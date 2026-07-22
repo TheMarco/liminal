@@ -181,6 +181,41 @@ cabinets, hanging chains and knee-deep mist in the sewers; scrawled walls
 in two different hands, cork noticeboards, ward signs and numbered steel
 doors in the asylum.
 
+Rooms are grouped into deterministic **96m semantic districts**, so a run of
+spaces now belongs to the same part of the building instead of every doorway
+rolling independently. Casino gaming floors give way to hotel and convention
+areas; offices resolve into operations, records and staff departments; sewer
+conveyance reaches treatment and maintenance works; airport airside becomes
+departures and arrivals; patient wings transition through treatment to
+administration; school academic wings open into commons and front-office
+zones. Office directories, airport wayfinding, asylum ward plates and school
+room labels agree with the surrounding district.
+
+True 24x24m halls can very rarely become a memorable **landmark**: the Silver
+Room ballroom, an impossible corporate boardroom, a four-pool cistern under a
+pipe manifold, a shuttered airport food court, the asylum chapel, or the school
+auditorium. Landmarks are deterministic, never claim a corridor or small room,
+and leave a clear route through the space.
+
+Merged rooms furnish against their full generated footprint rather than
+repeating a 12×12 m layout in the middle: grand casino halls extend their
+column grid and gaming islands, open offices grow into multiple cubicle
+neighbourhoods, sewer pump works place a complete machine train in every
+occupied cell while treatment banks dress every pool with rails and inspection
+bridges, baggage claims gain perimeter seating and trolley ranks, and large
+asylum dayrooms divide into separate abandoned activity groups.
+
+Surface finishes also change in deterministic six-cell maintenance districts:
+related wallpaper dye lots, office paint, airport panels and school block paint
+stay coherent over long stretches, then shift as though another renovation era
+took over. Every cell of a merged room agrees on the finish. Sparse casino and
+office rooms receive occasional abandonment vignettes—an uncleared service cart
+or archive boxes with forms spilled across the carpet—without blocking routes.
+The existing CC0 pool is used more broadly as well: food-court tables and carts,
+modelled auditorium seating, office edge furniture, and several generations of
+sewer crates, stoves, wheel rims, lanterns and industrial fixtures break up the
+most recognizable procedural repeats.
+
 ### Fidelity features
 
 - **Real-time global illumination (SDFGI)** — light bounces: neon washes the
@@ -209,6 +244,10 @@ doors in the asylum.
   printed to the console each run).
 - `WorldGen.WALL_P` — wall density (default 0.45).
 - `ChunkManager.LOAD_R` / `BUDGET` — stream radius and per-frame build budget.
+- Level changes synchronously build only a safe 3x3 neighbourhood; the rest of
+  the 7x7 view streams closest-first inside a 6ms frame slice. glTF props begin
+  loading on worker threads behind the title card, and multi-cell rooms share a
+  single reflection probe.
 - Performance: the biggest costs are SDFGI, TAA, volumetric fog and omni
   shadows — set in `scripts/main.gd::_build_env`, `project.godot` and
   `chunk.gd::_build_lighting` if you need to trade fidelity for FPS.
@@ -216,6 +255,16 @@ doors in the asylum.
   deterministic corridor topology across many seeds and fails if a narrow
   corridor exposes its reserved backing space, interrupts a through-spine, or
   disagrees with the neighbouring cell about a shared edge.
+- `godot --headless --path . --script tools/audit_sewers.gd` — verifies the
+  sewer channel and flow graph from both sides of every edge, the protected dry
+  spawn edge, and the room-size contracts for tunnels, basins, pump rooms, dry
+  chambers and service galleries.
+- `godot --headless --path . --script tools/audit_zones.gd` — samples more than
+  26,000 rooms per theme, verifies room-level district/style consistency and
+  checks that landmarks only occupy eligible 2x2 halls at the intended rarity.
+- `godot --headless --path . --script tools/profile_generation.gd` — constructs
+  real chunks for every floor, reporting first-pass and steady-state build
+  latency plus mesh, collision, light and reflection-probe counts.
 
 ## Structure
 

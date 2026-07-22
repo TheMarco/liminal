@@ -55,6 +55,35 @@ static func wallpaper() -> Material:
 	return m
 
 
+## Coarse districts use one of three related dye lots. They are deliberately
+## close enough to belong to the same hotel, but distinct enough that a long
+## walk does not feel wrapped in one infinitely repeated roll of paper.
+static func wallpaper_variant(idx: int) -> Material:
+	idx = posmod(idx, 3)
+	if idx == 0:
+		return wallpaper()
+	var key := "wallpaper_variant_%d" % idx
+	if _c.has(key):
+		return _c[key]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/wallpaper.gdshader")
+	m.set_shader_parameter("detail_tex", detail_noise())
+	if idx == 1:
+		m.set_shader_parameter("col_a", Color(0.43, 0.39, 0.29))
+		m.set_shader_parameter("col_b", Color(0.27, 0.24, 0.17))
+		m.set_shader_parameter("col_flock", Color(0.46, 0.34, 0.15))
+		m.set_shader_parameter("col_wood", Color(0.20, 0.11, 0.06))
+		m.set_shader_parameter("col_trim", Color(0.57, 0.41, 0.15))
+	else:
+		m.set_shader_parameter("col_a", Color(0.47, 0.32, 0.29))
+		m.set_shader_parameter("col_b", Color(0.30, 0.16, 0.18))
+		m.set_shader_parameter("col_flock", Color(0.57, 0.36, 0.15))
+		m.set_shader_parameter("col_wood", Color(0.21, 0.105, 0.06))
+		m.set_shader_parameter("col_trim", Color(0.63, 0.42, 0.14))
+	_c[key] = m
+	return m
+
+
 ## The hotel circulation variant is quieter than the gaming rooms: the same
 ## old flocked paper, but faded by decades of low light and repeated cleaning.
 ## Keeping its height field shallow stops the wall reading as carved stone at
@@ -73,6 +102,34 @@ static func hall_wallpaper() -> Material:
 	m.set_shader_parameter("bump_strength", 0.09)
 	m.set_shader_parameter("peel_amount", 0.45)
 	_c["hall_wallpaper"] = m
+	return m
+
+
+static func hall_wallpaper_variant(idx: int) -> Material:
+	idx = posmod(idx, 3)
+	if idx == 0:
+		return hall_wallpaper()
+	var key := "hall_wallpaper_variant_%d" % idx
+	if _c.has(key):
+		return _c[key]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/wallpaper.gdshader")
+	m.set_shader_parameter("detail_tex", detail_noise())
+	if idx == 1:
+		m.set_shader_parameter("col_a", Color(0.30, 0.29, 0.22))
+		m.set_shader_parameter("col_b", Color(0.17, 0.16, 0.11))
+		m.set_shader_parameter("col_flock", Color(0.31, 0.25, 0.11))
+		m.set_shader_parameter("col_wood", Color(0.13, 0.075, 0.04))
+		m.set_shader_parameter("col_trim", Color(0.42, 0.31, 0.11))
+	else:
+		m.set_shader_parameter("col_a", Color(0.33, 0.23, 0.22))
+		m.set_shader_parameter("col_b", Color(0.19, 0.10, 0.12))
+		m.set_shader_parameter("col_flock", Color(0.36, 0.23, 0.10))
+		m.set_shader_parameter("col_wood", Color(0.14, 0.07, 0.045))
+		m.set_shader_parameter("col_trim", Color(0.47, 0.30, 0.10))
+	m.set_shader_parameter("bump_strength", 0.09)
+	m.set_shader_parameter("peel_amount", 0.45)
+	_c[key] = m
 	return m
 
 
@@ -411,6 +468,21 @@ static func office_wall() -> Material:
 	return _shader("office_wall", "res://shaders/office_wall.gdshader")
 
 
+static func office_wall_variant(idx: int) -> Material:
+	idx = posmod(idx, 3)
+	if idx == 0:
+		return office_wall()
+	var key := "office_wall_variant_%d" % idx
+	if _c.has(key):
+		return _c[key]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/office_wall.gdshader")
+	m.set_shader_parameter("base_col", Color(0.81, 0.84, 0.80) if idx == 1 \
+		else Color(0.86, 0.83, 0.76))
+	_c[key] = m
+	return m
+
+
 static func office_ceiling() -> Material:
 	if _c.has("office_ceiling"):
 		return _c["office_ceiling"]
@@ -634,6 +706,22 @@ static func airport_wall() -> Material:
 	m.set_shader_parameter("base_col", Color(0.80, 0.81, 0.83))
 	m.set_shader_parameter("ceil_h", 5.0)
 	_c["airport_wall"] = m
+	return m
+
+
+static func airport_wall_variant(idx: int) -> Material:
+	idx = posmod(idx, 3)
+	if idx == 0:
+		return airport_wall()
+	var key := "airport_wall_variant_%d" % idx
+	if _c.has(key):
+		return _c[key]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/office_wall.gdshader")
+	m.set_shader_parameter("base_col", Color(0.73, 0.77, 0.82) if idx == 1 \
+		else Color(0.80, 0.78, 0.71))
+	m.set_shader_parameter("ceil_h", 5.0)
+	_c[key] = m
 	return m
 
 
@@ -978,6 +1066,21 @@ static func sch_wall() -> Material:
 	m.shader = load("res://shaders/office_wall.gdshader")
 	m.set_shader_parameter("base_col", Color(0.85, 0.82, 0.74))
 	_c["sch_wall"] = m
+	return m
+
+
+static func sch_wall_variant(idx: int) -> Material:
+	idx = posmod(idx, 3)
+	if idx == 0:
+		return sch_wall()
+	var key := "sch_wall_variant_%d" % idx
+	if _c.has(key):
+		return _c[key]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/office_wall.gdshader")
+	m.set_shader_parameter("base_col", Color(0.77, 0.81, 0.74) if idx == 1 \
+		else Color(0.85, 0.79, 0.66))
+	_c[key] = m
 	return m
 
 

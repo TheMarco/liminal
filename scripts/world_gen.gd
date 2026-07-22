@@ -20,18 +20,21 @@ const STYLE_SLOTS := 2
 const STYLE_LOUNGE := 3
 const STYLE_GRAND := 4
 const STYLE_HALLWAY := 5
+const STYLE_BALLROOM := 6
 
 const OFFICE_EMPTY := 10
 const OFFICE_CORRIDOR := 11
 const OFFICE_CUBICLES := 12
 const OFFICE_STORAGE := 13
 const OFFICE_BREAK := 14
+const OFFICE_BOARDROOM := 15
 
 const SEWER_TUNNEL := 20
 const SEWER_BASIN := 21
 const SEWER_PUMP := 22
 const SEWER_DRY := 23
 const SEWER_GALLERY := 24
+const SEWER_CISTERN := 25
 
 const AIR_GATE := 40
 const AIR_CONCOURSE := 41
@@ -40,6 +43,7 @@ const AIR_BAGGAGE := 43
 const AIR_ESCALATOR := 44
 const AIR_HALL := 45
 const AIR_TRANSIT := 46
+const AIR_FOODCOURT := 47
 
 const ASY_CELL := 50       # patient room — small, often split again
 const ASY_WARD := 51       # rows of metal beds down a shared room
@@ -48,6 +52,7 @@ const ASY_TREATMENT := 53  # restraint table, ECT cart, tiled walls
 const ASY_HYDRO := 54      # hydrotherapy tubs under dripping tile
 const ASY_OFFICE := 55     # records and administration
 const ASY_CORRIDOR := 56   # narrow ward corridor, gurneys against the walls
+const ASY_CHAPEL := 57     # a rare assembly room, pews still facing forward
 
 const SCH_CORRIDOR := 60   # the spine: locker runs, strip lights, no bell
 const SCH_CLASSROOM := 61  # desks in rows facing a board nobody wrote on
@@ -57,6 +62,14 @@ const SCH_GYM := 64        # the big one — sprung floor, hoops, bleachers
 const SCH_LIBRARY := 65    # stacks and reading tables
 const SCH_LAB := 66        # science benches with gas taps and stools
 const SCH_ADMIN := 67      # front office, counter, filing
+const SCH_AUDITORIUM := 68 # a rare stage and rows of empty folding seats
+
+# Eight-cell (96m) semantic districts. Room styles still vary within a zone,
+# but the weights now agree over a meaningful walk: a run of gates gives way
+# to baggage handling, patient wards yield to treatment, and so on. The room
+# root keeps a merged space in one district even when it crosses a boundary.
+const ZONE_SPAN := 8
+const ZONE_COUNT := 3
 
 
 static func h(ws: int, a: int, b: int, salt: int) -> int:
@@ -234,6 +247,60 @@ static func room_centre(ws: int, root: Vector2i) -> Vector2:
 	if mz:
 		z0 -= 12.0
 	return Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5)
+
+
+## Coarse maintenance era for material palettes. Six-cell districts keep the
+## same finish over meaningful stretches, and the room root guarantees every
+## member of a merged room agrees even when it crosses a district boundary.
+static func finish_variant(ws: int, cell: Vector2i, theme: int) -> int:
+	var root := room_id(ws, cell)
+	var zone_x := floori(float(root.x + 3) / 6.0)
+	var zone_z := floori(float(root.y + 3) / 6.0)
+	return h(ws, zone_x, zone_z, 1201 + theme * 37) % 3
+
+
+## Semantic district for a room: 0..2, interpreted separately by each theme.
+## This is intentionally independent of finish_variant — a department can
+## cross an old repaint boundary, and a renovation can cut across departments.
+static func macro_zone(ws: int, cell: Vector2i, theme: int) -> int:
+	var root := room_id(ws, cell)
+	var zone_x := floori(float(root.x + ZONE_SPAN / 2) / float(ZONE_SPAN))
+	var zone_z := floori(float(root.y + ZONE_SPAN / 2) / float(ZONE_SPAN))
+	return h(ws, zone_x, zone_z, 1301 + theme * 53) % ZONE_COUNT
+
+
+## Human-readable names are used by audits and debug tooling rather than the
+## runtime scene, keeping district intent easy to inspect when tuning seeds.
+static func macro_zone_name(zone: int, theme: int) -> String:
+	var names := {
+		0: ["gaming", "hotel", "convention"],
+		1: ["operations", "records", "staff"],
+		2: ["conveyance", "treatment", "maintenance"],
+		4: ["airside", "departures", "arrivals"],
+		5: ["patient wing", "treatment", "administration"],
+		6: ["academic", "commons", "administration"],
+	}
+	var labels: Array = names.get(theme, ["zone 0", "zone 1", "zone 2"])
+	return labels[clampi(zone, 0, labels.size() - 1)]
+
+
+## Landmarks only claim true 2x2 halls, never the spawn room or a corridor.
+## Roughly one hall in five is promoted: rare in a local view, but dependable
+## over a longer walk. Each floor gets a single unmistakable landmark grammar.
+static func landmark_style(ws: int, cell: Vector2i, theme: int) -> int:
+	var root := room_id(ws, cell)
+	if root == Vector2i.ZERO or room_size(ws, root) < 4 or corridor(ws, root) != 0:
+		return -1
+	if r01(ws, root.x, root.y, 1391 + theme * 61) >= 0.22:
+		return -1
+	match theme:
+		0: return STYLE_BALLROOM
+		1: return OFFICE_BOARDROOM
+		2: return SEWER_CISTERN
+		4: return AIR_FOODCOURT
+		5: return ASY_CHAPEL
+		6: return SCH_AUDITORIUM
+	return -1
 
 
 ## Ceiling height for a room: small rooms are low and close, halls soar.
@@ -590,76 +657,138 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 	var root := room_id(ws, cell)
 	var n := room_size(ws, root)
 	var r := r01(ws, root.x, root.y, 7)
+	var zone := macro_zone(ws, root, theme)
+	var landmark := landmark_style(ws, root, theme)
+	if landmark >= 0:
+		return landmark
 	if theme == 5:
 		if root == Vector2i.ZERO:
 			return ASY_WARD
 		if n >= 4:
-			return ASY_DAYROOM if r < 0.72 else ASY_HYDRO
+			if zone == 0: return ASY_DAYROOM if r < 0.82 else ASY_WARD
+			if zone == 1: return ASY_HYDRO if r < 0.62 else ASY_DAYROOM
+			return ASY_OFFICE if r < 0.48 else ASY_DAYROOM
 		if n >= 2:
-			if r < 0.40: return ASY_WARD
-			if r < 0.62: return ASY_TREATMENT
-			if r < 0.80: return ASY_HYDRO
-			return ASY_OFFICE
-		if r < 0.5: return ASY_CELL
-		if r < 0.68: return ASY_TREATMENT
-		if r < 0.84: return ASY_OFFICE
-		return ASY_CELL
+			if zone == 0:
+				if r < 0.66: return ASY_WARD
+				if r < 0.84: return ASY_DAYROOM
+				return ASY_OFFICE
+			if zone == 1:
+				if r < 0.48: return ASY_TREATMENT
+				if r < 0.82: return ASY_HYDRO
+				return ASY_WARD
+			if r < 0.56: return ASY_OFFICE
+			if r < 0.80: return ASY_WARD
+			return ASY_TREATMENT
+		if zone == 0:
+			return ASY_CELL if r < 0.78 else ASY_OFFICE
+		if zone == 1:
+			if r < 0.45: return ASY_TREATMENT
+			if r < 0.72: return ASY_CELL
+			return ASY_HYDRO
+		return ASY_OFFICE if r < 0.58 else ASY_CELL
 	if theme == 6:
 		# a school is mostly classrooms; everything else is the exception you
 		# walk past on the way to another classroom
 		if root == Vector2i.ZERO:
 			return SCH_CLASSROOM
 		if n >= 4:
-			return SCH_GYM if r < 0.62 else SCH_CAFETERIA
+			if zone == 0: return SCH_LIBRARY if r < 0.48 else SCH_GYM
+			if zone == 1: return SCH_CAFETERIA if r < 0.62 else SCH_GYM
+			return SCH_CAFETERIA if r < 0.55 else SCH_LIBRARY
 		if n >= 2:
-			if r < 0.34: return SCH_CAFETERIA
-			if r < 0.58: return SCH_LIBRARY
-			if r < 0.80: return SCH_CLASSROOM
-			return SCH_LAB
-		if r < 0.46: return SCH_CLASSROOM
-		if r < 0.62: return SCH_LAB
-		if r < 0.76: return SCH_BATHROOM
-		if r < 0.88: return SCH_ADMIN
+			if zone == 0:
+				if r < 0.46: return SCH_CLASSROOM
+				if r < 0.76: return SCH_LAB
+				return SCH_LIBRARY
+			if zone == 1:
+				if r < 0.48: return SCH_CAFETERIA
+				if r < 0.74: return SCH_LIBRARY
+				return SCH_CLASSROOM
+			if r < 0.52: return SCH_ADMIN
+			if r < 0.75: return SCH_LIBRARY
+			return SCH_CLASSROOM
+		if zone == 0:
+			if r < 0.62: return SCH_CLASSROOM
+			if r < 0.84: return SCH_LAB
+			return SCH_LIBRARY
+		if zone == 1:
+			if r < 0.38: return SCH_CLASSROOM
+			if r < 0.64: return SCH_BATHROOM
+			if r < 0.84: return SCH_LIBRARY
+			return SCH_CAFETERIA
+		if r < 0.54: return SCH_ADMIN
+		if r < 0.76: return SCH_CLASSROOM
+		if r < 0.90: return SCH_BATHROOM
 		return SCH_LIBRARY
 	if theme == 4:
 		if root == Vector2i.ZERO:
 			return AIR_GATE
 		if n >= 4:
-			return AIR_GATE if r < 0.45 else AIR_BAGGAGE
+			if zone == 0: return AIR_GATE if r < 0.76 else AIR_CONCOURSE
+			if zone == 1: return AIR_CHECKIN if r < 0.52 else AIR_CONCOURSE
+			return AIR_BAGGAGE if r < 0.74 else AIR_HALL
 		if n >= 2:
-			if r < 0.3: return AIR_CHECKIN
-			if r < 0.55: return AIR_CONCOURSE
-			if r < 0.78: return AIR_GATE
-			return AIR_BAGGAGE
-		if r < 0.45: return AIR_HALL
-		if r < 0.75: return AIR_ESCALATOR
-		return AIR_CONCOURSE
+			if zone == 0:
+				if r < 0.58: return AIR_GATE
+				if r < 0.86: return AIR_CONCOURSE
+				return AIR_HALL
+			if zone == 1:
+				if r < 0.52: return AIR_CHECKIN
+				if r < 0.80: return AIR_CONCOURSE
+				return AIR_ESCALATOR
+			if r < 0.58: return AIR_BAGGAGE
+			if r < 0.82: return AIR_HALL
+			return AIR_CONCOURSE
+		if zone == 0:
+			return AIR_CONCOURSE if r < 0.62 else AIR_GATE
+		if zone == 1:
+			if r < 0.44: return AIR_HALL
+			if r < 0.78: return AIR_ESCALATOR
+			return AIR_CONCOURSE
+		return AIR_HALL if r < 0.58 else AIR_BAGGAGE
 	if theme == 2:
 		if n >= 4:
-			return SEWER_BASIN
+			return SEWER_BASIN if zone != 2 or r < 0.55 else SEWER_PUMP
 		if n >= 2:
-			return SEWER_TUNNEL if r < 0.55 else SEWER_PUMP
-		return SEWER_TUNNEL if r < 0.55 else SEWER_DRY
+			if zone == 0: return SEWER_TUNNEL if r < 0.78 else SEWER_PUMP
+			if zone == 1: return SEWER_BASIN if r < 0.56 else SEWER_PUMP
+			return SEWER_PUMP if r < 0.68 else SEWER_DRY
+		if zone == 0: return SEWER_TUNNEL if r < 0.78 else SEWER_DRY
+		if zone == 1: return SEWER_TUNNEL if r < 0.42 else SEWER_DRY
+		return SEWER_DRY if r < 0.70 else SEWER_PUMP
 	if theme == 1:
 		if root == Vector2i.ZERO:
 			return OFFICE_CUBICLES
 		if n >= 4:
-			return OFFICE_CUBICLES
+			if zone == 0: return OFFICE_CUBICLES
+			if zone == 1: return OFFICE_STORAGE if r < 0.58 else OFFICE_CUBICLES
+			return OFFICE_BREAK if r < 0.48 else OFFICE_CUBICLES
 		if n >= 2:
-			if r < 0.55: return OFFICE_CUBICLES
-			if r < 0.8: return OFFICE_STORAGE
-			return OFFICE_BREAK
-		if r < 0.3: return OFFICE_EMPTY
-		if r < 0.6: return OFFICE_STORAGE
-		return OFFICE_BREAK
+			if zone == 0: return OFFICE_CUBICLES if r < 0.78 else OFFICE_EMPTY
+			if zone == 1: return OFFICE_STORAGE if r < 0.72 else OFFICE_CUBICLES
+			return OFFICE_BREAK if r < 0.62 else OFFICE_CUBICLES
+		if zone == 0: return OFFICE_EMPTY if r < 0.34 else OFFICE_CUBICLES
+		if zone == 1: return OFFICE_STORAGE if r < 0.72 else OFFICE_EMPTY
+		return OFFICE_BREAK if r < 0.66 else OFFICE_EMPTY
 	if root == Vector2i.ZERO:
 		return STYLE_LOUNGE
 	if n >= 4:
-		return STYLE_GRAND
+		if zone == 0: return STYLE_GRAND if r < 0.38 else STYLE_SLOTS
+		if zone == 1: return STYLE_GRAND if r < 0.48 else STYLE_LOUNGE
+		return STYLE_GRAND if r < 0.72 else STYLE_PILLARS
 	if n >= 2:
-		if r < 0.42: return STYLE_SLOTS
-		if r < 0.74: return STYLE_LOUNGE
-		return STYLE_PILLARS
-	if r < 0.38: return STYLE_EMPTY
-	if r < 0.68: return STYLE_LOUNGE
-	return STYLE_PILLARS
+		if zone == 0:
+			if r < 0.64: return STYLE_SLOTS
+			if r < 0.82: return STYLE_PILLARS
+			return STYLE_LOUNGE
+		if zone == 1:
+			if r < 0.62: return STYLE_LOUNGE
+			if r < 0.82: return STYLE_EMPTY
+			return STYLE_PILLARS
+		if r < 0.54: return STYLE_PILLARS
+		if r < 0.82: return STYLE_LOUNGE
+		return STYLE_EMPTY
+	if zone == 0: return STYLE_EMPTY if r < 0.22 else (STYLE_LOUNGE if r < 0.42 else STYLE_PILLARS)
+	if zone == 1: return STYLE_EMPTY if r < 0.38 else (STYLE_LOUNGE if r < 0.82 else STYLE_PILLARS)
+	return STYLE_EMPTY if r < 0.46 else (STYLE_PILLARS if r < 0.78 else STYLE_LOUNGE)

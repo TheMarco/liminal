@@ -7,6 +7,8 @@ const CELL := 12.0
 const LOAD_R := 3
 const UNLOAD_R := 5
 const BUDGET := 3  # chunks built per frame, closest first
+const WARM_R := 1  # 3x3 is enough collision coverage for a safe arrival
+const BUILD_SLICE_USEC := 6000  # stop streaming after roughly 6ms this frame
 
 var world_seed := 1
 var theme := 0
@@ -17,8 +19,11 @@ static var _dev_timing := false
 
 
 func warm_up(center: Vector2i) -> void:
-	for dz in range(-2, 3):
-		for dx in range(-2, 3):
+	# Level changes happen behind a fade, but synchronously constructing 25
+	# dense chunks still held the main thread for too long. Build the safe 3x3
+	# neighbourhood now; the normal distance-sorted queue fills the 7x7 view.
+	for dz in range(-WARM_R, WARM_R + 1):
+		for dx in range(-WARM_R, WARM_R + 1):
 			var c := center + Vector2i(dx, dz)
 			if not chunks.has(c):
 				_build(c)
@@ -41,13 +46,14 @@ func _process(_dt: float) -> void:
 		var keys: Array = queued.keys()
 		keys.sort_custom(func(a, b): return _cheb(a, pc) < _cheb(b, pc))
 		var built := 0
+		var slice_start := Time.get_ticks_usec()
 		for c in keys:
 			queued.erase(c)
 			if _cheb(c, pc) > LOAD_R or chunks.has(c):
 				continue
 			_build(c)
 			built += 1
-			if built >= BUDGET:
+			if built >= BUDGET or Time.get_ticks_usec() - slice_start >= BUILD_SLICE_USEC:
 				break
 
 	for c in chunks.keys():

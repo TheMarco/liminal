@@ -82,6 +82,14 @@ func _ready() -> void:
 	if not pos_given:
 		spawn = _safe_arrival(active_level, Vector2i.ZERO, DEFAULT_SPAWN)
 	print("Liminal Vegas — seed %d" % world_seed)
+	# Audits and screenshot helpers intentionally quit after a few seconds;
+	# don't leave background resource workers alive during their forced exit.
+	var quick_exit := OS.get_cmdline_user_args().has("--audit")
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--screenshot="):
+			quick_exit = true
+	if not quick_exit:
+		Chunk.request_prop_preloads()
 	add_to_group("portal_listener")
 	if OS.get_cmdline_user_args().has("--notaa"):
 		get_viewport().use_taa = false

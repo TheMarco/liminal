@@ -60,6 +60,12 @@ func _init() -> void:
 							failures.append("asymmetric edge seed=%d theme=%d cell=%s dir=%d" % [
 								base_seed, theme, cell, dir])
 							continue
+						if WorldGen.room_id(ws, cell) == WorldGen.room_id(ws, nb) and \
+								WorldGen.finish_variant(ws, cell, theme) != \
+								WorldGen.finish_variant(ws, nb, theme):
+							failures.append("merged room finish mismatch seed=%d theme=%d cell=%s dir=%d" % [
+								base_seed, theme, cell, dir])
+							continue
 						if ca == 0 and cb == 0:
 							continue
 						if WorldGen.corridor_link(ws, cell, dir):

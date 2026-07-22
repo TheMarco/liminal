@@ -4,6 +4,8 @@ extends SceneTree
 ## Run: godot --headless --path . --script tools/find_cells.gd -- <seed> <theme>
 
 const NAMES := {
+	6: "ballroom", 15: "boardroom", 25: "cistern", 47: "foodcourt",
+	57: "chapel", 68: "auditorium",
 	60: "corridor", 61: "classroom", 62: "cafeteria", 63: "bathroom",
 	64: "gym", 65: "library", 66: "lab", 67: "admin",
 }
@@ -13,9 +15,14 @@ func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	var ws := int(args[0]) if args.size() > 0 else 4242
 	var theme := int(args[1]) if args.size() > 1 else 6
-	# main.gd salts the world seed per level; mirror that for level 6
-	if theme == 6:
-		ws = ((ws ^ 179424673) & 0x7FFFFFFF) | 1
+	# main.gd salts the base seed per level; mirror it for every non-casino floor.
+	if theme != 0:
+		var salt := 348039917
+		if theme == 2: salt = 715827883
+		elif theme == 4: salt = 536870923
+		elif theme == 5: salt = 998244353
+		elif theme == 6: salt = 179424673
+		ws = ((ws ^ salt) & 0x7FFFFFFF) | 1
 	var found := {}
 	for r in 14:
 		for x in range(-r, r + 1):

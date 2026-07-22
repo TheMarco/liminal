@@ -39,6 +39,22 @@ static var QUAD := QuadMesh.new()
 static var CONE := CylinderMesh.new()
 static var _cone_ready := false
 
+const ASY_PROP_NAMES := ["BarberShopChair_01", "Rockingchair_01", "SchoolChair_01",
+	"medical_box", "metal_office_desk", "mounted_fluorescent_lights",
+	"old_bed_frame", "vintage_crutches_01", "wheelchair_01"]
+const CC0_PROP_NAMES := ["ArmChair_01", "Barrel_01", "Chandelier_03", "CoffeeCart_01",
+	"CoffeeTable_01", "Lantern_01", "Ottoman_01", "WetFloorSign_01",
+	"bar_chair_round_01", "barrel_03", "barrel_stove", "clipboard",
+	"coffee_table_round_01", "drawer_cabinet", "fancy_picture_frame_01",
+	"fancy_picture_frame_02", "hanging_industrial_lamp", "industrial_caged_sconce",
+	"old_tyre", "plastic_crate_03", "potted_plant_01", "potted_plant_02",
+	"power_box_01", "rusted_wheel_rim_01", "rusted_wheel_rim_02", "sofa_03",
+	"steel_frame_shelves_01", "television_02", "trashbag", "vintage_grandfather_clock_01",
+	"vintage_suitcase", "wall_clock", "wooden_crate_01", "wooden_crate_02",
+	"wooden_ladder", "wooden_picnic_table"]
+
+static var _prop_preloads_requested := false
+
 var wseed: int
 var cell: Vector2i
 var theme: int
@@ -50,6 +66,23 @@ var room_root: Vector2i        # the room this cell belongs to
 var room_n := 1                # how many cells the room spans
 var is_room_anchor := false    # only the anchor cell furnishes the room
 # props are laid out in cell coords, then shifted onto the room centre
+
+
+## Start glTF loading on worker threads while the title card is up. The first
+## encounter with a new prop previously made streaming pay the full disk,
+## decode and scene-import cost in one frame (hundreds of milliseconds for the
+## heaviest casino sets). Retrieval still blocks if a player outruns the load,
+## but in normal play the work is complete long before another floor is seen.
+static func request_prop_preloads() -> void:
+	if _prop_preloads_requested:
+		return
+	_prop_preloads_requested = true
+	for mname in ASY_PROP_NAMES:
+		ResourceLoader.load_threaded_request(
+			"res://models/asylum/%s/%s_1k.gltf" % [mname, mname])
+	for mname in CC0_PROP_NAMES:
+		ResourceLoader.load_threaded_request(
+			"res://models/cc0/%s/%s_1k.gltf" % [mname, mname])
 
 
 func _init(p_seed: int, p_cell: Vector2i, p_theme := 0) -> void:
@@ -82,21 +115,35 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0) -> void:
 ## Real reflections for the rooms with mirror-like surfaces (marble, gold,
 ## glass). One static box-projected probe, rendered once at chunk build.
 func _maybe_probe() -> void:
+	# One probe covers a generated room. Multi-cell rooms used to create one in
+	# every member chunk, rendering the same surrounding geometry four times.
+	if not is_room_anchor:
+		return
 	var want := false
 	if theme == 0:
-		want = style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_SLOTS
+		want = style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_SLOTS \
+			or style == WorldGen.STYLE_BALLROOM
 	elif theme == 2:
-		want = style == WorldGen.SEWER_BASIN
+		want = style == WorldGen.SEWER_BASIN or style == WorldGen.SEWER_CISTERN
 	elif theme == 4:
-		want = style == WorldGen.AIR_GATE
+		want = style == WorldGen.AIR_GATE or style == WorldGen.AIR_FOODCOURT
 	elif theme == 6:
-		want = style == WorldGen.SCH_CORRIDOR
+		# The polished hall floor benefits from local cubemaps, but one in every
+		# corridor cell recaptured almost the same scene. Alternate cells keep
+		# the long reflection read at half the startup/rendering cost.
+		want = style == WorldGen.SCH_CORRIDOR \
+			and WorldGen.h(wseed, cell.x, cell.y, 1499) % 2 == 0
 	if not want:
 		return
 	var probe := ReflectionProbe.new()
 	probe.update_mode = ReflectionProbe.UPDATE_ONCE
-	probe.size = Vector3(S, ceil_h + (2.0 if theme == 2 else 0.6), S)
-	probe.position = Vector3(S / 2.0, ceil_h / 2.0 - (0.7 if theme == 2 else 0.0), S / 2.0)
+	var span := _room_span()
+	var rc := WorldGen.room_centre(wseed, room_root)
+	var local_c := Vector3(rc.x - float(cell.x) * S,
+		ceil_h / 2.0 - (0.7 if theme == 2 else 0.0),
+		rc.y - float(cell.y) * S)
+	probe.size = Vector3(span.x, ceil_h + (2.0 if theme == 2 else 0.6), span.y)
+	probe.position = local_c
 	probe.box_projection = true
 	probe.interior = true
 	probe.max_distance = 24.0
@@ -105,6 +152,12 @@ func _maybe_probe() -> void:
 
 func _r(salt: int) -> float:
 	return WorldGen.r01(wseed, cell.x, cell.y, salt)
+
+
+## A 72m maintenance district shares one finish palette. This gives long walks
+## coherent eras of repainting and refitting instead of recoloring every room.
+func _finish_variant() -> int:
+	return WorldGen.finish_variant(wseed, cell, theme)
 
 
 func _wall_h() -> float:
@@ -244,7 +297,7 @@ func _build_floor_ceiling() -> void:
 	if theme == 5:
 		var fmat: Material = Mats.asy_floor()
 		if style == WorldGen.ASY_CORRIDOR or style == WorldGen.ASY_DAYROOM \
-				or style == WorldGen.ASY_OFFICE:
+				or style == WorldGen.ASY_OFFICE or style == WorldGen.ASY_CHAPEL:
 			fmat = Mats.asy_checker()
 		elif style == WorldGen.ASY_HYDRO:
 			fmat = Mats.asy_tile()
@@ -255,11 +308,12 @@ func _build_floor_ceiling() -> void:
 		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), _sch_floor_mat())
 		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.sch_ceiling())
 		return
-	var floor_mat: Material = Mats.marble_photo() if style == WorldGen.STYLE_GRAND else Mats.carpet()
+	var floor_mat: Material = Mats.marble_photo() if style == WorldGen.STYLE_GRAND \
+		or style == WorldGen.STYLE_BALLROOM else Mats.carpet()
 	_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), floor_mat)
 	_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.ceiling())
 
-	if style == WorldGen.STYLE_GRAND:
+	if style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_BALLROOM:
 		# clerestory band between standard wall height and the raised ceiling
 		var bh := ceil_h - H
 		var by := H + bh / 2.0
@@ -305,14 +359,14 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 	var hh := y1 - y0
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner := plane + n * (T * 0.5)
-	var wmat: Material = Mats.wallpaper()
+	var wmat: Material = Mats.wallpaper_variant(_finish_variant())
 	if theme == 1:
-		wmat = Mats.office_wall()
+		wmat = Mats.office_wall_variant(_finish_variant())
 	elif theme == 2:
 		# the older stretches of the works are brick, not cast concrete
 		wmat = Mats.brick_sewer() if _r(49) < 0.4 else Mats.concrete()
 	elif theme == 4:
-		wmat = Mats.airport_wall()
+		wmat = Mats.airport_wall_variant(_finish_variant())
 	elif theme == 5:
 		wmat = _asy_wall_mat()
 	elif theme == 6:
@@ -627,7 +681,7 @@ func _build_lighting() -> void:
 	for p in [Vector2(3, 3), Vector2(9, 3), Vector2(3, 9), Vector2(9, 9)]:
 		_troffer(Vector3(p.x, 0, p.y), Vector2(1.7, 0.8), pmat, Mats.sign_housing())
 
-	var grand := style == WorldGen.STYLE_GRAND
+	var grand := style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_BALLROOM
 	if grand:
 		_chandelier()
 	if dead:
@@ -812,6 +866,12 @@ func _build_props() -> void:
 	portal_dest = WorldGen.portal(wseed, cell, theme)
 	if portal_dest >= 0:
 		_build_portal(portal_dest)
+	# A large sewer basin is a bank of cell-sized treatment pools. Structural
+	# dressing belongs to each pool, not only to the room anchor that owns the
+	# shared ambience and larger set pieces.
+	if not is_room_anchor and (style == WorldGen.SEWER_BASIN or style == WorldGen.SEWER_CISTERN):
+		_sewer_basin_props()
+		_sewer_mist()
 	# one room is furnished once, by its anchor cell, around its true centre
 	if not is_room_anchor:
 		return
@@ -826,7 +886,7 @@ func _build_props() -> void:
 		rc.y - (float(cell.y) * S + S / 2.0))
 	# these build against a specific wall of THIS cell — moving them to the
 	# room centre would tear the glass, mezzanine or desk run off its wall
-	if style == WorldGen.AIR_GATE or style == WorldGen.AIR_CHECKIN \
+	if style == WorldGen.SEWER_BASIN or style == WorldGen.AIR_GATE or style == WorldGen.AIR_CHECKIN \
 			or style == WorldGen.AIR_ESCALATOR or style == WorldGen.AIR_TRANSIT:
 		off = Vector3.ZERO
 	var n0 := get_child_count()
@@ -844,13 +904,23 @@ func _build_props() -> void:
 				_blackjack(Vector3(9.4, 0, 4.6), 242)
 		WorldGen.STYLE_GRAND:
 			_pillars(ceil_h, Mats.marble_photo())
+			if room_n >= 4:
+				# A 24m casino hall needs more than a 12m column island. Two
+				# abandoned tables give the enlarged floor a reason to exist.
+				_blackjack(Vector3(1.6, 0, 1.6), 248)
+				_blackjack(Vector3(10.4, 0, 10.4), 286)
 			if _r(246) < 0.5:
 				_velvet_ropes()
+		WorldGen.STYLE_BALLROOM:
+			_casino_ballroom()
 		WorldGen.STYLE_HALLWAY:
 			_hallway()
 		WorldGen.STYLE_EMPTY:
 			if portal_dest < 0 and _r(20) < 0.35:
 				_planter(Vector3(2.6 + 6.8 * _r(21), 0, 2.6 + 6.8 * _r(22)))
+			if portal_dest < 0 and _r(24) < 0.48:
+				_casino_service_cart(Vector3(2.1 if _r(25) < 0.5 else 9.9, 0,
+					2.1 if _r(26) < 0.5 else 9.9), 27)
 		WorldGen.OFFICE_CORRIDOR:
 			_office_corridor()
 		WorldGen.OFFICE_CUBICLES:
@@ -859,25 +929,40 @@ func _build_props() -> void:
 			_office_storage()
 		WorldGen.OFFICE_BREAK:
 			_office_break()
+		WorldGen.OFFICE_BOARDROOM:
+			_office_boardroom()
 		WorldGen.OFFICE_EMPTY:
 			if portal_dest < 0 and _r(20) < 0.15:
 				_planter(Vector3(2.6 + 6.8 * _r(21), 0, 2.6 + 6.8 * _r(22)))
 			if _r(250) < 0.35:
 				_copier(Vector3(3.0, 0, 8.8), 252)
+			elif portal_dest < 0 and _r(254) < 0.62:
+				_office_floor_files(Vector3(2.2 if _r(255) < 0.5 else 9.8, 0,
+					2.1 if _r(256) < 0.5 else 9.9), 257)
 		WorldGen.SEWER_TUNNEL:
 			_sewer_tunnel_props()
+			_sewer_mist()
 			_sewer_sounds()
 		WorldGen.SEWER_BASIN:
 			_sewer_basin_props()
+			_sewer_mist()
 			_sewer_sounds()
 		WorldGen.SEWER_PUMP:
 			_sewer_pump_props()
+			_sewer_mist()
 			_sewer_sounds()
 		WorldGen.SEWER_DRY:
 			_sewer_dry_props()
+			_sewer_mist()
 			_sewer_sounds()
 		WorldGen.SEWER_GALLERY:
 			_sewer_gallery()
+			_sewer_mist()
+			_sewer_sounds()
+		WorldGen.SEWER_CISTERN:
+			_sewer_basin_props()
+			_sewer_cistern()
+			_sewer_mist()
 			_sewer_sounds()
 		WorldGen.AIR_GATE:
 			_air_gate()
@@ -900,6 +985,9 @@ func _build_props() -> void:
 		WorldGen.AIR_HALL:
 			_air_hall()
 			_air_common()
+		WorldGen.AIR_FOODCOURT:
+			_air_foodcourt()
+			_air_common()
 		WorldGen.ASY_CELL:
 			_asy_cell_props()
 		WorldGen.ASY_WARD:
@@ -920,6 +1008,9 @@ func _build_props() -> void:
 			_asy_corridor()
 			if _r(779) < 0.35:
 				_asy_sounds()
+		WorldGen.ASY_CHAPEL:
+			_asy_chapel()
+			_asy_sounds()
 		WorldGen.SCH_CORRIDOR:
 			_sch_corridor()
 		WorldGen.SCH_CLASSROOM:
@@ -936,6 +1027,8 @@ func _build_props() -> void:
 			_sch_lab()
 		WorldGen.SCH_ADMIN:
 			_sch_admin()
+		WorldGen.SCH_AUDITORIUM:
+			_sch_auditorium()
 	_shift_props(off, n0, b0)
 
 
@@ -955,7 +1048,19 @@ func _shift_props(off: Vector3, n0: int, b0: int) -> void:
 
 
 func _pillars(h: float, mat: Material) -> void:
-	for p in [Vector2(2.2, 2.2), Vector2(9.8, 2.2), Vector2(2.2, 9.8), Vector2(9.8, 9.8)]:
+	var points := [Vector2(2.2, 2.2), Vector2(9.8, 2.2),
+		Vector2(2.2, 9.8), Vector2(9.8, 9.8)]
+	if style == WorldGen.STYLE_GRAND and room_n >= 4:
+		# Local (6,6) is shifted to the 24x24 room centre after furnishing.
+		# An eight-column perimeter grid leaves a generous central axis while
+		# making the whole hall, not just its middle cell, feel supported.
+		points = []
+		for px in [-8.0, 0.0, 8.0]:
+			for pz in [-8.0, 0.0, 8.0]:
+				if px == 0.0 and pz == 0.0:
+					continue
+				points.append(Vector2(6.0 + px, 6.0 + pz))
+	for p in points:
 		_box(Vector3(p.x, 0.06, p.y), Vector3(0.95, 0.12, 0.95), Mats.darkwood())
 		_cyl(Vector3(p.x, h / 2.0, p.y), 0.34, h, mat)
 		for ring_y in [0.28, h - 0.28]:
@@ -1253,6 +1358,48 @@ func _velvet_ropes() -> void:
 			r2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
+## Landmark: the casino's forgotten ballroom. A clear marble dance floor,
+## bandstand and perimeter supper tables make the whole 24m hall legible at a
+## glance without filling its main circulation axis.
+func _casino_ballroom() -> void:
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	# Inlaid dance floor and brass border.
+	_box(c + Vector3(0, 0.012, 0.6), Vector3(10.2, 0.024, 8.2), Mats.marble_photo(), false)
+	for sx in [-5.18, 5.18]:
+		_box(c + Vector3(sx, 0.027, 0.6), Vector3(0.08, 0.03, 8.35), Mats.brass(), false)
+	for sz in [-3.52, 4.72]:
+		_box(c + Vector3(0, 0.027, sz), Vector3(10.35, 0.03, 0.08), Mats.brass(), false)
+	# Low stage across the far side, curtain folds and an abandoned microphone.
+	var stage := c + Vector3(0, 0, -8.0)
+	_rbox(stage + Vector3(0, 0.22, 0), Vector3(9.2, 0.44, 2.7), Mats.darkwood(), 0.025)
+	for i in 9:
+		var x := -4.2 + 1.05 * float(i)
+		_box(stage + Vector3(x, 2.45, -1.22), Vector3(0.58, 4.4, 0.10),
+			Mats.velvet() if i % 2 == 0 else Mats.velvet2(), false)
+	var mic := stage + Vector3(0.8, 0.44, 0.35)
+	_cyl(mic + Vector3(0, 0.72, 0), 0.025, 1.44, Mats.chrome(), false)
+	_sphere(mic + Vector3(0, 1.48, 0), 0.065, Mats.charcoal())
+	_collider_box(stage + Vector3(0, 0.24, 0), Vector3(9.3, 0.48, 2.8))
+	# Supper tables form a loose ring, leaving the dance floor empty.
+	for i in 6:
+		var ang := TAU * float(i) / 6.0 + PI / 6.0
+		var tp := c + Vector3(cos(ang) * 8.1, 0, 0.9 + sin(ang) * 7.2)
+		_cc0_prop("coffee_table_round_01", tp, ang)
+		_collider_cyl(tp + Vector3(0, 0.26, 0), 0.67, 0.52)
+		for j in 3:
+			var ca := ang + TAU * float(j) / 3.0 + 0.35
+			var cp := tp + Vector3(cos(ca) * 1.0, 0, sin(ca) * 1.0)
+			_cc0_prop("bar_chair_round_01", cp, ca + PI)
+			_collider_cyl(cp + Vector3(0, 0.38, 0), 0.25, 0.76)
+	var title := Label3D.new()
+	title.text = "THE SILVER ROOM"
+	title.font_size = 140
+	title.pixel_size = 0.003
+	title.modulate = Color(1.0, 0.72, 0.22)
+	title.position = stage + Vector3(0, 3.8, -1.30)
+	add_child(title)
+
+
 ## Hotel corridor: a 3m lane of numbered, permanently locked rooms.  The
 ## guest-room strips behind the two walls are real reserved floor-plan volume:
 ## they may continue invisibly through several corridor cells, but no navigable
@@ -1383,7 +1530,8 @@ func _hall_wall_run(o: Vector3, yw: float, side: float, a: float, b: float) -> v
 		return
 	var c := (a + b) * 0.5
 	var wc := _wp(o, Vector3(c, ceil_h / 2.0, side), yw)
-	var wl := _mbox(self, wc, Vector3(ln, ceil_h, 0.16), Mats.hall_wallpaper())
+	var wl := _mbox(self, wc, Vector3(ln, ceil_h, 0.16),
+		Mats.hall_wallpaper_variant(_finish_variant()))
 	wl.rotation.y = yw
 	_collider_yaw_box(wc, Vector3(ln, ceil_h, 0.16), yw)
 	var inn := side - signf(side) * 0.11
@@ -1400,7 +1548,8 @@ func _hall_header(o: Vector3, yw: float, side: float, t: float, width: float) ->
 	if hh <= 0.02:
 		return
 	var hp := _wp(o, Vector3(t, DOOR_TOP + hh * 0.5, side), yw)
-	var hmesh := _mbox(self, hp, Vector3(width, hh, 0.16), Mats.hall_wallpaper())
+	var hmesh := _mbox(self, hp, Vector3(width, hh, 0.16),
+		Mats.hall_wallpaper_variant(_finish_variant()))
 	hmesh.rotation.y = yw
 	_collider_yaw_box(hp, Vector3(width, hh, 0.16), yw)
 
@@ -1413,7 +1562,8 @@ func _hall_bay_returns(o: Vector3, yw: float, side: float, t: float, width: floa
 	var dc := (outer + side) * 0.5
 	for edge in [t - width * 0.5, t + width * 0.5]:
 		var wp := _wp(o, Vector3(edge, ceil_h * 0.5, dc), yw)
-		var ret := _mbox(self, wp, Vector3(0.16, ceil_h, depth), Mats.hall_wallpaper())
+		var ret := _mbox(self, wp, Vector3(0.16, ceil_h, depth),
+			Mats.hall_wallpaper_variant(_finish_variant()))
 		ret.rotation.y = yw
 		_collider_yaw_box(wp, Vector3(0.16, ceil_h, depth), yw)
 	# Continue the runner into the doorway recess so it reads as intentional
@@ -1522,6 +1672,44 @@ func _planter(p: Vector3) -> void:
 	var mname := "potted_plant_02" if theme == 1 else "potted_plant_01"
 	_cc0_prop(mname, p, _r(23) * TAU)
 	_collider_cyl(p + Vector3(0, 0.5, 0), 0.32, 1.0)
+
+
+## A room-service cart abandoned after the glasses were poured. Its low,
+## asymmetric silhouette gives otherwise empty casino rooms a lived-in past.
+func _casino_service_cart(p: Vector3, salt: int) -> void:
+	var v := Node3D.new()
+	v.position = p
+	v.rotation.y = _r(salt) * TAU
+	add_child(v)
+	_mrbox(v, Vector3(0, 0.76, 0), Vector3(1.05, 0.07, 0.56), Mats.darkwood(), 0.025)
+	_mrbox(v, Vector3(0, 0.28, 0), Vector3(0.92, 0.045, 0.46), Mats.darkwood(), 0.018)
+	for sx in [-0.44, 0.44]:
+		for sz in [-0.20, 0.20]:
+			_mcyl(v, Vector3(sx, 0.40, sz), 0.018, 0.72, Mats.brass())
+			_mcyl(v, Vector3(sx, 0.055, sz), 0.055, 0.05, Mats.charcoal())
+	# Two glasses, one bottle, and a plate left slightly off square.
+	for gx in [-0.22, 0.10]:
+		_mcyl(v, Vector3(gx, 0.84, -0.06), 0.045, 0.13, Mats.glass_tint())
+		_mcyl(v, Vector3(gx, 0.92, -0.06), 0.065, 0.018, Mats.glass_tint())
+	_mcyl(v, Vector3(0.32, 0.91, 0.08), 0.045, 0.28, Mats.glass_tint())
+	_mcyl(v, Vector3(-0.08, 0.805, 0.12), 0.18, 0.025, Mats.crown())
+	_collider_yaw_box(p + Vector3(0, 0.42, 0), Vector3(1.08, 0.84, 0.6), v.rotation.y)
+
+
+## Archive boxes and loose forms occupy a corner of some otherwise empty
+## offices. The pile is broad enough to read, low enough not to become a wall.
+func _office_floor_files(p: Vector3, salt: int) -> void:
+	for i in 3:
+		var v := Node3D.new()
+		var ox := -0.30 if i != 1 else 0.30
+		v.position = p + Vector3(ox, 0, -0.14)
+		v.rotation.y = (_r(salt + i) - 0.5) * 0.34
+		add_child(v)
+		var y := 0.70 if i == 2 else 0.24
+		_mrbox(v, Vector3(0, y, 0), Vector3(0.58, 0.46, 0.48), Mats.box_white(), 0.015)
+		_mbox(v, Vector3(0, y + 0.235, 0), Vector3(0.5, 0.018, 0.4), Mats.paint_white())
+	_asy_papers(p + Vector3(0.6, 0, 0.35), salt + 8, 6)
+	_collider_box(p + Vector3(0, 0.42, 0), Vector3(1.25, 0.84, 1.0))
 
 
 # --- office props ------------------------------------------------------------
@@ -1649,7 +1837,8 @@ func _office_corridor_wall_run(o: Vector3, yw: float, side: float,
 		return
 	var c := (a + b) * 0.5
 	var wc := _wp(o, Vector3(c, ceil_h * 0.5, side), yw)
-	var wall := _mbox(self, wc, Vector3(ln, ceil_h, 0.15), Mats.office_wall())
+	var wall := _mbox(self, wc, Vector3(ln, ceil_h, 0.15),
+		Mats.office_wall_variant(_finish_variant()))
 	wall.rotation.y = yw
 	_collider_yaw_box(wc, Vector3(ln, ceil_h, 0.15), yw)
 	var inn := side - signf(side) * 0.105
@@ -1664,7 +1853,8 @@ func _office_corridor_header(o: Vector3, yw: float, side: float,
 	if hh <= 0.02:
 		return
 	var hp := _wp(o, Vector3(t, DOOR_TOP + hh * 0.5, side), yw)
-	var head := _mbox(self, hp, Vector3(width, hh, 0.15), Mats.office_wall())
+	var head := _mbox(self, hp, Vector3(width, hh, 0.15),
+		Mats.office_wall_variant(_finish_variant()))
 	head.rotation.y = yw
 	_collider_yaw_box(hp, Vector3(width, hh, 0.15), yw)
 
@@ -1678,7 +1868,8 @@ func _office_corridor_bay_returns(o: Vector3, yw: float, side: float,
 	var dc := (outer + side) * 0.5
 	for edge in [t - width * 0.5, t + width * 0.5]:
 		var wp := _wp(o, Vector3(edge, ceil_h * 0.5, dc), yw)
-		var ret := _mbox(self, wp, Vector3(0.15, ceil_h, depth), Mats.office_wall())
+		var ret := _mbox(self, wp, Vector3(0.15, ceil_h, depth),
+			Mats.office_wall_variant(_finish_variant()))
 		ret.rotation.y = yw
 		_collider_yaw_box(wp, Vector3(0.15, ceil_h, depth), yw)
 		# Baseboard on the vestibule face of each return.
@@ -1778,6 +1969,25 @@ func _office_corridor_directory(o: Vector3, yw: float, side: float, t: float) ->
 ## with a CRT terminal, keyboard and chair. The room's reason to exist.
 func _office_cubicles() -> void:
 	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var span := _room_span()
+	var centres := [c]
+	if span.x > 12.1 and span.y > 12.1:
+		centres = [c + Vector3(-5.4, 0, -5.4), c + Vector3(5.4, 0, -5.4),
+			c + Vector3(-5.4, 0, 5.4), c + Vector3(5.4, 0, 5.4)]
+	elif span.x > 12.1:
+		centres = [c + Vector3(-5.6, 0, 0), c + Vector3(5.6, 0, 0)]
+	elif span.y > 12.1:
+		centres = [c + Vector3(0, 0, -5.6), c + Vector3(0, 0, 5.6)]
+	for ci in centres.size():
+		_office_cubicle_cluster(centres[ci], ci * 12)
+	var snd := OfficeSounds.new()
+	snd.position = c + Vector3(0, 1.2, 0)
+	add_child(snd)
+
+
+## One four-person work island. Large merged rooms arrange several of these
+## from their true span rather than leaving three quarters of the floor empty.
+func _office_cubicle_cluster(c: Vector3, qi_base: int) -> void:
 	# cross divider
 	_box(c + Vector3(0, 0.675, 0), Vector3(3.6, 1.35, 0.08), Mats.divider_gray())
 	_box(c + Vector3(0, 0.675, 0), Vector3(0.08, 1.35, 3.6), Mats.divider_gray())
@@ -1786,13 +1996,11 @@ func _office_cubicles() -> void:
 	_box(c + Vector3(0, 1.36, 0), Vector3(0.12, 0.04, 3.7), Mats.paint_white(), false)
 	var qi := 0
 	for q in [Vector2(-1, -1), Vector2(-1, 1), Vector2(1, -1), Vector2(1, 1)]:
-		_office_desk(c + Vector3(q.x * 1.5, 0, 0), Vector2(0, q.y), qi)
+		_office_desk(c + Vector3(q.x * 1.5, 0, 0), Vector2(0, q.y), qi_base + qi)
 		qi += 1
 	# waste bin
-	_cyl(c + Vector3(1.7, 0.18, 1.7), 0.14, 0.36, Mats.charcoal())
-	var snd := OfficeSounds.new()
-	snd.position = c + Vector3(0, 1.2, 0)
-	add_child(snd)
+	var bin_side := -1.0 if int(qi_base / 12) % 2 == 1 else 1.0
+	_cyl(c + Vector3(1.7 * bin_side, 0.18, 1.7), 0.14, 0.36, Mats.charcoal())
 
 
 func _office_desk(c: Vector3, d: Vector2, qi := 0) -> void:
@@ -1893,7 +2101,11 @@ func _office_poster(dir: int, plane: float) -> void:
 	v.add_child(bd)
 
 
-const OFFICE_DEPTS := ["PROCESSING", "ARCHIVES", "ACCOUNTS", "WELLNESS", "RECORDS"]
+const OFFICE_ZONE_DEPTS := [
+	["PROCESSING", "ACCOUNTS", "DATA SERVICES"],
+	["ARCHIVES", "RECORDS", "DOCUMENT CONTROL"],
+	["WELLNESS", "BREAK ROOMS", "HUMAN RESOURCES"],
+]
 
 
 ## White acrylic department sign hung over the corridor.
@@ -1906,9 +2118,11 @@ func _office_dept_sign(along_x: bool) -> void:
 	for sx in [-0.55, 0.55]:
 		_mcyl(v, Vector3(sx, 0.19 + rod_h / 2.0, 0), 0.012, rod_h, Mats.metal_gray())
 	_mrbox(v, Vector3.ZERO, Vector3(1.6, 0.38, 0.05), Mats.paint_white(), 0.01)
+	var zone := WorldGen.macro_zone(wseed, cell, theme)
+	var labels: Array = OFFICE_ZONE_DEPTS[zone]
 	for sside in [-1.0, 1.0]:
 		var lb := Label3D.new()
-		lb.text = OFFICE_DEPTS[int(_r(255) * (float(OFFICE_DEPTS.size()) - 0.01))]
+		lb.text = labels[int(_r(255) * (float(labels.size()) - 0.01))]
 		lb.font_size = 60
 		lb.pixel_size = 0.0022
 		lb.modulate = Color(0.08, 0.22, 0.14)
@@ -2040,6 +2254,44 @@ func _office_break() -> void:
 		_cc0_prop("television_02", tvp + Vector3(0, 0.49, 0), PI * 0.78 + (_r(107) - 0.5) * 0.3)
 
 
+## Landmark: a boardroom far larger than the company could have needed. The
+## single long table and repeated empty chairs create a strong navigational
+## silhouette; the live wall display makes it visible through several doors.
+func _office_boardroom() -> void:
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var ln := 11.5
+	_rbox(c + Vector3(0, 0.75, 0), Vector3(ln, 0.10, 2.15), Mats.desk_white(), 0.045)
+	for x in [-4.7, -1.6, 1.6, 4.7]:
+		_rbox(c + Vector3(x, 0.38, 0), Vector3(0.18, 0.72, 1.65), Mats.metal_gray(), 0.025)
+	_collider_box(c + Vector3(0, 0.48, 0), Vector3(ln, 0.96, 2.2))
+	for side in [-1.0, 1.0]:
+		for i in 8:
+			var x := -4.9 + 1.4 * float(i)
+			var cp := c + Vector3(x, 0, side * 1.75)
+			_chair_at(cp, 0.0 if side < 0.0 else PI, Mats.fabric_charcoal())
+	# One chair sits conspicuously far from the head of the table.
+	_chair_at(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18, Mats.fabric_charcoal())
+	# Dark wall-sized presentation display with a stubborn status line.
+	_box(c + Vector3(-8.9, 1.75, 0), Vector3(0.10, 2.3, 5.8), Mats.charcoal(), false)
+	var screen := Label3D.new()
+	screen.text = "QUARTER  48\nATTENDANCE  0"
+	screen.font_size = 92
+	screen.pixel_size = 0.0028
+	screen.modulate = Color(0.42, 1.0, 0.66)
+	screen.position = c + Vector3(-8.82, 1.78, 0)
+	screen.rotation.y = PI / 2.0
+	add_child(screen)
+	# Real models break up the procedural table geometry at the room edges.
+	_cc0_prop("drawer_cabinet", c + Vector3(8.8, 0, -7.7), -PI / 2.0)
+	_collider_yaw_box(c + Vector3(8.8, 0.95, -7.7), Vector3(1.15, 1.9, 0.52), -PI / 2.0)
+	for p in [c + Vector3(-8.5, 0, -8.0), c + Vector3(8.5, 0, 8.0)]:
+		_cc0_prop("potted_plant_02", p, _r(118 + int(p.x)) * TAU)
+		_collider_cyl(p + Vector3(0, 0.42, 0), 0.34, 0.84)
+	var snd := OfficeSounds.new()
+	snd.position = c + Vector3(0, 1.2, 0)
+	add_child(snd)
+
+
 # --- sewer -------------------------------------------------------------------
 
 func _sewer_ch() -> Array:
@@ -2057,7 +2309,7 @@ func _sewer_floor_ceiling() -> void:
 	_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.concrete())
 	for t in [2.0, 6.0, 10.0]:
 		_box(Vector3(S / 2.0, ceil_h - 0.11, t), Vector3(S, 0.24, 0.34), Mats.concrete(), false)
-	if style == WorldGen.SEWER_BASIN:
+	if style == WorldGen.SEWER_BASIN or style == WorldGen.SEWER_CISTERN:
 		_sewer_basin_structure(ch)
 		return
 	var a := 6.0 - CH_CUT
@@ -2281,14 +2533,25 @@ func _basin_ramp(rdir: int, lat: float) -> void:
 func _sewer_basin_props() -> void:
 	var ch := _sewer_ch()
 	var rs := _basin_ramp_spot(ch)
+	# Prefer an inspection bridge between two closed sides. It crosses the
+	# pool rather than pretending a walkway can end in an incoming waterway.
+	var bridge_axis := -1  # 0 = along x, 1 = along z
+	if not ch[0] and not ch[1]:
+		bridge_axis = 0
+	elif not ch[2] and not ch[3]:
+		bridge_axis = 1
 	for dir in 4:
 		var segs := [[BAS0 + 0.05, BAS1 - 0.05]]
 		if ch[dir]:
 			segs = _cut_seg(segs, 6.0 - CH_CUT - 0.15, 6.0 + CH_CUT + 0.15)
 		if rs[0] == dir:
 			segs = _cut_seg(segs, rs[1] - 0.85, rs[1] + 0.85)
+		if (bridge_axis == 0 and dir <= 1) or (bridge_axis == 1 and dir >= 2):
+			segs = _cut_seg(segs, 5.28, 6.72)
 		for sg in segs:
 			_rail_run(dir, sg[0], sg[1])
+	if bridge_axis >= 0:
+		_sewer_basin_bridge(bridge_axis == 0)
 	# ceiling drop pipes discharging into the pool
 	var made := 0
 	for dir in 4:
@@ -2299,6 +2562,46 @@ func _sewer_basin_props() -> void:
 		if _r(96 + dir) < 0.55:
 			_outfall(dir, 4.6 if _r(97 + dir) < 0.5 else 7.4)
 			made += 1
+
+
+## Narrow grated inspection bridge over one treatment pool. The solid deck
+## collider keeps it dependable while individual slats sell the open grating.
+func _sewer_basin_bridge(along_x: bool) -> void:
+	var length := BAS1 - BAS0
+	var centre := (BAS0 + BAS1) * 0.5
+	for i in 23:
+		var t := lerpf(BAS0 + 0.16, BAS1 - 0.16, float(i) / 22.0)
+		var p := Vector3(t, 0.055, centre) if along_x else Vector3(centre, 0.055, t)
+		var sz := Vector3(0.12, 0.07, 1.08) if along_x else Vector3(1.08, 0.07, 0.12)
+		_box(p, sz, Mats.iron_dark(), false)
+	# rusted longitudinals visible beneath the grate
+	for side in [-0.48, 0.48]:
+		var bp := Vector3(centre, 0.015, centre + side) if along_x \
+			else Vector3(centre + side, 0.015, centre)
+		var bs := Vector3(length, 0.10, 0.08) if along_x \
+			else Vector3(0.08, 0.10, length)
+		_box(bp, bs, Mats.pipe_rust(), false)
+	# handrails and posts along both exposed sides
+	for side in [-0.58, 0.58]:
+		for t in [BAS0 + 0.12, centre, BAS1 - 0.12]:
+			var pp := Vector3(t, 0.48, centre + side) if along_x \
+				else Vector3(centre + side, 0.48, t)
+			_cyl(pp, 0.022, 0.88, Mats.iron_dark(), false)
+		for ry in [0.52, 0.91]:
+			var rp := Vector3(centre, ry, centre + side) if along_x \
+				else Vector3(centre + side, ry, centre)
+			var rz := Vector3(length, 0.05, 0.05) if along_x \
+				else Vector3(0.05, 0.05, length)
+			_box(rp, rz, Mats.iron_dark(), false)
+	var deck_size := Vector3(length, 0.10, 1.12) if along_x \
+		else Vector3(1.12, 0.10, length)
+	_collider_box(Vector3(centre, 0.05, centre), deck_size)
+	for side in [-0.58, 0.58]:
+		var cp := Vector3(centre, 0.5, centre + side) if along_x \
+			else Vector3(centre + side, 0.5, centre)
+		var cs := Vector3(length, 1.0, 0.06) if along_x \
+			else Vector3(0.06, 1.0, length)
+		_collider_box(cp, cs)
 
 
 func _cut_seg(segs: Array, c0: float, c1: float) -> Array:
@@ -2356,52 +2659,79 @@ func _outfall(dir: int, along: float) -> void:
 # --- sewer: props ------------------------------------------------------------
 
 func _sewer_tunnel_props() -> void:
-	for i in 2:
-		if _r(75 + i) < 0.55:
-			var px := 1.2 + 2.6 * _r(76 + i)
-			var pz := 1.5 + 9.0 * _r(77 + i)
-			if _r(78 + i) < 0.5:
-				px = S - px
-			_box(Vector3(px, 0.006, pz),
-				Vector3(0.9 + _r(79 + i), 0.012, 0.7 + 0.8 * _r(80 + i)), Mats.puddle(), false)
-	if _r(81) < 0.22:
-		_barrel(Vector3(1.1 + 1.6 * _r(82), 0, 1.2 + 1.8 * _r(83)))
-	if _r(84) < 0.16:
+	var members := _room_members()
+	for mi in members.size():
+		var member: Vector2i = members[mi]
+		var mc := _room_member_local(member)
+		var salt := 330 + mi * 24
+		# Wet patches and abandoned debris live in dry corners, never on the
+		# centre-line water graph that has to remain readable and walkable.
+		for pi in 2:
+			if WorldGen.r01(wseed, member.x, member.y, salt + pi) >= 0.62:
+				continue
+			var sx := -1.0 if WorldGen.r01(wseed, member.x, member.y, salt + 3 + pi) < 0.5 else 1.0
+			var sz := -1.0 if WorldGen.r01(wseed, member.x, member.y, salt + 5 + pi) < 0.5 else 1.0
+			var pp := mc + Vector3(sx * (3.4 + WorldGen.r01(wseed, member.x, member.y, salt + 7 + pi)),
+				0.006, sz * (3.2 + 1.2 * WorldGen.r01(wseed, member.x, member.y, salt + 9 + pi)))
+			_box(pp, Vector3(0.8 + WorldGen.r01(wseed, member.x, member.y, salt + 11 + pi),
+				0.012, 0.65 + 0.7 * WorldGen.r01(wseed, member.x, member.y, salt + 13 + pi)),
+				Mats.puddle(), false)
+		if WorldGen.r01(wseed, member.x, member.y, salt + 15) < 0.28:
+			_barrel(mc + Vector3(-4.25, 0, -4.15))
+		if WorldGen.r01(wseed, member.x, member.y, salt + 16) < 0.24:
+			_cc0_prop("trashbag", mc + Vector3(4.2, 0, -3.8),
+				WorldGen.r01(wseed, member.x, member.y, salt + 17) * TAU)
+		if WorldGen.r01(wseed, member.x, member.y, salt + 18) < 0.24:
+			_chain(mc + Vector3(-3.8, 0, 3.2))
+	# Wall-bound ladders cannot be shifted with a merged room's centre.
+	if room_n == 1 and _r(84) < 0.16:
 		_wall_ladder()
-	if _r(190) < 0.2:
-		_cc0_prop("trashbag", Vector3(1.4 + 1.2 * _r(191), 0, 2.5 + 7.0 * _r(192)), _r(193) * TAU)
-	if _r(260) < 0.3:
-		_chain(Vector3(2.0 + 1.6 * _r(261), 0, 2.0 + 8.0 * _r(262)))
-		if _r(263) < 0.5:
-			_chain(Vector3(S - 1.6 - 1.4 * _r(264), 0, 2.0 + 8.0 * _r(265)))
 
 
 func _sewer_pump_props() -> void:
-	var c := Vector3(2.3, 0, 2.3)
+	var members := _room_members()
+	for i in members.size():
+		var member: Vector2i = members[i]
+		var mc := _room_member_local(member)
+		var sx := -1.0 if WorldGen.r01(wseed, member.x, member.y, 300) < 0.5 else 1.0
+		var sz := -1.0 if WorldGen.r01(wseed, member.x, member.y, 301) < 0.5 else 1.0
+		_sewer_pump_skid(mc + Vector3(3.7 * sx, 0, 3.7 * sz), sx, sz, 310 + i * 8)
+
+
+## One complete pump train per occupied room cell. Keeping each skid in a dry
+## corner preserves the central water graph and turns merged rooms into actual
+## pump works instead of one machine marooned in a warehouse.
+func _sewer_pump_skid(c: Vector3, sx: float, sz: float, salt: int) -> void:
 	_box(c + Vector3(0, 0.07, 0), Vector3(2.6, 0.14, 1.8), Mats.concrete_floor())
 	# horizontal tank on saddles
-	var tk := _cyl(c + Vector3(0, 1.02, -0.25), 0.5, 1.9, Mats.pipe_green(), false)
+	var tk := _cyl(c + Vector3(0, 1.02, -0.25 * sz), 0.5, 1.9, Mats.pipe_green(), false)
 	tk.rotation.z = PI / 2.0
-	_collider_box(c + Vector3(0, 1.0, -0.25), Vector3(1.9, 1.05, 1.0))
-	for sx in [-0.6, 0.6]:
-		_box(c + Vector3(sx, 0.42, -0.25), Vector3(0.16, 0.84, 0.9), Mats.iron_dark(), false)
+	_collider_box(c + Vector3(0, 1.0, -0.25 * sz), Vector3(1.9, 1.05, 1.0))
+	for support_x in [-0.6, 0.6]:
+		_box(c + Vector3(support_x, 0.42, -0.25 * sz),
+			Vector3(0.16, 0.84, 0.9), Mats.iron_dark(), false)
 	for ex in [-0.95, 0.95]:
-		_sphere(c + Vector3(ex, 1.02, -0.25), 0.48, Mats.pipe_green())
+		_sphere(c + Vector3(ex, 1.02, -0.25 * sz), 0.48, Mats.pipe_green())
 	# pump block and motor
-	_box(c + Vector3(-0.5, 0.32, 0.55), Vector3(0.7, 0.5, 0.55), Mats.iron_dark())
-	var mot := _cyl(c + Vector3(0.25, 0.42, 0.55), 0.19, 0.6, Mats.pipe_green(), false)
+	_box(c + Vector3(-0.5 * sx, 0.32, 0.55 * sz), Vector3(0.7, 0.5, 0.55), Mats.iron_dark())
+	var mot := _cyl(c + Vector3(0.25 * sx, 0.42, 0.55 * sz), 0.19, 0.6, Mats.pipe_green(), false)
 	mot.rotation.z = PI / 2.0
 	# riser to the ceiling with a valve wheel
-	_cyl(c + Vector3(0.9, (1.3 + ceil_h) / 2.0, -0.25), 0.12, ceil_h - 1.3, Mats.pipe_rust(), false)
+	_cyl(c + Vector3(0.9 * sx, (1.3 + ceil_h) / 2.0, -0.25 * sz),
+		0.12, ceil_h - 1.3, Mats.pipe_rust(), false)
 	var vw := MeshInstance3D.new()
 	vw.mesh = TOR
 	vw.material_override = Mats.iron_dark()
-	vw.position = c + Vector3(0.9 - 0.17, 1.85, -0.25)
+	vw.position = c + Vector3((0.9 - 0.17) * sx, 1.85, -0.25 * sz)
 	vw.rotation.z = PI / 2.0
 	vw.scale = Vector3(0.24, 0.24, 0.24)
 	add_child(vw)
+	# one stubborn status lamp makes the machinery legible through the mist
+	_sphere(c + Vector3(-0.5 * sx, 0.63, 0.55 * sz), 0.045,
+		Mats.lamp_green() if _r(salt) < 0.62 else Mats.lamp_red())
 	# oily spill under the works
-	_box(c + Vector3(0.1, 0.005, 0.3), Vector3(2.2, 0.01, 1.5), Mats.puddle(), false)
+	_box(c + Vector3(0.1 * sx, 0.005, 0.3 * sz),
+		Vector3(2.2, 0.01, 1.5), Mats.puddle(), false)
 
 
 func _sewer_dry_props() -> void:
@@ -2419,8 +2749,11 @@ func _sewer_dry_props() -> void:
 	# workmen's junk that never got hauled out
 	if _r(94) < 0.5:
 		var cyaw := _r(95) * TAU
-		_cc0_prop("wooden_crate_02", Vector3(bx + 0.6, 0, bz - 1.3), cyaw)
-		_collider_yaw_box(Vector3(bx + 0.6, 0.23, bz - 1.3), Vector3(0.55, 0.47, 1.17), cyaw)
+		var crate_name := "wooden_crate_01" if _r(189) < 0.45 else "wooden_crate_02"
+		_cc0_prop(crate_name, Vector3(bx + 0.6, 0, bz - 1.3), cyaw)
+		var crate_size := Vector3(0.86, 0.38, 0.44) if crate_name == "wooden_crate_01" \
+			else Vector3(0.55, 0.47, 1.17)
+		_collider_yaw_box(Vector3(bx + 0.6, crate_size.y * 0.5, bz - 1.3), crate_size, cyaw)
 	if _r(180) < 0.4:
 		var tp := Vector3(S - bx, 0.085, bz + (_r(181) - 0.5) * 3.0)
 		var tyre := _cc0_prop("old_tyre", tp, _r(182) * TAU)
@@ -2435,6 +2768,65 @@ func _sewer_dry_props() -> void:
 	if _r(187) < 0.3:
 		_cc0_prop("plastic_crate_03", Vector3(bx + 1.4, 0, bz + 1.1), _r(188) * TAU)
 		_collider_box(Vector3(bx + 1.4, 0.13, bz + 1.1), Vector3(0.5, 0.27, 0.28))
+	# More than one generation of maintenance debris: a stove, loose wheel rim
+	# or hand lantern appears in the driest rooms, never in the water channel.
+	if _r(190) < 0.24:
+		var sp := Vector3(S - bx, 0, 2.0 if bz > 6.0 else 10.0)
+		_cc0_prop("barrel_stove", sp, _r(191) * TAU)
+		_collider_cyl(sp + Vector3(0, 0.43, 0), 0.32, 0.86)
+	if _r(192) < 0.34:
+		var rim_name := "rusted_wheel_rim_01" if _r(193) < 0.5 else "rusted_wheel_rim_02"
+		var rp := Vector3(2.0 if bx > 6.0 else 10.0, 0.18, S - bz)
+		var rim := _cc0_prop(rim_name, rp, _r(194) * TAU)
+		rim.rotation.x = PI / 2.0
+	if _r(195) < 0.28:
+		var lp := Vector3(bx + 0.4, 0.48, bz - 0.2)
+		_cc0_prop("Lantern_01", lp, _r(196) * TAU, 1.25)
+		var ll := OmniLight3D.new()
+		ll.position = lp + Vector3(0, 0.15, 0)
+		ll.light_color = Color(1.0, 0.54, 0.22)
+		ll.light_energy = 0.28
+		ll.omni_range = 3.0
+		ll.shadow_enabled = false
+		ll.distance_fade_enabled = true
+		ll.distance_fade_begin = 12.0
+		ll.distance_fade_length = 5.0
+		add_child(ll)
+
+
+## Landmark: four treatment pools meet beneath a huge overhead manifold. The
+## existing per-cell bridges keep every basin traversable; the shared pipe
+## crown and control island make the 24m reservoir read as one place.
+func _sewer_cistern() -> void:
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	# A compact central operator island, offset so the joins between pool decks
+	# remain passable on both axes.
+	var console := c + Vector3(2.2, 0, 2.2)
+	_rbox(console + Vector3(0, 0.62, 0), Vector3(2.4, 1.24, 1.0), Mats.iron_dark(), 0.04)
+	var face := _rbox(console + Vector3(0, 1.02, -0.51), Vector3(2.2, 0.48, 0.06), Mats.pipe_green(), 0.02, false)
+	face.rotation.x = -0.18
+	for i in 7:
+		_sphere(console + Vector3(-0.85 + 0.28 * float(i), 1.06, -0.57), 0.035,
+			Mats.lamp_green() if i == 2 else Mats.lamp_red())
+	_collider_box(console + Vector3(0, 0.65, 0), Vector3(2.45, 1.3, 1.05))
+	# Four enormous risers feed a square manifold just below the ceiling.
+	for ox in [-5.2, 5.2]:
+		for oz in [-5.2, 5.2]:
+			var p := c + Vector3(ox, 0, oz)
+			_cyl(p + Vector3(0, ceil_h * 0.5, 0), 0.24, ceil_h, Mats.pipe_rust(), false)
+			var wheel := _cc0_prop("rusted_wheel_rim_01", p + Vector3(0.28, 1.35, 0), PI / 2.0, 1.7)
+			wheel.rotation.z = PI / 2.0
+	for oz in [-5.2, 5.2]:
+		var px := _cyl(c + Vector3(0, ceil_h - 0.42, oz), 0.22, 10.4, Mats.pipe_green(), false)
+		px.rotation.z = PI / 2.0
+	for ox in [-5.2, 5.2]:
+		var pz := _cyl(c + Vector3(ox, ceil_h - 0.42, 0), 0.22, 10.4, Mats.pipe_green(), false)
+		pz.rotation.x = PI / 2.0
+	# A pair of real industrial fixtures hangs over the control island.
+	for dx in [-1.1, 1.1]:
+		var lamp := _cc0_prop("industrial_caged_sconce",
+			console + Vector3(dx, 1.85, -0.58), 0.0, 0.58)
+		lamp.rotation.x = -PI / 2.0
 
 
 func _barrel(p: Vector3) -> void:
@@ -2551,10 +2943,33 @@ func _sewer_gallery() -> void:
 			pp.rotation = Vector3(0, yw, PI / 2.0)
 		var tr := _mbox(self, _wp(o, Vector3(0, 1.45, inn), yw), Vector3(9.6, 0.05, 0.16), Mats.iron_dark())
 		tr.rotation.y = yw
+	# A flush service grate reconnects the two narrow banks without obstructing
+	# travel along them. Keep it away from the central cross-channel opening.
+	var bridge_t := -3.0 if _r(289) < 0.5 else 3.0
+	_sewer_gallery_grate(o, yw, bridge_t)
 	# lamps strung down the slot
 	for t in [-3.0, 0.0, 3.0]:
 		var lp := _wp(o, Vector3(t, 0, 0), yw)
 		_cage_lamp(Vector2(lp.x, lp.z), false, t == 0.0 and _r(288) < 0.3, false)
+
+
+func _sewer_gallery_grate(o: Vector3, yw: float, along: float) -> void:
+	for i in 7:
+		var x := along + lerpf(-0.48, 0.48, float(i) / 6.0)
+		var bar := _mbox(self, _wp(o, Vector3(x, 0.045, 0), yw),
+			Vector3(0.055, 0.07, 3.45), Mats.iron_dark())
+		bar.rotation.y = yw
+	for z in [-1.45, -0.5, 0.5, 1.45]:
+		var brace := _mbox(self, _wp(o, Vector3(along, 0.025, z), yw),
+			Vector3(1.08, 0.06, 0.055), Mats.pipe_rust())
+		brace.rotation.y = yw
+	# worn hazard paint just outside the load-bearing grate
+	for ex in [-0.58, 0.58]:
+		var edge := _mbox(self, _wp(o, Vector3(along + ex, 0.052, 0), yw),
+			Vector3(0.055, 0.025, 3.45), Mats.lamp_amber())
+		edge.rotation.y = yw
+	_collider_yaw_box(_wp(o, Vector3(along, 0.04, 0), yw),
+		Vector3(1.12, 0.09, 3.5), yw)
 
 
 # --- sewer: lighting & sound -------------------------------------------------
@@ -2642,6 +3057,12 @@ func _sewer_sounds() -> void:
 	snd.rush_db = -10.0 if style == WorldGen.SEWER_BASIN else -16.0
 	snd.position = Vector3(6.0, 0.4, 6.0)
 	add_child(snd)
+
+
+func _sewer_mist() -> void:
+	var ch := _sewer_ch()
+	if not (ch[0] or ch[1] or ch[2] or ch[3] or style == WorldGen.SEWER_BASIN):
+		return
 	# cold mist pooling knee-deep over the water
 	if _r(266) < 0.65:
 		var fv := FogVolume.new()
@@ -2764,8 +3185,17 @@ const AIR_DESTS := ["AMSTERDAM", "SINGAPORE", "DENVER", "REYKJAVIK", "OSAKA",
 	"MANAUS", "TAIPEI", "LAGOS", "ZURICH"]
 const AIR_STATUS := ["DELAYED", "DELAYED", "ON TIME", "BOARDING", "DELAYED",
 	"CANCELLED", "GATE WAIT", "DELAYED"]
-const AIR_SIGNS := ["Gates A1 - A22  >", "<  Gates B1 - B14", "Baggage Claim",
-	"Transfers", "Exit  >", "<  Passport Control", "Lounges  >", "Trains to City"]
+const AIR_ZONE_SIGNS := [
+	["Gates A1 - A22  >", "<  Gates B1 - B14", "Transfers", "Lounges  >"],
+	["Departures  >", "<  Check-in", "Security", "Gates  >"],
+	["Baggage Claim", "Exit  >", "<  Passport Control", "Trains to City"],
+]
+
+
+func _air_zone_sign(salt: int) -> String:
+	var zone := WorldGen.macro_zone(wseed, cell, theme)
+	var labels: Array = AIR_ZONE_SIGNS[zone]
+	return labels[int(_r(salt) * (float(labels.size()) - 0.01))]
 
 
 func _msphere(parent: Node3D, pos: Vector3, r: float, mat: Material) -> MeshInstance3D:
@@ -2882,7 +3312,7 @@ func _hang_sign(pos: Vector3, yaw: float, text: String, top := 0.0) -> void:
 func _air_portal_sign(dir: int, t: float) -> void:
 	if style == WorldGen.AIR_TRANSIT:
 		return  # would poke through the transit bulkhead
-	var txt: String = AIR_SIGNS[int(_r(345 + dir) * (float(AIR_SIGNS.size()) - 0.01))]
+	var txt := _air_zone_sign(345 + dir)
 	if dir == 0:
 		_hang_sign(Vector3(S - 0.8, AIR_DOOR + 0.6, t), PI / 2.0, txt)
 	else:
@@ -3323,8 +3753,8 @@ func _air_concourse() -> void:
 	for i in offs.size():
 		_travelator(_wp(o, Vector3(0, 0, offs[i]), yw), yw,
 			flow0 * (1.0 if i == 0 else -1.0), 323 + i, minf(10.4, run))
-	_hang_sign(o + Vector3(0, 3.55, 0), yw + PI / 2.0,
-		AIR_SIGNS[int(_r(326) * (float(AIR_SIGNS.size()) - 0.01))])
+		_hang_sign(o + Vector3(0, 3.55, 0), yw + PI / 2.0,
+			_air_zone_sign(326))
 	# a seat row parked against the quiet side, only if there is room beside
 	# the belts for it
 	var side := lat / 2.0 - 1.6
@@ -3443,7 +3873,7 @@ func _air_transit() -> void:
 		var sl := -1.7 if ki == 0 else 1.7
 		if _r(516 + ki) < 0.55:
 			_hang_sign(_wp(o, Vector3(0, 2.8, sl), yw), yw + PI / 2.0,
-				AIR_SIGNS[int(_r(518 + ki) * (float(AIR_SIGNS.size()) - 0.01))], wh)
+					_air_zone_sign(518 + ki), wh)
 
 
 func _air_transit_side_data(si: int, along_x: bool, wall_half: float) -> Dictionary:
@@ -3483,7 +3913,8 @@ func _air_transit_wall_run(o: Vector3, yw: float, side: float,
 		return
 	var c := (a + b) * 0.5
 	var wc := _wp(o, Vector3(c, wh * 0.5, side), yw)
-	var wall := _mbox(self, wc, Vector3(ln, wh, T), Mats.airport_wall())
+	var wall := _mbox(self, wc, Vector3(ln, wh, T),
+		Mats.airport_wall_variant(_finish_variant()))
 	wall.rotation.y = yw
 	_collider_yaw_box(wc, Vector3(ln, wh, T), yw)
 	var inn := side - signf(side) * (T * 0.5 + 0.022)
@@ -3507,7 +3938,8 @@ func _air_transit_header(o: Vector3, yw: float, side: float,
 	if hh <= 0.02:
 		return
 	var hp := _wp(o, Vector3(t, AIR_DOOR + hh * 0.5, side), yw)
-	var head := _mbox(self, hp, Vector3(width, hh, T), Mats.airport_wall())
+	var head := _mbox(self, hp, Vector3(width, hh, T),
+		Mats.airport_wall_variant(_finish_variant()))
 	head.rotation.y = yw
 	_collider_yaw_box(hp, Vector3(width, hh, T), yw)
 
@@ -3547,7 +3979,8 @@ func _air_transit_bay_returns(o: Vector3, yw: float, side: float,
 	var dc := (outer + side) * 0.5
 	for edge in [t - width * 0.5, t + width * 0.5]:
 		var wp := _wp(o, Vector3(edge, wh * 0.5, dc), yw)
-		var ret := _mbox(self, wp, Vector3(T, wh, depth), Mats.airport_wall())
+		var ret := _mbox(self, wp, Vector3(T, wh, depth),
+			Mats.airport_wall_variant(_finish_variant()))
 		ret.rotation.y = yw
 		_collider_yaw_box(wp, Vector3(T, wh, depth), yw)
 		var inward := T * 0.5 + 0.022 if edge < t else -(T * 0.5 + 0.022)
@@ -3709,6 +4142,30 @@ func _air_baggage() -> void:
 		_air_trolley(Vector3(1.6 + 1.2 * _r(389), 0, 1.5), (_r(390) - 0.5) * 0.4, 391, 2 + int(_r(392) * 2.0))
 	if _r(393) < 0.6:
 		_suitcase(Vector3(2.2 + 7.6 * _r(394), 0, 8.6 + 1.6 * _r(395)), _r(396) * TAU, 397, _r(398) < 0.5)
+	if room_n >= 2:
+		_air_baggage_large_dressing(c)
+
+
+## Seating and trolley ranks scale with a merged baggage hall while the main
+## carousel remains the visual anchor. The added islands sit outside its sweep.
+func _air_baggage_large_dressing(c: Vector3) -> void:
+	var span := _room_span()
+	var spots := []
+	if span.x > 12.1:
+		spots.append(c + Vector3(-7.2, 0, 0))
+		spots.append(c + Vector3(7.2, 0, 0))
+	if span.y > 12.1:
+		spots.append(c + Vector3(0, 0, -7.2))
+		spots.append(c + Vector3(0, 0, 7.2))
+	for i in spots.size():
+		var sp: Vector3 = spots[i]
+		var face := atan2(c.x - sp.x, c.z - sp.z)
+		_seat_row(sp, face, 4, 430 + i * 4)
+	var tp := c + Vector3(span.x * 0.5 - 2.0, 0, -span.y * 0.5 + 2.0)
+	_air_trolley(tp, PI * 0.25 + (_r(448) - 0.5) * 0.3, 449,
+		2 + int(_r(450) * 1.99))
+	if _r(451) < 0.75:
+		_suitcase(tp + Vector3(-1.2, 0, 0.7), _r(452) * TAU, 453, _r(454) < 0.4)
 
 
 # --- airport: escalators ------------------------------------------------------
@@ -3850,9 +4307,52 @@ func _air_hall() -> void:
 			float(int(_r(414) * 3.99)) * PI / 2.0, true, true)
 
 
+## Landmark: a shuttered food court. Three distinct concession fronts frame
+## a sparse field of real tables; the central aisle stays clear enough to see
+## the dead menu boards from the adjoining concourse.
+func _air_foodcourt() -> void:
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var names := ["SKYLINE GRILL", "COFFEE / TEA", "FRESH EXPRESS"]
+	for i in 3:
+		var x := -6.6 + 6.6 * float(i)
+		var kp := c + Vector3(x, 0, -8.5)
+		_rbox(kp + Vector3(0, 0.65, 0), Vector3(5.4, 1.3, 1.35), Mats.jetway_body(), 0.03)
+		# Corrugated shutter, counter and a black menu strip.
+		for sl in 8:
+			_box(kp + Vector3(0, 1.22 + 0.22 * float(sl), 0.69),
+				Vector3(5.0, 0.12, 0.04), Mats.metal_gray(), false)
+		_rbox(kp + Vector3(0, 1.0, 1.0), Vector3(5.2, 0.12, 0.78), Mats.steel(), 0.025)
+		_box(kp + Vector3(0, 3.45, 0.72), Vector3(4.7, 0.65, 0.08), Mats.charcoal(), false)
+		var sign := Label3D.new()
+		sign.text = names[i]
+		sign.font_size = 96
+		sign.pixel_size = 0.0025
+		sign.modulate = Color(0.72, 0.88, 1.0) if i != 1 else Color(1.0, 0.72, 0.34)
+		sign.position = kp + Vector3(0, 3.46, 0.78)
+		add_child(sign)
+		_collider_box(kp + Vector3(0, 1.3, 0), Vector3(5.5, 2.6, 1.5))
+	# Four battered public tables, deliberately asymmetrical around the aisle.
+	var table_offsets: Array[Vector3] = [Vector3(-5.4, 0, -1.8), Vector3(4.8, 0, -2.0),
+		Vector3(-4.5, 0, 4.4), Vector3(5.6, 0, 4.0)]
+	for i in 4:
+		var tp: Vector3 = c + table_offsets[i]
+		var yaw := (0.0 if i % 2 == 0 else PI / 2.0) + (_r(430 + i) - 0.5) * 0.15
+		_cc0_prop("wooden_picnic_table", tp, yaw)
+		_collider_yaw_box(tp + Vector3(0, 0.4, 0), Vector3(2.3, 0.8, 3.1), yaw)
+	# Cleaning and service equipment gives the set piece a second read.
+	var cartp := c + Vector3(8.0, 0, 7.6)
+	_cc0_prop("CoffeeCart_01", cartp, -PI / 2.0)
+	_collider_yaw_box(cartp + Vector3(0, 0.85, 0), Vector3(2.2, 1.7, 1.1), -PI / 2.0)
+	var wetp := c + Vector3(0.8, 0, 5.2)
+	_cc0_prop("WetFloorSign_01", wetp, _r(438) * TAU)
+	_collider_box(wetp + Vector3(0, 0.3, 0), Vector3(0.32, 0.62, 0.36))
+	_hang_sign(c + Vector3(0, 3.7, 6.4), 0.0, "FOOD COURT")
+
+
 func _air_common() -> void:
 	# structural columns in the open styles
-	if style == WorldGen.AIR_CONCOURSE or style == WorldGen.AIR_HALL or style == WorldGen.AIR_BAGGAGE:
+	if style == WorldGen.AIR_CONCOURSE or style == WorldGen.AIR_HALL \
+			or style == WorldGen.AIR_BAGGAGE or style == WorldGen.AIR_FOODCOURT:
 		for p in [Vector2(1.7, 1.7), Vector2(10.3, 1.7), Vector2(1.7, 10.3), Vector2(10.3, 10.3)]:
 			if WorldGen.r01(wseed, cell.x + int(p.x), cell.y + int(p.y), 330) < 0.5:
 				_air_column(p)
@@ -3872,7 +4372,7 @@ func _air_common() -> void:
 		_collider_yaw_box(vsp + Vector3(0, 0.3, 0), Vector3(1.62, 0.58, 0.26), vsy)
 	# PA speakers live in the busy styles
 	var wants_pa := style == WorldGen.AIR_GATE or style == WorldGen.AIR_CHECKIN \
-		or style == WorldGen.AIR_BAGGAGE
+		or style == WorldGen.AIR_BAGGAGE or style == WorldGen.AIR_FOODCOURT
 	if wants_pa and _r(342) < 0.5:
 		var snd := AirportSounds.new()
 		snd.position = Vector3(S / 2.0, 0, S / 2.0)
@@ -3882,6 +4382,26 @@ func _air_common() -> void:
 ## Usable rectangle of this room, in metres, centred on room_centre. An
 ## L-shaped room reports only its root cell, since that is the largest part
 ## guaranteed to be free of walls.
+func _room_members() -> Array:
+	var out := []
+	# Merges only reach one cell toward -x/-z, while a 2x2 hall reaches one
+	# toward +x/+z. This small scan covers every legal generated room shape.
+	for mx in range(room_root.x - 1, room_root.x + 2):
+		for mz in range(room_root.y - 1, room_root.y + 2):
+			var candidate := Vector2i(mx, mz)
+			if WorldGen.room_id(wseed, candidate) == room_root:
+				out.append(candidate)
+	return out
+
+
+## Local furnishing-space centre of one member cell. The later room-centre
+## shift maps this point back onto that cell in world space, including L rooms.
+func _room_member_local(member: Vector2i) -> Vector3:
+	var rc := WorldGen.room_centre(wseed, room_root)
+	return Vector3(6.0 + float(member.x) * S + S / 2.0 - rc.x, 0,
+		6.0 + float(member.y) * S + S / 2.0 - rc.y)
+
+
 func _room_span() -> Vector2:
 	if room_n >= 4:
 		return Vector2(24.0, 24.0)
@@ -3909,11 +4429,11 @@ func _partition(along_x: bool, off: float) -> void:
 	if chosen < 0.0:
 		return
 	off = chosen
-	var wmat: Material = Mats.wallpaper()
+	var wmat: Material = Mats.wallpaper_variant(_finish_variant())
 	if theme == 1:
-		wmat = Mats.office_wall()
+		wmat = Mats.office_wall_variant(_finish_variant())
 	elif theme == 4:
-		wmat = Mats.airport_wall()
+		wmat = Mats.airport_wall_variant(_finish_variant())
 	elif theme == 5:
 		wmat = _asy_wall_mat()
 	elif theme == 6:
@@ -4109,11 +4629,22 @@ const ASY_SCRAWLS := ["LET ME OUT", "THEY LISTEN AT NIGHT", "NO ONE LEFT",
 	"I AM NOT SICK", "IT WATCHES THE DOOR", "ROOM 9 ROOM 9 ROOM 9",
 	"DONT SLEEP HERE", "WHERE DID EVERYONE GO", "HE COUNTS US AT NIGHT",
 	"THE TREATMENT HELPS", "ALL OF US ARE STILL HERE"]
-const ASY_SIGNS := ["WARD 3", "WARD 7", "HYDROTHERAPY", "TREATMENT",
-	"ADMISSIONS", "SOLITARY", "NO ADMITTANCE", "RECORDS"]
+const ASY_ZONE_SIGNS := [
+	["WARD 3", "WARD 7", "SOLITARY", "DAY ROOM"],
+	["HYDROTHERAPY", "TREATMENT", "NO ADMITTANCE", "SURGERY"],
+	["ADMISSIONS", "RECORDS", "ADMINISTRATION", "VISITORS"],
+]
 
 static var _asy_scenes := {}
 static var _cc0_scenes := {}
+
+
+static func _prop_scene(path: String) -> PackedScene:
+	var status := ResourceLoader.load_threaded_get_status(path)
+	if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS \
+			or status == ResourceLoader.THREAD_LOAD_LOADED:
+		return ResourceLoader.load_threaded_get(path) as PackedScene
+	return load(path) as PackedScene
 
 
 ## Instance a downloaded glTF prop. Scenes are load()-cached, so each model's
@@ -4121,7 +4652,7 @@ static var _cc0_scenes := {}
 func _asy_model(mname: String, pos: Vector3, yaw: float) -> Node3D:
 	var ps: PackedScene = _asy_scenes.get(mname)
 	if ps == null:
-		ps = load("res://models/asylum/%s/%s_1k.gltf" % [mname, mname])
+		ps = _prop_scene("res://models/asylum/%s/%s_1k.gltf" % [mname, mname])
 		_asy_scenes[mname] = ps
 	var inst: Node3D = ps.instantiate()
 	inst.position = pos
@@ -4134,7 +4665,7 @@ func _asy_model(mname: String, pos: Vector3, yaw: float) -> Node3D:
 func _cc0_prop(mname: String, pos: Vector3, yaw: float, scl := 1.0) -> Node3D:
 	var ps: PackedScene = _cc0_scenes.get(mname)
 	if ps == null:
-		ps = load("res://models/cc0/%s/%s_1k.gltf" % [mname, mname])
+		ps = _prop_scene("res://models/cc0/%s/%s_1k.gltf" % [mname, mname])
 		_cc0_scenes[mname] = ps
 	var inst: Node3D = ps.instantiate()
 	inst.position = pos
@@ -4592,14 +5123,23 @@ func _asy_ward() -> void:
 ## facing the wall, papers everywhere.
 func _asy_dayroom() -> void:
 	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var span := _room_span()
+	var large := span.x > 12.1 or span.y > 12.1
 	var base := _r(880) * TAU
-	for i in 7:
+	var chair_count := 11 if large else 7
+	var circle_r := 4.1 if large else 2.3
+	for i in chair_count:
 		if _r(881 + i) < 0.2:
 			continue
-		var ang := base + TAU * float(i) / 7.0
-		var cp := c + Vector3(cos(ang) * 2.3, 0, sin(ang) * 2.3)
+		var ang := base + TAU * float(i) / float(chair_count)
+		var cp := c + Vector3(cos(ang) * circle_r, 0, sin(ang) * circle_r)
 		var face := atan2(c.x - cp.x, c.z - cp.z)
-		_asy_chair(cp, face + (_r(888 + i) - 0.5) * 0.5, _r(895 + i) < 0.15)
+		_asy_chair(cp, face + (_r(900 + i) - 0.5) * 0.5, _r(920 + i) < 0.15)
+	if large:
+		# Secondary activity islands stop the 24m dayroom reading as one chair
+		# circle marooned in a warehouse-sized shell.
+		_asy_dayroom_table(c + Vector3(-6.2, 0, 5.0), 940)
+		_asy_dayroom_table(c + Vector3(6.2, 0, -5.0), 950)
 	var rp := c + Vector3(7.6, 0, 7.9)
 	var rock := _asy_model("Rockingchair_01", rp, PI * 0.83)
 	rock.position.y = -0.1
@@ -4613,6 +5153,21 @@ func _asy_dayroom() -> void:
 	if _r(913) < 0.4:
 		var fb := _box(c + Vector3(3.5 * (_r(914) - 0.5), 0.04, -4.5), Vector3(1.2, 0.06, 0.85), Mats.darkwood(), false)
 		fb.rotation.y = _r(915) * TAU
+
+
+## A scarred institutional table and three mismatched chairs, laid out as a
+## smaller therapy or card-game group around the edge of a large dayroom.
+func _asy_dayroom_table(c: Vector3, salt: int) -> void:
+	_mrbox(self, c + Vector3(0, 0.72, 0), Vector3(1.55, 0.07, 1.0),
+		Mats.asy_concrete(), 0.025)
+	for sx in [-0.62, 0.62]:
+		for sz in [-0.36, 0.36]:
+			_cyl(c + Vector3(sx, 0.35, sz), 0.025, 0.7, Mats.asy_metal())
+	_collider_box(c + Vector3(0, 0.4, 0), Vector3(1.6, 0.8, 1.05))
+	for i in 3:
+		var ang := TAU * float(i) / 3.0 + 0.35 + (_r(salt + i) - 0.5) * 0.2
+		var cp := c + Vector3(cos(ang) * 1.25, 0, sin(ang) * 1.05)
+		_asy_chair(cp, atan2(c.x - cp.x, c.z - cp.z), _r(salt + 5 + i) < 0.25)
 
 
 func _asy_treatment() -> void:
@@ -4700,6 +5255,37 @@ func _asy_office() -> void:
 			break
 	if _r(979) < 0.4:
 		_asy_iv(c + Vector3(4.0, 0, -3.5 * (_r(980) - 0.5)))
+
+
+## Landmark: an institutional chapel/assembly room. Long scarred pews point
+## toward a tiny dais, while one wheelchair has been left in the centre aisle.
+## The aisle itself remains a clean sightline and traversal route.
+func _asy_chapel() -> void:
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	# Shallow dais and plain altar at the north end.
+	var front := c + Vector3(0, 0, -8.0)
+	_rbox(front + Vector3(0, 0.16, 0), Vector3(8.0, 0.32, 2.8), Mats.darkwood(), 0.025)
+	_rbox(front + Vector3(0, 0.88, 0.1), Vector3(2.2, 1.45, 0.75), Mats.asy_concrete(), 0.035)
+	_collider_box(front + Vector3(0, 0.48, 0), Vector3(8.1, 0.96, 2.9))
+	# A stark wall cross; it is architecture, not a glowing quest marker.
+	_box(front + Vector3(0, 3.45, -1.43), Vector3(0.30, 2.2, 0.09), Mats.darkwood(), false)
+	_box(front + Vector3(0, 3.70, -1.43), Vector3(1.45, 0.28, 0.09), Mats.darkwood(), false)
+	# Two banks of pews leave a generous central aisle.
+	for row in 6:
+		var z := -4.5 + 2.05 * float(row)
+		for side in [-1.0, 1.0]:
+			var p := c + Vector3(side * 3.65, 0, z)
+			_rbox(p + Vector3(0, 0.54, 0), Vector3(5.6, 0.15, 0.66), Mats.darkwood(), 0.035, false)
+			_rbox(p + Vector3(0, 0.92, -0.28), Vector3(5.6, 0.72, 0.12), Mats.darkwood(), 0.035, false)
+			for sx in [-2.5, 0.0, 2.5]:
+				_box(p + Vector3(sx, 0.30, 0), Vector3(0.10, 0.60, 0.58), Mats.iron_dark(), false)
+			_collider_box(p + Vector3(0, 0.65, 0), Vector3(5.7, 1.3, 0.75))
+	# Human-scale detail makes the symmetry feel abandoned rather than staged.
+	_asy_wheelchair(c + Vector3(0.7, 0, 4.2), PI + 0.22)
+	_asy_papers(c + Vector3(-0.8, 0, 6.5), 1101, 11)
+	var rockp := front + Vector3(4.8, 0, 0.2)
+	_asy_model("Rockingchair_01", rockp, -PI / 2.0)
+	_collider_yaw_box(rockp + Vector3(0, 0.5, 0), Vector3(0.72, 1.0, 0.85), -PI / 2.0)
 
 
 ## A narrow but structurally complete ward corridor. Locked patient rooms are
@@ -4926,7 +5512,9 @@ func _asy_corridor_door(o: Vector3, yw: float, t: float,
 
 
 func _asy_sign(o: Vector3, yw: float) -> void:
-	var txt: String = ASY_SIGNS[WorldGen.h(wseed, cell.x, cell.y, 741) % ASY_SIGNS.size()]
+	var zone := WorldGen.macro_zone(wseed, cell, theme)
+	var labels: Array = ASY_ZONE_SIGNS[zone]
+	var txt: String = labels[WorldGen.h(wseed, cell.x, cell.y, 741) % labels.size()]
 	var y := ceil_h - 0.55
 	var v := Node3D.new()
 	v.position = _wp(o, Vector3(0, y, 0), yw)
@@ -4959,12 +5547,12 @@ func _sch_tiled_room() -> bool:
 func _sch_wall_mat() -> Material:
 	if _sch_tiled_room():
 		return Mats.sch_tile()
-	return Mats.sch_wall()
+	return Mats.sch_wall_variant(_finish_variant())
 
 
 func _sch_floor_mat() -> Material:
 	match style:
-		WorldGen.SCH_GYM:
+		WorldGen.SCH_GYM, WorldGen.SCH_AUDITORIUM:
 			return Mats.sch_gymfloor()
 		WorldGen.SCH_BATHROOM:
 			return Mats.sch_tile()
@@ -5035,8 +5623,11 @@ func _sch_lighting() -> void:
 	add_child(light)
 
 
-const SCH_CORRIDOR_ROOMS := ["101", "103", "112", "204", "ART", "MUSIC",
-	"SCIENCE", "FACULTY"]
+const SCH_ZONE_ROOMS := [
+	["101", "103", "112", "204", "ART", "SCIENCE"],
+	["MUSIC", "GYM", "CAFETERIA", "LIBRARY", "ART"],
+	["FACULTY", "MAIN OFFICE", "COUNSELOR", "RECORDS"],
+]
 
 
 ## The architectural contract for one side of a school hall. Coordinates are
@@ -5113,7 +5704,8 @@ func _sch_corridor_wall_run(o: Vector3, yw: float, side: float,
 		return
 	var c := (a + b) * 0.5
 	var wc := _wp(o, Vector3(c, ceil_h * 0.5, side), yw)
-	var wall := _mbox(self, wc, Vector3(ln, ceil_h, T), Mats.sch_wall())
+	var wall := _mbox(self, wc, Vector3(ln, ceil_h, T),
+		Mats.sch_wall_variant(_finish_variant()))
 	wall.rotation.y = yw
 	_collider_yaw_box(wc, Vector3(ln, ceil_h, T), yw)
 	var inn := side - signf(side) * (T * 0.5 + 0.025)
@@ -5131,7 +5723,8 @@ func _sch_corridor_header(o: Vector3, yw: float, side: float,
 	if hh <= 0.02:
 		return
 	var hp := _wp(o, Vector3(t, DOOR_TOP + hh * 0.5, side), yw)
-	var head := _mbox(self, hp, Vector3(width, hh, T), Mats.sch_wall())
+	var head := _mbox(self, hp, Vector3(width, hh, T),
+		Mats.sch_wall_variant(_finish_variant()))
 	head.rotation.y = yw
 	_collider_yaw_box(hp, Vector3(width, hh, T), yw)
 
@@ -5157,7 +5750,8 @@ func _sch_corridor_bay_returns(o: Vector3, yw: float, side: float,
 	var dc := (outer + side) * 0.5
 	for edge in [t - width * 0.5, t + width * 0.5]:
 		var wp := _wp(o, Vector3(edge, ceil_h * 0.5, dc), yw)
-		var ret := _mbox(self, wp, Vector3(T, ceil_h, depth), Mats.sch_wall())
+		var ret := _mbox(self, wp, Vector3(T, ceil_h, depth),
+			Mats.sch_wall_variant(_finish_variant()))
 		ret.rotation.y = yw
 		_collider_yaw_box(wp, Vector3(T, ceil_h, depth), yw)
 		var inward := T * 0.5 + 0.025 if edge < t else -(T * 0.5 + 0.025)
@@ -5219,8 +5813,9 @@ func _sch_corridor_door(o: Vector3, yw: float, t: float,
 		Vector3(0.3, 0.22, 0.025), Mats.sch_white(), 0.005)
 	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var lb := Label3D.new()
-	lb.text = SCH_CORRIDOR_ROOMS[
-		WorldGen.h(wseed, cell.x + int(t * 4.0), cell.y, salt) % SCH_CORRIDOR_ROOMS.size()]
+	var zone := WorldGen.macro_zone(wseed, cell, theme)
+	var labels: Array = SCH_ZONE_ROOMS[zone]
+	lb.text = labels[WorldGen.h(wseed, cell.x + int(t * 4.0), cell.y, salt) % labels.size()]
 	lb.font_size = 34
 	lb.pixel_size = 0.00145
 	lb.modulate = Color(0.16, 0.22, 0.24)
@@ -5780,6 +6375,56 @@ func _sch_gym() -> void:
 	_sch_bleachers(c + Vector3(-(half - 1.3), 0, 0), PI / 2.0, minf(half * 1.5, 9.0))
 	if _r(600) < 0.6:
 		_sch_bleachers(c + Vector3(half - 1.3, 0, 0), -PI / 2.0, minf(half * 1.5, 9.0))
+
+
+## Landmark: the school auditorium. A real raised stage and two disciplined
+## seating banks give the hall a remembered orientation, while one displaced
+## modelled chair breaks the procedural rhythm near the centre aisle.
+func _sch_auditorium() -> void:
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var stage := c + Vector3(0, 0, -8.2)
+	_rbox(stage + Vector3(0, 0.32, 0), Vector3(15.5, 0.64, 3.5), Mats.sch_desk(), 0.025)
+	_collider_box(stage + Vector3(0, 0.34, 0), Vector3(15.6, 0.68, 3.6))
+	# Heavy red curtains, closed except for an uneasy centre gap.
+	for side: float in [-1.0, 1.0]:
+		for i in 6:
+			var x := side * (1.0 + 1.15 * float(i))
+			_box(stage + Vector3(x, 3.1, -1.58), Vector3(0.72, 5.3, 0.10),
+				Mats.velvet() if i % 2 == 0 else Mats.velvet2(), false)
+	# Lectern and a microphone left facing the empty seats.
+	_rbox(stage + Vector3(-2.0, 1.05, 0.35), Vector3(1.1, 1.45, 0.65), Mats.darkwood(), 0.035)
+	var stem := _cyl(stage + Vector3(1.6, 1.35, 0.35), 0.025, 1.9, Mats.charcoal(), false)
+	stem.rotation.z = -0.12
+	_sphere(stage + Vector3(1.72, 2.28, 0.35), 0.06, Mats.charcoal())
+	# Six rows, split by the centre aisle. Seats are simplified into shared
+	# row geometry so the landmark stays cheaper than a room full of glTFs.
+	for row in 6:
+		var z := -4.6 + 2.05 * float(row)
+		for side in [-1.0, 1.0]:
+			var row_c := c + Vector3(side * 4.2, 0, z)
+			for col in 5:
+				var x := (float(col) - 2.0) * 1.25
+				var p := row_c + Vector3(x, 0, 0)
+				_rbox(p + Vector3(0, 0.48, 0), Vector3(0.82, 0.10, 0.68),
+					Mats.sch_chair(0.56 + 0.05 * _r(1200 + row * 10 + col)), 0.035, false)
+				_rbox(p + Vector3(0, 0.83, -0.28), Vector3(0.82, 0.62, 0.10),
+					Mats.sch_chair(0.58), 0.035, false)
+			for bx in [-2.6, 2.6]:
+				_box(row_c + Vector3(bx, 0.27, 0), Vector3(0.08, 0.54, 0.62), Mats.sch_trim(), false)
+			_collider_box(row_c + Vector3(0, 0.58, 0), Vector3(6.0, 1.16, 0.78))
+	var loose := c + Vector3(0.25, 0, 5.8)
+	_asy_model("SchoolChair_01", loose, PI + 0.48)
+	_collider_yaw_box(loose + Vector3(0, 0.5, 0), Vector3(0.58, 1.02, 0.7), PI + 0.48)
+	# Exit boxes make the room recognizable from the rear doors.
+	for x in [-7.6, 7.6]:
+		var ex := Label3D.new()
+		ex.text = "EXIT"
+		ex.font_size = 84
+		ex.pixel_size = 0.0022
+		ex.modulate = Color(1.0, 0.22, 0.16)
+		ex.position = c + Vector3(x, 2.4, 8.5)
+		ex.rotation.y = PI
+		add_child(ex)
 
 
 ## Backboard, ring, and the folded arms holding it off the wall.
