@@ -1,0 +1,6 @@
+.godot/
+*.translation
+.DS_Store
+.claude/
+build/
+*.zip

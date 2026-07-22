@@ -1,0 +1,9 @@
+# Keep Godot's text resources consistent across macOS, Windows, and Linux.
+* text=auto eol=lf
+
+# Imported media and model payloads are binary.
+*.bin binary
+*.jpg binary
+*.mp3 binary
+*.png binary
+*.ttf binary
