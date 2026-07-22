@@ -437,8 +437,18 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	var b_cor := cb != 0
 	var is_corr := a_cor or b_cor
 	if theme == 6 and is_corr:
+		var sw := lerpf(1.6, 2.1, hr01(eh, 2))
+		var st := lerpf(2.6, 9.4, hr01(eh, 3))
+		# Side classrooms may sit irregularly along the hall. A doorway at the
+		# end of its axis cannot: outside the central lane it opens directly into
+		# the inaccessible classroom strip behind the narrowed corridor wall.
+		var terminal := (ca == 1 and dir <= 1) or (ca == 2 and dir >= 2) \
+			or (cb == 1 and dir <= 1) or (cb == 2 and dir >= 2)
+		if terminal:
+			st = 6.0
+			sw = minf(sw, 2.4)
 		return {"wall": wall, "full_open": false,
-			"t": lerpf(2.6, 9.4, hr01(eh, 3)), "w": lerpf(1.6, 2.1, hr01(eh, 2)),
+			"t": st, "w": sw,
 			"exit_sign": hr01(eh, 4) < 0.2}
 	if not wall and not full_open:
 		# A cased doorway only sells "a room behind this wall" when both
@@ -493,13 +503,15 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	# locked doors. Keep it as a cased opening instead. At a terminal or junction,
 	# the opening is centred on the lane so it cannot discharge into that hidden
 	# strip.  This is symmetric: both sides see the same corridor axis and edge.
-	if (theme == 0 or theme == 1 or theme == 5) and is_corr:
+	if (theme == 0 or theme == 1 or theme == 4 or theme == 5) and is_corr:
 		full_open = false
 		var terminal := (ca == 1 and dir <= 1) or (ca == 2 and dir >= 2) \
 			or (cb == 1 and dir <= 1) or (cb == 2 and dir >= 2)
 		if terminal:
 			t = 6.0
-			w = minf(w, 2.4)
+			# A transit bank needs its whole cross-section at a genuine exit;
+			# the narrower hotel, office and asylum spines use a single doorway.
+			w = 10.4 if theme == 4 else minf(w, 2.4)
 	return {"wall": wall, "full_open": full_open, "t": t, "w": w, "exit_sign": has_sign}
 
 

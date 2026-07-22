@@ -70,20 +70,24 @@ brings a stinger with it.
 Doorways only ever appear between spaces that feel like rooms — an edge
 that would put a lone cased door in the middle of a merged open hall opens
 fully instead, so every door you do see plausibly leads somewhere.
-Closed hotel-room and office doors reserve real, inaccessible floor-plan
-volume behind the corridor wall. Each corridor shell runs continuously across
-cell boundaries, while genuine room connections cut a return-walled, carpeted
-vestibule through that shell. You can walk past a locked room forever, but you
-can never walk around the wall and discover the back of its door.
+Closed hotel-room, private-office, asylum patient-room and school-classroom
+doors reserve real, inaccessible floor-plan volume behind the corridor wall.
+Each corridor shell runs continuously across cell boundaries, while genuine
+room connections cut a return-walled vestibule, tiled cross-passage or cased
+classroom recess through that shell. You can walk past a locked room forever,
+but you can never walk around the wall and discover the back of its door.
 
 The grid also carves **corridor bands**: whole rows and columns collapse
 into narrow passages that run cell after cell — numbered-door hotel
 corridors in the casino, sealed private offices and return-walled vestibules
-in the office, pipe
+in the office, locked patient wards and tiled cross-passages in the asylum, pipe
 galleries with the channel running down the middle in the sewers, and
-low-ceilinged transit tubes of paired
-moving walkways in the airport. Where two corridor cells meet, the passage
-punches straight through.
+continuous low-ceilinged transit tubes in the airport. Airport walkway banks
+sit inside finished panel walls with steel-framed, return-walled access portals
+where the graph genuinely connects to a concourse. School halls reserve sealed
+classroom strips, with locker banks ending cleanly at wired-glass doors and real
+room recesses. Where two corridor cells meet, the passage punches straight
+through.
 
 The world generation, lighting, shaders and audio are procedural — but
 every floor is now dressed with **downloaded CC0 assets**: photo PBR

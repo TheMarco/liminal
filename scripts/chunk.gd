@@ -3384,10 +3384,9 @@ func _travelator(p: Vector3, yaw: float, flow: float, salt: int, L := 8.4) -> vo
 	add_child(tv)
 
 
-## Transit corridor: a bank of three walkways crossing the whole cell in
-## alternating directions with walking lanes between. Rows of transit cells
-## share an axis and lane directions, so the belts chain into conveyor
-## corridors longer than sight.
+## Transit corridor: three chained walkways in a complete low tube. Side room
+## connections get finished portals into a narrow walking margin; every other
+## stretch is continuous wall, so there is no cell-end route behind a facade.
 func _air_transit() -> void:
 	var cdir := WorldGen.corridor(wseed, cell)
 	var along_x: bool
@@ -3397,30 +3396,37 @@ func _air_transit() -> void:
 		along_x = WorldGen.r01(wseed, 0, cell.y, 511) < 0.5
 	var yw := 0.0 if along_x else PI / 2.0
 	var o := Vector3(S / 2.0, 0, S / 2.0)
+	var wall_half := 5.2
+	var wh := 3.5
 	for k in 3:
 		var off := (float(k) - 1.0) * 3.4
 		var flow := 1.0 if k % 2 == 0 else -1.0
 		_travelator(_wp(o, Vector3(0, 0, off), yw), yw, flow, 512 + k, 10.4)
-	# enclosing walls and a dropped bulkhead turn the bank into a true tube
-	var wh := 3.5
+
+	# A single architectural contract drives wall cuts, returns and dressing.
 	for si in 2:
-		var side := -4.6 if si == 0 else 4.6
-		var wc := _wp(o, Vector3(0, wh / 2.0, side), yw)
-		var wl := _mbox(self, wc, Vector3(10.0, wh, 0.16), Mats.airport_wall())
-		wl.rotation.y = yw
-		_collider_yaw_box(wc, Vector3(10.0, wh, 0.16), yw)
-		if _r(530 + si) < 0.55:
-			var q := _mquad(self, _wp(o, Vector3((_r(532 + si) - 0.5) * 5.0, 1.9,
-				side - signf(side) * 0.09), yw), Vector2(1.2, 1.8), Mats.adbox(int(_r(534 + si) * 3.99)))
-			q.rotation.y = yw + (PI if side > 0.0 else 0.0)
-	var sof := _mbox(self, _wp(o, Vector3(0, wh + 0.06, 0), yw), Vector3(S, 0.12, 9.36), Mats.airport_ceiling())
+		var data := _air_transit_side_data(si, along_x, wall_half)
+		_air_transit_wall_side(o, yw, float(data["side"]), wh, data["bay"])
+		if _r(530 + si) < 0.62:
+			var at := _air_transit_ad_t(si, data["bay"])
+			if at < 90.0:
+				var side: float = data["side"] - signf(float(data["side"])) * 0.1
+				var q := _mquad(self, _wp(o, Vector3(at, 1.9, side), yw),
+					Vector2(1.2, 1.8), Mats.adbox(int(_r(534 + si) * 3.99)))
+				q.rotation.y = yw + (PI if side > 0.0 else 0.0)
+
+	# The dropped lid now reaches the continuous walls. Side portal helpers add
+	# their own small ceiling patches over the remaining boundary recess.
+	var sof := _mbox(self, _wp(o, Vector3(0, wh + 0.06, 0), yw),
+		Vector3(S, 0.12, wall_half * 2.0 + T), Mats.airport_ceiling())
 	sof.rotation.y = yw
-	# low light lines under the bulkhead — the tall hall above stays dark
+	# Low light lines under the bulkhead — the tall terminal above stays dark.
 	var pmat := Mats.air_panel()
 	for li in 2:
 		var lane := -1.7 if li == 0 else 1.7
 		for t in [-3.0, 0.0, 3.0]:
-			var st := _mbox(self, _wp(o, Vector3(t, wh - 0.03, lane), yw), Vector3(2.2, 0.05, 0.16), pmat)
+			var st := _mbox(self, _wp(o, Vector3(t, wh - 0.03, lane), yw),
+				Vector3(2.2, 0.05, 0.16), pmat)
 			st.rotation.y = yw
 	var l := OmniLight3D.new()
 	l.light_color = Color(0.85, 0.91, 1.0)
@@ -3432,12 +3438,146 @@ func _air_transit() -> void:
 	l.distance_fade_begin = 22.0
 	l.distance_fade_length = 8.0
 	add_child(l)
-	# wayfinding over the walking lanes, tucked under the lid
+	# Wayfinding over the two genuine walking lanes, tucked under the lid.
 	for ki in 2:
 		var sl := -1.7 if ki == 0 else 1.7
 		if _r(516 + ki) < 0.55:
 			_hang_sign(_wp(o, Vector3(0, 2.8, sl), yw), yw + PI / 2.0,
 				AIR_SIGNS[int(_r(518 + ki) * (float(AIR_SIGNS.size()) - 0.01))], wh)
+
+
+func _air_transit_side_data(si: int, along_x: bool, wall_half: float) -> Dictionary:
+	var side := -wall_half if si == 0 else wall_half
+	var sdir := (3 if si == 0 else 2) if along_x else (1 if si == 0 else 0)
+	var info := WorldGen.edge_info(wseed, cell, sdir, theme)
+	var bay := []
+	if not info["wall"]:
+		var bt: float = float(info["t"]) - 6.0 if along_x else 6.0 - float(info["t"])
+		var bw := clampf(float(info["w"]) + 0.3, 4.1, 6.5)
+		bay = [bt, bw]
+	return {"side": side, "bay": bay}
+
+
+func _air_transit_wall_side(o: Vector3, yw: float, side: float,
+		wh: float, bay: Array) -> void:
+	var segs := [[-6.0, 6.0]]
+	if not bay.is_empty():
+		segs = _cut_seg(segs, float(bay[0]) - float(bay[1]) * 0.5,
+			float(bay[0]) + float(bay[1]) * 0.5)
+	for sg in segs:
+		_air_transit_wall_run(o, yw, side, wh, float(sg[0]), float(sg[1]))
+	if not bay.is_empty():
+		var bt: float = bay[0]
+		var bw: float = bay[1]
+		_air_transit_header(o, yw, side, wh, bt, bw)
+		_air_transit_open_casing(o, yw, side, bt, bw)
+		_air_transit_bay_returns(o, yw, side, wh, bt, bw)
+
+
+## Full-length wall run with modular aluminium reveals, a stainless kick plate
+## and a baggage-cart bumper rail. Segmentation matches its collider exactly.
+func _air_transit_wall_run(o: Vector3, yw: float, side: float,
+		wh: float, a: float, b: float) -> void:
+	var ln := b - a
+	if ln < 0.04:
+		return
+	var c := (a + b) * 0.5
+	var wc := _wp(o, Vector3(c, wh * 0.5, side), yw)
+	var wall := _mbox(self, wc, Vector3(ln, wh, T), Mats.airport_wall())
+	wall.rotation.y = yw
+	_collider_yaw_box(wc, Vector3(ln, wh, T), yw)
+	var inn := side - signf(side) * (T * 0.5 + 0.022)
+	var kick := _mbox(self, _wp(o, Vector3(c, 0.11, inn), yw),
+		Vector3(ln, 0.22, 0.045), Mats.steel())
+	kick.rotation.y = yw
+	var bumper := _mbox(self, _wp(o, Vector3(c, 0.78, inn - signf(side) * 0.02), yw),
+		Vector3(ln, 0.055, 0.075), Mats.rubber_black())
+	bumper.rotation.y = yw
+	for seam in [-4.0, -2.0, 0.0, 2.0, 4.0]:
+		if seam <= a + 0.05 or seam >= b - 0.05:
+			continue
+		var reveal := _mbox(self, _wp(o, Vector3(seam, wh * 0.5, inn), yw),
+			Vector3(0.028, wh, 0.035), Mats.metal_gray())
+		reveal.rotation.y = yw
+
+
+func _air_transit_header(o: Vector3, yw: float, side: float,
+		wh: float, t: float, width: float) -> void:
+	var hh := wh - AIR_DOOR
+	if hh <= 0.02:
+		return
+	var hp := _wp(o, Vector3(t, AIR_DOOR + hh * 0.5, side), yw)
+	var head := _mbox(self, hp, Vector3(width, hh, T), Mats.airport_wall())
+	head.rotation.y = yw
+	_collider_yaw_box(hp, Vector3(width, hh, T), yw)
+
+
+func _air_transit_open_casing(o: Vector3, yw: float, side: float,
+		t: float, width: float) -> void:
+	var inn := side - signf(side) * (T * 0.5 + 0.025)
+	for edge in [t - width * 0.5, t + width * 0.5]:
+		var jamb := _mbox(self, _wp(o, Vector3(edge, AIR_DOOR * 0.5, inn), yw),
+			Vector3(0.2, AIR_DOOR, T + 0.2), Mats.steel())
+		jamb.rotation.y = yw
+	var lintel := _mbox(self, _wp(o, Vector3(t, AIR_DOOR + 0.1, inn), yw),
+		Vector3(width + 0.22, 0.2, T + 0.2), Mats.steel())
+	lintel.rotation.y = yw
+	# Small backlit identifier fixed to the portal head, facing the transit lane.
+	var v := Node3D.new()
+	v.position = _wp(o, Vector3(t, AIR_DOOR - 0.16, inn - signf(side) * 0.04), yw)
+	v.rotation.y = yw + (PI if side > 0.0 else 0.0)
+	add_child(v)
+	_mrbox(v, Vector3.ZERO, Vector3(minf(width - 0.35, 2.35), 0.23, 0.05),
+		Mats.sign_navy(), 0.008)
+	var lb := Label3D.new()
+	lb.text = "CONCOURSE ACCESS"
+	lb.font_size = 42
+	lb.pixel_size = 0.00165
+	lb.modulate = Color(0.96, 0.92, 0.5)
+	lb.position = Vector3(0, 0, 0.031)
+	v.add_child(lb)
+
+
+## Short returns link the low transit shell to the actual cell-edge portal.
+## They close the sliver behind adjacent panels and roof the recess at 3.5m.
+func _air_transit_bay_returns(o: Vector3, yw: float, side: float,
+		wh: float, t: float, width: float) -> void:
+	var outer := signf(side) * (S * 0.5 - T)
+	var depth := absf(outer - side)
+	var dc := (outer + side) * 0.5
+	for edge in [t - width * 0.5, t + width * 0.5]:
+		var wp := _wp(o, Vector3(edge, wh * 0.5, dc), yw)
+		var ret := _mbox(self, wp, Vector3(T, wh, depth), Mats.airport_wall())
+		ret.rotation.y = yw
+		_collider_yaw_box(wp, Vector3(T, wh, depth), yw)
+		var inward := T * 0.5 + 0.022 if edge < t else -(T * 0.5 + 0.022)
+		var kick := _mbox(self, _wp(o, Vector3(edge + inward, 0.11, dc), yw),
+			Vector3(0.045, 0.22, depth), Mats.steel())
+		kick.rotation.y = yw
+	var roof := _mbox(self, _wp(o, Vector3(t, wh + 0.06, dc), yw),
+		Vector3(width, 0.12, depth), Mats.airport_ceiling())
+	roof.rotation.y = yw
+	var bl := OmniLight3D.new()
+	bl.light_color = Color(0.85, 0.91, 1.0)
+	bl.light_energy = 0.48
+	bl.omni_range = 4.6
+	bl.position = _wp(o, Vector3(t, wh - 0.38, dc), yw)
+	bl.shadow_enabled = false
+	bl.distance_fade_enabled = true
+	bl.distance_fade_begin = 18.0
+	bl.distance_fade_length = 6.0
+	add_child(bl)
+
+
+func _air_transit_ad_t(si: int, bay: Array) -> float:
+	var raw := -3.0 + 6.0 * _r(532 + si)
+	var candidates := [raw, -3.9, 3.9, 0.0]
+	if si == 1:
+		candidates = [raw, 3.9, -3.9, 0.0]
+	for t in candidates:
+		if bay.is_empty() or absf(float(t) - float(bay[0])) >= float(bay[1]) * 0.5 + 0.9:
+			return float(t)
+	return 99.0
 
 
 # --- airport: check-in --------------------------------------------------------
@@ -4562,69 +4702,226 @@ func _asy_office() -> void:
 		_asy_iv(c + Vector3(4.0, 0, -3.5 * (_r(980) - 0.5)))
 
 
-## Narrow ward corridor: green steel doors both sides, dead beds and gurneys
-## shoved against the walls, a sign that has not helped anyone in decades.
+## A narrow but structurally complete ward corridor. Locked patient rooms are
+## sealed volumes behind continuous masonry; actual graph connections become
+## return-walled cross-passages to the canonical cell-edge doorway. The spacing
+## stays irregular so this never acquires the office floor's modular rhythm.
 func _asy_corridor() -> void:
 	var cdir := WorldGen.corridor(wseed, cell)
 	var along_x := cdir != 2
 	var yw := 0.0 if along_x else PI / 2.0
 	var o := Vector3(S / 2.0, 0, S / 2.0)
+	var lane_half := 2.05
+	var side_data := []
 	for si in 2:
-		var side := -2.05 if si == 0 else 2.05
-		var wc := _wp(o, Vector3(0, ceil_h / 2.0, side), yw)
-		var wl := _mbox(self, wc, Vector3(10.0, ceil_h, 0.16), _asy_wall_mat())
-		wl.rotation.y = yw
-		_collider_yaw_box(wc, Vector3(10.0, ceil_h, 0.16), yw)
-		var inn := side - signf(side) * 0.11
-		var ws2 := _mbox(self, _wp(o, Vector3(0, 0.7, inn), yw), Vector3(10.0, 1.4, 0.05), Mats.asy_tile())
-		ws2.rotation.y = yw
-		for di in 3:
-			var t := -3.3 + 3.3 * float(di)
-			if _r(700 + si * 4 + di) < 0.72:
-				_asy_door(o, yw, t, side, 704 + si * 8 + di)
-	# abandoned transport against the walls
+		var side := -lane_half if si == 0 else lane_half
+		var sdir := (3 if si == 0 else 2) if along_x else (1 if si == 0 else 0)
+		var info := WorldGen.edge_info(wseed, cell, sdir, theme)
+		var bay := []
+		if not info["wall"]:
+			var bt: float = float(info["t"]) - 6.0 if along_x else 6.0 - float(info["t"])
+			var bw := clampf(float(info["w"]) + 0.34, 1.9, 2.9)
+			bay = [bt, bw]
+		var doors := _asy_corridor_doors(si, bay)
+		_asy_corridor_wall_side(o, yw, side, doors, bay)
+		side_data.append({"side": side, "doors": doors, "bay": bay})
+
+	# Abandoned transport is parked only against uninterrupted wall. It adds
+	# history without blocking a real connection or floating in front of a door.
 	for si in 2:
-		var side := -1.45 if si == 0 else 1.45
+		var data: Dictionary = side_data[si]
 		for di in 2:
-			var t := lerpf(-3.9, 3.9, _r(720 + si * 5 + di))
-			var rr := _r(724 + si * 5 + di)
+			var t := _asy_corridor_prop_t(si, di, data["doors"], data["bay"])
+			if t > 90.0:
+				continue
+			var side: float = (-1.42 if si == 0 else 1.42)
 			var pp := _wp(o, Vector3(t, 0, side), yw)
+			var rr := _r(724 + si * 5 + di)
 			var park_yaw := yw + PI / 2.0
-			if rr < 0.22:
-				_asy_gurney(pp, park_yaw + (_r(726 + di) - 0.5) * 0.2, 728 + si * 3 + di)
-			elif rr < 0.38:
-				_asy_bed(pp, park_yaw + (_r(729 + di) - 0.5) * 0.15, 730 + si * 3 + di)
-			elif rr < 0.5:
-				_asy_wheelchair(pp, _r(731 + di) * TAU)
-			elif rr < 0.6:
+			if rr < 0.18:
+				_asy_gurney(pp, park_yaw + (_r(726 + di) - 0.5) * 0.18,
+					728 + si * 3 + di)
+			elif rr < 0.3:
+				_asy_bed(pp, park_yaw + (_r(729 + di) - 0.5) * 0.14,
+					730 + si * 3 + di)
+			elif rr < 0.46:
+				_asy_wheelchair(pp, _r(731 + si * 3 + di) * TAU)
+			elif rr < 0.59:
 				_asy_iv(pp)
-			elif rr < 0.75:
+			elif rr < 0.76:
 				_asy_papers(pp, 733 + si * 7 + di, 5)
 	if _r(740) < 0.4:
 		_asy_sign(o, yw)
 
 
-## Heavy green steel ward door: wired observation window, food hatch, number.
-func _asy_door(o: Vector3, yw: float, t: float, side: float, salt: int) -> void:
-	var inn := side - signf(side) * 0.14
+func _asy_corridor_doors(si: int, bay: Array) -> Array:
+	var doors := []
+	# Offset the two sides and perturb the end positions slightly: real old wards
+	# accrete rooms, unlike the perfectly repeated office grid.
+	var positions := [-3.65, -0.15, 3.42] if si == 0 else [-3.28, 0.3, 3.78]
+	for di in positions.size():
+		var t: float = positions[di] + (_r(700 + si * 7 + di) - 0.5) * 0.26
+		if _r(704 + si * 7 + di) >= 0.78:
+			continue
+		if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + 0.9:
+			continue
+		doors.append(t)
+	if doors.is_empty() and bay.is_empty():
+		doors.append(float(positions[1]))
+	return doors
+
+
+func _asy_corridor_clear(t: float, doors: Array, bay: Array, clearance: float) -> bool:
+	if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + clearance:
+		return false
+	for dt in doors:
+		if absf(t - float(dt)) < 0.62 + clearance:
+			return false
+	return true
+
+
+func _asy_corridor_prop_t(si: int, index: int, doors: Array, bay: Array) -> float:
+	var raw := -4.45 + 8.9 * _r(720 + si * 9 + index)
+	var candidates := [raw, -4.65, 4.65, -1.72, 1.72]
+	if (si + index) % 2 == 1:
+		candidates = [raw, 4.65, -4.65, 1.72, -1.72]
+	for t in candidates:
+		if _asy_corridor_clear(float(t), doors, bay, 0.82):
+			return float(t)
+	return 99.0
+
+
+## One complete masonry side, cut only for a filled locked door or for a real
+## cross-passage. Wall, tile and collider share the exact same segmentation.
+func _asy_corridor_wall_side(o: Vector3, yw: float, side: float,
+		doors: Array, bay: Array) -> void:
+	var segs := [[-6.0, 6.0]]
+	for dt in doors:
+		segs = _cut_seg(segs, float(dt) - 0.61, float(dt) + 0.61)
+	if not bay.is_empty():
+		segs = _cut_seg(segs, float(bay[0]) - float(bay[1]) * 0.5,
+			float(bay[0]) + float(bay[1]) * 0.5)
+	for sg in segs:
+		_asy_corridor_wall_run(o, yw, side, float(sg[0]), float(sg[1]))
+	for di in doors.size():
+		var dt := float(doors[di])
+		_asy_corridor_header(o, yw, side, dt, 1.22)
+		_asy_corridor_door(o, yw, dt, side,
+			750 + (0 if side < 0.0 else 14) + di)
+	if not bay.is_empty():
+		var bt: float = bay[0]
+		var bw: float = bay[1]
+		_asy_corridor_header(o, yw, side, bt, bw)
+		_asy_corridor_open_casing(o, yw, side, bt, bw)
+		_asy_corridor_bay_returns(o, yw, side, bt, bw)
+
+
+func _asy_corridor_wall_run(o: Vector3, yw: float, side: float,
+		a: float, b: float) -> void:
+	var ln := b - a
+	if ln < 0.04:
+		return
+	var c := (a + b) * 0.5
+	var wc := _wp(o, Vector3(c, ceil_h * 0.5, side), yw)
+	var wall := _mbox(self, wc, Vector3(ln, ceil_h, 0.18), _asy_wall_mat())
+	wall.rotation.y = yw
+	_collider_yaw_box(wc, Vector3(ln, ceil_h, 0.18), yw)
+	var inn := side - signf(side) * 0.115
+	var tile := _mbox(self, _wp(o, Vector3(c, 0.69, inn), yw),
+		Vector3(ln, 1.38, 0.05), Mats.asy_tile())
+	tile.rotation.y = yw
+	var rail := _mbox(self, _wp(o, Vector3(c, 1.39, inn - signf(side) * 0.018), yw),
+		Vector3(ln, 0.07, 0.07), Mats.asy_metal_green())
+	rail.rotation.y = yw
+
+
+func _asy_corridor_header(o: Vector3, yw: float, side: float,
+		t: float, width: float) -> void:
+	var hh := ceil_h - DOOR_TOP
+	if hh <= 0.02:
+		return
+	var hp := _wp(o, Vector3(t, DOOR_TOP + hh * 0.5, side), yw)
+	var head := _mbox(self, hp, Vector3(width, hh, 0.18), _asy_wall_mat())
+	head.rotation.y = yw
+	_collider_yaw_box(hp, Vector3(width, hh, 0.18), yw)
+
+
+## These returns are the crucial illusion: they carry the corridor wall all the
+## way to the real boundary opening and close both neighboring patient volumes.
+func _asy_corridor_bay_returns(o: Vector3, yw: float, side: float,
+		t: float, width: float) -> void:
+	var outer := signf(side) * (S * 0.5 - T)
+	var depth := absf(outer - side)
+	var dc := (outer + side) * 0.5
+	for edge in [t - width * 0.5, t + width * 0.5]:
+		var wp := _wp(o, Vector3(edge, ceil_h * 0.5, dc), yw)
+		var ret := _mbox(self, wp, Vector3(0.18, ceil_h, depth), _asy_wall_mat())
+		ret.rotation.y = yw
+		_collider_yaw_box(wp, Vector3(0.18, ceil_h, depth), yw)
+		var tile_in := 0.115 if edge < t else -0.115
+		var tile := _mbox(self, _wp(o, Vector3(edge + tile_in, 0.69, dc), yw),
+			Vector3(0.05, 1.38, depth), Mats.asy_tile())
+		tile.rotation.y = yw
+		var rail := _mbox(self, _wp(o, Vector3(edge + tile_in, 1.39, dc), yw),
+			Vector3(0.07, 0.07, depth), Mats.asy_metal_green())
+		rail.rotation.y = yw
+	var floor_strip := _mbox(self, _wp(o, Vector3(t, 0.013, dc), yw),
+		Vector3(width, 0.026, depth), Mats.asy_checker())
+	floor_strip.rotation.y = yw
+
+
+func _asy_corridor_open_casing(o: Vector3, yw: float, side: float,
+		t: float, width: float) -> void:
+	var inn := side - signf(side) * 0.115
+	for edge in [t - width * 0.5, t + width * 0.5]:
+		var jamb := _mbox(self, _wp(o, Vector3(edge, DOOR_TOP * 0.5, inn), yw),
+			Vector3(0.12, DOOR_TOP, 0.3), Mats.asy_metal_green())
+		jamb.rotation.y = yw
+	var lintel := _mbox(self, _wp(o, Vector3(t, DOOR_TOP + 0.065, inn), yw),
+		Vector3(width + 0.18, 0.13, 0.3), Mats.asy_metal_green())
+	lintel.rotation.y = yw
+
+
+## Heavy ward door installed into an actual wall opening. The vision panel is
+## backed by darkness: it suggests a lightless cell without exposing empty map.
+func _asy_corridor_door(o: Vector3, yw: float, t: float,
+		side: float, salt: int) -> void:
+	var inn := side - signf(side) * 0.115
 	var v := Node3D.new()
 	v.position = _wp(o, Vector3(t, 0, inn), yw)
 	v.rotation.y = yw + (PI if side > 0.0 else 0.0)
 	add_child(v)
-	_mbox(v, Vector3(0, 1.05, 0.0), Vector3(0.92, 2.1, 0.07), Mats.asy_metal_green())
-	_mbox(v, Vector3(0, 1.66, 0.038), Vector3(0.3, 0.4, 0.015), Mats.glass_tint())
-	for bx in [-0.07, 0.07]:
-		_mbox(v, Vector3(bx, 1.66, 0.046), Vector3(0.015, 0.4, 0.008), Mats.charcoal())
-	_mbox(v, Vector3(0, 0.68, 0.04), Vector3(0.36, 0.15, 0.02), Mats.asy_metal())
-	_mbox(v, Vector3(0, 0.6, 0.05), Vector3(0.12, 0.03, 0.02), Mats.steel())
-	for hy in [0.45, 1.7]:
-		_mbox(v, Vector3(-0.46, hy, 0.0), Vector3(0.04, 0.12, 0.09), Mats.iron_dark())
+	_mrbox(v, Vector3(0, 1.06, 0), Vector3(1.0, 2.12, 0.09),
+		Mats.asy_metal_green(), 0.012)
+	_mbox(v, Vector3(-0.57, 1.09, 0), Vector3(0.12, 2.2, 0.3), Mats.asy_metal())
+	_mbox(v, Vector3(0.57, 1.09, 0), Vector3(0.12, 2.2, 0.3), Mats.asy_metal())
+	_mbox(v, Vector3(0, 2.22, 0), Vector3(1.26, 0.13, 0.3), Mats.asy_metal())
+	# Opaque backing first, then dirty glass and a welded cross-mesh.
+	_mrbox(v, Vector3(0, 1.65, 0.047), Vector3(0.34, 0.42, 0.02),
+		Mats.charcoal(), 0.006)
+	_mrbox(v, Vector3(0, 1.65, 0.061), Vector3(0.3, 0.38, 0.012),
+		Mats.glass_tint(), 0.005)
+	for bx in [-0.075, 0.075]:
+		_mbox(v, Vector3(bx, 1.65, 0.071), Vector3(0.014, 0.4, 0.01), Mats.iron_dark())
+	for by in [1.54, 1.65, 1.76]:
+		_mbox(v, Vector3(0, by, 0.072), Vector3(0.32, 0.012, 0.01), Mats.iron_dark())
+	# Food hatch, hinges and a lock whose key has long since disappeared.
+	_mrbox(v, Vector3(0, 0.68, 0.057), Vector3(0.4, 0.17, 0.025),
+		Mats.asy_metal(), 0.006)
+	_mbox(v, Vector3(0, 0.59, 0.074), Vector3(0.13, 0.03, 0.025), Mats.steel())
+	for hy in [0.42, 1.12, 1.82]:
+		_mbox(v, Vector3(-0.49, hy, 0.045), Vector3(0.045, 0.14, 0.055), Mats.iron_dark())
+	_mrbox(v, Vector3(0.35, 1.02, 0.066), Vector3(0.13, 0.22, 0.03),
+		Mats.iron_dark(), 0.006)
+	_msphere(v, Vector3(0.35, 1.02, 0.102), 0.035, Mats.steel())
+	_collider_yaw_box(_wp(o, Vector3(t, 1.06, inn), yw),
+		Vector3(1.02, 2.12, 0.13), yw)
 	var num := Label3D.new()
 	num.text = "%02d" % (WorldGen.h(wseed, cell.x + int(t * 3.0), cell.y, salt) % 40 + 1)
-	num.font_size = 40
+	num.font_size = 42
 	num.pixel_size = 0.0018
-	num.modulate = Color(0.85, 0.88, 0.8)
-	num.position = Vector3(0, 1.98, 0.05)
+	num.modulate = Color(0.82, 0.86, 0.77)
+	num.position = Vector3(0, 1.98, 0.075)
 	v.add_child(num)
 
 
@@ -4738,94 +5035,251 @@ func _sch_lighting() -> void:
 	add_child(light)
 
 
-## A school corridor is about four metres across, not twelve. Wall the cell
-## down to a passage; the strips left either side are simply the backs of the
-## rooms, sealed and never entered. Each doorway gets a bay opened through the
-## new wall so the room behind it is still reachable — which is also what a
-## school actually looks like, doors set back off the main run.
+const SCH_CORRIDOR_ROOMS := ["101", "103", "112", "204", "ART", "MUSIC",
+	"SCIENCE", "FACULTY"]
+
+
+## The architectural contract for one side of a school hall. Coordinates are
+## corridor-local: x follows the hall and z points toward its side rooms.
+func _sch_corridor_side_data(si: int, along_x: bool) -> Dictionary:
+	var side := -2.05 if si == 0 else 2.05
+	var sdir := (3 if si == 0 else 2) if along_x else (1 if si == 0 else 0)
+	var info := WorldGen.edge_info(wseed, cell, sdir, theme)
+	var bay := []
+	if not info["wall"]:
+		var bt: float = float(info["t"]) - 6.0 if along_x else 6.0 - float(info["t"])
+		var bw := clampf(float(info["w"]) + 0.62, 2.25, 2.9)
+		bay = [bt, bw]
+	return {"side": side, "bay": bay, "doors": _sch_corridor_doors(si, bay)}
+
+
+## Long enclosed stretches get evidence of classrooms behind them. A genuine
+## connection owns its interval and suppresses any locked-door facade nearby.
+func _sch_corridor_doors(si: int, bay: Array) -> Array:
+	var doors := []
+	var positions := [-3.25, 3.3] if si == 0 else [-3.55, 3.0]
+	for di in positions.size():
+		var t: float = positions[di] + (_r(330 + si * 7 + di) - 0.5) * 0.24
+		if _r(334 + si * 7 + di) >= 0.72:
+			continue
+		if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + 0.95:
+			continue
+		doors.append(t)
+	if doors.is_empty() and bay.is_empty():
+		doors.append(float(positions[int(_r(348 + si) * 1.99)]))
+	return doors
+
+
+## A school corridor is about four metres across. The side strips are reserved
+## classroom volume: continuous walls seal them, locked doors fill real cuts,
+## and actual graph connections become cased, return-walled recesses.
 func _sch_narrow() -> void:
 	var along_x := _sch_corridor_axis() == 1
-	var hw := 2.05
-	var mid := S / 2.0
-	var wmat := _sch_wall_mat()
-	var h := ceil_h
-	for sgn: float in [-1.0, 1.0]:
-		var plane: float = mid + sgn * hw
-		# the cell edge this side of the passage faces
-		var sdir2: int = (2 if sgn > 0.0 else 3) if along_x else (0 if sgn > 0.0 else 1)
-		var info := WorldGen.edge_info(wseed, cell, sdir2, theme)
-		var segs := [[0.0, S]]
-		var bay := Vector2.ZERO
-		if not info["wall"]:
-			var t: float = info["t"]
-			var bw: float = float(info["w"]) * 0.5 + 1.2
-			bay = Vector2(maxf(0.0, t - bw), minf(S, t + bw))
-			segs = _cut_seg(segs, bay.x, bay.y)
-		for sg in segs:
-			var a: float = sg[0]
-			var b: float = sg[1]
-			if b - a < 0.05:
-				continue
-			var c := (a + b) * 0.5
-			if along_x:
-				_box(Vector3(c, h / 2.0, plane), Vector3(b - a, h, T), wmat)
-			else:
-				_box(Vector3(plane, h / 2.0, c), Vector3(T, h, b - a), wmat)
-		# a bay is a 4m recess with no strip over it, so it needs its own fill
-		# or the doors off the corridor sit in a black hole
-		if bay != Vector2.ZERO:
-			var bc: float = (bay.x + bay.y) * 0.5
-			var bd: float = mid + sgn * (S / 2.0 - 1.2)
-			var bl := OmniLight3D.new()
-			bl.light_color = Color(0.94, 0.97, 1.0)
-			bl.light_energy = 0.9
-			bl.omni_range = 6.5
-			bl.shadow_enabled = false
-			bl.distance_fade_enabled = true
-			bl.distance_fade_begin = 18.0
-			bl.distance_fade_length = 6.0
-			bl.position = Vector3(bc, ceil_h - 0.5, bd) if along_x \
-				else Vector3(bd, ceil_h - 0.5, bc)
-			add_child(bl)
-		# returns closing the bay off from the dead strip either side of it
-		if bay != Vector2.ZERO:
-			for t2 in [bay.x, bay.y]:
-				if t2 <= 0.01 or t2 >= S - 0.01:
-					continue
-				var d0: float = plane
-				var d1: float = mid + sgn * (S / 2.0)
-				var dc: float = (d0 + d1) * 0.5
-				var dl: float = absf(d1 - d0)
-				if along_x:
-					_box(Vector3(t2, h / 2.0, dc), Vector3(T, h, dl), wmat)
-				else:
-					_box(Vector3(dc, h / 2.0, t2), Vector3(dl, h, T), wmat)
+	var yw := 0.0 if along_x else PI / 2.0
+	var o := Vector3(S / 2.0, 0, S / 2.0)
+	for si in 2:
+		var data := _sch_corridor_side_data(si, along_x)
+		_sch_corridor_wall_side(o, yw, float(data["side"]), data["doors"], data["bay"])
 
 
-## Lockers down both sides of the narrowed passage — the one thing that makes
-## it unmistakably a school. Skips the stretch each doorway bay opens through.
+func _sch_corridor_wall_side(o: Vector3, yw: float, side: float,
+		doors: Array, bay: Array) -> void:
+	var segs := [[-6.0, 6.0]]
+	for dt in doors:
+		segs = _cut_seg(segs, float(dt) - 0.62, float(dt) + 0.62)
+	if not bay.is_empty():
+		segs = _cut_seg(segs, float(bay[0]) - float(bay[1]) * 0.5,
+			float(bay[0]) + float(bay[1]) * 0.5)
+	for sg in segs:
+		_sch_corridor_wall_run(o, yw, side, float(sg[0]), float(sg[1]))
+	for di in doors.size():
+		var dt := float(doors[di])
+		_sch_corridor_header(o, yw, side, dt, 1.24)
+		_sch_corridor_door(o, yw, dt, side,
+			360 + (0 if side < 0.0 else 12) + di)
+	if not bay.is_empty():
+		var bt: float = bay[0]
+		var bw: float = bay[1]
+		_sch_corridor_header(o, yw, side, bt, bw)
+		_sch_corridor_open_casing(o, yw, side, bt, bw)
+		_sch_corridor_bay_returns(o, yw, side, bt, bw)
+		_sch_corridor_bay_light(o, yw, side, bt)
+
+
+func _sch_corridor_wall_run(o: Vector3, yw: float, side: float,
+		a: float, b: float) -> void:
+	var ln := b - a
+	if ln < 0.04:
+		return
+	var c := (a + b) * 0.5
+	var wc := _wp(o, Vector3(c, ceil_h * 0.5, side), yw)
+	var wall := _mbox(self, wc, Vector3(ln, ceil_h, T), Mats.sch_wall())
+	wall.rotation.y = yw
+	_collider_yaw_box(wc, Vector3(ln, ceil_h, T), yw)
+	var inn := side - signf(side) * (T * 0.5 + 0.025)
+	var band := _mbox(self, _wp(o, Vector3(c, SCH_BAND, inn), yw),
+		Vector3(ln, 0.17, 0.04), Mats.sch_red())
+	band.rotation.y = yw
+	var base := _mbox(self, _wp(o, Vector3(c, 0.06, inn), yw),
+		Vector3(ln, 0.12, 0.05), Mats.charcoal())
+	base.rotation.y = yw
+
+
+func _sch_corridor_header(o: Vector3, yw: float, side: float,
+		t: float, width: float) -> void:
+	var hh := ceil_h - DOOR_TOP
+	if hh <= 0.02:
+		return
+	var hp := _wp(o, Vector3(t, DOOR_TOP + hh * 0.5, side), yw)
+	var head := _mbox(self, hp, Vector3(width, hh, T), Mats.sch_wall())
+	head.rotation.y = yw
+	_collider_yaw_box(hp, Vector3(width, hh, T), yw)
+
+
+func _sch_corridor_open_casing(o: Vector3, yw: float, side: float,
+		t: float, width: float) -> void:
+	var inn := side - signf(side) * (T * 0.5 + 0.025)
+	for edge in [t - width * 0.5, t + width * 0.5]:
+		var jamb := _mbox(self, _wp(o, Vector3(edge, DOOR_TOP * 0.5, inn), yw),
+			Vector3(0.17, DOOR_TOP, T + 0.14), Mats.sch_red())
+		jamb.rotation.y = yw
+	var lintel := _mbox(self, _wp(o, Vector3(t, DOOR_TOP + 0.08, inn), yw),
+		Vector3(width + 0.17, 0.16, T + 0.14), Mats.sch_red())
+	lintel.rotation.y = yw
+
+
+## Close the dead classroom strips on both sides of a real connection and carry
+## the red datum line and cove base all the way to its boundary doorway.
+func _sch_corridor_bay_returns(o: Vector3, yw: float, side: float,
+		t: float, width: float) -> void:
+	var outer := signf(side) * (S * 0.5 - T)
+	var depth := absf(outer - side)
+	var dc := (outer + side) * 0.5
+	for edge in [t - width * 0.5, t + width * 0.5]:
+		var wp := _wp(o, Vector3(edge, ceil_h * 0.5, dc), yw)
+		var ret := _mbox(self, wp, Vector3(T, ceil_h, depth), Mats.sch_wall())
+		ret.rotation.y = yw
+		_collider_yaw_box(wp, Vector3(T, ceil_h, depth), yw)
+		var inward := T * 0.5 + 0.025 if edge < t else -(T * 0.5 + 0.025)
+		var band := _mbox(self, _wp(o, Vector3(edge + inward, SCH_BAND, dc), yw),
+			Vector3(0.04, 0.17, depth), Mats.sch_red())
+		band.rotation.y = yw
+		var base := _mbox(self, _wp(o, Vector3(edge + inward, 0.06, dc), yw),
+			Vector3(0.05, 0.12, depth), Mats.charcoal())
+		base.rotation.y = yw
+
+
+func _sch_corridor_bay_light(o: Vector3, yw: float, side: float, t: float) -> void:
+	var outer := signf(side) * (S * 0.5 - T)
+	var dc := (outer + side) * 0.5
+	var bl := OmniLight3D.new()
+	bl.light_color = Color(0.94, 0.97, 1.0)
+	bl.light_energy = 0.72
+	bl.omni_range = 5.8
+	bl.shadow_enabled = false
+	bl.distance_fade_enabled = true
+	bl.distance_fade_begin = 18.0
+	bl.distance_fade_length = 6.0
+	bl.position = _wp(o, Vector3(t, ceil_h - 0.5, dc), yw)
+	add_child(bl)
+
+
+## A closed classroom door in a genuine opening: deep painted-steel jambs,
+## opaque wired safety glass, a closer, lever and room plate. Its collider seals
+## the reserved classroom volume behind it.
+func _sch_corridor_door(o: Vector3, yw: float, t: float,
+		side: float, salt: int) -> void:
+	var inn := side - signf(side) * (T * 0.5 + 0.025)
+	var v := Node3D.new()
+	v.position = _wp(o, Vector3(t, 0, inn), yw)
+	v.rotation.y = yw + (PI if side > 0.0 else 0.0)
+	add_child(v)
+	_mrbox(v, Vector3(0, 1.08, 0), Vector3(1.03, 2.16, 0.075),
+		Mats.sch_door(), 0.01)
+	_mbox(v, Vector3(-0.575, 1.1, 0), Vector3(0.12, 2.22, 0.26), Mats.sch_red())
+	_mbox(v, Vector3(0.575, 1.1, 0), Vector3(0.12, 2.22, 0.26), Mats.sch_red())
+	_mbox(v, Vector3(0, 2.24, 0), Vector3(1.27, 0.13, 0.26), Mats.sch_red())
+	# Narrow safety-glass panel and its embedded wire grid.
+	_mrbox(v, Vector3(0, 1.55, 0.043), Vector3(0.3, 0.68, 0.018),
+		Mats.sch_wired_glass(), 0.006)
+	for wx in [-0.09, 0.0, 0.09]:
+		_mbox(v, Vector3(wx, 1.55, 0.055), Vector3(0.008, 0.64, 0.008), Mats.sch_trim())
+	for wy in [1.37, 1.55, 1.73]:
+		_mbox(v, Vector3(0, wy, 0.056), Vector3(0.28, 0.008, 0.008), Mats.sch_trim())
+	# Lever set and a surface closer with its articulated arm.
+	_mrbox(v, Vector3(0.35, 1.01, 0.055), Vector3(0.13, 0.2, 0.025),
+		Mats.sch_trim(), 0.006)
+	_mbox(v, Vector3(0.24, 1.01, 0.08), Vector3(0.25, 0.035, 0.035), Mats.sch_trim())
+	_mrbox(v, Vector3(-0.27, 2.02, 0.05), Vector3(0.4, 0.1, 0.07),
+		Mats.sch_trim(), 0.008)
+	_mbox(v, Vector3(0.03, 2.04, 0.084), Vector3(0.31, 0.025, 0.025), Mats.sch_trim())
+	_collider_yaw_box(_wp(o, Vector3(t, 1.08, inn), yw),
+		Vector3(1.05, 2.16, 0.12), yw)
+	var plate := _mrbox(v, Vector3(0.79, 1.7, 0.045),
+		Vector3(0.3, 0.22, 0.025), Mats.sch_white(), 0.005)
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var lb := Label3D.new()
+	lb.text = SCH_CORRIDOR_ROOMS[
+		WorldGen.h(wseed, cell.x + int(t * 4.0), cell.y, salt) % SCH_CORRIDOR_ROOMS.size()]
+	lb.font_size = 34
+	lb.pixel_size = 0.00145
+	lb.modulate = Color(0.16, 0.22, 0.24)
+	lb.position = Vector3(0.79, 1.7, 0.061)
+	v.add_child(lb)
+
+
+func _sch_corridor_clear(t: float, doors: Array, bay: Array, clearance: float) -> bool:
+	if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + clearance:
+		return false
+	for dt in doors:
+		if absf(t - float(dt)) < 0.63 + clearance:
+			return false
+	return true
+
+
+func _sch_corridor_prop_t(si: int, salt: int, doors: Array, bay: Array,
+		clearance: float) -> float:
+	var raw := -3.8 + 7.6 * _r(salt)
+	var candidates := [raw, -4.65, 4.65, -1.7, 1.7]
+	if si == 1:
+		candidates = [raw, 4.65, -4.65, 1.7, -1.7]
+	for t in candidates:
+		if _sch_corridor_clear(float(t), doors, bay, clearance):
+			return float(t)
+	return 99.0
+
+
+## Locker banks use the exact same cuts as the architecture, so they finish at
+## jambs rather than covering doors or jutting into a real classroom recess.
 func _sch_passage_lockers(salt: int) -> void:
 	var along_x := _sch_corridor_axis() == 1
-	var hw := 2.05
-	var mid := S / 2.0
 	var depth := 0.42
 	var hgt := 1.83
-	for sgn: float in [-1.0, 1.0]:
-		var sdir: int = (2 if sgn > 0.0 else 3) if along_x else (0 if sgn > 0.0 else 1)
-		var info := WorldGen.edge_info(wseed, cell, sdir, theme)
-		var segs := [[0.4, S - 0.4]]
-		if not info["wall"]:
-			var t: float = info["t"]
-			var bw: float = float(info["w"]) * 0.5 + 1.5
-			segs = _cut_seg(segs, t - bw, t + bw)
-		var mat: Material = Mats.sch_locker() if _r(salt) < 0.68 else Mats.sch_locker_blue()
+	for si in 2:
+		var data := _sch_corridor_side_data(si, along_x)
+		var side: float = data["side"]
+		var doors: Array = data["doors"]
+		var bay: Array = data["bay"]
+		var segs := [[-5.6, 5.6]]
+		for dt in doors:
+			segs = _cut_seg(segs, float(dt) - 0.86, float(dt) + 0.86)
+		if not bay.is_empty():
+			segs = _cut_seg(segs, float(bay[0]) - float(bay[1]) * 0.5 - 0.28,
+				float(bay[0]) + float(bay[1]) * 0.5 + 0.28)
+		var mat: Material = Mats.sch_locker() if _r(salt + si) < 0.68 \
+			else Mats.sch_locker_blue()
+		var lo_local := side - signf(side) * (T * 0.5 + depth * 0.5)
 		for sg in segs:
 			var a: float = sg[0]
 			var b: float = sg[1]
 			if b - a < 1.0:
 				continue
-			var lo: float = mid + sgn * hw - sgn * (T * 0.5 + depth * 0.5)
-			_sch_locker_run(along_x, lo, a, b, -sgn, mat, depth, hgt, salt)
+			if along_x:
+				_sch_locker_run(true, S * 0.5 + lo_local, a + S * 0.5,
+					b + S * 0.5, -signf(side), mat, depth, hgt, salt + si * 19)
+			else:
+				_sch_locker_run(false, S * 0.5 + lo_local, S * 0.5 - b,
+					S * 0.5 - a, -signf(side), mat, depth, hgt, salt + si * 19)
 
 
 ## The bank itself: carcass, kick plinth, and two tiers of doors with vents
@@ -4874,22 +5328,33 @@ func _sch_corridor() -> void:
 	_sch_narrow()
 	_sch_passage_lockers(300)
 	var along_x := _sch_corridor_axis() == 1
+	var yw := 0.0 if along_x else PI / 2.0
+	var o := Vector3(S / 2.0, 0, S / 2.0)
+	var side_data := [_sch_corridor_side_data(0, along_x),
+		_sch_corridor_side_data(1, along_x)]
 	# a bin, and sometimes something knocked over and left
-	var t := lerpf(2.5, 9.5, _r(310))
-	var side := S / 2.0 + (1.15 if _r(311) < 0.5 else -1.15)
-	var p := Vector3(t, 0, side) if along_x else Vector3(side, 0, t)
+	var si := 1 if _r(311) < 0.5 else 0
+	var data: Dictionary = side_data[si]
+	var t := _sch_corridor_prop_t(si, 310, data["doors"], data["bay"], 0.58)
+	var side := -1.15 if si == 0 else 1.15
+	var p := _wp(o, Vector3(t, 0, side), yw)
 	if _r(312) < 0.62:
-		_sch_bin(p)
+		if t < 90.0:
+			_sch_bin(p)
 	if _r(313) < 0.35:
-		var t2 := lerpf(2.5, 9.5, _r(314))
-		var s2 := S / 2.0 + (1.1 if _r(315) < 0.5 else -1.1)
-		var p2 := Vector3(t2, 0, s2) if along_x else Vector3(s2, 0, t2)
-		_sch_trolley(p2, _r(316) * TAU)
+		var si2 := 1 if _r(315) < 0.5 else 0
+		var data2: Dictionary = side_data[si2]
+		var t2 := _sch_corridor_prop_t(si2, 314, data2["doors"], data2["bay"], 0.92)
+		if t2 < 90.0:
+			var s2 := -1.1 if si2 == 0 else 1.1
+			_sch_trolley(_wp(o, Vector3(t2, 0, s2), yw), _r(316) * TAU)
 	if _r(317) < 0.3:
-		var t3 := lerpf(3.0, 9.0, _r(318))
-		var s3 := S / 2.0 + (_r(319) - 0.5) * 2.0
-		_sch_stack_chairs(Vector3(t3, 0, s3) if along_x else Vector3(s3, 0, t3),
-			_r(320) * TAU, 321)
+		var si3 := 1 if _r(319) < 0.5 else 0
+		var data3: Dictionary = side_data[si3]
+		var t3 := _sch_corridor_prop_t(si3, 318, data3["doors"], data3["bay"], 0.78)
+		if t3 < 90.0:
+			var s3 := -1.0 if si3 == 0 else 1.0
+			_sch_stack_chairs(_wp(o, Vector3(t3, 0, s3), yw), _r(320) * TAU, 321)
 
 
 ## Wheeled steel bin, the kind parked by the doors and never emptied.

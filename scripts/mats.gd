@@ -988,6 +988,24 @@ static func sch_red() -> StandardMaterial3D:
 		m.roughness = 0.55)
 
 
+## Faded blue-grey enamel on classroom doors. It belongs to a different
+## maintenance decade than either locker colour, which keeps the hall layered.
+static func sch_door() -> StandardMaterial3D:
+	return _std("sch_door", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.20, 0.29, 0.34)
+		m.metallic = 0.18
+		m.roughness = 0.58)
+
+
+## Opaque wired-glass backing for inaccessible classrooms. It catches the hall
+## light like old safety glass without revealing the ungenerated room volume.
+static func sch_wired_glass() -> StandardMaterial3D:
+	return _std("sch_wired_glass", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.28, 0.34, 0.32)
+		m.metallic_specular = 0.7
+		m.roughness = 0.3)
+
+
 ## Sealed concrete, polished by forty years of shoes. Roughness is pushed
 ## down hard so the corridor lights streak in it.
 static func sch_floor() -> StandardMaterial3D:
