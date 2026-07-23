@@ -16,6 +16,9 @@ const GRAVITY := 16.0
 const SENS := 0.0022
 const CAM_H := 1.62
 const GRAB_SETTLE_MS := 150   # mouse motion to swallow after taking the cursor
+const INTERACT_DIST := 3.2
+
+signal interaction_prompt_changed(text: String)
 
 var cam: Camera3D
 var world_seed := 0   # set by main; used to pick footstep surface per cell
@@ -39,6 +42,8 @@ var _spin_wait := 3.0
 var _spin_left := 0.0
 var _strafe := 0.0
 var _sprinting := false
+var _focused: Interactable
+var _focus_text := ""
 
 
 func _init() -> void:
@@ -99,6 +104,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pitch = clampf(_pitch - event.relative.y * SENS, -1.45, 1.45)
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		grab_look()
+	elif event is InputEventKey and event.pressed and not event.echo \
+			and event.physical_keycode == KEY_E:
+		if is_instance_valid(_focused):
+			_focused.interact(self)
 	elif event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -172,8 +181,28 @@ func _process(dt: float) -> void:
 	cam.global_position = _prev_pos.lerp(_curr_pos, f) + Vector3(0, _cam_y, 0)
 	_roll = lerpf(_roll, -_strafe * 0.022, minf(1.0, dt * 8.0))
 	cam.rotation = Vector3(_pitch, rotation.y, _roll)
+	_scan_interaction()
 	var hs := Vector2(velocity.x, velocity.z).length()
 	cam.fov = lerpf(cam.fov, 83.0 if (_sprinting and hs > 4.0) else 77.0, minf(1.0, dt * 5.0))
+
+
+func _scan_interaction() -> void:
+	var from := cam.global_position
+	var to := from - cam.global_transform.basis.z * INTERACT_DIST
+	var q := PhysicsRayQueryParameters3D.create(from, to, 2)
+	q.collide_with_areas = true
+	q.collide_with_bodies = false
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var next: Interactable
+	if not hit.is_empty() and hit["collider"] is Interactable:
+		var candidate := hit["collider"] as Interactable
+		if candidate.enabled:
+			next = candidate
+	_focused = next
+	var text := _focused.prompt_text if is_instance_valid(_focused) else ""
+	if text != _focus_text:
+		_focus_text = text
+		interaction_prompt_changed.emit(text)
 
 
 ## What you are walking on, per floor and per room — terrazzo in a terminal,

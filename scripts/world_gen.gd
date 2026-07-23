@@ -181,6 +181,11 @@ static func hall_root(ws: int, cell: Vector2i) -> Vector2i:
 
 ## Raw merge preference, ignoring whether the target can accept it.
 static func _merge_raw(ws: int, cell: Vector2i) -> int:
+	# The origin is the guaranteed arrival room. Keep it as a root so theme
+	# spawn contracts (classroom, ward, gate) cannot silently move their props
+	# into a neighbouring anchor cell while the player still arrives at (0, 0).
+	if cell == Vector2i.ZERO:
+		return -1
 	if corridor(ws, cell) != 0 or hall_root(ws, cell) != NO_HALL:
 		return -1
 	var r := r01(ws, cell.x, cell.y, 611)
@@ -365,7 +370,10 @@ static func partition_offset(ws: int, cell: Vector2i, theme: int, along_x: bool,
 ## [along_x, offset_metres] or [] for none. This is where small rooms come
 ## from — a 12x12 cell split into, say, 4x12 and 8x12.
 static func room_split(ws: int, root: Vector2i, theme: int) -> Array:
-	if theme == 2 or room_size(ws, root) != 1 or corridor(ws, root) != 0:
+	# Never drop a partition across a level's arrival room. In the school this
+	# could put the fixed spawn capsule inside a wall before the first frame.
+	if root == Vector2i.ZERO or theme == 2 or room_size(ws, root) != 1 \
+			or corridor(ws, root) != 0:
 		return []
 	var r := r01(ws, root.x, root.y, 613)
 	# the asylum is mostly small rooms: split single cells aggressively
@@ -638,6 +646,22 @@ static func portal(ws: int, cell: Vector2i, theme := 0) -> int:
 		if t != theme:
 			others.append(t)
 	return others[int(r01(ws, cell.x, cell.y, 502) * (float(others.size()) - 0.01))]
+
+
+## Rare working lift facade in a quiet, unsplit single-cell room. Keeping the
+## predicate here makes the set piece deterministic and lets dev tools locate
+## one without constructing the whole world.
+static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
+	if room_id(ws, cell) != cell or room_size(ws, cell) != 1 \
+			or not room_split(ws, cell, theme).is_empty() \
+			or portal(ws, cell, theme) >= 0:
+		return false
+	var st := cell_style(ws, cell, theme)
+	var eligible := st == STYLE_EMPTY or st == OFFICE_EMPTY \
+		or st == SEWER_DRY or st == AIR_HALL \
+		or st == ASY_DAYROOM or st == SCH_ADMIN
+	return eligible and r01(ws, cell.x, cell.y, 1700) < 0.28 \
+		and anchor_wall(ws, cell, 1701) >= 0
 
 
 ## What kind of room this is. Seeded by the room ROOT so every cell of a

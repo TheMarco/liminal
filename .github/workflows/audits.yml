@@ -1,0 +1,69 @@
+name: Procedural audits
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audits-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Godot audit suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: 4.6.3
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Cache imported resources
+        uses: actions/cache@v4
+        with:
+          path: .godot/imported
+          key: godot-${{ runner.os }}-${{ env.GODOT_VERSION }}-${{ hashFiles('models/**', 'textures/**', 'fonts/**', 'sounds/**', 'music/**') }}
+
+      - name: Install official Godot build
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl --fail --location --retry 3 \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" \
+            --output "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          install -m 0755 \
+            "$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" \
+            "$HOME/.local/bin/godot"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Import project resources
+        run: godot --headless --path . --editor --quit
+
+      - name: Audit corridor topology
+        run: godot --headless --path . --script tools/audit_corridors.gd
+
+      - name: Audit sewer topology
+        run: godot --headless --path . --script tools/audit_sewers.gd
+
+      - name: Audit semantic zones and landmarks
+        run: godot --headless --path . --script tools/audit_zones.gd
+
+      - name: Audit doorway furnishing clearance
+        run: godot --headless --path . --script tools/audit_doorways.gd
+
+      - name: Audit interactions
+        run: godot --headless --path . --script tools/audit_interactions.gd
+
+      - name: Audit portal and saved-position arrivals
+        run: godot --headless --path . --script tools/audit_arrivals.gd
+
+      - name: Audit runtime level switching
+        run: godot --headless --path . --script tools/audit_level_switches.gd -- --nologo

@@ -47,6 +47,12 @@ its own geography and remembers where you were. Or don't press anything:
 colour of wherever they lead. Step in and you emerge in the same cell of
 another world.
 
+Some of the building now answers back. Aim at an active control and press
+**E**: office terminals reveal successive records, a small selection of real
+doorway leaves can be opened and closed, and rare physical elevator panels
+carry you onward. Local lights occasionally sag, an unused lift may chime down
+the hall, and inaccessible rooms sometimes knock from the other side.
+
 The whole feed plays back as **240p footage on a consumer CRT tube** (the
 composite pass ported from the scramble Godot port, dropped to 240 lines;
 the 3D view itself renders at 240p): barrel curvature, beam scanlines, a
@@ -98,7 +104,8 @@ and glTF props from [Poly Haven](https://polyhaven.com): Victorian sofas,
 chandeliers and gilt-framed oils in the casino; CRT televisions, coffee
 carts and wet-floor signs in the office; oil drums, crates, tyres and
 trash bags in the sewers; abandoned trunks in baggage claim; bed frames, wheelchairs and
-crutches in the asylum. Anything animated or bespoke (slot machines,
+crutches in the asylum; adjustable desks and moulded chairs in the school.
+Anything animated or bespoke (slot machines,
 travelators, water, departure boards) stays procedural. The
 music (`music/lim*.mp3`) and the recorded audio in `sounds/` are the binary
 indulgences.
@@ -147,6 +154,7 @@ export templates installed):
 | WASD / arrow keys | Move |
 | Mouse | Look |
 | Shift | Sprint |
+| E | Use a focused terminal, elevator panel or working door |
 | 1–6 | Switch floor (casino / office / sewers / airport / asylum / school) |
 | V | Toggle the CRT tube effect |
 | Esc | Release mouse |
@@ -262,9 +270,25 @@ most recognizable procedural repeats.
 - `godot --headless --path . --script tools/audit_zones.gd` — samples more than
   26,000 rooms per theme, verifies room-level district/style consistency and
   checks that landmarks only occupy eligible 2x2 halls at the intended rarity.
+- `godot --headless --path . --script tools/audit_arrivals.gd -- 16` — follows
+  real generated portals across every floor and many seeds, builds each 3×3
+  destination neighbourhood, then verifies both portal and restored saved-position
+  landing capsules have a supporting floor and at least two clear escape directions.
+- `godot --headless --path . --script tools/audit_level_switches.gd -- --nologo`
+  — runs the actual floor-transition path against the school regression seed and
+  verifies the outgoing floor leaves physics before the landing probe begins.
+- `godot --headless --path . --script tools/audit_interactions.gd` — activates
+  a generated terminal, lift panel and working door, then verifies their state
+  and animation responses.
+- `godot --headless --path . --script tools/audit_doorways.gd` — builds
+  furnished rooms across every floor and fails if any generated prop mesh or
+  collider remains inside the protected approach lane of a real doorway.
 - `godot --headless --path . --script tools/profile_generation.gd` — constructs
   real chunks for every floor, reporting first-pass and steady-state build
   latency plus mesh, collision, light and reflection-probe counts.
+
+GitHub Actions runs every `audit_*.gd` check above on pushes to `main` and on
+pull requests via `.github/workflows/audits.yml`.
 
 ## Structure
 
@@ -278,6 +302,9 @@ scripts/mats.gd           shared material cache
 scripts/player.gd         FPS controller
 scripts/flicker_light.gd  fluorescent flicker behaviour
 scripts/ambience.gd       procedural room tone
+scripts/interactable.gd   shared E-key ray targets
+scripts/environment_events.gd  sparse local power and sound events
+scripts/arrival_safety.gd physics-tested portal / floor arrival resolver
 scripts/travelator.gd     moving-walkway drive volume
 scripts/spinner.gd        baggage-carousel rotation
 scripts/*_sounds.gd       per-theme spatial sound emitters

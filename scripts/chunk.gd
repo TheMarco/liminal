@@ -20,6 +20,8 @@ const SCH_BAND := 1.42   # height of the red line that runs the whole school
 const T := 0.15
 const DOOR_TOP := 2.25
 const AIR_DOOR := 3.15   # airport portal head height
+const DOOR_CLEAR_DEPTH := 3.6
+const DOOR_CLEAR_PAD := 0.5
 
 # sewer waterway cross-section
 const WATER_Y := -0.22   # water surface below the walkways
@@ -44,7 +46,7 @@ const ASY_PROP_NAMES := ["BarberShopChair_01", "Rockingchair_01", "SchoolChair_0
 	"old_bed_frame", "vintage_crutches_01", "wheelchair_01"]
 const CC0_PROP_NAMES := ["ArmChair_01", "Barrel_01", "Chandelier_03", "CoffeeCart_01",
 	"CoffeeTable_01", "Lantern_01", "Ottoman_01", "WetFloorSign_01",
-	"bar_chair_round_01", "barrel_03", "barrel_stove", "clipboard",
+	"SchoolDesk_01", "bar_chair_round_01", "barrel_03", "barrel_stove", "clipboard",
 	"coffee_table_round_01", "drawer_cabinet", "fancy_picture_frame_01",
 	"fancy_picture_frame_02", "hanging_industrial_lamp", "industrial_caged_sconce",
 	"old_tyre", "plastic_crate_03", "potted_plant_01", "potted_plant_02",
@@ -65,6 +67,7 @@ var portal_dest := -1
 var room_root: Vector2i        # the room this cell belongs to
 var room_n := 1                # how many cells the room spans
 var is_room_anchor := false    # only the anchor cell furnishes the room
+var doorway_props_removed := 0 # exposed for the generated-doorway audit
 # props are laid out in cell coords, then shifted onto the room centre
 
 
@@ -109,6 +112,7 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0) -> void:
 	_build_walls()
 	_build_lighting()
 	_build_props()
+	_build_interactions()
 	_maybe_probe()
 
 
@@ -343,11 +347,91 @@ func _build_walls() -> void:
 			_wall_seg(dir, plane, b, S, 0.0, _wall_h())
 			_wall_seg(dir, plane, a, b, AIR_DOOR if theme == 4 else DOOR_TOP, _wall_h())
 			_door_casing(dir, plane, a, b)
+			_maybe_swing_door(dir, plane, a, b)
 			if (dir == 0 or dir == 2) and info["exit_sign"]:
 				if theme == 4:
 					_air_portal_sign(dir, info["t"])
 				else:
 					_exit_sign(dir, info["t"])
+
+
+## Some genuine room-to-room openings get a working leaf. Canonical east and
+## south ownership prevents the neighbour chunk from building a duplicate.
+func _maybe_swing_door(dir: int, plane: float, a: float, b: float) -> void:
+	if dir != 0 and dir != 2:
+		return
+	if theme == 2 or theme == 4 or b - a > 2.25:
+		return
+	if WorldGen.h(wseed, cell.x, cell.y, 1760 + dir + theme * 11) % 100 >= 14:
+		return
+	var width := b - a - 0.12
+	if width < 0.82:
+		return
+	var pivot := Node3D.new()
+	var swing := -1.28 if dir == 0 else 1.28
+	if dir == 0:
+		pivot.position = Vector3(plane - 0.015, 0, a + 0.06)
+	else:
+		pivot.position = Vector3(a + 0.06, 0, plane - 0.015)
+	add_child(pivot)
+	var panel_mat: Material = Mats.wood_door()
+	if theme == 5:
+		panel_mat = Mats.asy_metal_green()
+	elif theme == 6:
+		panel_mat = Mats.sch_door()
+	var panel_pos := Vector3(0, 1.08, width * 0.5) if dir == 0 \
+		else Vector3(width * 0.5, 1.08, 0)
+	var panel_size := Vector3(0.075, 2.16, width) if dir == 0 \
+		else Vector3(width, 2.16, 0.075)
+	_mrbox(pivot, panel_pos, panel_size, panel_mat, 0.012)
+	# Kick plate, closer and proper lever make the selected leaf read differently
+	# from the permanently locked facade doors nearby.
+	var kick_pos := panel_pos + (Vector3(-0.045, -0.72, 0) if dir == 0 \
+		else Vector3(0, -0.72, -0.045))
+	var kick_size := Vector3(0.018, 0.34, width - 0.18) if dir == 0 \
+		else Vector3(width - 0.18, 0.34, 0.018)
+	_mbox(pivot, kick_pos, kick_size, Mats.steel())
+	var handle_pos := panel_pos + (Vector3(-0.065, -0.05, width * 0.34) if dir == 0 \
+		else Vector3(width * 0.34, -0.05, -0.065))
+	_mcyl(pivot, handle_pos, 0.025, 0.18, Mats.brass() if theme == 0 else Mats.chrome())
+	var closer_pos := panel_pos + Vector3(0, 0.86, 0)
+	_mbox(pivot, closer_pos, Vector3(0.10, 0.10, 0.42) if dir == 0 \
+		else Vector3(0.42, 0.10, 0.10), Mats.charcoal())
+	var sb := StaticBody3D.new()
+	pivot.add_child(sb)
+	var cs := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = panel_size
+	cs.shape = shape
+	cs.position = panel_pos
+	sb.add_child(cs)
+	var hit := Interactable.new()
+	hit.prompt_text = "E — open door"
+	hit.position = panel_pos
+	hit.add_box(panel_size + Vector3(0.28, 0.1, 0.28))
+	pivot.add_child(hit)
+	hit.activated.connect(_toggle_swing_door.bind(pivot, cs, hit, swing))
+
+
+func _toggle_swing_door(_actor: Node, pivot: Node3D, cs: CollisionShape3D,
+		hit: Interactable, swing: float) -> void:
+	if bool(pivot.get_meta("moving", false)):
+		return
+	var opening := not bool(pivot.get_meta("open", false))
+	pivot.set_meta("moving", true)
+	if opening:
+		cs.disabled = true
+	hit.prompt_text = "E — close door" if opening else "E — open door"
+	get_tree().call_group("level_manager", "door_activity")
+	var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(pivot, "rotation:y", swing if opening else 0.0, 0.58)
+	await tw.finished
+	if not is_instance_valid(pivot):
+		return
+	pivot.set_meta("open", opening)
+	pivot.set_meta("moving", false)
+	if not opening:
+		cs.disabled = false
 
 
 func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: float) -> void:
@@ -678,8 +762,15 @@ func _build_lighting() -> void:
 		pmat = Mats.panel_on().duplicate()
 	else:
 		pmat = Mats.panel_on()
-	for p in [Vector2(3, 3), Vector2(9, 3), Vector2(3, 9), Vector2(9, 9)]:
-		_troffer(Vector3(p.x, 0, p.y), Vector2(1.7, 0.8), pmat, Mats.sign_housing())
+	# The casino ceiling wants jewellery, not office hardware. Small opaline
+	# flush mounts keep the light warm and low without reading as fluorescent
+	# square panels against the coffered plaster.
+	# The shader's 2.4m world-space coffers put medallion centres at
+	# 1.2 + n*2.4. 3.6/8.4 give this four-light rhythm while keeping every
+	# mount inside a rosette instead of stranded on the moulding intersection.
+	for p in [Vector2(3.6, 3.6), Vector2(8.4, 3.6),
+			Vector2(3.6, 8.4), Vector2(8.4, 8.4)]:
+		_casino_flush_mount(Vector3(p.x, 0, p.y), pmat)
 
 	var grand := style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_BALLROOM
 	if grand:
@@ -700,6 +791,22 @@ func _build_lighting() -> void:
 	add_child(light)
 
 
+## A shallow 1930s-style opaline dome in concentric brass rings. The material
+## is passed through to FlickerLight, so the visible glass dies with the room.
+func _casino_flush_mount(at: Vector3, lens_mat: Material) -> void:
+	var y := ceil_h - 0.045
+	var plate := _cyl(Vector3(at.x, y, at.z), 0.34, 0.055, Mats.darkwood(), false)
+	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var ring := _cyl(Vector3(at.x, y - 0.035, at.z), 0.285, 0.075, Mats.brass(), false)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var glass := _cyl(Vector3(at.x, y - 0.085, at.z), 0.205, 0.065, lens_mat, false)
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# A small central finial makes the silhouette read as a fixture rather than
+	# another luminous disc pasted onto the ceiling.
+	var finial := _sphere(Vector3(at.x, y - 0.14, at.z), 0.055, Mats.brass())
+	finial.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
 ## Hotel circulation is lit by a chain of warm flush mounts, not the four
 ## fluorescent panels used in gaming rooms.  Each fixture owns its light so
 ## highlights and falloff follow the visible architecture down the corridor.
@@ -714,8 +821,11 @@ func _hall_lighting() -> void:
 		dead_i = int(_r(18) * 2.99)
 	elif cell != Vector2i.ZERO and _r(9) < 0.18:
 		flick_i = int(_r(19) * 2.99)
+	# A 12m chunk contains five complete 2.4m coffers. Use the first, middle and
+	# last medallion centres (local 1.2, 6.0, 10.8); the old 2/6/10 rhythm only
+	# aligned its middle fixture and visibly walked off the rosettes down a hall.
 	for i in 3:
-		var t := -4.0 + 4.0 * float(i)
+		var t := -4.8 + 4.8 * float(i)
 		var at := _wp(o, Vector3(t, ceil_h - 0.08, 0), yw)
 		_cyl(at + Vector3(0, 0.025, 0), 0.27, 0.08, Mats.brass(), false)
 		var lens_mat: StandardMaterial3D = Mats.panel_dead() if i == dead_i else Mats.panel_on()
@@ -879,7 +989,10 @@ func _build_props() -> void:
 	if not split.is_empty():
 		_partition(split[0], split[1])
 		if portal_dest < 0:
+			var sn0 := get_child_count()
+			var sb0 := body.get_child_count()
 			_small_room_props(split[0], split[1])
+			_clear_furnishings_from_doorways(sn0, sb0)
 		return
 	var rc := WorldGen.room_centre(wseed, room_root)
 	var off := Vector3(rc.x - (float(cell.x) * S + S / 2.0), 0.0,
@@ -1030,6 +1143,7 @@ func _build_props() -> void:
 		WorldGen.SCH_AUDITORIUM:
 			_sch_auditorium()
 	_shift_props(off, n0, b0)
+	_clear_furnishings_from_doorways(n0, b0)
 
 
 ## Move everything the prop pass just built onto the room centre — meshes,
@@ -1045,6 +1159,238 @@ func _shift_props(off: Vector3, n0: int, b0: int) -> void:
 		var cs := body.get_child(i)
 		if cs is Node3D:
 			(cs as Node3D).position += off
+
+
+## Every cased edge opening is a real connection. Furnishing is allowed to be
+## dense and awkward, but it may not occupy the first few metres of the path
+## through that opening. Locked facade doors are not edge openings and are
+## therefore deliberately unaffected.
+func _doorway_clearance_rects() -> Array[Rect2]:
+	var zones: Array[Rect2] = []
+	for member in _room_members():
+		var base := Vector2(float(member.x - cell.x) * S,
+			float(member.y - cell.y) * S)
+		for dir in 4:
+			var info := WorldGen.edge_info(wseed, member, dir, theme)
+			if info["wall"] or info["full_open"]:
+				continue
+			var width := float(info["w"]) + DOOR_CLEAR_PAD * 2.0
+			var along := float(info["t"]) - width * 0.5
+			match dir:
+				0:
+					zones.append(Rect2(base.x + S - DOOR_CLEAR_DEPTH,
+						base.y + along, DOOR_CLEAR_DEPTH + 0.15, width))
+				1:
+					zones.append(Rect2(base.x - 0.15, base.y + along,
+						DOOR_CLEAR_DEPTH + 0.15, width))
+				2:
+					zones.append(Rect2(base.x + along,
+						base.y + S - DOOR_CLEAR_DEPTH, width, DOOR_CLEAR_DEPTH + 0.15))
+				3:
+					zones.append(Rect2(base.x + along, base.y - 0.15,
+						width, DOOR_CLEAR_DEPTH + 0.15))
+	return zones
+
+
+func _rect_hits_zones(rect: Rect2, zones: Array[Rect2]) -> bool:
+	for zone in zones:
+		if rect.intersects(zone):
+			return true
+	return false
+
+
+## Collect the floor footprint of every visible mesh below head height. A
+## top-level prop pivot is removed as a unit when any of its solid-looking
+## geometry occupies an approach lane, so a bookcase cannot be left as loose
+## shelves and a table cannot be left as four orphaned legs.
+func _collect_low_mesh_rects(node: Node, parent_xf: Transform3D, out: Array[Rect2]) -> void:
+	var xf := parent_xf
+	if node is Node3D:
+		xf = parent_xf * (node as Node3D).transform
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null:
+			var a := mi.get_aabb()
+			var mn := Vector3(INF, INF, INF)
+			var mx := Vector3(-INF, -INF, -INF)
+			for ix in 2:
+				for iy in 2:
+					for iz in 2:
+						var p := xf * (a.position + Vector3(a.size.x * ix,
+							a.size.y * iy, a.size.z * iz))
+						mn = mn.min(p)
+						mx = mx.max(p)
+			# Floor finishes and ceiling fittings do not obstruct a body.
+			if mx.y > 0.22 and mn.y < 2.45:
+				out.append(Rect2(mn.x, mn.z, mx.x - mn.x, mx.z - mn.z))
+	for ch in node.get_children():
+		_collect_low_mesh_rects(ch, xf, out)
+
+
+func _node_hits_doorway(node: Node, zones: Array[Rect2]) -> bool:
+	var rects: Array[Rect2] = []
+	_collect_low_mesh_rects(node, Transform3D.IDENTITY, rects)
+	for rect in rects:
+		if _rect_hits_zones(rect, zones):
+			return true
+	return false
+
+
+func _collision_floor_rect(cs: CollisionShape3D) -> Rect2:
+	if cs.shape == null:
+		return Rect2()
+	var size := Vector3.ZERO
+	if cs.shape is BoxShape3D:
+		size = (cs.shape as BoxShape3D).size
+	elif cs.shape is CylinderShape3D:
+		var cy := cs.shape as CylinderShape3D
+		size = Vector3(cy.radius * 2.0, cy.height, cy.radius * 2.0)
+	elif cs.shape is CapsuleShape3D:
+		var cap := cs.shape as CapsuleShape3D
+		size = Vector3(cap.radius * 2.0, cap.height, cap.radius * 2.0)
+	else:
+		return Rect2()
+	var local := AABB(-size * 0.5, size)
+	var mn := Vector3(INF, INF, INF)
+	var mx := Vector3(-INF, -INF, -INF)
+	for ix in 2:
+		for iy in 2:
+			for iz in 2:
+				var p := cs.transform * (local.position + Vector3(local.size.x * ix,
+					local.size.y * iy, local.size.z * iz))
+				mn = mn.min(p)
+				mx = mx.max(p)
+	if mx.y <= 0.22 or mn.y >= 2.45:
+		return Rect2()
+	return Rect2(mn.x, mn.z, mx.x - mn.x, mx.z - mn.z)
+
+
+func _clear_furnishings_from_doorways(n0: int, b0: int) -> void:
+	# Corridor styles build their continuous shell during the prop pass. Their
+	# real side bays already own explicit clearance and must not be mistaken for
+	# furniture. The neighbouring room still clears its side of the same door.
+	if WorldGen.corridor(wseed, cell) != 0:
+		return
+	var zones := _doorway_clearance_rects()
+	if zones.is_empty():
+		return
+	var remove_nodes: Array[Node] = []
+	for i in range(n0, get_child_count()):
+		var ch := get_child(i)
+		ch.set_meta("doorway_furnishing", true)
+		if _node_hits_doorway(ch, zones):
+			remove_nodes.append(ch)
+	for ch in remove_nodes:
+		remove_child(ch)
+		ch.free()
+		doorway_props_removed += 1
+	var remove_shapes: Array[CollisionShape3D] = []
+	for i in range(b0, body.get_child_count()):
+		var cs := body.get_child(i) as CollisionShape3D
+		if cs == null:
+			continue
+		cs.set_meta("doorway_furnishing", true)
+		var rect := _collision_floor_rect(cs)
+		if rect.size != Vector2.ZERO and _rect_hits_zones(rect, zones):
+			remove_shapes.append(cs)
+	for cs in remove_shapes:
+		body.remove_child(cs)
+		cs.free()
+		doorway_props_removed += 1
+
+
+## Audit hook: after the cull, no marked furnishing mesh or collider may still
+## overlap a real doorway approach lane.
+func doorway_clearance_violations() -> int:
+	var zones := _doorway_clearance_rects()
+	var bad := 0
+	for ch in get_children():
+		if ch.has_meta("doorway_furnishing") and _node_hits_doorway(ch, zones):
+			bad += 1
+	for ch in body.get_children():
+		if ch is CollisionShape3D and ch.has_meta("doorway_furnishing"):
+			var rect := _collision_floor_rect(ch)
+			if rect.size != Vector2.ZERO and _rect_hits_zones(rect, zones):
+				bad += 1
+	return bad
+
+
+# --- interaction set pieces --------------------------------------------------
+
+func _build_interactions() -> void:
+	if not WorldGen.elevator_cell(wseed, cell, theme):
+		return
+	var wall := WorldGen.anchor_wall(wseed, cell, 1701)
+	_interactive_elevator(wall)
+
+
+## A complete lift facade: split brushed-metal leaves, deep black reveal,
+## illuminated floor display, call panel and animated opening before travel.
+func _interactive_elevator(dir: int) -> void:
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var plane := (S - T / 2.0) if dir == 0 or dir == 2 else (T / 2.0)
+	var inner := plane + n * (T / 2.0)
+	var v := Node3D.new()
+	if dir < 2:
+		v.position = Vector3(inner + n * 0.035, 0, S / 2.0)
+		v.rotation.y = -PI / 2.0 if dir == 0 else PI / 2.0
+	else:
+		v.position = Vector3(S / 2.0, 0, inner + n * 0.035)
+		v.rotation.y = PI if dir == 2 else 0.0
+	add_child(v)
+	_mrbox(v, Vector3(0, 1.27, -0.035), Vector3(2.62, 2.54, 0.10),
+		Mats.charcoal(), 0.025)
+	_mbox(v, Vector3(0, 1.25, -0.075), Vector3(2.22, 2.42, 0.04), Mats.screen_dark())
+	var left := Node3D.new()
+	var right := Node3D.new()
+	v.add_child(left)
+	v.add_child(right)
+	left.position = Vector3(-0.545, 1.25, 0.015)
+	right.position = Vector3(0.545, 1.25, 0.015)
+	for leaf in [left, right]:
+		_mrbox(leaf, Vector3.ZERO, Vector3(1.07, 2.40, 0.075), Mats.steel(), 0.012)
+		for rib in [-0.36, 0.0, 0.36]:
+			_mbox(leaf, Vector3(rib, 0, 0.045), Vector3(0.018, 2.25, 0.018), Mats.chrome())
+	# Header display and its stubborn amber direction arrow.
+	_mrbox(v, Vector3(0, 2.78, 0.035), Vector3(0.92, 0.34, 0.08), Mats.sign_housing(), 0.018)
+	var floor_lb := Label3D.new()
+	floor_lb.text = "%d  ▼" % (WorldGen.THEMES.find(theme) + 1)
+	floor_lb.font_size = 72
+	floor_lb.pixel_size = 0.0021
+	floor_lb.modulate = Color(1.0, 0.56, 0.18)
+	floor_lb.position = Vector3(0, 2.78, 0.082)
+	v.add_child(floor_lb)
+	# Brushed call plate, button, key switch and Braille-like locator studs.
+	_mrbox(v, Vector3(1.38, 1.16, 0.06), Vector3(0.34, 0.64, 0.08), Mats.steel(), 0.018)
+	var button := _mcyl(v, Vector3(1.38, 1.27, 0.125), 0.075, 0.035, Mats.lamp_amber())
+	button.rotation.x = PI / 2.0
+	var keyhole := _mcyl(v, Vector3(1.38, 0.99, 0.12), 0.026, 0.025, Mats.charcoal())
+	keyhole.rotation.x = PI / 2.0
+	for i in 3:
+		_msphere(v, Vector3(1.30 + 0.08 * float(i), 0.88, 0.125), 0.012, Mats.chrome())
+	var idx := WorldGen.THEMES.find(theme)
+	var dest: int = WorldGen.THEMES[(idx + 1) % WorldGen.THEMES.size()]
+	var hit := Interactable.new()
+	hit.prompt_text = "E — elevator to Floor %d" % (WorldGen.THEMES.find(dest) + 1)
+	hit.position = Vector3(1.38, 1.18, 0.22)
+	hit.add_box(Vector3(0.52, 0.88, 0.42))
+	v.add_child(hit)
+	hit.activated.connect(_use_elevator.bind(dest, hit, left, right))
+
+
+func _use_elevator(_actor: Node, dest: int, hit: Interactable,
+		left: Node3D, right: Node3D) -> void:
+	if not hit.enabled:
+		return
+	hit.enabled = false
+	hit.prompt_text = "ELEVATOR ARRIVING"
+	get_tree().call_group("level_manager", "door_activity")
+	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(left, "position:x", -1.02, 0.48)
+	tw.parallel().tween_property(right, "position:x", 1.02, 0.48)
+	await tw.finished
+	if is_inside_tree():
+		get_tree().call_group("level_manager", "use_elevator", dest)
 
 
 func _pillars(h: float, mat: Material) -> void:
@@ -2147,6 +2493,14 @@ func _copier(p: Vector3, salt: int) -> void:
 	_collider_yaw_box(p + Vector3(0, 0.55, 0), Vector3(1.15, 1.1, 0.7), v.rotation.y)
 
 
+const TERMINAL_PAGES := [
+	"EMPLOYEE 0000\nSTATUS: PRESENT\nSHIFT END: --:--",
+	"QUEUE 9 / 9\nPLEASE REMAIN\nAT YOUR STATION",
+	"FLOOR PLAN\nROOM NOT FOUND\nRETRYING...",
+	"MESSAGE (1)\nFROM: YOURSELF\nDO NOT REPLY",
+]
+
+
 ## DEC VT100 lookalike, built in local space facing +Z under one pivot so the
 ## random desk-jitter yaw can never shear the screen out of its housing.
 func _vt100(pos: Vector3, yaw: float) -> void:
@@ -2170,6 +2524,30 @@ func _vt100(pos: Vector3, yaw: float) -> void:
 	# dark trim strip across the top front, and a little model badge
 	_mrbox(p, Vector3(0, 1.103, 0.03), Vector3(0.36, 0.012, 0.12), dark, 0.004)
 	_mrbox(p, Vector3(0.13, 0.826, 0.155), Vector3(0.055, 0.016, 0.008), dark, 0.003)
+	var readout := Label3D.new()
+	readout.text = TERMINAL_PAGES[WorldGen.h(wseed, cell.x, cell.y, 1801) % TERMINAL_PAGES.size()]
+	readout.font_size = 38
+	readout.pixel_size = 0.0016
+	readout.width = 170.0
+	readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	readout.modulate = Color(0.38, 1.0, 0.58, 0.92)
+	readout.position = Vector3(0, 0.952, 0.154)
+	p.add_child(readout)
+	var hit := Interactable.new()
+	hit.prompt_text = "E — query terminal"
+	hit.position = Vector3(0, 0.96, 0.29)
+	hit.add_box(Vector3(0.58, 0.48, 0.40))
+	p.add_child(hit)
+	hit.set_meta("page", WorldGen.h(wseed, cell.x, cell.y, 1801) % TERMINAL_PAGES.size())
+	hit.activated.connect(_use_terminal.bind(hit, readout))
+
+
+func _use_terminal(_actor: Node, hit: Interactable, readout: Label3D) -> void:
+	var page := (int(hit.get_meta("page", 0)) + 1) % TERMINAL_PAGES.size()
+	hit.set_meta("page", page)
+	readout.text = TERMINAL_PAGES[page]
+	hit.prompt_text = "E — next record"
+	get_tree().call_group("level_manager", "terminal_activity", page)
 
 
 ## Matching wedge keyboard: beige base, dark key deck, rows of black caps.
@@ -6015,6 +6393,18 @@ func _sch_front_wall(salt: int) -> int:
 
 ## Student desk: a tray top on a tube frame, with a chair tucked under it.
 func _sch_desk(p: Vector3, yaw: float, salt: int) -> void:
+	# Alternate the lightweight procedural desks with a scanned/modelled CC0
+	# desk and chair pair. Close rows gain real adjustable legs, basket shelf,
+	# edge wear and chair cut-outs without making every classroom a glTF farm.
+	if WorldGen.h(wseed, cell.x + salt, cell.y, 1601) % 2 == 0:
+		var myaw := yaw + (_r(salt) - 0.5) * 0.12
+		_cc0_prop("SchoolDesk_01", p, myaw)
+		_collider_yaw_box(p + Vector3(0, 0.44, 0), Vector3(0.72, 0.88, 0.58), myaw)
+		var cp := p - Vector3(sin(yaw) * 0.58, 0, cos(yaw) * 0.58)
+		var cyaw := yaw + (_r(salt + 4) - 0.5) * 0.45
+		_asy_model("SchoolChair_01", cp, cyaw)
+		_collider_yaw_box(cp + Vector3(0, 0.48, 0), Vector3(0.52, 0.96, 0.58), cyaw)
+		return
 	var v := Node3D.new()
 	v.position = p
 	v.rotation.y = yaw + (_r(salt) - 0.5) * 0.12
@@ -6123,11 +6513,16 @@ func _sch_classroom() -> void:
 	if _r(74) < 0.5:
 		_sch_screen(fw)
 	# the stuff that accumulates down the side of every classroom
-	var side := Vector3(fz, 0, -fx)          # perpendicular to the class's facing
-	_sch_cupboard(c + side * 4.7 + Vector3(fx, 0, fz) * 1.2, yaw + PI / 2.0, 88)
-	if _r(89) < 0.7:
-		_sch_stack(c - side * 4.9, yaw + PI / 2.0, 90)
-	_sch_bin(c + Vector3(fx, 0, fz) * 3.0 + side * 3.4)
+	# Keep the arrival classroom's perimeter bare. Its only real exit can land
+	# on either side wall, and a tall cupboard in that bay made a valid spawn
+	# feel like a sealed pocket even when the capsule itself was clear.
+	if room_root != Vector2i.ZERO:
+		var side := Vector3(fz, 0, -fx)      # perpendicular to the class's facing
+		_sch_cupboard(c + side * 4.7 + Vector3(fx, 0, fz) * 1.2,
+			yaw + PI / 2.0, 88)
+		if _r(89) < 0.7:
+			_sch_stack(c - side * 4.9, yaw + PI / 2.0, 90)
+		_sch_bin(c + Vector3(fx, 0, fz) * 3.0 + side * 3.4)
 
 
 ## Steel storage cupboard, the tall kind with the dented doors.
@@ -6463,14 +6858,34 @@ func _sch_bleachers(p: Vector3, yaw: float, ln: float) -> void:
 
 func _sch_library() -> void:
 	var span := _room_span()
-	var along_x := span.x >= span.y
-	var runs := 3 if maxf(span.x, span.y) > 20.0 else 2
+	# Run stacks parallel to the dominant doorway flow and distribute them
+	# across that flow. The old layout varied their position along the same axis
+	# as their length, overlapping the runs into one solid barricade.
+	var x_doors := 0
+	var z_doors := 0
+	for member in _room_members():
+		for dir in 4:
+			var edge := WorldGen.edge_info(wseed, member, dir, theme)
+			if edge["wall"] or edge["full_open"]:
+				continue
+			if dir < 2:
+				x_doors += 1
+			else:
+				z_doors += 1
+	var along_x := x_doors >= z_doors if x_doors + z_doors > 0 else span.x >= span.y
+	var large := maxf(span.x, span.y) > 20.0
+	var runs := 3 if large else 2
 	for i in runs:
-		var u := (float(i) - float(runs - 1) * 0.5) * 3.2
-		var p := Vector3(S / 2.0 + u, 0, S / 2.0) if along_x else Vector3(S / 2.0, 0, S / 2.0 + u)
+		var pitch := 5.8 if large else 8.4
+		var u := (float(i) - float(runs - 1) * 0.5) * pitch
+		var p := Vector3(S / 2.0, 0, S / 2.0 + u) if along_x \
+			else Vector3(S / 2.0 + u, 0, S / 2.0)
 		_sch_stack(p, 0.0 if along_x else PI / 2.0, 620 + i * 9)
-	# a reading table off to one side
-	var tp := Vector3(S / 2.0, 0, S / 2.0) + (Vector3(0, 0, 4.2) if along_x else Vector3(4.2, 0, 0))
+	# The small-room table sits between the end approaches; large libraries have
+	# enough interior depth to move it out into a separate reading bay.
+	var tp := Vector3(S / 2.0, 0, S / 2.0)
+	if large:
+		tp += Vector3(0, 0, 7.8) if along_x else Vector3(7.8, 0, 0)
 	_sch_caf_table(tp, 0.0 if along_x else PI / 2.0, 640)
 
 

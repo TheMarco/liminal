@@ -13,6 +13,7 @@ signal started
 const KEYS := [
 	["WASD  /  arrows", "walk"],
 	["Shift", "run"],
+	["E", "use terminals, lifts and selected doors"],
 	["1 - 6", "ride the elevator between floors"],
 	["V", "look with your own eyes instead of the tube"],
 	["Esc", "release the mouse"],

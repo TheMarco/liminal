@@ -23,3 +23,7 @@ scaled ~0.75), barrel_stove, tree_stump_01 (roots start 0.19 below origin),
 rusted_wheel_rim_02, wooden_crate_01.
 
 **Airport:** vintage_suitcase (an open 1.6m trunk).
+
+**School:** SchoolDesk_01 (modelled adjustable student desk with storage
+shelf; alternated with the lighter procedural desks). Downloaded at 1K glTF
+from `polyhaven.com/a/SchoolDesk_01`.

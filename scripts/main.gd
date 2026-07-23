@@ -1,5 +1,5 @@
 extends Node3D
-## Entry point and level manager. Five endless floors share one player:
+## Entry point and level manager. Six endless floors share one player:
 ##   1 — seedy Vegas hotel-casino            (theme 0)
 ##   2 — sterile Severance-style office      (theme 1)
 ##   3 — dripping sewer works under everything (theme 2)
@@ -47,6 +47,14 @@ var _figures: ShadowFigures
 var _music: AudioStreamPlayer
 var _title: TitleScreen
 var _hint: Label
+var _interact_panel: PanelContainer
+var _interact_hint: Label
+var _event_panel: PanelContainer
+var _event_hint: Label
+var _event_tween: Tween
+var _interact_style: StyleBoxFlat
+var _event_style: StyleBoxFlat
+var _events: EnvironmentEvents
 
 # One mood track per floor.
 const MUSIC_TRACKS := {
@@ -91,6 +99,7 @@ func _ready() -> void:
 	if not quick_exit:
 		Chunk.request_prop_preloads()
 	add_to_group("portal_listener")
+	add_to_group("level_manager")
 	if OS.get_cmdline_user_args().has("--notaa"):
 		get_viewport().use_taa = false
 	# dev: start with the tube off, so screenshots show the raw full-res render
@@ -132,13 +141,22 @@ func _ready() -> void:
 	_figures = ShadowFigures.new()
 	_figures.player = player
 	add_child(_figures)
+	_events = EnvironmentEvents.new()
+	_events.player = player
+	_events.set_level(level_root)
+	add_child(_events)
 	_music = AudioStreamPlayer.new()
 	_music.volume_db = -50.0
 	add_child(_music)
 	_switch_music(active_level)
 	_build_ui()
+	player.interaction_prompt_changed.connect(_on_interaction_prompt)
+	_events.message.connect(_show_event_message)
+	if OS.get_cmdline_user_args().has("--caption-preview"):
+		_preview_captions()
 	_build_title()
 	_maybe_screenshot()
+	call_deferred("_settle_initial_arrival")
 
 
 func _level_seed(level: int) -> int:
@@ -195,11 +213,50 @@ func _on_portal(dest: int, cellv: Vector2i) -> void:
 	_jump_to(dest, _safe_arrival(dest, cellv, PORTAL_ARRIVE[dest]), true)
 
 
+## Called by physical lift panels built into selected generated rooms.
+func use_elevator(dest: int) -> void:
+	if _switching or dest == active_level or not WorldGen.THEMES.has(dest):
+		return
+	_events.elevator_response()
+	_show_event_message("FLOOR %d" % (WorldGen.THEMES.find(dest) + 1))
+	_switch_level(dest)
+
+
+func terminal_activity(page: int) -> void:
+	if _events != null:
+		_events.terminal_response(page)
+
+
+func door_activity() -> void:
+	if _events != null:
+		_events.door_response()
+
+
 ## Airport gate cells seal a 2.2m apron strip behind curtain glass along
 ## their anchor wall. If a fixed arrival offset would land inside that strip
 ## — an inescapable pocket — mirror it across the cell.
 func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
 	var pos := Vector3(cellv.x * 12.0 + base.x, 0.15, cellv.y * 12.0 + base.z)
+	# The first school room is a classroom. Its desks rotate to face whichever
+	# solid wall owns the board, so a fixed corner can become the back row. Land
+	# in the clear teaching aisle between the first row and the teacher's desk.
+	if level == 6 and cellv == Vector2i.ZERO:
+		var ws6 := _level_seed(6)
+		var root := WorldGen.room_id(ws6, cellv)
+		var centre := WorldGen.room_centre(ws6, root)
+		var front := WorldGen.anchor_wall(ws6, root, 72)
+		var facing := Vector2.ZERO
+		match front:
+			0: facing = Vector2(1.0, 0.0)
+			1: facing = Vector2(-1.0, 0.0)
+			2: facing = Vector2(0.0, 1.0)
+			_: facing = Vector2(0.0, -1.0)
+		# Bias into the wide perimeter aisle as well. At the centreline, walking
+		# away from the teacher immediately meets the first student desk; here
+		# every initial heading has room to resolve before reaching furniture.
+		var side := Vector2(facing.y, -facing.x)
+		return Vector3(centre.x + facing.x * 2.2 + side.x * 3.0, 0.15,
+			centre.y + facing.y * 2.2 + side.y * 3.0)
 	if level != 4:
 		return pos
 	var ws := _level_seed(4)
@@ -227,14 +284,31 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
 	var tw := create_tween()
 	tw.tween_property(_fade, "color:a", 1.0, 0.16 if via_portal else 0.3)
 	await tw.finished
-	level_root.queue_free()
+	# Detach the outgoing floor immediately. queue_free() alone can leave its
+	# collision bodies registered until the end of a busy frame; if the landing
+	# probe runs during that overlap, geometry from two floors can make every
+	# otherwise-safe candidate appear blocked (seen returning to the school at
+	# seed 1760336105, cell -1,0).
+	var old_level := level_root
+	remove_child(old_level)
+	old_level.queue_free()
 	_figures.despawn()
 	_switch_music(level)
 	active_level = level
+	# Let the physics server unregister every outgoing collider before any
+	# destination body is created.
+	await get_tree().physics_frame
 	_build_level(level, pos)
-	player.teleport(pos)
+	_events.set_level(level_root)
 	player.world_seed = _level_seed(level)
 	player.level_theme = level
+	await get_tree().physics_frame
+	var cellv := Vector2i(floori(pos.x / 12.0), floori(pos.z / 12.0))
+	var safe := ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
+	if safe == Vector3.INF:
+		push_warning("No audited arrival candidate in theme %d cell %s; using requested position" % [level, cellv])
+		safe = pos
+	player.teleport(safe)
 	we.environment = _build_env(level)
 	ambience.queue_free()
 	ambience = Ambience.new(level)
@@ -243,6 +317,17 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
 	var tw2 := create_tween()
 	tw2.tween_property(_fade, "color:a", 0.0, 0.45 if via_portal else 0.5)
 	_switching = false
+
+
+func _settle_initial_arrival() -> void:
+	await get_tree().physics_frame
+	if player == null or not is_instance_valid(player):
+		return
+	var pos := player.global_position
+	var cellv := Vector2i(floori(pos.x / 12.0), floori(pos.z / 12.0))
+	var safe := ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
+	if safe != Vector3.INF and safe.distance_to(pos) > 0.02:
+		player.teleport(safe)
 
 
 func _process(dt: float) -> void:
@@ -356,6 +441,43 @@ func _apply_scaling() -> void:
 		vp.scaling_3d_scale = clampf(240.0 / float(vp.size.y), 0.05, 1.0)
 	else:
 		vp.scaling_3d_scale = 1.0
+	_apply_hud_scaling()
+
+
+## Keep captions physically legible when the window is larger than 720p.
+## The 3D world can deliberately become low-resolution; the HUD must not.
+func _apply_hud_scaling() -> void:
+	if _hint == null:
+		return
+	var viewport_size := Vector2(get_viewport().size)
+	var scale := clampf(viewport_size.y / 720.0, 1.0, 1.8)
+	_hint.position = Vector2(18.0, 14.0) * scale
+	_hint.add_theme_font_size_override("font_size", roundi(15.0 * minf(scale, 1.5)))
+	_hint.add_theme_constant_override("outline_size", roundi(2.0 * scale))
+
+	_interact_panel.custom_minimum_size = Vector2(520.0, 54.0) * scale
+	_interact_panel.position = Vector2(
+		(viewport_size.x - _interact_panel.custom_minimum_size.x) * 0.5,
+		viewport_size.y - 100.0 * scale)
+	_interact_hint.add_theme_font_size_override("font_size", roundi(24.0 * scale))
+	_interact_hint.add_theme_constant_override("outline_size", roundi(2.0 * scale))
+
+	_event_panel.custom_minimum_size = Vector2(640.0, 60.0) * scale
+	_event_panel.position = Vector2(
+		(viewport_size.x - _event_panel.custom_minimum_size.x) * 0.5,
+		viewport_size.y * 0.5 + 150.0 * scale)
+	_event_hint.add_theme_font_size_override("font_size", roundi(28.0 * scale))
+	_event_hint.add_theme_constant_override("outline_size", roundi(2.0 * scale))
+
+	for style in [_interact_style, _event_style]:
+		style.content_margin_left = 18.0 * scale
+		style.content_margin_right = 18.0 * scale
+		style.content_margin_top = 9.0 * scale
+		style.content_margin_bottom = 9.0 * scale
+		style.corner_radius_top_left = roundi(7.0 * scale)
+		style.corner_radius_top_right = roundi(7.0 * scale)
+		style.corner_radius_bottom_left = roundi(7.0 * scale)
+		style.corner_radius_bottom_right = roundi(7.0 * scale)
 
 
 ## Shared "Hall" bus: every spatial emitter routes through a soft reverb so
@@ -525,14 +647,53 @@ func _build_ui() -> void:
 	cl.layer = 2
 	var lb := Label.new()
 	_hint = lb
-	lb.text = "WASD / arrows move   ·   Shift run   ·   1-6 switch floors   ·   swirling portals jump worlds   ·   V toggles CRT   ·   Esc release mouse"
+	lb.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   1-6 switch floors   ·   portals jump worlds   ·   V toggles CRT   ·   Esc release mouse"
 	lb.position = Vector2(18, 14)
 	lb.add_theme_font_size_override("font_size", 15)
 	lb.add_theme_color_override("font_color", Color(1.0, 0.9, 0.8, 0.9))
 	lb.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	lb.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
 	lb.add_theme_constant_override("shadow_offset_x", 1)
 	lb.add_theme_constant_override("shadow_offset_y", 1)
 	cl.add_child(lb)
+	_interact_panel = PanelContainer.new()
+	_interact_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_interact_panel.visible = false
+	_interact_style = StyleBoxFlat.new()
+	_interact_style.bg_color = Color(0.025, 0.022, 0.018, 0.78)
+	_interact_style.border_color = Color(0.72, 0.53, 0.28, 0.42)
+	_interact_style.set_border_width_all(1)
+	_interact_panel.add_theme_stylebox_override("panel", _interact_style)
+	cl.add_child(_interact_panel)
+	_interact_hint = Label.new()
+	_interact_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_interact_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_interact_hint.add_theme_font_size_override("font_size", 19)
+	_interact_hint.add_theme_color_override("font_color", Color(1.0, 0.88, 0.62))
+	_interact_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	_interact_hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_interact_hint.add_theme_constant_override("shadow_offset_x", 2)
+	_interact_hint.add_theme_constant_override("shadow_offset_y", 2)
+	_interact_panel.add_child(_interact_hint)
+	_event_panel = PanelContainer.new()
+	_event_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_event_panel.modulate.a = 0.0
+	_event_style = StyleBoxFlat.new()
+	_event_style.bg_color = Color(0.018, 0.017, 0.015, 0.76)
+	_event_style.border_color = Color(0.65, 0.62, 0.54, 0.30)
+	_event_style.set_border_width_all(1)
+	_event_panel.add_theme_stylebox_override("panel", _event_style)
+	cl.add_child(_event_panel)
+	_event_hint = Label.new()
+	_event_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_event_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_event_hint.add_theme_font_size_override("font_size", 15)
+	_event_hint.add_theme_color_override("font_color", Color(0.96, 0.93, 0.84))
+	_event_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
+	_event_hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_event_hint.add_theme_constant_override("shadow_offset_x", 2)
+	_event_hint.add_theme_constant_override("shadow_offset_y", 2)
+	_event_panel.add_child(_event_hint)
 	# fullscreen fade for level transitions
 	_fade = ColorRect.new()
 	_fade.color = Color(0, 0, 0, 0)
@@ -548,6 +709,34 @@ func _build_ui() -> void:
 	_warp.stream = SoundBank.warp()
 	_warp.volume_db = -6.0
 	add_child(_warp)
+	_apply_hud_scaling()
+
+
+func _on_interaction_prompt(text: String) -> void:
+	if _interact_hint != null:
+		_interact_hint.text = text
+		_interact_panel.visible = not text.is_empty()
+
+
+func _show_event_message(text: String) -> void:
+	if _event_hint == null or _event_panel == null:
+		return
+	_event_hint.text = text
+	if _event_tween != null and _event_tween.is_valid():
+		_event_tween.kill()
+	_event_panel.modulate.a = 0.0
+	_event_tween = create_tween()
+	_event_tween.tween_property(_event_panel, "modulate:a", 0.96, 0.18)
+	_event_tween.tween_interval(2.2)
+	_event_tween.tween_property(_event_panel, "modulate:a", 0.0, 0.7)
+
+
+## Screenshot-only helper for checking both caption styles without waiting for
+## a random event or finding an interactable prop.
+func _preview_captions() -> void:
+	await get_tree().create_timer(1.0).timeout
+	_show_event_message("THE POWER DIPS")
+	_on_interaction_prompt("E — QUERY TERMINAL")
 
 
 ## The strip along the top says the same as the title screen; it goes once you
