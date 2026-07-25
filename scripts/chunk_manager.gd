@@ -10,9 +10,16 @@ const BUDGET := 3  # chunks built per frame, closest first
 const WARM_R := 1  # 3x3 is enough collision coverage for a safe arrival
 const BUILD_SLICE_USEC := 6000  # stop streaming after roughly 6ms this frame
 
+signal chunk_built(chunk: Chunk)
+
 var world_seed := 1
 var theme := 0
 var player: Node3D
+var descent := false
+var descent_floor_idx := 0
+var descent_route: DescentRoute
+var blackout := false
+var anomalies := {}
 var chunks := {}
 var queued := {}
 static var _dev_timing := false
@@ -68,7 +75,18 @@ func _cheb(a: Vector2i, b: Vector2i) -> int:
 
 func _build(c: Vector2i) -> void:
 	var t0 := Time.get_ticks_usec()
-	var ch := Chunk.new(world_seed, c, theme)
+	var config := {}
+	if descent and descent_route != null:
+		config = {
+			"descent": true,
+			"target": c == descent_route.target,
+			"target_wall": descent_route.target_wall,
+			"final": descent_floor_idx >= DescentRun.ORDER.size() - 1,
+			"floor_idx": descent_floor_idx,
+			"anomaly": int(anomalies.get(c, -1)),
+			"blackout": blackout,
+		}
+	var ch := Chunk.new(world_seed, c, theme, config)
 	if _dev_timing:
 		var ms := float(Time.get_ticks_usec() - t0) / 1000.0
 		if ms > 4.0:
@@ -76,3 +94,17 @@ func _build(c: Vector2i) -> void:
 	ch.position = Vector3(c.x * CELL, 0.0, c.y * CELL)
 	add_child(ch)
 	chunks[c] = ch
+	chunk_built.emit(ch)
+
+
+func set_blackout(on: bool) -> void:
+	blackout = on
+	for ch in chunks.values():
+		if is_instance_valid(ch):
+			(ch as Chunk).set_blackout(on)
+
+
+func set_anomaly(at: Vector2i, kind: int) -> void:
+	anomalies[at] = kind
+	if chunks.has(at) and is_instance_valid(chunks[at]):
+		(chunks[at] as Chunk).activate_anomaly(kind)

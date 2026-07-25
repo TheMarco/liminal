@@ -29,7 +29,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .godot/imported
-          key: godot-${{ runner.os }}-${{ env.GODOT_VERSION }}-${{ hashFiles('models/**', 'textures/**', 'fonts/**', 'sounds/**', 'music/**') }}
+          key: godot-${{ runner.os }}-${{ env.GODOT_VERSION }}-${{ hashFiles('models/**', 'textures/**', 'paintings/**', 'fonts/**', 'sounds/**', 'music/**') }}
 
       - name: Install official Godot build
         shell: bash
@@ -59,6 +59,24 @@ jobs:
       - name: Audit doorway furnishing clearance
         run: godot --headless --path . --script tools/audit_doorways.gd
 
+      - name: Audit authored airport luggage
+        run: godot --headless --path . --script tools/audit_airport_luggage.gd
+
+      - name: Audit authored mall shopping carts
+        run: godot --headless --path . --script tools/audit_mall_shopping_carts.gd
+
+      - name: Audit authored chemistry rooms and glassware
+        run: godot --headless --path . --script tools/audit_chemistry_props.gd
+
+      - name: Audit closed slot-machine cabinets
+        run: godot --headless --path . --script tools/audit_slots.gd
+
+      - name: Audit mall and prison furniture support
+        run: godot --headless --path . --script tools/audit_new_levels.gd
+
+      - name: Audit mounted wall art
+        run: godot --headless --path . --script tools/audit_wall_art.gd
+
       - name: Audit interactions
         run: godot --headless --path . --script tools/audit_interactions.gd
 
@@ -67,3 +85,15 @@ jobs:
 
       - name: Audit runtime level switching
         run: godot --headless --path . --script tools/audit_level_switches.gd -- --nologo
+
+      - name: Audit Descent objective routes
+        run: godot --headless --path . --script tools/audit_descent_routes.gd -- 200
+
+      - name: Audit Descent runtime contracts
+        run: godot --headless --path . --script tools/audit_descent_runtime.gd -- --mode=descent --nologo
+
+      - name: Audit bundled fonts
+        run: godot --headless --path . --script tools/font_check.gd
+
+      - name: Build distributable resource pack
+        run: godot --headless --quiet --path . --export-pack "macOS" "$RUNNER_TEMP/LiminalVegas-ci.pck"

@@ -18,11 +18,26 @@ const CAM_H := 1.62
 const GRAB_SETTLE_MS := 150   # mouse motion to swallow after taking the cursor
 const INTERACT_DIST := 3.2
 
+## The torch is a resource, not a state you leave switched on. Ten seconds of
+## light, then it dies, and it wants time in the dark before it will run again.
+## Without that the whole game is played with the beam up and nothing out there
+## is worth being afraid of.
+const FLASH_ENERGY := 4.5
+const FLASH_MAX := 10.0
+const FLASH_RECHARGE := 7.0   # seconds in the dark for a full charge
+## Refuse to switch on for a useless flicker. Being told "not yet" is fairer
+## than handing over a beam that dies in the half second you needed it.
+const FLASH_MIN_START := 2.2
+const FLASH_WARN := 2.5       # it starts to fail this long before it goes out
+
 signal interaction_prompt_changed(text: String)
 
 var cam: Camera3D
+var flashlight: SpotLight3D
 var world_seed := 0   # set by main; used to pick footstep surface per cell
 var level_theme := 0  # set by main on level switch
+var _flash_charge := FLASH_MAX
+var _flash_t := 0.0
 var _bob := 0.0
 var _step_acc := 0.0
 var _roll := 0.0
@@ -36,12 +51,16 @@ var _grabbed := -10000
 var _walk_p: AudioStreamPlayer
 var _walk_surface := ""
 var _walk_vol := -60.0
+var _flash_click: AudioStreamPlayer
 var dev_spin := false     # dev: whip around every few seconds, for testing
 var dev_walk := false     # dev: hold forward, for frame-pacing tests
 var _spin_wait := 3.0
 var _spin_left := 0.0
 var _strafe := 0.0
 var _sprinting := false
+## Mode-owned movement gate. Wander leaves this at its default; Descent turns
+## it off without changing the controller's normal key handling.
+var allow_sprint := true
 var _focused: Interactable
 var _focus_text := ""
 
@@ -61,6 +80,17 @@ func _init() -> void:
 	cam.near = 0.05
 	cam.far = 80.0
 	add_child(cam)
+	flashlight = SpotLight3D.new()
+	flashlight.position = Vector3(0.10, -0.10, -0.06)
+	flashlight.light_color = Color(0.88, 0.93, 1.0)
+	flashlight.light_energy = 4.5
+	flashlight.spot_range = 21.0
+	flashlight.spot_angle = 46.0
+	flashlight.spot_attenuation = 1.15
+	flashlight.light_volumetric_fog_energy = 0.42
+	flashlight.shadow_enabled = true
+	flashlight.visible = false
+	cam.add_child(flashlight)
 
 
 func _ready() -> void:
@@ -74,6 +104,10 @@ func _ready() -> void:
 	_walk_p = AudioStreamPlayer.new()
 	_walk_p.volume_db = -60.0
 	add_child(_walk_p)
+	_flash_click = AudioStreamPlayer.new()
+	_flash_click.stream = SoundBank.key_click()
+	_flash_click.volume_db = -10.0
+	add_child(_flash_click)
 
 
 ## Move without the camera sweeping across the world to catch up — the
@@ -108,11 +142,64 @@ func _unhandled_input(event: InputEvent) -> void:
 			and event.physical_keycode == KEY_E:
 		if is_instance_valid(_focused):
 			_focused.interact(self)
+	elif event is InputEventKey and event.pressed and not event.echo \
+			and event.physical_keycode == KEY_F:
+		set_flashlight(not flashlight.visible)
 	elif event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
+func set_flashlight(on: bool) -> void:
+	if flashlight == null:
+		return
+	if on and _flash_charge < FLASH_MIN_START:
+		# a dead click, so a refusal is legible rather than an unresponsive key
+		if is_instance_valid(_flash_click):
+			_flash_click.pitch_scale = 0.62
+			_flash_click.volume_db = -16.0
+			_flash_click.play()
+		return
+	if on:
+		flashlight.light_energy = FLASH_ENERGY
+	flashlight.visible = on
+	if is_instance_valid(_flash_click):
+		_flash_click.pitch_scale = 1.08 if on else 0.86
+		_flash_click.volume_db = -10.0
+		_flash_click.play()
+
+
+## How much beam is left, 0..1. The HUD has nothing to show it with yet; the
+## light failing in your hand is the readout.
+func flashlight_charge() -> float:
+	return _flash_charge / FLASH_MAX
+
+
+## Burn the cell down while it is lit, and let it recover while it is not. The
+## last couple of seconds visibly fail, so the torch going out is never a
+## surprise — you get to decide whether to spend them.
+func _update_flashlight(dt: float) -> void:
+	if flashlight == null:
+		return
+	_flash_t += dt
+	if not flashlight.visible:
+		_flash_charge = minf(FLASH_MAX,
+			_flash_charge + dt * (FLASH_MAX / FLASH_RECHARGE))
+		return
+	_flash_charge = maxf(0.0, _flash_charge - dt)
+	if _flash_charge <= 0.0:
+		set_flashlight(false)
+		return
+	var left := _flash_charge / FLASH_WARN
+	if left >= 1.0:
+		flashlight.light_energy = FLASH_ENERGY
+		return
+	var dying := 1.0 - left
+	var stutter := 1.0 - 0.42 * dying * maxf(0.0, sin(_flash_t * 27.0))
+	flashlight.light_energy = FLASH_ENERGY * (0.48 + 0.52 * left) * stutter
+
+
 func _physics_process(dt: float) -> void:
+	_update_flashlight(dt)
 	if dev_spin:
 		if _spin_left > 0.0:
 			var step := minf(_spin_left, dt * 9.0)
@@ -131,7 +218,7 @@ func _physics_process(dt: float) -> void:
 		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN): input.y += 1.0
 		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT): input.x -= 1.0
 		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT): input.x += 1.0
-	var sprinting := Input.is_physical_key_pressed(KEY_SHIFT)
+	var sprinting := allow_sprint and Input.is_physical_key_pressed(KEY_SHIFT)
 	var speed := SPRINT_SPEED if sprinting else WALK_SPEED
 
 	var wish := Vector3.ZERO
@@ -198,7 +285,12 @@ func _scan_interaction() -> void:
 		var candidate := hit["collider"] as Interactable
 		if candidate.enabled:
 			next = candidate
-	_focused = next
+	if next != _focused:
+		if is_instance_valid(_focused):
+			_focused.set_focused(false)
+		_focused = next
+		if is_instance_valid(_focused):
+			_focused.set_focused(true)
 	var text := _focused.prompt_text if is_instance_valid(_focused) else ""
 	if text != _focus_text:
 		_focus_text = text
@@ -225,6 +317,11 @@ func _surface() -> String:
 			if st6 == WorldGen.SCH_BATHROOM or st6 == WorldGen.SCH_CAFETERIA \
 					or st6 == WorldGen.SCH_ADMIN:
 				return "marble"
+			return "concrete"
+		7:
+			return "concrete" if WorldGen.cell_style(world_seed, cellv, 7) == WorldGen.MALL_SERVICE \
+				else "marble"
+		8:
 			return "concrete"
 	if WorldGen.cell_style(world_seed, cellv) == WorldGen.STYLE_GRAND:
 		return "marble"

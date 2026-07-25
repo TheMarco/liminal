@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode unshaded;
+render_mode cull_disabled;
 
 // Animated slot machine face: scrolling neon gradient with reel cutouts and a
 // desynced attract-mode blink. Phase is derived from world position so every
@@ -35,5 +35,9 @@ void fragment() {
 	c = mix(c * 0.3, c, box);
 
 	float blink = 0.75 + 0.25 * step(0.5, fract(t * 0.9));
-	ALBEDO = c * blink * 1.5;
+	ALBEDO = c * 0.46;
+	EMISSION = c * blink * 0.92;
+	ROUGHNESS = 0.2;
+	METALLIC = 0.0;
+	SPECULAR = 0.68;
 }

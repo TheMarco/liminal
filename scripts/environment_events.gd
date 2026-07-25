@@ -8,6 +8,7 @@ signal message(text: String)
 
 var player: Player
 var level_root: Node3D
+var descent_mode := false
 var _time_left := 38.0
 var _busy := false
 
@@ -29,6 +30,12 @@ func _process(dt: float) -> void:
 	if _time_left > 0.0:
 		return
 	_time_left = randf_range(38.0, 72.0)
+	if descent_mode:
+		# Rule-bearing darkness belongs exclusively to DescentRun. Keep the
+		# neutral knock, but never fake a blackout or a remote lift arrival.
+		_spatial_sound(SoundBank.thud(), 5.0, -8.0)
+		message.emit("THREE KNOCKS FROM BEHIND THE WALL")
+		return
 	var pick := randf()
 	if pick < 0.48:
 		_power_sag(0.7, "THE POWER DIPS")
@@ -41,7 +48,7 @@ func _process(dt: float) -> void:
 
 
 func terminal_response(page: int) -> void:
-	if page % 3 == 2:
+	if page % 3 == 2 and not descent_mode:
 		_power_sag(1.15, "THE TERMINAL REQUESTS MORE POWER")
 	else:
 		_spatial_sound(SoundBank.ding(), 2.5, -15.0)

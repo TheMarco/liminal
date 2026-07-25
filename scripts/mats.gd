@@ -4,6 +4,8 @@ class_name Mats
 ## and reused across all chunks.
 
 static var _c := {}
+static var _wall_art_textures := {}
+static var _wall_art_preloads_requested := false
 
 
 static func _shader(key: String, path: String) -> ShaderMaterial:
@@ -148,6 +150,29 @@ static func slot_screen() -> Material:
 	return _shader("slot_screen", "res://shaders/slot_screen.gdshader")
 
 
+## Original fictional cabinet art generated for this project. Each texture has
+## a real, readable theme instead of procedural pseudo-copy, while the shared
+## shader keeps it part of the physically lit cabinet rather than an unshaded
+## billboard.
+static func slot_artwork(idx: int) -> Material:
+	idx = posmod(idx, 3)
+	var key := "slot_artwork_%d" % idx
+	if _c.has(key):
+		return _c[key]
+	var paths := [
+		"res://textures/slots/midnight_7.png",
+		"res://textures/slots/desert_fortune.png",
+		"res://textures/slots/neon_jackpot.png",
+	]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/slot_artwork.gdshader")
+	m.set_shader_parameter("artwork", load(paths[idx]))
+	m.set_shader_parameter("glow_strength", [0.58, 0.48, 0.70][idx])
+	m.set_shader_parameter("age", [0.24, 0.34, 0.14][idx])
+	_c[key] = m
+	return m
+
+
 static func panel_on() -> StandardMaterial3D:
 	return _std("panel_on", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.95, 0.9, 0.8)
@@ -216,6 +241,81 @@ static func slot_body() -> StandardMaterial3D:
 		m.roughness = 0.35
 		m.clearcoat_enabled = true
 		m.clearcoat = 0.5)
+
+
+## Worn powder-coated cabinet finishes. Real machines are predominantly dark
+## serviceable appliances; their color comes from the display and restrained
+## edge lighting, not a uniformly glossy candy shell.
+static func slot_cabinet_variant(idx: int) -> Material:
+	idx = posmod(idx, 5)
+	var key := "slot_cabinet_%d" % idx
+	if _c.has(key):
+		return _c[key]
+	var palettes := [
+		[Color(0.048, 0.052, 0.058), 0.42, 0.46, 0.30], # graphite
+		[Color(0.16, 0.035, 0.042), 0.34, 0.48, 0.42],  # faded oxblood
+		[Color(0.035, 0.065, 0.105), 0.40, 0.42, 0.26], # midnight blue
+		[Color(0.13, 0.105, 0.075), 0.48, 0.39, 0.34],  # smoked bronze
+		[Color(0.075, 0.06, 0.082), 0.37, 0.47, 0.38],  # aubergine black
+	]
+	var p: Array = palettes[idx]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/slot_cabinet.gdshader")
+	m.set_shader_parameter("base_color", p[0])
+	m.set_shader_parameter("metalness", p[1])
+	m.set_shader_parameter("base_roughness", p[2])
+	m.set_shader_parameter("wear", p[3])
+	_c[key] = m
+	return m
+
+
+static func slot_molded_plastic() -> StandardMaterial3D:
+	return _std("slot_molded_plastic", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.026, 0.029, 0.032)
+		m.metallic = 0.08
+		m.roughness = 0.54
+		m.metallic_specular = 0.62)
+
+
+static func slot_brushed_metal() -> StandardMaterial3D:
+	return _std("slot_brushed_metal", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.34, 0.35, 0.36)
+		m.metallic = 0.92
+		m.roughness = 0.31
+		m.anisotropy_enabled = true
+		m.anisotropy = 0.72)
+
+
+static func slot_accent_amber() -> StandardMaterial3D:
+	return _std("slot_accent_amber", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.16, 0.075, 0.018)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.43, 0.085)
+		m.emission_energy_multiplier = 1.45
+		m.roughness = 0.34)
+
+
+static func slot_accent_cyan() -> StandardMaterial3D:
+	return _std("slot_accent_cyan", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.012, 0.065, 0.075)
+		m.emission_enabled = true
+		m.emission = Color(0.12, 0.66, 0.78)
+		m.emission_energy_multiplier = 1.35
+		m.roughness = 0.34)
+
+
+static func slot_status_blue() -> StandardMaterial3D:
+	return _std("slot_status_blue", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.01, 0.055, 0.12)
+		m.emission_enabled = true
+		m.emission = Color(0.08, 0.42, 1.0)
+		m.emission_energy_multiplier = 1.8)
+
+
+static func slot_service_label() -> StandardMaterial3D:
+	return _std("slot_service_label", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.67, 0.63, 0.48)
+		m.roughness = 0.9)
 
 
 static func pot() -> StandardMaterial3D:
@@ -356,6 +456,27 @@ static func glass_tint() -> StandardMaterial3D:
 		m.metallic_specular = 0.8)
 
 
+## Public-facing airport safety glass. The generic architectural glass is
+## deliberately almost invisible, but that made full-height terminal panes
+## read as empty space even though they correctly blocked the player.
+static func airport_glass() -> StandardMaterial3D:
+	return _std("airport_glass", func(m: StandardMaterial3D):
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_color = Color(0.48, 0.64, 0.72, 0.24)
+		m.roughness = 0.16
+		m.metallic_specular = 0.88
+		m.clearcoat_enabled = true
+		m.clearcoat = 0.35)
+
+
+## Pale ceramic manifestation dots bonded to full-height glazing at eye level.
+static func airport_glass_marker() -> StandardMaterial3D:
+	return _std("airport_glass_marker", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.72, 0.81, 0.84)
+		m.roughness = 0.42
+		m.metallic_specular = 0.7)
+
+
 static func body_black() -> StandardMaterial3D:
 	return _std("body_black", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.06, 0.06, 0.07)
@@ -484,14 +605,53 @@ static func office_wall_variant(idx: int) -> Material:
 
 
 static func office_ceiling() -> Material:
-	if _c.has("office_ceiling"):
-		return _c["office_ceiling"]
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/ceiling.gdshader")
-	m.set_shader_parameter("col", Color(0.86, 0.87, 0.84))
-	m.set_shader_parameter("stain_amount", 0.15)
-	_c["office_ceiling"] = m
-	return m
+	return _std("office_ceiling", func(m: StandardMaterial3D):
+		# AquaEquinox's source is a 12-triangle demonstration slab. Reusing its
+		# authored PBR maps on the existing structural BoxMesh keeps one ceiling
+		# and collider per chunk instead of tiling dozens of overlapping models.
+		var root := "res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_"
+		var albedo := load(root + "0.jpg")
+		m.albedo_texture = albedo
+		m.albedo_color = Color(1.0, 1.0, 0.98)
+		# The fixtures sit below the ceiling, so pure PBR shading leaves the
+		# upward-facing slab starved of bounce light. A low, texture-preserving
+		# emission approximates that diffuse room fill without making it glow.
+		m.emission_enabled = true
+		m.emission_texture = albedo
+		m.emission = Color(0.24, 0.25, 0.22)
+		m.emission_energy_multiplier = 0.55
+		m.normal_enabled = true
+		m.normal_texture = load(root + "2.png")
+		m.normal_scale = 0.8
+		var orm := load(root + "1.png")
+		m.roughness = 1.0
+		m.roughness_texture = orm
+		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		m.metallic = 1.0
+		m.metallic_texture = orm
+		m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+		# The square source image contains a 2 x 2 tile repeat. A tighter repeat
+		# keeps the grid from making the three-metre office ceiling feel low.
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE / 0.75
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
+
+
+## Textured black task chair from 3DModelsCC0/OpenGameArt. The source FBX
+## references an absent authoring-time TIFF, so bind the supplied PBR set
+## explicitly rather than allowing the importer to render it flat white.
+static func office_task_chair() -> StandardMaterial3D:
+	return _std("office_task_chair", func(m: StandardMaterial3D):
+		var root := "res://models/cc0/office_chair/Office_Chair_"
+		m.albedo_texture = load(root + "Base_Color.png")
+		m.normal_enabled = true
+		m.normal_texture = load(root + "Normal.png")
+		m.roughness_texture = load(root + "Roughness.png")
+		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+		m.metallic_texture = load(root + "Metallic.png")
+		m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
 
 
 static func crt() -> Material:
@@ -860,6 +1020,8 @@ const PORTAL_COLS := [
 	[Color(0.55, 0.8, 1.0), Color(0.92, 0.97, 1.0)],   # -> airport: ice white
 	[Color(0.72, 0.9, 0.38), Color(0.93, 1.0, 0.8)],   # -> asylum: sick fluorescent
 	[Color(0.85, 0.22, 0.18), Color(1.0, 0.86, 0.72)], # -> school: the red line
+	[Color(0.22, 0.82, 0.78), Color(1.0, 0.68, 0.28)], # -> mall: faded teal / sodium
+	[Color(0.36, 0.48, 0.42), Color(0.78, 0.84, 0.76)],# -> prison: oxidised iron
 ]
 
 
@@ -901,7 +1063,6 @@ static func portal_spark(dest: int) -> StandardMaterial3D:
 	return m
 
 
-## Per-instance saturated luggage shell — intentionally not cached.
 ## Warm cabin light behind an airliner's windows — on, for no one.
 static func cabin_warm() -> StandardMaterial3D:
 	return _std("cabin_warm", func(m: StandardMaterial3D):
@@ -911,20 +1072,55 @@ static func cabin_warm() -> StandardMaterial3D:
 		m.emission_energy_multiplier = 2.4)
 
 
-static func luggage(hue: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color.from_hsv(hue, 0.55, 0.3 + 0.25 * fmod(hue * 7.0, 1.0))
-	m.roughness = 0.5
-	m.clearcoat_enabled = true
-	m.clearcoat = 0.3
-	return m
-
-
 ## Per-instance muted painting canvas — intentionally not cached.
 static func canvas(hue: float) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = Color.from_hsv(hue, 0.3, 0.42)
 	m.roughness = 0.85
+	return m
+
+
+## Mipmapped runtime wall art. Source paintings remain in `paintings/`; the
+## game uses the 1024px WebP derivatives so a 720x480 presentation never pays
+## to decode or retain nineteen 2K/3K PNGs.
+static func note_wall_art_preloads_requested() -> void:
+	_wall_art_preloads_requested = true
+
+
+static func wall_art_texture(path: String) -> Texture2D:
+	if _wall_art_textures.has(path):
+		return _wall_art_textures[path]
+	# Chunk preloading requests these images on a worker. Calling load() while
+	# that request is still in flight can briefly hand the dummy renderer a null
+	# texture, so finish the existing request through the threaded API instead.
+	var tex: Texture2D
+	if not _wall_art_preloads_requested:
+		tex = load(path) as Texture2D
+	else:
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS \
+				or status == ResourceLoader.THREAD_LOAD_LOADED:
+			tex = ResourceLoader.load_threaded_get(path) as Texture2D
+		else:
+			tex = load(path) as Texture2D
+	if tex != null:
+		_wall_art_textures[path] = tex
+	return tex
+
+
+static func wall_art(path: String) -> StandardMaterial3D:
+	var key := "wall_art:" + path
+	if _c.has(key):
+		return _c[key]
+	var m := StandardMaterial3D.new()
+	var tex := wall_art_texture(path)
+	if tex != null:
+		m.albedo_texture = tex
+	m.albedo_color = Color(0.94, 0.94, 0.91)
+	m.roughness = 0.72
+	m.metallic = 0.0
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_c[key] = m
 	return m
 
 
@@ -1156,6 +1352,15 @@ static func sch_locker_blue() -> StandardMaterial3D:
 		m.roughness = 0.44)
 
 
+## Opaque moulded polyethylene for the school janitor carts. `jug_blue()` is
+## translucent drink-container plastic and made the entire trolley see-through.
+static func sch_cart_plastic() -> StandardMaterial3D:
+	return _std("sch_cart_plastic", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.13, 0.31, 0.44)
+		m.metallic = 0.0
+		m.roughness = 0.62)
+
+
 ## Sprung maple — the gym, and nothing else in the building.
 static func sch_gymfloor() -> StandardMaterial3D:
 	return _photo("sch_gymfloor", "cc0", "Planks039", 0.85, Color(0.86, 0.66, 0.38), 0.32)
@@ -1218,3 +1423,159 @@ static func sch_chalkdust() -> StandardMaterial3D:
 		m.albedo_color = Color(0.62, 0.68, 0.60, 0.16)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.roughness = 0.95)
+
+
+# --- abandoned mall ----------------------------------------------------------
+
+static func mall_floor() -> StandardMaterial3D:
+	return _photo("mall_floor", "cc0", "Terrazzo005", 0.34,
+		Color(0.72, 0.68, 0.61), 0.42)
+
+
+static func mall_wall() -> StandardMaterial3D:
+	# Clean off-white painted plaster — a mall is maintained right up until the
+	# day it closes, so the decay lives in the light and the shutters, not the
+	# walls. (The old PaintedPlaster018 read as a rusted cave.)
+	return _photo("mall_wall", "mall", "Plaster001", 0.5,
+		Color(0.87, 0.85, 0.80), 0.92)
+
+
+static func mall_ceiling() -> Material:
+	# A real suspended T-bar grid like the office and airport, not a glossy
+	# slab: dingier tiles, heavy smoke staining, and more of them missing.
+	if _c.has("mall_ceiling"):
+		return _c["mall_ceiling"]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/ceiling.gdshader")
+	m.set_shader_parameter("col", Color(0.72, 0.71, 0.66))
+	m.set_shader_parameter("stain", Color(0.30, 0.24, 0.16))
+	m.set_shader_parameter("stain_amount", 0.25)
+	m.set_shader_parameter("missing_amount", 1.6)
+	# grazing sodium light exaggerates the tile relief into pressed tin —
+	# keep the grid, flatten the surface
+	m.set_shader_parameter("bump_strength", 0.045)
+	_c["mall_ceiling"] = m
+	return m
+
+
+static func mall_shutter() -> StandardMaterial3D:
+	# Galvanized roller-shutter steel, dusty from years down.
+	return _photo("mall_shutter", "mall", "CorrugatedSteel005", 1.1,
+		Color(0.72, 0.71, 0.67), 0.55)
+
+
+static func mall_brick() -> StandardMaterial3D:
+	# Navy painted brick — the cinema block and anchor-store accent band.
+	return _photo("mall_brick", "mall", "PaintedBricks001", 0.45,
+		Color(0.85, 0.88, 0.95), 0.85)
+
+
+static func mall_skylight() -> StandardMaterial3D:
+	# Night sky through dirty laylight glass — barely-blue, faintly luminous.
+	return _std("mall_skylight", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.04, 0.06, 0.11)
+		m.roughness = 0.3
+		m.emission_enabled = true
+		m.emission = Color(0.10, 0.16, 0.30)
+		m.emission_energy_multiplier = 0.9)
+
+
+static func mall_sign_face() -> StandardMaterial3D:
+	# A dead storefront lightbox: the acrylic face of a sign whose tubes went
+	# out years ago. The faint emission keeps the lettering legible.
+	return _std("mall_sign_face", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.80, 0.78, 0.71)
+		m.roughness = 0.35
+		m.emission_enabled = true
+		m.emission = Color(0.72, 0.68, 0.58)
+		m.emission_energy_multiplier = 0.22)
+
+
+## Backing for a painted fascia board. The lightbox face above is pale and
+## faintly lit, so it shows past a painted sign's own edges as two glowing
+## strips; a painted board was screwed onto dark-painted ply instead.
+static func mall_sign_board() -> StandardMaterial3D:
+	return _std("mall_sign_board", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.11, 0.10, 0.09)
+		m.roughness = 0.82)
+
+
+static func mall_trim() -> StandardMaterial3D:
+	return _std("mall_trim", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.12, 0.24, 0.24)
+		m.metallic = 0.72
+		m.roughness = 0.36)
+
+
+static func mall_glass() -> StandardMaterial3D:
+	return _std("mall_glass", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.12, 0.24, 0.23, 0.34)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.metallic = 0.15
+		m.roughness = 0.16)
+
+
+static func mall_panel() -> StandardMaterial3D:
+	return _std("mall_panel", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.82, 0.78, 0.66)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.72, 0.38)
+		m.emission_energy_multiplier = 2.2)
+
+
+# --- island prison -----------------------------------------------------------
+
+static func prison_wall() -> StandardMaterial3D:
+	# Smooth trowelled concrete, lighter than the old salt-black — the dark
+	# lives in the corners now, not in every surface
+	return _photo("prison_wall", "prison", "Concrete016", 0.40,
+		Color(0.68, 0.69, 0.66), 0.95)
+
+
+static func prison_dado() -> StandardMaterial3D:
+	# The institutional green paint band every prison wall carries to
+	# shoulder height, worn semi-gloss
+	return _photo("prison_dado", "prison", "Concrete016", 0.40,
+		Color(0.42, 0.53, 0.43), 0.5)
+
+
+static func prison_floor() -> StandardMaterial3D:
+	return _photo("prison_floor", "prison", "Concrete016", 0.55,
+		Color(0.45, 0.46, 0.44), 0.55)
+
+
+static func prison_ceiling() -> StandardMaterial3D:
+	return _asy_tex("prison_ceiling", "PaintedPlaster018", 0.28,
+		Color(0.35, 0.37, 0.34), 1.0)
+
+
+static func prison_iron() -> StandardMaterial3D:
+	return _asy_tex("prison_iron", "Metal021", 0.86,
+		Color(0.38, 0.42, 0.39), 0.82)
+
+
+static func prison_green() -> StandardMaterial3D:
+	return _asy_tex("prison_green", "PaintedMetal006", 0.70,
+		Color(0.55, 0.64, 0.54), 0.80)
+
+
+## Yellowed institutional handset plastic. The downloaded desk phone ships with
+## no maps at all, so the whole model takes this one material.
+static func prison_handset() -> StandardMaterial3D:
+	return _asy_tex("prison_handset", "PaintedMetal006", 0.52,
+		Color(0.72, 0.69, 0.58), 0.46)
+
+
+static func prison_tile() -> StandardMaterial3D:
+	# Plain square tile under a film of grime — the shower block, distinct
+	# from the asylum's cracked hydro tile
+	return _photo("prison_tile", "prison", "Tiles107", 0.45,
+		Color(0.58, 0.63, 0.58), 0.6)
+
+
+static func prison_panel() -> StandardMaterial3D:
+	return _std("prison_panel", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.70, 0.75, 0.68)
+		m.emission_enabled = true
+		m.emission = Color(0.68, 0.82, 0.70)
+		m.emission_energy_multiplier = 2.6)

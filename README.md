@@ -1,7 +1,7 @@
 # Liminal Vegas
 
 A Godot 4 proof of concept: first-person wandering through **endless,
-procedurally generated liminal spaces** across six floors:
+procedurally generated liminal spaces** across eight floors:
 
 - **Floor 1 — the casino**: seedy Vegas hotel. Garish carpet, flickering
   fluorescents, humming air, slot machine banks glowing in empty rooms,
@@ -35,13 +35,23 @@ procedurally generated liminal spaces** across six floors:
   cold serving line, tiled bathrooms with the stall doors ajar, a library of
   half-raided stacks, science labs with gas taps and stools, the front
   office, and a gym with a sprung maple floor, hoops at both ends and the
-  bleachers pulled out and left out.
+  bleachers pulled out and left out. The science rooms are now consistent
+  chemistry labs built around full sink-and-tap islands, with supported
+  glassware left on their black worktops.
+- **Floor 7 — the mall**: a dead indoor shopping centre. Broad terrazzo
+  galleries pass shuttered storefronts, deserted kiosks and planter islands;
+  beyond them are stripped department stores, a food court, service corridors,
+  a dry atrium fountain and a sealed six-screen cinema.
+- **Floor 8 — the prison**: a salt-eaten island penitentiary. Barred galleries,
+  close cells and stacked bunks open into mess halls, communal showers, guard
+  cages, workshops and visitation booths. Rare cell blocks rise into false
+  upper tiers and a central rotunda watches every direction at once.
 
 It opens on a title card — the logo, what every key does, and one
 instruction — over a world that is already built and already running behind
 it. Nothing moves until you press **space**.
 
-Press **1**–**6** to ride the elevator between floors — each floor keeps
+Press **1**–**8** to ride the elevator between floors — each floor keeps
 its own geography and remembers where you were. Or don't press anything:
 **swirling portals** hang in the roomier chambers of every floor, tinted the
 colour of wherever they lead. Step in and you emerge in the same cell of
@@ -53,25 +63,57 @@ doorway leaves can be opened and closed, and rare physical elevator panels
 carry you onward. Local lights occasionally sag, an unused lift may chime down
 the hall, and inaccessible rooms sometimes knock from the other side.
 
-The whole feed plays back as **240p footage on a consumer CRT tube** (the
-composite pass ported from the scramble Godot port, dropped to 240 lines;
-the 3D view itself renders at 240p): barrel curvature, beam scanlines, a
+The whole feed plays back as **720×480 interlaced footage on a widescreen CRT
+tube**: barrel curvature, beam scanlines, a
 Trinitron aperture grille, RGB convergence error, halation, interlace
 flicker, a rolling scan band, and rounded tube corners. Press **V** to
 look at the world with your own eyes instead.
 
 You are, occasionally, not alone. A dark figure sometimes stands where
 nothing stood — down a corridor, at the edge of the frame, behind you (one
-soft footstep, so you know to turn). Hold your gaze on it or walk toward it
-and it is gone before your eyes finish focusing. It never approaches. There
-are thirteen of them: a coat with hair over its face, a gown that hangs
-rather than stands, something tattered that used to be a man, a walker
-carrying a knife, a hooded one with an axe in each hand — and, only down in
-the sewers and the asylum, two that are not pretending to be people at all.
+soft footstep, so you know to turn). **It closes the distance whenever you
+are not looking straight at it**, and freezes the instant you are: glance
+away, glance back, and it is nearer than it was. Holding it in the centre of
+your vision pins it and slowly wears it down; the flashlight burns it away in
+a fraction of the time, and burns it away spectacularly — a ragged front runs
+up the body, the walls light up, and it goes out screaming. Seven recordings
+for that, its own sound rather than a stinger pitched up: a stinger is
+something arriving, and this is something ending. Let one reach you instead
+and it is a scare in the endless floors and the end of a Descent run.
+
+There are seven of them, and every one is animated — hooded wraiths of drifting
+smoke with lit eyes, all but one of them red. Two hang rather than walk and
+trail into nothing where legs should be; those keep to the sewers and the
+asylum, the floors where something could have got in from below. They are
+sprite-sheet flipbooks rather than video: Godot's only codec is Theora, which
+carries no alpha, so an animated silhouette would be a black rectangle.
+
 Each floor also carries its own mood track (`music/lim*.mp3`), crossfading as
-you ride between worlds. Whip around fast enough and one may already be
+you ride between worlds. Descent preserves those floor identities, then shifts
+to `lim9.mp3` for its final two floors as the pressure peaks; Wander is
+unchanged. Whip around fast enough and one may already be
 standing there — and that arrival, rarely and never twice inside a minute,
-brings a stinger with it.
+brings a stinger with it. There are twelve of those, each trimmed to a common
+mean so none of them is the loud one, and the picker never plays the same
+stinger twice in a row: a scare you recognise is a sound effect.
+
+After a fright your own pulse comes up under everything, and it takes its time
+going away again — a heartbeat that snaps off the moment the figure fades is a
+sound effect, but one still going twenty-five seconds later, slowly settling
+while you stand in an empty corridor deciding whether to turn around, is what
+the frights are for. It quickens as well as swells, compounds if something
+startles you before you have recovered, and holds itself up on its own whenever
+one of them is standing close by. Past a certain fright your breathing joins it
+— but only past it, so mild dread is a pulse and panting over the top is panic.
+Arriving together would leave the game nowhere to escalate to.
+
+Under all of that, someone is muttering. Eleven recordings of whispering in a
+dead language surface every forty seconds to two minutes, placed out in the
+world rather than in your head — so a voice arrives from a direction, falls off
+across the room, and is gone before you have finished turning toward it. They
+sit sixteen decibels under the stingers and never come from directly behind
+you: that would read as someone at your shoulder, and being startled is the
+figures' job. This is only ever a suggestion that the floor is occupied.
 
 Doorways only ever appear between spaces that feel like rooms — an edge
 that would put a lone cased door in the middle of a merged open hall opens
@@ -124,7 +166,7 @@ through on their transients.
 
 ## Run it
 
-1. Install [Godot 4.3+](https://godotengine.org/download) (Forward+ / desktop).
+1. Install [Godot 4.6+](https://godotengine.org/download) (Forward+ / desktop).
 2. Open this folder in the Godot project manager (Import → select `project.godot`).
 3. Press **F5** (Run Project).
 
@@ -155,8 +197,10 @@ export templates installed):
 | Mouse | Look |
 | Shift | Sprint |
 | E | Use a focused terminal, elevator panel or working door |
-| 1–6 | Switch floor (casino / office / sewers / airport / asylum / school) |
+| F | Toggle the handheld flashlight |
+| 1–8 | Switch floor (casino / office / sewers / airport / asylum / school / mall / prison) |
 | V | Toggle the CRT tube effect |
+| Q | Ask to end the current mode and return to the title |
 | Esc | Release mouse |
 | Click | Recapture mouse |
 
@@ -182,7 +226,9 @@ gate lounges, moving-walkway concourses, transit corridors (banks of three
 walkways running in opposite directions), check-in rows, baggage claims and
 escalator mezzanines in the airport; patient rooms, bed wards, treatment
 rooms, hydrotherapy halls, records offices and the rare dayroom in the
-asylum. Set dressing runs deep: neon amenity signs, blackjack tables and
+asylum; shuttered stores, atriums, food courts and cinema lobbies in the mall;
+and cell blocks, mess halls, showers, workshops and guard posts in the prison.
+Set dressing runs deep: neon amenity signs, blackjack tables and
 velvet ropes in the casino; filing banks, motivational posters, department
 signs and idling copiers in the office; stencilled markings, control
 cabinets, hanging chains and knee-deep mist in the sewers; scrawled walls
@@ -196,14 +242,17 @@ areas; offices resolve into operations, records and staff departments; sewer
 conveyance reaches treatment and maintenance works; airport airside becomes
 departures and arrivals; patient wings transition through treatment to
 administration; school academic wings open into commons and front-office
-zones. Office directories, airport wayfinding, asylum ward plates and school
-room labels agree with the surrounding district.
+zones; mall retail galleries decay toward food/cinema and service wings; prison
+cell blocks give way to institutional and custody zones. Office directories,
+airport wayfinding, asylum ward plates and school room labels agree with the
+surrounding district.
 
 True 24x24m halls can very rarely become a memorable **landmark**: the Silver
 Room ballroom, an impossible corporate boardroom, a four-pool cistern under a
 pipe manifold, a shuttered airport food court, the asylum chapel, or the school
-auditorium. Landmarks are deterministic, never claim a corridor or small room,
-and leave a clear route through the space.
+auditorium, along with a dead six-screen cinema and prison guard rotunda. Landmarks are
+deterministic, never claim a corridor or small room, and leave a clear route
+through the space.
 
 Merged rooms furnish against their full generated footprint rather than
 repeating a 12×12 m layout in the middle: grand casino halls extend their
@@ -282,13 +331,91 @@ most recognizable procedural repeats.
   and animation responses.
 - `godot --headless --path . --script tools/audit_doorways.gd` — builds
   furnished rooms across every floor and fails if any generated prop mesh or
-  collider remains inside the protected approach lane of a real doorway.
+  collider remains inside the protected approach lane of a real doorway. It
+  also rejects orphan EXIT lettering and invalid school boards, stationery,
+  terminals, or projector screens, and takes a census of every authored
+  furnishing across all eight floors — beds, gurneys, baths, door leaves,
+  blackjack and roulette tables, the hotdog cart, the autopsy table, the copier,
+  school desks and desk phones. A downloaded model that quietly stops reaching
+  its rooms fails the build instead of just disappearing.
+- `godot --headless --path . --script tools/audit_slots.gd` — samples casino
+  banks across many seeds and requires every slot cabinet to have explicit,
+  opaque front and rear volume.
+- `godot --headless --path . --script tools/audit_new_levels.gd` — builds every
+  mall and prison room style, checks support and doorway clearance, enforces
+  one coherent food-court identity, and keeps bunks and detention fixtures
+  inside actual barred cell contexts. It also proves the authored mall models
+  still import: a painted fascia keeps the artwork's own aspect inside the sign
+  band, and the payphone and directory are counted rather than allowed to fail
+  silently into their generated fallbacks.
+- `godot --headless --path . --script tools/audit_wall_art.gd` — exercises all
+  seventeen active paintings across the seven art-bearing floors and verifies
+  that every piece remains wall-mounted, inside the solid wall bounds and at
+  its original aspect ratio without being bisected by an interior partition.
+  The sewer is explicitly audited to remain bare.
 - `godot --headless --path . --script tools/profile_generation.gd` — constructs
   real chunks for every floor, reporting first-pass and steady-state build
   latency plus mesh, collision, light and reflection-probe counts.
 
 GitHub Actions runs every `audit_*.gd` check above on pushes to `main` and on
 pull requests via `.github/workflows/audits.yml`.
+
+## Assets and attribution
+
+The game is not restricted to attribution-free assets. Carefully selected
+CC BY work is welcome when it is a strong visual and contextual fit, its source
+and license are recorded, and any modification is documented. The compact
+in-game Credits screen is available from the title with `C`; the canonical
+record is [`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md).
+
+The accepted-license policy and level-by-level high-value replacement list are
+in [`docs/ASSET_OPPORTUNITIES.md`](docs/ASSET_OPPORTUNITIES.md). Clearly
+documented CC BY-NC work is permitted for this explicitly noncommercial game;
+any future commercial build must replace those assets first. No-derivatives,
+editorial-only, personal-use-only and unclear licenses remain out of scope.
+
+Attributed models are stored separately by license: `models/cc_by/` contains
+redistributable attribution-required work, while `models/cc_by_nc/` and
+`textures/cc_by_nc/` contain assets that make the resulting build
+noncommercial. Every such asset has a local `SOURCE.md` in addition to the
+canonical record above.
+
+Where a download is a whole scene rather than a prop — an abandoned hospital, a
+shopping mall — only its separately-modelled objects are extracted, re-origined
+and redistributed; the building itself is not. Those extractions are listed
+individually in the asset's `SOURCE.md` with their source node names.
+
+The single CC BY-NC dependency in the mall is deliberately confined to one
+function, `_mall_painted_sign` in `scripts/chunk.gd`. Deleting that function and
+its one call site restores the generated storefront lettering and removes the
+noncommercial obligation in a single edit.
+
+Dev tools for adding content:
+
+- `godot --path . tools/preview_model.tscn -- --model=res://… --screenshot=/tmp/x.png`
+  stages one model on a lit floor. `--scale=`, `--rot-x/y/z=`, `--camera=` and
+  `--scale-reference` (a 1m grid plus a slab at the player's 1.62m eye height)
+  make it possible to check a placement transform before writing any placement
+  code. It needs a real window — Godot cannot render in `--headless`.
+- `godot --headless --path . --script tools/dbg_asylum.gd -- <seed> <x> <z>`
+  prints where every authored asylum prop landed in one cell, with world AABBs,
+  which answers most placement questions without opening a window at all.
+- `godot --headless --path . --script tools/dbg_find_prop.gd -- <seed> <theme>
+  <kind> [radius]` finds authored furnishings by kind — `blackjack_table`,
+  `hotdog_stand`, `autopsy_table`, `ward_bed` and so on — and prints a
+  ready-made `--pos`/`--yaw` to stand in front of one. Aiming a screenshot by
+  trial and error wastes far more time than it looks like it will.
+- `godot --headless --path . --script tools/dbg_mall_signs.gd -- <seed>
+  [radius]` does the same for painted storefront fascias, which are quads
+  rather than furnishings and so are not in the census above.
+- `python3 tools/build_flipbook.py SRC.mp4 textures/ghosts/NAME.png --frames 24
+  --height 288 --cols 6` turns a white-background looping video into an
+  animated ghost sheet, printing the shader constants and the `BODY` row it
+  needs. Godot's only video codec is Theora and it carries no alpha, so an
+  animated silhouette has to be a flipbook.
+- `godot --path . -- --whispers` shortens the whisper timer and prints the
+  bearing, distance and level of each one, so the layer can be judged in a
+  minute rather than in twenty.
 
 ## Structure
 
@@ -302,6 +429,8 @@ scripts/mats.gd           shared material cache
 scripts/player.gd         FPS controller
 scripts/flicker_light.gd  fluorescent flicker behaviour
 scripts/ambience.gd       procedural room tone
+scripts/whispers.gd       positional muttering, placed out in the world
+scripts/heartbeat.gd      fright tension: pulse, then breathing; decays to calm
 scripts/interactable.gd   shared E-key ray targets
 scripts/environment_events.gd  sparse local power and sound events
 scripts/arrival_safety.gd physics-tested portal / floor arrival resolver
@@ -313,4 +442,5 @@ textures/asylum/          CC0 PBR textures for the asylum (ambientCG), 1K JPG
 textures/cc0/             shared CC0 textures for the other floors
 models/asylum/            CC0 glTF props for the asylum (Poly Haven)
 models/cc0/               shared CC0 prop pool (Poly Haven)
+models/cc_by/             attributed models with per-asset source records
 ```

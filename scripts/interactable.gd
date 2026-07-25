@@ -4,6 +4,8 @@ extends Area3D
 ## lives on a separate physics layer so it never changes player collision.
 
 signal activated(actor: Node)
+signal focus_entered
+signal focus_exited
 
 var prompt_text := "E — interact"
 var enabled := true
@@ -29,3 +31,10 @@ func add_box(size: Vector3, centre := Vector3.ZERO) -> CollisionShape3D:
 func interact(actor: Node) -> void:
 	if enabled:
 		activated.emit(actor)
+
+
+func set_focused(value: bool) -> void:
+	if value:
+		focus_entered.emit()
+	else:
+		focus_exited.emit()

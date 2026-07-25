@@ -13,17 +13,31 @@ const TURN_CHANCE := 0.6    # chance one is there when you whip around
 # outside the stare cone, so they are seen before they can be stared away.
 const TURN_OFF_MIN := 17.0
 const TURN_OFF_MAX := 44.0
+# Widest painted silhouette is a little over a metre. Reserve its full body
+# volume at spawn time so a camera-facing quad cannot straddle a wall edge.
+const FIGURE_CLEAR_RADIUS := 0.68
+const FIGURE_CLEAR_HEIGHT := 2.55
 
-# gaunt, wraith, tall, crawler, child, watcher, coat, gown, husk, knife,
-# axeman, horned, smoke — the painted ones carry most of the weight now
-const VARIANT_W := [0.10, 0.09, 0.09, 0.07, 0.07, 0.08,
-	0.16, 0.14, 0.12, 0.14, 0.12, 0.05, 0.06]
-# The two that are not even pretending to be people keep to the floors where
-# something could have got in. Nothing gets into the office.
-const UNDERNEATH := [ShadowFigure.HORNED, ShadowFigure.SMOKE]
+# revenant, drowned, pilgrim, trailing, gaoler, reacher, drifter.
+# Seven animated wraiths, weighted close to evenly — none of them is a
+# fallback for the others any more, so there is no reason to favour one.
+const VARIANT_W := [0.16, 0.15, 0.14, 0.13, 0.14, 0.14, 0.14]
+# The two that hang rather than walk, and trail into nothing where legs should
+# be, keep to the floors where something could have got in from below. Nothing
+# gets into the office.
+const UNDERNEATH := [ShadowFigure.TRAILING, ShadowFigure.DRIFTER]
 const UNDERNEATH_THEMES := [2, 5]  # the sewers, the asylum
 
+signal stared_away
+signal burned_away
+signal seen_by_player
+## One of them closed the distance. In the endless floors this is a scare and
+## nothing more; whoever owns this node decides whether a run survives it.
+signal reached_player
+
 var player: Player
+var suspended := false
+var interval_scale := 1.0
 
 var _t := 0.0
 var _dev := false
@@ -58,12 +72,20 @@ func despawn() -> void:
 		if is_instance_valid(f):
 			f.queue_free()
 	_figs.clear()
+	# Stingers and death cries are deliberately hung on this node rather than on
+	# the figure, because the figure stops existing while they are still
+	# playing. That also means they outlive a floor change unless they are cut
+	# here — a three-second death cry following you into the lift belongs to a
+	# building you have already left.
+	for child in get_children():
+		if child is AudioStreamPlayer3D:
+			child.queue_free()
 	_t = randf_range(4.0, 11.0)
 	_prev_yaw = NAN
 
 
 func _physics_process(dt: float) -> void:
-	if player == null or not player.is_inside_tree():
+	if suspended or player == null or not player.is_inside_tree():
 		return
 	for i in range(_figs.size() - 1, -1, -1):
 		if not is_instance_valid(_figs[i]):
@@ -73,7 +95,8 @@ func _physics_process(dt: float) -> void:
 		return
 	_t -= dt
 	if _t <= 0.0:
-		_t = randf_range(7.0, 18.0) if _try_spawn() else randf_range(2.5, 6.0)
+		_t = (randf_range(7.0, 18.0) if _try_spawn() \
+			else randf_range(2.5, 6.0)) * interval_scale
 
 
 ## Whip around fast enough and it may already be there. It was following.
@@ -118,6 +141,8 @@ func _turn_spawn() -> bool:
 		var ground := _floor_at(player.global_position + dirv * randf_range(6.0, 14.0))
 		if ground == Vector3.INF:
 			continue
+		if not _figure_volume_clear(ground):
+			continue
 		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
 			continue
 		_spawn_at(ground, false, 1.7)
@@ -142,6 +167,8 @@ func _try_spawn() -> bool:
 		var ground := _floor_at(player.global_position + dirv * randf_range(7.0, 16.0))
 		if ground == Vector3.INF:
 			continue
+		if not _figure_volume_clear(ground):
+			continue
 		# glimpsable, mostly: front spawns want a sight line
 		if not behind and not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
 			if randf() < 0.55:
@@ -164,6 +191,10 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> void:
 	f.announce = announce or randf() < 0.3
 	f.position = ground
 	add_child(f)
+	f.stared_away.connect(func(): stared_away.emit())
+	f.burned_away.connect(func(): burned_away.emit())
+	f.seen_by_player.connect(func(): seen_by_player.emit())
+	f.reached_player.connect(func(): reached_player.emit())
 	_figs.append(f)
 	if _dev:
 		print("spawned variant %d at %s (player %s)" % [f.variant, ground, player.global_position])
@@ -185,6 +216,20 @@ func _pick_variant() -> int:
 	return 0
 
 
+## Distance to the nearest live figure, or a large number when none is out
+## there. The heartbeat samples this: something standing close by is a dread
+## the player can hear without it having to startle them again.
+func nearest_distance() -> float:
+	if player == null or not player.is_inside_tree():
+		return 1e9
+	var best := 1e9
+	for f in _figs:
+		if not is_instance_valid(f):
+			continue
+		best = minf(best, f.global_position.distance_to(player.global_position))
+	return best
+
+
 func _flat_fwd() -> Vector3:
 	var fwd := -player.cam.global_transform.basis.z
 	fwd.y = 0.0
@@ -200,11 +245,45 @@ func _clear_line(a: Vector3, b: Vector3) -> bool:
 	return hit["position"].distance_to(b) < 1.2
 
 
+func _figure_volume_clear(ground: Vector3) -> bool:
+	var shape := CapsuleShape3D.new()
+	shape.radius = FIGURE_CLEAR_RADIUS
+	shape.height = FIGURE_CLEAR_HEIGHT
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = shape
+	q.transform = Transform3D(Basis.IDENTITY,
+		ground + Vector3(0, FIGURE_CLEAR_HEIGHT * 0.5 + 0.04, 0))
+	q.exclude = [player.get_rid()]
+	q.collision_mask = 1
+	return player.get_world_3d().direct_space_state.intersect_shape(q, 1).is_empty()
+
+
+## Distance a real walkable floor may sit off the level's ground plane. A dais
+## or a shallow step is fine; a table top at 0.73m, a bed at 0.60m or the
+## sewer's channel invert at -0.48m are not. The old probe accepted anything
+## within 1.3m, which is why figures stood on furniture and sank into trenches —
+## and why they read as the wrong size when they did.
+const FLOOR_TOL := 0.34
+const FLOOR_PIERCE := 6
+
+
+## The first surface under `pos` is very often furniture. Keep dropping through
+## it until the real floor turns up, so the body-volume check that follows gets
+## to reject the spot properly instead of clearing the air above a table.
 func _floor_at(pos: Vector3) -> Vector3:
-	var q := PhysicsRayQueryParameters3D.create(pos + Vector3(0, 2.6, 0), pos + Vector3(0, -2.0, 0))
-	var hit := player.get_world_3d().direct_space_state.intersect_ray(q)
-	if hit.is_empty():
-		return Vector3.INF
-	if hit["normal"].y < 0.8 or absf(hit["position"].y) > 1.3:
-		return Vector3.INF
-	return hit["position"]
+	var space := player.get_world_3d().direct_space_state
+	var bottom := pos + Vector3(0, -2.0, 0)
+	var from := pos + Vector3(0, 2.6, 0)
+	for pierce in FLOOR_PIERCE:
+		var q := PhysicsRayQueryParameters3D.create(from, bottom)
+		q.exclude = [player.get_rid()]
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			return Vector3.INF
+		var p: Vector3 = hit["position"]
+		if hit["normal"].y >= 0.8 and absf(p.y) <= FLOOR_TOL:
+			return p
+		if p.y <= bottom.y + 0.01:
+			return Vector3.INF
+		from = p - Vector3(0, 0.03, 0)
+	return Vector3.INF

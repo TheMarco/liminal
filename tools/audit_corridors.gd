@@ -8,22 +8,13 @@ extends SceneTree
 ## able to reach that space from an uncased/open corridor boundary.  This tool
 ## exercises many seeds and checks the data contract the corridor shells rely on.
 
-const THEMES := [0, 1, 4, 5, 6]
+const THEMES := [0, 1, 4, 5, 6, 7, 8]
 const DIRV := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const OPP := [1, 0, 3, 2]
 
 
 func _level_seed(base: int, theme: int) -> int:
-	if theme == 0:
-		return base
-	var salt := 348039917
-	if theme == 4:
-		salt = 536870923
-	elif theme == 5:
-		salt = 998244353
-	elif theme == 6:
-		salt = 179424673
-	return ((base ^ salt) & 0x7FFFFFFF) | 1
+	return WorldGen.level_seed(base, theme)
 
 
 func _same_edge(a: Dictionary, b: Dictionary) -> bool:

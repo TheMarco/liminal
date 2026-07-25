@@ -1,29 +1,29 @@
 shader_type canvas_item;
 
-// CRT composite — 240p consumer-tube look, ported from scramble-godot's
-// crt.gdshader (itself evolved from that project's src/crt.js) and dropped
-// to 240 lines; the 3D view is also rendered at 240p (main.gd), so the tube
-// is genuinely upscaling low-res footage. Curvature,
-// beam scanlines, aperture grille, RGB convergence error, halation,
+// CRT composite — a widescreen 720x480 anamorphic signal running as 480i.
+// The 3D view is rendered at 480 lines (main.gd), horizontally resampled to
+// 720 signal samples, and emitted as alternating even/odd 240-line fields.
+// Curvature,
+// beam scanlines, subtle phosphor texture, RGB convergence error, halation,
 // vignette, interlace flicker, rolling scan band, signal noise, rounded
 // tube corners.
 //   strength = 0 -> passthrough, 1 -> full CRT. V toggles the whole rect.
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform float strength : hint_range(0.0, 1.0) = 1.0;
-// Brightness compensation for scanline/grille/vignette darkening.
+// Brightness compensation for scanline/vignette darkening.
 uniform float bright_boost : hint_range(0.5, 2.5) = 1.18;
 // Master dial for all signal/RF noise (snow, shimmer, sparkles, chroma).
 uniform float noise_amount : hint_range(0.0, 3.0) = 1.0;
 
-const float V_RES_MAX = 240.0;  // 240-line tube — capped to 2px/line by output res
-const float HARD_SCAN = -13.0;  // scanline hardness (more negative = sharper)
-const float MASK_STR = 0.12;    // aperture-grille strength
+const float H_RES = 720.0;      // anamorphic widescreen signal samples
+const float V_RES = 480.0;      // two interlaced 240-line fields
+const float HARD_SCAN = -6.0;   // fine 480-line beam, not the old coarse comb
 const float BARREL = 0.018;     // tube curvature
-const float ABERRATION = 1.3;   // RGB convergence error in output px at edge
-const float HALATION = 0.07;    // glass glow bleed around bright areas
-const float NOISE_AMP = 0.028;  // composite per-line signal shimmer
-const float SNOW_AMP = 0.016;   // RF snow — per-virtual-pixel static
+const float ABERRATION = 1.05;  // RGB convergence error in output px at edge
+const float HALATION = 0.055;   // glass glow bleed around bright areas
+const float NOISE_AMP = 0.014;  // composite per-line signal shimmer
+const float SNOW_AMP = 0.007;   // fine RF snow at 720x480
 const float CORNER_R = 0.018;   // rounded tube corner radius
 
 float hash12(vec2 p) {
@@ -41,17 +41,23 @@ void fragment() {
 	vec2 d = uv0 - 0.5;
 	vec2 uvc = 0.5 + d * (1.0 + BARREL * dot(d, d) * 4.0);
 
-	// Scanline row count: 480 when the output can resolve it (>=2px per line),
-	// otherwise drop rows so lines never alias into shimmer.
-	float rows = min(V_RES_MAX, screen_size.y * 0.5);
+	// A fixed 720x480 anamorphic signal. On unusually small windows, reduce
+	// rows only far enough to avoid unstable sub-pixel scanline shimmer.
+	float rows = min(V_RES, screen_size.y * 0.75);
+	float cols = H_RES;
 	float pitch = screen_size.y / rows;
-	vec2 frag = uvc * screen_size;
 
-	// ── CRT beam: snap Y to scanline centre, 5-tap horizontal Gaussian blur,
-	//    with RGB convergence error (R/B splay outward with radius) ──
+	// ── 480i source: snap to 720 horizontal samples and 480 line positions.
+	//    Alternate line parity at the NTSC field rate. Phosphor persistence
+	//    keeps the previous field present rather than blacking every other row.
+	float field_phase = mod(floor(TIME * 59.94), 2.0);
+	float line_index = floor(uvc.y * rows);
 	float quantized_y = (floor(uvc.y * rows) + 0.5) / rows;
-	vec2 scan_uv = vec2(uvc.x, quantized_y);
-	float cols = rows * screen_size.x / screen_size.y;
+	float quantized_x = (floor(uvc.x * cols) + 0.5) / cols;
+	vec2 scan_uv = vec2(quantized_x, quantized_y);
+
+	// ── CRT beam: 5-tap horizontal Gaussian blur with RGB convergence error
+	//    (R/B splay outward with radius) ──
 	float beam = 0.6 / cols;
 	vec3 t0 = texture(screen_tex, vec2(scan_uv.x - beam * 2.0, scan_uv.y)).rgb;
 	vec3 t1 = texture(screen_tex, vec2(scan_uv.x - beam, scan_uv.y)).rgb;
@@ -87,17 +93,14 @@ void fragment() {
 	float bright = max(max(input_node.r, input_node.g), input_node.b);
 	float scan_h = mix(HARD_SCAN * 0.32, HARD_SCAN * 0.65, bright);
 	float scan_weight = exp(scan_phase * scan_phase * scan_h);
-	float pitch_fade = smoothstep(1.2, 2.0, pitch);
+	float pitch_fade = smoothstep(1.05, 1.55, pitch) * 0.72;
 	vec3 c = mix(input_node, input_node * scan_weight, pitch_fade);
 
-	// ── Aperture grille (Trinitron vertical RGB stripes, 3px period) ──
-	float mx = mod(frag.x, 3.0);
-	float mask_r = mx < 1.0 ? (1.0 + MASK_STR) : (1.0 - MASK_STR * 0.5);
-	float mask_g = (mx >= 1.0 && mx < 2.0) ? (1.0 + MASK_STR) : (1.0 - MASK_STR * 0.5);
-	float mask_b = (mx >= 2.0) ? (1.0 + MASK_STR) : (1.0 - MASK_STR * 0.5);
-	float grille_sep = smoothstep(0.0, 0.5, mx) * smoothstep(3.0, 2.5, mx);
-	vec3 grille_mask = vec3(mask_r, mask_g, mask_b) * mix(0.92, 1.0, grille_sep);
-	c *= mix(vec3(1.0), grille_mask, pitch_fade);
+	// A faint irregular phosphor grain gives the glass texture without
+	// producing a persistent vertical grille over the entire picture.
+	float phosphor = hash12(vec2(floor(uvc.x * cols * 0.5),
+		floor(virtual_y * 0.5))) - 0.5;
+	c *= 1.0 + phosphor * 0.018 * pitch_fade;
 
 	// ── Warm consumer-CRT colour temperature ──
 	c *= vec3(0.98, 0.95, 0.93);
@@ -106,10 +109,11 @@ void fragment() {
 	float vignette = 1.0 - r2 * 4.0 * 0.16;
 	c *= vignette;
 
-	// ── Interlace flicker (even/odd field alternation) ──
-	float field_phase = mod(floor(TIME * 30.0), 2.0);
-	float interlace = mod(floor(virtual_y) + field_phase, 2.0);
-	c *= 1.0 - interlace * 0.02 * pitch_fade;
+	// ── Interlace: the active field is a touch brighter while the other field
+	//    persists in the phosphor. This reads in motion without harsh combing. ──
+	float active_field = 1.0 - step(0.5,
+		abs(mod(line_index, 2.0) - field_phase));
+	c *= mix(0.965, 1.015, active_field * pitch_fade);
 
 	// ── Rolling scan band ──
 	float band_pos = fract(uvc.y * 0.5 - TIME * 0.08);
@@ -119,8 +123,8 @@ void fragment() {
 	// ── Composite signal noise — per-line shimmer over RF snow ──
 	float noise = hash12(vec2(floor(virtual_y), floor(TIME * 60.0))) - 0.5;
 	c *= 1.0 + noise * NOISE_AMP * noise_amount;
-	// snow: per-pixel static at source resolution, chunky at 240p, breathing
-	// with a slow interference band drifting down the picture
+	// snow: fine per-signal-sample static at 720x480, breathing with a slow
+	// interference band drifting down the picture
 	vec2 cellp = vec2(floor(uvc.x * cols), floor(virtual_y));
 	float snow = hash12(cellp + vec2(fract(TIME * 61.7) * 289.0, fract(TIME * 23.3) * 173.0));
 	float ib_pos = fract(uvc.y * 0.7 + TIME * 0.043);

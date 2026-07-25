@@ -21,6 +21,22 @@ const CC0_MODELS := [
 	"street_lamp_01", "wooden_picnic_table", "Lantern_01",
 	"wooden_barrels_01", "barrel_stove", "tree_stump_01",
 	"rusted_wheel_rim_02", "wooden_crate_01", "vintage_suitcase",
+	"book_encyclopedia_set_01", "bunsen_burner", "chemistry_set",
+	"office_notepads", "old_military_compressor", "projector_screen",
+	"security_camera_01", "stationery_supplies", "office_chair",
+	"CashRegister_01", "hand_truck", "industrial_storage_cart",
+	"metal_trash_can", "long_life_food", "plunger", "drain_cleaner",
+	"can_rusted",
+]
+
+const CC_BY_MODELS := [
+	["res://models/cc_by/slot_machine/slot_machine.glb", "slot_machine"],
+	["res://models/cc_by/prison_toilet/prison_toilet.glb", "prison_toilet"],
+	["res://models/cc_by/prison_door_old/prison_door_old.glb", "prison_door_old"],
+	["res://models/cc_by/solitary_cell_door/solitary_cell_door.glb",
+		"solitary_cell_door"],
+	["res://models/cc_by_nc/prison_bunk_bed/prison_bunk_bed.glb",
+		"prison_bunk_bed"],
 ]
 
 
@@ -28,7 +44,11 @@ func _init() -> void:
 	for m in MODELS:
 		_dump("res://models/asylum/%s/%s_1k.gltf" % [m, m], m)
 	for m in CC0_MODELS:
-		_dump("res://models/cc0/%s/%s_1k.gltf" % [m, m], m)
+		var path := "res://models/cc0/office_chair/Office_Chair.fbx" if m == "office_chair" \
+			else "res://models/cc0/%s/%s_1k.gltf" % [m, m]
+		_dump(path, m)
+	for entry in CC_BY_MODELS:
+		_dump(entry[0], entry[1])
 	quit()
 
 

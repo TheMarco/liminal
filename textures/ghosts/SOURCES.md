@@ -1,47 +1,71 @@
-# Ghost silhouettes — sources
+# Ghost sheets — sources
 
-Black RGBA cutouts on cylindrical billboards with noise-eroded edges
+Animated black RGBA figures on cylindrical billboards with noise-eroded edges
 (`shaders/ghost.gdshader`), spawned by `scripts/shadow_figure.gd`.
 
-## Traced (Wikimedia Commons)
+Every figure in the game is animated. The photo-traced Wikimedia silhouettes
+and the still painted cutouts that preceded these were retired wholesale: a
+motionless silhouette reads as a decal the moment it shares a floor with one
+that moves, so the roster is animated or it is nothing.
 
-Photo-traced human silhouettes, thresholded and cropped to 512px. Hard,
-binary edges — the shader carves their outline out of drifting noise so they
-do not look stamped.
+## Generated for this project (Magnific)
 
-| File | Source (Wikimedia Commons) | License | Author |
-|---|---|---|---|
-| man_bald.png | File:Silhouette of a standing man.svg | CC0 | Mette Aumala |
-| man_shirt.png | File:Silhouette of man standing and facing forward.svg | CC0 | Madeleine Price Ball |
-| woman_walk.png | File:1Silhouette Female.jpg | CC BY 2.0 | Phil Bronnery (Moscow, Russia) |
-| girl.png | File:Girl silhouette black.svg | CC0 | OpenClipart-Vectors |
+Seven looping videos of dark hooded figures on white, 720×1280, 24 fps, ~4s.
+The white is paper, not background: coverage becomes alpha directly, so smoke,
+tendrils and blurred hands survive as partial alpha instead of being chopped
+into an outline.
 
-## Painted (generated for this project, Magnific)
+| Sheet | Source loop | Notes |
+|---|---|---|
+| wraith_anim.webp | `magnific_ghost-looping-animation-s_1sk7R5lr4r.mp4` | red eyes, ragged robe |
+| wraith2.webp | `ghost2.mp4` | red eyes, stands in ground fog |
+| wraith3.webp | `ghost3.mp4` | no lit eyes — the only blind one |
+| wraith4.webp | `ghost4.mp4` | pale green eyes, hangs, trails into smoke |
+| wraith5.webp | `ghost5.mp4` | red eyes, broad shoulders |
+| wraith6.webp | `ghost6.mp4` | red eyes, one arm reaching |
+| wraith7.webp | `ghost7.mp4` | red eyes, hangs, long smoke tail |
 
-Dark figures on white, masked off the white by `tools/mask_silhouette.py`.
-The white is paper, not background: coverage becomes alpha directly, so
-smoke, loose hair and blurred hands survive as partial alpha instead of being
-chopped into an outline. These arrive soft-edged and the shader eases off
-(`SOFT` in shadow_figure.gd: erode 0.14, edge window opened right up).
+## Conversion
 
-The exact runs, from `~/Downloads/magnific_creepy-silouette-*`:
+Built by `tools/build_flipbook.py`, which prints the shader constants and the
+`BODY` row for each sheet:
 
-    coat.png    …like-img_8vXnGMoIrU  --ground 0.25 --melt 0.02
-    gown.png    …in-style_iA9sls73uK  --floor 0.08 --ground 0.20 --melt 0.03
-    husk.png    …in-style_gJLQF1RSXO  --floor 0.22 --gain 1.4 --ground 0.30 --band 0.30 --melt 0.04
-    knife.png   …in-style_TeWNRhpVNR  --floor 0.10 --gain 1.3 --ground 0.30 --melt 0.03
-    axeman.png  …in-style_SOsFbI4Ub8  --floor 0.14 --gain 1.35 --ground 0.35 --band 0.30 --melt 0.04
-    horned.png  …in-style_74SbkFHJAL  --floor 0.08 --trim 0.145 --melt 0.03
-    smoke.png   …in-style_ONwK182ynm  --floor 0.07 --melt 0.03
+    python3 tools/build_flipbook.py SRC.mp4 textures/ghosts/NAME.png \
+        --frames 24 --height 288 --cols 6
 
-`--floor` cuts the paper grain, `--ground` the faint cast shadow at the feet,
-`--trim` a pooled one too dark to threshold away (horned stood in its own
-shadow), `--melt` dissolves the base so nothing ends on a cut line.
+Godot 4 ships one video codec, Theora, and it carries no alpha channel — a
+video silhouette would be a black rectangle. So each loop becomes a 6×4 sprite
+sheet of 24 frames, and the ghost shader cycles them by offsetting UVs. That
+costs nothing over a static cutout and composes with the erosion, the stare
+dissolve and the flashlight burn already in the shader.
+
+Three things the conversion has to get right, all learned from these sources:
+
+- **The backdrop is not white.** These sit at 214–249, not 255. Assuming pure
+  white leaves a full-bleed wash on every frame and nothing ever crops, so the
+  white point is measured from the frame border.
+- **Alpha comes from distance to the backdrop, not luminance.** Luminance reads
+  the lit eyes as mid-grey haze and half-erases them.
+- **The cast shadow has to go.** Several loops composite a soft ellipse under
+  the figure, which on a transparent billboard becomes a grey oval hanging at
+  its feet. Width is the discriminator, not opacity: a smoke tail tapers to a
+  fifth of the body's width while a shadow stays as wide as the figure.
+
+Sheets are WebP — a 24-frame grid is an order of magnitude larger than a single
+cutout, and PNG is the wrong trade at that size. Roughly 600 KB each.
+
+The shader normalises a lit pixel to full brightness in its own hue rather than
+using the painted value: several sheets paint their eyes a dark red around 0.3,
+which came through barely above the black body and read as no eyes at all. Hue
+is the artwork's business; how brightly a lit eye burns is the shader's.
 
 ## Variant mapping (scripts/shadow_figure.gd)
 
-GAUNT/TALL use man_bald (TALL stretched to 2.35m), CRAWLER man_shirt,
-WRAITH/WATCHER woman_walk (WATCHER mirrored), CHILD girl. COAT, GOWN, HUSK,
-KNIFE, AXEMAN take one painted cutout each; HORNED and SMOKE are the two that
-are not pretending to be people, and `UNDERNEATH_THEMES` keeps them to the
-sewers and the asylum.
+REVENANT, DROWNED, PILGRIM, TRAILING, GAOLER, REACHER, DRIFTER take one sheet
+each, weighted close to evenly — none is a fallback for the others, so there is
+no reason to favour one. TRAILING and DRIFTER are the two that hang rather than
+walk and trail into nothing where legs should be; `UNDERNEATH_THEMES` keeps
+them to the sewers and the asylum, the floors where something could have got in
+from below.
+
+The complete project attribution record is `THIRD_PARTY_ASSETS.md`.

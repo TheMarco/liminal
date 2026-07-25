@@ -7,6 +7,7 @@ Downloaded from the Google Fonts repo (`github.com/google/fonts`) with
 |---|---|---|---|
 | `RockSalt-Regular.ttf` | Rock Salt | Apache-2.0 | Asylum wall scrawl — shaky block capitals, reads as marker/scratched plaster |
 | `Caveat-Regular.ttf` | Caveat | OFL-1.1 | Asylum wall scrawl variant — fast, fluid, desperate cursive |
+| `VT323-Regular.ttf` | VT323 | OFL-1.1 | Office CRT records — square, low-resolution terminal glyphs with nearest filtering |
 
 Both are picked per-cell in `Chunk._asy_scrawl` so a corridor mixes hands, as
 if written by different people over years.
@@ -18,3 +19,4 @@ Re-download:
 
     https://github.com/google/fonts/raw/main/apache/rocksalt/RockSalt-Regular.ttf
     https://github.com/google/fonts/raw/main/ofl/caveat/Caveat%5Bwght%5D.ttf
+    https://github.com/google/fonts/raw/main/ofl/vt323/VT323-Regular.ttf

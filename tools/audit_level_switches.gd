@@ -42,6 +42,20 @@ func _run() -> void:
 			failures.append("landing has no supporting floor")
 		if ArrivalSafety.escape_count(game.get_world_3d(), landed, [game.player.get_rid()]) < 2:
 			failures.append("landing has fewer than two escape directions")
+		if game._music_track_for(game.active_level) \
+				!= game.MUSIC_TRACKS[game.active_level]:
+			failures.append("Wander soundtrack was changed by Descent escalation")
+
+	# The shared Q flow must pause Wander without labelling it as a Descent run,
+	# then restore ordinary haunt/input state when cancelled.
+	game._show_return_prompt()
+	if not is_instance_valid(game._return_prompt) or game._return_prompt.descent:
+		failures.append("Wander return prompt received Descent-specific context")
+	if not game._figures.suspended:
+		failures.append("Wander return prompt did not suspend haunt timers")
+	game._cancel_return_to_title()
+	if game._figures.suspended:
+		failures.append("cancelling the Wander return prompt did not resume haunt timers")
 
 	print("level-switch audit: seed=%d target=school cell=%s player=%s" % [
 		REGRESSION_SEED, SCHOOL_CELL, game.player.global_position])
@@ -51,7 +65,22 @@ func _run() -> void:
 		for failure in failures:
 			print("FAIL ", failure)
 		_print_candidate_colliders(game)
+	_stop_audio(game)
+	game.free()
+	Chunk.finish_prop_preloads()
+	SoundBank._c.clear()
+	Sfx._c.clear()
+	await process_frame
+	await physics_frame
+	await create_timer(0.1).timeout
 	quit(0 if failures.is_empty() else 1)
+
+
+func _stop_audio(root: Node) -> void:
+	for node in root.find_children("*", "AudioStreamPlayer", true, false):
+		(node as AudioStreamPlayer).stop()
+	for node in root.find_children("*", "AudioStreamPlayer3D", true, false):
+		(node as AudioStreamPlayer3D).stop()
 
 
 func _print_candidate_colliders(game: Node) -> void:

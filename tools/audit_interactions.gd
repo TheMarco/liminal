@@ -1,6 +1,7 @@
 extends SceneTree
-## Smoke-test the three generated E-key interactions without relying on a
-## particular camera path: one terminal record, one swing door, one lift call.
+## Smoke-test the generated E-key interactions without relying on a particular
+## camera path. Office terminals are deliberately non-interactive authored
+## units; swing doors and lift calls remain usable.
 ## Run: godot --headless --path . --script tools/audit_interactions.gd
 
 const BASE_SEED := 1563747281
@@ -11,14 +12,7 @@ func _init() -> void:
 
 
 func _level_seed(theme: int) -> int:
-	if theme == 0:
-		return BASE_SEED
-	var salt := 348039917
-	if theme == 2: salt = 715827883
-	elif theme == 4: salt = 536870923
-	elif theme == 5: salt = 998244353
-	elif theme == 6: salt = 179424673
-	return ((BASE_SEED ^ salt) & 0x7FFFFFFF) | 1
+	return WorldGen.level_seed(BASE_SEED, theme)
 
 
 func _find_cell(ws: int, theme: int, predicate: Callable) -> Vector2i:
@@ -59,6 +53,16 @@ func _hit(chunk: Chunk, prefix: String) -> Interactable:
 	return null
 
 
+func _door_leaf_moved_away(pivot: Node3D, actor: Node3D, dir: int) -> bool:
+	var leaf_local := Vector3(0, 0, 1) if dir == 0 else Vector3.RIGHT
+	var parent := pivot.get_parent() as Node3D
+	var closed_leaf_world := parent.global_transform.basis * leaf_local
+	var open_leaf_world := pivot.global_transform.basis * leaf_local
+	var leaf_displacement := open_leaf_world - closed_leaf_world
+	var toward_actor := actor.global_position - pivot.global_position
+	return leaf_displacement.dot(toward_actor) < -0.01
+
+
 func _run() -> void:
 	var failures := []
 	var office_ws := _level_seed(1)
@@ -66,15 +70,24 @@ func _run() -> void:
 		return WorldGen.room_id(office_ws, c) == c \
 			and WorldGen.cell_style(office_ws, c, 1) == WorldGen.OFFICE_CUBICLES)
 	var tc := _chunk(office_ws, 1, terminal_cell)
-	var terminal := _hit(tc, "E — query terminal")
-	if terminal == null:
-		failures.append("usable terminal not built")
-	else:
-		var page := int(terminal.get_meta("page", -1))
-		terminal.interact(null)
-		if int(terminal.get_meta("page", -1)) == page \
-				or terminal.prompt_text != "E — next record":
-			failures.append("terminal did not advance its record")
+	var workstations := 0
+	var authored_terminals := 0
+	var custom_screens := 0
+	for n in tc.find_children("*", "Node3D", true, false):
+		if n.has_meta("office_workstation"):
+			workstations += 1
+		if str(n.get_meta("attributed_asset", "")) == Chunk.OFFICE_TERMINAL_PATH:
+			authored_terminals += 1
+		if n.has_meta("office_terminal_custom_screen"):
+			custom_screens += 1
+	if workstations == 0:
+		failures.append("office workstations not built")
+	elif authored_terminals != workstations:
+		failures.append("not every office workstation uses the authored VT100")
+	elif custom_screens != authored_terminals:
+		failures.append("not every office VT100 uses the custom Liminal screen")
+	if _hit(tc, "E — query terminal") != null:
+		failures.append("office still contains an E-query terminal")
 
 	var lift_cell := _find_cell(office_ws, 1, func(c: Vector2i) -> bool:
 		return WorldGen.elevator_cell(office_ws, c, 1))
@@ -94,17 +107,58 @@ func _run() -> void:
 	if door == null:
 		failures.append("working swing door not built")
 	else:
-		var before: float = (door.get_parent() as Node3D).rotation.y
-		door.interact(null)
+		var pivot := door.get_parent() as Node3D
+		var door_dir := int(pivot.get_meta("door_dir", -1))
+		var actor := Node3D.new()
+		get_root().add_child(actor)
+		var normal_local := Vector3.RIGHT if door_dir == 0 else Vector3(0, 0, 1)
+		var normal_world := (dc.global_transform.basis * normal_local).normalized()
+		actor.global_position = pivot.global_position + normal_world * 1.5
+		var before: float = pivot.rotation.y
+		door.interact(actor)
 		await create_timer(0.7).timeout
 		if door.prompt_text != "E — close door" \
-				or absf((door.get_parent() as Node3D).rotation.y - before) < 0.5:
+				or absf(pivot.rotation.y - before) < 0.5:
 			failures.append("door did not complete its opening motion")
+		if not _door_leaf_moved_away(pivot, actor, door_dir):
+			failures.append("door opened toward the actor from its first side")
+		var first_angle := pivot.rotation.y
+		door.interact(actor)
+		await create_timer(0.7).timeout
+		if absf(pivot.rotation.y) > 0.01 or door.prompt_text != "E — open door":
+			failures.append("door did not return to its closed position")
+		actor.global_position = pivot.global_position - normal_world * 1.5
+		door.interact(actor)
+		await create_timer(0.7).timeout
+		if not _door_leaf_moved_away(pivot, actor, door_dir):
+			failures.append("door opened toward the actor from its opposite side")
+		if signf(first_angle) == signf(pivot.rotation.y):
+			failures.append("door did not reverse its swing between approach sides")
+		actor.queue_free()
 
-	print("interaction audit: terminal=%s elevator=%s door=%s" % [
-		terminal_cell, lift_cell, door_cell])
+	var prison_ws := _level_seed(8)
+	var prison_door_cell := _find_cell(prison_ws, 8, func(c: Vector2i) -> bool:
+		return _has_working_door(prison_ws, 8, c))
+	var pdc := _chunk(prison_ws, 8, prison_door_cell)
+	var prison_door := _hit(pdc, "E — open door")
+	if prison_door == null:
+		failures.append("working prison swing door not built")
+	else:
+		var authored_leaf := false
+		for node in prison_door.get_parent().find_children("*", "Node3D", true,
+				false):
+			if bool(node.get_meta("interactive_prison_door", false)) \
+					and str(node.get_meta("attributed_asset", "")) == \
+					Chunk.SOLITARY_CELL_DOOR_PATH:
+				authored_leaf = true
+				break
+		if not authored_leaf:
+			failures.append("prison swing door did not use the authored cell leaf")
+
+	print("interaction audit: office=%s elevator=%s door=%s prison_door=%s" % [
+		terminal_cell, lift_cell, door_cell, prison_door_cell])
 	if failures.is_empty():
-		print("  PASS — terminal advances; lift responds; selected door opens")
+		print("  PASS — office uses authored VT100s without E prompts; lift responds; selected door opens away from both approach sides")
 	else:
 		for failure in failures:
 			print("FAIL ", failure)

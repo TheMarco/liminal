@@ -1,12 +1,13 @@
 extends SceneTree
 ## Builds real 3x3 destination neighbourhoods and tests the same capsule/floor
 ## resolver used at runtime. It covers both fixed portal offsets and arbitrary
-## saved positions. Default: 16 base seeds × six source floors.
+## saved positions. Default: 16 base seeds × every live source floor.
 ## Run: godot --headless --path . --script tools/audit_arrivals.gd -- [seeds]
 
 const ARRIVE := {
 	0: Vector2(3.2, 2.0), 1: Vector2(3.2, 2.0), 2: Vector2(3.9, 1.0),
 	4: Vector2(3.2, 2.0), 5: Vector2(3.2, 2.0), 6: Vector2(3.2, 2.0),
+	7: Vector2(3.2, 2.0), 8: Vector2(3.2, 2.0),
 }
 const SAVED_OFFSETS := [
 	Vector2(1.0, 1.0), Vector2(6.0, 6.0), Vector2(11.0, 11.0),
@@ -18,14 +19,7 @@ func _init() -> void:
 
 
 func _level_seed(base: int, theme: int) -> int:
-	if theme == 0:
-		return base
-	var salt := 348039917
-	if theme == 2: salt = 715827883
-	elif theme == 4: salt = 536870923
-	elif theme == 5: salt = 998244353
-	elif theme == 6: salt = 179424673
-	return ((base ^ salt) & 0x7FFFFFFF) | 1
+	return WorldGen.level_seed(base, theme)
 
 
 func _portal_cell(ws: int, theme: int) -> Array:
@@ -103,8 +97,10 @@ func _run() -> void:
 							base, dest, cellv, saved_off])
 				else:
 					saved_tested += 1
-			level.queue_free()
+			_stop_audio(level)
+			level.free()
 			await process_frame
+			await physics_frame
 	print("arrival audit: %d seeds, %d real portal destinations" % [seed_count, tested])
 	print("  saved-position probes: %d | relocated portal points: %d | minimum escape rays: %d" % [
 		saved_tested, moved, min_exits])
@@ -112,4 +108,15 @@ func _run() -> void:
 		print("  PASS — every arrival has capsule clearance, supported floor, and 2+ escape directions")
 	else:
 		print("  FAIL — %d unsafe or missing destinations" % failures)
+	SoundBank._c.clear()
+	Sfx._c.clear()
+	await process_frame
+	await create_timer(0.1).timeout
 	quit(0 if failures == 0 else 1)
+
+
+func _stop_audio(root: Node) -> void:
+	for node in root.find_children("*", "AudioStreamPlayer", true, false):
+		(node as AudioStreamPlayer).stop()
+	for node in root.find_children("*", "AudioStreamPlayer3D", true, false):
+		(node as AudioStreamPlayer3D).stop()

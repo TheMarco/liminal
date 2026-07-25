@@ -12,7 +12,7 @@ const OPP := [1, 0, 3, 2]
 ## 3 was the derelict theme park, cut because it never held up beside the
 ## interiors. Ids are NOT renumbered — every other theme keeps the seed salt and
 ## world it always had, so old seeds still reproduce.
-const THEMES: Array[int] = [0, 1, 2, 4, 5, 6]
+const THEMES: Array[int] = [0, 1, 2, 4, 5, 6, 7, 8]
 
 const STYLE_EMPTY := 0
 const STYLE_PILLARS := 1
@@ -64,12 +64,48 @@ const SCH_LAB := 66        # science benches with gas taps and stools
 const SCH_ADMIN := 67      # front office, counter, filing
 const SCH_AUDITORIUM := 68 # a rare stage and rows of empty folding seats
 
+const MALL_CORRIDOR := 70   # the broad public gallery, shopfronts on both sides
+const MALL_STORE := 71      # a small shuttered retail unit
+const MALL_ANCHOR := 72     # the remains of a department store
+const MALL_FOODCOURT := 73  # bolted tables and dead menu boxes
+const MALL_ATRIUM := 74     # planters, fountain and a false upper balcony
+const MALL_SERVICE := 75    # concrete back-of-house loading passages
+const MALL_KIOSKS := 76     # abandoned islands in the concourse
+const MALL_CINEMA := 77     # landmark box office and sealed screens
+
+const PRISON_CORRIDOR := 80 # a barred gallery running the length of a cell block
+const PRISON_CELLBLOCK := 81# two tiers of cells around a central floor
+const PRISON_CELLS := 82    # close individual cells and bunks
+const PRISON_MESS := 83     # fixed tables under harsh lamps
+const PRISON_SHOWER := 84   # tiled communal washroom
+const PRISON_GUARD := 85    # barred control cage and observation post
+const PRISON_INDUSTRY := 86 # prison workshop / laundry
+const PRISON_VISITATION := 87 # divided booths and a dead telephone line
+const PRISON_ROTUNDA := 88  # landmark radial guard hub
+
 # Eight-cell (96m) semantic districts. Room styles still vary within a zone,
 # but the weights now agree over a meaningful walk: a run of gates gives way
 # to baggage handling, patient wards yield to treatment, and so on. The room
 # root keeps a merged space in one district even when it crosses a boundary.
 const ZONE_SPAN := 8
 const ZONE_COUNT := 3
+
+
+## Stable per-floor seed derivation shared by runtime and audits. Existing
+## salts are preserved byte-for-byte; new themes only add new streams.
+static func level_seed(base: int, theme: int) -> int:
+	if theme == 0:
+		return base
+	var salts := {
+		1: 348039917,
+		2: 715827883,
+		4: 536870923,
+		5: 998244353,
+		6: 179424673,
+		7: 463670041,
+		8: 805306457,
+	}
+	return ((base ^ int(salts.get(theme, 348039917))) & 0x7FFFFFFF) | 1
 
 
 static func h(ws: int, a: int, b: int, salt: int) -> int:
@@ -284,6 +320,8 @@ static func macro_zone_name(zone: int, theme: int) -> String:
 		4: ["airside", "departures", "arrivals"],
 		5: ["patient wing", "treatment", "administration"],
 		6: ["academic", "commons", "administration"],
+		7: ["retail galleries", "food and cinema", "service wing"],
+		8: ["cell blocks", "institutional", "custody"],
 	}
 	var labels: Array = names.get(theme, ["zone 0", "zone 1", "zone 2"])
 	return labels[clampi(zone, 0, labels.size() - 1)]
@@ -305,6 +343,8 @@ static func landmark_style(ws: int, cell: Vector2i, theme: int) -> int:
 		4: return AIR_FOODCOURT
 		5: return ASY_CHAPEL
 		6: return SCH_AUDITORIUM
+		7: return MALL_CINEMA
+		8: return PRISON_ROTUNDA
 	return -1
 
 
@@ -328,6 +368,12 @@ static func room_height(ws: int, root: Vector2i, theme: int) -> float:
 		# a school is built to one height and then the gym happens
 		if n >= 4: return 6.6
 		return 3.4 if n >= 2 else lerpf(2.9, 3.15, r)
+	if theme == 7:
+		if n >= 4: return 7.2
+		return 4.8 if n >= 2 else lerpf(3.7, 4.2, r)
+	if theme == 8:
+		if n >= 4: return 6.8
+		return 4.4 if n >= 2 else lerpf(3.25, 3.65, r)
 	if n >= 4:
 		return 6.4
 	if n >= 2:
@@ -375,6 +421,18 @@ static func room_split(ws: int, root: Vector2i, theme: int) -> Array:
 	if root == Vector2i.ZERO or theme == 2 or room_size(ws, root) != 1 \
 			or corridor(ws, root) != 0:
 		return []
+	# A split is a room-type decision, not a generic overlay. Letting it replace
+	# landmark/set-piece styles created context nonsense: bunks in showers,
+	# store fascias behind a food-court counter, and classroom filler in gyms.
+	# Only styles that plausibly contain a little stockroom/office annex may be
+	# subdivided; every other style keeps its authored furnishing contract.
+	var st := cell_style(ws, root, theme)
+	if theme == 6 and st != SCH_ADMIN:
+		return []
+	if theme == 7 and st != MALL_STORE and st != MALL_SERVICE:
+		return []
+	if theme == 8 and st != PRISON_INDUSTRY:
+		return []
 	var r := r01(ws, root.x, root.y, 613)
 	# the asylum is mostly small rooms: split single cells aggressively
 	var split_p := 0.3
@@ -383,9 +441,15 @@ static func room_split(ws: int, root: Vector2i, theme: int) -> Array:
 	elif theme == 5:
 		split_p = 0.52
 	elif theme == 6:
-		# split hard: a school is many small rooms off a corridor, not a
-		# handful of halls. This is where the offices and cupboards come from.
+		# Administrative suites can contain small offices and cupboards.
 		split_p = 0.55
+	elif theme == 7:
+		# Only inline shops and service rooms receive a stockroom.
+		split_p = 0.18
+	elif theme == 8:
+		# A workshop can contain a caged tool or stock room. Actual cells are
+		# built by the barred cell-strip system, never by generic partitions.
+		split_p = 0.62
 	if r > split_p:
 		return []
 	var along_x := r01(ws, root.x, root.y, 614) < 0.5
@@ -476,6 +540,8 @@ static func _fo_p(theme: int) -> float:
 		4: return 0.55
 		5: return 0.26
 		6: return 0.08   # a school is rooms off corridors, and doors between
+		7: return 0.52   # a mall is one public interior interrupted by shopfronts
+		8: return 0.06   # a prison boundary is always legible
 	return 0.45
 
 
@@ -511,7 +577,7 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	var a_cor := ca != 0
 	var b_cor := cb != 0
 	var is_corr := a_cor or b_cor
-	if theme == 6 and is_corr:
+	if (theme == 6 or theme == 8) and is_corr:
 		var sw := lerpf(1.6, 2.1, hr01(eh, 2))
 		var st := lerpf(2.6, 9.4, hr01(eh, 3))
 		# Side classrooms may sit irregularly along the hall. A doorway at the
@@ -524,7 +590,7 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 			sw = minf(sw, 2.4)
 		return {"wall": wall, "full_open": false,
 			"t": st, "w": sw,
-			"exit_sign": hr01(eh, 4) < 0.2}
+			"exit_sign": hr01(eh, 4) < (0.10 if theme == 8 else 0.2)}
 	if not wall and not full_open:
 		# A cased doorway only sells "a room behind this wall" when both
 		# sides feel enclosed. If either side is already a merged open hall
@@ -571,6 +637,16 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 		var m6 := w / 2.0 + 0.9
 		t = lerpf(m6, 12.0 - m6, hr01(eh, 3))
 		has_sign = hr01(eh, 4) < 0.22
+	elif theme == 7:
+		w = lerpf(4.4, 7.2, hr01(eh, 2))
+		var m7 := w / 2.0 + 0.8
+		t = lerpf(m7, 12.0 - m7, hr01(eh, 3))
+		has_sign = hr01(eh, 4) < 0.28
+	elif theme == 8:
+		w = lerpf(1.25, 1.75, hr01(eh, 2))
+		var m8 := w / 2.0 + 0.75
+		t = lerpf(m8, 12.0 - m8, hr01(eh, 3))
+		has_sign = false
 	# Narrow circulation spines need an architectural boundary wherever an edge
 	# is not their straight-through link. Letting it become fully open exposes
 	# the service/guest-room
@@ -578,7 +654,7 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	# locked doors. Keep it as a cased opening instead. At a terminal or junction,
 	# the opening is centred on the lane so it cannot discharge into that hidden
 	# strip.  This is symmetric: both sides see the same corridor axis and edge.
-	if (theme == 0 or theme == 1 or theme == 4 or theme == 5) and is_corr:
+	if (theme == 0 or theme == 1 or theme == 4 or theme == 5 or theme == 7 or theme == 8) and is_corr:
 		full_open = false
 		var terminal := (ca == 1 and dir <= 1) or (ca == 2 and dir >= 2) \
 			or (cb == 1 and dir <= 1) or (cb == 2 and dir >= 2)
@@ -586,7 +662,7 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 			t = 6.0
 			# A transit bank needs its whole cross-section at a genuine exit;
 			# the narrower hotel, office and asylum spines use a single doorway.
-			w = 10.4 if theme == 4 else minf(w, 2.4)
+			w = 10.4 if theme == 4 or theme == 7 else minf(w, 2.4)
 	return {"wall": wall, "full_open": full_open, "t": t, "w": w, "exit_sign": has_sign}
 
 
@@ -636,6 +712,8 @@ static func portal(ws: int, cell: Vector2i, theme := 0) -> int:
 		4: ok = st == AIR_HALL
 		5: ok = st == ASY_DAYROOM
 		6: ok = st == SCH_GYM
+		7: ok = st == MALL_ATRIUM
+		8: ok = st == PRISON_GUARD
 	if not ok:
 		return -1
 	if r01(ws, cell.x, cell.y, 501) > 0.30:
@@ -659,7 +737,8 @@ static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
 	var st := cell_style(ws, cell, theme)
 	var eligible := st == STYLE_EMPTY or st == OFFICE_EMPTY \
 		or st == SEWER_DRY or st == AIR_HALL \
-		or st == ASY_DAYROOM or st == SCH_ADMIN
+		or st == ASY_DAYROOM or st == SCH_ADMIN \
+		or st == MALL_ATRIUM or st == PRISON_GUARD
 	return eligible and r01(ws, cell.x, cell.y, 1700) < 0.28 \
 		and anchor_wall(ws, cell, 1701) >= 0
 
@@ -677,6 +756,8 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 			4: return AIR_TRANSIT
 			5: return ASY_CORRIDOR
 			6: return SCH_CORRIDOR
+			7: return MALL_CORRIDOR
+			8: return PRISON_CORRIDOR
 			_: return STYLE_HALLWAY
 	var root := room_id(ws, cell)
 	var n := room_size(ws, root)
@@ -685,6 +766,40 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 	var landmark := landmark_style(ws, root, theme)
 	if landmark >= 0:
 		return landmark
+	if theme == 8:
+		if root == Vector2i.ZERO:
+			return PRISON_CELLBLOCK
+		if n >= 4:
+			if zone == 0: return PRISON_CELLBLOCK if r < 0.78 else PRISON_GUARD
+			if zone == 1: return PRISON_MESS if r < 0.52 else PRISON_INDUSTRY
+			return PRISON_GUARD if r < 0.58 else PRISON_VISITATION
+		if n >= 2:
+			if zone == 0: return PRISON_CELLBLOCK if r < 0.60 else PRISON_CELLS
+			if zone == 1:
+				if r < 0.38: return PRISON_MESS
+				if r < 0.70: return PRISON_SHOWER
+				return PRISON_INDUSTRY
+			return PRISON_GUARD if r < 0.48 else PRISON_VISITATION
+		if zone == 0: return PRISON_CELLS if r < 0.82 else PRISON_GUARD
+		if zone == 1: return PRISON_SHOWER if r < 0.46 else PRISON_INDUSTRY
+		return PRISON_GUARD if r < 0.56 else PRISON_VISITATION
+	if theme == 7:
+		if root == Vector2i.ZERO:
+			return MALL_ATRIUM
+		if n >= 4:
+			if zone == 0: return MALL_ATRIUM if r < 0.62 else MALL_ANCHOR
+			if zone == 1: return MALL_FOODCOURT if r < 0.58 else MALL_ATRIUM
+			return MALL_ANCHOR if r < 0.54 else MALL_SERVICE
+		if n >= 2:
+			if zone == 0:
+				if r < 0.50: return MALL_STORE
+				if r < 0.78: return MALL_KIOSKS
+				return MALL_ATRIUM
+			if zone == 1: return MALL_FOODCOURT if r < 0.54 else MALL_STORE
+			return MALL_SERVICE if r < 0.58 else MALL_ANCHOR
+		if zone == 0: return MALL_STORE if r < 0.66 else MALL_KIOSKS
+		if zone == 1: return MALL_STORE if r < 0.52 else MALL_FOODCOURT
+		return MALL_SERVICE if r < 0.66 else MALL_STORE
 	if theme == 5:
 		if root == Vector2i.ZERO:
 			return ASY_WARD

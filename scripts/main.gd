@@ -1,11 +1,13 @@
 extends Node3D
-## Entry point and level manager. Six endless floors share one player:
+## Entry point and level manager. Eight endless floors share one player:
 ##   1 — seedy Vegas hotel-casino            (theme 0)
 ##   2 — sterile Severance-style office      (theme 1)
 ##   3 — dripping sewer works under everything (theme 2)
 ##   4 — an airport terminal at 3 a.m., between every flight (theme 4)
 ##   5 — an abandoned asylum, beds still made, straps still buckled (theme 5)
 ##   6 — a high school after the last bell that never rang (theme 6)
+##   7 — an abandoned shopping mall with every shutter down (theme 7)
+##   8 — an island prison whose cell blocks never end (theme 8)
 ## The number key is an index into WorldGen.THEMES, NOT the theme id — theme 3
 ## was a derelict theme park, cut, and the rest keep their original ids so every
 ## existing seed still generates the world it always did.
@@ -21,6 +23,7 @@ const PORTAL_ARRIVE := {
 	2: Vector3(3.9, 0.15, 1.0),
 	4: Vector3(3.2, 0.15, 2.0), 5: Vector3(3.2, 0.15, 2.0),
 	6: Vector3(3.2, 0.15, 2.0),
+	7: Vector3(3.2, 0.15, 2.0), 8: Vector3(3.2, 0.15, 2.0),
 }
 
 var player: Player
@@ -44,6 +47,9 @@ var _bench_slow := 0
 var _bench_prev := Vector3.ZERO
 var _bench_steps: Array[float] = []
 var _figures: ShadowFigures
+var _whispers: Whispers
+var _heart: Heartbeat
+var _dying := false
 var _music: AudioStreamPlayer
 var _title: TitleScreen
 var _hint: Label
@@ -55,6 +61,16 @@ var _event_tween: Tween
 var _interact_style: StyleBoxFlat
 var _event_style: StyleBoxFlat
 var _events: EnvironmentEvents
+var descent := false
+var run: DescentRun
+var descent_route: DescentRoute
+var _descent_preparing := false
+var _attention_override := -1.0
+var _blackout_ambient := -1.0
+var _descent_summary: DescentSummary
+var _pursuer: DescentPursuer
+var _descent_hud: DescentHUD
+var _return_prompt: ReturnPrompt
 
 # One mood track per floor.
 const MUSIC_TRACKS := {
@@ -62,7 +78,11 @@ const MUSIC_TRACKS := {
 	2: "res://music/lim3.mp3",
 	4: "res://music/lim5.mp3", 5: "res://music/lim6.mp3",
 	6: "res://music/lim4.mp3",
+	7: "res://music/lim7.mp3", 8: "res://music/lim8.mp3",
 }
+# A distinct late-run cue gives Descent's final two floors an audible rise in
+# pressure without changing Wander mode's established per-level soundtrack.
+const DESCENT_LATE_TRACK := "res://music/lim9.mp3"
 const MUSIC_DB := -14.0
 
 
@@ -85,8 +105,28 @@ func _ready() -> void:
 			# --level takes a THEME id, not a key index, so old commands still work
 			var lv := int(arg.substr(8))
 			active_level = lv if WorldGen.THEMES.has(lv) else 0
+		elif arg == "--mode=descent":
+			descent = true
+		elif arg.begins_with("--attention="):
+			_attention_override = clampf(float(arg.substr(12)), 0.0, 1.0)
 	if world_seed == 0:
 		world_seed = (randi() & 0x7FFFFFFF) | 1
+	if descent:
+		run = DescentRun.new()
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--descent-floor="):
+				run.floor_idx = clampi(int(arg.substr(16)) - 1, 0,
+					DescentRun.ORDER.size() - 1)
+		active_level = run.theme()
+		if _attention_override >= 0.0:
+			run.attention = _attention_override
+		_connect_descent_run()
+		run.prepare_floor()
+		add_child(run)
+		descent_route = DescentRoute.build(_level_seed(active_level), active_level)
+		print("Descent floor %d target %s wall %d, %d edges" % [
+			run.floor_idx + 1, descent_route.target, descent_route.target_wall,
+			descent_route.graph_distance])
 	if not pos_given:
 		spawn = _safe_arrival(active_level, Vector2i.ZERO, DEFAULT_SPAWN)
 	print("Liminal Vegas — seed %d" % world_seed)
@@ -100,6 +140,7 @@ func _ready() -> void:
 		Chunk.request_prop_preloads()
 	add_to_group("portal_listener")
 	add_to_group("level_manager")
+	add_to_group("descent_listener")
 	if OS.get_cmdline_user_args().has("--notaa"):
 		get_viewport().use_taa = false
 	# dev: start with the tube off, so screenshots show the raw full-res render
@@ -116,16 +157,22 @@ func _ready() -> void:
 	player = Player.new()
 	player.world_seed = _level_seed(active_level)
 	player.level_theme = active_level
+	player.allow_sprint = not descent
+	if descent and run != null:
+		run.player = player
 	_build_level(active_level, spawn)
 
 	player.position = spawn
 	player.rotation.y = yaw
 	add_child(player)
+	if OS.get_cmdline_user_args().has("--flashlight"):
+		player.set_flashlight(true)
 
 	if OS.get_cmdline_user_args().has("--spin"):
 		player.dev_spin = true
 	if OS.get_cmdline_user_args().has("--audit"):
 		_audit_partitions()
+		return
 	if OS.get_cmdline_user_args().has("--chunktime"):
 		ChunkManager._dev_timing = true
 	if OS.get_cmdline_user_args().has("--bench"):
@@ -138,11 +185,34 @@ func _ready() -> void:
 	var oneshots := OneShots.new()
 	oneshots.player = player
 	add_child(oneshots)
+	_whispers = Whispers.new()
+	_whispers.player = player
+	# Same gate as the figures: nothing mutters behind a title or a rule card.
+	_whispers.suspended = true
+	add_child(_whispers)
 	_figures = ShadowFigures.new()
 	_figures.player = player
+	# No haunt timers run behind a title or rule card. Screenshot/--nologo
+	# starts explicitly release this gate below.
+	_figures.suspended = true
+	_figures.stared_away.connect(_on_figure_stared_away)
+	_figures.reached_player.connect(_on_figure_reached_player)
 	add_child(_figures)
+	# Frights raise the pulse; it bleeds away on its own. Wired after the
+	# figures exist so it can sample how close the nearest one is.
+	_heart = Heartbeat.new()
+	_heart.figures = _figures
+	_heart.suspended = true
+	add_child(_heart)
+	_figures.seen_by_player.connect(
+		func(): _heart.bump(Heartbeat.BUMP_SEEN))
+	_figures.burned_away.connect(
+		func(): _heart.bump(Heartbeat.BUMP_BURNED))
+	_figures.stared_away.connect(
+		func(): _heart.bump(Heartbeat.BUMP_STARED))
 	_events = EnvironmentEvents.new()
 	_events.player = player
+	_events.descent_mode = descent
 	_events.set_level(level_root)
 	add_child(_events)
 	_music = AudioStreamPlayer.new()
@@ -155,23 +225,19 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--caption-preview"):
 		_preview_captions()
 	_build_title()
+	if _title == null:
+		if descent:
+			_begin_descent_floor()
+		else:
+			_figures.suspended = false
+			_whispers.suspended = false
+			_heart.suspended = false
 	_maybe_screenshot()
 	call_deferred("_settle_initial_arrival")
 
 
 func _level_seed(level: int) -> int:
-	if level == 0:
-		return world_seed
-	var salt := 348039917
-	if level == 2:
-		salt = 715827883
-	elif level == 4:
-		salt = 536870923
-	elif level == 5:
-		salt = 998244353
-	elif level == 6:
-		salt = 179424673
-	return ((world_seed ^ salt) & 0x7FFFFFFF) | 1
+	return WorldGen.level_seed(world_seed, level)
 
 
 func _build_level(level: int, around: Vector3) -> void:
@@ -181,24 +247,94 @@ func _build_level(level: int, around: Vector3) -> void:
 	cm.world_seed = _level_seed(level)
 	cm.theme = level
 	cm.player = player
+	cm.descent = descent
+	if descent:
+		if descent_route == null or descent_route.theme != level:
+			descent_route = DescentRoute.build(_level_seed(level), level)
+		cm.descent_floor_idx = run.floor_idx
+		cm.descent_route = descent_route
+		cm.blackout = run.blackout
+		cm.anomalies = run.anomalies
 	level_root.add_child(cm)
 	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode == KEY_Q and _title == null \
+				and not _switching and not is_instance_valid(_return_prompt) \
+				and not is_instance_valid(_descent_summary):
+			get_viewport().set_input_as_handled()
+			_show_return_prompt()
+			return
 		# keys 1..N select the Nth live theme — no gap where the park used to be
 		var idx: int = event.physical_keycode - KEY_1
-		if idx >= 0 and idx < WorldGen.THEMES.size():
+		if not descent and idx >= 0 and idx < WorldGen.THEMES.size():
 			_switch_level(WorldGen.THEMES[idx])
-		elif event.physical_keycode == KEY_V:
+		elif not descent and event.physical_keycode == KEY_V:
 			_crt = not _crt
 			_post.visible = _crt
 			_apply_scaling()
 
 
+func _show_return_prompt() -> void:
+	_return_prompt = ReturnPrompt.new()
+	_return_prompt.descent = descent
+	_return_prompt.confirmed.connect(_confirm_return_to_title)
+	_return_prompt.cancelled.connect(_cancel_return_to_title)
+	add_child(_return_prompt)
+	player.velocity = Vector3.ZERO
+	player.set_process_unhandled_input(false)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_figures.suspended = true
+	_whispers.suspended = true
+	_heart.suspended = true
+	if descent and run != null:
+		run.suspend_rules()
+	if is_instance_valid(_descent_hud):
+		_descent_hud.set_active(false)
+
+
+func _cancel_return_to_title() -> void:
+	if is_instance_valid(_return_prompt):
+		_return_prompt.queue_free()
+	_return_prompt = null
+	player.set_process_unhandled_input(true)
+	player.grab_look()
+	if descent and run != null and not run.ended:
+		run.resume_rules()
+		_figures.suspended = false
+		_whispers.suspended = false
+		_heart.suspended = false
+		if is_instance_valid(_descent_hud):
+			_descent_hud.set_active(true)
+	else:
+		_figures.suspended = false
+		_whispers.suspended = false
+		_heart.suspended = false
+
+
+func _confirm_return_to_title() -> void:
+	if is_instance_valid(_return_prompt):
+		_return_prompt.queue_free()
+	_return_prompt = null
+	player.set_flashlight(false)
+	if descent:
+		await _leave_descent()
+		return
+	_figures.suspended = true
+	_whispers.suspended = true
+	_heart.suspended = true
+	_saved_pos.clear()
+	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
+	await _jump_to(0, spawn, false)
+	_saved_pos.clear()
+	_set_mode_hint()
+	_build_title()
+
+
 func _switch_level(level: int) -> void:
-	if _switching or level == active_level:
+	if descent or _switching or level == active_level:
 		return
 	var pos: Vector3 = _saved_pos.get(level, Vector3.INF)
 	if pos == Vector3.INF:
@@ -208,18 +344,377 @@ func _switch_level(level: int) -> void:
 
 ## Stepping into a swirling portal: emerge in the same cell of another world.
 func _on_portal(dest: int, cellv: Vector2i) -> void:
-	if _switching or dest == active_level:
+	if descent or _switching or dest == active_level:
 		return
 	_jump_to(dest, _safe_arrival(dest, cellv, PORTAL_ARRIVE[dest]), true)
 
 
 ## Called by physical lift panels built into selected generated rooms.
 func use_elevator(dest: int) -> void:
-	if _switching or dest == active_level or not WorldGen.THEMES.has(dest):
+	if descent or _switching or dest == active_level or not WorldGen.THEMES.has(dest):
 		return
 	_events.elevator_response()
 	_show_event_message("FLOOR %d" % (WorldGen.THEMES.find(dest) + 1))
 	_switch_level(dest)
+
+
+func _connect_descent_run() -> void:
+	run.world_seed = world_seed
+	run.pinned_attention = _attention_override
+	if player != null:
+		run.player = player
+	run.attention_changed.connect(_on_descent_attention)
+	run.violation.connect(_on_descent_violation)
+	run.blackout_changed.connect(_on_descent_blackout)
+	run.anomaly_requested.connect(_on_descent_anomaly)
+	run.run_ended.connect(_on_descent_ended)
+
+
+func _begin_descent_floor() -> void:
+	if not descent or run == null or run.ended:
+		return
+	run.player = player
+	run.start_floor()
+	player.allow_sprint = false
+	_figures.suspended = false
+	_whispers.suspended = false
+	_heart.suspended = false
+	_ensure_descent_hud()
+	_descent_hud.set_active(true)
+	_on_descent_attention(run.attention)
+
+
+func _ensure_descent_hud() -> void:
+	if not is_instance_valid(_descent_hud):
+		_descent_hud = DescentHUD.new()
+		add_child(_descent_hud)
+	_descent_hud.configure(player, descent_route, run,
+		_level_seed(active_level), active_level)
+
+
+func suspend_descent_rules() -> void:
+	if descent and run != null:
+		run.suspend_rules()
+
+
+func _on_descent_lift() -> void:
+	if not descent or run == null or run.ended or _switching \
+			or run.is_last_floor():
+		return
+	if is_instance_valid(_descent_hud):
+		_descent_hud.set_active(false)
+	run.suspend_rules()
+	run.floor_idx += 1
+	run.prepare_floor()
+	var next_theme := run.theme()
+	descent_route = DescentRoute.build(_level_seed(next_theme), next_theme)
+	print("Descent floor %d target %s wall %d, %d edges" % [
+		run.floor_idx + 1, descent_route.target, descent_route.target_wall,
+		descent_route.graph_distance])
+	var spawn := _safe_arrival(next_theme, Vector2i.ZERO, DEFAULT_SPAWN)
+	await _jump_to(next_theme, spawn, false)
+	_begin_descent_floor()
+
+
+func _on_descent_exit() -> void:
+	if descent and run != null and run.is_last_floor() and not run.ended:
+		run.finish(true)
+
+
+func _on_figure_stared_away() -> void:
+	if descent and run != null:
+		run.add_stare_violation()
+
+
+## One of them reached you. The endless floors cannot be lost, so there it is a
+## scare and nothing else; a Descent run ends the same way the pursuer ends it.
+## One of them reached you. This is the only way to lose in Wander: the floors
+## are endless and cannot be completed, so the run simply ends and you are put
+## back at the title. A Descent run ends the way the pursuer already ends it.
+##
+## Nothing here is recoverable on purpose. The flashlight is the answer, it is
+## on a ten-second cell, and letting one close the distance while you decide is
+## the mistake being punished.
+func _on_figure_reached_player() -> void:
+	if _dying:
+		return
+	_dying = true
+	_play_player_death()
+	if descent and run != null and not run.ended:
+		run.finish(false)
+		return
+	_die_to_title()
+
+
+## Not positional: this is the one sound in the game that is not happening
+## somewhere in the room.
+func _play_player_death() -> void:
+	var d := Sfx.random_player_death()
+	if d[0] == null:
+		return
+	var pl := AudioStreamPlayer.new()
+	pl.stream = d[0]
+	pl.volume_db = float(d[1])
+	pl.bus = "Hall"
+	add_child(pl)
+	pl.finished.connect(pl.queue_free)
+	pl.play()
+
+
+## Hold on the moment for a beat — long enough to register what reached you —
+## then black, then the title. The fade runs slower than a floor change: a lift
+## is a transition, this is an ending.
+func _die_to_title() -> void:
+	_switching = true
+	player.set_process_unhandled_input(false)
+	player.velocity = Vector3.ZERO
+	player.set_flashlight(false)
+	_figures.suspended = true
+	_whispers.suspended = true
+	_heart.suspended = true
+	if is_instance_valid(_return_prompt):
+		_return_prompt.queue_free()
+		_return_prompt = null
+	var tw := create_tween()
+	tw.tween_property(_fade, "color:a", 1.0, 1.5).set_delay(0.45)
+	await tw.finished
+	_figures.despawn()
+	_whispers.stop()
+	_heart.reset()
+	_saved_pos.clear()
+	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
+	await _jump_to(0, spawn, false)
+	_saved_pos.clear()
+	_switching = false
+	_dying = false
+	_set_mode_hint()
+	_build_title()
+
+
+func _on_descent_attention(_value: float) -> void:
+	if not descent:
+		return
+	var threat := run.threat() if run != null else 0.0
+	if _post != null and _post.material is ShaderMaterial:
+		(_post.material as ShaderMaterial).set_shader_parameter(
+			"noise_amount", 1.0 + threat * 1.6)
+	if _figures != null:
+		_figures.interval_scale = lerpf(1.0, 0.35, threat)
+	if threat >= 0.85 and run != null and not run.suspended \
+			and not is_instance_valid(_pursuer):
+		_spawn_descent_pursuer()
+
+
+func _spawn_descent_pursuer() -> void:
+	if not descent or run == null or run.ended or run.suspended:
+		return
+	var ws := _level_seed(active_level)
+	var origin := Vector2i(floori(player.global_position.x / 12.0),
+		floori(player.global_position.z / 12.0))
+	var queue: Array[Vector2i] = [origin]
+	var dist := {}
+	dist[origin] = 0
+	var candidates: Array[Vector2i] = []
+	var head := 0
+	while head < queue.size():
+		var at := queue[head]
+		head += 1
+		var d := int(dist[at])
+		if d >= 4:
+			candidates.append(at)
+			continue
+		for dir in 4:
+			if WorldGen.edge_info(ws, at, dir, active_level)["wall"]:
+				continue
+			var nb: Vector2i = at + WorldGen.DIRV[dir]
+			if dist.has(nb):
+				continue
+			dist[nb] = d + 1
+			queue.append(nb)
+	if candidates.is_empty():
+		return
+	candidates.sort_custom(func(a: Vector2i, b: Vector2i):
+		return WorldGen.h(ws, a.x, a.y, 2601) \
+			< WorldGen.h(ws, b.x, b.y, 2601))
+	var chosen := candidates[0]
+	for candidate in candidates:
+		var point := Vector3(float(candidate.x) * 12.0 + 6.0, 1.4,
+			float(candidate.y) * 12.0 + 6.0)
+		if not player.cam.is_position_in_frustum(point):
+			chosen = candidate
+			break
+	_pursuer = DescentPursuer.new()
+	_pursuer.player = player
+	_pursuer.world_seed = ws
+	_pursuer.theme = active_level
+	_pursuer.speed = lerpf(3.0, 3.75, run.floor_progress())
+	_pursuer.position = Vector3(float(chosen.x) * 12.0 + 6.0, 0.0,
+		float(chosen.y) * 12.0 + 6.0)
+	_pursuer.caught.connect(_on_pursuer_caught)
+	level_root.add_child(_pursuer)
+
+
+func _on_pursuer_caught() -> void:
+	if descent and run != null and not run.ended:
+		run.finish(false)
+
+
+func _on_descent_violation(kind: int) -> void:
+	if not descent or player == null:
+		return
+	var message := "RULE BROKEN"
+	match kind:
+		DescentRun.Rule.STARE:
+			message = "RULE BROKEN — LOOK AWAY"
+		DescentRun.Rule.STOP:
+			message = "RULE BROKEN — KEEP MOVING"
+		DescentRun.Rule.BACKTRACK:
+			message = "RULE BROKEN — DO NOT GO BACK"
+		DescentRun.Rule.BLACKOUT_MOVE:
+			message = "RULE BROKEN — STAND STILL"
+	_show_event_message(message, true)
+	var groan := AudioStreamPlayer3D.new()
+	groan.stream = SoundBank.creak()
+	groan.volume_db = -11.0
+	groan.max_distance = 28.0
+	groan.unit_size = 8.0
+	add_child(groan)
+	groan.global_position = player.global_position + Vector3(0, 1.0, 0)
+	groan.finished.connect(groan.queue_free)
+	groan.play()
+	if _post != null and _post.material is ShaderMaterial:
+		var mat := _post.material as ShaderMaterial
+		var base := 1.0 + run.threat() * 1.6
+		mat.set_shader_parameter("noise_amount", minf(3.0, base + 0.7))
+		var tw := create_tween()
+		tw.tween_method(_set_post_noise,
+			minf(3.0, base + 0.7), base, 0.32)
+
+
+func _set_post_noise(value: float) -> void:
+	if _post != null and _post.material is ShaderMaterial:
+		(_post.material as ShaderMaterial).set_shader_parameter(
+			"noise_amount", value)
+
+
+func _on_descent_blackout(on: bool) -> void:
+	if not descent or cm == null:
+		return
+	cm.set_blackout(on)
+	if on:
+		if _blackout_ambient < 0.0:
+			_blackout_ambient = we.environment.ambient_light_energy
+		we.environment.ambient_light_energy = 0.003
+		_play_descent_cue(SoundBank.thud(), -7.0)
+		_show_event_message("BLACKOUT — STAND STILL", true)
+	else:
+		if _blackout_ambient >= 0.0:
+			we.environment.ambient_light_energy = _blackout_ambient
+			_blackout_ambient = -1.0
+		_play_descent_cue(SoundBank.ding(), -10.0)
+		_show_event_message("POWER RESTORED — KEEP MOVING")
+
+
+func _play_descent_cue(stream: AudioStream, volume: float) -> void:
+	var cue := AudioStreamPlayer.new()
+	cue.stream = stream
+	cue.volume_db = volume
+	add_child(cue)
+	cue.finished.connect(cue.queue_free)
+	cue.play()
+
+
+func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
+	if not descent or cm == null or descent_route == null \
+			or at == descent_route.target:
+		return
+	cm.set_anomaly(at, kind)
+
+
+func _on_descent_ended(won: bool) -> void:
+	_figures.suspended = true
+	_whispers.suspended = true
+	_heart.suspended = true
+	if is_instance_valid(_descent_hud):
+		_descent_hud.set_active(false)
+	if is_instance_valid(_pursuer):
+		_pursuer.queue_free()
+	_pursuer = null
+	player.set_process_unhandled_input(false)
+	player.velocity = Vector3.ZERO
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_show_descent_summary(won)
+
+
+func _show_descent_summary(won: bool) -> void:
+	if is_instance_valid(_descent_summary):
+		return
+	_descent_summary = DescentSummary.new()
+	_descent_summary.won = won
+	_descent_summary.floor_idx = run.floor_idx
+	_descent_summary.elapsed = run.elapsed
+	_descent_summary.violations = run.violations
+	_descent_summary.world_seed = world_seed
+	_descent_summary.retry.connect(_restart_descent)
+	_descent_summary.leave.connect(_leave_descent)
+	add_child(_descent_summary)
+
+
+func _restart_descent() -> void:
+	if _switching:
+		return
+	if is_instance_valid(_descent_summary):
+		_descent_summary.queue_free()
+	_descent_summary = null
+	if run != null and run.blackout:
+		_on_descent_blackout(false)
+	if is_instance_valid(run):
+		run.queue_free()
+	run = DescentRun.new()
+	_connect_descent_run()
+	run.prepare_floor()
+	add_child(run)
+	run.player = player
+	descent_route = DescentRoute.build(_level_seed(run.theme()), run.theme())
+	print("Descent floor 1 target %s wall %d, %d edges" % [
+		descent_route.target, descent_route.target_wall,
+		descent_route.graph_distance])
+	var spawn := _safe_arrival(run.theme(), Vector2i.ZERO, DEFAULT_SPAWN)
+	await _jump_to(run.theme(), spawn, false)
+	player.grab_look()
+	player.set_process_unhandled_input(true)
+	_begin_descent_floor()
+
+
+func _leave_descent() -> void:
+	if _switching:
+		return
+	if is_instance_valid(_descent_summary):
+		_descent_summary.queue_free()
+	_descent_summary = null
+	if run != null and run.blackout:
+		_on_descent_blackout(false)
+	if is_instance_valid(run):
+		run.queue_free()
+	run = null
+	descent = false
+	descent_route = null
+	if is_instance_valid(_descent_hud):
+		_descent_hud.queue_free()
+	_descent_hud = null
+	_saved_pos.clear()
+	player.allow_sprint = true
+	_events.descent_mode = false
+	_figures.suspended = true
+	_whispers.suspended = true
+	_heart.suspended = true
+	_figures.interval_scale = 1.0
+	_set_mode_hint()
+	_set_post_noise(1.0)
+	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
+	await _jump_to(0, spawn, false)
+	_saved_pos.clear()
+	_build_title()
 
 
 func terminal_activity(page: int) -> void:
@@ -276,7 +771,8 @@ func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
 
 func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
 	_switching = true
-	_saved_pos[active_level] = player.position
+	if not descent:
+		_saved_pos[active_level] = player.position
 	if via_portal:
 		_warp.play()
 	else:
@@ -290,9 +786,14 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
 	# otherwise-safe candidate appear blocked (seen returning to the school at
 	# seed 1760336105, cell -1,0).
 	var old_level := level_root
+	if is_instance_valid(_pursuer):
+		_pursuer.queue_free()
+	_pursuer = null
 	remove_child(old_level)
 	old_level.queue_free()
 	_figures.despawn()
+	_whispers.stop()
+	_heart.reset()
 	_switch_music(level)
 	active_level = level
 	# Let the physics server unregister every outgoing collider before any
@@ -316,6 +817,7 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
 	await get_tree().process_frame
 	var tw2 := create_tween()
 	tw2.tween_property(_fade, "color:a", 0.0, 0.45 if via_portal else 0.5)
+	await tw2.finished
 	_switching = false
 
 
@@ -414,8 +916,14 @@ func _audit_partitions() -> void:
 
 
 ## Crossfade the floor's mood track in; unknown floors fade to silence.
+func _music_track_for(level: int) -> String:
+	if descent and run != null and run.floor_idx >= DescentRun.ORDER.size() - 2:
+		return DESCENT_LATE_TRACK
+	return MUSIC_TRACKS.get(level, "")
+
+
 func _switch_music(level: int) -> void:
-	var target: String = MUSIC_TRACKS.get(level, "")
+	var target := _music_track_for(level)
 	var tw := create_tween()
 	tw.tween_property(_music, "volume_db", -50.0, 0.6)
 	tw.tween_callback(func():
@@ -430,15 +938,16 @@ func _switch_music(level: int) -> void:
 		tw.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
 
 
-## With the CRT on, genuine 240-line source footage: the 3D world renders at
-## 240p and gets bilinearly stretched onto the tube, and the CRT pass then lays
-## its 240 scanlines over the top 1:1. With the CRT off there is no tube to
-## match, so the world renders at full native resolution instead.
+## With the CRT on, render a 480-line widescreen source. At a 16:9 viewport the
+## uniform 3D scale produces roughly 853x480 before the CRT pass resamples it
+## onto a 720x480 anamorphic signal grid — the way a widescreen 480i source uses
+## non-square pixels. The shader alternates its two 240-line fields. With the
+## tube off the world returns to full native resolution.
 func _apply_scaling() -> void:
 	var vp := get_viewport()
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	if _crt:
-		vp.scaling_3d_scale = clampf(240.0 / float(vp.size.y), 0.05, 1.0)
+		vp.scaling_3d_scale = clampf(480.0 / float(vp.size.y), 0.05, 1.0)
 	else:
 		vp.scaling_3d_scale = 1.0
 	_apply_hud_scaling()
@@ -483,6 +992,8 @@ func _apply_hud_scaling() -> void:
 ## Shared "Hall" bus: every spatial emitter routes through a soft reverb so
 ## sounds feel like they happen inside the building.
 func _setup_audio_bus() -> void:
+	if AudioServer.get_bus_index("Hall") >= 0:
+		return
 	var idx := AudioServer.bus_count
 	AudioServer.add_bus(idx)
 	AudioServer.set_bus_name(idx, "Hall")
@@ -511,6 +1022,49 @@ func _build_env(theme: int) -> Environment:
 	env.sdfgi_min_cell_size = 0.15
 	env.sdfgi_bounce_feedback = 0.4
 
+	if theme == 7:
+		# A 1980s mall after closing. The sodium warmth belongs to the
+		# maintenance FIXTURES, not the air: ambient and fog stay near-neutral
+		# so white plaster reads white and the lamps read orange against it —
+		# a fully saturated ambient painted every surface the same rust.
+		env.background_color = Color(0.010, 0.010, 0.011)
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.62, 0.59, 0.54)
+		env.ambient_light_energy = 0.30
+		env.tonemap_exposure = 1.24
+		env.sdfgi_energy = 1.22
+		env.glow_enabled = true
+		env.glow_intensity = 0.44
+		env.glow_bloom = 0.035
+		env.fog_light_color = Color(0.105, 0.095, 0.080)
+		env.fog_density = 0.0035
+		env.volumetric_fog_density = 0.0015
+		env.volumetric_fog_albedo = Color(0.72, 0.66, 0.55)
+		env.volumetric_fog_length = 54.0
+		env.ssao_radius = 1.45
+		env.ssao_intensity = 1.35
+		return env
+	if theme == 8:
+		# Cold salt-eaten concrete and green institutional lamps. Dark at the
+		# ends of blocks, but readable without forcing the flashlight on.
+		env.background_color = Color(0.004, 0.006, 0.005)
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.50, 0.58, 0.51)
+		env.ambient_light_energy = 0.37
+		env.tonemap_exposure = 1.38
+		env.sdfgi_energy = 1.16
+		env.glow_enabled = true
+		env.glow_intensity = 0.36
+		env.glow_bloom = 0.025
+		env.fog_light_color = Color(0.055, 0.070, 0.060)
+		env.fog_density = 0.0045
+		env.volumetric_fog_density = 0.0018
+		env.volumetric_fog_albedo = Color(0.52, 0.62, 0.54)
+		env.volumetric_fog_length = 50.0
+		env.ssao_radius = 1.65
+		env.ssao_intensity = 1.65
+		return env
+
 	if theme == 6:
 		# after hours: the strips are still on, cold and even, and the polished
 		# floor throws them back. Bright enough to see all the way down, which
@@ -525,8 +1079,8 @@ func _build_env(theme: int) -> Environment:
 		env.glow_intensity = 0.42
 		env.glow_bloom = 0.03
 		env.fog_light_color = Color(0.12, 0.13, 0.14)
-		env.fog_density = 0.016
-		env.volumetric_fog_density = 0.007
+		env.fog_density = 0.006
+		env.volumetric_fog_density = 0.0025
 		env.volumetric_fog_albedo = Color(0.80, 0.82, 0.86)
 		env.volumetric_fog_length = 48.0
 		env.ssao_radius = 1.4
@@ -544,8 +1098,8 @@ func _build_env(theme: int) -> Environment:
 		env.glow_intensity = 0.5
 		env.glow_bloom = 0.04
 		env.fog_light_color = Color(0.05, 0.065, 0.045)
-		env.fog_density = 0.03
-		env.volumetric_fog_density = 0.014
+		env.fog_density = 0.011
+		env.volumetric_fog_density = 0.005
 		env.volumetric_fog_albedo = Color(0.62, 0.72, 0.55)
 		env.volumetric_fog_length = 44.0
 		env.ssao_radius = 1.6
@@ -563,8 +1117,8 @@ func _build_env(theme: int) -> Environment:
 		env.glow_intensity = 0.4
 		env.glow_bloom = 0.03
 		env.fog_light_color = Color(0.10, 0.12, 0.16)
-		env.fog_density = 0.015
-		env.volumetric_fog_density = 0.005
+		env.fog_density = 0.005
+		env.volumetric_fog_density = 0.002
 		env.volumetric_fog_albedo = Color(0.75, 0.82, 0.95)
 		env.volumetric_fog_length = 56.0
 		env.ssao_radius = 1.3
@@ -582,8 +1136,8 @@ func _build_env(theme: int) -> Environment:
 		env.glow_intensity = 0.45
 		env.glow_bloom = 0.04
 		env.fog_light_color = Color(0.04, 0.07, 0.05)
-		env.fog_density = 0.019
-		env.volumetric_fog_density = 0.011
+		env.fog_density = 0.0045
+		env.volumetric_fog_density = 0.0022
 		env.volumetric_fog_albedo = Color(0.5, 0.68, 0.55)
 		env.volumetric_fog_length = 40.0
 		env.ssao_radius = 1.6
@@ -600,8 +1154,8 @@ func _build_env(theme: int) -> Environment:
 		env.glow_intensity = 0.3
 		env.glow_bloom = 0.02
 		env.fog_light_color = Color(0.72, 0.76, 0.72)
-		env.fog_density = 0.009
-		env.volumetric_fog_density = 0.003
+		env.fog_density = 0.003
+		env.volumetric_fog_density = 0.0012
 		env.volumetric_fog_albedo = Color(0.9, 0.95, 0.9)
 		env.volumetric_fog_length = 48.0
 		env.ssao_radius = 1.2
@@ -618,8 +1172,8 @@ func _build_env(theme: int) -> Environment:
 		env.glow_intensity = 0.55
 		env.glow_bloom = 0.05
 		env.fog_light_color = Color(0.23, 0.15, 0.11)
-		env.fog_density = 0.026
-		env.volumetric_fog_density = 0.011
+		env.fog_density = 0.009
+		env.volumetric_fog_density = 0.004
 		env.volumetric_fog_albedo = Color(0.9, 0.78, 0.62)
 		env.volumetric_fog_length = 48.0
 		env.ssao_radius = 1.5
@@ -647,7 +1201,7 @@ func _build_ui() -> void:
 	cl.layer = 2
 	var lb := Label.new()
 	_hint = lb
-	lb.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   1-6 switch floors   ·   portals jump worlds   ·   V toggles CRT   ·   Esc release mouse"
+	_set_mode_hint()
 	lb.position = Vector2(18, 14)
 	lb.add_theme_font_size_override("font_size", 15)
 	lb.add_theme_color_override("font_color", Color(1.0, 0.9, 0.8, 0.9))
@@ -718,9 +1272,15 @@ func _on_interaction_prompt(text: String) -> void:
 		_interact_panel.visible = not text.is_empty()
 
 
-func _show_event_message(text: String) -> void:
+func _show_event_message(text: String, alert := false) -> void:
 	if _event_hint == null or _event_panel == null:
 		return
+	_event_style.bg_color = Color(0.035, 0.012, 0.008, 0.84) if alert \
+		else Color(0.018, 0.017, 0.015, 0.76)
+	_event_style.border_color = Color(0.96, 0.37, 0.18, 0.72) if alert \
+		else Color(0.65, 0.62, 0.54, 0.30)
+	_event_hint.add_theme_color_override("font_color",
+		Color(1.0, 0.72, 0.43) if alert else Color(0.96, 0.93, 0.84))
 	_event_hint.text = text
 	if _event_tween != null and _event_tween.is_valid():
 		_event_tween.kill()
@@ -755,18 +1315,73 @@ func _build_title() -> void:
 		if arg.begins_with("--screenshot=") or arg == "--nologo":
 			_start_hint_fade()
 			return
+	if _hint != null:
+		_hint.modulate.a = 1.0
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.set_process_unhandled_input(false)  # no looking around yet either
 	_title = TitleScreen.new()
+	_title.mode_selected.connect(_on_mode_selected)
 	_title.started.connect(_on_start)
 	add_child(_title)
+	if descent:
+		_title.present_descent(true)
 
 
-func _on_start() -> void:
+func _on_mode_selected(wants_descent: bool) -> void:
+	if wants_descent:
+		call_deferred("_prepare_descent")
+
+
+func _prepare_descent() -> void:
+	if descent or _descent_preparing:
+		if descent and is_instance_valid(_title):
+			_title.set_descent_ready()
+		return
+	_descent_preparing = true
+	descent = true
+	player.allow_sprint = false
+	player.set_process_unhandled_input(false)
+	_saved_pos.clear()
+	run = DescentRun.new()
+	_connect_descent_run()
+	run.prepare_floor()
+	add_child(run)
+	descent_route = DescentRoute.build(_level_seed(run.theme()), run.theme())
+	print("Descent floor 1 target %s wall %d, %d edges" % [
+		descent_route.target, descent_route.target_wall,
+		descent_route.graph_distance])
+	_events.descent_mode = true
+	_figures.suspended = true
+	_whispers.suspended = true
+	_heart.suspended = true
+	_set_mode_hint()
+	var spawn := _safe_arrival(run.theme(), Vector2i.ZERO, DEFAULT_SPAWN)
+	await _jump_to(run.theme(), spawn, false)
+	_descent_preparing = false
+	if is_instance_valid(_title):
+		_title.set_descent_ready()
+
+
+func _on_start(selected_descent: bool) -> void:
 	_title = null
 	player.grab_look()
 	player.set_process_unhandled_input(true)
+	if selected_descent:
+		_begin_descent_floor()
+	else:
+		_figures.suspended = false
+		_whispers.suspended = false
+		_heart.suspended = false
 	_start_hint_fade()
+
+
+func _set_mode_hint() -> void:
+	if _hint == null:
+		return
+	if descent:
+		_hint.text = "WASD / arrows move   ·   E interact   ·   F flashlight   ·   follow the HUD needle   ·   Q title   ·   Esc release mouse"
+	else:
+		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-8 floors   ·   V CRT   ·   Q title   ·   Esc release mouse"
 
 
 ## Dev helper: `godot --path . -- --screenshot=/tmp/shot.png` renders a couple

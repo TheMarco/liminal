@@ -27,19 +27,14 @@ func _run() -> void:
 	for theme in WorldGen.THEMES:
 		_profile_theme(theme, "first", true)
 		_profile_theme(theme, "steady", false)
+	Chunk.finish_prop_preloads()
+	await process_frame
 	print("PROFILE COMPLETE")
 	quit()
 
 
 func _theme_seed(theme: int) -> int:
-	if theme == 0:
-		return SEED
-	var salt := 348039917
-	if theme == 2: salt = 715827883
-	elif theme == 4: salt = 536870923
-	elif theme == 5: salt = 998244353
-	elif theme == 6: salt = 179424673
-	return ((SEED ^ salt) & 0x7FFFFFFF) | 1
+	return WorldGen.level_seed(SEED, theme)
 
 
 func _profile_theme(theme: int, pass_name: String, sample_landmark: bool) -> void:

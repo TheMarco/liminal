@@ -1,741 +1,1111 @@
-# Descent — implementation plan
+# Descent — revised implementation plan
 
-A second play mode for Liminal. The existing endless-wander experience stays
-exactly as it is and remains the default; **Descent** is a separate mode,
-selected at the title screen, that gives the world a goal, a rule set, and an
-ending.
+Descent is a second play mode for Liminal. The existing endless-wander
+experience remains the default and keeps its current portals, usable elevators,
+floor keys, saved positions, figures, lighting, CRT controls and generation.
+Descent reuses the same worlds but gives them a route, four rules, escalating
+consequences and an ending.
 
-This document is written to be implementable by someone who has not read the
-codebase. Every hook into existing files is named with its file and function.
-Read [Codebase rules](#codebase-rules-read-before-touching-anything) before
-writing any code — several of them have cost real debugging time already.
+This revision is based on the current codebase. In particular:
+
+- the project is a Git repository with procedural audits in CI;
+- Wander already has deterministic, usable elevator facades;
+- `main.gd` builds the first world before `TitleScreen` currently appears;
+- interaction geometry is built by `Chunk._build_interactions()`;
+- portals, arrivals and doorway clearance already have automated audits.
+
+Do not implement the older version of this plan from memory. The routing,
+startup, elevator and anomaly designs below deliberately replace it.
 
 ---
 
 ## 1. The design
 
-**Core loop.** You start on floor 1 and descend. The only way down is a real
-elevator, placed rarely in the world hash and found by following painted
-arrows on the floor. Six floors down there is a way out.
+### Core loop
 
-**The rules.** At the title you are given a card. Four rules:
+Start in the casino and descend through eight floors. Each floor has exactly one
+objective lift or exit, chosen deterministically from the seed. A restrained
+HUD needle points toward the next real open doorway in the generated topology.
+Call and enter the lift to move down one floor. The bottom of the sewers
+contains a unique way out.
 
-> - do not look at them
+Descent order is not the Wander key order:
+
+| Descent floor | Theme id | Name |
+|---|---:|---|
+| 1 | 0 | the casino |
+| 2 | 7 | the mall |
+| 3 | 1 | the office |
+| 4 | 4 | the airport |
+| 5 | 6 | the school |
+| 6 | 8 | the prison |
+| 7 | 5 | the asylum |
+| 8 | 2 | the sewers |
+
+The sequence reads as a physical and psychological descent:
+
+> garish → deserted consumer space → sterile → vast and cold → institutional
+> → confined → wrong → underneath
+
+It also reserves the two themes that admit the least-human figure variants
+(`ShadowFigures.UNDERNEATH_THEMES == [2, 5]`) for the final two floors.
+
+### The four rules
+
+The title presents one card:
+
+> - do not stare at them
 > - do not stop walking
 > - do not go back
 > - if the lights fail, stand still
 
-Breaking a rule never kills you directly. It raises the building's
-**attention**. Attention is never shown as a number or a meter — it shows only
-as the world getting worse: more figures, more CRT snow, more blackouts, and
-finally a figure that does not vanish and does not stop following.
+“Do not stare” is intentional wording. Figures may appear inside the field of
+view, and merely noticing one must not be a violation. The violation occurs
+only when the player centres it long enough to dissolve it.
 
-**Why these rules.** Rule 1 converts the project's best existing asset into a
-mechanic. Today, staring a shadow figure away is pure relief — it costs
-nothing. Under Descent it is still the only way to make one go away, but it
-costs you. Rule 2 sets the pace: you can never stand and admire a room. Rules 2
-and 4 are deliberate opposites, and the lights tell you which one is live.
+Rules two and four are deliberate opposites. Normal power means movement is
+required. A blackout reverses the rule. Short grace periods make both states
+fair rather than twitch tests.
 
-**Anomalies are the enforcement of rule 3, not a separate system.** When you
-re-enter a cell you have already left, that chunk rebuilds *wrong* — the lights
-in it are dead, or something is standing in it. Backtracking is punished by the
-building lying to you. This is the whole of the "anomaly" feature; do not build
-a separate spot-the-difference mode.
+### Attention
 
-**Floor order.** Descent does **not** use the sandbox's `1`–`6` order. It uses:
+Breaking a rule raises the building's attention. Attention is never shown as a
+meter or number. It is expressed through:
 
-| Floor | Theme id | Name |
-|---|---|---|
-| 1 | 0 | the casino |
-| 2 | 1 | the office |
-| 3 | 4 | the airport |
-| 4 | 6 | the school |
-| 5 | 5 | the asylum |
-| 6 | 2 | the sewers |
+- a consistent, subtle “the building noticed” response after each violation;
+- increasingly frequent figures;
+- stronger CRT instability;
+- increasingly frequent blackouts;
+- at high attention, one persistent pursuer.
 
-Rationale: it reads as an actual descent — garish → sterile → vast and cold →
-institutional → wrong → underneath. It also puts the two floors that can spawn
-the non-human figures (`ShadowFigures.UNDERNEATH_THEMES == [2, 5]`) at the
-bottom two, so the worst things are deepest. The way out is at the bottom of
-the sewers.
+Attention recovers slowly while the player obeys. A run can recover from a few
+mistakes, but not immediately.
 
----
+### Backtracking and anomalies
 
-## 2. Hard constraint: the sandbox does not change
+Anomalies are the enforcement of “do not go back,” not a separate
+spot-the-difference mode.
 
-The wander mode must be byte-for-byte the experience it is today. Every
-behaviour below is gated on the mode being Descent. Concretely:
+When the player safely leaves a cell, that cell becomes eligible to change
+behind them. If they return, its lights may be dead or a motionless figure may
+be waiting. The mutation is activated after departure, never by rebuilding the
+floor underneath the player.
 
-- `Chunk` must build **no** elevator, **no** floor arrows and **no** anomalies
-  unless the mode is Descent.
-- `WorldGen.portal()` must return exactly what it returns today in wander mode.
-- `ShadowFigures` cadence, `Environment` values, CRT `noise_amount` and music
-  must be untouched in wander mode.
-- The title screen's `SPACE` must still start the wander mode, unchanged.
+Do not close generated doorways as an anomaly. Presentation mutations carry
+the idea without risking world connectivity.
 
-The mechanism is a single static flag, set once at startup, checked in the two
-static/stateless places that need it:
+### Target length
 
-```gdscript
-# world_gen.gd, near the top
-static var descent := false
-```
-
-`Chunk` and `WorldGen` are static/stateless by design and are constructed by
-`ChunkManager` without a reference to `main`, so a static flag is the correct
-tool here. It matches the existing precedent (`ChunkManager._dev_timing`).
-
-Set it in `main._ready()` before the first `_build_level()` call, and never
-again.
+A successful first run should take roughly 20–30 minutes. The objective route
+on each floor should normally be 7–12 graph edges from the arrival cell. The
+route is controlled; the surrounding world remains endless.
 
 ---
 
-## 3. File map
+## 2. Non-negotiable Wander regression contract
+
+Wander remains the default. Starting with `SPACE` must preserve the current
+experience:
+
+- existing interactive elevators remain present and cycle through
+  `WorldGen.THEMES`;
+- portals remain exactly as generated by `WorldGen.portal()`;
+- keys `1`–`8` switch floors and restore saved positions;
+- `V` toggles the CRT;
+- `F` toggles the handheld flashlight;
+- `Q` opens a Y/N return-to-title confirmation;
+- sprint remains available;
+- figure cadence and behaviour at default values remain unchanged;
+- no Descent HUD needle, objective lift cars, rule feedback, attention,
+  blackouts, pursuer, anomalies or sewer exit appear.
+
+“Unchanged” means observable runtime behaviour and deterministic generation,
+not identical source bytes. Existing Wander audits must continue to pass
+without a Descent flag.
+
+Do not add a process-global `WorldGen.descent` static flag. It would make a
+Wander regression depend on hidden mutable state and would leak between
+headless tests or restarts in the same process.
+
+Instead:
+
+- `main` owns `descent: bool` and `run: DescentRun`;
+- `ChunkManager` receives explicit Descent configuration;
+- `Chunk` receives explicit objective/anomaly data at construction;
+- `WorldGen.portal()` is not changed;
+- `Chunk._build_props()` simply does not build a portal when that chunk is in
+  Descent;
+- Wander elevator generation remains in `WorldGen.elevator_cell()`;
+- Descent objective selection lives in `DescentRoute`.
+
+---
+
+## 3. Architecture and file map
 
 ### New files
 
 | File | Class | Responsibility |
 |---|---|---|
-| `scripts/run.gd` | `Run extends Node` | The whole mode: floor progression, the four rules, attention, blackouts, run summary state. Added under `main` **only** in Descent. |
-| `scripts/elevator.gd` | `Elevator extends Node3D` | The set piece's behaviour: door animation, approach/commit areas, chime. Geometry is built by `chunk.gd` and handed to it. |
+| `scripts/descent_run.gd` | `DescentRun extends Node` | Floor order, rules, attention, blackout schedule, violations, run state and summary data. |
+| `scripts/descent_route.gd` | `DescentRoute extends RefCounted` | BFS over real open edges, deterministic objective selection and next-hop guidance. |
+| `scripts/descent_hud.gd` | `DescentHUD extends CanvasLayer` | A single compass needle aimed at the next real doorway. |
+| `scripts/descent_pursuer.gd` | `DescentPursuer extends Node3D` | Topology-aware lethal pursuit at high threat. |
+| `scripts/descent_summary.gd` | `DescentSummary extends CanvasLayer` | Win/caught state, time, rule-break count and retry/leave input. |
 
 ### Modified files
 
-| File | Change | Size |
-|---|---|---|
-| `scripts/main.gd` | mode var, `--mode=descent`, construct `Run`, gate keys `1`–`6`, `_on_elevator` group callback, blackout apply, CRT noise, summary UI | ~120 lines |
-| `scripts/title.gd` | two start options + the rule card | ~60 lines |
-| `scripts/world_gen.gd` | `descent` flag, `elevator_cell()`, `elevator_wall()`, `nearest_elevator()`, portal suppression | ~70 lines |
-| `scripts/chunk.gd` | `_build_elevator()`, `_floor_arrow()`, anomaly mutations | ~350 lines |
-| `scripts/chunk_manager.gd` | anomalous-cell set, force-rebuild of a cell | ~25 lines |
-| `scripts/shadow_figures.gd` | `attention` input, `stared_away` signal, pursuer spawn | ~50 lines |
-| `scripts/shadow_figure.gd` | emit on gaze-kill, `pursuer` mode | ~40 lines |
+| File | Change |
+|---|---|
+| `scripts/main.gd` | Mode preparation, Descent manager, input gates, explicit level transitions, blackout application, attention presentation, run end/restart. |
+| `scripts/title.gd` | Wander/Descent selection and two-stage Descent rule card. |
+| `scripts/player.gd` | `allow_sprint`; disabled only in Descent. |
+| `scripts/chunk_manager.gd` | Explicit route, objective, blackout and anomaly state; `chunk_built` signal; safe mutation activation. |
+| `scripts/chunk.gd` | Build Descent car/exit and usable call button; anomaly activation and blackout fixture hook. |
+| `scripts/environment_events.gd` | Explicit mode gate: suppress misleading random power sags and “elevator elsewhere” events during Descent. |
+| `scripts/shadow_figures.gd` | Attention-scaled cadence, gaze signal forwarding, one pursuer and its cell route. |
+| `scripts/shadow_figure.gd` | `stared_away` signal, inert anomaly mode and pursuer mode. |
+| `.github/workflows/audits.yml` | Add route and Descent runtime audits. |
+
+### New audits
+
+| File | Responsibility |
+|---|---|
+| `tools/audit_descent_routes.gd` | Objective exists, graph route is open, target distance is bounded, every next hop is legal, final exit is reachable. |
+| `tools/audit_descent_runtime.gd` | Mode startup, floor order, input gates, violations, blackout restoration, lift commit and run completion. |
+
+Extend `tools/audit_interactions.gd` rather than replacing it. Its current
+Wander terminal/elevator/door assertions are part of the regression contract.
 
 ---
 
-## 4. Codebase rules (read before touching anything)
+## 4. Current codebase rules
 
-These are established facts about this project. Violating them produces bugs
-that are slow to diagnose.
-
-1. **There is no git in this repo.** Copy `scripts/`, `shaders/` and `scenes/`
-   somewhere safe before any large edit.
-2. **Theme ids are sparse.** `WorldGen.THEMES == [0, 1, 2, 4, 5, 6]`. Id 3 was a
-   theme park that was cut, and the ids were deliberately not renumbered so old
-   seeds still reproduce. Anything indexed *by theme id* must keep a dead slot
-   at 3 (see `Mats.PORTAL_COLS`). Anything that *iterates* themes must iterate
-   `WorldGen.THEMES`.
-3. **New `class_name` scripts are invisible to headless runs until imported.**
-   Run `godot --headless --path . --import` after adding `run.gd` and
-   `elevator.gd`.
-4. **`var x := cell + DIRV[d]` fails to infer** — `DIRV` is untyped. Annotate
-   `var x: Vector2i = cell + WorldGen.DIRV[d]`.
-5. **Thin meshes near an omni light must set `cast_shadow = OFF`.** The
-   per-cell shadowed omni smears thin geometry into long streaks across walls
-   and floors. This bit the escalator handrails and every light fixture. Door
-   panels, jambs, handrails and sign plates all qualify.
-6. **`CharacterBody3D` cannot step up.** The player has no step-up height. An
-   elevator threshold must be flush with the floor or ramped — a 5cm lip will
-   trap the player outside the car.
-7. **Never position anything from the `H`/`H2` constants** — use the chunk's
-   `ceil_h`, which is per-room. Two black-screen renders were lost to lights
-   ending up above low ceilings.
-8. **Props laid out by a room's anchor cell get shifted to the room centre.**
-   `Chunk._shift_props(off, n0, b0)` walks every child added to the chunk and to
-   `body` since the marks `n0`/`b0` and moves it. Wall-anchored set pieces must
-   avoid this — see §6.2.
-9. **Verify visuals by rendering, not by reading code.**
+1. **Use Git deliberately.** The repository exists and CI runs the procedural
+   audit suite. Preserve unrelated working-tree changes, commit by coherent
+   phase, and never rewrite user work.
+2. **Theme ids are sparse.** `WorldGen.THEMES == [0, 1, 2, 4, 5, 6, 7, 8]`. Anything
+   indexed by theme id retains the dead slot at 3. Anything iterating themes
+   iterates `WorldGen.THEMES`.
+3. **Import new `class_name` scripts before headless tests.**
+   ```sh
+   godot --headless --path . --editor --quit
+   ```
+4. **Annotate vector inference from untyped arrays.**
+   `var next: Vector2i = cell + WorldGen.DIRV[d]`.
+5. **Thin meshes near shadowed omni lights cast no shadow.** Door leaves,
+   jambs, arrows, handrails, call plates and sign plates qualify.
+6. **The player cannot step over a lift threshold.** The car floor must be
+   flush or gently ramped. A small lip is enough to trap the player.
+7. **Use `ceil_h`, never fixed height constants, for room fixtures.**
+8. **Anchor-cell furnishings are shifted.** Wall-bound lifts/exits must be
+   built outside the child range moved by `Chunk._shift_props()`.
+9. **Render visual changes.** Use `--nocrt` while judging geometry:
    ```sh
    godot --path . -- --seed=N --pos=x,z --yaw=deg --level=<THEME_ID> \
-         --nocrt --screenshot=/tmp/shot.png
+     --nocrt --screenshot=/tmp/shot.png
    ```
-   renders ~2.5s and saves a frame. `--level` takes a **theme id**, not a floor
-   number. Always pass `--nocrt` for visual checks — the 240p blur and snow
-   hide exactly what you are judging.
-10. **Camera yaw convention**: forward is `(-sin yaw, 0, -cos yaw)`. Yaw `-90°`
-    faces `+x`; yaw `0°` faces `-z`.
-11. **Judge walls and ceilings from ~4m.** `--pos=0,0` puts the camera under
-    half a metre from a wall.
-12. **`--quit-after N` counts frames, not seconds**, and headless runs
-    uncapped. Print `Time.get_ticks_msec()` to measure real cadence.
-13. **Screenshot instances share the user's mouse.** If the mouse moves during
-    a dev screenshot the camera is dragged. Retake before diagnosing framing.
-14. **Re-run `--audit`** (`godot --path . -- --audit`) after touching anything
-    to do with partitions or door widths. It must report `NOW: 0` for every
-    theme.
+10. **Camera forward convention:** `(-sin yaw, 0, -cos yaw)`.
+11. **Screenshot instances share the user's mouse.** Retake an unexpectedly
+    rotated view before diagnosing geometry.
+12. **`--quit-after` counts frames, not seconds.** Use wall-clock timestamps
+    for cadence tests.
+13. **Run all existing audits after generation, doorway, arrival or
+    interaction changes.** CI currently covers corridors, sewers, zones,
+    doorway clearance, interactions, arrivals and runtime level switching.
 
-### Useful existing API
+Useful APIs:
 
-- `WorldGen.r01(ws, a, b, salt) -> float` — deterministic 0..1. All world
-  randomness goes through this. `Chunk._r(salt)` is the per-cell shorthand.
-- `WorldGen.anchor_wall(ws, cell, salt) -> int` — first solid edge from a hashed
-  start, or `-1`. Directions: `0 = +x, 1 = -x, 2 = +z, 3 = -z`.
-- `WorldGen.corridor(ws, cell) -> int` — `0` none, `1` along x, `2` along z.
-- `WorldGen.room_id / room_size / room_centre / room_height / room_split`.
-- `Chunk._air_yaw_for(dir) -> float` — yaw that points a node's local `+z` at
-  the given edge (`0 → PI/2`, `1 → -PI/2`, `2 → 0`, `3 → PI`).
-- `Chunk._wp(o, local, yaw) -> Vector3` — rotate a local offset into chunk space.
-- `Chunk._collider_yaw_box(pos, size, yaw)` — collider for yawed geometry.
-- `Chunk._mbox / _mrbox / _mcyl / _msphere(parent, ...)` — build under a given
-  parent node (use these inside a yawed node).
-- `Chunk._box / _rbox / _cyl(...)` — build directly on the chunk, with collider.
-- `Mats.steel() / chrome() / charcoal() / metal_gray() / brass() / panel_on() /
-  panel_dead() / screen_glow() / caution_yellow() / rubber_black() / bulb()`.
-- `SoundBank.elev() / ding() / thud() / clang() / creak() / warp()`;
-  `SoundBank.randomized(wav, pitch, vol_db)`.
-- `shaders/post.gdshader` exposes `noise_amount : hint_range(0.0, 3.0) = 1.0`
-  and `bright_boost` (set to `1.4` in `main._build_ui`).
+- `WorldGen.r01(ws, a, b, salt)`
+- `WorldGen.edge_info(ws, cell, dir, theme)`
+- `WorldGen.anchor_wall(ws, cell, salt)`
+- `WorldGen.corridor(ws, cell)`
+- `WorldGen.room_id / room_size / room_centre / room_height / room_split`
+- `Chunk._air_yaw_for(dir)`
+- `Chunk._wp(o, local, yaw)`
+- `Chunk._collider_yaw_box(pos, size, yaw)`
+- `Chunk._mbox / _mrbox / _mcyl / _msphere`
+- `ArrivalSafety.find_safe(...)`
+- `SoundBank.elev() / ding() / thud() / clang() / creak() / warp()`
 
 ---
 
-## 5. Phase 1 — mode plumbing
+## 5. Phase 1 — mode selection and clean startup
 
-**Goal:** the mode exists and is selectable; no gameplay yet. Wander mode is
-provably unchanged.
+### Goal
 
-### 5.1 `scripts/run.gd` (skeleton)
+Select Descent from the real title screen, prepare it behind the rule card and
+start on a freshly built casino. Wander still starts immediately with `SPACE`
+and does not rebuild.
+
+### Why startup needs restructuring
+
+`main._ready()` currently builds the first world before `_build_title()`.
+Therefore a title selection cannot be treated as if it existed before the
+first `_build_level()` call.
+
+Keep the current prebuilt Wander casino as the title background. Descent
+selection explicitly replaces it while the black rule card hides the rebuild.
+
+### `title.gd`
+
+Add:
 
 ```gdscript
-class_name Run
+signal mode_selected(descent: bool)
+signal started(descent: bool)
+```
+
+Initial menu:
+
+```text
+SPACE    wander
+ENTER    descend
+```
+
+Behaviour:
+
+- `SPACE`: emit `mode_selected(false)`, then `started(false)` and fade away
+  exactly as the title does now.
+- `ENTER`: emit `mode_selected(true)`, replace the key list with the four-rule
+  card, and wait.
+- second `SPACE`: emit `started(true)` and fade the rule card away.
+- while on the rule card, swallow all other input.
+
+All labels must use `_style()` so `_relayout()` scales them.
+
+### `main.gd`
+
+Add:
+
+```gdscript
+var descent := false
+var run: DescentRun
+var descent_route: DescentRoute
+```
+
+Connect both title signals:
+
+```gdscript
+_title.mode_selected.connect(_on_mode_selected)
+_title.started.connect(_on_start)
+```
+
+`_on_mode_selected(true)`:
+
+1. set `descent = true`;
+2. disable player input and sprint;
+3. clear `_saved_pos`;
+4. construct `DescentRun`;
+5. prepare `DescentRun.ORDER[0]`;
+6. rebuild the casino at a safe origin arrival while the rule card is black;
+7. configure `ChunkManager` with that floor's `DescentRoute`;
+8. suppress Wander portals and Wander elevators through explicit manager/chunk
+   configuration;
+9. despawn any figures created while the title was open and suspend new
+   Descent figures until the run actually starts;
+10. put `EnvironmentEvents` in Descent mode.
+
+`_on_start(true)` releases the player only after preparation has completed.
+If preparation takes longer than the rule-card interaction, keep the card
+visible until it is ready.
+
+Descent transitions may reuse `_jump_to()`, but saved-position behaviour must
+be gated:
+
+```gdscript
+if not descent:
+	_saved_pos[active_level] = player.position
+```
+
+Descent never reads or writes `_saved_pos`; every new floor begins at its
+audited origin arrival.
+
+CLI support:
+
+- `--mode=descent` sets the mode before the first world build;
+- `--mode=descent --nologo` starts directly for audits;
+- `--attention=0.7` pins attention for visual/debug runs;
+- `--descent-floor=N` starts at human floor number `1..8` for testing only.
+
+### Input policy
+
+In Descent:
+
+- keys `1`–`8` do nothing;
+- portals are not built;
+- `V` does nothing and is omitted from the Descent controls;
+- the CRT remains on because it carries a primary attention consequence;
+- the existing `--nocrt` command-line flag remains a visual-debug override;
+- Shift sprint is disabled via `player.allow_sprint = false`;
+- `F` toggles the same narrow handheld flashlight used in Wander;
+- `Q` suspends rule detection and opens a Y/N return-to-title confirmation;
+- `E` remains available for selected doors and terminals, although terminals
+  are optional distractions rather than route requirements. The objective
+  lift call button also requires `E`.
+- the established per-floor music remains intact through floor six, then
+  `lim9.mp3` carries the final two floors as a mode-only escalation cue.
+
+Wander retains every current input.
+
+### Acceptance
+
+- `SPACE` starts Wander without a world rebuild.
+- Wander floor keys, CRT toggle, flashlight, sprint, portals and current lifts
+  work.
+- `ENTER` shows the rule card; second `SPACE` starts a fresh Descent casino.
+- Descent floor keys, CRT toggle and sprint are disabled.
+- both modes can cancel or confirm the Q return prompt without stray movement
+  or a false Descent stop-rule charge.
+- direct `--mode=descent --nologo` startup works.
+- no figure or rule timer runs behind the Descent rule card.
+- all existing audits pass before Phase 2 begins.
+
+---
+
+## 6. Phase 2 — deterministic route, objective lift and sewer exit
+
+This is the largest phase. Build it before any rule logic.
+
+### 6.1 `DescentRoute`
+
+`DescentRoute.build(ws, theme)` performs a bounded BFS from `Vector2i.ZERO`
+over actual traversable edges.
+
+An edge is traversable when:
+
+```gdscript
+not WorldGen.edge_info(ws, cell, dir, theme)["wall"]
+```
+
+The BFS stores:
+
+- graph distance from the origin;
+- parent toward the origin;
+- candidate objective cells;
+- after choosing a target, distance-to-target and next-hop maps.
+
+Candidate contract:
+
+- graph distance normally between 7 and 12 edges;
+- not the origin;
+- not a corridor;
+- single-cell room anchor;
+- unsplit;
+- at least one solid `anchor_wall`;
+- not a cell selected by the current Wander portal or elevator predicates;
+- style compatible with a wall alcove;
+- enough safe interior footprint for the set piece.
+
+Eligible starting styles:
+
+```gdscript
+const DESCENT_ELEV_STYLES := {
+	0: [WorldGen.STYLE_EMPTY, WorldGen.STYLE_LOUNGE,
+		WorldGen.STYLE_PILLARS, WorldGen.STYLE_GRAND],
+	1: [WorldGen.OFFICE_EMPTY, WorldGen.OFFICE_STORAGE,
+		WorldGen.OFFICE_BREAK, WorldGen.OFFICE_CUBICLES],
+	4: [WorldGen.AIR_HALL, WorldGen.AIR_CONCOURSE,
+		WorldGen.AIR_BAGGAGE],
+	6: [WorldGen.SCH_GYM, WorldGen.SCH_CAFETERIA,
+		WorldGen.SCH_LIBRARY, WorldGen.SCH_ADMIN],
+	5: [WorldGen.ASY_OFFICE, WorldGen.ASY_WARD,
+		WorldGen.ASY_DAYROOM],
+	2: [WorldGen.SEWER_DRY],
+}
+```
+
+Select one candidate deterministically by the lowest seed-derived rank, not the
+first iteration order. If none exists at distance 7–12, expand the BFS to
+radius 16 and accept the best eligible candidate at distance at least 4.
+
+If the style-filtered fallback is still empty, choose a non-corridor,
+single-cell, unsplit room with a solid wall and suppress that target room's
+ordinary furnishing before building the lift. This last fallback may expand
+the one-time BFS farther, but it must never silently produce a floor with no
+objective. The route audit must record which fallback tier was used for every
+tested seed.
+
+The sewer never relaxes its `SEWER_DRY` requirement. Expand its one-time search
+rather than placing the exit over a channel, pool or basin.
+
+The resulting object exposes:
+
+```gdscript
+var target: Vector2i
+var target_wall: int
+var graph_distance: int
+
+func next_from(cell: Vector2i) -> Vector2i
+func contains(cell: Vector2i) -> bool
+func path_from_origin() -> Array[Vector2i]
+```
+
+`next_from()` always returns an adjacent cell joined by a real open edge. Build
+the reverse distance map from the target so the HUD needle from nearby
+off-route cells also leads back to the objective instead of pointing through
+walls.
+
+Compute one route per floor from the same salted world seed used by its chunks:
+
+```gdscript
+var route := DescentRoute.build(_level_seed(theme), theme)
+```
+
+Do not compute it once per chunk. `main` gives the result to `ChunkManager`.
+
+### 6.2 Explicit chunk configuration
+
+Add configuration to `ChunkManager`:
+
+```gdscript
+var descent := false
+var descent_floor_idx := 0
+var descent_route: DescentRoute
+var blackout := false
+var anomalies := {}
+
+signal chunk_built(chunk: Chunk)
+```
+
+When `_build(c)` constructs a chunk, pass:
+
+- whether this is Descent;
+- whether `c == descent_route.target`;
+- the target wall;
+- whether this is the final floor;
+- anomaly kind, if any;
+- current blackout state.
+
+Do not change the signature or semantics of `WorldGen.portal()` or
+`WorldGen.elevator_cell()`.
+
+In a Descent chunk:
+
+- `_build_props()` skips `_build_portal()`;
+- `_build_interactions()` skips the existing Wander elevator predicate;
+- the one target cell builds the Descent lift or final exit;
+- the target cell suppresses ordinary room furnishing so the objective reads
+  clearly and cannot collide with an unexpected seeded prop layout.
+
+### 6.3 Reuse the current lift
+
+Refactor the geometry in `Chunk._interactive_elevator()` into a shared lift
+builder. Preserve its Wander result and interaction audit.
+
+The shared controller supports:
+
+```gdscript
+enum Mode { WANDER, DESCENT }
+```
+
+Wander mode:
+
+- keeps the current call plate, `E` prompt, door animation and next-theme
+  destination;
+- still calls the `"level_manager"` group;
+- remains deterministic under `WorldGen.elevator_cell()`.
+
+Descent mode:
+
+- receives the current floor index and `OUT` flag;
+- has no destination-selection button;
+- opens automatically on approach;
+- contains a physical car and commit area;
+- calls the `"descent_listener"` group after the player is safely inside.
+
+### 6.4 Descent lift geometry
+
+Use the existing facade dimensions as the visual starting point. Add a sealed
+alcove and car behind it:
+
+| Part | Requirement |
+|---|---|
+| Facade | Existing brushed-metal surround and split leaves, adapted rather than duplicated. |
+| Car floor | Flush with generated floor; no threshold lip. |
+| Car back/sides | Opaque from every angle; cannot reveal an empty world behind the doors. |
+| Ceiling | Uses `ceil_h` only for placement constraints. |
+| Handrail | Thin geometry, shadow casting off. |
+| Indicator | Descent floor number; `OUT` only on the final target. |
+| Car light | Warm, non-shadowed, visible at range when doors open. |
+| Call plate | Present as dressing; no required button in Descent. |
+
+Do not cut or remove the generated anchor wall. The Descent car protrudes into
+the target room: its back sits against the existing solid wall and its facade
+sits roughly 2m inward. The car, sides and facade form one opaque room-side
+island. Wander keeps its current shallow wall-mounted facade.
+
+The set piece remains a closed island against one solid wall. It must not reach
+perpendicular walls or real doorway approach zones.
+
+### 6.5 Lift behaviour
+
+Two `Area3D`s:
+
+- approach: opens the doors and chimes when the player enters;
+- car: commits when the player fully enters.
+
+Commit sequence:
+
+1. suspend rule detection;
+2. disable repeat triggers;
+3. close doors after the player is inside;
+4. wait for the leaves to seal;
+5. call `descent_listener._on_descent_lift()`;
+6. transition using the existing `_jump_to()` fade/audio/rebuild path;
+7. clear visited/anomaly state and apply an 8-second arrival grace;
+8. resume rule detection.
+
+Door bodies and their collision shapes move together. Never close a
+`StaticBody3D` through a player standing in the threshold.
+
+Main receives the commit explicitly:
+
+```gdscript
+func _on_descent_lift() -> void:
+	if not descent or run == null or run.ended or _switching:
+		return
+	if run.floor_idx >= DescentRun.ORDER.size() - 1:
+		return # the sewer uses the exit trigger, not the lift callback
+	run.floor_idx += 1
+	var theme := run.theme()
+	run.prepare_floor()
+	descent_route = DescentRoute.build(_level_seed(theme), theme)
+	_jump_to(theme, _safe_arrival(theme, Vector2i.ZERO, DEFAULT_SPAWN), false)
+```
+
+`run.prepare_floor()` clears per-floor visited/anomaly state and suspends rules
+until the arrival grace expires. `main._build_level()` gives
+`descent_route` to the new `ChunkManager` before `warm_up()`.
+
+### 6.6 HUD route needle
+
+Do not place route markings in the world. They flatten the level art and turn
+the building into a marked course.
+
+`DescentHUD` renders one small top-centre compass needle. In each cell it aims
+at the exact generated doorway selected by
+`descent_route.next_from(cell)`, including that doorway's seeded offset along
+the wall. In the target room it aims at the lift facade. It hides during the
+title, transitions, summary, and whenever the player is outside the audited
+reverse route map.
+
+### 6.7 Final sewer exit
+
+The sewer target is not another ordinary elevator ride.
+
+Reuse the facade language so the route remains readable, but opening it reveals
+an impossible overexposed service passage with moving air and exterior sound
+instead of a metal car. The passage:
+
+- is flat and physically walkable;
+- has an opaque closed shell so it never exposes ungenerated space;
+- uses a bright rectangular endpoint, fog and wind rather than literal outdoor
+  scenery;
+- ends in an `Area3D` that commits the successful run;
+- displays `OUT`.
+
+Like the lift car, the passage is a sealed room-side illusion backed by the
+existing solid anchor wall. It never cuts into a neighbouring chunk or exposes
+ungenerated space.
+
+This is the run's final remembered image. Do not finish immediately on pressing
+a call button.
+
+### 6.8 Route and interaction acceptance
+
+For at least 200 seeds × 6 themes:
+
+- exactly one Descent target is selected;
+- target is reachable from the origin;
+- normal graph distance is 7–12 or a documented fallback;
+- every `next_from()` hop is adjacent and open;
+- following next hops reaches the target without a loop;
+- target is not a corridor, split room, portal or Wander lift;
+- target wall exists;
+- every Descent arrival has the existing capsule/floor/escape guarantees.
+
+Visually inspect one closed and open lift per theme from about 5m away. Confirm
+car opacity, flush threshold, readable light, no wall clipping and no doorway
+obstruction. Inspect the sewer exit separately.
+
+Run `--chunktime`; routing must be computed once per floor, not 81 times per
+chunk.
+
+---
+
+## 7. Phase 3 — rules, feedback, attention and blackouts
+
+### 7.1 `DescentRun` state
+
+```gdscript
+class_name DescentRun
 extends Node
-## Descent mode. Six floors down and a way out at the bottom. Four rules.
-## Breaking one raises the building's attention; attention is never drawn on
-## screen, only felt — more figures, more snow, more blackouts, and eventually
-## something that does not vanish when you look at it.
 
 signal floor_reached(floor_idx: int)
+signal attention_changed(value: float)
+signal violation(kind: int)
+signal blackout_changed(on: bool)
 signal run_ended(won: bool)
 
-## Theme ids in descent order — NOT WorldGen.THEMES order.
-const ORDER: Array[int] = [0, 1, 4, 6, 5, 2]
-const NAMES := ["the casino", "the office", "the airport",
-	"the school", "the asylum", "the sewers"]
+const ORDER: Array[int] = [0, 7, 1, 4, 6, 8, 5, 2]
+const NAMES := [
+	"the casino", "the mall", "the office", "the airport",
+	"the school", "the prison", "the asylum", "the sewers",
+]
 
 var floor_idx := 0
-var attention := 0.0        # 0..1, never shown
-var broken := 0             # rule violations this run, for the summary
+var attention := 0.0
+var violations := 0
 var elapsed := 0.0
+var blackout := false
+var suspended := true
 var ended := false
+var visited := {}
+var departed := {}
+var charged_backtracks := {}
+var arrival_grace := 0.0
 
 func theme() -> int:
 	return ORDER[floor_idx]
 
 func is_last_floor() -> bool:
 	return floor_idx >= ORDER.size() - 1
+
+func prepare_floor() -> void:
+	visited.clear()
+	departed.clear()
+	charged_backtracks.clear()
+	blackout = false
+	arrival_grace = 8.0
+	suspended = true
 ```
 
-Fill in the rest across phases 3–5.
+Track horizontal movement and cells from the player's real position. Clear
+per-floor visited state on every descent.
 
-### 5.2 `main.gd`
+Suspend rules during:
 
-- Add `var run: Run` and `var descent := false`.
-- Parse `--mode=descent` in the `OS.get_cmdline_user_args()` loop in `_ready()`,
-  alongside the existing `--seed=` / `--pos=` / `--level=` handling.
-- After parsing, before the first `_build_level()`:
-  ```gdscript
-  WorldGen.descent = descent
-  if descent:
-      active_level = Run.ORDER[0]
-  ```
-- Construct `Run` next to the other managers (near where `_figures` is added)
-  **only** when `descent` is true. Add `main` to a new group:
-  ```gdscript
-  add_to_group("elevator_listener")
-  ```
-- Gate the floor keys in `_unhandled_input()`:
-  ```gdscript
-  var idx: int = event.physical_keycode - KEY_1
-  if idx >= 0 and idx < WorldGen.THEMES.size():
-      if not descent:                     # no free rides on the way down
-          _switch_level(WorldGen.THEMES[idx])
-  elif event.physical_keycode == KEY_V:
-      ...
-  ```
-  Keep `V` working in both modes.
-- Suppress the wander-mode hint strip (`_hint`) in Descent — the mode has no HUD.
+- title/rule card;
+- the first 8 seconds after each arrival;
+- lift commit and floor transition;
+- run summary;
+- any explicit scripted immobilisation.
 
-### 5.3 `title.gd`
+### 7.2 Rule detection
 
-`TitleScreen` currently swallows all input until `KEY_SPACE`, then emits
-`started`. Change to:
+| Rule | Detection | Initial tuning |
+|---|---|---:|
+| do not stare at them | `ShadowFigure.stared_away` after gaze dissolution | `+0.10` |
+| do not stop walking | speed `< 0.3` for 6s outside blackout | `+0.04`, then `+0.01/s`, max `+0.12` per stop episode |
+| do not go back | enter a previously departed cell, once per cell | `+0.06` |
+| lights failed, stand still | speed `> 0.3` after 0.75s blackout grace | `+0.06`, then `+0.02/s`, max `+0.20` per blackout |
 
-- `signal started(descent: bool)` — update the `main._on_start` connection to
-  take the argument.
-- Under the existing key list, two lines:
-  ```
-  SPACE    wander
-  ENTER    descend
-  ```
-- On `ENTER`, replace the key list with the rule card before starting — a beat
-  where the four rules are the only thing on screen, then `SPACE` to begin. The
-  rules must be read once; there is no in-game way to recall them.
-- Reuse `_style()` for every new label so `_relayout()` scales it. Labels not
-  registered through `_style()` will be the wrong size at anything other than
-  720p.
+Count one summary violation per stare, stop episode, re-entered cell or blackout
+movement episode—not once per physics frame.
 
-### 5.4 Acceptance
+Attention decay starts at `-0.0025/s` while obeying. One `+0.10` stare therefore
+takes about 40 seconds of clean play to undo. The previous `-0.01/s` proposal
+would recover a stare in 10 seconds, not 100.
 
-- `godot --path . --headless --quit-after 120` — clean, no errors.
-- Wander mode: title `SPACE`, keys `1`–`6` still switch floors, hint strip
-  still fades after 9s.
-- `godot --path . -- --mode=descent --nologo` starts on the casino; `1`–`6` do
-  nothing; `V` still toggles the tube.
-- `godot --path . -- --audit` still reports `NOW: 0` for all six themes.
+### 7.3 Violation feedback
+
+Every violation emits the same restrained audiovisual acknowledgment:
+
+- one low building groan or distant structural knock;
+- a brief CRT sync twitch;
+- a short amber caption naming the broken rule and corrective action.
+
+The player must never reach the summary and discover unexplained rule breaks.
+The caption exposes neither an attention meter nor a numeric penalty.
+
+### 7.4 Existing environmental events
+
+`EnvironmentEvents` currently creates local power sags and distant
+“an elevator arrives somewhere else” events. Both would lie about Descent's
+rules and route.
+
+Add an explicit Descent mode:
+
+- suppress random power sags;
+- suppress “elevator elsewhere” sounds/captions;
+- terminal queries do not trigger their existing power sag;
+- local selected-door and terminal response sounds may remain;
+- the neutral behind-the-wall knock may remain if it does not use a rule
+  caption.
+
+Only `DescentRun` may initiate a rule-bearing blackout. Wander retains every
+current environmental event.
+
+### 7.5 Attention consequences
+
+Keep values continuous, with meaningful thresholds:
+
+| Attention | Expression |
+|---:|---|
+| `0.00–0.25` | baseline Descent ambience; occasional figures |
+| `0.25–0.55` | shorter figure interval, slightly stronger CRT instability |
+| `0.55–0.85` | frequent figures and blackouts |
+| `0.85–1.00` | pursuer eligible |
+
+CRT:
+
+```gdscript
+noise_amount = 1.0 + attention * 1.6
+```
+
+Figures:
+
+```gdscript
+interval_scale = lerpf(1.0, 0.35, attention)
+```
+
+Keep `MAX_FIGS == 3` initially. More than three simultaneous figures is likely
+to become noisy or comic.
+
+At attention zero, `ShadowFigures` must retain its current Wander cadence when
+not in Descent.
+
+### 7.6 Blackouts
+
+Blackouts are unmistakable run events, not inferred from ambient light:
+
+- interval: roughly 90–150 seconds at attention zero, 25–40 at one;
+- duration: 5–8 seconds;
+- breaker thud at onset;
+- clear power-return sound at the end;
+- 0.75-second movement grace after onset;
+- rule two is suspended while blackout is active.
+
+Do not restore lights with `visible = true`.
+
+At blackout onset, snapshot every affected light's exact state:
+
+- instance reference or id;
+- original `visible`;
+- original energy if the implementation changes it;
+- any per-fixture emissive state that is changed.
+
+At restore, return surviving nodes to their snapshot values. Intentionally dead
+or flickering fixtures must not come alive.
+
+`ChunkManager.blackout` is explicit state. Its `chunk_built` signal lets the
+blackout controller immediately darken chunks streamed during the event.
+There is no process-global `Chunk.blackout`.
+
+Treat blackout as a temporary overlay on persistent chunk state:
+
+1. a chunk's normal/anomalous light configuration is its base state;
+2. `chunk.set_blackout(true)` snapshots that base and hides it;
+3. anomaly activation updates the stored base if it occurs during blackout;
+4. `chunk.set_blackout(false)` reveals the current base, not a stale global
+   “all lights on” state.
+
+Snapshot and restore ambient energy separately on `main.we.environment`.
+
+### 7.7 Phase acceptance
+
+- Each violation triggers exactly one feedback event per defined episode.
+- Arrival/lift grace never produces a false stop violation.
+- A short glance at a figure is not a violation; gaze dissolution is.
+- Attention clamps to `0..1` and decays at the documented rate.
+- Blackout movement grace works at both onset and restoration.
+- New chunks arrive dark during blackout.
+- Restore returns intentionally dead/flickering fixtures to exact prior state.
+- Wander has no rule feedback, attention, blackout or cadence change.
+- Descent never emits a fake power sag or misleading remote-elevator event.
+- `--attention=N` allows deterministic consequence screenshots.
 
 ---
 
-## 6. Phase 2 — the elevator
-
-The largest phase. Build and verify it before touching rules.
-
-### 6.1 Placement — `world_gen.gd`
-
-```gdscript
-## Cells that may hold an elevator, per theme. Chosen because their furnishing
-## only places props in the middle of the cell — the wall-anchored set pieces
-## (airport gates, check-in, escalators, transit) and the self-walling rooms
-## (asylum hydro/treatment, every corridor style) would collide with the alcove.
-const ELEV_STYLES := {
-	0: [STYLE_EMPTY, STYLE_LOUNGE, STYLE_PILLARS, STYLE_GRAND],
-	1: [OFFICE_EMPTY, OFFICE_STORAGE, OFFICE_BREAK, OFFICE_CUBICLES],
-	2: [SEWER_DRY],
-	4: [AIR_HALL, AIR_CONCOURSE, AIR_BAGGAGE],
-	5: [ASY_OFFICE, ASY_WARD, ASY_DAYROOM],
-	6: [SCH_GYM, SCH_CAFETERIA, SCH_LIBRARY, SCH_ADMIN],
-}
-const ELEV_P := 0.06        # of eligible cells; tune by playtest
-
-static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
-	if not descent or cell == Vector2i.ZERO:
-		return false
-	if corridor(ws, cell) != 0:
-		return false
-	var root := room_id(ws, cell)
-	if not room_split(ws, root, theme).is_empty():
-		return false          # a partition could cut the alcove
-	if not ELEV_STYLES.get(theme, []).has(cell_style(ws, cell, theme)):
-		return false
-	if anchor_wall(ws, cell, 770) < 0:
-		return false          # needs a solid edge to back onto
-	return r01(ws, cell.x, cell.y, 771) < ELEV_P
-
-static func elevator_wall(ws: int, cell: Vector2i) -> int:
-	return anchor_wall(ws, cell, 770)
-```
-
-`SEWER_DRY` is the only sewer style: the others carry water channels and
-basins, and an alcove over a channel is unwalkable.
-
-**Portal suppression.** In `WorldGen.portal()`, first line:
-
-```gdscript
-if descent:
-	return -1
-```
-
-One way down. A portal that teleports you to a random floor destroys the run's
-shape, and it frees the roomy styles for other uses.
-
-**Wayfinding.** Elevators at ~6% of eligible cells are roughly one per 30–80
-cells depending on theme — findable only if the building points at them.
-
-```gdscript
-const ELEV_SIGN_R := 4   # cells
-
-## Nearest elevator within ELEV_SIGN_R, or NO_HALL if there is none.
-## Chebyshev-nearest, ties broken by the lower (x, y) so it is deterministic.
-static func nearest_elevator(ws: int, cell: Vector2i, theme: int) -> Vector2i
-```
-
-Cost: 81 `cell_style()` calls per chunk build. `cell_style` chains through
-`room_id` → `merge_dir`, so measure with `--chunktime` before and after; if any
-chunk crosses ~4ms, cache per (ws, theme) in a static `Dictionary` keyed by
-cell.
-
-### 6.2 Geometry — `chunk.gd`
-
-Call it from `_build_props()` **immediately after the portal block and before
-the `if not is_room_anchor: return` line**:
-
-```gdscript
-portal_dest = WorldGen.portal(wseed, cell, theme)
-if portal_dest >= 0:
-	_build_portal(portal_dest)
-if WorldGen.elevator_cell(wseed, cell, theme):
-	_build_elevator()
-_floor_arrow()                    # no-ops unless descent and in range
-if not is_room_anchor:
-	return
-```
-
-Building here is deliberate and load-bearing: `_shift_props()` only moves
-children added *after* the `n0`/`b0` marks, which are taken further down. An
-elevator built before those marks can never be dragged off its wall — the same
-protection the portal already relies on. **Do not** move this call into the
-`match style` block, and do not add the elevator to the `off = Vector3.ZERO`
-list; it does not need to be there if it is built early.
-
-**Frame.** Everything is authored inside one yawed `Node3D` so it can be
-written in a single sane coordinate system:
-
-```gdscript
-var d := WorldGen.elevator_wall(wseed, cell)
-var yaw := _air_yaw_for(d)
-var v := Node3D.new()
-v.position = Vector3(S / 2.0, 0.0, S / 2.0)   # cell centre
-v.rotation.y = yaw
-add_child(v)
-```
-
-Inside `v`: local `+z` points **at the anchor wall**, local `-z` points into the
-room. Local `z` runs `-6` (far wall) to `+6` (anchor wall). Local `x` is `±6` at
-the perpendicular walls.
-
-Colliders cannot be parented to `v` — they must go on `body`. Use
-`_collider_yaw_box(_wp(v.position, local_pos, yaw), size, yaw)` for each.
-
-**Layout** (all local to `v`, metres):
-
-| Part | Position | Size | Material |
-|---|---|---|---|
-| Alcove facade, left | `x -3.65, z 3.9` | `2.1 × ceil_h × 0.2` | theme wall mat |
-| Alcove facade, right | `x +3.65, z 3.9` | `2.1 × ceil_h × 0.2` | theme wall mat |
-| Facade header | `x 0, y 2.45, z 3.9` | `3.2 × (ceil_h - 2.45) × 0.2` | theme wall mat |
-| Alcove side, left | `x -2.6, z 4.95` | `0.2 × ceil_h × 2.1` | theme wall mat |
-| Alcove side, right | `x +2.6, z 4.95` | `0.2 × ceil_h × 2.1` | theme wall mat |
-| Door surround | around the `1.8 × 2.25` opening at `z 3.9` | `0.12` proud | `Mats.steel()` |
-| Car back | `z 5.85` | `2.4 × 2.35 × 0.1` | `Mats.metal_gray()` |
-| Car sides | `x ±1.2, z 4.9` | `0.1 × 2.35 × 1.9` | `Mats.metal_gray()` |
-| Car ceiling | `y 2.35, z 4.9` | `2.4 × 0.1 × 1.9` | `Mats.charcoal()` |
-| Car floor | `y 0.01, z 4.9` | `2.4 × 0.02 × 1.9` | `Mats.rubber_black()` — **flush, see rule 6** |
-| Handrail | `y 0.9`, three sides | `0.04` radius cyl | `Mats.chrome()` |
-| Doors ×2 | `x ∓0.45, z 3.9` | `0.9 × 2.25 × 0.08` | `Mats.steel()` |
-| Call plate | `x 1.35, y 1.15, z 3.78` | `0.16 × 0.26 × 0.03` | `Mats.charcoal()` |
-| Call button | on the plate | `0.045` radius | `Mats.panel_on()` when live |
-| Floor indicator | `x 0, y 2.62, z 3.82` | `0.5 × 0.24 × 0.04` | `Mats.screen_dark()` |
-
-The alcove is a closed island against the anchor wall: it never reaches the
-perpendicular walls (`±2.6` against walls at `±6`), so it cannot cross a
-doorway. Facade and sides are thick enough to be opaque from any angle.
-
-**Floor indicator** is a `Label3D` showing the current floor number in amber
-(`Color(0.95, 0.68, 0.2)`), the same treatment as `_exit_sign`. On the last
-floor it reads `OUT` instead.
-
-**Car light.** One `OmniLight3D` inside the car, warm, `omni_range` ~4,
-`shadow_enabled = false`. When the doors open this throws a rectangle of light
-into a dark room — that is the long-range "found it" cue, and it is the reason
-the car light must be brighter than the room. Every thin part of the fixture
-gets `cast_shadow = OFF` (rule 5).
-
-**Chime.** `AudioStreamPlayer3D` on the elevator: `SoundBank.elev()`,
-`bus = "Hall"`, `max_distance` ~45, quiet, retriggered every 12–20s. This is the
-audible version of the same cue — a chime somewhere down the corridor.
-
-### 6.3 Behaviour — `scripts/elevator.gd`
-
-```gdscript
-class_name Elevator
-extends Node3D
-## The way down. Doors open when you come near and close behind you; there is
-## no button to press and no way back up.
-
-signal committed
-
-var floor_label: Label3D
-var doors: Array[StaticBody3D] = []   # [left, right]
-var open := false
-var _busy := false
-```
-
-- **Two `Area3D`s**, both handed in by `chunk.gd`:
-  - *approach* — a `3.0 × 2.4 × 2.6` box in front of the doors. On
-    `body_entered` with a `CharacterBody3D`: open the doors (0.9s tween, chime).
-    On `body_exited`: close them after a 2s delay, unless committed.
-  - *car* — a `2.0 × 2.3 × 1.6` box inside the car. On `body_entered`: commit.
-- **Commit** closes the doors, waits for them to seal, then
-  `get_tree().call_group("elevator_listener", "_on_elevator", cellv)`.
-  This mirrors exactly how `portal.gd` hands off today.
-- **Doors are `StaticBody3D`**, each with its mesh and its `CollisionShape3D` as
-  children, so tweening the body's `position.x` moves collision with the mesh.
-  Only close them once the player is inside the car area — a `StaticBody3D`
-  teleporting into a `CharacterBody3D` standing in the threshold will trap or
-  eject them.
-- Guard everything with `_busy` so a player jittering in the doorway cannot
-  start two tweens.
-
-### 6.4 Descent — `main.gd`
-
-```gdscript
-func _on_elevator(_cellv: Vector2i) -> void:
-	if _switching or run == null or run.ended:
-		return
-	if run.is_last_floor():
-		run.finish(true)
-		return
-	run.floor_idx += 1
-	run.floor_reached.emit(run.floor_idx)
-	_jump_to(run.theme(), _safe_arrival(run.theme(), Vector2i.ZERO, DEFAULT_SPAWN), false)
-```
-
-Reuse `_jump_to()` untouched: it already fades, plays `_ding` (the elevator
-chime — correct here), crossfades music, rebuilds the level and calls
-`player.teleport()`. Arriving at the origin cell of the new floor is right —
-each floor is a fresh start and `_safe_arrival` already handles the airport
-gate-cell trap.
-
-Do **not** write to `_saved_pos` for Descent floors. There is no going back up,
-so remembered positions are meaningless and would leak state between runs.
-
-### 6.5 Floor arrows
-
-`Chunk._floor_arrow()`:
-
-```gdscript
-func _floor_arrow() -> void:
-	if not WorldGen.descent:
-		return
-	var target := WorldGen.nearest_elevator(wseed, cell, theme)
-	if target == WorldGen.NO_HALL or target == cell:
-		return
-	...
-```
-
-A painted arrow on the floor at `y = 0.02`, pointing along
-`(target - cell)` in world space:
-
-- shaft — `BoxMesh`, `2.0 × 0.005 × 0.18`
-- head — the shared `CONE` mesh, `rotation.x = PI / 2.0` to lay it flat
-  pointing along `+z`, then yawed to the target bearing
-- material — a faded safety yellow with a low emissive so it survives the dark
-  floors (`Mats.caution_yellow()` is the starting point; it may need a dedicated
-  low-emission variant)
-- `cast_shadow = OFF`, **no collider**
-
-Floor arrows were chosen over hanging signs deliberately: a hanging sign at cell
-centre collides with chandeliers, transit bulkheads and gate glass across six
-themes, whereas nothing in this project occupies the floor plane at 2cm. It also
-reads as a marking left by whoever ran the building, not as the building's own
-signage — which is the right voice for the mode.
-
-### 6.6 Acceptance
-
-- Write a small Python replica of `elevator_cell()` (there is an existing
-  pattern for replicating `WorldGen` in Python for cell scouting — 64-bit
-  signed wrap, arithmetic shift) to find elevator cells for a given seed,
-  rather than wandering blind looking for one.
-- Screenshot one elevator per theme, doors closed and doors open, from ~5m back,
-  with `--nocrt`. Check: no geometry poking through the anchor wall, no props
-  clipping the alcove, the car light reads at distance, the threshold is flush.
-- Walk in and confirm the descent fires and lands you on the next floor.
-- `--chunktime` — no chunk over ~4ms.
-- Confirm zero elevators and zero arrows in wander mode.
-
----
-
-## 7. Phase 3 — rules and attention
-
-### 7.1 Detection, in `Run._physics_process`
-
-| Rule | Detection | Cost |
-|---|---|---|
-| do not look at them | `ShadowFigure` emits when it is stared away | `+0.10` per figure |
-| do not stop walking | horizontal speed `< 0.3` for `> 6.0s`, outside a blackout | `+0.03/s` while stopped |
-| do not go back | entering a cell already in `_visited`, first time only | `+0.06`, and marks the cell anomalous |
-| lights failed, stand still | horizontal speed `> 0.3` **during** a blackout | `+0.08/s` while moving |
-
-Rules 2 and 4 are mutually exclusive by construction: rule 2 is suspended while
-`blackout` is true and rule 4 only applies then.
-
-Track cells as `Vector2i(floori(pos.x / 12.0), floori(pos.z / 12.0))` — the same
-expression `Player._surface()` uses. Only count a *transition* into a cell, not
-every physics tick inside it. Clear `_visited` on every floor change.
-
-Attention decays slowly while you are obeying — target roughly `-0.01/s`, so
-about a hundred seconds of clean walking undoes one stare. It should be
-recoverable but not quickly.
-
-### 7.2 Consequences
-
-All continuous in `attention`, none of them drawn:
-
-- **CRT snow** — `main` sets the post material's `noise_amount` from
-  `1.0 + attention * 1.6` (shader range is `0..3`). Only when `_crt` is on;
-  with the tube off there is no substitute, which is an accepted cost.
-- **Figures** — `ShadowFigures` gains `var attention := 0.0` and scales its
-  spawn interval by `lerpf(1.0, 0.35, attention)`. Baseline today is one figure
-  per ~11s; at full attention that is one per ~4s. Leave `MAX_FIGS` at 3 until
-  playtested — more than three at once reads as comedy.
-- **Blackouts** — see below.
-- **The pursuer** — phase 5.
-
-### 7.3 Blackouts
-
-The lights failing is an **event driven by attention**, not a property of a
-room. This was chosen over sampling the ambient light at the player: it is
-unmistakable to the player, fully controllable, and needs no light-probing.
-
-In `main`:
-
-```gdscript
-func set_blackout(on: bool) -> void:
-	# kill every light under the current level, and the ambient with it
-	for n in _all_lights(level_root):
-		n.visible = not on
-	we.environment.ambient_light_energy = 0.0 if on else _ambient_for(active_level)
-```
-
-- Interval scales with attention: idle around 90–150s at zero, 25–40s at one.
-- Duration 5–8s.
-- Announce it with `SoundBank.thud()` — a breaker going somewhere.
-- Chunks streaming in *during* a blackout must arrive dark. Either gate on a
-  static `Chunk.blackout` checked in `_build_lighting()`, or re-apply
-  `set_blackout(true)` whenever `ChunkManager` builds a chunk. The static flag
-  is cleaner and matches the `WorldGen.descent` precedent.
-- Cache the per-theme ambient energy when `_build_env()` runs so restoring it
-  does not have to rebuild the `Environment`.
-
-### 7.4 `shadow_figure.gd` / `shadow_figures.gd`
-
-- `ShadowFigure` gains `signal stared_away`, emitted where the gaze timer
-  currently triggers the fade (`_gaze > GAZE_TIME`, guarded by `grace`). Emit
-  **only** for the gaze path — walking a figure down (`NEAR_D`) and the natural
-  7–14s expiry are not rule breaks. Looking is the rule.
-- `ShadowFigures` connects the signal on every figure it spawns in `_spawn_at()`
-  and re-emits upward, or takes a `Callable` from `Run`.
-- Neither file may change behaviour when `attention == 0.0`. Verify by playing
-  wander mode.
-
-### 7.5 Acceptance
-
-- A dev flag (`--attention=0.7`) that pins attention, for screenshotting each
-  consequence without playing up to it.
-- Blackout: everything goes dark, chunks built during it arrive dark, the
-  restore returns the exact ambient the floor had before.
-- Wander mode: no blackouts, `noise_amount` stays at 1.0, figure cadence
-  unchanged (measure with `--haunt` and real `Time.get_ticks_msec()` deltas —
-  remember `--quit-after` counts frames).
-
----
-
-## 8. Phase 4 — anomalies
-
-Anomalies exist **only** as the punishment for rule 3. A cell you re-enter
-rebuilds wrong.
-
-- `Run` marks the cell: `cm.mark_anomalous(cellv)`.
-- `ChunkManager` gains `var anomalous := {}` and a `force_rebuild(c)` that frees
-  and rebuilds a loaded chunk. The player is standing in the cell when it
-  rebuilds, so rebuild the *neighbours* they are walking toward rather than the
-  cell under their feet — a chunk freed underneath the player drops them
-  through the floor.
-- `Chunk` takes an `anomaly: bool` in `_init` and applies **one** mutation,
-  picked by `_r(780)`:
-  1. every light in the cell is dead (`Mats.panel_dead()`, no omni)
-  2. a figure standing in the corner — a `ShadowFigure` that does not drift, does
-     not vanish under gaze, and is simply not there when you leave and return
-  3. all doorways in the cell reduced to one
-
-Mutation 3 is the most interesting and the most dangerous: it can seal the
-player in. It must respect the `WorldGen._parent_dir` spanning tree — every cell
-force-opens one edge toward the origin, and that edge is what guarantees the
-world is connected. **Never close a parent edge.** If that cannot be
-guaranteed cheaply, ship mutations 1 and 2 only; they carry the idea on their
-own.
-
-Verify connectivity with a flood fill after any change here. The existing
-guarantee is 361/361 cells reachable across seeds.
-
----
-
-## 9. Phase 5 — the pursuer and the end of a run
-
-**Pursuer.** At `attention >= 0.85`, one figure spawns that:
-
-- does not vanish under gaze, proximity or time
-- moves toward the player at just under walk speed (~3.0 m/s against the
-  player's 3.4) so walking holds it off and stopping does not
-- despawns on a floor change — descending is the escape, which is the whole
-  point of the mode
-
-Reuse `ShadowFigure` with a `pursuer := true` flag rather than writing a new
-node: the mesh build, the billboard and the materials are all there. It needs
-simple navigation — a floor raycast plus a wall raycast, or straight-line drift
-with a wall slide. It does not need pathfinding; something that catches on
-corners occasionally is scarier than something that solves the maze.
-
-Contact ends the run.
-
-**Summary.** On end, fade to black and show, centred, in the title's type:
-
-```
-FLOOR 4 — THE SCHOOL
-17:42   ·   3 rules broken
+## 8. Phase 4 — pursuer and run ending
+
+Build a complete run before adding anomalies.
+
+### 8.1 Pursuer
+
+At attention `>= 0.85`, Descent may own one persistent pursuer:
+
+- it does not dissolve under gaze, proximity or time;
+- it uses the existing figure visuals and smoke treatment;
+- it moves at about `3.0 m/s` against the player's `3.4 m/s` walk;
+- it despawns on floor transition;
+- contact ends the run.
+
+Do not rely on straight-line drift that repeatedly catches on walls.
+
+Use lightweight cell navigation:
+
+1. identify pursuer and player cells;
+2. BFS real open edges within a bounded radius;
+3. select the next cell toward the player;
+4. move toward the shared doorway centre;
+5. after crossing, compute the next step;
+6. apply a local floor raycast and wall slide for movement inside the cell.
+
+Recompute at a low rate such as 2 Hz, not every physics tick. If the pursuer is
+out of sight and has made no progress for several seconds, allow a controlled
+reposition to the next valid route cell. Never teleport it inside the player's
+view.
+
+Because sprint is disabled in Descent, the speed relationship remains
+meaningful. Continuous walking holds it off; stopping or navigating poorly
+lets it close.
+
+### 8.2 End states
+
+Failure:
+
+- pursuer contact;
+- no other rule directly kills the player.
+
+Success:
+
+- physically enter the final light at the end of the sewer exit passage.
+
+Both fade to black and show a summary above the CRT:
+
+```text
+CAUGHT — FLOOR 4 — THE SCHOOL
+17:42   ·   3 rule breaks
 seed 1839472051
 
-SPACE to walk again
+SPACE to descend again
+ESC to return
 ```
 
-Won runs say `OUT` in place of the floor line. Build it as a `CanvasLayer` at
-layer 3 (above the tube, like `TitleScreen` — the CRT eats 15px text at 240
-lines) and reuse `TitleScreen._style()`/`_relayout()` sizing so it scales with
-the viewport.
+Successful runs replace the floor line with:
 
-Restart should rebuild from `main`, not reload the scene, so the seed can be
-kept or rerolled deliberately.
+```text
+OUT
+```
 
----
+“Rule breaks” means violation episodes, not unique rule categories and not
+physics frames.
 
-## 10. Tuning values, all in one place
+Restart rebuilds mode state from `main` without reloading the project scene:
 
-Everything below is a first guess. None of it is derived from playtesting.
+- same seed by default for a learnable retry;
+- an explicit reroll action may be added after the first playable;
+- all attention, blackout, anomaly, figure and route state is reset.
 
-| Constant | Start | Notes |
-|---|---|---|
-| `ELEV_P` | `0.06` | of eligible cells. Lower if elevators feel common. |
-| `ELEV_SIGN_R` | `4` cells | ~48m of guidance. |
-| stare cost | `+0.10` | ten stares to max attention. |
-| stopped cost | `+0.03/s` after 6s | |
-| backtrack cost | `+0.06` | once per cell. |
-| blackout-move cost | `+0.08/s` | |
-| attention decay | `-0.01/s` | ~100s of clean walking per stare. |
-| blackout interval | 90–150s → 25–40s | by attention. |
-| blackout duration | 5–8s | |
-| `noise_amount` | `1.0 → 2.6` | shader hard max 3.0. |
-| figure interval scale | `1.0 → 0.35` | ~11s → ~4s. |
-| pursuer threshold | `attention 0.85` | |
-| pursuer speed | `3.0 m/s` | player walks 3.4, sprints 6.2. |
+### 8.3 Phase acceptance
+
+- pursuer reaches a walking player through corners and doorway sequences;
+- it never crosses a closed wall;
+- it never appears in Wander;
+- only one exists;
+- floor descent removes it;
+- contact produces one failure;
+- sewer exit produces one success;
+- same-seed restart reproduces all eight objective routes.
 
 ---
 
-## 11. Suggested order of work
+## 9. Phase 5 — anomalies
 
-1. **Phase 1** — plumbing. Small, and it proves the sandbox is safe.
-2. **Phase 2** — the elevator. The biggest single piece; nothing downstream
-   works without it. Verify by screenshot per theme before moving on.
-3. **Phase 3** — rules and attention. The mode becomes playable here; stop and
-   play it before adding more.
-4. **Phase 5** — pursuer and summary. A run needs an ending before anomalies
-   are worth tuning.
-5. **Phase 4** — anomalies. Genuinely optional for a first playable; it is
-   texture, not structure.
+Anomalies are optional texture after the complete run works.
 
-Phases 4 and 5 are deliberately swapped relative to their numbering. A run that
-can end is worth more than a run with better texture.
+### 9.1 Safe timing
+
+Track:
+
+- current cell;
+- departed cells;
+- cells already charged as backtracking violations;
+- anomaly kind per cell.
+
+When the player crosses from `A` to `B` and gets safely inside `B`, choose and
+activate an anomaly for `A`. This happens behind the player.
+
+If `A` is loaded, call:
+
+```gdscript
+chunk.activate_anomaly(kind)
+```
+
+If it is unloaded, store the kind in `ChunkManager.anomalies`; construction
+applies it when the cell streams back in.
+
+No floor or collision body under the player is freed.
+
+### 9.2 Initial anomaly set
+
+Pick one deterministic mutation:
+
+1. **dead cell** — disable that chunk's working lights and change its fixture
+   panels to dead state;
+2. **the one waiting** — add one motionless, non-dissolving figure in a
+   validated corner position.
+
+Both must survive streaming and regenerate identically from the same seed and
+cell.
+
+Do not initially implement:
+
+- doorway removal;
+- wall relocation;
+- floor/ceiling removal;
+- furniture with large new colliders;
+- anything that can change graph connectivity.
+
+Later presentation-only candidates include reversed signage, a clock with an
+impossible time, duplicated harmless props or a terminal showing a different
+idle record.
+
+### 9.3 Rule-three detection
+
+Re-entering an anomalous departed cell raises attention once for that cell.
+Boundary jitter must not count:
+
+- require an actual cell transition;
+- require the player to move at least 1m inside the new cell before confirming;
+- do not charge the same cell twice on one floor;
+- clear all per-floor tracking after descent.
+
+### 9.4 Acceptance
+
+- leaving a cell never drops or collides with the player;
+- returning reveals the already-applied anomaly;
+- dead-light anomalies restore correctly after a global blackout;
+- inert figures never dissolve, chase or trigger the pursuer logic;
+- anomaly choices reproduce from seed/cell;
+- graph connectivity and every existing procedural audit remain unchanged.
 
 ---
 
-## 12. Open questions
+## 10. Initial tuning table
 
-- **Sprinting.** Should Shift still work in Descent? It trivialises "do not stop
-  walking" and outruns the pursuer. Consider removing it, or giving it a cost.
-- **Rule 3 and dead ends.** A maze with no map will produce corridors that must
-  be backtracked. `+0.06` once per cell is intended to be survivable, but if
-  dead ends are common the rule may need to only fire on cells you have *fully
-  crossed* rather than merely entered.
-- **The tube.** `noise_amount` is the main attention tell, and `V` turns the
-  tube off entirely. Either Descent locks the tube on, or attention needs a
-  second expression that survives with the tube off.
-- **Seeds.** Generation is deterministic, so a daily seed and a shareable run
-  string are nearly free once the summary screen exists. Out of scope here, but
-  do not do anything that makes it harder.
+All values require playtesting.
+
+| Constant | Initial value | Intent |
+|---|---:|---|
+| objective graph distance | `7–12` edges | longer eight-floor target |
+| route scan fallback radius | `16` cells | guarantee a valid objective |
+| arrival rule grace | `8s` | no punishment while orienting |
+| floor pressure | `0.00 → 0.64` | later floors escalate even on a clean run |
+| blackout reaction grace | `0.75s → 0.45s` | readable but tighter with depth |
+| stare cost | `+0.10` | serious but recoverable |
+| rule-cost multiplier | `1.00 → 1.30` | mistakes matter more with depth |
+| stop threshold | `6s → 3.75s` | permits inspection but tightens with depth |
+| stop episode | `+0.04`, then `+0.01/s`, cap `+0.12` | repeated lingering matters |
+| backtrack cell | `+0.06` once | dead ends survivable |
+| blackout movement | `+0.06`, then `+0.02/s`, cap `+0.20` | clear but not run-ending |
+| attention decay | `-0.0025/s → -0.0016/s` | recovery slows with depth |
+| blackout interval | `90–150s → 25–40s` | total threat-scaled |
+| blackout duration | `5–8s → 6.5–9.5s` | longer decisions with depth |
+| CRT noise | `1.0 → 2.6` | shader range remains valid |
+| figure interval scale | `1.0 → 0.35` | ~11s → ~4s |
+| pursuer threshold | `0.85` | late consequence |
+| pursuer speed | `3.0 → 3.75 m/s` | eventually faster than the player |
+
+Tune route length before elevator rarity. Descent has one objective per floor;
+it does not use a probability such as `ELEV_P`.
+
+---
+
+## 11. Implementation and commit order
+
+### Phase A — mode boundary
+
+- title selection and rule card;
+- explicit mode configuration;
+- CLI flags;
+- input gates;
+- Wander regression tests.
+
+Commit only when Wander is unchanged and direct Descent startup works.
+
+### Phase B — route and complete traversal
+
+- `DescentRoute`;
+- route audit;
+- shared elevator refactor;
+- objective car, usable call button and HUD needle;
+- floor order;
+- sewer exit;
+- interaction/runtime CI coverage;
+- per-theme visual verification.
+
+At the end of Phase B, a player can complete eight floors with no rule system.
+
+### Phase C — rules and attention
+
+- violation episodes and feedback;
+- gaze signal;
+- stop/backtrack/blackout detection;
+- exact blackout snapshot/restore;
+- attention presentation and debug pin.
+
+Stop and play several complete runs before adding pursuit.
+
+### Phase D — pursuer and summary
+
+- graph-guided pursuer;
+- contact failure;
+- final exit success;
+- summary and same-seed restart.
+
+At the end of Phase D, Descent is shippable.
+
+### Phase E — anomalies
+
+- departed-cell activation;
+- dead-light and inert-figure mutations;
+- streaming persistence;
+- deterministic anomaly audit.
+
+Anomalies remain optional if they do not improve the complete run.
+
+Each phase gets:
+
+1. implementation;
+2. focused headless audit;
+3. full existing CI suite;
+4. visual screenshots where relevant;
+5. a coherent Git commit and push only when requested.
+
+---
+
+## 12. Definition of the first playable
+
+The first playable is Phase B plus the simplest Phase C rule loop:
+
+- title selection and rule card;
+- eight floors in the revised order;
+- one guaranteed graph-routed objective per floor;
+- a HUD needle that always points through a real doorway;
+- reused physical lifts;
+- unique sewer exit;
+- four detected rules;
+- hidden attention with violation feedback;
+- blackouts with exact restoration;
+- no pursuer;
+- no anomalies.
+
+Playtest questions:
+
+1. Is a complete run 20–30 minutes?
+2. Can a new player follow the HUD needle without searching for floor marks?
+3. Does “do not stare” read as a choice rather than an accident?
+4. Are blackout transitions unmistakable and fair?
+5. Does disabling sprint create tension or merely make traversal slow?
+6. Is attention escalation perceptible without a meter?
+7. Does the sewer exit feel like a payoff?
+
+Do not tune the pursuer or anomalies until those answers are good.
+
+---
+
+## 13. Future possibilities, deliberately out of scope
+
+- daily seeds;
+- shareable run strings;
+- best-time history;
+- alternate rule cards;
+- additional presentation-only anomalies;
+- optional hard mode with longer routes or retained attention between floors;
+- accessibility option that keeps the rule card recallable;
+- reroll from the summary screen.
+
+Keep route generation and run state deterministic so these remain inexpensive
+later.
