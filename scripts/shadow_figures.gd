@@ -37,6 +37,16 @@ signal reached_player
 
 var player: Player
 var suspended := false
+## The rules have the player pinned — a blackout they must stand still through,
+## or the arrival caption. Nothing new arrives and nothing already out there
+## closes the distance; the torch still works, so the player keeps an answer.
+## Distinct from `suspended`, which is a hard stop for level switches.
+var passive := false:
+	set(value):
+		passive = value
+		for f in _figs:
+			if is_instance_valid(f):
+				f.suppressed = value
 var interval_scale := 1.0
 
 var _t := 0.0
@@ -90,6 +100,8 @@ func _physics_process(dt: float) -> void:
 	for i in range(_figs.size() - 1, -1, -1):
 		if not is_instance_valid(_figs[i]):
 			_figs.remove_at(i)
+	if passive:
+		return
 	_track_turn(dt)
 	if _figs.size() >= MAX_FIGS:
 		return
@@ -190,6 +202,7 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> void:
 	f.grace = grace
 	f.announce = announce or randf() < 0.3
 	f.position = ground
+	f.suppressed = passive
 	add_child(f)
 	f.stared_away.connect(func(): stared_away.emit())
 	f.burned_away.connect(func(): burned_away.emit())
@@ -228,6 +241,19 @@ func nearest_distance() -> float:
 			continue
 		best = minf(best, f.global_position.distance_to(player.global_position))
 	return best
+
+
+## Is something the player has already seen close enough that stopping is a
+## reaction rather than dawdling? The stop rule asks before it charges.
+func has_close_figure(within: float) -> bool:
+	if player == null or not player.is_inside_tree():
+		return false
+	for f in _figs:
+		if not is_instance_valid(f) or not f.is_pressing():
+			continue
+		if f.global_position.distance_to(player.global_position) <= within:
+			return true
+	return false
 
 
 func _flat_fwd() -> Vector3:

@@ -11,6 +11,11 @@ const REPATH_TIME := 0.5
 const SEARCH_RADIUS := 32
 
 var player: Player
+## Held still for the length of a blackout. It cannot be burned, so "stand
+## still" and "something unkillable is closing at 3 m/s" left the player no
+## legal play between them. DescentRun also refuses to start a blackout while
+## one of these is alive; this covers the case where it spawns into one.
+var frozen := false
 var world_seed := 1
 var theme := 0
 var speed := BASE_SPEED
@@ -32,7 +37,7 @@ func _ready() -> void:
 
 
 func _physics_process(dt: float) -> void:
-	if _caught or player == null or not player.is_inside_tree():
+	if frozen or _caught or player == null or not player.is_inside_tree():
 		return
 	if global_position.distance_to(player.global_position) < 0.95:
 		_caught = true

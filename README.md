@@ -47,9 +47,10 @@ procedurally generated liminal spaces** across eight floors:
   cages, workshops and visitation booths. Rare cell blocks rise into false
   upper tiers and a central rotunda watches every direction at once.
 
-It opens on a title card — the logo, what every key does, and one
-instruction — over a world that is already built and already running behind
-it. Nothing moves until you press **space**.
+It opens on a focused title menu over a world that is already built and
+already running behind it. **Wander** and **Descent** remain immediate choices;
+Instructions, About and Credits each have their own screen. Nothing moves until
+you choose a mode.
 
 Press **1**–**8** to ride the elevator between floors — each floor keeps
 its own geography and remembers where you were. Or don't press anything:
@@ -87,6 +88,14 @@ trail into nothing where legs should be; those keep to the sewers and the
 asylum, the floors where something could have got in from below. They are
 sprite-sheet flipbooks rather than video: Godot's only codec is Theora, which
 carries no alpha, so an animated silhouette would be a black rectangle.
+
+The title has a track of its own (`music/title.mp3`), and while the card is up
+it is the only thing you hear. The world behind it is already built and already
+running, but the building is silent: room tone, slot banks, dripping sewers and
+the odd distant knock under a title card read as a mix that has not been
+mastered rather than as atmosphere. Everything the building makes routes through
+one "Hall" bus, so the card mutes that bus and stops the room tone, and starting
+restores both.
 
 Each floor also carries its own mood track (`music/lim*.mp3`), crossfading as
 you ride between worlds. Descent preserves those floor identities, then shifts
@@ -348,6 +357,22 @@ most recognizable procedural repeats.
   still import: a painted fascia keeps the artwork's own aspect inside the sign
   band, and the payphone and directory are counted rather than allowed to fail
   silently into their generated fallbacks.
+- `godot --headless --path . --script tools/audit_survivability.gd` — the only
+  audit that tests *play* rather than construction. Drives `DescentRun` and a
+  `ShadowFigure` by hand for fifteen simulated minutes per floor and asserts that
+  no enforced rule can kill the player who obeys it: a blackout always suppresses
+  the figures, a blackout never begins while a pursuer is out, a suppressed
+  figure never closes the distance, and the torch's cell still clears a full
+  house. The four rules were written before the figures could advance, kill or be
+  burned, and neither system referenced the other — "stand still" against a 3 m/s
+  pursuer that cannot be burned had no legal play at all.
+- `godot --headless --path . --script tools/audit_prop_overlap.gd` — builds
+  furnished rooms *and* corridor cells on every floor and compares floor
+  furnishings as oriented boxes, failing on any pair that interpenetrates. It
+  only sees colliders carrying a `furnishing_group`, so a new free-standing prop
+  has to join that system to be covered — a suitcase once stood inside a row of
+  gate seating for exactly that reason, and a drinking fountain later stood
+  inside a bathroom stall.
 - `godot --headless --path . --script tools/audit_wall_art.gd` — exercises all
   seventeen active paintings across the seven art-bearing floors and verifies
   that every piece remains wall-mounted, inside the solid wall bounds and at
@@ -364,9 +389,11 @@ pull requests via `.github/workflows/audits.yml`.
 
 The game is not restricted to attribution-free assets. Carefully selected
 CC BY work is welcome when it is a strong visual and contextual fit, its source
-and license are recorded, and any modification is documented. The compact
-in-game Credits screen is available from the title with `C`; the canonical
-record is [`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md).
+and license are recorded, and any modification is documented. The title's
+About screen identifies the author and studio. The dedicated Credits screen is
+available with `C` and acknowledges the 3D model creators and other third-party
+artists; the canonical record is
+[`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md).
 
 The accepted-license policy and level-by-level high-value replacement list are
 in [`docs/ASSET_OPPORTUNITIES.md`](docs/ASSET_OPPORTUNITIES.md). Clearly
@@ -385,10 +412,18 @@ shopping mall — only its separately-modelled objects are extracted, re-origine
 and redistributed; the building itself is not. Those extractions are listed
 individually in the asset's `SOURCE.md` with their source node names.
 
-The single CC BY-NC dependency in the mall is deliberately confined to one
-function, `_mall_painted_sign` in `scripts/chunk.gd`. Deleting that function and
-its one call site restores the generated storefront lettering and removes the
-noncommercial obligation in a single edit.
+Every CC BY-NC dependency is deliberately confined to a single function in
+`scripts/chunk.gd`, so each one lifts out in one edit and leaves a generated or
+CC0 fallback behind:
+
+| Asset | Entry point | Falls back to |
+| --- | --- | --- |
+| Mall storefront sign faces | `_mall_painted_sign` | generated `MALL_NAMES` lettering |
+| `office_phone.glb` | `_office_desk_phone` | no phone on the desk |
+| `prison_bunk_bed.glb` | `_prison_bunk` | generated bunk frame |
+| `cleaning_cart.glb` | `_sch_trolley` | `_sch_trolley_generated` |
+
+A commercial build removes those four and nothing else.
 
 Dev tools for adding content:
 
@@ -397,6 +432,12 @@ Dev tools for adding content:
   `--scale-reference` (a 1m grid plus a slab at the player's 1.62m eye height)
   make it possible to check a placement transform before writing any placement
   code. It needs a real window — Godot cannot render in `--headless`.
+- `godot --path . tools/preview_prop.tscn -- --prop=_mall_bench
+  --screenshot=/tmp/x.png` does the same for props that are *built* rather than
+  loaded. It constructs a real `Chunk` on the prop's own floor, hides everything
+  that chunk built for itself, calls the one method, and prints the resulting
+  bounds — which is how a double-offset food-court set was caught reading 7.26 m
+  wide instead of 1.82 m. Add a recipe to `_build` for each new prop.
 - `godot --headless --path . --script tools/dbg_asylum.gd -- <seed> <x> <z>`
   prints where every authored asylum prop landed in one cell, with world AABBs,
   which answers most placement questions without opening a window at all.

@@ -24,6 +24,12 @@ const ADVANCE_MIN := 1.05   # it has you at arm's length
 ## Half-angle that counts as looking straight at it. Wider than the stare that
 ## wears it down, so holding one still is easier than banishing it.
 const HOLD_CONE := 0.42
+## A figure advances through geometry on purpose, but both defences need line of
+## sight — the hold and the beam alike. Behind a partition it was therefore
+## invulnerable and still closing, with no counter at all. It still crosses the
+## cover; it just has to stand in the open for a beat when it comes out, which
+## is a window to aim and reads as the thing stepping into view.
+const REVEAL_HOLD := 0.6
 
 ## Flashlight burn. The beam has to stay on it; look away and the progress
 ## bleeds back. It keeps coming the whole time.
@@ -127,6 +133,11 @@ var _burn := 0.0
 var _burning := false
 var _held := false          # frozen because you are looking at it
 var _sway := 0.0
+## Set by ShadowFigures while the rules have the player pinned. It still burns,
+## still fades, still expires — it simply does not close the distance.
+var suppressed := false
+var _was_sighted := true
+var _reveal := 0.0
 
 
 static func _mat_for(texname: String) -> ShaderMaterial:
@@ -245,12 +256,19 @@ func _physics_process(dt: float) -> void:
 	var fwd := -cam.global_transform.basis.z
 	var aim := fwd.angle_to(to.normalized())
 	var sighted := _clear_line(cam.global_position, eye)
+	# Coming out from behind cover costs it a beat.
+	if sighted and not _was_sighted:
+		_reveal = REVEAL_HOLD
+	_was_sighted = sighted
+	if _reveal > 0.0:
+		_reveal = maxf(0.0, _reveal - dt)
 	var stared := grace <= 0.0 and aim < GAZE_ANG and sighted
 	# It only ever moves while you cannot see it. In frame, it is a photograph.
 	# The few that are already walking away are leavers and never turn back:
 	# one thing cannot be both retreating and stalking.
 	_held = aim < HOLD_CONE and sighted
-	if _fade < 0.0 and not _held and grace <= 0.0 and _drift == Vector3.ZERO:
+	if _fade < 0.0 and not _held and not suppressed and _reveal <= 0.0 \
+			and grace <= 0.0 and _drift == Vector3.ZERO:
 		_advance(dt)
 	_sway += dt
 	_quad.set_instance_shader_parameter("sway",
@@ -304,6 +322,12 @@ func _physics_process(dt: float) -> void:
 			clampf(_fade / maxf(_fade_len, 0.001), 0.0, 1.0))
 		if _fade <= 0.0:
 			queue_free()
+
+
+## Something the player has actually laid eyes on and which is still out there.
+## The stop rule asks this before charging: you are allowed to stop for it.
+func is_pressing() -> bool:
+	return _seen and _fade < 0.0
 
 
 ## One step closer, but never through a wall and never past arm's length. The

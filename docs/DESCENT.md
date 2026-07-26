@@ -695,17 +695,30 @@ Suspend rules during:
 
 | Rule | Detection | Initial tuning |
 |---|---|---:|
-| do not stare at them | `ShadowFigure.stared_away` after gaze dissolution | `+0.10` |
-| do not stop walking | speed `< 0.3` for 6s outside blackout | `+0.04`, then `+0.01/s`, max `+0.12` per stop episode |
+| do not stare at them | `ShadowFigure.stared_away` after gaze dissolution | `+0.05` |
+| do not stop walking | speed `< 0.3` for 6s outside blackout, **no figure within 12m** | `+0.04`, then `+0.01/s`, max `+0.12` per stop episode |
 | do not go back | enter a previously departed cell, once per cell | `+0.06` |
 | lights failed, stand still | speed `> 0.3` after 0.75s blackout grace | `+0.06`, then `+0.02/s`, max `+0.20` per blackout |
 
 Count one summary violation per stare, stop episode, re-entered cell or blackout
 movement episode—not once per physics frame.
 
-Attention decay starts at `-0.0025/s` while obeying. One `+0.10` stare therefore
-takes about 40 seconds of clean play to undo. The previous `-0.01/s` proposal
-would recover a stare in 10 seconds, not 100.
+Attention decay starts at `-0.0025/s` while obeying. One `+0.05` stare therefore
+takes about 20 seconds of clean play to undo. The previous `-0.01/s` proposal
+would recover a stare in 5 seconds, not 20.
+
+The stare cost was halved from `+0.10` after the figures gained the ability to
+advance and kill. At `+0.10` it was the most expensive violation in the game,
+while also being the only defence available without a torch — and attention
+feeds spawn rate and blackout scheduling, so defending yourself was the fastest
+route to more of what you were defending against. Holding a figure still by
+keeping it in the centre of frame has always been free and remains so; only the
+three-second banish charges.
+
+The stop rule now asks `ShadowFigures.has_close_figure(12.0)` before charging.
+Standing still because something you have already seen is bearing down on you
+is not the dawdling rule two exists to punish. The clock freezes rather than
+resetting, so the excuse cannot be farmed for free rest.
 
 ### 7.3 Violation feedback
 
@@ -774,7 +787,42 @@ Blackouts are unmistakable run events, not inferred from ambient light:
 - breaker thud at onset;
 - clear power-return sound at the end;
 - 0.75-second movement grace after onset;
-- rule two is suspended while blackout is active.
+- rule two is suspended while blackout is active;
+- **the figures are suppressed for the duration** (see 7.7);
+- **a blackout never begins while a pursuer is on the floor.**
+
+### 7.7 Passivity and the figures
+
+A rule that forces the player to be passive must also stop the things that can
+kill them, or obeying it is fatal and breaking it is the only play. `DescentRun`
+therefore exposes one channel:
+
+```gdscript
+signal passive_changed(on: bool)
+func rules_force_passive() -> bool   # blackout or arrival grace
+```
+
+`main.gd` forwards it to `ShadowFigures.passive`, which stops spawning and sets
+`suppressed` on every live figure. A suppressed figure still burns, still fades,
+still expires — it simply does not close the distance. The player keeps a legal
+answer throughout, because turning to aim the torch produces no velocity and so
+cannot break rule four.
+
+Two states are covered:
+
+- **Blackout.** Figures advance at 1.25 m/s and spawn 7–16m out, so one alive
+  when the lights fail closes 6.2–11.9m during a 5.0–9.5s blackout — it can
+  reach a player who is correctly standing still.
+- **Arrival grace.** Rules are not charged for 8s, but spawning and advance used
+  to start immediately and the nearest spawn reaches you in 4.8s, so a run could
+  end while the floor caption was still on screen.
+
+The pursuer is handled separately because it cannot be burned: `DescentPursuer`
+gains a `frozen` flag set for the length of a blackout, `DescentRun.pursuer_active`
+holds the blackout timer rather than spending it while one lives, and
+`_on_descent_attention` refuses to spawn one into a blackout in progress.
+
+`tools/audit_survivability.gd` asserts all of this against the real classes.
 
 Do not restore lights with `visible = true`.
 
@@ -984,7 +1032,11 @@ All values require playtesting.
 | arrival rule grace | `8s` | no punishment while orienting |
 | floor pressure | `0.00 → 0.64` | later floors escalate even on a clean run |
 | blackout reaction grace | `0.75s → 0.45s` | readable but tighter with depth |
-| stare cost | `+0.10` | serious but recoverable |
+| stare cost | `+0.05` | the one torch-free defence; must not be the priciest rule |
+| stop excuse radius | `12m` | stopping for a visible figure is a reaction, not dawdling |
+| figure suppression | blackout, arrival grace | a forced-passive player is not hunted |
+| torch refund per burn | `+1.5s` | accuracy sustains the cell at peak pressure |
+| line-of-sight regain hold | `0.6s` | a figure crossing cover cannot arrive uncounterable |
 | rule-cost multiplier | `1.00 → 1.30` | mistakes matter more with depth |
 | stop threshold | `6s → 3.75s` | permits inspection but tightens with depth |
 | stop episode | `+0.04`, then `+0.01/s`, cap `+0.12` | repeated lingering matters |

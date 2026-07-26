@@ -422,6 +422,191 @@ and remove it from the distributed build.
   interactive hinge so it opens away from the player from either side.
 - **Local record:** [`models/cc_by/solitary_cell_door/SOURCE.md`](models/cc_by/solitary_cell_door/SOURCE.md)
 
+### Authored replacements for generated furniture
+
+Sixteen models that each took over a function which used to assemble the same
+object out of boxes and cylinders. `cleaning_cart.glb` is noncommercial and is
+reached through a single function; the two Sketchfab Standard assets were
+supplied by the project owner and are used only as embedded game content.
+
+#### `slot_machine_alt.glb`
+
+- **Title:** `Slot Machine With Abstract Design`
+- **Creator:** [Audrey Gonçalves](https://sketchfab.com/audreyfv10)
+- **Source:** <https://sketchfab.com/3d-models/slot-machine-with-abstract-design-29e199a16098408abb48b3e04d243af6>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** The 5.2 m ground plane baked into the source scene is
+  removed. Scaled to a 1.75 m cabinet and placed as the one-in-five casino
+  machine that used to be assembled from forty-two primitives.
+- **Local record:** [`models/cc_by/slot_machine_alt/SOURCE.md`](models/cc_by/slot_machine_alt/SOURCE.md)
+
+#### `change_machine.glb`
+
+- **Title:** `change machine`
+- **Creator:** [juliegraham178](https://sketchfab.com/juliegraham178)
+- **Source:** <https://sketchfab.com/3d-models/change-machine-68f395358c8d43c2b94e816d1c68a70d>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Scaled to 1.75 m and stood against a casino wall. It
+  carries its own branding, coin tray and bill slot, replacing a generated
+  panel stack and a Label3D marquee.
+- **Local record:** [`models/cc_by/change_machine/SOURCE.md`](models/cc_by/change_machine/SOURCE.md)
+
+#### `city_bench.glb`
+
+- **Title:** `City Bench`
+- **Creator:** [matejbiskup97](https://sketchfab.com/matejbiskup97)
+- **Source:** <https://sketchfab.com/3d-models/city-bench-973507d6b4e44265887f8feffa6de13e>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Authored in centimetres; scaled to a 1.89 m bench and
+  floor-aligned, with collision on the seat block so the thin cast-iron
+  ends are not an invisible wall.
+- **Local record:** [`models/cc_by/city_bench/SOURCE.md`](models/cc_by/city_bench/SOURCE.md)
+
+#### `iv_drip.glb`
+
+- **Title:** `Crutch and IV Drip`
+- **Creator:** [Matt LeMoine](https://sketchfab.com/Matt_LeMoine)
+- **Source:** <https://sketchfab.com/3d-models/crutch-and-iv-drip-5cc65c6aed374220b67f7d60e679153e>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Re-origined from an authored 31.8-unit offset and
+  scaled to a 1.95 m stand. Collision follows the pole rather than the
+  castor base.
+- **Local record:** [`models/cc_by/iv_drip/SOURCE.md`](models/cc_by/iv_drip/SOURCE.md)
+
+#### `drinking_fountain.glb`
+
+- **Title:** `Drinking Fountain`
+- **Creator:** [FLUXIUM3D](https://sketchfab.com/fluxium3d)
+- **Source:** <https://sketchfab.com/3d-models/drinking-fountain-69f0147a64354ba9aaf2f63e86169322>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Scaled to 1.05 m and wall-mounted facing the room.
+  Textures re-encoded at 512 px. Kept out of bathrooms, whose walls are
+  already spoken for.
+- **Local record:** [`models/cc_by/drinking_fountain/SOURCE.md`](models/cc_by/drinking_fountain/SOURCE.md)
+
+#### `lockers.glb`
+
+- **Title:** `Locker`
+- **Creator:** [neverfollow81](https://sketchfab.com/neverfollow81)
+- **Source:** <https://sketchfab.com/3d-models/locker-41f55ae53fca41c3b861cebe5244b5dd>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Authored in centimetres; scaled to a 1.97 x 1.85 m
+  bank. Corridor runs are tiled with whole banks rather than one bank
+  stretched to length.
+- **Local record:** [`models/cc_by/lockers/SOURCE.md`](models/cc_by/lockers/SOURCE.md)
+
+#### `gym_locker.glb`
+
+- **Title:** `Metal Gym/Boxing Locker`
+- **Creator:** [CAL21](https://sketchfab.com/CAL21)
+- **Source:** <https://sketchfab.com/3d-models/metal-gymboxing-locker-975fe97634ad4812bc3b7450e7de6efb>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Scaled to a 0.48 x 1.85 m single column, used where a
+  corridor run is too short for a full bank.
+- **Local record:** [`models/cc_by/gym_locker/SOURCE.md`](models/cc_by/gym_locker/SOURCE.md)
+
+#### `wall_telephone.glb`
+
+- **Title:** `Old Wall Mounted Telephone.`
+- **Creator:** [ShepDes](https://sketchfab.com/ShepDes)
+- **Source:** <https://sketchfab.com/3d-models/old-wall-mounted-telephone-d7efe01f8f51469c821407c9e248c519>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Authored in centimetres; scaled to 0.38 m and hung on
+  a prison visitation divider, replacing a generated plate, keypad,
+  receiver and cord.
+- **Local record:** [`models/cc_by/wall_telephone/SOURCE.md`](models/cc_by/wall_telephone/SOURCE.md)
+
+#### `sink.glb`
+
+- **Title:** `Sink`
+- **Creator:** [Osian CG](https://sketchfab.com/OsianOHM)
+- **Source:** <https://sketchfab.com/3d-models/sink-83baa951f3b34ab3a5fd40478516ba3f>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Placed at authored scale in school bathrooms.
+  Supplies its own tap and trap; the mirror band above it stays generated.
+- **Local record:** [`models/cc_by/sink/SOURCE.md`](models/cc_by/sink/SOURCE.md)
+
+#### `toilet.glb`
+
+- **Title:** `Toilet`
+- **Creator:** [HippoStance](https://sketchfab.com/hippostance)
+- **Source:** <https://sketchfab.com/3d-models/toilet-132a8ee2af3a40d39d270fbed3d3666c>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Placed at authored scale and turned to put its
+  cistern against the cubicle wall, replacing a generated pedestal, bowl,
+  torus seat and tank.
+- **Local record:** [`models/cc_by/toilet/SOURCE.md`](models/cc_by/toilet/SOURCE.md)
+
+#### `urinal.glb`
+
+- **Title:** `Urinal`
+- **Creator:** [Dun](https://sketchfab.com/DundeeA)
+- **Source:** <https://sketchfab.com/3d-models/urinal-caf807491633470784cb81990825d09d>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Placed at authored scale. Modelled already hanging,
+  so only X and Z are recentred. Runs of three face the stalls in school
+  bathrooms, which previously had none.
+- **Local record:** [`models/cc_by/urinal/SOURCE.md`](models/cc_by/urinal/SOURCE.md)
+
+#### `garbage_bin.glb`
+
+- **Title:** `Stylized Garbage Bin`
+- **Creator:** [WillowBoxArt](https://sketchfab.com/willowboxart)
+- **Source:** <https://sketchfab.com/3d-models/stylized-garbage-bin-439e6a809caa4a9c80baa42f5d305f4f>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Placed at authored scale with a hashed yaw. One model
+  now serves the airport, school and mall bins, which each used to be two
+  cylinders in slightly different greys.
+- **Local record:** [`models/cc_by/garbage_bin/SOURCE.md`](models/cc_by/garbage_bin/SOURCE.md)
+
+#### `food_court_set.glb`
+
+- **Title:** `Valley View Mall Food Court Dining Set`
+- **Creator:** [Some Random Mall Modeller](https://sketchfab.com/NotUsingMyRealName)
+- **Source:** <https://sketchfab.com/3d-models/valley-view-mall-food-court-dining-set-7259e5c692ac416690fc793dfddcda79>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Scaled so the tabletop lands at 0.75 m — fitted on
+  the working surface, not total height, since the chairs' spindle backs
+  run 0.4 m above it. Textures re-encoded at 512 px.
+- **Local record:** [`models/cc_by/food_court_set/SOURCE.md`](models/cc_by/food_court_set/SOURCE.md)
+
+#### `cleaning_cart.glb` — noncommercial
+
+- **Title:** `Cleaning Cart`
+- **Creator:** [Kerridge1](https://sketchfab.com/Kerridge1)
+- **Source:** <https://sketchfab.com/3d-models/cleaning-cart-ced9dec64e66451fb2ccedee1fddeaa9>
+- **License:** [Creative Commons Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/)
+- **Commercial-use status:** **Not permitted.** Builds containing this
+  model are noncommercial and must not be sold or monetized.
+- **Modifications:** Placed at authored scale in school corridors, walked
+  in from the wall until it clears the locker banks. Every use goes
+  through `_sch_trolley`, so the noncommercial dependency lifts out in one
+  edit.
+- **Local record:** [`models/cc_by_nc/cleaning_cart/SOURCE.md`](models/cc_by_nc/cleaning_cart/SOURCE.md)
+
+#### `rope_barrier.glb`
+
+- **Title:** `Rope Barrier`
+- **Creator:** [MaX3Dd](https://sketchfab.com/MaX3Dd)
+- **Source:** <https://sketchfab.com/3d-models/rope-barrier-72f49afbd0a2408690874f3bd8f9ef05>
+- **License:** [Sketchfab Standard](https://sketchfab.com/licenses)
+- **Modifications:** Scaled to a 1.02 m stanchion pair 1.891 m apart.
+  Casino and cinema queue lines are laid out on that pitch rather than the
+  unit being stretched to a chosen one. Only the posts collide.
+- **Local record:** [`models/sketchfab/rope_barrier/SOURCE.md`](models/sketchfab/rope_barrier/SOURCE.md)
+
+#### `checkin_desk.glb`
+
+- **Title:** `Airport Check In Desk`
+- **Creator:** [assetfactory](https://sketchfab.com/assetfactory)
+- **Source:** <https://sketchfab.com/3d-models/airport-check-in-desk-d5efee1fedff4dfab4a89357b7bacb61>
+- **License:** [Sketchfab Standard](https://sketchfab.com/licenses)
+- **Modifications:** Authored in metres and used at 1:1. The source is a
+  double-sided island 6.23 m deep; it is clipped to a single 3.20 m
+  position, and a coincident collider proxy mesh that shipped with it is
+  removed.
+- **Local record:** [`models/sketchfab/checkin_desk/SOURCE.md`](models/sketchfab/checkin_desk/SOURCE.md)
+
 ## Public-domain and attribution-optional work
 
 These sources do not require attribution, but are included for provenance and

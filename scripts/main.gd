@@ -67,6 +67,16 @@ var descent_route: DescentRoute
 var _descent_preparing := false
 var _attention_override := -1.0
 var _blackout_ambient := -1.0
+## Seconds of torch handed back per burned figure, and how close one has to get
+## before the game says out loud, once, what the torch is for.
+const BURN_REFUND := 1.5
+const TORCH_HINT_D := 6.0
+var _torch_hint_shown := false
+var _title_music := false
+## What the last `_switch_music` was aiming at. The swap happens behind a 0.6s
+## fade, so the live stream lags the intent — guarding on the stream instead
+## lets a second call stack another fade tween on the same property.
+var _music_target := ""
 var _descent_summary: DescentSummary
 var _pursuer: DescentPursuer
 var _descent_hud: DescentHUD
@@ -84,6 +94,11 @@ const MUSIC_TRACKS := {
 # pressure without changing Wander mode's established per-level soundtrack.
 const DESCENT_LATE_TRACK := "res://music/lim9.mp3"
 const MUSIC_DB := -14.0
+## The title has its own track, and nothing else. The world behind the card is
+## already built and already running, but it is not meant to be heard yet:
+## room tone, slot banks, dripping sewers and the odd distant knock under a
+## title card read as a mix that has not been mastered, not as atmosphere.
+const TITLE_MUSIC := "res://music/title.mp3"
 
 
 func _ready() -> void:
@@ -207,7 +222,9 @@ func _ready() -> void:
 	_figures.seen_by_player.connect(
 		func(): _heart.bump(Heartbeat.BUMP_SEEN))
 	_figures.burned_away.connect(
-		func(): _heart.bump(Heartbeat.BUMP_BURNED))
+		func():
+			_heart.bump(Heartbeat.BUMP_BURNED)
+			player.add_flashlight_charge(BURN_REFUND))
 	_figures.stared_away.connect(
 		func(): _heart.bump(Heartbeat.BUMP_STARED))
 	_events = EnvironmentEvents.new()
@@ -218,6 +235,11 @@ func _ready() -> void:
 	_music = AudioStreamPlayer.new()
 	_music.volume_db = -50.0
 	add_child(_music)
+	# Decide before the first note: `_build_title` runs several lines later, and
+	# starting a floor track only to crossfade it out is audible.
+	_title_music = _will_show_title()
+	if _title_music:
+		_set_world_audio(false)
 	_switch_music(active_level)
 	_build_ui()
 	player.interaction_prompt_changed.connect(_on_interaction_prompt)
@@ -366,6 +388,8 @@ func _connect_descent_run() -> void:
 	run.attention_changed.connect(_on_descent_attention)
 	run.violation.connect(_on_descent_violation)
 	run.blackout_changed.connect(_on_descent_blackout)
+	run.passive_changed.connect(_on_descent_passive)
+	run.figures = _figures
 	run.anomaly_requested.connect(_on_descent_anomaly)
 	run.run_ended.connect(_on_descent_ended)
 
@@ -475,6 +499,12 @@ func _die_to_title() -> void:
 	if is_instance_valid(_return_prompt):
 		_return_prompt.queue_free()
 		_return_prompt = null
+	# Hand the music over now, at the top of the two seconds of black. The
+	# floor track fades out and the title track is already up by the time the
+	# card appears — the death cry still carries, because it is on a bus that
+	# stays live until `_build_title` silences the building.
+	_title_music = true
+	_switch_music(active_level)
 	var tw := create_tween()
 	tw.tween_property(_fade, "color:a", 1.0, 1.5).set_delay(0.45)
 	await tw.finished
@@ -500,8 +530,10 @@ func _on_descent_attention(_value: float) -> void:
 			"noise_amount", 1.0 + threat * 1.6)
 	if _figures != null:
 		_figures.interval_scale = lerpf(1.0, 0.35, threat)
+	# Never into a blackout: the player is standing still by rule and this thing
+	# has no counter. It waits for the lights.
 	if threat >= 0.85 and run != null and not run.suspended \
-			and not is_instance_valid(_pursuer):
+			and not run.blackout and not is_instance_valid(_pursuer):
 		_spawn_descent_pursuer()
 
 
@@ -552,6 +584,7 @@ func _spawn_descent_pursuer() -> void:
 		float(chosen.y) * 12.0 + 6.0)
 	_pursuer.caught.connect(_on_pursuer_caught)
 	level_root.add_child(_pursuer)
+	run.pursuer_active = true
 
 
 func _on_pursuer_caught() -> void:
@@ -601,18 +634,42 @@ func _on_descent_blackout(on: bool) -> void:
 	if not descent or cm == null:
 		return
 	cm.set_blackout(on)
+	if is_instance_valid(_pursuer):
+		_pursuer.frozen = on
 	if on:
 		if _blackout_ambient < 0.0:
 			_blackout_ambient = we.environment.ambient_light_energy
 		we.environment.ambient_light_energy = 0.003
 		_play_descent_cue(SoundBank.thud(), -7.0)
-		_show_event_message("BLACKOUT — STAND STILL", true)
+		_show_event_message("BLACKOUT — STAND STILL · THE TORCH STILL WORKS", true)
 	else:
 		if _blackout_ambient >= 0.0:
 			we.environment.ambient_light_energy = _blackout_ambient
 			_blackout_ambient = -1.0
 		_play_descent_cue(SoundBank.ding(), -10.0)
 		_show_event_message("POWER RESTORED — KEEP MOVING")
+
+
+## The rules have the player pinned. Nothing arrives and nothing closes until
+## they are free to act again.
+## Say it once, the first time something gets close enough to matter. The
+## briefing lists the building's rules; it does not say what the figures are or
+## what answers them, and finding that out by dying is not a fair lesson.
+func _check_torch_hint() -> void:
+	if _torch_hint_shown or _switching or _dying or player == null \
+			or _figures == null or _figures.suspended:
+		return
+	if _title != null or not player.is_inside_tree():
+		return
+	if _figures.nearest_distance() > TORCH_HINT_D:
+		return
+	_torch_hint_shown = true
+	_show_event_message("IT IS COMING — F TO BURN IT", true)
+
+
+func _on_descent_passive(on: bool) -> void:
+	if _figures != null:
+		_figures.passive = on
 
 
 func _play_descent_cue(stream: AudioStream, volume: float) -> void:
@@ -640,6 +697,8 @@ func _on_descent_ended(won: bool) -> void:
 	if is_instance_valid(_pursuer):
 		_pursuer.queue_free()
 	_pursuer = null
+	if run != null:
+		run.pursuer_active = false
 	player.set_process_unhandled_input(false)
 	player.velocity = Vector3.ZERO
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -789,6 +848,8 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
 	if is_instance_valid(_pursuer):
 		_pursuer.queue_free()
 	_pursuer = null
+	if run != null:
+		run.pursuer_active = false
 	remove_child(old_level)
 	old_level.queue_free()
 	_figures.despawn()
@@ -814,6 +875,12 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
 	ambience.queue_free()
 	ambience = Ambience.new(level)
 	add_child(ambience)
+	# Descent prepares its first floor while the card is still up, and a death
+	# returns through here on its way back to one. A fresh room tone must not
+	# undo the silence either of those is holding — and `Ambience` starts itself
+	# in `_ready`, so this has to come after it is in the tree.
+	if _title_music:
+		ambience.stop()
 	await get_tree().process_frame
 	var tw2 := create_tween()
 	tw2.tween_property(_fade, "color:a", 0.0, 0.45 if via_portal else 0.5)
@@ -833,6 +900,7 @@ func _settle_initial_arrival() -> void:
 
 
 func _process(dt: float) -> void:
+	_check_torch_hint()
 	if not _bench:
 		return
 	_bench_t += dt
@@ -922,8 +990,20 @@ func _music_track_for(level: int) -> String:
 	return MUSIC_TRACKS.get(level, "")
 
 
+## Screenshot and `--nologo` starts go straight into the world with no card.
+func _will_show_title() -> bool:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--screenshot=") or arg == "--nologo":
+			return false
+	return true
+
+
+## While the title is up the track is fixed, whatever floor is loaded behind it.
 func _switch_music(level: int) -> void:
-	var target := _music_track_for(level)
+	var target := TITLE_MUSIC if _title_music else _music_track_for(level)
+	if target == _music_target:
+		return
+	_music_target = target
 	var tw := create_tween()
 	tw.tween_property(_music, "volume_db", -50.0, 0.6)
 	tw.tween_callback(func():
@@ -933,7 +1013,9 @@ func _switch_music(level: int) -> void:
 		var st: AudioStreamMP3 = load(target)
 		st.loop = true
 		_music.stream = st
-		_music.play(randf() * 20.0))
+		# The title track starts at the top. A floor track is joined partway in,
+		# because you are walking into a building that was already playing.
+		_music.play(0.0 if _title_music else randf() * 20.0))
 	if target != "":
 		tw.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
 
@@ -987,6 +1069,22 @@ func _apply_hud_scaling() -> void:
 		style.corner_radius_top_right = roundi(7.0 * scale)
 		style.corner_radius_bottom_left = roundi(7.0 * scale)
 		style.corner_radius_bottom_right = roundi(7.0 * scale)
+
+
+## Everything the building makes — all twenty-four spatial emitters, the
+## whispers, the heartbeat, the slot banks — routes through "Hall", so one bus
+## mute covers the lot. `Ambience` is the exception: it is a plain
+## AudioStreamPlayer on Master, so it is stopped by hand.
+func _set_world_audio(on: bool) -> void:
+	var idx := AudioServer.get_bus_index("Hall")
+	if idx >= 0:
+		AudioServer.set_bus_mute(idx, not on)
+	if is_instance_valid(ambience):
+		if on:
+			if not ambience.playing:
+				ambience.play()
+		else:
+			ambience.stop()
 
 
 ## Shared "Hall" bus: every spatial emitter routes through a soft reverb so
@@ -1308,17 +1406,24 @@ func _start_hint_fade() -> void:
 	tw.tween_property(_hint, "modulate:a", 0.0, 2.5)
 
 
-## The logo, the keys, and one instruction, over the already-running world.
+## The title menu and its dedicated information pages, over the already-running
+## world.
 ## Skipped for `--screenshot=` runs, which want the view and not the titles.
 func _build_title() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--screenshot=") or arg == "--nologo":
+			# These starts never show a card, so the world was never silenced.
+			_title_music = false
+			_set_world_audio(true)
 			_start_hint_fade()
 			return
 	if _hint != null:
 		_hint.modulate.a = 1.0
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.set_process_unhandled_input(false)  # no looking around yet either
+	_title_music = true
+	_set_world_audio(false)
+	_switch_music(active_level)
 	_title = TitleScreen.new()
 	_title.mode_selected.connect(_on_mode_selected)
 	_title.started.connect(_on_start)
@@ -1364,6 +1469,9 @@ func _prepare_descent() -> void:
 
 func _on_start(selected_descent: bool) -> void:
 	_title = null
+	_title_music = false
+	_set_world_audio(true)
+	_switch_music(active_level)
 	player.grab_look()
 	player.set_process_unhandled_input(true)
 	if selected_descent:

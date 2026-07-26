@@ -74,6 +74,15 @@ jobs:
       - name: Audit mall and prison furniture support
         run: godot --headless --path . --script tools/audit_new_levels.gd
 
+      - name: Audit rule survivability
+        run: godot --headless --path . --script tools/audit_survivability.gd
+
+      - name: Audit interpenetrating floor furnishings
+        run: godot --headless --path . --script tools/audit_prop_overlap.gd
+
+      - name: Audit airport collision glass
+        run: godot --headless --path . --script tools/audit_airport_colliders.gd
+
       - name: Audit mounted wall art
         run: godot --headless --path . --script tools/audit_wall_art.gd
 
@@ -91,6 +100,9 @@ jobs:
 
       - name: Audit Descent runtime contracts
         run: godot --headless --path . --script tools/audit_descent_runtime.gd -- --mode=descent --nologo
+
+      - name: Audit title navigation and attribution
+        run: godot --headless --path . --script tools/audit_title_screen.gd
 
       - name: Audit bundled fonts
         run: godot --headless --path . --script tools/font_check.gd

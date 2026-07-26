@@ -177,6 +177,13 @@ func flashlight_charge() -> float:
 ## Burn the cell down while it is lit, and let it recover while it is not. The
 ## last couple of seconds visibly fail, so the torch going out is never a
 ## surprise — you get to decide whether to spend them.
+## Burning a figure hands a little of the cell back. At peak pressure the torch
+## is on a ten-second cell against a spawn every few seconds, which no amount of
+## good aim could outrun; this makes accuracy the thing that sustains it.
+func add_flashlight_charge(seconds: float) -> void:
+	_flash_charge = minf(FLASH_MAX, _flash_charge + maxf(0.0, seconds))
+
+
 func _update_flashlight(dt: float) -> void:
 	if flashlight == null:
 		return

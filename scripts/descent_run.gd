@@ -6,6 +6,11 @@ signal floor_reached(floor_idx: int)
 signal attention_changed(value: float)
 signal violation(kind: int)
 signal blackout_changed(on: bool)
+## The rules are forcing the player to be passive — standing still through a
+## blackout, or still reading the floor caption. Whoever owns the figures is
+## expected to stop hunting for the duration: a threat the player is not
+## permitted to answer is not difficulty, it is a coin flip.
+signal passive_changed(on: bool)
 signal run_ended(won: bool)
 signal anomaly_requested(cell: Vector2i, kind: int)
 
@@ -17,6 +22,9 @@ const NAMES := [
 	"the school", "the prison", "the asylum", "the sewers",
 ]
 const ARRIVAL_GRACE := 8.0
+## How close a figure has to be before standing still stops counting as
+## breaking rule 2. You are allowed to stop for the thing the building sent.
+const STOP_EXCUSE_D := 12.0
 const FLOOR_PRESSURE := [0.0, 0.09, 0.18, 0.27, 0.36, 0.46, 0.56, 0.68]
 
 var floor_idx := 0
@@ -33,6 +41,13 @@ var departed := {}
 var charged_backtracks := {}
 var anomalies := {}
 var player: Player
+## Set by whoever owns both — the stop rule needs to know when something is
+## close enough that stopping is a reaction rather than a violation.
+var figures: ShadowFigures = null
+## True while a pursuer is walking the floor. Blackouts hold their timer rather
+## than firing into one: the pursuer cannot be burned, so "stand still" and
+## "something unkillable is closing at 3 m/s" have no play between them.
+var pursuer_active := false
 var world_seed := 1
 var pinned_attention := -1.0
 
@@ -46,6 +61,7 @@ var _blackout_cost := 0.0
 var _blackout_episode := false
 var _blackout_due := 0.0
 var _blackout_left := 0.0
+var _passive := false
 var _rng := RandomNumberGenerator.new()
 
 
@@ -108,10 +124,14 @@ func finish(won: bool) -> void:
 	run_ended.emit(won)
 
 
+## Only the three-second banish charges. Merely holding one still by keeping it
+## in the centre of frame is free, and always was — but at 0.10 this was the
+## most expensive violation in the game, which made the one torch-free defence
+## the fastest route to more figures and an earlier blackout.
 func add_stare_violation() -> void:
 	if suspended or ended or arrival_grace > 0.0:
 		return
-	_charge(Rule.STARE, 0.10, true)
+	_charge(Rule.STARE, 0.05, true)
 
 
 func suspend_rules() -> void:
@@ -130,6 +150,7 @@ func resume_rules(grace := 1.0) -> void:
 
 
 func _physics_process(dt: float) -> void:
+	_update_passive()
 	if ended or suspended or player == null or not player.is_inside_tree():
 		return
 	elapsed += dt
@@ -162,24 +183,31 @@ func _physics_process(dt: float) -> void:
 		if _blackout_left <= 0.0:
 			_end_blackout()
 	else:
-		_blackout_due -= dt
-		if _blackout_due <= 0.0:
-			_begin_blackout()
-			charged = true
+		# The timer is held, not spent, while a pursuer is out. It resumes where
+		# it left off once the floor is quiet again.
+		if not pursuer_active:
+			_blackout_due -= dt
+			if _blackout_due <= 0.0:
+				_begin_blackout()
+				charged = true
 		if speed < 0.3:
-			_stop_time += dt
-			var stop_threshold := lerpf(6.0, 3.75, floor_progress())
-			if _stop_time >= stop_threshold:
-				if not _stop_episode:
-					_stop_episode = true
-					_stop_cost = 0.04
-					_charge(Rule.STOP, 0.04, true)
-					charged = true
-				elif _stop_cost < 0.12:
-					var amount := minf(dt * 0.01, 0.12 - _stop_cost)
-					_stop_cost += amount
-					_charge(Rule.STOP, amount, false)
-					charged = true
+			# Standing still because something is bearing down on you is not the
+			# dawdling rule 2 exists to punish. Freeze the clock rather than
+			# resetting it, so the excuse cannot be farmed for free rest.
+			if not _stop_excused():
+				_stop_time += dt
+				var stop_threshold := lerpf(6.0, 3.75, floor_progress())
+				if _stop_time >= stop_threshold:
+					if not _stop_episode:
+						_stop_episode = true
+						_stop_cost = 0.04
+						_charge(Rule.STOP, 0.04, true)
+						charged = true
+					elif _stop_cost < 0.12:
+						var amount := minf(dt * 0.01, 0.12 - _stop_cost)
+						_stop_cost += amount
+						_charge(Rule.STOP, amount, false)
+						charged = true
 		else:
 			_stop_time = 0.0
 			_stop_cost = 0.0
@@ -190,6 +218,25 @@ func _physics_process(dt: float) -> void:
 		_set_attention(attention - dt * recovery)
 	elif pinned_attention >= 0.0 and not is_equal_approx(attention, pinned_attention):
 		_set_attention(pinned_attention)
+
+
+## Blackout or arrival caption: the player is not free to act, so nothing
+## should be closing on them. Recomputed every frame and emitted on change.
+func _update_passive() -> void:
+	var now := not ended and not suspended \
+		and (blackout or arrival_grace > 0.0)
+	if now == _passive:
+		return
+	_passive = now
+	passive_changed.emit(now)
+
+
+func rules_force_passive() -> bool:
+	return _passive
+
+
+func _stop_excused() -> bool:
+	return figures != null and figures.has_close_figure(STOP_EXCUSE_D)
 
 
 func _track_cell(enforce: bool) -> void:
@@ -278,6 +325,9 @@ func _begin_blackout() -> void:
 	_stop_time = 0.0
 	_stop_episode = false
 	blackout_changed.emit(true)
+	# Recompute now rather than at the top of the next frame: for that one frame
+	# the lights would be out with the figures still free to close.
+	_update_passive()
 
 
 func _end_blackout() -> void:
@@ -288,4 +338,5 @@ func _end_blackout() -> void:
 	_blackout_cost = 0.0
 	_blackout_episode = false
 	blackout_changed.emit(false)
+	_update_passive()
 	_schedule_blackout()

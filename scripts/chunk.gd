@@ -141,6 +141,9 @@ const DESK_PHONE_SCALE := 5.25
 # 4m gallery wall beside 4.8m storefronts, so it is mounted a fifth over.
 const MALL_PAYPHONE_PATH := "res://models/cc_by/payphone/payphone.glb"
 const MALL_PAYPHONE_SCALE := 1.2
+## How far the housing hangs below its own mounting origin, in authored units.
+## The bank uses it to sit the housing clear of the concourse's brass rail.
+const MALL_PAYPHONE_DROP := 0.3083
 const MALL_DIRECTORY_PATH := \
 	"res://models/cc_by/mall_directories/mall_directories.glb"
 const MALL_DIRECTORY_SCALE := 0.01
@@ -293,6 +296,125 @@ const SCH_CHEMISTRY_COUNTER_POINTS := [
 const OFFICE_PHONE_PATH := "res://models/cc_by_nc/office_phone/office_phone.glb"
 const OFFICE_PHONE_CENTRE := Vector3(-0.0703, 0.0039, 0.0840)
 
+# --- authored replacements for generated furniture ---------------------------
+#
+# Every model below took over a function that used to assemble the same object
+# out of boxes and cylinders. They share one convention: authored front is
+# local +Z, which is what `_wall_facing` already assumes, and each records the
+# (centre x, lowest y, centre z) of its own bounds so `_attributed_floor_prop`
+# can drop it centred and standing on the floor.
+#
+# Scales are fitted to the *working surface* — the seat, the counter, the
+# baize — not to total height. Fitting a total is how the school desk, the
+# hydrotherapy bath and the roulette table each ended up short.
+
+## Third casino cabinet. The 1-in-5 machines that used to be assembled out of
+## 42 primitives are this instead; the generated cabinet stays as the fallback.
+## The source shipped a 5.2m ground plane baked into the scene, since removed.
+const SLOT_ALT_PATH := "res://models/cc_by/slot_machine_alt/slot_machine_alt.glb"
+const SLOT_ALT_SCALE := 0.81064
+const SLOT_ALT_CENTRE := Vector3(0.0, -0.1019, 0.0539)
+
+const CHANGE_MACHINE_PATH := \
+	"res://models/cc_by/change_machine/change_machine.glb"
+const CHANGE_MACHINE_SCALE := 0.61738
+const CHANGE_MACHINE_CENTRE := Vector3(0.0, 0.0, 0.0432)
+
+## Two brass stanchions and the swag between them, as one unit. Posts sit
+## 1.891m apart at this scale, which is what the queue lines are laid out on
+## rather than the other way round — stretching the unit to a chosen pitch
+## would take the post height with it.
+const ROPE_BARRIER_PATH := "res://models/sketchfab/rope_barrier/rope_barrier.glb"
+const ROPE_BARRIER_SCALE := 0.62184
+const ROPE_BARRIER_CENTRE := Vector3(0.0, 0.0, 0.0)
+const ROPE_BARRIER_PITCH := 1.891
+
+const CHECKIN_DESK_PATH := "res://models/sketchfab/checkin_desk/checkin_desk.glb"
+## Authored in metres and correct at 1:1. The source was a double-sided island
+## mirrored about its counter — 6.23m deep, more than the 3.4m between the
+## queue lane and the back wall — so it is clipped to one position: counter at
+## local -Z facing the queue, masts, scale and belt housing running back to +Z.
+const CHECKIN_DESK_SCALE := 1.0
+const CHECKIN_DESK_CENTRE := Vector3(0.0, 0.0, 0.0)
+## Half-depth and width of the clipped position, which is what sets both the
+## desk pitch below and the distance the row stands off the back wall.
+const CHECKIN_DESK_HALF_D := 1.60
+const CHECKIN_DESK_W := 4.78
+
+const GARBAGE_BIN_PATH := "res://models/cc_by/garbage_bin/garbage_bin.glb"
+const GARBAGE_BIN_SCALE := 1.0
+const GARBAGE_BIN_CENTRE := Vector3(0.0, 0.0028, 0.0)
+
+const IV_DRIP_PATH := "res://models/cc_by/iv_drip/iv_drip.glb"
+const IV_DRIP_SCALE := 0.00486
+const IV_DRIP_CENTRE := Vector3(31.8042, -0.8658, 0.0)
+
+const CITY_BENCH_PATH := "res://models/cc_by/city_bench/city_bench.glb"
+const CITY_BENCH_SCALE := 0.01186
+const CITY_BENCH_CENTRE := Vector3(0.0, 0.0, -1.1806)
+
+const FOOD_COURT_SET_PATH := \
+	"res://models/cc_by/food_court_set/food_court_set.glb"
+## Fitted so the tabletop lands at 0.75m. The chairs' spindle backs run 0.4m
+## above that and would have made a 1.39m table out of a 0.92m one.
+const FOOD_COURT_SET_SCALE := 0.818
+const FOOD_COURT_SET_CENTRE := Vector3(0.0, -0.0172, -0.7932)
+
+const LOCKERS_PATH := "res://models/cc_by/lockers/lockers.glb"
+const LOCKERS_SCALE := 0.00904
+const LOCKERS_CENTRE := Vector3(22.0150, -115.0920, 79.8665)
+## Width of one authored run, used to tile a corridor length without stretching.
+const LOCKERS_RUN_W := 1.97
+const GYM_LOCKER_PATH := "res://models/cc_by/gym_locker/gym_locker.glb"
+const GYM_LOCKER_SCALE := 16.68542
+const GYM_LOCKER_CENTRE := Vector3(0.0, 0.0074, -0.0012)
+const GYM_LOCKER_W := 0.48
+
+const SCH_SINK_PATH := "res://models/cc_by/sink/sink.glb"
+const SCH_SINK_SCALE := 1.0
+const SCH_SINK_CENTRE := Vector3(0.0075, -0.0076, 0.0336)
+const SCH_TOILET_PATH := "res://models/cc_by/toilet/toilet.glb"
+const SCH_TOILET_SCALE := 1.0
+const SCH_TOILET_CENTRE := Vector3(-0.0279, 0.0, 0.3011)
+const SCH_URINAL_PATH := "res://models/cc_by/urinal/urinal.glb"
+const SCH_URINAL_SCALE := 1.0
+## Authored hanging: the bowl's lowest point is 0.60m up its own mounting
+## plane, so this one is placed from the wall rather than from the floor.
+const SCH_URINAL_CENTRE := Vector3(-0.1628, 0.5985, -0.0041)
+const SCH_FOUNTAIN_PATH := \
+	"res://models/cc_by/drinking_fountain/drinking_fountain.glb"
+const SCH_FOUNTAIN_SCALE := 0.55948
+const SCH_FOUNTAIN_CENTRE := Vector3(-0.0249, -0.9555, -0.0157)
+
+## An authored overhead fixture sheet was measured for `_troffer` and rejected.
+## The 4ft pan it contains is 3.9:1, and five of the six ceiling runs need
+## between 2.1:1 and 11.8:1 — matching them means non-uniform scaling that
+## visibly distorts the housing and its end caps. The lens would have to stay a
+## separate emissive quad in every case regardless, because the flicker system
+## drives that material and the model's own lens is baked, so the model would
+## only ever have contributed a frame around a quad that five boxes already do.
+
+const PRISON_WALL_PHONE_PATH := \
+	"res://models/cc_by/wall_telephone/wall_telephone.glb"
+const PRISON_WALL_PHONE_SCALE := 0.01025
+const PRISON_WALL_PHONE_CENTRE := Vector3(13.5224, -18.2725, 0.0)
+
+## Noncommercial, like the mall fascias and the office phone. Reached through
+## exactly one function — `_sch_trolley` — so the dependency lifts out in a
+## single edit.
+##
+## Two authored jetways have been measured for `_air_jetway` and neither
+## shipped. The apron is a sealed 2.14m diorama strip that the docked aircraft
+## already fills — fuselage z 4.00..5.76 across its full 10.5m width. A tunnel
+## sized to that depth is either too short to read as a jetway, or tall enough
+## to swallow the aircraft rather than dock against it. The generated tube is
+## 1m across and tuned to meet a fuselage, which is what this space actually
+## needs; a replacement has to be authored as a shallow facade, not a bridge.
+const SCH_CLEANING_CART_PATH := \
+	"res://models/cc_by_nc/cleaning_cart/cleaning_cart.glb"
+const SCH_CLEANING_CART_SCALE := 1.0
+const SCH_CLEANING_CART_CENTRE := Vector3(0.0502, -0.0002, -0.0109)
+
 ## Painted storefront fascias cropped from a CC BY-NC source. Every use of these
 ## runs through `_mall_unit_sign`, so the noncommercial dependency can be lifted
 ## out in one edit; the generated MALL_NAMES lettering is the fallback and stays.
@@ -432,6 +554,22 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(SCH_CHEMISTRY_TABLE_PATH)
 	paths.append(CHEMISTRY_GLASSWARE_PATH)
 	paths.append(OFFICE_PHONE_PATH)
+	paths.append(SLOT_ALT_PATH)
+	paths.append(CHANGE_MACHINE_PATH)
+	paths.append(ROPE_BARRIER_PATH)
+	paths.append(CHECKIN_DESK_PATH)
+	paths.append(GARBAGE_BIN_PATH)
+	paths.append(IV_DRIP_PATH)
+	paths.append(CITY_BENCH_PATH)
+	paths.append(FOOD_COURT_SET_PATH)
+	paths.append(LOCKERS_PATH)
+	paths.append(GYM_LOCKER_PATH)
+	paths.append(SCH_SINK_PATH)
+	paths.append(SCH_TOILET_PATH)
+	paths.append(SCH_URINAL_PATH)
+	paths.append(SCH_FOUNTAIN_PATH)
+	paths.append(PRISON_WALL_PHONE_PATH)
+	paths.append(SCH_CLEANING_CART_PATH)
 	for art_path in WALL_ART_ALL:
 		paths.append(art_path)
 	return paths
@@ -1270,6 +1408,14 @@ func _exit_sign(dir: int, t: float) -> void:
 ## Top of the wall's horizontal banding, or 0 where a theme has none. These
 ## match the strips laid down in `_build_walls`: the asylum's tiled wainscot,
 ## the school's red line, the mall's brass rail and the prison's green dado.
+##
+## Anything mounted on a banded wall clears the boundary by `WALL_BAND_CLEAR`
+## rather than straddling it. A picture hung across a wainscot, or a payphone
+## housing cut in half by a brass rail, reads as a mistake rather than as
+## something someone installed.
+const WALL_BAND_CLEAR := 0.11
+
+
 func _wall_band_top() -> float:
 	match theme:
 		0:
@@ -1411,7 +1557,7 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 	# it. The ceiling clamp still wins if a room is too short to allow both.
 	var band := _wall_band_top()
 	if band > 0.0:
-		y = maxf(y, band + 0.11 + size.y * 0.5)
+		y = maxf(y, band + WALL_BAND_CLEAR + size.y * 0.5)
 		y = minf(y, ceil_h - size.y * 0.5 - 0.22)
 	var pos := Vector3(inner + n * 0.055, y, along) if dir < 2 \
 		else Vector3(along, y, inner + n * 0.055)
@@ -2869,7 +3015,7 @@ func _slots() -> void:
 ## source can disappear without breaking the generated fallback.
 func _slot_machine(x: float, z: float, f: float, idx: int) -> void:
 	if posmod(idx, 5) == 4:
-		_procedural_slot_machine(x, z, f, idx)
+		_slot_machine_alt(x, z, f, idx)
 		return
 	if _slot_scene == null:
 		_slot_scene = _prop_scene(SLOT_MACHINE_PATH)
@@ -2910,6 +3056,33 @@ func _slot_machine(x: float, z: float, f: float, idx: int) -> void:
 		_cc0_prop("bar_chair_round_01", cpos, cyaw)
 		_collider_cyl(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
 	_collider_box(Vector3(x, 0.85, z), Vector3(0.88, 1.70, 0.76))
+
+
+## The minority cabinet, so a bank never reads as ten copies of the vintage
+## one. This used to be forty-two primitives with live shader screens; it is
+## now a second authored machine, and the generated cabinet below stays as the
+## fallback if the model is missing.
+func _slot_machine_alt(x: float, z: float, f: float, idx: int) -> void:
+	var yaw := 0.0 if f > 0.0 else PI
+	var b0 := body.get_child_count()
+	var pivot := _attributed_floor_prop(SLOT_ALT_PATH, Vector3(x, 0, z), yaw,
+		SLOT_ALT_SCALE, SLOT_ALT_CENTRE, "slot_machine_alt", null, true)
+	if pivot == null:
+		_procedural_slot_machine(x, z, f, idx)
+		return
+	pivot.set_meta("slot_machine", true)
+	pivot.set_meta("slot_asset", "slot_machine_alt")
+	# The generated-world audit checks that no cabinet is an unsupported stack
+	# of display quads. This one is a closed authored volume, front and back.
+	pivot.set_meta("slot_front_shell", true)
+	pivot.set_meta("slot_rear_shell", true)
+	if _r(60 + idx) < 0.85:
+		var cyaw := yaw + (_r(66 + idx) - 0.5) * 0.6
+		var cpos := Vector3(x + (_r(96 + idx) - 0.5) * 0.16, 0, z + f * 0.95)
+		_cc0_prop("bar_chair_round_01", cpos, cyaw)
+		_collider_cyl(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
+	_collider_box(Vector3(x, 0.88, z), Vector3(0.62, 1.76, 1.10))
+	_bind_furnishing_colliders(pivot, b0)
 
 
 ## Newer alternate machine: sculpted cabinet shell (shared ArrayMesh) with the
@@ -3231,22 +3404,27 @@ func _change_machine(dir: int, plane: float) -> void:
 		v.position = Vector3(along, 0, inner + n * 0.30)
 		v.rotation.y = 0.0 if n > 0.0 else PI
 	add_child(v)
-	_mrbox(v, Vector3(0, 0.95, 0), Vector3(0.75, 1.9, 0.5), Mats.slot_body(), 0.03)
-	_mquad(v, Vector3(-0.12, 1.42, 0.253), Vector2(0.34, 0.24), Mats.ticker())
-	_mrbox(v, Vector3(0.22, 1.38, 0.26), Vector3(0.16, 0.3, 0.03), Mats.sign_housing(), 0.008)
-	for bi in 6:
-		_mbox(v, Vector3(0.16 + 0.06 * float(bi % 2), 1.47 - 0.08 * float(bi / 2), 0.278),
-			Vector3(0.04, 0.04, 0.01), Mats.charcoal())
-	_mbox(v, Vector3(0, 0.98, 0.26), Vector3(0.5, 0.05, 0.03), Mats.chrome())
-	_mrbox(v, Vector3(0, 0.62, 0.24), Vector3(0.44, 0.18, 0.06), Mats.sign_housing(), 0.015)
-	var lb := Label3D.new()
-	lb.text = "CHANGE"
-	lb.font_size = 72
-	lb.pixel_size = 0.0022
-	lb.modulate = Color(1.0, 0.72, 0.2)
-	lb.position = Vector3(0, 1.75, 0.26)
-	v.add_child(lb)
-	_collider_yaw_box(v.position + Vector3(0, 0.95, 0), Vector3(0.8, 1.9, 0.55), v.rotation.y)
+	# The authored cabinet carries its own CHANGE branding, coin tray and bill
+	# slot, so the generated panel stack and Label3D marquee are gone with it.
+	var unit := _attributed_prop_local(v, CHANGE_MACHINE_PATH,
+		-CHANGE_MACHINE_CENTRE * CHANGE_MACHINE_SCALE, 0.0,
+		Vector3.ONE * CHANGE_MACHINE_SCALE)
+	if unit == null:
+		_mrbox(v, Vector3(0, 0.95, 0), Vector3(0.75, 1.9, 0.5),
+			Mats.slot_body(), 0.03)
+		_mquad(v, Vector3(-0.12, 1.42, 0.253), Vector2(0.34, 0.24), Mats.ticker())
+		_mbox(v, Vector3(0, 0.98, 0.26), Vector3(0.5, 0.05, 0.03), Mats.chrome())
+		var lb := Label3D.new()
+		lb.text = "CHANGE"
+		lb.font_size = 72
+		lb.pixel_size = 0.0022
+		lb.modulate = Color(1.0, 0.72, 0.2)
+		lb.position = Vector3(0, 1.75, 0.26)
+		v.add_child(lb)
+	else:
+		v.set_meta("attributed_furnishing", "casino_change_machine")
+	_collider_yaw_box(v.position + Vector3(0, 0.88, 0),
+		Vector3(1.0, 1.76, 0.52), v.rotation.y)
 
 
 ## Blackjack table nobody deals anymore: baize, shoe, chips, three stools.
@@ -3312,24 +3490,32 @@ func _blackjack(p: Vector3, salt: int) -> void:
 
 
 ## Brass posts and sagging red rope framing the grand hall's centre aisle.
+## Two queue lines flanking the casino's main axis, laid out on the authored
+## barrier's own 1.891m post pitch rather than a chosen one.
 func _velvet_ropes() -> void:
 	for xr in [3.0, 9.0]:
-		var pts := []
 		for i in 4:
-			pts.append(Vector3(xr, 0, 2.4 + 2.4 * float(i)))
-		for i in 4:
-			var pp: Vector3 = pts[i]
-			_cyl(pp + Vector3(0, 0.5, 0), 0.028, 1.0, Mats.brass())
-			_cyl(pp + Vector3(0, 0.015, 0), 0.15, 0.03, Mats.brass(), false)
-			_sphere(pp + Vector3(0, 1.03, 0), 0.045, Mats.brass())
-		for i in 3:
-			var a: Vector3 = pts[i] + Vector3(0, 0.93, 0)
-			var b: Vector3 = pts[i + 1] + Vector3(0, 0.93, 0)
-			var mid := (a + b) / 2.0 - Vector3(0, 0.2, 0)
-			var r1 := _beam(a, mid, 0.04, Mats.velvet())
-			var r2 := _beam(mid, b, 0.04, Mats.velvet())
-			r1.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			r2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_rope_barrier(Vector3(xr, 0,
+				2.4 + ROPE_BARRIER_PITCH * (float(i) + 0.5)), PI / 2.0,
+				"casino_queue_rope")
+
+
+## One pair of brass stanchions and the swag between them. `yaw` turns the
+## run: the authored unit lies along its local X.
+func _rope_barrier(p: Vector3, yaw: float, kind: String) -> Node3D:
+	var b0 := body.get_child_count()
+	var pivot := _attributed_floor_prop(ROPE_BARRIER_PATH, p, yaw,
+		ROPE_BARRIER_SCALE, ROPE_BARRIER_CENTRE, kind, null, true)
+	if pivot == null:
+		return null
+	# Posts collide; the swag between them does not, so a player can duck a
+	# queue line the way the geometry suggests they should be able to.
+	var half := ROPE_BARRIER_PITCH * 0.5
+	for side in [-1.0, 1.0]:
+		var off := Vector3(side * half, 0, 0).rotated(Vector3.UP, yaw)
+		_collider_cyl(p + off + Vector3(0, 0.51, 0), 0.09, 1.02)
+	_bind_furnishing_colliders(pivot, b0)
+	return pivot
 
 
 ## Landmark: the casino's forgotten ballroom. A clear marble dance floor,
@@ -3628,17 +3814,13 @@ func _lounge() -> void:
 	mz.ready.connect(func(): mz.play(randf() * 11.0))
 
 
+## Was seven rounded boxes and two tilted cushions, which read as upholstered
+## geometry rather than as a sofa. `sofa_03` was already in the project and
+## already used elsewhere, so this was only ever a missing call.
 func _sofa(center: Vector3, face: float) -> void:
-	_rbox(center + Vector3(0, 0.33, 0), Vector3(2.2, 0.42, 0.95), Mats.velvet(), 0.06, false)
-	_rbox(center + Vector3(0, 0.78, -face * 0.36), Vector3(2.2, 0.7, 0.24), Mats.velvet(), 0.07, false)
-	_rbox(center + Vector3(-0.98, 0.62, 0), Vector3(0.24, 0.55, 0.95), Mats.velvet(), 0.07, false)
-	_rbox(center + Vector3(0.98, 0.62, 0), Vector3(0.24, 0.55, 0.95), Mats.velvet(), 0.07, false)
-	_rbox(center + Vector3(-0.44, 0.6, face * 0.06), Vector3(0.84, 0.14, 0.78), Mats.velvet2(), 0.055, false)
-	_rbox(center + Vector3(0.44, 0.6, face * 0.06), Vector3(0.84, 0.14, 0.78), Mats.velvet2(), 0.055, false)
-	for px in [-0.44, 0.44]:
-		var pil := _rbox(center + Vector3(px, 0.93, -face * 0.28), Vector3(0.8, 0.44, 0.16), Mats.velvet2(), 0.06, false)
-		pil.rotation.x = face * (0.12 + (WorldGen.r01(wseed, cell.x, cell.y, 57 + int(px * 10.0)) - 0.5) * 0.08)
-	_collider_box(center + Vector3(0, 0.6, 0), Vector3(2.2, 1.2, 1.0))
+	var yaw := 0.0 if face > 0.0 else PI
+	_cc0_prop("sofa_03", center, yaw)
+	_collider_box(center + Vector3(0, 0.55, 0), Vector3(2.74, 1.10, 0.95))
 
 
 func _planter(p: Vector3) -> void:
@@ -4228,11 +4410,20 @@ func _mall_payphone_bank(dir: int, count: int) -> void:
 	pv.position = origin
 	pv.rotation.y = facing
 	add_child(pv)
+	# The authored housing is 0.74m tall about its own mounting plane, so a
+	# 1.38m mount cut it in half on the mall's 1.21m brass rail — the same
+	# fault the wall art was moved for. Lift it so the bottom of the housing
+	# clears the rail by the shared margin instead of straddling it.
+	var mount := 1.38
+	var band := _wall_band_top()
+	if band > 0.0:
+		mount = maxf(mount,
+			band + WALL_BAND_CLEAR + MALL_PAYPHONE_DROP * MALL_PAYPHONE_SCALE)
 	var span := 1.0
 	for ph in count:
 		var px := (float(ph) - float(count - 1) * 0.5) * span
 		var authored := _attributed_prop_local(pv, MALL_PAYPHONE_PATH,
-			Vector3(px, 1.38, 0.0), 0.0,
+			Vector3(px, mount, 0.0), 0.0,
 			Vector3.ONE * MALL_PAYPHONE_SCALE)
 		if authored != null:
 			# The authored housing is its own backboard; the charcoal panel the
@@ -4249,7 +4440,7 @@ func _mall_payphone_bank(dir: int, count: int) -> void:
 	# generated boxes needed; a deeper collider would stop the player short of
 	# a wall they can see is flat.
 	var forward := Vector3(sin(facing), 0, cos(facing))
-	_collider_yaw_box(origin + forward * 0.09 + Vector3(0, 1.38, 0),
+	_collider_yaw_box(origin + forward * 0.09 + Vector3(0, mount, 0),
 		Vector3(span * float(count) - 0.1, 0.78, 0.20), facing)
 
 
@@ -4579,6 +4770,13 @@ func school_fixture_integrity_audit() -> Dictionary:
 	if theme != 6:
 		return report
 	for node in find_children("*", "Node3D", true, false):
+		# The authored cart carries its own opaque materials. The generated one
+		# is still the fallback and still has to be checked: its tub was once
+		# built from translucent water-jug plastic, and the wheels and the wall
+		# behind it showed through.
+		if str(node.get_meta("attributed_furnishing", "")) \
+				== "school_janitor_trolley":
+			report["carts"] = int(report["carts"]) + 1
 		if node.has_meta("school_cart_opaque_body"):
 			report["carts"] = int(report["carts"]) + 1
 			var mesh := node as MeshInstance3D
@@ -6065,8 +6263,7 @@ func _air_column(p: Vector2) -> void:
 
 
 func _air_bin(p: Vector3) -> void:
-	_cyl(p + Vector3(0, 0.42, 0), 0.26, 0.84, Mats.steel())
-	_cyl(p + Vector3(0, 0.855, 0), 0.22, 0.03, Mats.charcoal(), false)
+	_waste_bin(p, _r(int(p.x * 7.0 + p.z * 13.0) + 431) * TAU, "airport_bin")
 
 
 ## Nested baggage trolley (optionally a rank of them).
@@ -6668,8 +6865,15 @@ func _air_checkin() -> void:
 	var wdir := _air_pick_wall(360)
 	var yw := _air_yaw_for(wdir) if wdir >= 0 else ((PI / 2.0) if _r(361) < 0.5 else 0.0)
 	var o := Vector3(S / 2.0, 0, S / 2.0)
-	for di in 3:
-		_checkin_desk(o, yw, -3.6 + 3.6 * float(di), 365 + di * 4)
+	# The authored position is 4.78m wide, so a row of two fills the same span
+	# three narrow generated desks used to. Falling back to the generated desk
+	# restores the tighter three-desk row.
+	if _prop_scene(CHECKIN_DESK_PATH) != null:
+		for di in 2:
+			_checkin_desk(o, yw, -2.6 + 5.2 * float(di), 365 + di * 4)
+	else:
+		for di in 3:
+			_checkin_desk(o, yw, -3.6 + 3.6 * float(di), 365 + di * 4)
 	# the big board hanging over the queue
 	_fids(self, _wp(o, Vector3(0, 3.15, 1.1), yw), yw + PI, true, true)
 	# serpentine of queue barriers holding a line for no one
@@ -6684,39 +6888,72 @@ func _air_checkin() -> void:
 
 
 func _checkin_desk(o: Vector3, yw: float, dx: float, salt: int) -> void:
+	var authored := _prop_scene(CHECKIN_DESK_PATH) != null
+	# The generated desk is a shallow counter that sat 3.55m off centre. The
+	# authored position is 3.2m deep, so it stands back far enough for its belt
+	# housing to reach the wall without the counter crowding the queue lane.
+	var dz := 4.20 if authored else 3.55
+	var b0 := body.get_child_count()
 	var v := Node3D.new()
-	v.position = _wp(o, Vector3(dx, 0, 3.55), yw)
+	v.position = _wp(o, Vector3(dx, 0, dz), yw)
 	v.rotation.y = yw
+	v.set_meta("atomic_furnishing", "airport_checkin_desk")
+	v.set_meta("floor_supported", true)
+	_furnishing_group_serial += 1
+	v.set_meta("furnishing_group", _furnishing_group_serial)
 	add_child(v)
-	# counter facing the queue (local -z)
-	_mbox(v, Vector3(0.35, 0.06, 0), Vector3(1.9, 0.12, 0.68), Mats.charcoal())
-	_mrbox(v, Vector3(0.35, 0.57, 0), Vector3(1.9, 1.02, 0.66), Mats.desk_white(), 0.02)
-	_mbox(v, Vector3(0.35, 1.1, 0), Vector3(1.96, 0.04, 0.74), Mats.steel())
-	_collider_yaw_box(_wp(v.position, Vector3(0.35, 0.6, 0), yw), Vector3(1.9, 1.2, 0.75), yw)
-	# monitor on a pole, screen to the agent side
-	_mcyl(v, Vector3(0.85, 1.55, 0.1), 0.025, 0.9, Mats.metal_gray())
-	var lit := _r(salt) < 0.4
-	_mrbox(v, Vector3(0.85, 2.1, 0.1), Vector3(0.5, 0.34, 0.04), Mats.screen_glow() if lit else Mats.screen_dark(), 0.008)
-	if lit:
-		var lb := Label3D.new()
-		lb.text = "CLOSED"
-		lb.font_size = 40
-		lb.pixel_size = 0.002
-		lb.modulate = Color(1.0, 0.5, 0.25)
-		lb.position = Vector3(0.85, 2.1, 0.13)
-		v.add_child(lb)
-	# baggage scale and the belt that climbs into the wall housing
-	_mbox(v, Vector3(-0.75, 0.17, 0.35), Vector3(0.8, 0.34, 0.95), Mats.steel())
-	_mbox(v, Vector3(-0.75, 0.355, 0.35), Vector3(0.68, 0.02, 0.85), Mats.rubber_black())
-	var stub := _mbox(v, Vector3(-0.75, 0.62, 1.25), Vector3(0.68, 0.05, 1.0), Mats.rubber_black())
-	stub.rotation.x = -0.45
-	_mbox(v, Vector3(-0.75, 1.0, 1.95), Vector3(0.92, 1.9, 0.5), Mats.steel())
-	for fi in 4:
-		_mbox(v, Vector3(-0.99 + 0.16 * float(fi), 1.25, 1.68), Vector3(0.14, 0.5, 0.02), Mats.rubber_black())
-	_collider_yaw_box(_wp(v.position, Vector3(-0.75, 0.5, 0.8), yw), Vector3(0.9, 1.0, 2.0), yw)
-	# position number hanging above
+	# The authored position supplies the counter, the agent monitor mast, the
+	# baggage scale and the belt housing — the twelve primitives that used to
+	# fake them are the fallback below. Its counter faces local -Z, which is
+	# the queue side, matching the generated desk it replaces.
+	var desk: Node3D = null
+	if authored:
+		desk = _attributed_prop_local(v, CHECKIN_DESK_PATH,
+			-CHECKIN_DESK_CENTRE * CHECKIN_DESK_SCALE, 0.0,
+			Vector3.ONE * CHECKIN_DESK_SCALE)
+	if desk != null:
+		v.set_meta("attributed_furnishing", "airport_checkin_desk")
+		# Counter run and the belt housing behind it, as two boxes rather than
+		# one: the queue side in front of the counter must stay walkable.
+		_collider_yaw_box(_wp(v.position, Vector3(0, 0.58, -1.05), yw),
+			Vector3(CHECKIN_DESK_W, 1.16, 1.10), yw)
+		_collider_yaw_box(_wp(v.position, Vector3(0, 0.72, 0.60), yw),
+			Vector3(CHECKIN_DESK_W, 1.44, 2.00), yw)
+	else:
+		# counter facing the queue (local -z)
+		_mbox(v, Vector3(0.35, 0.06, 0), Vector3(1.9, 0.12, 0.68), Mats.charcoal())
+		_mrbox(v, Vector3(0.35, 0.57, 0), Vector3(1.9, 1.02, 0.66), Mats.desk_white(), 0.02)
+		_mbox(v, Vector3(0.35, 1.1, 0), Vector3(1.96, 0.04, 0.74), Mats.steel())
+		_collider_yaw_box(_wp(v.position, Vector3(0.35, 0.6, 0), yw), Vector3(1.9, 1.2, 0.75), yw)
+		# monitor on a pole, screen to the agent side
+		_mcyl(v, Vector3(0.85, 1.55, 0.1), 0.025, 0.9, Mats.metal_gray())
+		var lit := _r(salt) < 0.4
+		_mrbox(v, Vector3(0.85, 2.1, 0.1), Vector3(0.5, 0.34, 0.04), Mats.screen_glow() if lit else Mats.screen_dark(), 0.008)
+		if lit:
+			var lb := Label3D.new()
+			lb.text = "CLOSED"
+			lb.font_size = 40
+			lb.pixel_size = 0.002
+			lb.modulate = Color(1.0, 0.5, 0.25)
+			lb.position = Vector3(0.85, 2.1, 0.13)
+			v.add_child(lb)
+		# baggage scale and the belt that climbs into the wall housing
+		_mbox(v, Vector3(-0.75, 0.17, 0.35), Vector3(0.8, 0.34, 0.95), Mats.steel())
+		_mbox(v, Vector3(-0.75, 0.355, 0.35), Vector3(0.68, 0.02, 0.85), Mats.rubber_black())
+		var stub := _mbox(v, Vector3(-0.75, 0.62, 1.25), Vector3(0.68, 0.05, 1.0), Mats.rubber_black())
+		stub.rotation.x = -0.45
+		_mbox(v, Vector3(-0.75, 1.0, 1.95), Vector3(0.92, 1.9, 0.5), Mats.steel())
+		for fi in 4:
+			_mbox(v, Vector3(-0.99 + 0.16 * float(fi), 1.25, 1.68), Vector3(0.14, 0.5, 0.02), Mats.rubber_black())
+		_collider_yaw_box(_wp(v.position, Vector3(-0.75, 0.5, 0.8), yw), Vector3(0.9, 1.0, 2.0), yw)
+	_bind_furnishing_colliders(v, b0)
+	# Position number hanging above. Over the authored desk it moves a metre
+	# forward, to hang over the counter rather than the belt run behind it —
+	# far enough back to leave the big departures board its own airspace, and
+	# 2.5m clear of the 3.55m monitor mast at the desk's other end.
 	var pn := Node3D.new()
-	pn.position = _wp(o, Vector3(dx + 0.35, 3.0, 3.55), yw)
+	pn.position = _wp(o, Vector3(dx + 0.35, 3.0,
+		dz - (1.00 if authored else 0.0)), yw)
 	pn.rotation.y = yw
 	add_child(pn)
 	var rod_h := ceil_h - 3.0 - 0.26
@@ -7523,11 +7760,25 @@ func _attributed_prop_local(parent: Node3D, path: String, pos: Vector3,
 ## every call site is where placement bugs come from, so each asset records its
 ## authored (centre x, lowest y, centre z) once and this drops the prop with its
 ## footprint centred on `p`, its lowest point on the floor, facing `yaw`.
+## `group` opts the prop into the furnishing-group system: the overlap audit
+## only compares colliders carrying a group id, so a free-standing prop dropped
+## at a hashed point is invisible to it otherwise. That is precisely how a
+## suitcase came to stand inside a row of gate seating undetected. Callers that
+## pass it must follow their collider calls with `_bind_furnishing_colliders`.
 func _attributed_floor_prop(path: String, p: Vector3, yaw: float, scl: float,
-		centre: Vector3, kind: String, parent: Node3D = null) -> Node3D:
+		centre: Vector3, kind: String, parent: Node3D = null,
+		group := false) -> Node3D:
 	var pivot := Node3D.new()
 	pivot.position = p
 	pivot.rotation.y = yaw
+	if group:
+		# Same contract as `_furnishing_pivot`: one pivot, one group, removed
+		# as a unit. The support audit requires the tag, or the prop's grouped
+		# colliders read as physics left behind by a culled assembly.
+		pivot.set_meta("atomic_furnishing", kind)
+		pivot.set_meta("floor_supported", true)
+		_furnishing_group_serial += 1
+		pivot.set_meta("furnishing_group", _furnishing_group_serial)
 	if parent != null:
 		parent.add_child(pivot)
 	else:
@@ -7540,6 +7791,23 @@ func _attributed_floor_prop(path: String, p: Vector3, yaw: float, scl: float,
 		return null
 	pivot.set_meta("attributed_furnishing", kind)
 	inst.set_meta("authored_model", kind)
+	return pivot
+
+
+## The one waste bin the whole building uses. Airport concourses, school
+## corridors and mall walkways each used to roll their own out of two cylinders
+## in slightly different greys; a public bin is a public bin.
+func _waste_bin(p: Vector3, yaw: float, kind: String) -> Node3D:
+	var b0 := body.get_child_count()
+	var pivot := _attributed_floor_prop(GARBAGE_BIN_PATH, p, yaw,
+		GARBAGE_BIN_SCALE, GARBAGE_BIN_CENTRE, kind, null, true)
+	if pivot == null:
+		# The generated fallback keeps a floor legible if the model is absent.
+		_cyl(p + Vector3(0, 0.42, 0), 0.26, 0.84, Mats.steel())
+		_cyl(p + Vector3(0, 0.855, 0), 0.22, 0.03, Mats.charcoal(), false)
+		return null
+	_collider_cyl(p + Vector3(0, 0.43, 0), 0.39, 0.86)
+	_bind_furnishing_colliders(pivot, b0)
 	return pivot
 
 
@@ -7903,15 +8171,27 @@ func _asy_medbox(p: Vector3, yaw: float) -> void:
 
 
 func _asy_iv(p: Vector3) -> void:
-	var v := Node3D.new()
-	v.position = p
-	add_child(v)
-	_mcyl(v, Vector3(0, 0.95, 0), 0.017, 1.9, Mats.chrome())
-	_mcyl(v, Vector3(0, 0.025, 0), 0.2, 0.05, Mats.asy_metal())
-	_mbox(v, Vector3(0, 1.88, 0), Vector3(0.4, 0.02, 0.02), Mats.chrome())
-	_mrbox(v, Vector3(0.16, 1.68, 0), Vector3(0.13, 0.24, 0.05), Mats.glass_tint(), 0.02)
-	_asy_wire(v, Vector3(0.16, 1.56, 0), Vector3(0.05, 0.9, 0.06))
-	_collider_cyl(p + Vector3(0, 0.95, 0), 0.2, 1.9)
+	var yaw := _r(int(p.x * 17.0 + p.z * 3.0) + 812) * TAU
+	var b0 := body.get_child_count()
+	var pivot := _attributed_floor_prop(IV_DRIP_PATH, p, yaw, IV_DRIP_SCALE,
+		IV_DRIP_CENTRE, "asylum_iv_stand", null, true)
+	if pivot == null:
+		var v := Node3D.new()
+		v.position = p
+		add_child(v)
+		_mcyl(v, Vector3(0, 0.95, 0), 0.017, 1.9, Mats.chrome())
+		_mcyl(v, Vector3(0, 0.025, 0), 0.2, 0.05, Mats.asy_metal())
+		_mbox(v, Vector3(0, 1.88, 0), Vector3(0.4, 0.02, 0.02), Mats.chrome())
+		_mrbox(v, Vector3(0.16, 1.68, 0), Vector3(0.13, 0.24, 0.05),
+			Mats.glass_tint(), 0.02)
+		_asy_wire(v, Vector3(0.16, 1.56, 0), Vector3(0.05, 0.9, 0.06))
+		_collider_cyl(p + Vector3(0, 0.95, 0), 0.2, 1.9)
+		return
+	# The five-castor base is 0.84m across but nothing above 0.2m is wider than
+	# the pole, so the collider follows the pole and lets a player's feet pass
+	# between the legs rather than bouncing off a metre-wide invisible drum.
+	_collider_cyl(p + Vector3(0, 1.0, 0), 0.17, 1.95)
+	_bind_furnishing_colliders(pivot, b0)
 
 
 ## Claw-foot hydrotherapy tub; half of them still hold black water. The authored
@@ -9110,6 +9390,62 @@ func _sch_passage_lockers(salt: int) -> void:
 ## and latches. One collider for the whole run, not forty.
 func _sch_locker_run(along_x: bool, off: float, from: float, to: float,
 		facing: float, mat: Material, depth: float, hgt: float, salt: int) -> void:
+	if _sch_locker_run_authored(along_x, off, from, to, facing, depth):
+		return
+	_sch_locker_run_generated(along_x, off, from, to, facing, mat, depth,
+		hgt, salt)
+
+
+## The authored bank is 1.97m of doors, so a corridor length is tiled with as
+## many whole banks as fit and the remainder split evenly at both ends rather
+## than stretching one bank to length — a stretched locker reads immediately as
+## the wrong door proportion. Runs shorter than one bank fall back to single
+## columns, and anything shorter than that is left to the generated run.
+func _sch_locker_run_authored(along_x: bool, off: float, from: float,
+		to: float, facing: float, gen_depth: float) -> bool:
+	var ln := to - from
+	if ln < GYM_LOCKER_W or _prop_scene(LOCKERS_PATH) == null:
+		return false
+	# `facing` is +1/-1 across the run's axis; turn it into the yaw that puts
+	# the authored doors' local +Z out into the corridor.
+	var yaw := 0.0
+	if along_x:
+		yaw = 0.0 if facing > 0.0 else PI
+	else:
+		yaw = PI / 2.0 if facing > 0.0 else -PI / 2.0
+	var use_bank := ln >= LOCKERS_RUN_W
+	var unit_w := LOCKERS_RUN_W if use_bank else GYM_LOCKER_W
+	var path := LOCKERS_PATH if use_bank else GYM_LOCKER_PATH
+	var scl := LOCKERS_SCALE if use_bank else GYM_LOCKER_SCALE
+	var centre := LOCKERS_CENTRE if use_bank else GYM_LOCKER_CENTRE
+	var kind := "school_locker_bank" if use_bank else "school_locker_column"
+	var cnt := int(ln / unit_w)
+	var pad := (ln - float(cnt) * unit_w) * 0.5
+	# `off` is the centre of the generated carcass, so the wall face it stood
+	# against is half its depth behind. The authored bank is 0.48m deep rather
+	# than 0.42m; align the backs, not the centres, or the run floats.
+	var depth := 0.48
+	var mid := off - facing * gen_depth * 0.5 + facing * depth * 0.5
+	var placed := 0
+	for i in cnt:
+		var t := from + pad + unit_w * (float(i) + 0.5)
+		var p := Vector3(t, 0, mid) if along_x else Vector3(mid, 0, t)
+		var bank_b0 := body.get_child_count()
+		var bank := _attributed_floor_prop(path, p, yaw, scl, centre, kind,
+			null, true)
+		if bank == null:
+			continue
+		placed += 1
+		var size := Vector3(unit_w, 1.85, depth) if along_x \
+			else Vector3(depth, 1.85, unit_w)
+		_collider_box(p + Vector3(0, 0.925, 0), size)
+		_bind_furnishing_colliders(bank, bank_b0)
+	return placed > 0
+
+
+func _sch_locker_run_generated(along_x: bool, off: float, from: float,
+		to: float, facing: float, mat: Material, depth: float, hgt: float,
+		salt: int) -> void:
 	var ln := to - from
 	var plinth := 0.12
 	var c := (from + to) * 0.5
@@ -9177,7 +9513,18 @@ func _sch_corridor() -> void:
 		var t2 := _sch_corridor_prop_t(si2, 314, data2["doors"], data2["bay"], 0.92)
 		if t2 < 90.0:
 			var s2 := -1.1 if si2 == 0 else 1.1
-			_sch_trolley(_wp(o, Vector3(t2, 0, s2), yw), _r(316) * TAU)
+			# The authored cart is 1.09m across, half again the generated one
+			# it replaced, and the locker banks now stand 0.48m off these
+			# walls. Walk it in from the wall until it genuinely fits, and
+			# leave the corridor empty rather than park it inside a locker.
+			var tp := _wp(o, Vector3(t2, 0, s2), yw)
+			for pull in 4:
+				if _floor_spot_clear(tp, 0.58):
+					break
+				s2 *= 0.6
+				tp = _wp(o, Vector3(t2, 0, s2), yw)
+			if _floor_spot_clear(tp, 0.58):
+				_sch_trolley(tp, _r(316) * TAU)
 	if _r(317) < 0.3:
 		var si3 := 1 if _r(319) < 0.5 else 0
 		var data3: Dictionary = side_data[si3]
@@ -9189,8 +9536,7 @@ func _sch_corridor() -> void:
 
 ## Wheeled steel bin, the kind parked by the doors and never emptied.
 func _sch_bin(p: Vector3) -> void:
-	_cyl(p + Vector3(0, 0.42, 0), 0.29, 0.84, Mats.sch_trim())
-	_cyl(p + Vector3(0, 0.85, 0), 0.30, 0.05, Mats.charcoal(), false)
+	_waste_bin(p, _r(int(p.x * 11.0 + p.z * 5.0) + 288) * TAU, "school_bin")
 
 
 ## Stacked plastic chairs, shoved against a wall at the end of term.
@@ -9206,7 +9552,23 @@ func _sch_stack_chairs(p: Vector3, yaw: float, salt: int) -> void:
 
 
 ## Janitor's trolley — mop bucket on castors, handle, a bag hanging off it.
+## Janitor's cart. The authored model is the only noncommercial asset the
+## school floor depends on, and this is its single entry point, so the
+## dependency lifts out by deleting one branch.
 func _sch_trolley(p: Vector3, yaw: float) -> void:
+	var b0 := body.get_child_count()
+	var pivot := _attributed_floor_prop(SCH_CLEANING_CART_PATH, p, yaw,
+		SCH_CLEANING_CART_SCALE, SCH_CLEANING_CART_CENTRE,
+		"school_janitor_trolley", null, true)
+	if pivot != null:
+		_collider_yaw_box(p + Vector3(0, 0.42, 0),
+			Vector3(1.05, 0.84, 0.80), yaw)
+		_bind_furnishing_colliders(pivot, b0)
+		return
+	_sch_trolley_generated(p, yaw)
+
+
+func _sch_trolley_generated(p: Vector3, yaw: float) -> void:
 	var b0 := body.get_child_count()
 	var v := _furnishing_pivot(p, yaw, "school_janitor_trolley")
 	var plastic := Mats.sch_cart_plastic()
@@ -9651,9 +10013,11 @@ func _sch_bathroom() -> void:
 	var sw := _sch_front_wall(500)
 	if sw < 0:
 		sw = 3
-	# stalls along the front wall, sinks on the one to its left
+	# stalls along the front wall, sinks on the one to its left, and a run of
+	# urinals facing the stalls across the room
 	_sch_stalls(sw)
 	_sch_sinks((sw + 2) % 4)
+	_sch_urinals((sw + 1) % 4)
 
 
 ## A run of cubicles: partitions, doors ajar, gap at the floor.
@@ -9702,24 +10066,32 @@ func _sch_stalls(dir: int) -> void:
 			1.10, 0).rotated(Vector3.UP, door.rotation.y)
 		_collider_yaw_box(_wp(stall_pos, door_local, yaw),
 			Vector3(door_w, 1.66, 0.06), yaw + door.rotation.y)
-		# Recognisable porcelain fixture: pedestal, oval bowl/seat and tank.
-		_mrbox(stall, Vector3(0, 0.26, -0.43),
-			Vector3(0.38, 0.52, 0.48), Mats.sch_white(), 0.10)
-		_mellipsoid(stall, Vector3(0, 0.48, -0.62),
-			Vector3(0.54, 0.22, 0.68), Mats.sch_white())
-		var seat := MeshInstance3D.new()
-		seat.mesh = TOR
-		seat.material_override = Mats.sch_trim()
-		seat.position = Vector3(0, 0.57, -0.64)
-		seat.scale = Vector3(0.27, 0.045, 0.34)
-		seat.set_meta("school_stall_toilet", true)
-		stall.add_child(seat)
-		_mrbox(stall, Vector3(0, 0.78, -0.16),
-			Vector3(0.48, 0.58, 0.24), Mats.sch_white(), 0.045)
-		_mbox(stall, Vector3(0, 1.085, -0.16),
-			Vector3(0.50, 0.045, 0.27), Mats.sch_white())
-		_collider_yaw_box(_wp(stall_pos, Vector3(0, 0.48, -0.43), yaw),
-			Vector3(0.58, 0.96, 0.78), yaw)
+		# Authored porcelain. The stall runs from the wall at local z=0 out to
+		# its door at -depth, so the pan turns to put its cistern against the
+		# wall and its bowl toward the door. Six primitives used to fake it.
+		var pan := _attributed_floor_prop(SCH_TOILET_PATH,
+			Vector3(0, 0, -0.30), PI, SCH_TOILET_SCALE, SCH_TOILET_CENTRE,
+			"school_stall_toilet", stall)
+		if pan != null:
+			pan.set_meta("school_stall_toilet", true)
+		else:
+			_mrbox(stall, Vector3(0, 0.26, -0.43),
+				Vector3(0.38, 0.52, 0.48), Mats.sch_white(), 0.10)
+			_mellipsoid(stall, Vector3(0, 0.48, -0.62),
+				Vector3(0.54, 0.22, 0.68), Mats.sch_white())
+			var seat := MeshInstance3D.new()
+			seat.mesh = TOR
+			seat.material_override = Mats.sch_trim()
+			seat.position = Vector3(0, 0.57, -0.64)
+			seat.scale = Vector3(0.27, 0.045, 0.34)
+			seat.set_meta("school_stall_toilet", true)
+			stall.add_child(seat)
+			_mrbox(stall, Vector3(0, 0.78, -0.16),
+				Vector3(0.48, 0.58, 0.24), Mats.sch_white(), 0.045)
+			_mbox(stall, Vector3(0, 1.085, -0.16),
+				Vector3(0.50, 0.045, 0.27), Mats.sch_white())
+		_collider_yaw_box(_wp(stall_pos, Vector3(0, 0.37, -0.30), yaw),
+			Vector3(0.52, 0.74, 0.64), yaw)
 		_bind_furnishing_colliders(stall, b0)
 
 
@@ -9728,6 +10100,7 @@ func _sch_sinks(dir: int) -> void:
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var plane := (S - T / 2.0) if (dir == 0 or dir == 2) else (T / 2.0)
 	var inner := plane + n * (T / 2.0)
+	var facing := _wall_facing(dir)
 	var cnt := 3
 	var w := 0.92
 	var start := S / 2.0 - float(cnt) * w * 0.5
@@ -9739,11 +10112,59 @@ func _sch_sinks(dir: int) -> void:
 		Mats.gold_mirror(), false)
 	for i in cnt:
 		var t := start + w * (float(i) + 0.5)
+		# The authored basin is a pedestal unit with its own tap and trap, so
+		# it takes a wall point directly rather than a box and a chrome stub.
+		var sp := Vector3(inner + n * 0.30, 0, t) if dir < 2 \
+			else Vector3(t, 0, inner + n * 0.30)
+		var sink_b0 := body.get_child_count()
+		var basin := _attributed_floor_prop(SCH_SINK_PATH, sp, facing,
+			SCH_SINK_SCALE, SCH_SINK_CENTRE, "school_sink", null, true)
+		if basin != null:
+			_collider_yaw_box(sp + Vector3(0, 0.54, 0),
+				Vector3(0.75, 1.07, 0.60), facing)
+			_bind_furnishing_colliders(basin, sink_b0)
+			continue
 		var bp := Vector3(d, 0.86, t) if dir < 2 else Vector3(t, 0.86, d)
 		_box(bp, Vector3(0.44, 0.16, 0.6) if dir < 2 else Vector3(0.6, 0.16, 0.44),
 			Mats.sch_white(), true)
 		var tp := Vector3(inner + n * 0.08, 1.06, t) if dir < 2 else Vector3(t, 1.06, inner + n * 0.08)
 		_cyl(tp, 0.02, 0.16, Mats.chrome(), false)
+
+
+## A run of wall-hung urinals on the wall opposite the stalls. The generated
+## bathroom never had any. This is the one authored fixture that must not be
+## floor-corrected: it is modelled already hanging, its lowest point 0.60m up
+## its own mounting plane, so only X and Z are recentred.
+func _sch_urinals(dir: int) -> void:
+	var facing := _wall_facing(dir)
+	var cnt := 3
+	var w := 0.78
+	var start := S / 2.0 - float(cnt) * w * 0.5
+	for i in cnt:
+		var t := start + w * (float(i) + 0.5)
+		var p := _wall_pt(dir, t, 0.0)
+		var b0 := body.get_child_count()
+		var pivot := Node3D.new()
+		pivot.position = p
+		pivot.rotation.y = facing
+		# Wall-hung, so no `floor_supported`: the support audit would otherwise
+		# want its lowest mesh on the floor, which is the one thing it is not.
+		pivot.set_meta("atomic_furnishing", "school_urinal")
+		_furnishing_group_serial += 1
+		pivot.set_meta("furnishing_group", _furnishing_group_serial)
+		add_child(pivot)
+		var unit := _attributed_prop_local(pivot, SCH_URINAL_PATH,
+			Vector3(-SCH_URINAL_CENTRE.x, 0.0, -SCH_URINAL_CENTRE.z)
+				* SCH_URINAL_SCALE, 0.0, Vector3.ONE * SCH_URINAL_SCALE)
+		if unit == null:
+			pivot.get_parent().remove_child(pivot)
+			pivot.free()
+			return
+		pivot.set_meta("attributed_furnishing", "school_urinal")
+		unit.set_meta("authored_model", "school_urinal")
+		_collider_yaw_box(p + Vector3(0, 1.04, 0.20).rotated(Vector3.UP, facing),
+			Vector3(0.36, 0.90, 0.40), facing)
+		_bind_furnishing_colliders(pivot, b0)
 
 
 func _sch_gym() -> void:
@@ -10045,9 +10466,44 @@ func _sch_noticeboard(dir: int, plane: float) -> void:
 ## Drinking fountain. Two of them, always, at the height of two different
 ## years of children.
 func _sch_fountain(dir: int, plane: float) -> void:
+	# A bathroom has its own plumbing and every wall already spoken for by
+	# stalls, sinks or urinals. The old fountain was a 0.44m-deep pair of boxes
+	# and could tuck in beside a stall run; the authored bubbler is 0.92m deep
+	# and lands inside one.
+	if style == WorldGen.SCH_BATHROOM:
+		return
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner := plane + n * (T / 2.0)
 	var along := S / 2.0 + (_r(920 + dir) - 0.5) * 3.0
+	var facing := _wall_facing(dir)
+	# One authored bubbler with its own bowl, bubbler head and back panel,
+	# where the pair of stacked boxes used to stand in for two.
+	var fp := Vector3(inner + n * 0.44, 0, along) if dir < 2 \
+		else Vector3(along, 0, inner + n * 0.44)
+	# Corridor walls carry locker banks, and a bubbler that deep will sit
+	# inside one. Slide along the wall for a gap before giving the wall up.
+	if not _floor_spot_clear(fp, 0.46):
+		var found := false
+		for step in 6:
+			var shift := (float(step) - 2.5) * 1.7
+			var alt := fp + (Vector3(0, 0, shift) if dir < 2 \
+				else Vector3(shift, 0, 0))
+			if alt.x < 1.4 or alt.x > S - 1.4 or alt.z < 1.4 or alt.z > S - 1.4:
+				continue
+			if _floor_spot_clear(alt, 0.46):
+				fp = alt
+				found = true
+				break
+		if not found:
+			return
+	var fount_b0 := body.get_child_count()
+	var bubbler := _attributed_floor_prop(SCH_FOUNTAIN_PATH, fp, facing,
+		SCH_FOUNTAIN_SCALE, SCH_FOUNTAIN_CENTRE, "school_fountain", null, true)
+	if bubbler != null:
+		_collider_yaw_box(fp + Vector3(0, 0.53, 0),
+			Vector3(0.88, 1.05, 0.92), facing)
+		_bind_furnishing_colliders(bubbler, fount_b0)
+		return
 	for pair in 2:
 		var t := along + (float(pair) - 0.5) * 0.72
 		var y := 0.86 if pair == 0 else 0.72
@@ -10517,13 +10973,29 @@ func _mall_shopping_cart(p: Vector3, yaw: float, loaded := false) -> void:
 	_bind_furnishing_colliders(v, b0)
 
 
+## Slatted concourse bench. `yaw` is the direction the sitter faces, matching
+## the authored model's local +Z.
 func _mall_bench(p: Vector3, yaw: float) -> void:
+	var b0 := body.get_child_count()
+	var pivot := _attributed_floor_prop(CITY_BENCH_PATH, p, yaw,
+		CITY_BENCH_SCALE, CITY_BENCH_CENTRE, "mall_bench", null, true)
+	if pivot == null:
+		_mrbox_bench_fallback(p, yaw)
+		return
+	# Collide the seat block only. The backrest is behind it and the cast-iron
+	# ends are thin enough that a box around the whole footprint would read as
+	# an invisible wall at the edges.
+	_collider_yaw_box(p + Vector3(0, 0.42, -0.1), Vector3(1.89, 0.85, 0.5), yaw)
+	_bind_furnishing_colliders(pivot, b0)
+
+
+func _mrbox_bench_fallback(p: Vector3, yaw: float) -> void:
 	var v := Node3D.new()
 	v.position = p
 	v.rotation.y = yaw
 	add_child(v)
 	_mrbox(v, Vector3(0, 0.49, 0), Vector3(2.1, 0.16, 0.58), Mats.sch_desk(), 0.06)
-	_mrbox(v, Vector3(0, 0.92, 0.25), Vector3(2.1, 0.58, 0.12), Mats.sch_desk(), 0.04)
+	_mrbox(v, Vector3(0, 0.92, -0.25), Vector3(2.1, 0.58, 0.12), Mats.sch_desk(), 0.04)
 	for x in [-0.82, 0.82]:
 		_mbox(v, Vector3(x, 0.23, 0), Vector3(0.09, 0.46, 0.50), Mats.mall_trim())
 	_collider_yaw_box(p + Vector3(0, 0.52, 0), Vector3(2.1, 1.04, 0.62), yaw)
@@ -10537,14 +11009,15 @@ func _mall_corridor() -> void:
 	if _r(1634) < 0.7:
 		_mall_bench(Vector3(6.0, 0, 6.55) if along_x else Vector3(6.55, 0, 6.0), yaw + PI)
 	if _r(1635) < 0.6:
-		# a mall bin: brick-red cylinder with a black swing lid
 		var bp := Vector3(3.6, 0, 6.95) if along_x else Vector3(6.95, 0, 3.6)
-		var bin_b0 := body.get_child_count()
-		var bin := _furnishing_pivot(bp, 0.0, "mall_bin")
-		_mcyl(bin, Vector3(0, 0.42, 0), 0.30, 0.84, Mats.velvet_rust())
-		_mcyl(bin, Vector3(0, 0.89, 0), 0.26, 0.10, Mats.charcoal())
-		_collider_cyl(bp + Vector3(0, 0.45, 0), 0.32, 0.95)
-		_bind_furnishing_colliders(bin, bin_b0)
+		if _waste_bin(bp, _r(1636) * TAU, "mall_bin") == null:
+			# a mall bin: brick-red cylinder with a black swing lid
+			var bin_b0 := body.get_child_count()
+			var bin := _furnishing_pivot(bp, 0.0, "mall_bin")
+			_mcyl(bin, Vector3(0, 0.42, 0), 0.30, 0.84, Mats.velvet_rust())
+			_mcyl(bin, Vector3(0, 0.89, 0), 0.26, 0.10, Mats.charcoal())
+			_collider_cyl(bp + Vector3(0, 0.45, 0), 0.32, 0.95)
+			_bind_furnishing_colliders(bin, bin_b0)
 	if _r(1630) < 0.72:
 		var plant_pos := Vector3(2.1, 0, 4.4) if along_x else Vector3(4.4, 0, 2.1)
 		_planter(plant_pos)
@@ -10731,16 +11204,34 @@ func _mall_anchor() -> void:
 func _mall_food_table(p: Vector3, salt: int) -> void:
 	var b0 := body.get_child_count()
 	var v := _furnishing_pivot(p, 0.0, "mall_food_table")
-	_mcyl(v, Vector3(0, 0.72, 0), 0.72, 0.08, Mats.sch_white())
-	_mcyl(v, Vector3(0, 0.35, 0), 0.08, 0.7, Mats.mall_trim())
-	_collider_cyl(p + Vector3(0, 0.45, 0), 0.74, 0.9)
-	for i in 3:
-		var a := TAU * float(i) / 3.0 + _r(salt) * 0.3
-		var cp := p + Vector3(cos(a), 0, sin(a)) * 1.1
-		var chair := _cc0_prop("bar_chair_round_01", cp, -a + PI / 2.0, 0.85)
-		_adopt_local(v, chair)
-		_collider_cyl(cp + Vector3(0, 0.42, 0), 0.30, 0.84)
+	# The authored set arrives as a pedestal table with its two chairs already
+	# pulled up to it, so the generated top, column and ring of stools go with
+	# it. Its chairs sit along local Z, hence the free yaw.
+	var set_yaw := _r(salt + 3) * TAU
+	# `v` already stands at `p`, so the set is placed at its origin. Passing
+	# `p` again would put it at twice the distance from the chunk.
+	var authored := _attributed_floor_prop(FOOD_COURT_SET_PATH, Vector3.ZERO,
+		set_yaw, FOOD_COURT_SET_SCALE, FOOD_COURT_SET_CENTRE,
+		"mall_food_table", v)
+	if authored != null:
+		# One box on the set's own footprint rather than a cylinder around it:
+		# the pair is half again as long as it is wide, so a circle would put
+		# an invisible bubble either side of the table.
+		_collider_yaw_box(p + Vector3(0, 0.46, 0),
+			Vector3(0.78, 0.92, 1.86), set_yaw)
+	else:
+		_mcyl(v, Vector3(0, 0.72, 0), 0.72, 0.08, Mats.sch_white())
+		_mcyl(v, Vector3(0, 0.35, 0), 0.08, 0.7, Mats.mall_trim())
+		_collider_cyl(p + Vector3(0, 0.45, 0), 0.74, 0.9)
+		for i in 3:
+			var a := TAU * float(i) / 3.0 + _r(salt) * 0.3
+			var cp := p + Vector3(cos(a), 0, sin(a)) * 1.1
+			var chair := _cc0_prop("bar_chair_round_01", cp, -a + PI / 2.0, 0.85)
+			_adopt_local(v, chair)
+			_collider_cyl(cp + Vector3(0, 0.42, 0), 0.30, 0.84)
 	# Trays, wax cups and collapsed takeout cartons leave a human-scale trace.
+	# Both tops land within a centimetre of 0.76m, so the clutter sits on
+	# either version without moving.
 	if _r(salt + 20) < 0.78:
 		var tray_yaw := (_r(salt + 21) - 0.5) * 0.5
 		var tray := _mrbox(v, Vector3(-0.12, 0.79, 0.10),
@@ -10976,16 +11467,13 @@ func _mall_cinema() -> void:
 	_box(Vector3(6, 0.015, 5.4), Vector3(2.2, 0.02, 6.4), Mats.carpet_red(), false)
 	var queue_b0 := body.get_child_count()
 	var queue := _furnishing_pivot(Vector3.ZERO, 0.0, "mall_cinema_queue")
-	for rz in [3.2, 5.4, 7.6]:
+	for i in 2:
+		var rz := 3.2 + ROPE_BARRIER_PITCH * (float(i) + 0.5)
 		for rx in [4.6, 7.4]:
-			var post := _mall_rope_post(Vector3(rx, 0, rz))
-			_adopt_local(queue, post)
-	for rz2 in [4.3, 6.5]:
-		for rx2 in [4.6, 7.4]:
-			var rope := _box(Vector3(rx2, 0.82, rz2), Vector3(0.05, 0.05, 2.0),
-				Mats.velvet_rust(), false)
-			rope.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			_adopt_local(queue, rope)
+			var barrier := _rope_barrier(Vector3(rx, 0, rz), PI / 2.0,
+				"mall_cinema_rope")
+			if barrier != null:
+				_adopt_local(queue, barrier)
 	_bind_furnishing_colliders(queue, queue_b0)
 	for x in [2.4, 9.6]:
 		_mall_poster_stand(Vector3(x, 0, 2.0))
@@ -10993,22 +11481,6 @@ func _mall_cinema() -> void:
 		_cc0_floor_prop("metal_trash_can", Vector3(10.0, 0, 8.1),
 			PI / 2.0, 0.64, "mall_cinema_refuse",
 			Vector3(1.20, 0.60, 0.42), Vector3(-0.06, 0.30, 0))
-
-
-func _mall_rope_post(p: Vector3) -> Node3D:
-	var b0 := body.get_child_count()
-	var v := _furnishing_pivot(p, 0.0, "mall_rope_post")
-	_mcyl(v, Vector3(0, 0.45, 0), 0.03, 0.9, Mats.brass())
-	var knob := MeshInstance3D.new()
-	knob.mesh = SPH
-	knob.material_override = Mats.brass()
-	knob.position = Vector3(0, 0.93, 0)
-	knob.scale = Vector3.ONE * (0.055 / 0.5)
-	knob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	v.add_child(knob)
-	_collider_cyl(p + Vector3(0, 0.45, 0), 0.06, 0.95)
-	_bind_furnishing_colliders(v, b0)
-	return v
 
 
 func _mall_poster_stand(p: Vector3) -> void:
@@ -11845,6 +12317,23 @@ func _prison_visitation_phone(parent: Node3D, side_z: float) -> void:
 	phone.set_meta("prison_visitation_phone", true)
 	phone.set_meta("enrichment_prop", "visitation_phone")
 	parent.add_child(phone)
+	# The authored handset carries its own body, cradle and coiled cord. It
+	# hangs on the divider facing whichever side of the glass this booth is,
+	# which is what `side_z` selects. Its centre is corrected under a pivot
+	# rather than in the offset, so the turn cannot get the sign wrong.
+	var mount := Node3D.new()
+	mount.position = Vector3(0.42, 1.28, 0.0)
+	mount.rotation.y = 0.0 if side_z > 0.0 else PI
+	phone.add_child(mount)
+	var hung := _attributed_prop_local(mount, PRISON_WALL_PHONE_PATH,
+		Vector3(-PRISON_WALL_PHONE_CENTRE.x, -PRISON_WALL_PHONE_CENTRE.y,
+			-PRISON_WALL_PHONE_CENTRE.z) * PRISON_WALL_PHONE_SCALE,
+		0.0, Vector3.ONE * PRISON_WALL_PHONE_SCALE)
+	if hung != null:
+		hung.set_meta("authored_model", "visitation_phone")
+		return
+	mount.get_parent().remove_child(mount)
+	mount.free()
 	# Wall plate and keypad on the occupant's side of the glass.
 	_mrbox(phone, Vector3(0.33, 1.35, 0),
 		Vector3(0.34, 0.46, 0.09), Mats.prison_green(), 0.025)
