@@ -37,7 +37,7 @@ Two models from that batch were measured and rejected rather than forced:
   a frame around a quad five boxes already draw.
 
 Largest remaining generated props, by primitive count: `_vt100` (10),
-`_prison_shower_station` (10), `_sewer_pump_skid` (9), `_asy_ect` (9),
+`_prison_shower_station` (10), `_asy_ect` (9),
 `_sch_servery` (8), `_air_gate_desk` (7), `_asy_restraint_table` (7).
 
 ## Highest-value replacements by level
@@ -57,13 +57,12 @@ Largest remaining generated props, by primitive count: `_vt100` (10),
 - Desk phones, fax machines and late-CRT-era peripherals
 - Break-room appliances and commercial water coolers
 
-### Sewer
+### Annex
 
-- Industrial pumps, sluice actuators and pipe valve assemblies
-- Electrical junction boxes and maintenance tools
-- Drain grates and ladder assemblies
+- No furniture replacements. The almost empty floor is intentional.
+- A second period CCTV housing could be used as an extremely rare variant.
 
-Sewer wall art remains prohibited.
+Annex wall art remains prohibited.
 
 ### Airport
 

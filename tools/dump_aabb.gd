@@ -30,6 +30,10 @@ const CC0_MODELS := [
 ]
 
 const CC_BY_MODELS := [
+	["res://models/cc_by/light_switch/light_switch.glb", "light_switch"],
+	["res://models/cc_by/outlet/outlet.glb", "outlet"],
+	["res://models/cc_by/stainless_steel_shelving/stainless_steel_shelving.glb",
+		"stainless_steel_shelving"],
 	["res://models/cc_by/slot_machine/slot_machine.glb", "slot_machine"],
 	["res://models/cc_by/prison_toilet/prison_toilet.glb", "prison_toilet"],
 	["res://models/cc_by/prison_door_old/prison_door_old.glb", "prison_door_old"],

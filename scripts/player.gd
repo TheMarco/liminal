@@ -39,6 +39,10 @@ var level_theme := 0  # set by main on level switch
 var _flash_charge := FLASH_MAX
 var _flash_t := 0.0
 var _bob := 0.0
+## 0..1. A sealed lift car gives the eye nothing to move against, so the ride
+## is sold almost entirely through this and the motor loop.
+var _rumble := 0.0
+var _rumble_t := 0.0
 var _step_acc := 0.0
 var _roll := 0.0
 var _land := 0.0
@@ -119,6 +123,12 @@ func teleport(to: Vector3) -> void:
 	_curr_pos = to
 	if cam != null:
 		cam.global_position = to + Vector3(0, _cam_y, 0)
+
+
+## Continuous low-frequency camera shake, held until it is set back to zero.
+## Descent's lift ride owns this; nothing else currently drives it.
+func set_rumble(amount: float) -> void:
+	_rumble = clampf(amount, 0.0, 1.0)
 
 
 ## Take the mouse. Capturing it warps the cursor to the middle of the window,
@@ -274,7 +284,17 @@ func _process(dt: float) -> void:
 	var f := Engine.get_physics_interpolation_fraction()
 	cam.global_position = _prev_pos.lerp(_curr_pos, f) + Vector3(0, _cam_y, 0)
 	_roll = lerpf(_roll, -_strafe * 0.022, minf(1.0, dt * 8.0))
-	cam.rotation = Vector3(_pitch, rotation.y, _roll)
+	var tilt := 0.0
+	if _rumble > 0.0:
+		# Deliberately not random per frame: a lift is a machine with a period,
+		# and white-noise jitter reads as a bad camera rather than as travel.
+		_rumble_t += dt * 37.0
+		cam.global_position += Vector3(
+			sin(_rumble_t * 1.31) * 0.0090,
+			sin(_rumble_t) * 0.0155,
+			cos(_rumble_t * 0.79) * 0.0090) * _rumble
+		tilt = sin(_rumble_t * 0.61) * 0.0045 * _rumble
+	cam.rotation = Vector3(_pitch, rotation.y, _roll + tilt)
 	_scan_interaction()
 	var hs := Vector2(velocity.x, velocity.z).length()
 	cam.fov = lerpf(cam.fov, 83.0 if (_sprinting and hs > 4.0) else 77.0, minf(1.0, dt * 5.0))
@@ -305,7 +325,7 @@ func _scan_interaction() -> void:
 
 
 ## What you are walking on, per floor and per room — terrazzo in a terminal,
-## carpet on the gate lounge islands within it, wet concrete down the works.
+## carpet in the office and Annex, tile and concrete in institutions.
 func _surface() -> String:
 	var cellv := Vector2i(floori(global_position.x / 12.0), floori(global_position.z / 12.0))
 	if world_seed == 0:
@@ -314,7 +334,7 @@ func _surface() -> String:
 		1:
 			return "carpet"
 		2:
-			return "concrete" if WorldGen.cell_style(world_seed, cellv, 2) == WorldGen.SEWER_DRY else "wet"
+			return "carpet"
 		4:
 			return "carpet" if WorldGen.cell_style(world_seed, cellv, 4) == WorldGen.AIR_GATE else "marble"
 		5:

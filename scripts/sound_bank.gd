@@ -455,6 +455,55 @@ static func shiver() -> AudioStreamWAV:
 	return _c["shiver"]
 
 
+## Looping lift-car motor heard from inside the car: hoist whine over a cable
+## drone, with the slow beat of a sheave that is fractionally out of round.
+static func lift_motor() -> AudioStreamWAV:
+	if _c.has("lift_motor"):
+		return _c["lift_motor"]
+	var n := int(RATE * 2.4)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	var period := 2.4
+	for i in n:
+		var t := float(i) / RATE
+		# Everything periodic uses the exact buffer length so the loop is seamless
+		# before _loop_blend even touches the seam.
+		var wobble := sin(TAU * t / period) * 0.5 + sin(TAU * 3.0 * t / period) * 0.2
+		var v := 0.30 * sin(TAU * 41.0 * t + wobble * 1.4)
+		v += 0.16 * sin(TAU * 82.0 * t + wobble)
+		v += 0.09 * sin(TAU * 214.0 * t + wobble * 2.2) * (0.7 + 0.3 * wobble)
+		lp = lerpf(lp, randf() * 2.0 - 1.0, 0.09)
+		v += lp * 0.20
+		s[i] = v * 0.55
+	_c["lift_motor"] = _wav(_loop_blend(s, int(RATE * 0.12)), true)
+	return _c["lift_motor"]
+
+
+## Looping machinery in the shaft, heard from the landing while a called car
+## works its way down to you. Thinner and further off than lift_motor.
+static func lift_shaft() -> AudioStreamWAV:
+	if _c.has("lift_shaft"):
+		return _c["lift_shaft"]
+	var n := int(RATE * 3.1)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	var lp2 := 0.0
+	var period := 3.1
+	for i in n:
+		var t := float(i) / RATE
+		var sweep := sin(TAU * t / period)
+		var v := 0.18 * sin(TAU * 63.0 * t + sweep * 2.0)
+		v += 0.07 * sin(TAU * 149.0 * t + sweep * 3.0)
+		lp = lerpf(lp, randf() * 2.0 - 1.0, 0.05)
+		lp2 = lerpf(lp2, lp, 0.35)
+		v += (lp - lp2) * 0.5
+		s[i] = v * 0.5
+	_c["lift_shaft"] = _wav(_loop_blend(s, int(RATE * 0.15)), true)
+	return _c["lift_shaft"]
+
+
 ## Two-tone elevator chime from an unseen lobby.
 static func elev() -> AudioStreamWAV:
 	if _c.has("elev"):

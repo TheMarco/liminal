@@ -86,12 +86,54 @@ func _run() -> void:
 	_expect(lift_call != null,
 		"objective lift has no usable call button", failures)
 	if lift_call != null:
+		# Calling the lift must NOT open it. The car is somewhere else and the
+		# wait is the floor's most exposed stretch; the run owns its clock so it
+		# survives the target room streaming out during it.
 		lift_call.interact(game.player)
 		await create_timer(0.35).timeout
-		_expect(not lift_call.enabled and lift_call.has_meta("opened"),
-			"lift button did not lock and open the car", failures)
+		_expect(not lift_call.enabled,
+			"call button did not lock after being pressed", failures)
+		_expect(not target.get_node("DescentElevator").has_meta("opened"),
+			"lift opened immediately instead of making the player wait", failures)
+		_expect(game.run.lift_called and game.run.lift_wait_left > 1.0,
+			"call did not start the run-owned lift wait", failures)
+		_expect(game.run.lift_wait_left <= DescentRun.LIFT_WAIT_LAST + 0.01,
+			"lift wait exceeded its authored range", failures)
+		_expect(DescentRun.lift_wait_for(DescentRun.ORDER.size() - 2) \
+				> DescentRun.lift_wait_for(0),
+			"lift wait does not lengthen with depth", failures)
+		# Only the arrival, not the press, opens the doors.
+		target.open_descent_lift()
+		await create_timer(0.1).timeout
+		_expect(target.get_node("DescentElevator").has_meta("opened"),
+			"arrival did not open the objective car", failures)
 	target.queue_free()
 	await process_frame
+
+	# The arrival car: the player rides in, so a floor's origin room owns a
+	# sealed car and the player starts standing inside it facing shut doors.
+	_expect(route.origin_wall >= 0,
+		"floor has no wall-backed arrival room", failures)
+	_expect(route.origin != route.target,
+		"arrival room and objective are the same cell", failures)
+	if route.origin_wall >= 0:
+		var arrival_chunk: Chunk = game.cm.chunk_at(route.origin)
+		_expect(arrival_chunk != null,
+			"arrival room was not streamed in at startup", failures)
+		if arrival_chunk != null:
+			_expect(arrival_chunk.has_node("DescentArrival"),
+				"arrival room did not build the car the player rides in on",
+				failures)
+			_expect(arrival_chunk.has_descent_arrival(),
+				"arrival car is not in a usable state at floor start", failures)
+		var seat: Dictionary = Chunk.car_interior_point(route.origin,
+			route.origin_wall)
+		_expect(game.player.global_position.distance_to(
+			seat["position"]) < 1.0,
+			"player did not start inside the arrival car", failures)
+		_expect(ArrivalSafety.is_clear(game.get_world_3d(), seat["position"],
+			[game.player.get_rid()]),
+			"arrival car interior is not clear for the player capsule", failures)
 
 	# The two post-launch themes must satisfy the complete runtime objective
 	# contract, not merely appear in ORDER or pass the topology-only route
@@ -197,6 +239,66 @@ func _run() -> void:
 	_expect(game._return_prompt == null,
 		"cancelled return confirmation remained in the tree", failures)
 
+	# The ride is the one part of a run that happens to the player rather than
+	# being done by them, and it is a chain of awaits — if it ever fails to
+	# return, the run is unrecoverable. Exercise the real sequence on a detached
+	# car: `_descent_ride` drives presentation only, so it cannot advance a floor
+	# on its own the way `_descent_commit` does.
+	var ride_target := Chunk.new(game._level_seed(game.active_level),
+		route.target, game.active_level, target_config)
+	get_root().add_child(ride_target)
+	var ride_rig: Dictionary = ride_target._descent_lift_rig
+	_expect(not ride_rig.is_empty(), "objective car exposed no rig", failures)
+	if not ride_rig.is_empty():
+		var ride_started := Time.get_ticks_msec()
+		# An Array is the mutable box a lambda needs: GDScript captures plain
+		# locals by value, so a captured bool would never come back.
+		var ride_done := [false]
+		var runner := func() -> void:
+			await ride_target._descent_ride(ride_rig)
+			ride_done[0] = true
+		runner.call()
+		var peak_rumble := 0.0
+		while not ride_done[0] and Time.get_ticks_msec() - ride_started < 12000:
+			peak_rumble = maxf(peak_rumble, game.player._rumble)
+			await process_frame
+		var ride_ms := Time.get_ticks_msec() - ride_started
+		_expect(ride_done[0],
+			"lift ride never completed — a run would be stuck in the car",
+			failures)
+		_expect(peak_rumble > 0.5,
+			"lift ride never drove the camera rumble (peak %.2f)" % peak_rumble,
+			failures)
+		_expect(ride_ms > 3000 and ride_ms < 12000,
+			"lift ride took %d ms, outside its authored window" % ride_ms,
+			failures)
+		_expect(game.player._rumble < 0.35,
+			"lift ride left the camera shaking after deceleration", failures)
+		var ride_display: Label3D = ride_rig["display"]
+		_expect(ride_display.text.contains("02"),
+			"ride indicator did not land on the floor below, got '%s'" \
+				% ride_display.text, failures)
+	ride_target.queue_free()
+	game.player.set_rumble(0.0)
+	await process_frame
+
+	# The needle degrades with depth: exact doorways early, a bearing in the
+	# middle, held readings late, nothing at the bottom.
+	_expect(DescentHUD.FLOOR_GUIDE.size() == DescentRun.ORDER.size(),
+		"guidance table does not cover every floor", failures)
+	_expect(DescentHUD.FLOOR_GUIDE[0] == DescentHUD.Guide.EXACT,
+		"first floor does not name real doorways", failures)
+	_expect(DescentHUD.FLOOR_GUIDE[DescentRun.ORDER.size() - 1] \
+		== DescentHUD.Guide.NONE,
+		"last floor still hands out route guidance", failures)
+	if is_instance_valid(game._descent_hud):
+		game.run.blackout = true
+		game._descent_hud._process(0.016)
+		_expect(not game._descent_hud._needle.visible,
+			"route needle survived a blackout", failures)
+		game.run.blackout = false
+		game._descent_hud._process(0.016)
+
 	# The real async lift callback must rebuild the next floor at the origin,
 	# keep the same run and advance in the authored order.
 	await game._on_descent_lift()
@@ -209,10 +311,18 @@ func _run() -> void:
 		"floor transition returned before its fade completed", failures)
 	_expect(game.run.threat() >= DescentRun.FLOOR_PRESSURE[1],
 		"second floor did not gain its authored pressure", failures)
+	var next_arrival: Dictionary = game._descent_arrival(game.active_level)
 	_expect(game.player.global_position.distance_to(
-		game._safe_arrival(game.active_level, Vector2i.ZERO,
-			game.DEFAULT_SPAWN)) < 4.5,
-		"Descent floor did not arrive near audited origin", failures)
+		next_arrival["position"]) < 1.0,
+		"Descent floor did not arrive inside its car", failures)
+	_expect(game.descent_route.origin_wall < 0 \
+		or game.cm.chunk_at(game.descent_route.origin) != null,
+		"new floor did not stream in its arrival room", failures)
+	_expect(not game.run.lift_called and not game.run.lift_open \
+		and not game.run.arrival_used,
+		"new floor inherited the previous floor's lift state", failures)
+	_expect(game.descent_route.min_dist > DescentRoute.MIN_DIST_FIRST,
+		"second floor did not lengthen its objective route", failures)
 
 	# Rule episodes: one continuous stop counts once, while attention increases.
 	game.run.arrival_grace = 0.0
@@ -240,11 +350,11 @@ func _run() -> void:
 	_expect(game._figures.suspended,
 		"title world left haunt timers active behind its rule card", failures)
 
-	print("descent runtime audit: seed=%d first=%s target=%s distance=%d" % [
-		SEED, route.next_from(Vector2i.ZERO), route.target,
+	print("descent runtime audit: seed=%d arrive=%s/%d target=%s distance=%d" % [
+		SEED, route.origin, route.origin_wall, route.target,
 		route.graph_distance])
 	if failures.is_empty():
-		print("  PASS — HUD guidance, lift call, pressure, rules and transition hold")
+		print("  PASS — arrival car, HUD guidance, lift wait, pressure, rules and transition hold")
 	else:
 		for failure in failures:
 			print("FAIL ", failure)

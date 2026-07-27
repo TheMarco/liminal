@@ -2,7 +2,7 @@ extends Node3D
 ## Entry point and level manager. Eight endless floors share one player:
 ##   1 — seedy Vegas hotel-casino            (theme 0)
 ##   2 — sterile Severance-style office      (theme 1)
-##   3 — dripping sewer works under everything (theme 2)
+##   3 — the yellow Backrooms corridors of the Annex (theme 2)
 ##   4 — an airport terminal at 3 a.m., between every flight (theme 4)
 ##   5 — an abandoned asylum, beds still made, straps still buckled (theme 5)
 ##   6 — a high school after the last bell that never rang (theme 6)
@@ -20,7 +20,7 @@ const DEFAULT_SPAWN := Vector3(6.0, 0.15, 2.0)
 # Safe arrival offsets within a cell, per theme, for portal jumps.
 const PORTAL_ARRIVE := {
 	0: Vector3(3.2, 0.15, 2.0), 1: Vector3(3.2, 0.15, 2.0),
-	2: Vector3(3.9, 0.15, 1.0),
+	2: Vector3(3.2, 0.15, 2.0),
 	4: Vector3(3.2, 0.15, 2.0), 5: Vector3(3.2, 0.15, 2.0),
 	6: Vector3(3.2, 0.15, 2.0),
 	7: Vector3(3.2, 0.15, 2.0), 8: Vector3(3.2, 0.15, 2.0),
@@ -85,7 +85,6 @@ var _return_prompt: ReturnPrompt
 # One mood track per floor.
 const MUSIC_TRACKS := {
 	0: "res://music/lim1.mp3", 1: "res://music/lim2.mp3",
-	2: "res://music/lim3.mp3",
 	4: "res://music/lim5.mp3", 5: "res://music/lim6.mp3",
 	6: "res://music/lim4.mp3",
 	7: "res://music/lim7.mp3", 8: "res://music/lim8.mp3",
@@ -96,7 +95,7 @@ const DESCENT_LATE_TRACK := "res://music/lim9.mp3"
 const MUSIC_DB := -14.0
 ## The title has its own track, and nothing else. The world behind the card is
 ## already built and already running, but it is not meant to be heard yet:
-## room tone, slot banks, dripping sewers and the odd distant knock under a
+## room tone, slot banks, fluorescent hum and the odd distant knock under a
 ## title card read as a mix that has not been mastered, not as atmosphere.
 const TITLE_MUSIC := "res://music/title.mp3"
 
@@ -106,6 +105,7 @@ func _ready() -> void:
 	var spawn := DEFAULT_SPAWN
 	var pos_given := false
 	var yaw := PI  # face into the room
+	var yaw_given := false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--seed="):
 			world_seed = int(arg.substr(7))
@@ -116,6 +116,7 @@ func _ready() -> void:
 				pos_given = true
 		elif arg.begins_with("--yaw="):
 			yaw = deg_to_rad(float(arg.substr(6)))
+			yaw_given = true
 		elif arg.begins_with("--level="):
 			# --level takes a THEME id, not a key index, so old commands still work
 			var lv := int(arg.substr(8))
@@ -138,12 +139,17 @@ func _ready() -> void:
 		_connect_descent_run()
 		run.prepare_floor()
 		add_child(run)
-		descent_route = DescentRoute.build(_level_seed(active_level), active_level)
-		print("Descent floor %d target %s wall %d, %d edges" % [
-			run.floor_idx + 1, descent_route.target, descent_route.target_wall,
-			descent_route.graph_distance])
+		descent_route = DescentRoute.build(_level_seed(active_level),
+			active_level, run.floor_idx)
+		_print_descent_route()
 	if not pos_given:
-		spawn = _safe_arrival(active_level, Vector2i.ZERO, DEFAULT_SPAWN)
+		if descent:
+			var arrival := _descent_arrival(active_level)
+			spawn = arrival["position"]
+			if not yaw_given:
+				yaw = float(arrival["yaw"])
+		else:
+			spawn = _safe_arrival(active_level, Vector2i.ZERO, DEFAULT_SPAWN)
 	print("Liminal Vegas — seed %d" % world_seed)
 	# Audits and screenshot helpers intentionally quit after a few seconds;
 	# don't leave background resource workers alive during their forced exit.
@@ -272,11 +278,16 @@ func _build_level(level: int, around: Vector3) -> void:
 	cm.descent = descent
 	if descent:
 		if descent_route == null or descent_route.theme != level:
-			descent_route = DescentRoute.build(_level_seed(level), level)
+			descent_route = DescentRoute.build(_level_seed(level), level,
+				run.floor_idx)
 		cm.descent_floor_idx = run.floor_idx
 		cm.descent_route = descent_route
 		cm.blackout = run.blackout
 		cm.anomalies = run.anomalies
+		cm.descent_arrival_used = run.arrival_used
+		cm.descent_lift_called = run.lift_called
+		cm.descent_lift_wait = run.lift_wait_left
+		cm.descent_lift_open = run.lift_open
 	level_root.add_child(cm)
 	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
 
@@ -380,6 +391,109 @@ func use_elevator(dest: int) -> void:
 	_switch_level(dest)
 
 
+## Where a Descent floor begins: standing inside the sealed arrival car, facing
+## its shut doors. `exact` tells `_jump_to` to trust the point rather than run
+## ArrivalSafety over it — a 2.2m car can never satisfy the escape-direction
+## test, and the interior is authored clear by construction.
+func _descent_arrival(theme: int) -> Dictionary:
+	if descent_route != null and descent_route.origin_wall >= 0:
+		var car := Chunk.car_interior_point(descent_route.origin,
+			descent_route.origin_wall)
+		car["exact"] = true
+		return car
+	var cellv := descent_route.origin if descent_route != null else Vector2i.ZERO
+	return {
+		"position": _safe_arrival(theme, cellv, DEFAULT_SPAWN),
+		"yaw": PI,
+		"exact": false,
+	}
+
+
+func _print_descent_route() -> void:
+	if descent_route == null or run == null:
+		return
+	print("Descent floor %d — arrive %s wall %d → target %s wall %d, %d edges (%.0fm), band %d-%d" % [
+		run.floor_idx + 1, descent_route.origin, descent_route.origin_wall,
+		descent_route.target, descent_route.target_wall,
+		descent_route.graph_distance, descent_route.walk_metres(),
+		descent_route.min_dist, descent_route.max_dist])
+
+
+## Called by the objective chunk when the plate is pressed. The run owns the
+## clock so the wait survives that room streaming out behind the player.
+func descent_lift_called(seconds: float) -> void:
+	if not descent or run == null or run.ended:
+		return
+	run.call_lift()
+	run.lift_wait_left = maxf(run.lift_wait_left, seconds)
+	_sync_descent_chunk_state()
+	_show_event_message("LIFT CALLED")
+
+
+func _on_descent_lift_arrived() -> void:
+	if not descent or run == null or run.ended or cm == null \
+			or descent_route == null:
+		return
+	_sync_descent_chunk_state()
+	var chunk := cm.chunk_at(descent_route.target)
+	if chunk != null and chunk.has_descent_lift():
+		chunk.open_descent_lift()
+	else:
+		# Out of streaming range: it still arrived, and it will be standing open
+		# when the player walks back into the room.
+		_play_descent_cue(SoundBank.ding(), -20.0)
+
+
+func descent_ride_rumble(amount: float) -> void:
+	if player != null and is_instance_valid(player):
+		player.set_rumble(amount)
+
+
+func descent_arrival_spent() -> void:
+	# Freeing the outgoing floor makes its arrival area report the player as
+	# having left it. That fires after `prepare_floor()` has already reset the
+	# next floor's state, so without this gate the car the player is about to be
+	# teleported into would be built shut and dead around them.
+	if descent and run != null and not _switching:
+		run.arrival_used = true
+		_sync_descent_chunk_state()
+
+
+func _sync_descent_chunk_state() -> void:
+	if cm == null or run == null:
+		return
+	cm.descent_arrival_used = run.arrival_used
+	cm.descent_lift_called = run.lift_called
+	cm.descent_lift_wait = run.lift_wait_left
+	cm.descent_lift_open = run.lift_open
+
+
+## Opens the car the player rode in on, a beat after the floor goes live. Not
+## awaited by its caller: the arrival grace is long enough to cover it, and the
+## audits' synchronous startup path must not block on a timer.
+func _reveal_arrival() -> void:
+	if not descent or run == null or run.ended or cm == null \
+			or descent_route == null:
+		return
+	var floor_name: String = DescentRun.NAMES[run.floor_idx]
+	if descent_route.origin_wall < 0:
+		_show_event_message("FLOOR %d — %s" % [
+			run.floor_idx + 1, floor_name.to_upper()])
+		return
+	player.set_rumble(0.22)
+	var settle := create_tween()
+	settle.tween_method(func(v: float): player.set_rumble(v), 0.22, 0.0, 1.1)
+	await get_tree().create_timer(0.85).timeout
+	if not descent or run == null or run.ended or cm == null:
+		return
+	var chunk := cm.chunk_at(descent_route.origin)
+	if chunk != null and chunk.has_descent_arrival():
+		_play_descent_cue(SoundBank.ding(), -8.0)
+		chunk.open_descent_arrival()
+	_show_event_message("FLOOR %d — %s" % [
+		run.floor_idx + 1, floor_name.to_upper()])
+
+
 func _connect_descent_run() -> void:
 	run.world_seed = world_seed
 	run.pinned_attention = _attention_override
@@ -391,6 +505,7 @@ func _connect_descent_run() -> void:
 	run.passive_changed.connect(_on_descent_passive)
 	run.figures = _figures
 	run.anomaly_requested.connect(_on_descent_anomaly)
+	run.lift_arrived.connect(_on_descent_lift_arrived)
 	run.run_ended.connect(_on_descent_ended)
 
 
@@ -406,6 +521,8 @@ func _begin_descent_floor() -> void:
 	_ensure_descent_hud()
 	_descent_hud.set_active(true)
 	_on_descent_attention(run.attention)
+	_sync_descent_chunk_state()
+	_reveal_arrival()
 
 
 func _ensure_descent_hud() -> void:
@@ -431,12 +548,12 @@ func _on_descent_lift() -> void:
 	run.floor_idx += 1
 	run.prepare_floor()
 	var next_theme := run.theme()
-	descent_route = DescentRoute.build(_level_seed(next_theme), next_theme)
-	print("Descent floor %d target %s wall %d, %d edges" % [
-		run.floor_idx + 1, descent_route.target, descent_route.target_wall,
-		descent_route.graph_distance])
-	var spawn := _safe_arrival(next_theme, Vector2i.ZERO, DEFAULT_SPAWN)
-	await _jump_to(next_theme, spawn, false)
+	descent_route = DescentRoute.build(_level_seed(next_theme), next_theme,
+		run.floor_idx)
+	_print_descent_route()
+	var arrival := _descent_arrival(next_theme)
+	await _jump_to(next_theme, arrival["position"], false,
+		bool(arrival["exact"]), float(arrival["yaw"]))
 	_begin_descent_floor()
 
 
@@ -683,7 +800,7 @@ func _play_descent_cue(stream: AudioStream, volume: float) -> void:
 
 func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 	if not descent or cm == null or descent_route == null \
-			or at == descent_route.target:
+			or at == descent_route.target or at == descent_route.origin:
 		return
 	cm.set_anomaly(at, kind)
 
@@ -701,6 +818,7 @@ func _on_descent_ended(won: bool) -> void:
 		run.pursuer_active = false
 	player.set_process_unhandled_input(false)
 	player.velocity = Vector3.ZERO
+	player.set_rumble(0.0)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_show_descent_summary(won)
 
@@ -734,12 +852,12 @@ func _restart_descent() -> void:
 	run.prepare_floor()
 	add_child(run)
 	run.player = player
-	descent_route = DescentRoute.build(_level_seed(run.theme()), run.theme())
-	print("Descent floor 1 target %s wall %d, %d edges" % [
-		descent_route.target, descent_route.target_wall,
-		descent_route.graph_distance])
-	var spawn := _safe_arrival(run.theme(), Vector2i.ZERO, DEFAULT_SPAWN)
-	await _jump_to(run.theme(), spawn, false)
+	descent_route = DescentRoute.build(_level_seed(run.theme()), run.theme(),
+		run.floor_idx)
+	_print_descent_route()
+	var arrival := _descent_arrival(run.theme())
+	await _jump_to(run.theme(), arrival["position"], false,
+		bool(arrival["exact"]), float(arrival["yaw"]))
 	player.grab_look()
 	player.set_process_unhandled_input(true)
 	_begin_descent_floor()
@@ -763,6 +881,7 @@ func _leave_descent() -> void:
 	_descent_hud = null
 	_saved_pos.clear()
 	player.allow_sprint = true
+	player.set_rumble(0.0)
 	_events.descent_mode = false
 	_figures.suspended = true
 	_whispers.suspended = true
@@ -828,7 +947,8 @@ func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
 	return pos
 
 
-func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
+func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
+		yaw := NAN) -> void:
 	_switching = true
 	if not descent:
 		_saved_pos[active_level] = player.position
@@ -866,11 +986,23 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool) -> void:
 	player.level_theme = level
 	await get_tree().physics_frame
 	var cellv := Vector2i(floori(pos.x / 12.0), floori(pos.z / 12.0))
-	var safe := ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
-	if safe == Vector3.INF:
-		push_warning("No audited arrival candidate in theme %d cell %s; using requested position" % [level, cellv])
-		safe = pos
+	var safe := pos
+	# An authored arrival car interior is clear by construction but sealed, so
+	# the escape-direction half of ArrivalSafety can never pass inside one. Trust
+	# the point, but still refuse to drop the player into solid geometry.
+	var trusted := exact and ArrivalSafety.is_clear(get_world_3d(), pos,
+		[player.get_rid()]) \
+		and ArrivalSafety.has_floor(get_world_3d(), pos, [player.get_rid()])
+	if not trusted:
+		if exact:
+			push_warning("Descent arrival car interior was not clear in theme %d cell %s; falling back" % [level, cellv])
+		safe = ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
+		if safe == Vector3.INF:
+			push_warning("No audited arrival candidate in theme %d cell %s; using requested position" % [level, cellv])
+			safe = pos
 	player.teleport(safe)
+	if is_finite(yaw):
+		player.rotation.y = yaw
 	we.environment = _build_env(level)
 	ambience.queue_free()
 	ambience = Ambience.new(level)
@@ -892,6 +1024,10 @@ func _settle_initial_arrival() -> void:
 	await get_tree().physics_frame
 	if player == null or not is_instance_valid(player):
 		return
+	# A Descent run starts inside its sealed arrival car. Re-probing that point
+	# would "rescue" the player straight back out through the shut doors.
+	if descent and descent_route != null and descent_route.origin_wall >= 0:
+		return
 	var pos := player.global_position
 	var cellv := Vector2i(floori(pos.x / 12.0), floori(pos.z / 12.0))
 	var safe := ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
@@ -901,6 +1037,11 @@ func _settle_initial_arrival() -> void:
 
 func _process(dt: float) -> void:
 	_check_torch_hint()
+	# The chunk config is read at build time, so the mirrored lift clock has to
+	# stay current for a target room that streams back in mid-wait.
+	if descent and cm != null and run != null and run.lift_called \
+			and not run.lift_open:
+		cm.descent_lift_wait = run.lift_wait_left
 	if not _bench:
 		return
 	_bench_t += dt
@@ -985,6 +1126,10 @@ func _audit_partitions() -> void:
 
 ## Crossfade the floor's mood track in; unknown floors fade to silence.
 func _music_track_for(level: int) -> String:
+	# The Annex is deliberately scored only by its dedicated ambient bed—even
+	# during Descent's late-floor music override.
+	if level == 2:
+		return ""
 	if descent and run != null and run.floor_idx >= DescentRun.ORDER.size() - 2:
 		return DESCENT_LATE_TRACK
 	return MUSIC_TRACKS.get(level, "")
@@ -1223,23 +1368,25 @@ func _build_env(theme: int) -> Environment:
 		env.ssao_intensity = 1.1
 		return env
 	if theme == 2:
-		# black water and green rot; the dark leans cold, not warm
-		env.background_color = Color(0.004, 0.006, 0.005)
+		# The Annex: warm, institutional Backrooms yellow. Local troffers carry
+		# the bright spaces while lower ambient fill lets sparse fixture zones
+		# fall visibly darker.
+		env.background_color = Color(0.53, 0.47, 0.24)
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = Color(0.35, 0.45, 0.38)
-		env.ambient_light_energy = 0.16
-		env.tonemap_exposure = 1.25
+		env.ambient_light_color = Color(0.96, 0.84, 0.53)
+		env.ambient_light_energy = 0.20
+		env.tonemap_exposure = 1.16
 		env.sdfgi_energy = 1.15
 		env.glow_enabled = true
-		env.glow_intensity = 0.45
-		env.glow_bloom = 0.04
-		env.fog_light_color = Color(0.04, 0.07, 0.05)
-		env.fog_density = 0.0045
-		env.volumetric_fog_density = 0.0022
-		env.volumetric_fog_albedo = Color(0.5, 0.68, 0.55)
-		env.volumetric_fog_length = 40.0
-		env.ssao_radius = 1.6
-		env.ssao_intensity = 1.7
+		env.glow_intensity = 0.26
+		env.glow_bloom = 0.018
+		env.fog_light_color = Color(0.69, 0.60, 0.33)
+		env.fog_density = 0.0022
+		env.volumetric_fog_density = 0.0012
+		env.volumetric_fog_albedo = Color(0.88, 0.78, 0.49)
+		env.volumetric_fog_length = 52.0
+		env.ssao_radius = 1.25
+		env.ssao_intensity = 1.05
 	elif theme == 1:
 		# sterile daylight-white: corridors dissolve into bright haze
 		env.background_color = Color(0.55, 0.58, 0.55)
@@ -1451,17 +1598,17 @@ func _prepare_descent() -> void:
 	_connect_descent_run()
 	run.prepare_floor()
 	add_child(run)
-	descent_route = DescentRoute.build(_level_seed(run.theme()), run.theme())
-	print("Descent floor 1 target %s wall %d, %d edges" % [
-		descent_route.target, descent_route.target_wall,
-		descent_route.graph_distance])
+	descent_route = DescentRoute.build(_level_seed(run.theme()), run.theme(),
+		run.floor_idx)
+	_print_descent_route()
 	_events.descent_mode = true
 	_figures.suspended = true
 	_whispers.suspended = true
 	_heart.suspended = true
 	_set_mode_hint()
-	var spawn := _safe_arrival(run.theme(), Vector2i.ZERO, DEFAULT_SPAWN)
-	await _jump_to(run.theme(), spawn, false)
+	var arrival := _descent_arrival(run.theme())
+	await _jump_to(run.theme(), arrival["position"], false,
+		bool(arrival["exact"]), float(arrival["yaw"]))
 	_descent_preparing = false
 	if is_instance_valid(_title):
 		_title.set_descent_ready()

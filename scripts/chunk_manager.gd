@@ -20,6 +20,12 @@ var descent_floor_idx := 0
 var descent_route: DescentRoute
 var blackout := false
 var anomalies := {}
+## Mirrored from DescentRun so a target or arrival room that streams out and
+## back rebuilds in the state the run is actually in.
+var descent_arrival_used := false
+var descent_lift_called := false
+var descent_lift_wait := 0.0
+var descent_lift_open := false
 var chunks := {}
 var queued := {}
 static var _dev_timing := false
@@ -85,6 +91,13 @@ func _build(c: Vector2i) -> void:
 			"floor_idx": descent_floor_idx,
 			"anomaly": int(anomalies.get(c, -1)),
 			"blackout": blackout,
+			"arrival": descent_route.origin_wall >= 0 \
+				and c == descent_route.origin,
+			"arrival_wall": descent_route.origin_wall,
+			"arrival_used": descent_arrival_used,
+			"lift_called": descent_lift_called,
+			"lift_wait": descent_lift_wait,
+			"lift_open": descent_lift_open,
 		}
 	var ch := Chunk.new(world_seed, c, theme, config)
 	if _dev_timing:
@@ -102,6 +115,12 @@ func set_blackout(on: bool) -> void:
 	for ch in chunks.values():
 		if is_instance_valid(ch):
 			(ch as Chunk).set_blackout(on)
+
+
+func chunk_at(c: Vector2i) -> Chunk:
+	if not chunks.has(c) or not is_instance_valid(chunks[c]):
+		return null
+	return chunks[c] as Chunk
 
 
 func set_anomaly(at: Vector2i, kind: int) -> void:

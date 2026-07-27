@@ -13,19 +13,29 @@ signal blackout_changed(on: bool)
 signal passive_changed(on: bool)
 signal run_ended(won: bool)
 signal anomaly_requested(cell: Vector2i, kind: int)
+## The called car finished its descent. Whoever owns the objective chunk opens
+## the doors; the wait itself is run state so it survives the target room
+## streaming out from under a player who walked off during it.
+signal lift_arrived()
 
 enum Rule { STARE, STOP, BACKTRACK, BLACKOUT_MOVE }
 
 const ORDER: Array[int] = [0, 7, 1, 4, 6, 8, 5, 2]
 const NAMES := [
 	"the casino", "the mall", "the office", "the airport",
-	"the school", "the prison", "the asylum", "the sewers",
+	"the school", "the prison", "the asylum", "the Annex",
 ]
 const ARRIVAL_GRACE := 8.0
 ## How close a figure has to be before standing still stops counting as
 ## breaking rule 2. You are allowed to stop for the thing the building sent.
 const STOP_EXCUSE_D := 12.0
 const FLOOR_PRESSURE := [0.0, 0.09, 0.18, 0.27, 0.36, 0.46, 0.56, 0.68]
+## How long the car takes to reach you after the call. This is the only part of
+## a floor that is deliberately dead time, and it is the most dangerous part of
+## it: rule 2 forbids standing still, so the wait has to be paced on foot with
+## whatever the floor's attention level is spawning.
+const LIFT_WAIT_FIRST := 14.0
+const LIFT_WAIT_LAST := 34.0
 
 var floor_idx := 0
 var attention := 0.0
@@ -35,6 +45,12 @@ var blackout := false
 var suspended := true
 var ended := false
 var arrival_grace := 0.0
+var lift_called := false
+var lift_open := false
+var lift_wait_left := 0.0
+## Set once the player has stepped out of the car they arrived in. From then on
+## that car rebuilds shut and dead.
+var arrival_used := false
 
 var visited := {}
 var departed := {}
@@ -94,6 +110,10 @@ func prepare_floor() -> void:
 		blackout_changed.emit(false)
 	arrival_grace = ARRIVAL_GRACE
 	suspended = true
+	lift_called = false
+	lift_open = false
+	lift_wait_left = 0.0
+	arrival_used = false
 	_cell = Vector2i.ZERO
 	_pending_cell = Vector2i.ZERO
 	_stop_time = 0.0
@@ -134,6 +154,27 @@ func add_stare_violation() -> void:
 	_charge(Rule.STARE, 0.05, true)
 
 
+## Static so the objective chunk can present the wait without holding a
+## reference to run state it must not be able to mutate.
+static func lift_wait_for(p_floor_idx: int) -> float:
+	var p := clampf(float(p_floor_idx) / float(maxi(1, ORDER.size() - 1)),
+		0.0, 1.0)
+	return lerpf(LIFT_WAIT_FIRST, LIFT_WAIT_LAST, p)
+
+
+func lift_wait_seconds() -> float:
+	return lift_wait_for(floor_idx)
+
+
+## Pressing the plate is a commitment, not a teleport. The car is somewhere
+## above and it takes as long as it takes.
+func call_lift() -> void:
+	if ended or lift_called or lift_open:
+		return
+	lift_called = true
+	lift_wait_left = lift_wait_seconds()
+
+
 func suspend_rules() -> void:
 	suspended = true
 
@@ -153,6 +194,13 @@ func _physics_process(dt: float) -> void:
 	_update_passive()
 	if ended or suspended or player == null or not player.is_inside_tree():
 		return
+	# Held by the same gate as the rules: a paused run must not have a car
+	# quietly arriving behind the confirmation dialog.
+	if lift_called and not lift_open:
+		lift_wait_left = maxf(0.0, lift_wait_left - dt)
+		if lift_wait_left <= 0.0:
+			lift_open = true
+			lift_arrived.emit()
 	elapsed += dt
 	if pinned_attention >= 0.0:
 		attention = pinned_attention

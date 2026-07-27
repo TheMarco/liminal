@@ -29,12 +29,26 @@ const OFFICE_STORAGE := 13
 const OFFICE_BREAK := 14
 const OFFICE_BOARDROOM := 15
 
-const SEWER_TUNNEL := 20
-const SEWER_BASIN := 21
-const SEWER_PUMP := 22
-const SEWER_DRY := 23
-const SEWER_GALLERY := 24
-const SEWER_CISTERN := 25
+const ANNEX_OPEN := 20       # broad, nearly empty rooms
+const ANNEX_MAZE := 21       # offset wall slabs turn one room into several views
+const ANNEX_LONG := 22       # long uninterrupted sight lines
+const ANNEX_QUIET := 23      # mostly empty, with deliberately sparse lighting
+const ANNEX_PASSAGE := 24    # the narrow circulation spine
+const ANNEX_LOBBY := 25      # rare open landmark with low partitions
+## Dedicated Annex circulation grid. A one-cell band every six columns / five
+## rows becomes a long corridor; the spaces between are subdivided into mostly
+## 12x12 and 12x24 rooms, with only rare 24x24 chambers.
+const ANNEX_CORRIDOR_X := 6
+const ANNEX_CORRIDOR_Z := 5
+
+# Retired names kept only so the unreachable legacy sewer construction helpers
+# remain parseable while other themes still reuse their pipe-detail helper.
+const SEWER_TUNNEL := ANNEX_OPEN
+const SEWER_BASIN := ANNEX_MAZE
+const SEWER_PUMP := ANNEX_LONG
+const SEWER_DRY := ANNEX_QUIET
+const SEWER_GALLERY := ANNEX_PASSAGE
+const SEWER_CISTERN := ANNEX_LOBBY
 
 const AIR_GATE := 40
 const AIR_CONCOURSE := 41
@@ -168,11 +182,11 @@ static func _forced_open(ws: int, cell: Vector2i) -> int:
 ## glass, check-in backs and escalator mezzanines. -1 if the cell has no
 ## walls. Exposed here so spawn logic can know which side a gate's sealed
 ## apron strip is on.
-static func anchor_wall(ws: int, cell: Vector2i, salt: int) -> int:
+static func anchor_wall(ws: int, cell: Vector2i, salt: int, theme := 0) -> int:
 	var start := int(r01(ws, cell.x, cell.y, salt) * 3.99)
 	for i in 4:
 		var d := (start + i) % 4
-		if is_wall(ws, cell, d):
+		if is_wall(ws, cell, d, theme):
 			return d
 	return -1
 
@@ -294,17 +308,48 @@ static func room_centre(ws: int, root: Vector2i) -> Vector2:
 ## same finish over meaningful stretches, and the room root guarantees every
 ## member of a merged room agrees even when it crosses a district boundary.
 static func finish_variant(ws: int, cell: Vector2i, theme: int) -> int:
+	if theme == 2:
+		var aroot := annex_room_id(ws, cell)
+		# Put the supplied damask in the arrival junction so the level never
+		# presents as a plain mint material test. The broader distribution still
+		# leaves a clear majority of rooms unpapered.
+		if aroot == Vector2i.ZERO:
+			return 3
+		var ax := floori(float(aroot.x + 1) / 3.0)
+		var az := floori(float(aroot.y + 1) / 3.0)
+		var roll := h(ws, ax, az, 1275) % 10
+		if roll < 7:
+			return roll % 3
+		return 3 if roll < 9 else 4
 	var root := room_id(ws, cell)
 	var zone_x := floori(float(root.x + 3) / 6.0)
 	var zone_z := floori(float(root.y + 3) / 6.0)
 	return h(ws, zone_x, zone_z, 1201 + theme * 37) % 3
 
 
+## One committed finish for an entire collinear Annex wall line. Shared edges
+## are built by both adjacent streamed chunks; choosing from either room made
+## two materials occupy the same wall and visibly split or z-fight. A line key
+## keeps both faces and every contiguous segment consistent while perpendicular
+## walls can still belong to different renovation eras.
+static func annex_wall_finish(ws: int, cell: Vector2i, dir: int) -> int:
+	var vertical_line := dir <= 1
+	var line := 0
+	if vertical_line:
+		line = cell.x + (1 if dir == 0 else 0)
+	else:
+		line = cell.y + (1 if dir == 2 else 0)
+	var roll := h(ws, line, 0 if vertical_line else 1, 1289) % 10
+	if roll < 7:
+		return h(ws, line, 0 if vertical_line else 1, 1291) % 3
+	return 3 if roll < 9 else 4
+
+
 ## Semantic district for a room: 0..2, interpreted separately by each theme.
 ## This is intentionally independent of finish_variant — a department can
 ## cross an old repaint boundary, and a renovation can cut across departments.
 static func macro_zone(ws: int, cell: Vector2i, theme: int) -> int:
-	var root := room_id(ws, cell)
+	var root := annex_room_id(ws, cell) if theme == 2 else room_id(ws, cell)
 	var zone_x := floori(float(root.x + ZONE_SPAN / 2) / float(ZONE_SPAN))
 	var zone_z := floori(float(root.y + ZONE_SPAN / 2) / float(ZONE_SPAN))
 	return h(ws, zone_x, zone_z, 1301 + theme * 53) % ZONE_COUNT
@@ -316,7 +361,7 @@ static func macro_zone_name(zone: int, theme: int) -> String:
 	var names := {
 		0: ["gaming", "hotel", "convention"],
 		1: ["operations", "records", "staff"],
-		2: ["conveyance", "treatment", "maintenance"],
+		2: ["open plan", "service maze", "dead offices"],
 		4: ["airside", "departures", "arrivals"],
 		5: ["patient wing", "treatment", "administration"],
 		6: ["academic", "commons", "administration"],
@@ -339,7 +384,7 @@ static func landmark_style(ws: int, cell: Vector2i, theme: int) -> int:
 	match theme:
 		0: return STYLE_BALLROOM
 		1: return OFFICE_BOARDROOM
-		2: return SEWER_CISTERN
+		2: return ANNEX_LOBBY
 		4: return AIR_FOODCOURT
 		5: return ASY_CHAPEL
 		6: return SCH_AUDITORIUM
@@ -353,7 +398,9 @@ static func room_height(ws: int, root: Vector2i, theme: int) -> float:
 	var n := room_size(ws, root)
 	var r := r01(ws, root.x, root.y, 612)
 	if theme == 2:
-		return 2.7 if n < 4 else 3.4
+		# The Annex never rewards a large room with height. A low, almost
+		# invariant drop ceiling makes every opening feel like the same building.
+		return 2.76 if n < 4 else 2.84
 	if theme == 4:
 		if n >= 4: return 6.2
 		return 4.4 if n >= 2 else lerpf(3.2, 3.8, r)
@@ -474,10 +521,193 @@ static func _parent_dir(ws: int, cell: Vector2i) -> int:
 	return 3 if cell.y > 0 else 2
 
 
+## 0 room, 1 horizontal corridor, 2 vertical corridor, 3 intersection.
+## Keeping the origin as an intersection makes the actual launch demonstrate
+## the level's mixed-scale circulation immediately.
+static func annex_corridor_axis(_ws: int, cell: Vector2i) -> int:
+	var horizontal := posmod(cell.y, ANNEX_CORRIDOR_Z) == 0
+	var vertical := posmod(cell.x, ANNEX_CORRIDOR_X) == 0
+	if horizontal and vertical:
+		return 3
+	if horizontal:
+		return 1
+	if vertical:
+		return 2
+	return 0
+
+
+## Physical clear width of an Annex passage. Width is keyed to the whole row
+## or column rather than to each cell, so a hallway holds its proportions over
+## a long run before opening into a differently scaled crossing or room.
+static func annex_horizontal_width(ws: int, row: int) -> float:
+	var roll := h(ws, row, 0, 2827) % 100
+	if roll < 40:
+		return 3.4
+	if roll < 80:
+		return 4.8
+	return 6.4
+
+
+static func annex_vertical_width(ws: int, column: int) -> float:
+	var roll := h(ws, column, 0, 2831) % 100
+	if roll < 40:
+		return 3.4
+	if roll < 80:
+		return 4.8
+	return 6.4
+
+
+## Theme-local room identity. This graph is intentionally unrelated to the
+## generic Vegas/office rooms: most spaces are one cell, some are paired, and
+## a controlled minority become 2x2 chambers. That produces a noticeable jump
+## from compressed hallways to wider rooms without returning to hangar-sized
+## floor plates.
+static func annex_room_id(ws: int, cell: Vector2i) -> Vector2i:
+	if annex_corridor_axis(ws, cell) != 0:
+		return cell
+	var bx := cell.x - posmod(cell.x, 2)
+	var bz := cell.y - posmod(cell.y, 2)
+	var mode := h(ws, bx, bz, 2813) % 100
+	if mode < 28:
+		for dx in 2:
+			for dz in 2:
+				if annex_corridor_axis(ws, Vector2i(bx + dx, bz + dz)) != 0:
+					return cell
+		return Vector2i(bx, bz)
+	if mode < 56:
+		var hx := Vector2i(bx, cell.y)
+		if annex_corridor_axis(ws, hx) == 0 \
+				and annex_corridor_axis(ws, hx + Vector2i(1, 0)) == 0:
+			return hx
+	if mode < 84:
+		var vz := Vector2i(cell.x, bz)
+		if annex_corridor_axis(ws, vz) == 0 \
+				and annex_corridor_axis(ws, vz + Vector2i(0, 1)) == 0:
+			return vz
+	return cell
+
+
+static func annex_room_size(ws: int, root: Vector2i) -> int:
+	var total := 0
+	for dx in 2:
+		for dz in 2:
+			if annex_room_id(ws, root + Vector2i(dx, dz)) == root:
+				total += 1
+	return maxi(total, 1)
+
+
+## A furniture hoard is a rare interruption reserved for true 24x24 rooms.
+## At thirteen percent of those rooms it remains roughly a one-percent event
+## across the complete Annex rather than becoming another standard prop kit.
+static func annex_furniture_pile(ws: int, root: Vector2i) -> bool:
+	return annex_room_size(ws, root) >= 4 \
+		and r01(ws, root.x, root.y, 2867) < 0.13
+
+
+## Lighting changes in broad two-cell zones rather than per chunk, so the
+## player crosses a deliberate pool of lower illumination instead of a noisy
+## checkerboard. Quiet rooms are always dim; a smaller share of corridors and
+## other rooms inherit a dim macro-block.
+static func annex_dim_zone(ws: int, cell: Vector2i) -> bool:
+	if cell == Vector2i.ZERO:
+		return false
+	if annex_corridor_axis(ws, cell) == 0 \
+			and cell_style(ws, cell, 2) == ANNEX_QUIET:
+		return true
+	var bx := floori(float(cell.x) / 2.0)
+	var bz := floori(float(cell.y) / 2.0)
+	return r01(ws, bx, bz, 2879) < 0.10
+
+
+## A minority of dim macro-blocks have no fixture in a given chunk at all.
+## This produces genuinely low-light stretches without drawing dark, visibly
+## switched-off troffers on an otherwise bright ceiling.
+static func annex_light_gap(ws: int, cell: Vector2i) -> bool:
+	if not annex_dim_zone(ws, cell):
+		return false
+	var bx := floori(float(cell.x) / 2.0)
+	var bz := floori(float(cell.y) / 2.0)
+	return r01(ws, bx, bz, 2881) < 0.28
+
+
+static func _annex_corridor_supports(axis: int, dir: int) -> bool:
+	return axis == 3 or (axis == 1 and dir <= 1) or (axis == 2 and dir >= 2)
+
+
+static func _annex_forced_open(ws: int, cell: Vector2i, dir: int) -> bool:
+	if _parent_dir(ws, cell) == dir:
+		return true
+	var nb: Vector2i = cell + DIRV[dir]
+	return _parent_dir(ws, nb) == OPP[dir]
+
+
+## Dedicated mixed-scale Annex topology: long narrow corridor bands, human-
+## scale rooms, occasional merged chambers, broad doorless openings and a
+## guaranteed spanning tree so no room becomes unreachable.
+static func _annex_edge_info(ws: int, cell: Vector2i, dir: int) -> Dictionary:
+	var nb: Vector2i = cell + DIRV[dir]
+	var ca := annex_corridor_axis(ws, cell)
+	var cb := annex_corridor_axis(ws, nb)
+	if ca != 0 and cb != 0 \
+			and _annex_corridor_supports(ca, dir) \
+			and _annex_corridor_supports(cb, OPP[dir]):
+		return {
+			"wall": false, "full_open": true,
+			"t": 6.0, "w": 12.0, "exit_sign": false,
+		}
+
+	var e := _edge(cell, dir)
+	var owner: Vector2i = e[0]
+	var axis := int(e[1])
+	var eh := _edge_hash(ws, owner, axis)
+	var forced := _annex_forced_open(ws, cell, dir)
+
+	# A room opening onto a corridor is a short, cased side passage through the
+	# corridor's reserved wall strip. It is never a missing twelve-metre wall.
+	if (ca == 0) != (cb == 0):
+		if not forced and hr01(eh, 84) >= 0.34:
+			return {
+				"wall": true, "full_open": false,
+				"t": 6.0, "w": 0.0, "exit_sign": false,
+			}
+		var corridor_w := lerpf(3.2, 5.0, hr01(eh, 85))
+		var corridor_margin := corridor_w * 0.5 + 0.65
+		return {
+			"wall": false, "full_open": false,
+			"t": lerpf(corridor_margin, 12.0 - corridor_margin, hr01(eh, 86)),
+			"w": corridor_w, "exit_sign": false,
+		}
+
+	# Cells belonging to one authored room have no seam between them.
+	if ca == 0 and cb == 0 and annex_room_id(ws, cell) == annex_room_id(ws, nb):
+		return {
+			"wall": false, "full_open": true,
+			"t": 6.0, "w": 12.0, "exit_sign": false,
+		}
+
+	# Separate rooms remain closed most of the time. Tree edges and occasional
+	# secondary cuts become the broad, off-centre openings seen in the refs.
+	if not forced and hr01(eh, 87) >= 0.20:
+		return {
+			"wall": true, "full_open": false,
+			"t": 6.0, "w": 0.0, "exit_sign": false,
+		}
+	var completely_open := hr01(eh, 88) < 0.16
+	var width := lerpf(4.2, 7.2, hr01(eh, 89))
+	var margin := width * 0.5 + 0.55
+	var offset := lerpf(margin, 12.0 - margin, hr01(eh, 90))
+	return {
+		"wall": false, "full_open": completely_open,
+		"t": offset, "w": width, "exit_sign": false,
+	}
+
+
 ## Two cells in the same room have no wall between them. Two cells in
 ## different rooms always have one — sometimes with a doorway through it
 ## (see edge_info), never a bare panel standing in the open.
-static func is_wall(ws: int, cell: Vector2i, dir: int) -> bool:
+static func is_wall(ws: int, cell: Vector2i, dir: int, theme := 0) -> bool:
+	if theme == 2:
+		return bool(_annex_edge_info(ws, cell, dir)["wall"])
 	if room_id(ws, cell) == room_id(ws, cell + DIRV[dir]):
 		return false
 	if corridor_link(ws, cell, dir):
@@ -549,7 +779,7 @@ static func _fo_p(theme: int) -> float:
 ## the door-illusion rule below; deliberately ignores that rule itself so
 ## there is no recursion.
 static func _open_edge(ws: int, cell: Vector2i, dir: int, theme: int) -> bool:
-	if is_wall(ws, cell, dir):
+	if is_wall(ws, cell, dir, theme):
 		return false
 	if corridor_link(ws, cell, dir):
 		return true
@@ -558,9 +788,11 @@ static func _open_edge(ws: int, cell: Vector2i, dir: int, theme: int) -> bool:
 
 
 static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictionary:
+	if theme == 2:
+		return _annex_edge_info(ws, cell, dir)
 	var e := _edge(cell, dir)
 	var eh := _edge_hash(ws, e[0], e[1])
-	var wall := is_wall(ws, cell, dir)
+	var wall := is_wall(ws, cell, dir, theme)
 	if corridor_link(ws, cell, dir):
 		# nothing interrupts a running corridor — not even a door frame
 		return {"wall": false, "full_open": true, "t": 6.0, "w": 4.0, "exit_sign": false}
@@ -612,10 +844,11 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	var t := lerpf(margin, 12.0 - margin, hr01(eh, 3))
 	var has_sign := hr01(eh, 4) < (0.10 if theme == 1 else 0.16)
 	if theme == 2:
-		# sewers: openings are wide centered archways spanning the channel,
-		# so the waterway and both walkways pass through together
-		w = lerpf(4.8, 6.6, hr01(eh, 2))
-		t = 6.0
+		# Doorless, broad rectangular cuts. Their off-centre placement makes a
+		# sequence of rooms read as an office maze instead of a tiled grid.
+		w = lerpf(4.2, 7.4, hr01(eh, 2))
+		var m2 := w / 2.0 + 0.7
+		t = lerpf(m2, 12.0 - m2, hr01(eh, 3))
 		has_sign = false
 	elif theme == 4:
 		# airport: one continuous terminal — most edges fully open, the rest
@@ -654,7 +887,8 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	# locked doors. Keep it as a cased opening instead. At a terminal or junction,
 	# the opening is centred on the lane so it cannot discharge into that hidden
 	# strip.  This is symmetric: both sides see the same corridor axis and edge.
-	if (theme == 0 or theme == 1 or theme == 4 or theme == 5 or theme == 7 or theme == 8) and is_corr:
+	if (theme == 0 or theme == 1 or theme == 2 or theme == 4 or theme == 5 \
+			or theme == 7 or theme == 8) and is_corr:
 		full_open = false
 		var terminal := (ca == 1 and dir <= 1) or (ca == 2 and dir >= 2) \
 			or (cb == 1 and dir <= 1) or (cb == 2 and dir >= 2)
@@ -662,7 +896,10 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 			t = 6.0
 			# A transit bank needs its whole cross-section at a genuine exit;
 			# the narrower hotel, office and asylum spines use a single doorway.
-			w = 10.4 if theme == 4 or theme == 7 else minf(w, 2.4)
+			if theme == 2:
+				w = minf(w, 4.8)
+			else:
+				w = 10.4 if theme == 4 or theme == 7 else minf(w, 2.4)
 	return {"wall": wall, "full_open": full_open, "t": t, "w": w, "exit_sign": has_sign}
 
 
@@ -708,7 +945,7 @@ static func portal(ws: int, cell: Vector2i, theme := 0) -> int:
 	match theme:
 		0: ok = st == STYLE_EMPTY
 		1: ok = st == OFFICE_EMPTY
-		2: ok = st == SEWER_DRY
+		2: ok = st == ANNEX_QUIET
 		4: ok = st == AIR_HALL
 		5: ok = st == ASY_DAYROOM
 		6: ok = st == SCH_GYM
@@ -716,7 +953,11 @@ static func portal(ws: int, cell: Vector2i, theme := 0) -> int:
 		8: ok = st == PRISON_GUARD
 	if not ok:
 		return -1
-	if r01(ws, cell.x, cell.y, 501) > 0.30:
+	# Preserve Wander's cross-floor portal contract while keeping the minimalist
+	# Annex genuinely sparse: about one percent of its cells qualify, versus the
+	# denser set-piece floors' established rate.
+	var portal_p := 0.04 if theme == 2 else 0.30
+	if r01(ws, cell.x, cell.y, 501) > portal_p:
 		return -1
 	# pick any OTHER live theme; THEMES is sparse (3 was the theme park)
 	var others: Array[int] = []
@@ -730,17 +971,20 @@ static func portal(ws: int, cell: Vector2i, theme := 0) -> int:
 ## predicate here makes the set piece deterministic and lets dev tools locate
 ## one without constructing the whole world.
 static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
-	if room_id(ws, cell) != cell or room_size(ws, cell) != 1 \
+	var local_root := annex_room_id(ws, cell) if theme == 2 else room_id(ws, cell)
+	var local_size := annex_room_size(ws, local_root) if theme == 2 \
+		else room_size(ws, local_root)
+	if local_root != cell or local_size != 1 \
 			or not room_split(ws, cell, theme).is_empty() \
 			or portal(ws, cell, theme) >= 0:
 		return false
 	var st := cell_style(ws, cell, theme)
 	var eligible := st == STYLE_EMPTY or st == OFFICE_EMPTY \
-		or st == SEWER_DRY or st == AIR_HALL \
+		or st == ANNEX_QUIET or st == AIR_HALL \
 		or st == ASY_DAYROOM or st == SCH_ADMIN \
 		or st == MALL_ATRIUM or st == PRISON_GUARD
 	return eligible and r01(ws, cell.x, cell.y, 1700) < 0.28 \
-		and anchor_wall(ws, cell, 1701) >= 0
+		and anchor_wall(ws, cell, 1701, theme) >= 0
 
 
 ## What kind of room this is. Seeded by the room ROOT so every cell of a
@@ -748,11 +992,37 @@ static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
 ## fits: slot banks and ferris wheels want a hall; a small room does not get
 ## a carousel.
 static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
+	if theme == 2:
+		if annex_corridor_axis(ws, cell) != 0:
+			return ANNEX_PASSAGE
+		var aroot := annex_room_id(ws, cell)
+		var asize := annex_room_size(ws, aroot)
+		var ar := r01(ws, aroot.x, aroot.y, 2941)
+		# Wide rooms should actually exploit their footprint: they favour open
+		# plans and the column/half-wall lobby grammar. Single cells stay more
+		# restrained and are where quiet rooms and compressed mazes concentrate.
+		if asize >= 4:
+			if ar < 0.45: return ANNEX_OPEN
+			if ar < 0.70: return ANNEX_LOBBY
+			if ar < 0.85: return ANNEX_LONG
+			if ar < 0.95: return ANNEX_MAZE
+			return ANNEX_QUIET
+		if asize >= 2:
+			if ar < 0.40: return ANNEX_OPEN
+			if ar < 0.52: return ANNEX_LOBBY
+			if ar < 0.70: return ANNEX_LONG
+			if ar < 0.85: return ANNEX_MAZE
+			return ANNEX_QUIET
+		if ar < 0.35: return ANNEX_OPEN
+		if ar < 0.67: return ANNEX_QUIET
+		if ar < 0.82: return ANNEX_LONG
+		if ar < 0.96: return ANNEX_MAZE
+		return ANNEX_LOBBY
 	var cdir := corridor(ws, cell)
 	if cdir != 0:
 		match theme:
 			1: return OFFICE_CORRIDOR
-			2: return SEWER_GALLERY
+			2: return ANNEX_PASSAGE
 			4: return AIR_TRANSIT
 			5: return ASY_CORRIDOR
 			6: return SCH_CORRIDOR
@@ -887,15 +1157,21 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 			return AIR_CONCOURSE
 		return AIR_HALL if r < 0.58 else AIR_BAGGAGE
 	if theme == 2:
+		if root == Vector2i.ZERO:
+			return ANNEX_OPEN
 		if n >= 4:
-			return SEWER_BASIN if zone != 2 or r < 0.55 else SEWER_PUMP
+			return ANNEX_OPEN if r < 0.70 else ANNEX_LOBBY
 		if n >= 2:
-			if zone == 0: return SEWER_TUNNEL if r < 0.78 else SEWER_PUMP
-			if zone == 1: return SEWER_BASIN if r < 0.56 else SEWER_PUMP
-			return SEWER_PUMP if r < 0.68 else SEWER_DRY
-		if zone == 0: return SEWER_TUNNEL if r < 0.78 else SEWER_DRY
-		if zone == 1: return SEWER_TUNNEL if r < 0.42 else SEWER_DRY
-		return SEWER_DRY if r < 0.70 else SEWER_PUMP
+			if zone == 0:
+				return ANNEX_OPEN if r < 0.58 else ANNEX_LONG
+			if zone == 1:
+				return ANNEX_MAZE if r < 0.64 else ANNEX_OPEN
+			return ANNEX_QUIET if r < 0.38 else ANNEX_MAZE
+		if zone == 0:
+			return ANNEX_OPEN if r < 0.58 else ANNEX_LONG
+		if zone == 1:
+			return ANNEX_MAZE if r < 0.64 else ANNEX_QUIET
+		return ANNEX_QUIET if r < 0.62 else ANNEX_MAZE
 	if theme == 1:
 		if root == Vector2i.ZERO:
 			return OFFICE_CUBICLES

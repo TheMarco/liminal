@@ -4,7 +4,10 @@ extends SceneTree
 ## Run: godot --headless --path . --script tools/find_cells.gd -- <seed> <theme>
 
 const NAMES := {
-	6: "ballroom", 15: "boardroom", 25: "cistern", 47: "foodcourt",
+	6: "ballroom", 15: "boardroom",
+	20: "Annex open", 21: "Annex maze", 22: "Annex long",
+	23: "Annex quiet", 24: "Annex passage", 25: "Annex lobby",
+	47: "foodcourt",
 	57: "chapel", 68: "auditorium",
 	60: "corridor", 61: "classroom", 62: "cafeteria", 63: "bathroom",
 	64: "gym", 65: "library", 66: "lab", 67: "admin",
@@ -16,7 +19,8 @@ const NAMES := {
 	87: "visitation", 88: "rotunda",
 }
 const ANCHOR_LOCAL_STYLES := [
-	WorldGen.SEWER_BASIN,
+	WorldGen.ANNEX_OPEN, WorldGen.ANNEX_MAZE, WorldGen.ANNEX_LONG,
+	WorldGen.ANNEX_QUIET, WorldGen.ANNEX_PASSAGE, WorldGen.ANNEX_LOBBY,
 	WorldGen.AIR_GATE, WorldGen.AIR_CHECKIN, WorldGen.AIR_ESCALATOR,
 	WorldGen.AIR_TRANSIT,
 	WorldGen.MALL_CORRIDOR, WorldGen.MALL_STORE, WorldGen.MALL_FOODCOURT,

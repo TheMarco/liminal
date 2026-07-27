@@ -26,6 +26,47 @@ and remove it from the distributed build.
 
 ## Attributed work
 
+### `light_switch.glb`
+
+- **Title:** `Light Switch`
+- **Creator:** [Avot](https://sketchfab.com/avot)
+- **Source:** <https://sketchfab.com/3d-models/light-switch-808c3de4dd874fc1b67ff15cd2645555>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Re-oriented and mounted flush at realistic switch height
+  on deterministic Annex and office walls, usually beside openings.
+- **Local record:** [`models/cc_by/light_switch/SOURCE.md`](models/cc_by/light_switch/SOURCE.md)
+
+### `outlet.glb`
+
+- **Title:** `Outlet`
+- **Creator:** [Drake](https://sketchfab.com/dlp14c)
+- **Source:** <https://sketchfab.com/3d-models/outlet-192d0b1de17f4fcdbfeca3fe873c7bdf>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Mounted flush at normal receptacle height with restrained,
+  deterministic spacing on Annex and office walls.
+- **Local record:** [`models/cc_by/outlet/SOURCE.md`](models/cc_by/outlet/SOURCE.md)
+
+### `stainless_steel_shelving.glb`
+
+- **Title:** `Stainless Steel Shelving Restaurant Equipment`
+- **Creator:** [jimbogies](https://sketchfab.com/jimbogies)
+- **Source:** <https://sketchfab.com/3d-models/stainless-steel-shelving-restaurant-equipment-01addf6c21304a26a9634cbf725230ef>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Uniformly scaled and floor-centred as sparse Annex storage
+  shelving, with individually selected attributed cardboard boxes placed on
+  supported shelves. Source staging camera nodes are not used.
+- **Local record:** [`models/cc_by/stainless_steel_shelving/SOURCE.md`](models/cc_by/stainless_steel_shelving/SOURCE.md)
+
+### `wood_dining_chair.glb`
+
+- **Title:** `Wood Dining Chair`
+- **Creator:** [Doverlock](https://sketchfab.com/Doverlock)
+- **Source:** <https://sketchfab.com/3d-models/wood-dining-chair-dd63d6eb1d8d452786b9afd4555a8d2e>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Uniformly scaled and floor-centred into isolated chairs,
+  small groups, and rare supported chair piles in large Annex spaces.
+- **Local record:** [`models/cc_by/wood_dining_chair/SOURCE.md`](models/cc_by/wood_dining_chair/SOURCE.md)
+
 ### `chemistry_lab_table.glb`
 
 - **Title:** `Chemistry Lab Table`

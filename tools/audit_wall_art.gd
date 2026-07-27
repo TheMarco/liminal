@@ -2,7 +2,7 @@ extends SceneTree
 ## Verifies that every active painting appears across its intended themes,
 ## preserves aspect ratio, fits its wall, never mounts over an opening, and
 ## remains clear of any resolved interior partition that meets that wall.
-## Sewers must remain art-free; office art is restricted to its B&W portraits.
+## The Annex must remain art-free; office art is restricted to its B&W portraits.
 ## Run: godot --headless --path . --script tools/audit_wall_art.gd -- [seeds] [radius]
 
 
@@ -47,7 +47,7 @@ func _init() -> void:
 			print("FAIL — theme %d never generated wall art" % theme)
 	if int(theme_mounts.get(2, 0)) != 0:
 		missing += int(theme_mounts.get(2, 0))
-		print("FAIL — sewer generated %d forbidden paintings" % theme_mounts.get(2, 0))
+		print("FAIL — Annex generated %d forbidden paintings" % theme_mounts.get(2, 0))
 	var allowed := {
 		1: Chunk.ART_OFFICE,
 		4: Chunk.ART_AIRPORT + Chunk.ART_MALL + Chunk.ART_RANDOM,

@@ -2,7 +2,7 @@ class_name Chunk
 extends Node3D
 ## One 12x12m cell, fully generated in _init from (seed, cell, theme).
 ## Theme 0: seedy Vegas hotel-casino. Theme 1: sterile Severance-style office.
-## Theme 2: dripping sewer works. Theme 4: an airport terminal parked forever
+## Theme 2: the warm yellow Annex. Theme 4: an airport terminal parked forever
 ## at 3 a.m. (3 was a derelict theme park, cut — ids are not renumbered).
 ## Theme 5: an abandoned asylum — the first theme dressed in downloaded CC0
 ## photo textures and models (ambientCG / Poly Haven) instead of pure math.
@@ -14,7 +14,16 @@ const S := 12.0
 const H := 3.2       # vegas wall/ceiling height
 const H2 := 6.4      # vegas grand hall ceiling
 const HOFF := 3.0    # office ceiling height
-const HSEW := 2.7    # sewer ceiling height
+const HANNEX := 2.78 # the Annex's deliberately low drop ceiling
+## The source ceiling map is a 2x2 grid. At the material's world-triplanar
+## projection each visible square is 1.2m wide (the former 0.6m assumption
+## made every troffer occupy only one quarter of a visible tile).
+const ANNEX_CEILING_TILE := 1.20
+## The Annex uses substantial commercial partitions. The shared 0.15m wall
+## constant made its door returns look like paper and exposed a separately-lit
+## end cap at every 12m chunk boundary.
+const ANNEX_WALL_T := 0.30
+const ANNEX_FIXTURE_CLEARANCE := 0.08
 const HAIR := 5.0    # airport hall height
 const HASY := 3.0    # asylum corridor height
 const HSCH := 3.05   # school corridor height
@@ -44,6 +53,9 @@ static var TOR := TorusMesh.new()
 static var QUAD := QuadMesh.new()
 static var CONE := CylinderMesh.new()
 static var _cone_ready := false
+## Four unit-prism variants per run axis: neither, either, or both genuine end
+## caps. Annex continuation joins use no cap, so two adjacent chunks can meet
+## without a perpendicular face or coplanar overlap catching the light.
 
 const ASY_PROP_NAMES := ["BarberShopChair_01", "Rockingchair_01", "SchoolChair_01",
 	"medical_box", "metal_office_desk", "mounted_fluorescent_lights",
@@ -187,6 +199,21 @@ const OFFICE_BOXES_PATH := \
 const OFFICE_BOX_VARIANTS := [
 	"430x210x270_1", "290x170x190_1", "290x290x290_1", "290x290x400_1",
 ]
+const LIGHT_SWITCH_PATH := \
+	"res://models/cc_by/light_switch/light_switch.glb"
+const OUTLET_PATH := "res://models/cc_by/outlet/outlet.glb"
+const ANNEX_SHELVING_PATH := \
+	"res://models/cc_by/stainless_steel_shelving/stainless_steel_shelving.glb"
+const ANNEX_SHELVING_SCALE := 0.025
+const ANNEX_SHELVING_CENTRE := Vector3(1.75, 0.0, 0.75)
+# Measured tops of the first three load-bearing decks in the imported rack.
+# Boxes are bottom-aligned by `_office_shelf_box`, so these are contact planes,
+# not approximate visual offsets.
+const ANNEX_SHELVING_DECK_TOPS := [0.09375, 0.69375, 1.14375]
+const ANNEX_CHAIR_PATH := \
+	"res://models/cc_by/wood_dining_chair/wood_dining_chair.glb"
+const ANNEX_CHAIR_SCALE := 0.45
+const ANNEX_CHAIR_CENTRE := Vector3(0.0, -1.0, 0.0)
 const AIRPORT_SEATS_PATH := \
 	"res://models/cc_by/airport_seats/airport_seats.glb"
 const AIRPORT_SEATS_SCALE := 0.04
@@ -487,11 +514,26 @@ var descent_target := false
 var descent_target_wall := -1
 var descent_final := false
 var descent_floor_idx := 0
+## The arrival room — the car the player rides in on. A separate authored cell
+## from the objective, and never the same one.
+var descent_arrival := false
+var descent_arrival_wall := -1
+var descent_arrival_used := false
+## Objective lift call state, mirrored from DescentRun so a target room that
+## streams out during the wait resumes it correctly when it streams back in.
+var descent_lift_called := false
+var descent_lift_wait := 0.0
+var descent_lift_open := false
 var anomaly_kind := -1
+var _descent_lift_rig := {}
+var _descent_arrival_rig := {}
 var _blackout := false
 var _blackout_lights := {}
 var _blackout_meshes := {}
 var _furnishing_group_serial := 0
+## Local XZ footprints of walls and columns that reach the drop ceiling.
+## Annex fixtures are built after its architecture and reject these rectangles.
+var _annex_ceiling_obstructions: Array[Rect2] = []
 # props are laid out in cell coords, then shifted onto the room centre
 
 
@@ -547,6 +589,10 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(ASY_AUTOPSY_PATH)
 	paths.append(OFFICE_PRINTER_PATH)
 	paths.append(OFFICE_BOXES_PATH)
+	paths.append(LIGHT_SWITCH_PATH)
+	paths.append(OUTLET_PATH)
+	paths.append(ANNEX_SHELVING_PATH)
+	paths.append(ANNEX_CHAIR_PATH)
 	paths.append(AIRPORT_SEATS_PATH)
 	paths.append(AIRPORT_DEPARTURE_BOARD_PATH)
 	paths.append(AIRPORT_LUGGAGE_PATH)
@@ -603,24 +649,43 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	descent_target_wall = int(p_config.get("target_wall", -1))
 	descent_final = bool(p_config.get("final", false))
 	descent_floor_idx = int(p_config.get("floor_idx", 0))
+	descent_arrival = bool(p_config.get("arrival", false))
+	descent_arrival_wall = int(p_config.get("arrival_wall", -1))
+	descent_arrival_used = bool(p_config.get("arrival_used", false))
+	descent_lift_called = bool(p_config.get("lift_called", false))
+	descent_lift_wait = float(p_config.get("lift_wait", 0.0))
+	descent_lift_open = bool(p_config.get("lift_open", false))
 	anomaly_kind = int(p_config.get("anomaly", -1))
 	var requested_blackout := bool(p_config.get("blackout", false))
 	body = StaticBody3D.new()
 	add_child(body)
 	style = WorldGen.cell_style(wseed, cell, theme)
-	room_root = WorldGen.room_id(wseed, cell)
-	room_n = WorldGen.room_size(wseed, room_root)
+	# The Annex has its own room/corridor graph rather than inheriting the
+	# Vegas-era graph shared by the older floors.
+	room_root = WorldGen.annex_room_id(wseed, cell) if theme == 2 \
+		else WorldGen.room_id(wseed, cell)
+	room_n = WorldGen.annex_room_size(wseed, room_root) if theme == 2 \
+		else WorldGen.room_size(wseed, room_root)
 	is_room_anchor = room_root == cell
 	# ceiling follows the room, so a small room feels small and a hall soars
-	ceil_h = WorldGen.room_height(wseed, room_root, theme)
+	ceil_h = HANNEX if theme == 2 else WorldGen.room_height(wseed, room_root, theme)
 	if WorldGen.corridor(wseed, cell) != 0:
-		ceil_h = HSEW if theme == 2 else (3.5 if theme == 4 else \
+		ceil_h = HANNEX if theme == 2 else (3.5 if theme == 4 else \
 			(HASY if theme == 5 else (HSCH if theme == 6 else \
 			(HMALL if theme == 7 else (HPRISON if theme == 8 else HOFF)))))
 	_build_floor_ceiling()
 	_build_walls()
-	_build_lighting()
-	_build_props()
+	if theme == 2:
+		# Annex columns and internal partitions must exist before its ceiling
+		# grid is populated, otherwise a valid tile-centred fixture can still
+		# be cut in half by later architecture.
+		_build_props()
+		if not is_room_anchor:
+			_annex_room_member_architecture()
+		_build_lighting()
+	else:
+		_build_lighting()
+		_build_props()
 	_build_interactions()
 	if anomaly_kind >= 0:
 		activate_anomaly(anomaly_kind)
@@ -635,13 +700,13 @@ func _maybe_probe() -> void:
 	# One probe covers a generated room. Multi-cell rooms used to create one in
 	# every member chunk, rendering the same surrounding geometry four times.
 	if not is_room_anchor:
+		# Annex member-cell architecture is built before its lighting, above,
+		# so fixtures can reserve an unobstructed ceiling tile.
 		return
 	var want := false
 	if theme == 0:
 		want = style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_SLOTS \
 			or style == WorldGen.STYLE_BALLROOM
-	elif theme == 2:
-		want = style == WorldGen.SEWER_BASIN or style == WorldGen.SEWER_CISTERN
 	elif theme == 4:
 		want = style == WorldGen.AIR_GATE or style == WorldGen.AIR_FOODCOURT
 	elif theme == 6:
@@ -658,10 +723,9 @@ func _maybe_probe() -> void:
 	probe.update_mode = ReflectionProbe.UPDATE_ONCE
 	var span := _room_span()
 	var rc := WorldGen.room_centre(wseed, room_root)
-	var local_c := Vector3(rc.x - float(cell.x) * S,
-		ceil_h / 2.0 - (0.7 if theme == 2 else 0.0),
+	var local_c := Vector3(rc.x - float(cell.x) * S, ceil_h / 2.0,
 		rc.y - float(cell.y) * S)
-	probe.size = Vector3(span.x, ceil_h + (2.0 if theme == 2 else 0.6), span.y)
+	probe.size = Vector3(span.x, ceil_h + 0.6, span.y)
 	probe.position = local_c
 	probe.box_projection = true
 	probe.interior = true
@@ -694,6 +758,23 @@ func _box(pos: Vector3, size: Vector3, mat: Material, collide := true) -> MeshIn
 	add_child(mi)
 	if collide:
 		_collider_box(pos, size)
+	return mi
+
+
+## A substantial Annex wall. Keep this on Godot's native BoxMesh rendering
+## path: the former hand-built ArrayMesh developed intermittent black faces on
+## Metal when several streamed chunks met. Shared boundaries still have one
+## canonical owner and cross-corridor corners are single solids, which removes
+## the actual coplanar overlaps without replacing the stable wall primitive.
+func _annex_wall_prism(pos: Vector3, size: Vector3, along_x: bool,
+		cap_min: bool, cap_max: bool, mat: Material) -> MeshInstance3D:
+	var mi := _box(pos, size, mat)
+	mi.set_meta("annex_native_box", true)
+	# Retain the intended continuation metadata for audits and future batching;
+	# the geometry itself must remain the engine-native primitive.
+	mi.set_meta("annex_wall_along_x", along_x)
+	mi.set_meta("annex_wall_cap_min", cap_min)
+	mi.set_meta("annex_wall_cap_max", cap_max)
 	return mi
 
 
@@ -939,7 +1020,7 @@ func _mrbox(parent: Node3D, pos: Vector3, size: Vector3, mat: Material, r := 0.0
 
 func _build_floor_ceiling() -> void:
 	if theme == 2:
-		_sewer_floor_ceiling()
+		_annex_floor_ceiling()
 		return
 	if theme == 1:
 		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.office_carpet())
@@ -1018,20 +1099,42 @@ func _build_floor_ceiling() -> void:
 
 
 func _build_walls() -> void:
+	var wall_t := ANNEX_WALL_T if theme == 2 else T
 	for dir in 4:
 		var info := WorldGen.edge_info(wseed, cell, dir, theme)
-		var plane := (S - T / 2.0) if (dir == 0 or dir == 2) else (T / 2.0)
+		# Annex shared boundaries have one canonical east/south owner and sit
+		# on the actual boundary plane. Previously both neighbouring chunks
+		# built an inward 30cm half, producing a 60cm compound wall. The
+		# non-owner still supplies room-side wall dressing below.
+		var owns_annex_wall := theme != 2 or dir == 0 or dir == 2
+		var plane := (S if (dir == 0 or dir == 2) else 0.0) if theme == 2 \
+			else ((S - wall_t / 2.0) if (dir == 0 or dir == 2) \
+				else (wall_t / 2.0))
 		if info["wall"]:
-			_wall_seg(dir, plane, 0.0, S, 0.0, _wall_h())
+			if owns_annex_wall:
+				_wall_seg(dir, plane, 0.0, S, 0.0, _wall_h())
 			_wall_decor(dir, plane)
+			if (theme == 1 or theme == 2) \
+					and (theme != 2 or owns_annex_wall) \
+					and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
+					and not (theme == 1 and style == WorldGen.OFFICE_CORRIDOR):
+				_wall_utilities(dir, plane, info)
 		elif not info["full_open"]:
 			var a: float = info["t"] - info["w"] / 2.0
 			var b: float = info["t"] + info["w"] / 2.0
-			_wall_seg(dir, plane, 0.0, a, 0.0, _wall_h())
-			_wall_seg(dir, plane, b, S, 0.0, _wall_h())
-			_wall_seg(dir, plane, a, b, AIR_DOOR if theme == 4 or theme == 7 else DOOR_TOP, _wall_h())
-			_door_casing(dir, plane, a, b)
-			_maybe_swing_door(dir, plane, a, b)
+			if owns_annex_wall:
+				_wall_seg(dir, plane, 0.0, a, 0.0, _wall_h())
+				_wall_seg(dir, plane, b, S, 0.0, _wall_h())
+				_wall_seg(dir, plane, a, b,
+					AIR_DOOR if theme == 4 or theme == 7 else DOOR_TOP,
+					_wall_h())
+				_door_casing(dir, plane, a, b)
+				_maybe_swing_door(dir, plane, a, b)
+			if (theme == 1 or theme == 2) \
+					and (theme != 2 or owns_annex_wall) \
+					and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
+					and not (theme == 1 and style == WorldGen.OFFICE_CORRIDOR):
+				_wall_utilities(dir, plane, info)
 			if (dir == 0 or dir == 2) and info["exit_sign"]:
 				if theme == 4:
 					_air_portal_sign(dir, info["t"])
@@ -1166,7 +1269,59 @@ func _toggle_swing_door(actor: Node, pivot: Node3D, cs: CollisionShape3D,
 		cs.disabled = false
 
 
+## Annex boundary walls are centred ON their grid lines, so where the wall
+## line turns a corner each wall ran half a thickness past the other's face
+## and stopped at its centreline — a stepped notch read as a vertical groove
+## down every convex corner. Mitre the turn instead: walls along Z extend half
+## a thickness into it, walls along X retract by the same, which closes the
+## corner into one edge with abutting (never coplanar same-facing) surfaces.
+## Straight continuations and bare ends are left exactly as before.
+func _annex_corner_shift(dir: int, at_max: bool) -> float:
+	var collinear: Array
+	var perp_a: Array
+	var perp_b: Array
+	match dir:
+		0:
+			collinear = [cell + Vector2i(0, 1 if at_max else -1), 0]
+			perp_a = [cell, 2 if at_max else 3]
+			perp_b = [cell + Vector2i(1, 0), 2 if at_max else 3]
+		1:
+			collinear = [cell + Vector2i(0, 1 if at_max else -1), 1]
+			perp_a = [cell, 2 if at_max else 3]
+			perp_b = [cell + Vector2i(-1, 0), 2 if at_max else 3]
+		2:
+			collinear = [cell + Vector2i(1 if at_max else -1, 0), 2]
+			perp_a = [cell, 0 if at_max else 1]
+			perp_b = [cell + Vector2i(0, 1), 0 if at_max else 1]
+		_:
+			collinear = [cell + Vector2i(1 if at_max else -1, 0), 3]
+			perp_a = [cell, 0 if at_max else 1]
+			perp_b = [cell + Vector2i(0, -1), 0 if at_max else 1]
+	if _annex_edge_solid(collinear[0], collinear[1]):
+		return 0.0
+	if not _annex_edge_solid(perp_a[0], perp_a[1]) \
+			and not _annex_edge_solid(perp_b[0], perp_b[1]):
+		return 0.0
+	var h := ANNEX_WALL_T * 0.5
+	# walls along Z (dir 0/1) extend into the turn; walls along X retract
+	var outward := h if dir < 2 else -h
+	return outward if at_max else -outward
+
+
+## Whether an edge carries any wall mass at its corners. Openings keep at
+## least 0.55m of wall beside each jamb, so any non-full-open edge has solid
+## material at both cell corners.
+func _annex_edge_solid(at: Vector2i, dir: int) -> bool:
+	return not bool(WorldGen.edge_info(wseed, at, dir, theme)["full_open"])
+
+
 func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: float) -> void:
+	var wall_t := ANNEX_WALL_T if theme == 2 else T
+	if theme == 2:
+		if is_zero_approx(from):
+			from += _annex_corner_shift(dir, false)
+		if is_equal_approx(to, S):
+			to += _annex_corner_shift(dir, true)
 	var ln := to - from
 	if ln < 0.05:
 		return
@@ -1174,13 +1329,13 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 	var yc := (y0 + y1) * 0.5
 	var hh := y1 - y0
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
-	var inner := plane + n * (T * 0.5)
+	var inner := plane + n * (wall_t * 0.5)
 	var wmat: Material = Mats.wallpaper_variant(_finish_variant())
 	if theme == 1:
 		wmat = Mats.office_wall_variant(_finish_variant())
 	elif theme == 2:
-		# the older stretches of the works are brick, not cast concrete
-		wmat = Mats.brick_sewer() if _r(49) < 0.4 else Mats.concrete()
+		wmat = Mats.annex_wall_variant(
+			WorldGen.annex_wall_finish(wseed, cell, dir))
 	elif theme == 4:
 		wmat = Mats.airport_wall_variant(_finish_variant())
 	elif theme == 5:
@@ -1191,11 +1346,36 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		wmat = Mats.mall_wall()
 	elif theme == 8:
 		wmat = Mats.prison_tile() if style == WorldGen.PRISON_SHOWER else Mats.prison_wall()
+	var wall_mesh: MeshInstance3D
 	if dir < 2:
-		_box(Vector3(plane, yc, c), Vector3(T, hh, ln), wmat)
+		if theme == 2:
+			wall_mesh = _annex_wall_prism(Vector3(plane, yc, c),
+				Vector3(wall_t, hh, ln), false,
+				not is_zero_approx(from), not is_equal_approx(to, S), wmat)
+		else:
+			wall_mesh = _box(
+				Vector3(plane, yc, c), Vector3(wall_t, hh, ln), wmat)
+		if theme == 2:
+			_annex_register_ceiling_obstruction(
+				Vector3(plane, 0.0, c), wall_t, ln, 0.0, y1)
 	else:
-		_box(Vector3(c, yc, plane), Vector3(ln, hh, T), wmat)
+		if theme == 2:
+			wall_mesh = _annex_wall_prism(Vector3(c, yc, plane),
+				Vector3(ln, hh, wall_t), true,
+				not is_zero_approx(from), not is_equal_approx(to, S), wmat)
+		else:
+			wall_mesh = _box(
+				Vector3(c, yc, plane), Vector3(ln, hh, wall_t), wmat)
+		if theme == 2:
+			_annex_register_ceiling_obstruction(
+				Vector3(c, 0.0, plane), ln, wall_t, 0.0, y1)
 	if theme == 2:
+		wall_mesh.set_meta("annex_wall_thickness", wall_t)
+		wall_mesh.set_meta("annex_wall_seam_safe", true)
+		wall_mesh.set_meta("annex_wall_cap_min", not is_zero_approx(from))
+		wall_mesh.set_meta("annex_wall_cap_max", not is_equal_approx(to, S))
+		# The Annex references meet carpet directly. A contrasting baseboard
+		# reads as a freestanding bar whenever generated openings line up.
 		return
 	if theme == 5:
 		# tiled wainscot to shoulder height — unless the whole room is tiled
@@ -1275,16 +1455,9 @@ func _door_casing(dir: int, plane: float, a: float, b: float) -> void:
 			_box(Vector3((a + b) * 0.5, AIR_DOOR + 0.12, plane), Vector3(b - a + 0.3, 0.26, T + 0.2), sm, false)
 		return
 	if theme == 2:
-		# chunky cast-concrete jambs and lintel around the archway
-		var jm := Mats.concrete()
-		if dir < 2:
-			_box(Vector3(plane, DOOR_TOP * 0.5, a - 0.02), Vector3(T + 0.3, DOOR_TOP, 0.34), jm)
-			_box(Vector3(plane, DOOR_TOP * 0.5, b + 0.02), Vector3(T + 0.3, DOOR_TOP, 0.34), jm)
-			_box(Vector3(plane, DOOR_TOP + 0.14, (a + b) * 0.5), Vector3(T + 0.3, 0.3, b - a + 0.38), jm, false)
-		else:
-			_box(Vector3(a - 0.02, DOOR_TOP * 0.5, plane), Vector3(0.34, DOOR_TOP, T + 0.3), jm)
-			_box(Vector3(b + 0.02, DOOR_TOP * 0.5, plane), Vector3(0.34, DOOR_TOP, T + 0.3), jm)
-			_box(Vector3((a + b) * 0.5, DOOR_TOP + 0.14, plane), Vector3(b - a + 0.38, 0.3, T + 0.3), jm, false)
+		# The 30cm native wall segments already expose substantial returns at
+		# the opening. Extra jamb/lintel boxes sat directly on those surfaces,
+		# producing a thin distance-dependent ridge that vanished up close.
 		return
 	if theme == 5:
 		# chipped green steel frame, a size heavier than it needs to be
@@ -1644,12 +1817,12 @@ func _wall_decor(dir: int, plane: float) -> void:
 			_air_wall_fids(dir, plane)
 		return
 	if theme == 2:
-		if r < 0.52:
-			_sewer_pipes(dir, plane)
-		elif r < 0.68:
-			_sewer_stencil(dir, plane)
-		elif r < 0.78:
-			_sewer_panel(dir, plane)
+		# Cameras are the Annex's one intentional furnishing. Keeping them rare
+		# makes the otherwise blank walls feel watched rather than decorated.
+		# Corridor cameras mount on the visible inner shell instead of the outer
+		# backing wall hidden beyond its reserved side strip.
+		if style != WorldGen.ANNEX_PASSAGE and r < 0.095:
+			_security_camera_wall(dir, plane)
 		return
 	if theme == 1:
 		if r < 0.20:
@@ -1669,6 +1842,95 @@ func _wall_decor(dir: int, plane: float) -> void:
 		_casino_neon(dir, plane)
 	elif r < 0.70:
 		_change_machine(dir, plane)
+
+
+## Building infrastructure shared by the office and Annex. Receptacles stay
+## low and near the ends of uninterrupted walls; switches sit beside generated
+## openings at a human reach height. An Annex boundary's utilities are emitted
+## only by the same streamed chunk that owns its wall, so neither can appear
+## without the other at the edge of the loaded neighbourhood.
+func _wall_utilities(dir: int, plane: float, info: Dictionary) -> void:
+	if theme != 1 and theme != 2:
+		return
+	var base := 1400 + dir * 37 + theme * 211
+	var split := _resolved_room_split()
+	var outlet_chance := 0.62 if theme == 1 else 0.24
+	var switch_chance := 0.86 if theme == 1 else 0.32
+	if bool(info["wall"]):
+		if _r(base) >= outlet_chance:
+			return
+		var along := 0.78 if _r(base + 1) < 0.5 else S - 0.78
+		if not _wall_utility_along_clear(dir, along, split):
+			along = S - along
+		if _wall_utility_along_clear(dir, along, split):
+			_wall_utility(dir, plane, along, 0.31, false)
+		return
+
+	var a := float(info["t"]) - float(info["w"]) * 0.5
+	var b := float(info["t"]) + float(info["w"]) * 0.5
+	if _r(base + 2) < switch_chance:
+		var left_space := a
+		var right_space := S - b
+		var switch_along := a - 0.24
+		if right_space > left_space or (is_equal_approx(right_space, left_space) \
+				and _r(base + 3) < 0.5):
+			switch_along = b + 0.24
+		if switch_along > 0.16 and switch_along < S - 0.16 \
+				and _wall_utility_along_clear(dir, switch_along, split):
+			_wall_utility(dir, plane, switch_along, 1.12, true)
+	if _r(base + 4) < outlet_chance * 0.56:
+		var left_len := a
+		var right_len := S - b
+		var outlet_along := a * 0.5
+		if right_len > left_len:
+			outlet_along = (b + S) * 0.5
+		if (left_len if right_len <= left_len else right_len) > 1.15 \
+				and _wall_utility_along_clear(dir, outlet_along, split):
+			_wall_utility(dir, plane, outlet_along, 0.31, false)
+
+
+func _wall_utility_along_clear(dir: int, along: float, split: Array) -> bool:
+	if split.is_empty():
+		return true
+	var partition_hits_wall := (bool(split[0]) and dir < 2) \
+		or (not bool(split[0]) and dir >= 2)
+	return not partition_hits_wall or absf(along - float(split[1])) > 0.48
+
+
+func _wall_utility(dir: int, plane: float, along: float, height: float,
+		is_switch: bool) -> Node3D:
+	var wall_t := ANNEX_WALL_T if theme == 2 else T
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var face := plane + n * wall_t * 0.5
+	var p := Vector3(face, height, along) if dir < 2 \
+		else Vector3(along, height, face)
+	var mount := _wall_utility_mount(p, _wall_facing(dir), height, is_switch)
+	if mount != null:
+		mount.set_meta("wall_utility_dir", dir)
+	return mount
+
+
+func _wall_utility_mount(p: Vector3, yaw: float, height: float,
+		is_switch: bool) -> Node3D:
+	var mount := Node3D.new()
+	mount.position = p
+	mount.rotation.y = yaw
+	mount.set_meta("wall_utility_kind",
+		"light_switch" if is_switch else "outlet")
+	mount.set_meta("wall_utility_theme", theme)
+	mount.set_meta("wall_utility_height", height)
+	add_child(mount)
+	var path := LIGHT_SWITCH_PATH if is_switch else OUTLET_PATH
+	var correction := -PI * 0.5 if is_switch else 0.0
+	var depth := 0.015266 if is_switch else 0.005001
+	var inst := _attributed_prop_local(mount, path,
+		Vector3(0, 0, depth * 0.5 + 0.001), correction)
+	if inst == null:
+		mount.get_parent().remove_child(mount)
+		mount.free()
+		return null
+	inst.set_meta("wall_mounted_utility", true)
+	return mount
 
 
 func _art(dir: int, plane: float) -> void:
@@ -1745,7 +2007,7 @@ func _build_lighting() -> void:
 		_asy_lighting()
 		return
 	if theme == 2:
-		_sewer_lighting()
+		_annex_lighting()
 		return
 	if theme == 4:
 		_air_lighting()
@@ -2000,12 +2262,6 @@ func _build_props() -> void:
 	portal_dest = -1 if descent else WorldGen.portal(wseed, cell, theme)
 	if portal_dest >= 0:
 		_build_portal(portal_dest)
-	# A large sewer basin is a bank of cell-sized treatment pools. Structural
-	# dressing belongs to each pool, not only to the room anchor that owns the
-	# shared ambience and larger set pieces.
-	if not is_room_anchor and (style == WorldGen.SEWER_BASIN or style == WorldGen.SEWER_CISTERN):
-		_sewer_basin_props()
-		_sewer_mist()
 	# Cell strips hug their own cell's walls, so every cell of a merged block
 	# builds its own — the anchor-only path would leave the rest of the block
 	# as bare box rooms.
@@ -2015,8 +2271,10 @@ func _build_props() -> void:
 	if not is_room_anchor:
 		return
 	# The objective is a deliberately empty room with one unmistakable set
-	# piece. Seeded furniture cannot hide its doors or obstruct the car.
-	if descent_target:
+	# piece. Seeded furniture cannot hide its doors or obstruct the car. The
+	# arrival room is cleared for the same reason, plus one more: the player is
+	# teleported into that car, so nothing seeded may be standing in it.
+	if descent_target or descent_arrival:
 		return
 	var split := _resolved_room_split()
 	if theme == 1 and style != WorldGen.OFFICE_CORRIDOR:
@@ -2032,11 +2290,15 @@ func _build_props() -> void:
 	var rc := WorldGen.room_centre(wseed, room_root)
 	var off := Vector3(rc.x - (float(cell.x) * S + S / 2.0), 0.0,
 		rc.y - (float(cell.y) * S + S / 2.0))
+	if theme == 2:
+		# Annex set pieces are small architectural interruptions authored in the
+		# anchor cell; they never inherit the generic room-centre shift.
+		off = Vector3.ZERO
 	# these build against a specific wall of THIS cell — moving them to the
 	# room centre would tear the glass, mezzanine or desk run off its wall
 	# (this is exactly what left the prison's cell bars floating mid-room:
 	# cellblock strips hug their own cell's walls and must never be shifted)
-	if style == WorldGen.SEWER_BASIN or style == WorldGen.AIR_GATE or style == WorldGen.AIR_CHECKIN \
+	if style == WorldGen.AIR_GATE or style == WorldGen.AIR_CHECKIN \
 			or style == WorldGen.AIR_ESCALATOR or style == WorldGen.AIR_TRANSIT \
 			or style == WorldGen.MALL_CORRIDOR or style == WorldGen.PRISON_CORRIDOR \
 			or style == WorldGen.MALL_STORE or style == WorldGen.MALL_FOODCOURT \
@@ -2047,6 +2309,12 @@ func _build_props() -> void:
 		off = Vector3.ZERO
 	var n0 := get_child_count()
 	var b0 := body.get_child_count()
+	# On rare 24x24 Annex rooms the furniture hoard replaces that room's usual
+	# architectural dressing. It remains one atomic, clearance-aware set piece.
+	if theme == 2 and _annex_furniture_pile():
+		_shift_props(off, n0, b0)
+		_clear_furnishings_from_doorways(n0, b0)
+		return
 	match style:
 		WorldGen.STYLE_PILLARS:
 			_pillars(ceil_h, Mats.brass())
@@ -2117,31 +2385,18 @@ func _build_props() -> void:
 			elif portal_dest < 0 and _r(254) < 0.62:
 				_office_floor_files(Vector3(2.2 if _r(255) < 0.5 else 9.8, 0,
 					2.1 if _r(256) < 0.5 else 9.9), 257)
-		WorldGen.SEWER_TUNNEL:
-			_sewer_tunnel_props()
-			_sewer_mist()
-			_sewer_sounds()
-		WorldGen.SEWER_BASIN:
-			_sewer_basin_props()
-			_sewer_mist()
-			_sewer_sounds()
-		WorldGen.SEWER_PUMP:
-			_sewer_pump_props()
-			_sewer_mist()
-			_sewer_sounds()
-		WorldGen.SEWER_DRY:
-			_sewer_dry_props()
-			_sewer_mist()
-			_sewer_sounds()
-		WorldGen.SEWER_GALLERY:
-			_sewer_gallery()
-			_sewer_mist()
-			_sewer_sounds()
-		WorldGen.SEWER_CISTERN:
-			_sewer_basin_props()
-			_sewer_cistern()
-			_sewer_mist()
-			_sewer_sounds()
+		WorldGen.ANNEX_OPEN:
+			_annex_open()
+		WorldGen.ANNEX_MAZE:
+			_annex_maze()
+		WorldGen.ANNEX_LONG:
+			_annex_long()
+		WorldGen.ANNEX_QUIET:
+			_annex_quiet()
+		WorldGen.ANNEX_PASSAGE:
+			_annex_passage()
+		WorldGen.ANNEX_LOBBY:
+			_annex_lobby()
 		WorldGen.AIR_GATE:
 			_air_gate()
 			_air_common()
@@ -2241,6 +2496,8 @@ func _build_props() -> void:
 			_prison_visitation()
 		WorldGen.PRISON_ROTUNDA:
 			_prison_rotunda()
+	if theme == 2:
+		_annex_lived_in_dressing()
 	_shift_props(off, n0, b0)
 	_clear_furnishings_from_doorways(n0, b0)
 
@@ -2368,7 +2625,9 @@ func _clear_furnishings_from_doorways(n0: int, b0: int) -> void:
 	# Corridor styles build their continuous shell during the prop pass. Their
 	# real side bays already own explicit clearance and must not be mistaken for
 	# furniture. The neighbouring room still clears its side of the same door.
-	if WorldGen.corridor(wseed, cell) != 0:
+	var is_corridor := WorldGen.annex_corridor_axis(wseed, cell) != 0 \
+		if theme == 2 else WorldGen.corridor(wseed, cell) != 0
+	if is_corridor:
 		return
 	var zones := _doorway_clearance_rects()
 	if zones.is_empty():
@@ -2551,10 +2810,12 @@ func _build_interactions() -> void:
 				_descent_exit(descent_target_wall)
 			else:
 				_descent_elevator(descent_target_wall)
+		if descent_arrival and descent_arrival_wall >= 0:
+			_descent_arrival_car(descent_arrival_wall)
 		return
 	if not WorldGen.elevator_cell(wseed, cell, theme):
 		return
-	var wall := WorldGen.anchor_wall(wseed, cell, 1701)
+	var wall := WorldGen.anchor_wall(wseed, cell, 1701, theme)
 	_interactive_elevator(wall)
 
 
@@ -2630,21 +2891,65 @@ func _use_elevator(_actor: Node, dest: int, hit: Interactable,
 ## Descent objective: the wall is deliberately left intact. This sealed car
 ## sits wholly inside the target room, so walking around it never reveals an
 ## ungenerated room on the other side of a decorative door.
+##
+## Reaching it is not the end of the floor. The call plate summons a car that
+## is genuinely somewhere else, and the wait is the most exposed the player
+## ever is: rule two forbids standing still, so it has to be walked out.
 func _descent_elevator(dir: int) -> void:
 	var rig := _descent_car_shell(dir, false)
-	var left: AnimatableBody3D = rig["left"]
-	var right: AnimatableBody3D = rig["right"]
+	_descent_lift_rig = rig
 	var hit := Interactable.new()
 	hit.name = "DescentLiftCall"
 	hit.prompt_text = "E — call lift"
 	hit.position = Vector3(1.50, 1.28, 2.48)
 	hit.add_box(Vector3(0.52, 0.82, 0.36))
 	rig["root"].add_child(hit)
-	hit.activated.connect(_descent_call.bind(
-		left, right, hit, rig["call"]))
+	rig["hit"] = hit
+	hit.activated.connect(_descent_call.bind(rig, hit))
 	var commit := _local_area(rig["root"], Vector3(0, 1.05, 1.05),
 		Vector3(1.72, 2.0, 1.15))
-	commit.body_entered.connect(_descent_commit.bind(left, right, commit, hit))
+	commit.body_entered.connect(_descent_commit.bind(rig, commit, hit))
+	# Rebuilt after streaming out mid-wait: resume exactly where the run says.
+	if descent_lift_open:
+		hit.enabled = false
+		hit.prompt_text = ""
+		rig["root"].set_meta("opened", true)
+		_set_descent_leaves(rig, 1.02)
+		_descent_lit_call(rig, true)
+	elif descent_lift_called:
+		hit.enabled = false
+		hit.prompt_text = "LIFT ARRIVING"
+		_descent_lit_call(rig, true)
+		_descent_lift_wait(rig, descent_lift_wait)
+
+
+func has_descent_lift() -> bool:
+	return not _descent_lift_rig.is_empty()
+
+
+## Driven by DescentRun, which owns the authoritative clock. The chunk only
+## ever presents the wait; it never decides that the car has arrived.
+func open_descent_lift() -> void:
+	if _descent_lift_rig.is_empty():
+		return
+	var root: Node3D = _descent_lift_rig["root"]
+	# `_open_descent_doors` owns the "opened" meta; only read it here.
+	if not is_instance_valid(root) or root.has_meta("opened"):
+		return
+	if _descent_lift_rig.has("shaft"):
+		var shaft: Node = _descent_lift_rig["shaft"]
+		if is_instance_valid(shaft):
+			shaft.queue_free()
+	var display: Label3D = _descent_lift_rig["display"]
+	if is_instance_valid(display):
+		display.text = "%02d  ▼" % (descent_floor_idx + 1)
+	var hit: Interactable = _descent_lift_rig.get("hit")
+	if is_instance_valid(hit):
+		hit.enabled = false
+		hit.prompt_text = ""
+	_descent_sound(root, SoundBank.ding(), -7.0)
+	_open_descent_doors(_descent_lift_rig["left"], _descent_lift_rig["right"],
+		root, 0.72)
 
 
 ## Final objective: the same impossible room-side shell opens onto a short,
@@ -2686,18 +2991,42 @@ func _descent_exit(dir: int) -> void:
 	finish.body_entered.connect(_descent_finish.bind(finish, approach))
 
 
-func _descent_car_shell(dir: int, out: bool) -> Dictionary:
+## Local placement of a Descent car against wall `dir` of a cell. Shared with
+## `car_interior_point()` so main can teleport the player into the arrival car
+## without duplicating the offsets.
+static func descent_car_basis(dir: int) -> Transform3D:
 	var n := -1.0 if dir == 0 or dir == 2 else 1.0
 	var plane := (S - T / 2.0) if dir == 0 or dir == 2 else (T / 2.0)
 	var inner := plane + n * (T / 2.0)
-	var root := Node3D.new()
-	root.name = "DescentExit" if out else "DescentElevator"
+	var at := Vector3.ZERO
+	var yaw := 0.0
 	if dir < 2:
-		root.position = Vector3(inner + n * 0.035, 0, S / 2.0)
-		root.rotation.y = -PI / 2.0 if dir == 0 else PI / 2.0
+		at = Vector3(inner + n * 0.035, 0, S / 2.0)
+		yaw = -PI / 2.0 if dir == 0 else PI / 2.0
 	else:
-		root.position = Vector3(S / 2.0, 0, inner + n * 0.035)
-		root.rotation.y = PI if dir == 2 else 0.0
+		at = Vector3(S / 2.0, 0, inner + n * 0.035)
+		yaw = PI if dir == 2 else 0.0
+	return Transform3D(Basis(Vector3.UP, yaw), at)
+
+
+## World-space standing position inside the car built against `dir` of `cell`,
+## and the yaw that faces its doors. The interior is a sealed authored box, so
+## this point is safe by construction and deliberately bypasses ArrivalSafety —
+## whose escape-direction test a 2.2m car can never satisfy.
+static func car_interior_point(cell: Vector2i, dir: int) -> Dictionary:
+	var basis_at := descent_car_basis(dir)
+	var local := Vector3(0.0, 0.15, 1.12)
+	var world := basis_at * local + Vector3(float(cell.x) * S, 0.0,
+		float(cell.y) * S)
+	# The doors sit at +Z in car space; the camera convention is -Z forward.
+	return {"position": world, "yaw": basis_at.basis.get_euler().y + PI}
+
+
+func _descent_car_shell(dir: int, out: bool, arrival := false) -> Dictionary:
+	var root := Node3D.new()
+	root.name = "DescentArrival" if arrival else (
+		"DescentExit" if out else "DescentElevator")
+	root.transform = descent_car_basis(dir)
 	add_child(root)
 
 	var shell := StaticBody3D.new()
@@ -2745,7 +3074,14 @@ func _descent_car_shell(dir: int, out: bool) -> Dictionary:
 	_mrbox(root, Vector3(0, 2.68, 2.37), Vector3(1.04, 0.24, 0.025),
 		Mats.screen_dark(), 0.008)
 	var display := Label3D.new()
-	display.text = "OUT" if out else "%02d  ▼" % (descent_floor_idx + 1)
+	if out:
+		display.text = "OUT"
+	elif arrival:
+		# The car you arrived in reads the floor you are on, with no direction:
+		# it is not going anywhere and neither are you, back the way you came.
+		display.text = "%02d" % (descent_floor_idx + 1)
+	else:
+		display.text = "%02d  ▼" % (descent_floor_idx + 1)
 	display.font_size = 66
 	display.pixel_size = 0.0020
 	display.modulate = Color(1.0, 0.56, 0.18)
@@ -2758,7 +3094,10 @@ func _descent_car_shell(dir: int, out: bool) -> Dictionary:
 	var call := _mcyl(root, Vector3(1.50, 1.28, 2.37), 0.07, 0.035,
 		Mats.lamp_amber())
 	call.rotation.x = PI / 2.0
-	return {"root": root, "left": left, "right": right, "call": call}
+	return {
+		"root": root, "left": left, "right": right, "call": call,
+		"display": display, "light": car_light,
+	}
 
 
 func _descent_leaf(parent: Node3D, x: float) -> AnimatableBody3D:
@@ -2810,24 +3149,96 @@ func _descent_open(actor: Node, left: AnimatableBody3D,
 	_open_descent_doors(left, right, approach)
 
 
-func _descent_call(_actor: Node, left: AnimatableBody3D,
-		right: AnimatableBody3D, hit: Interactable,
-		call: MeshInstance3D) -> void:
+## Pressing the plate does not open anything. It tells the run to start the
+## car moving, and the run tells this chunk when the car is actually here.
+func _descent_call(_actor: Node, rig: Dictionary, hit: Interactable) -> void:
 	if not hit.enabled:
 		return
 	hit.enabled = false
 	hit.prompt_text = "LIFT ARRIVING"
 	get_tree().call_group("level_manager", "door_activity")
+	var call: MeshInstance3D = rig["call"]
 	var press := create_tween().set_trans(Tween.TRANS_QUAD)
 	press.tween_property(call, "position:z", 2.345, 0.08)
 	press.tween_property(call, "position:z", 2.37, 0.14)
-	await press.finished
-	if is_inside_tree():
-		_open_descent_doors(left, right, hit)
+	_descent_lit_call(rig, true)
+	_descent_sound(rig["root"], SoundBank.key_click(), -6.0)
+	var seconds := DescentRun.lift_wait_for(descent_floor_idx)
+	get_tree().call_group("descent_listener", "descent_lift_called", seconds)
+	_descent_lift_wait(rig, seconds)
+
+
+## Presentation for the wait only. The shaft works away somewhere above and the
+## indicator fills; nothing here can open a door.
+func _descent_lift_wait(rig: Dictionary, seconds: float) -> void:
+	var root: Node3D = rig["root"]
+	if not is_instance_valid(root) or root.has_meta("waiting") \
+			or root.has_meta("opened"):
+		return
+	root.set_meta("waiting", true)
+	var total := maxf(0.5, seconds)
+	var shaft := AudioStreamPlayer3D.new()
+	shaft.stream = SoundBank.lift_shaft()
+	shaft.volume_db = -30.0
+	shaft.max_distance = 34.0
+	shaft.unit_size = 7.0
+	root.add_child(shaft)
+	shaft.play()
+	rig["shaft"] = shaft
+	# It gets louder as the car gets closer — audible from further away than the
+	# indicator is readable, which is the point.
+	var approach_tw := create_tween()
+	approach_tw.tween_property(shaft, "volume_db", -13.0, total)
+	var display: Label3D = rig["display"]
+	var full := DescentRun.lift_wait_for(descent_floor_idx)
+	var elapsed_fraction := clampf(1.0 - total / maxf(0.001, full), 0.0, 1.0)
+	var tw := create_tween()
+	tw.tween_method(
+		func(v: float): _descent_lift_indicator(display, v),
+		elapsed_fraction, 1.0, total)
+
+
+func _descent_lift_indicator(display: Label3D, progress: float) -> void:
+	if not is_instance_valid(display):
+		return
+	var bars := clampi(1 + int(progress * 2.99), 1, 3)
+	display.text = "%02d  %s" % [descent_floor_idx + 1, "▼".repeat(bars)]
+	# A slow amber pulse while it is on its way; steady once it lands.
+	display.modulate = Color(1.0, 0.56, 0.18).lerp(
+		Color(0.55, 0.26, 0.07), 0.5 + 0.5 * sin(progress * 44.0))
+
+
+func _descent_lit_call(rig: Dictionary, on: bool) -> void:
+	var call: MeshInstance3D = rig.get("call")
+	if not is_instance_valid(call):
+		return
+	call.material_override = Mats.bulb() if on else null
+
+
+func _set_descent_leaves(rig: Dictionary, x: float) -> void:
+	var left: AnimatableBody3D = rig["left"]
+	var right: AnimatableBody3D = rig["right"]
+	if is_instance_valid(left):
+		left.position.x = -x
+	if is_instance_valid(right):
+		right.position.x = x
+
+
+func _descent_sound(parent: Node, stream: AudioStream, volume: float,
+		max_distance := 24.0) -> AudioStreamPlayer3D:
+	var sound := AudioStreamPlayer3D.new()
+	sound.stream = stream
+	sound.volume_db = volume
+	sound.max_distance = max_distance
+	sound.unit_size = 6.0
+	parent.add_child(sound)
+	sound.finished.connect(sound.queue_free)
+	sound.play()
+	return sound
 
 
 func _open_descent_doors(left: AnimatableBody3D,
-		right: AnimatableBody3D, owner: Node) -> void:
+		right: AnimatableBody3D, owner: Node, seconds := 0.62) -> void:
 	if owner.has_meta("opened"):
 		return
 	owner.set_meta("opened", true)
@@ -2838,25 +3249,166 @@ func _open_descent_doors(left: AnimatableBody3D,
 	owner.add_child(sound)
 	sound.play()
 	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(left, "position:x", -1.02, 0.62)
-	tw.parallel().tween_property(right, "position:x", 1.02, 0.62)
+	tw.tween_property(left, "position:x", -1.02, seconds)
+	tw.parallel().tween_property(right, "position:x", 1.02, seconds)
 
 
-func _descent_commit(actor: Node, left: AnimatableBody3D,
-		right: AnimatableBody3D, commit: Area3D,
+func _descent_commit(actor: Node, rig: Dictionary, commit: Area3D,
 		hit: Interactable) -> void:
 	if not actor is Player or commit.has_meta("committed"):
 		return
 	commit.set_meta("committed", true)
 	commit.set_deferred("monitoring", false)
 	hit.enabled = false
+	hit.prompt_text = ""
 	get_tree().call_group("descent_listener", "suspend_descent_rules")
 	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(left, "position:x", -0.54, 0.52)
-	tw.parallel().tween_property(right, "position:x", 0.54, 0.52)
+	tw.tween_property(rig["left"], "position:x", -0.54, 0.52)
+	tw.parallel().tween_property(rig["right"], "position:x", 0.54, 0.52)
 	await tw.finished
+	if not is_inside_tree():
+		return
+	await _descent_ride(rig)
 	if is_inside_tree():
 		get_tree().call_group("descent_listener", "_on_descent_lift")
+
+
+## The one safe place in a run, and the only part of it that happens to the
+## player rather than being done by them. A sealed car gives the eye no
+## parallax, so the travel is carried by the motor, the loaded car light and
+## the camera rumble; the world swap happens behind the fade at the end and the
+## player steps out of an identical car on the next floor.
+func _descent_ride(rig: Dictionary) -> void:
+	var root: Node3D = rig["root"]
+	var light: OmniLight3D = rig["light"]
+	var display: Label3D = rig["display"]
+	var base_energy := light.light_energy
+	_descent_sound(root, SoundBank.clang(), -14.0)
+	display.modulate = Color(1.0, 0.56, 0.18)
+	display.text = "%02d" % (descent_floor_idx + 1)
+	await get_tree().create_timer(0.5).timeout
+	if not is_inside_tree():
+		return
+
+	# Brake release, then the hoist takes the weight.
+	_descent_sound(root, SoundBank.thud(), -8.0)
+	var motor := AudioStreamPlayer3D.new()
+	motor.stream = SoundBank.lift_motor()
+	motor.volume_db = -36.0
+	motor.max_distance = 20.0
+	motor.unit_size = 5.0
+	root.add_child(motor)
+	motor.play()
+	var spin_up := create_tween()
+	spin_up.tween_property(motor, "volume_db", -12.0, 1.2)
+	var rumble_up := create_tween()
+	rumble_up.tween_method(_descent_rumble, 0.0, 1.0, 1.2)
+	# The car light sags as the motor draws, then hunts while under way.
+	var dim := create_tween()
+	dim.tween_property(light, "light_energy", base_energy * 0.58, 0.55)
+	var travel := create_tween()
+	travel.tween_method(
+		func(v: float): _descent_ride_indicator(display, v), 0.0, 1.0, 4.4)
+
+	await get_tree().create_timer(4.4).timeout
+	if not is_inside_tree():
+		return
+
+	# Deceleration: the number of the floor below appears before the doors do.
+	display.text = "%02d  ▼" % (descent_floor_idx + 2)
+	display.modulate = Color(1.0, 0.56, 0.18)
+	var spin_down := create_tween()
+	spin_down.tween_property(motor, "volume_db", -34.0, 1.1)
+	var rumble_down := create_tween()
+	rumble_down.tween_method(_descent_rumble, 1.0, 0.22, 1.1)
+	var lift_light := create_tween()
+	lift_light.tween_property(light, "light_energy", base_energy, 1.1)
+	await get_tree().create_timer(1.15).timeout
+	if not is_inside_tree():
+		return
+	_descent_sound(root, SoundBank.thud(), -12.0)
+	await get_tree().create_timer(0.35).timeout
+
+
+func _descent_ride_indicator(display: Label3D, progress: float) -> void:
+	if not is_instance_valid(display):
+		return
+	# Passing floors that are not on the route: the shaft is taller than the run.
+	var bars := 1 + (int(progress * 9.0) % 3)
+	display.text = "%s" % "▼".repeat(bars)
+	display.modulate = Color(1.0, 0.56, 0.18).lerp(
+		Color(0.42, 0.20, 0.05), 0.5 + 0.5 * sin(progress * 62.0))
+
+
+func _descent_rumble(amount: float) -> void:
+	if is_inside_tree():
+		get_tree().call_group("descent_listener", "descent_ride_rumble", amount)
+
+
+## The car the player rides in on. Built shut, opened by main once the floor is
+## live, and dead once they have stepped out of it — rule three, in steel.
+func _descent_arrival_car(dir: int) -> void:
+	var rig := _descent_car_shell(dir, false, true)
+	_descent_arrival_rig = rig
+	if descent_arrival_used:
+		_descent_kill_arrival(rig)
+		return
+	var inside := _local_area(rig["root"], Vector3(0, 1.05, 1.15),
+		Vector3(2.05, 2.10, 1.95))
+	inside.name = "DescentArrivalInterior"
+	rig["inside"] = inside
+	inside.body_exited.connect(_descent_arrival_left.bind(rig, inside))
+
+
+func has_descent_arrival() -> bool:
+	return not _descent_arrival_rig.is_empty() and not descent_arrival_used
+
+
+func open_descent_arrival() -> void:
+	if _descent_arrival_rig.is_empty() or descent_arrival_used:
+		return
+	var root: Node3D = _descent_arrival_rig["root"]
+	if not is_instance_valid(root):
+		return
+	# Slower than a call: this is the reveal of a floor, not a door operating.
+	_open_descent_doors(_descent_arrival_rig["left"],
+		_descent_arrival_rig["right"], root, 1.15)
+
+
+func _descent_arrival_left(actor: Node, rig: Dictionary, inside: Area3D) -> void:
+	if not actor is Player or inside.has_meta("spent"):
+		return
+	inside.set_meta("spent", true)
+	get_tree().call_group("descent_listener", "descent_arrival_spent")
+	await get_tree().create_timer(1.7).timeout
+	if not is_inside_tree() or not is_instance_valid(inside):
+		return
+	# Never seal a player who stepped back in — the car has no inside control,
+	# and a shut arrival car with someone in it is an unrecoverable run.
+	for body in inside.get_overlapping_bodies():
+		if body is Player:
+			inside.remove_meta("spent")
+			return
+	var root: Node3D = rig["root"]
+	_descent_sound(root, SoundBank.elev(), -13.0)
+	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(rig["left"], "position:x", -0.54, 0.9)
+	tw.parallel().tween_property(rig["right"], "position:x", 0.54, 0.9)
+	await tw.finished
+	if is_inside_tree():
+		_descent_kill_arrival(rig)
+
+
+func _descent_kill_arrival(rig: Dictionary) -> void:
+	_set_descent_leaves(rig, 0.54)
+	var light: OmniLight3D = rig.get("light")
+	if is_instance_valid(light):
+		light.light_energy = 0.0
+		light.visible = false
+	var display: Label3D = rig.get("display")
+	if is_instance_valid(display):
+		display.modulate = Color(0.17, 0.12, 0.08)
+	_descent_lit_call(rig, false)
 
 
 func _descent_finish(actor: Node, finish: Area3D, approach: Area3D) -> void:
@@ -4026,6 +4578,7 @@ func _office_corridor() -> void:
 			bay = [bt, bw]
 		var doors := _office_corridor_doors(si, bay)
 		_office_corridor_wall_side(o, yw, side, doors, bay)
+		_office_corridor_utilities(o, yw, side, si, doors, bay)
 		side_data.append({"side": side, "doors": doors, "bay": bay})
 
 	if _r(254) < 0.5:
@@ -4090,6 +4643,44 @@ func _office_corridor_clear_t(si: int, doors: Array, bay: Array) -> float:
 		if _office_corridor_clear(float(t), doors, bay, 0.62):
 			return float(t)
 	return 99.0
+
+
+## Services belong on the corridor shell the player can actually see, not on
+## the canonical cell boundary hidden behind the inaccessible office strip.
+## A receptacle occupies a clear wall run; a switch sits beside a sealed door
+## or real vestibule, just as it would in a maintained office building.
+func _office_corridor_utilities(o: Vector3, yw: float, side: float, si: int,
+		doors: Array, bay: Array) -> void:
+	var face := side - signf(side) * 0.078
+	var facing := yw + (PI if side > 0.0 else 0.0)
+	var base := 1480 + si * 23
+	if _r(base) < 0.82:
+		var outlet_t := _office_corridor_clear_t(si, doors, bay)
+		if outlet_t < 90.0:
+			_wall_utility_mount(
+				_wp(o, Vector3(outlet_t, 0.31, face), yw),
+				facing, 0.31, false)
+	if _r(base + 1) >= 0.88:
+		return
+	var opening_t := 99.0
+	var opening_half := 0.0
+	if not doors.is_empty():
+		opening_t = float(doors[0])
+		opening_half = 0.63
+	elif not bay.is_empty():
+		opening_t = float(bay[0])
+		opening_half = float(bay[1]) * 0.5
+	if opening_t > 90.0:
+		return
+	var switch_t := opening_t + opening_half + 0.25
+	if switch_t > 5.72:
+		switch_t = opening_t - opening_half - 0.25
+	if switch_t < -5.72 \
+			or not _office_corridor_clear(switch_t, doors, bay, 0.08):
+		return
+	_wall_utility_mount(
+		_wp(o, Vector3(switch_t, 1.12, face), yw),
+		facing, 1.12, true)
 
 
 ## One complete side wall, cut only by a sealed door or by a real vestibule.
@@ -4881,7 +5472,7 @@ func _shelf_unit(c: Vector3, along_x: bool, salt: int) -> void:
 ## Pull one real-world box variant out of the supplied Sketchfab set, discard
 ## the staged duplicates, then centre and bottom-align it on a generated shelf.
 func _office_shelf_box(parent: Node3D, pos: Vector3, yaw: float,
-		variant: int) -> bool:
+		variant: int, kind := "office_shelf_box") -> bool:
 	var ps: PackedScene = _attributed_scenes.get(OFFICE_BOXES_PATH)
 	if ps == null:
 		ps = _prop_scene(OFFICE_BOXES_PATH)
@@ -4904,7 +5495,7 @@ func _office_shelf_box(parent: Node3D, pos: Vector3, yaw: float,
 	var holder := Node3D.new()
 	holder.position = pos
 	holder.rotation.y = yaw
-	holder.set_meta("attributed_furnishing", "office_shelf_box")
+	holder.set_meta("attributed_furnishing", kind)
 	holder.set_meta("attributed_asset", OFFICE_BOXES_PATH)
 	parent.add_child(holder)
 	holder.add_child(inst)
@@ -5008,7 +5599,914 @@ func _office_boardroom() -> void:
 	add_child(snd)
 
 
-# --- sewer -------------------------------------------------------------------
+# --- the Annex ---------------------------------------------------------------
+
+## Theme 2 is almost prop-free. Its identity comes from continuous carpet, a
+## low drop ceiling and wall-like interruptions, plus one rare furniture hoard
+## reserved for the largest rooms.
+func _annex_floor_ceiling() -> void:
+	_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S),
+		Mats.annex_carpet())
+	_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S),
+		Mats.annex_ceiling())
+
+
+func _annex_lighting() -> void:
+	var is_spawn := cell == Vector2i.ZERO
+	var axis := WorldGen.annex_corridor_axis(wseed, cell)
+	var dim_zone := WorldGen.annex_dim_zone(wseed, cell)
+	var light_gap := WorldGen.annex_light_gap(wseed, cell)
+	# The Annex no longer draws switched-off fixtures. Every troffer that exists
+	# is steadily illuminated; darkness comes from sparse placement and weaker
+	# local throw instead.
+	var pmat := Mats.annex_panel()
+	set_meta("annex_dim_zone", dim_zone)
+	set_meta("annex_light_gap", light_gap)
+	# Corridor fixtures form an unmistakable line into the distance. Rooms use
+	# a four-panel grid. Dim zones reduce that to one or two fixtures; some
+	# macro-blocks omit fixtures entirely for a genuine low-light stretch.
+	var fixtures: Array[Vector2] = []
+	if light_gap:
+		fixtures = []
+	elif dim_zone:
+		if axis == 1 or axis == 2:
+			fixtures = [Vector2(6.0, 6.0)]
+		elif axis == 3:
+			fixtures = [Vector2(3.0, 6.0), Vector2(9.0, 6.0)]
+		else:
+			fixtures = [Vector2(6.0, 6.0)]
+	elif axis == 1:
+		fixtures = [Vector2(2.0, 6.0), Vector2(6.0, 6.0), Vector2(10.0, 6.0)]
+	elif axis == 2:
+		fixtures = [Vector2(6.0, 2.0), Vector2(6.0, 6.0), Vector2(6.0, 10.0)]
+	elif axis == 3:
+		fixtures = [Vector2(3.0, 6.0), Vector2(9.0, 6.0),
+			Vector2(6.0, 3.0), Vector2(6.0, 9.0)]
+	else:
+		fixtures = [Vector2(3.0, 3.0), Vector2(9.0, 3.0),
+			Vector2(3.0, 9.0), Vector2(9.0, 9.0)]
+	var built_fixtures := 0
+	for pt in fixtures:
+		var at := Vector3(
+			_annex_tile_center(pt.x, cell.x),
+			0.0,
+			_annex_tile_center(pt.y, cell.y))
+		if not _annex_fixture_clear(at):
+			continue
+		_annex_troffer(at, pmat)
+		built_fixtures += 1
+	var effective_gap := light_gap or built_fixtures == 0
+	set_meta("annex_light_gap", effective_gap)
+	set_meta("annex_ceiling_fixture_count", built_fixtures)
+	if effective_gap:
+		return
+	var light := _make_main_light(false, pmat, 0.24 if dim_zone else 1.42)
+	light.light_color = Color(1.0, 0.91, 0.64)
+	light.omni_range = 7.4 if dim_zone else 12.8
+	light.position = Vector3(S / 2.0, ceil_h - 0.46, S / 2.0)
+	light.shadow_enabled = false
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = 25.0
+	light.distance_fade_length = 9.0
+	add_child(light)
+
+
+## Snap a local fixture coordinate to the centre of the world-space drop-
+## ceiling grid. Empirical in-game projection of the 2x2 source makes each
+## visible tile exactly ANNEX_CEILING_TILE square.
+func _annex_tile_center(local_v: float, cell_axis: int) -> float:
+	var world_v := float(cell_axis) * S + local_v
+	# The imported ceiling map's visible grid intersections land at the former
+	# half-tile phase. Whole multiples are the centres of the rendered squares.
+	var snapped := roundf(world_v / ANNEX_CEILING_TILE) * ANNEX_CEILING_TILE
+	return snapped - float(cell_axis) * S
+
+
+## One recessed fixture replaces one complete 1.2m ceiling tile. The outer
+## frame is the exact tile footprint; the glowing lens is inset within it.
+func _annex_troffer(at: Vector3, pmat: Material) -> void:
+	var frame := Mats.annex_trim()
+	var border := 0.035
+	var lens_size := ANNEX_CEILING_TILE - border * 2.0
+	var lens := _box(
+		Vector3(at.x, ceil_h - 0.055, at.z),
+		Vector3(lens_size, 0.05, lens_size), pmat, false)
+	lens.set_meta("annex_ceiling_light_size", ANNEX_CEILING_TILE)
+	lens.set_meta("annex_ceiling_light_on", true)
+	var world_x := float(cell.x) * S + at.x
+	var world_z := float(cell.y) * S + at.z
+	var grid_error := maxf(
+		absf(world_x - roundf(world_x / ANNEX_CEILING_TILE) * ANNEX_CEILING_TILE),
+		absf(world_z - roundf(world_z / ANNEX_CEILING_TILE) * ANNEX_CEILING_TILE))
+	lens.set_meta("annex_ceiling_light_grid_error", grid_error)
+	var edge := ANNEX_CEILING_TILE * 0.5 - border * 0.5
+	_box(Vector3(at.x, ceil_h - 0.02, at.z - edge),
+		Vector3(ANNEX_CEILING_TILE, 0.035, border), frame, false)
+	_box(Vector3(at.x, ceil_h - 0.02, at.z + edge),
+		Vector3(ANNEX_CEILING_TILE, 0.035, border), frame, false)
+	_box(Vector3(at.x - edge, ceil_h - 0.02, at.z),
+		Vector3(border, 0.035, lens_size), frame, false)
+	_box(Vector3(at.x + edge, ceil_h - 0.02, at.z),
+		Vector3(border, 0.035, lens_size), frame, false)
+
+
+## Reserve a small margin around each complete ceiling tile. The rectangles are
+## populated by perimeter walls, corridor shells and full-height prop-pass
+## architecture before lighting is generated.
+func _annex_fixture_clear(at: Vector3) -> bool:
+	var half := ANNEX_CEILING_TILE * 0.5 + ANNEX_FIXTURE_CLEARANCE
+	var fixture := Rect2(
+		Vector2(at.x - half, at.z - half),
+		Vector2(half * 2.0, half * 2.0))
+	for obstruction in _annex_ceiling_obstructions:
+		if fixture.intersects(obstruction):
+			return false
+	return true
+
+
+## Runtime regression hook: every visible Annex panel must still own a complete,
+## unobstructed ceiling tile after all deterministic architecture is present.
+func annex_fixture_obstruction_violations() -> int:
+	if theme != 2:
+		return 0
+	var bad := 0
+	for node in find_children("*", "MeshInstance3D", true, false):
+		if node.has_meta("annex_ceiling_light_size") \
+				and not _annex_fixture_clear((node as MeshInstance3D).position):
+			bad += 1
+	return bad
+
+
+func _annex_register_ceiling_obstruction(p: Vector3, width: float,
+		depth: float, yaw: float, top: float) -> void:
+	if theme != 2 or top < ceil_h - 0.03:
+		return
+	var cs := absf(cos(yaw))
+	var sn := absf(sin(yaw))
+	var half_x := (cs * width + sn * depth) * 0.5
+	var half_z := (sn * width + cs * depth) * 0.5
+	_annex_ceiling_obstructions.append(Rect2(
+		Vector2(p.x - half_x, p.z - half_z),
+		Vector2(half_x * 2.0, half_z * 2.0)))
+
+
+## A wall-like slab standing inside the approach zone of a generated doorway
+## reads, from the other side of the opening, as a second offset doorframe with
+## a light-leak gap beside the jamb — an "indented doorway". The route
+## clearance system only protects the walk path, not the sightline, so test
+## the slab's footprint against a zone projected into the room from every
+## opening on this cell's edges and refuse to stand there. Columns are exempt:
+## a small pier near a doorway reads as architecture, not as a broken frame.
+func _annex_blocks_doorway(p: Vector3, yaw: float,
+		width: float, depth: float) -> bool:
+	const ZONE_DEPTH := 3.2
+	const ZONE_MARGIN := 0.5
+	var cs := absf(cos(yaw))
+	var sn := absf(sin(yaw))
+	var hx := (cs * width + sn * depth) * 0.5
+	var hz := (sn * width + cs * depth) * 0.5
+	var lo := Vector2(p.x - hx, p.z - hz)
+	var hi := Vector2(p.x + hx, p.z + hz)
+	for dir in 4:
+		var info := WorldGen.edge_info(wseed, cell, dir, theme)
+		if bool(info["wall"]):
+			continue
+		var a := float(info["t"]) - float(info["w"]) * 0.5 - ZONE_MARGIN
+		var b := float(info["t"]) + float(info["w"]) * 0.5 + ZONE_MARGIN
+		var zone_lo: Vector2
+		var zone_hi: Vector2
+		match dir:
+			0:
+				zone_lo = Vector2(S - ZONE_DEPTH, a)
+				zone_hi = Vector2(S, b)
+			1:
+				zone_lo = Vector2(0.0, a)
+				zone_hi = Vector2(ZONE_DEPTH, b)
+			2:
+				zone_lo = Vector2(a, S - ZONE_DEPTH)
+				zone_hi = Vector2(b, S)
+			3:
+				zone_lo = Vector2(a, 0.0)
+				zone_hi = Vector2(b, ZONE_DEPTH)
+		if lo.x < zone_hi.x and hi.x > zone_lo.x \
+				and lo.y < zone_hi.y and hi.y > zone_lo.y:
+			return true
+	return false
+
+
+## Add one architectural slab as an atomic assembly. It is generated in the
+## prop pass so the established doorway-clearance system can remove the whole
+## slab, including its collider, if a seed places it across a route.
+func _annex_block(p: Vector3, yaw: float, width: float, depth: float,
+		height: float, kind: String) -> void:
+	if kind == "annex_wall" or kind == "annex_half_wall":
+		depth = maxf(depth, ANNEX_WALL_T)
+	if kind != "annex_column" and _annex_blocks_doorway(p, yaw, width, depth):
+		return
+	var first := body.get_child_count()
+	var pivot := _furnishing_pivot(p, yaw, kind, false)
+	pivot.set_meta("annex_architecture", kind)
+	if kind == "annex_wall" or kind == "annex_half_wall":
+		pivot.set_meta("annex_partition_thickness", depth)
+	_mbox(pivot, Vector3(0, height * 0.5, 0),
+		Vector3(width, height, depth), Mats.annex_wall_variant(_finish_variant()))
+	_annex_register_ceiling_obstruction(p, width, depth, yaw, height)
+	if height < ceil_h - 0.2:
+		_mbox(pivot, Vector3(0, height + 0.025, 0),
+			Vector3(width + 0.08, 0.05, depth + 0.08), Mats.annex_trim())
+	_collider_yaw_box(p + Vector3(0, height * 0.5, 0),
+		Vector3(width, height, depth), yaw)
+	_bind_furnishing_colliders(pivot, first)
+
+
+func _annex_room_member_architecture() -> void:
+	if room_n < 2 or portal_dest >= 0:
+		return
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	if style == WorldGen.ANNEX_LOBBY and _r(523) < 0.72:
+		var side_x := 3.2 if _r(524) < 0.5 else 8.8
+		var side_z := 3.2 if _r(525) < 0.5 else 8.8
+		_annex_block(Vector3(side_x, 0, side_z), 0.0,
+			1.12, 1.12, ceil_h, "annex_column")
+	elif style == WorldGen.ANNEX_OPEN and _r(526) < 0.24:
+		_annex_block(c + Vector3((_r(527) - 0.5) * 4.4, 0,
+			(_r(528) - 0.5) * 4.4), 0.0,
+			0.94, 0.94, ceil_h, "annex_column")
+
+
+func _annex_open() -> void:
+	if cell == Vector2i.ZERO or portal_dest >= 0:
+		return
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var roll := _r(520)
+	# Open rooms stay empty often enough to preserve the level's restraint.
+	# The other branches use the references' broad central wall masses, short
+	# half-height dividers and occasional offset supports. A large pier leaves
+	# multiple routes around it and reads as architecture, not a generic prop.
+	if roll < 0.32:
+		return
+	if roll < 0.58:
+		var mass_yaw := PI * 0.5 if _r(521) < 0.5 else 0.0
+		var mass_width := lerpf(2.25, 3.15, _r(522))
+		var mass_depth := lerpf(1.10, 1.75, _r(523))
+		_annex_block(c + Vector3((_r(524) - 0.5) * 2.8, 0,
+			(_r(525) - 0.5) * 2.8), mass_yaw,
+			mass_width, mass_depth, ceil_h, "annex_wall_mass")
+	elif roll < 0.84:
+		var yaw := PI / 2.0 if _r(529) < 0.5 else 0.0
+		var side := -1.0 if _r(530) < 0.5 else 1.0
+		_annex_block(_wp(c, Vector3(0, 0, side * 2.2), yaw), yaw,
+			4.8, 0.24, 1.05, "annex_half_wall")
+	elif roll < 0.96 and room_n >= 2:
+		var along_x := _r(531) < 0.5
+		for side in [-1.0, 1.0]:
+			var p := c + (Vector3(side * 2.4, 0, 0) if along_x \
+				else Vector3(0, 0, side * 2.4))
+			_annex_block(p, 0.0, 1.04, 1.04, ceil_h, "annex_column")
+	else:
+		_annex_block(c + Vector3((_r(532) - 0.5) * 2.0, 0,
+			(_r(533) - 0.5) * 2.0), 0.0,
+			1.08, 1.08, ceil_h, "annex_column")
+
+
+func _annex_maze() -> void:
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var turn := PI / 2.0 if _r(530) < 0.5 else 0.0
+	var side := -1.0 if _r(531) < 0.5 else 1.0
+	_annex_block(_wp(c, Vector3(-1.45, 0, side * 1.25), turn), turn,
+		4.6, 0.22, ceil_h, "annex_wall")
+	if room_n >= 2:
+		_annex_block(_wp(c, Vector3(2.0, 0, -side * 1.55), turn + PI / 2.0),
+			turn + PI / 2.0, 3.4, 0.22, ceil_h, "annex_wall")
+
+
+func _annex_long() -> void:
+	var span := _room_span()
+	var along_x := span.x >= span.y
+	var yaw := 0.0 if along_x else PI / 2.0
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var side := -1.0 if _r(540) < 0.5 else 1.0
+	# A shallow offset slab hides one side of the next opening while preserving
+	# the long axis, producing the distant, ambiguous views in the reference.
+	_annex_block(_wp(c, Vector3(0, 0, side * 2.15), yaw), yaw,
+		5.4, 0.22, ceil_h, "annex_wall")
+
+
+func _annex_quiet() -> void:
+	# The room is the prop. Keeping this branch explicit protects its emptiness.
+	pass
+
+
+## Sparse evidence that the Annex once had an ordinary use. Most rooms remain
+## empty; the selected rooms get one readable idea rather than a grab-bag of
+## unrelated props. Large chair heaps are limited to genuinely broad spaces.
+func _annex_lived_in_dressing() -> void:
+	if portal_dest >= 0 or style == WorldGen.ANNEX_PASSAGE:
+		return
+	if _r(1620) < 0.12:
+		_annex_air_conditioner(1621)
+	if cell == Vector2i.ZERO:
+		return
+	var roll := _r(1630)
+	# Quiet rooms stay the sparsest branch even after the lived-in pass.
+	if style == WorldGen.ANNEX_QUIET:
+		if roll < 0.055:
+			_annex_chair_cluster(1, 1631, false)
+		elif roll < 0.095:
+			_annex_loose_boxes(1, 1632)
+		elif roll < 0.125:
+			_annex_school_chair_scatter(1, 1641)
+		return
+	if roll < 0.085:
+		_annex_shelving(1633)
+	elif roll < 0.175:
+		_annex_loose_boxes(1 + int(_r(1634) * 2.99), 1635)
+	elif roll < 0.285:
+		_annex_chair_cluster(1, 1636, false)
+	elif roll < 0.345:
+		_annex_chair_cluster(2 + int(_r(1637) * 2.99), 1638, false)
+	elif roll < 0.415:
+		_annex_school_chair_scatter(
+			1 + int(_r(1642) * 2.99), 1643)
+	elif roll < 0.442 and room_n >= 2:
+		_annex_chair_cluster(8 + int(_r(1639) * 2.99), 1640, true)
+
+
+func _annex_wall_floor_point(dir: int, along: float, off: float,
+		y := 0.0) -> Vector3:
+	var plane := S if dir == 0 or dir == 2 else 0.0
+	var inward := -1.0 if dir == 0 or dir == 2 else 1.0
+	var face := plane + inward * (ANNEX_WALL_T * 0.5 + off)
+	return Vector3(face, y, along) if dir < 2 \
+		else Vector3(along, y, face)
+
+
+func _annex_wall_has_utility(dir: int) -> bool:
+	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("wall_utility_dir") \
+				and int(node.get_meta("wall_utility_dir")) == dir:
+			return true
+	return false
+
+
+func _annex_pick_solid_wall(salt: int, avoid_utilities := false) -> int:
+	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, salt), 4)
+	for step in 4:
+		var dir := (start + step) % 4
+		if not bool(WorldGen.edge_info(wseed, cell, dir, theme)["wall"]):
+			continue
+		if avoid_utilities and _annex_wall_has_utility(dir):
+			continue
+		return dir
+	return -1
+
+
+func _annex_air_conditioner(salt: int) -> void:
+	var dir := _annex_pick_solid_wall(salt, false)
+	if dir < 0:
+		return
+	var along := lerpf(3.0, 9.0, _r(salt + 1))
+	var p := _annex_wall_floor_point(dir, along, 0.035, ceil_h - 0.32)
+	var pivot := Node3D.new()
+	pivot.position = p
+	pivot.rotation.y = _wall_facing(dir)
+	pivot.set_meta("attributed_furnishing", "annex_air_conditioner")
+	pivot.set_meta("annex_ac_mount", true)
+	pivot.set_meta("annex_ac_dir", dir)
+	add_child(pivot)
+	var unit := _attributed_prop_local(
+		pivot, OFFICE_AIR_CONDITIONER_PATH,
+		-OFFICE_AIR_CONDITIONER_CENTRE * OFFICE_AIR_CONDITIONER_SCALE,
+		0.0, Vector3.ONE * OFFICE_AIR_CONDITIONER_SCALE)
+	if unit == null:
+		pivot.get_parent().remove_child(pivot)
+		pivot.free()
+		return
+	unit.set_meta("authored_model", "annex_air_conditioner")
+
+
+func _annex_chair_cluster(count: int, salt: int, piled: bool) -> void:
+	var radius := 1.30 if piled else (0.52 if count == 1 else 1.08)
+	var p := _free_floor_spot(salt, radius, 1.45 if piled else 1.25,
+		1.85 if piled else 0.92, 18)
+	if p == Vector3.INF:
+		return
+	var base_yaw := _r(salt + 41) * TAU
+	var first := body.get_child_count()
+	var kind := "annex_chair_pile" if piled \
+		else ("annex_single_chair" if count == 1 else "annex_chair_group")
+	var group := _furnishing_pivot(p, base_yaw, kind)
+	group.set_meta("attributed_furnishing", kind)
+	group.set_meta("annex_chair_count", count)
+	var added := 0
+	if piled:
+		var pile_specs := [
+			# Four tight floor chairs make the physical base.
+			[Vector3(-0.40, 0.56, -0.30), Vector3(0.02, -0.52, 0.08)],
+			[Vector3(0.40, 0.56, -0.28), Vector3(-0.03, 0.68, -0.10)],
+			[Vector3(-0.38, 0.56, 0.32), Vector3(0.05, 2.26, 0.12)],
+			[Vector3(0.38, 0.56, 0.31), Vector3(-0.04, 3.72, -0.12)],
+			# Every upper chair penetrates the layer below slightly. At this
+			# density their legs visibly land on seats/rails instead of hanging
+			# in open air around a loose circle.
+			[Vector3(-0.16, 0.80, -0.12), Vector3(0.24, 1.26, 0.28)],
+			[Vector3(0.17, 0.83, 0.13), Vector3(-0.22, 2.72, -0.30)],
+			[Vector3(-0.13, 0.94, 0.10), Vector3(0.26, 4.10, 0.24)],
+			[Vector3(0.12, 1.02, -0.10), Vector3(-0.28, 5.24, -0.22)],
+			[Vector3(0.02, 1.13, 0.05), Vector3(0.30, 1.90, -0.28)],
+			[Vector3(-0.03, 1.25, -0.02), Vector3(-0.30, 4.76, 0.26)],
+		]
+		for i in mini(count, pile_specs.size()):
+			var spec: Array = pile_specs[i]
+			var before := group.get_child_count()
+			_annex_pile_chair(group, spec[0], spec[1])
+			if group.get_child_count() > before:
+				added += 1
+		if added > 0:
+			_collider_yaw_box(p + Vector3(0, 0.91, 0),
+				Vector3(1.72, 1.82, 1.66), base_yaw)
+	else:
+		var offsets := [
+			Vector3.ZERO,
+			Vector3(-0.48, 0, 0.12),
+			Vector3(0.48, 0, -0.10),
+			Vector3(0.02, 0, 0.60),
+		]
+		for i in mini(count, offsets.size()):
+			var local_yaw := (_r(salt + 50 + i) - 0.5) * 0.52
+			var inst := _attributed_prop_local(
+				group, ANNEX_CHAIR_PATH,
+				offsets[i] - ANNEX_CHAIR_CENTRE * ANNEX_CHAIR_SCALE,
+				local_yaw, Vector3.ONE * ANNEX_CHAIR_SCALE)
+			if inst == null:
+				continue
+			inst.set_meta("authored_model", "annex_dining_chair")
+			var cp := _wp(p, offsets[i] + Vector3(0, 0.45, 0), base_yaw)
+			_collider_yaw_box(cp, Vector3(0.40, 0.90, 0.49),
+				base_yaw + local_yaw)
+			added += 1
+	if added == 0:
+		group.get_parent().remove_child(group)
+		group.free()
+		return
+	_bind_furnishing_colliders(group, first)
+
+
+## Reuse the school's blue welded-frame chair as occasional Annex residue.
+## Upright and side-laid chairs share one supported group; the tipped pose uses
+## the imported chair's measured half-width (0.283m) as its floor lift.
+func _annex_school_chair_scatter(count: int, salt: int) -> void:
+	var radius := 0.46 if count == 1 else (0.78 if count == 2 else 1.02)
+	var p := _free_floor_spot(salt, radius, 1.35, 1.05, 18)
+	if p == Vector3.INF:
+		return
+	var base_yaw := _r(salt + 30) * TAU
+	var first := body.get_child_count()
+	var kind := "annex_school_chair_single" if count == 1 \
+		else "annex_school_chair_scatter"
+	var group := _furnishing_pivot(p, base_yaw, kind)
+	group.set_meta("attributed_furnishing", kind)
+	group.set_meta("annex_school_chair_count", count)
+	var offsets := [
+		Vector3.ZERO,
+		Vector3(-0.54, 0, 0.16),
+		Vector3(0.54, 0, -0.14),
+	]
+	var added := 0
+	var tipped_count := 0
+	for i in mini(count, offsets.size()):
+		var chair := _asy_model("SchoolChair_01", Vector3.ZERO, 0.0)
+		if chair == null:
+			continue
+		_adopt_local(group, chair)
+		var local_yaw := (_r(salt + 40 + i) - 0.5) * 0.70
+		chair.position = offsets[i] + Vector3(0, 0.002, 0)
+		chair.rotation = Vector3(0, local_yaw, 0)
+		var tipped := _r(salt + 50 + i) < 0.36
+		if tipped:
+			chair.position.y = 0.286
+			chair.rotation.z = (PI / 2.0 - 0.06) \
+				* (-1.0 if _r(salt + 60 + i) < 0.5 else 1.0)
+			chair.set_meta("annex_school_chair_tipped", true)
+			var tipped_pos := _wp(p,
+				offsets[i] + Vector3(0, 0.29, 0), base_yaw)
+			_collider_yaw_box(tipped_pos, Vector3(1.03, 0.58, 0.70),
+				base_yaw + local_yaw)
+			tipped_count += 1
+		else:
+			var upright_pos := _wp(p,
+				offsets[i] + Vector3(0, 0.505, 0), base_yaw)
+			_collider_yaw_box(upright_pos, Vector3(0.58, 1.01, 0.69),
+				base_yaw + local_yaw)
+		chair.set_meta("authored_model", "annex_school_chair")
+		added += 1
+	if added == 0:
+		group.get_parent().remove_child(group)
+		group.free()
+		return
+	group.set_meta("annex_school_chair_tipped_count", tipped_count)
+	_bind_furnishing_colliders(group, first)
+
+
+func _annex_loose_boxes(count: int, salt: int) -> void:
+	var p := _free_floor_spot(salt, 0.52 if count == 1 else 0.78,
+		1.20, 0.85, 16)
+	if p == Vector3.INF:
+		return
+	var yaw := _r(salt + 20) * TAU
+	var first := body.get_child_count()
+	var group := _furnishing_pivot(p, yaw, "annex_loose_boxes")
+	group.set_meta("attributed_furnishing", "annex_loose_boxes")
+	group.set_meta("annex_box_count", count)
+	var offsets := [
+		Vector3.ZERO,
+		Vector3(0.38, 0, 0.09),
+		Vector3(0.12, 0.30, -0.04),
+	]
+	var added := 0
+	for i in mini(count, offsets.size()):
+		var variant := posmod(
+			WorldGen.h(wseed, cell.x + i, cell.y - i, salt + 30),
+			OFFICE_BOX_VARIANTS.size())
+		if _office_shelf_box(group, offsets[i],
+				(_r(salt + 35 + i) - 0.5) * 0.26, variant,
+				"annex_loose_box"):
+			added += 1
+	if added == 0:
+		group.get_parent().remove_child(group)
+		group.free()
+		return
+	_collider_yaw_box(p + Vector3(0.12, 0.36, 0),
+		Vector3(1.04, 0.72, 0.76), yaw)
+	_bind_furnishing_colliders(group, first)
+
+
+func _annex_shelving(salt: int) -> void:
+	var dir := _annex_pick_solid_wall(salt, true)
+	if dir < 0:
+		dir = _annex_pick_solid_wall(salt, false)
+	if dir < 0:
+		return
+	var along := 3.15 if _r(salt + 1) < 0.5 else 8.85
+	var p := _annex_wall_floor_point(dir, along, 0.49)
+	if not _floor_spot_clear(p, 0.42, 2.12):
+		along = S - along
+		p = _annex_wall_floor_point(dir, along, 0.49)
+	if not _floor_spot_clear(p, 0.42, 2.12):
+		return
+	var yaw := _wall_facing(dir)
+	var first := body.get_child_count()
+	var shelf := _attributed_floor_prop(
+		ANNEX_SHELVING_PATH, p, yaw, ANNEX_SHELVING_SCALE,
+		ANNEX_SHELVING_CENTRE, "annex_shelving", null, true)
+	if shelf == null:
+		return
+	shelf.set_meta("annex_shelf_wall_dir", dir)
+	var box_count := 0
+	var box_slots := [
+		Vector3(-0.52, ANNEX_SHELVING_DECK_TOPS[0], 0.0),
+		Vector3(0.02, ANNEX_SHELVING_DECK_TOPS[0], 0.0),
+		Vector3(0.48, ANNEX_SHELVING_DECK_TOPS[1], 0.0),
+		Vector3(-0.30, ANNEX_SHELVING_DECK_TOPS[2], 0.0),
+		Vector3(0.36, ANNEX_SHELVING_DECK_TOPS[2], 0.0),
+	]
+	for i in box_slots.size():
+		if _r(salt + 10 + i) >= 0.66:
+			continue
+		var variant := posmod(
+			WorldGen.h(wseed, cell.x + i, cell.y, salt + 50),
+			OFFICE_BOX_VARIANTS.size())
+		if _office_shelf_box(shelf, box_slots[i],
+				(_r(salt + 60 + i) - 0.5) * 0.12, variant,
+				"annex_shelf_box"):
+			box_count += 1
+	shelf.set_meta("annex_shelf_box_count", box_count)
+	_collider_yaw_box(p + Vector3(0, 1.05, 0),
+		Vector3(1.90, 2.10, 0.68), yaw)
+	_bind_furnishing_colliders(shelf, first)
+
+
+func _annex_passage() -> void:
+	var axis := WorldGen.annex_corridor_axis(wseed, cell)
+	if axis == 0:
+		return
+	var horizontal_width := WorldGen.annex_horizontal_width(wseed, cell.y)
+	var vertical_width := WorldGen.annex_vertical_width(wseed, cell.x)
+	var marker := Node3D.new()
+	marker.set_meta("annex_corridor_shell", axis)
+	marker.set_meta("annex_horizontal_width", horizontal_width)
+	marker.set_meta("annex_vertical_width", vertical_width)
+	add_child(marker)
+	# Each corridor run owns one of three stable widths. At an intersection the
+	# four corner masses are sized independently, so a narrow hall can suddenly
+	# release into a broad cross-axis without gaps or backing voids.
+	if axis == 3:
+		var block_width := (S - vertical_width) * 0.5
+		var block_depth := (S - horizontal_width) * 0.5
+		for xi in 2:
+			var x := block_width * 0.5 if xi == 0 \
+				else S - block_width * 0.5
+			var x_dir := 1 if xi == 0 else 0
+			var x_mat := Mats.annex_wall_variant(
+				WorldGen.annex_wall_finish(wseed, cell, x_dir))
+			for zi in 2:
+				var z := block_depth * 0.5 if zi == 0 \
+					else S - block_depth * 0.5
+				# Each cross-corridor corner commits to one finish and one solid.
+				# The former perpendicular "skins" were coplanar with this block,
+				# causing the recurring bright vertical ridges seen in motion.
+				var corner := _box(Vector3(x, ceil_h * 0.5, z),
+					Vector3(block_width, ceil_h, block_depth), x_mat)
+				corner.set_meta("annex_cross_corner", true)
+				corner.set_meta("annex_single_finish", true)
+				_annex_register_ceiling_obstruction(
+					Vector3(x, 0.0, z), block_width, block_depth, 0.0, ceil_h)
+		return
+	# near/far_plane are the walkable corridor faces. The shell boxes are
+	# centred half a wall thickness outside them, so their corridor faces land
+	# exactly on the plane and stay flush with the intersection corner masses
+	# (which own [0, block_width]). Centring the box ON the plane put every
+	# shell face 15cm inside the corners' line, stepping the wall at each
+	# passage-to-intersection junction.
+	if axis == 1:
+		var near_shell := S * 0.5 - horizontal_width * 0.5 - ANNEX_WALL_T * 0.5
+		var far_shell := S * 0.5 + horizontal_width * 0.5 + ANNEX_WALL_T * 0.5
+		_annex_corridor_side(true, near_shell, 3,
+			Mats.annex_wall_variant(
+				WorldGen.annex_wall_finish(wseed, cell, 3)))
+		_annex_corridor_side(true, far_shell, 2,
+			Mats.annex_wall_variant(
+				WorldGen.annex_wall_finish(wseed, cell, 2)))
+		if _r(560) < 0.11:
+			var camera_dir := 3 if _r(561) < 0.5 else 2
+			if WorldGen.edge_info(wseed, cell, camera_dir, theme)["wall"]:
+				_security_camera_wall(camera_dir,
+					near_shell if camera_dir == 3 else far_shell)
+	else:
+		var near_shell := S * 0.5 - vertical_width * 0.5 - ANNEX_WALL_T * 0.5
+		var far_shell := S * 0.5 + vertical_width * 0.5 + ANNEX_WALL_T * 0.5
+		_annex_corridor_side(false, near_shell, 1,
+			Mats.annex_wall_variant(
+				WorldGen.annex_wall_finish(wseed, cell, 1)))
+		_annex_corridor_side(false, far_shell, 0,
+			Mats.annex_wall_variant(
+				WorldGen.annex_wall_finish(wseed, cell, 0)))
+		if _r(560) < 0.11:
+			var camera_dir := 1 if _r(561) < 0.5 else 0
+			if WorldGen.edge_info(wseed, cell, camera_dir, theme)["wall"]:
+				_security_camera_wall(camera_dir,
+					near_shell if camera_dir == 1 else far_shell)
+
+
+## Build one visible inner corridor wall. When its outer cell boundary opens
+## into a room, the same opening is repeated here and connected with two return
+## walls, creating a real short passage instead of exposing a fake backing bay.
+func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
+		mat: Material) -> void:
+	var info := WorldGen.edge_info(wseed, cell, outer_dir, theme)
+	if info["wall"]:
+		_annex_corridor_segment(along_x, plane, 0.0, S, 0.0, ceil_h, mat)
+		_wall_utilities(outer_dir, plane, info)
+		return
+	# The shell repeats the outer boundary opening EXACTLY. The former clamps
+	# let the two frames disagree by up to 70cm, which read from the wider side
+	# as a second doorway floating inside the first.
+	var a := float(info["t"]) - float(info["w"]) * 0.5
+	var b := float(info["t"]) + float(info["w"]) * 0.5
+	_annex_corridor_segment(along_x, plane, 0.0, a, 0.0, ceil_h, mat)
+	_annex_corridor_segment(along_x, plane, b, S, 0.0, ceil_h, mat)
+	_wall_utilities(outer_dir, plane, info)
+	var outer_plane := ANNEX_WALL_T * 0.5 \
+		if outer_dir == 1 or outer_dir == 3 \
+		else S - ANNEX_WALL_T * 0.5
+	# One solid mass above door height from the boundary wall to the corridor
+	# face of the shell, replacing the shell's own floating header. Together
+	# with the flanking returns this turns the doorway into a single straight
+	# rectangular tunnel through one visually thick wall — no second frame, no
+	# beam hanging behind the first, no ceiling slot over the passage.
+	var boundary := 0.0 if outer_dir == 1 or outer_dir == 3 else S
+	var reach := boundary if bool(info["full_open"]) else outer_plane
+	var toward := 1.0 if plane < S * 0.5 else -1.0
+	var shell_face := plane + toward * ANNEX_WALL_T * 0.5
+	var head_mid := (reach + shell_face) * 0.5
+	var head_depth := absf(shell_face - reach)
+	var head_y := (DOOR_TOP + ceil_h) * 0.5
+	var head_h := ceil_h - DOOR_TOP
+	if along_x:
+		_box(Vector3((a + b) * 0.5, head_y, head_mid),
+			Vector3(b - a, head_h, head_depth), mat)
+		_annex_register_ceiling_obstruction(
+			Vector3((a + b) * 0.5, 0.0, head_mid),
+			b - a, head_depth, 0.0, ceil_h)
+	else:
+		_box(Vector3(head_mid, head_y, (a + b) * 0.5),
+			Vector3(head_depth, head_h, b - a), mat)
+		_annex_register_ceiling_obstruction(
+			Vector3(head_mid, 0.0, (a + b) * 0.5),
+			head_depth, b - a, 0.0, ceil_h)
+	# Returns sit fully OUTSIDE the opening span, so their faces are flush with
+	# the jamb cuts at `a` and `b` — centring them ON the opening edge poked a
+	# 15cm sliver past each jamb into the passage. They run from the boundary
+	# side to the shell's strip face, abutting (never overlapping) the wall
+	# segments' own cut faces, so the tunnel side reads as one flush plane.
+	var shell_back := plane - toward * ANNEX_WALL_T * 0.5
+	var ret_depth := absf(reach - shell_back)
+	var ret_mid := (reach + shell_back) * 0.5
+	if along_x:
+		for x in [a - ANNEX_WALL_T * 0.5, b + ANNEX_WALL_T * 0.5]:
+			_box(Vector3(x, ceil_h * 0.5, ret_mid),
+				Vector3(ANNEX_WALL_T, ceil_h, ret_depth), mat)
+			_annex_register_ceiling_obstruction(
+				Vector3(x, 0.0, ret_mid),
+				ANNEX_WALL_T, ret_depth, 0.0, ceil_h)
+	else:
+		for z in [a - ANNEX_WALL_T * 0.5, b + ANNEX_WALL_T * 0.5]:
+			_box(Vector3(ret_mid, ceil_h * 0.5, z),
+				Vector3(ret_depth, ceil_h, ANNEX_WALL_T), mat)
+			_annex_register_ceiling_obstruction(
+				Vector3(ret_mid, 0.0, z),
+				ret_depth, ANNEX_WALL_T, 0.0, ceil_h)
+
+
+func _annex_corridor_segment(along_x: bool, plane: float, a: float, b: float,
+		y0: float, y1: float, mat: Material) -> void:
+	if b - a <= 0.02 or y1 - y0 <= 0.02:
+		return
+	var wall_mesh: MeshInstance3D
+	if along_x:
+		wall_mesh = _annex_wall_prism(
+			Vector3((a + b) * 0.5, (y0 + y1) * 0.5, plane),
+			Vector3(b - a, y1 - y0, ANNEX_WALL_T), true,
+			not is_zero_approx(a), not is_equal_approx(b, S), mat)
+		_annex_register_ceiling_obstruction(
+			Vector3((a + b) * 0.5, 0.0, plane),
+			b - a, ANNEX_WALL_T, 0.0, y1)
+	else:
+		wall_mesh = _annex_wall_prism(
+			Vector3(plane, (y0 + y1) * 0.5, (a + b) * 0.5),
+			Vector3(ANNEX_WALL_T, y1 - y0, b - a), false,
+			not is_zero_approx(a), not is_equal_approx(b, S), mat)
+		_annex_register_ceiling_obstruction(
+			Vector3(plane, 0.0, (a + b) * 0.5),
+			ANNEX_WALL_T, b - a, 0.0, y1)
+	wall_mesh.set_meta("annex_wall_thickness", ANNEX_WALL_T)
+	wall_mesh.set_meta("annex_wall_seam_safe", true)
+	wall_mesh.set_meta("annex_wall_cap_min", not is_zero_approx(a))
+	wall_mesh.set_meta("annex_wall_cap_max", not is_equal_approx(b, S))
+
+
+func _annex_lobby() -> void:
+	var c := Vector3(S / 2.0, 0, S / 2.0)
+	var yaw := PI / 2.0 if _r(550) < 0.5 else 0.0
+	# An asymmetrical deep mass plus one smaller support creates the framed,
+	# layered sightlines in the references without turning the lobby into a
+	# regular procedural column grid.
+	_annex_block(_wp(c, Vector3(-2.0, 0, -0.18), yaw), yaw,
+		2.35, 1.35, ceil_h, "annex_wall_mass")
+	_annex_block(_wp(c, Vector3(2.65, 0, 0.32), yaw), 0.0,
+		1.10, 1.10, ceil_h, "annex_column")
+	if _r(551) < 0.92:
+		_annex_block(_wp(c, Vector3(0, 0, 1.9), yaw), yaw,
+			5.1, 0.26, 1.08, "annex_half_wall")
+
+
+## Rare Backrooms furniture hoard. The pile is procedurally composed from a
+## few existing CC0 furnishings and seeded wooden chairs, then treated as one
+## atomic obstacle. Its centre sits at the middle of a 24x24 room, leaving a
+## broad navigable perimeter and every doorway approach clear.
+func _annex_furniture_pile() -> bool:
+	if portal_dest >= 0 or room_n < 4 \
+			or not WorldGen.annex_furniture_pile(wseed, room_root):
+		return false
+	var span := _room_span()
+	if span.x < 23.9 or span.y < 23.9:
+		return false
+	var centre := Vector3(span.x * 0.5, 0.0, span.y * 0.5)
+	var yaw := floorf(_r(568) * 4.0) * PI * 0.5 \
+		+ (_r(569) - 0.5) * 0.18
+	var body0 := body.get_child_count()
+	var pile := _furnishing_pivot(centre, yaw, "annex_furniture_pile")
+	pile.set_meta("annex_furniture_pile", true)
+	pile.set_meta("annex_room_cells", room_n)
+
+	# Heavy floor-supported core: a sofa, chair and cabinets give the loose
+	# upper pieces a believable mass rather than a gravity-free sculpture.
+	_cc0_prop_local(pile, "sofa_03", Vector3(-0.55, 0.0, 0.82),
+		PI + (_r(570) - 0.5) * 0.16, 0.90)
+	_cc0_prop_local(pile, "drawer_cabinet", Vector3(1.40, 0.0, -0.52),
+		-PI * 0.5 + (_r(571) - 0.5) * 0.12, 0.92)
+	_cc0_prop_local(pile, "ArmChair_01", Vector3(-1.58, 0.0, -0.74),
+		0.42 + (_r(572) - 0.5) * 0.22, 0.94)
+	_cc0_prop_local(pile, "Ottoman_01", Vector3(1.62, 0.0, 1.18),
+		_r(573) * TAU, 0.92)
+
+	# A shoved-in plywood cabinet and a tilted coffee table make the centre read
+	# as accumulated office furniture rather than a lounge arrangement.
+	_mrbox(pile, Vector3(0.02, 0.76, -0.52),
+		Vector3(1.52, 1.52, 0.72), Mats.wood_door(), 0.018)
+	for sy in [-0.33, 0.10, 0.53]:
+		_mbox(pile, Vector3(0.02, 0.76 + sy, -0.895),
+			Vector3(1.30, 0.035, 0.025), Mats.darkwood())
+	# Open bookcase on one flank.
+	_mbox(pile, Vector3(1.34, 0.88, 0.27),
+		Vector3(1.04, 1.76, 0.055), Mats.darkwood())
+	for sx in [-0.50, 0.50]:
+		_mrbox(pile, Vector3(1.34 + sx, 0.88, 0.02),
+			Vector3(0.065, 1.76, 0.56), Mats.wood_door(), 0.012)
+	for shelf_y in [0.08, 0.55, 1.02, 1.49, 1.74]:
+		_mrbox(pile, Vector3(1.34, shelf_y, 0.02),
+			Vector3(1.04, 0.055, 0.56), Mats.wood_door(), 0.012)
+	# A full-height panel leans against the opposite side, making the heap read
+	# wide even before the chairs and upholstery fill its silhouette.
+	var leaning_panel := Node3D.new()
+	leaning_panel.position = Vector3(-1.42, 1.03, 0.08)
+	leaning_panel.rotation = Vector3(0.04, -0.32, -0.22)
+	pile.add_child(leaning_panel)
+	_mrbox(leaning_panel, Vector3.ZERO,
+		Vector3(1.22, 1.94, 0.085), Mats.wood_door(), 0.015)
+	# Misaligned upholstery stacked through the middle.
+	_mrbox(pile, Vector3(-0.55, 1.18, 0.56),
+		Vector3(1.34, 0.36, 0.84), Mats.velvet2(), 0.10)
+	_mrbox(pile, Vector3(-0.43, 1.51, 0.45),
+		Vector3(1.10, 0.31, 0.76), Mats.velvet(), 0.09)
+	var table := _cc0_prop_local(pile, "CoffeeTable_01",
+		Vector3(0.25, 1.20, 0.0), _r(574) * TAU, 0.82)
+	table.rotation.x = 0.10 + _r(575) * 0.13
+	table.rotation.z = (_r(576) - 0.5) * 0.22
+	var upper_table := _cc0_prop_local(pile, "coffee_table_round_01",
+		Vector3(-0.22, 1.72, 0.18), _r(578) * TAU, 0.82)
+	upper_table.rotation.x = -0.12
+	upper_table.rotation.z = 0.16
+	var television := _cc0_prop_local(pile, "television_02",
+		Vector3(0.72, 1.45, -0.20), -0.55, 0.74)
+	television.rotation.z = -0.10
+
+	# Seeded dining chairs ring and crown the pile. They deliberately overlap
+	# the core and one another, but never escape the aggregate collider.
+	var chair_specs := [
+		[Vector3(-1.92, 0.56, -1.32), Vector3(0.02, -0.55, 0.10)],
+		[Vector3(1.84, 0.56, 1.38), Vector3(-0.02, 2.15, -0.12)],
+		[Vector3(0.32, 0.56, -1.82), Vector3(0.04, 1.55, 0.14)],
+		[Vector3(-1.05, 1.23, -0.20), Vector3(0.16, 0.48, 0.08)],
+		[Vector3(0.90, 1.32, 0.18), Vector3(-0.13, 2.75, 0.13)],
+		[Vector3(-1.36, 1.48, 0.78), Vector3(0.12, 0.18, 0.24)],
+		[Vector3(1.38, 1.53, 0.72), Vector3(-0.10, 3.70, -0.26)],
+		[Vector3(0.02, 1.84, -0.38), Vector3(0.18, 1.38, 0.20)],
+		[Vector3(2.08, 0.56, -0.76), Vector3(0.03, 2.88, -0.14)],
+		[Vector3(-2.10, 0.56, 0.72), Vector3(-0.02, -0.16, 0.12)],
+		[Vector3(0.76, 1.78, 0.46), Vector3(-0.16, 4.36, -0.18)],
+	]
+	var chair_count := 9 + int(_r(577) * 2.99)
+	for i in chair_count:
+		var spec: Array = chair_specs[i]
+		var pos: Vector3 = spec[0]
+		pos += Vector3((_r(580 + i * 3) - 0.5) * 0.14,
+			0.0, (_r(581 + i * 3) - 0.5) * 0.14)
+		var rot: Vector3 = spec[1]
+		rot.y += (_r(582 + i * 3) - 0.5) * 0.24
+		_annex_pile_chair(pile, pos, rot)
+
+	# One absurd floor lamp poking out of the top echoes the reference without
+	# turning every hoard into the exact same silhouette.
+	if _r(610) < 0.76:
+		_mcyl(pile, Vector3(-0.22, 1.91, 0.12), 0.018, 1.14,
+			Mats.metal_gray())
+		_mcyl(pile, Vector3(-0.22, 1.35, 0.12), 0.17, 0.035,
+			Mats.metal_gray())
+		var shade := _mcyl(pile, Vector3(-0.22, 2.46, 0.12), 0.18, 0.16,
+			Mats.shade())
+		shade.rotation.z = 0.18
+
+	# A single conservative collision volume is intentional: the hoard is a
+	# pile, not a platforming course, and one group can be culled atomically.
+	_collider_yaw_box(
+		_wp(centre, Vector3(0.0, 1.31, 0.0), yaw),
+		Vector3(5.45, 2.62, 5.15), yaw)
+	_bind_furnishing_colliders(pile, body0)
+	return true
+
+
+func _annex_pile_chair(parent: Node3D, pos: Vector3,
+		rot: Vector3) -> void:
+	var chair := Node3D.new()
+	# Existing pile coordinates describe the old generated chair's seat plane
+	# at y=.56. Rebase them to the floor and keep the supplied model's authored
+	# centre correction inside the rotating chair pivot.
+	chair.position = pos - Vector3(0, 0.56, 0)
+	chair.rotation = rot
+	parent.add_child(chair)
+	var inst := _attributed_prop_local(
+		chair, ANNEX_CHAIR_PATH,
+		-ANNEX_CHAIR_CENTRE * ANNEX_CHAIR_SCALE,
+		0.0, Vector3.ONE * ANNEX_CHAIR_SCALE)
+	if inst == null:
+		chair.get_parent().remove_child(chair)
+		chair.free()
+		return
+	inst.set_meta("authored_model", "annex_dining_chair")
+
+
+# --- legacy sewer (retired from generation) ---------------------------------
 
 func _sewer_ch() -> Array:
 	return [
@@ -7346,6 +8844,14 @@ func _room_member_local(member: Vector2i) -> Vector3:
 
 
 func _room_span() -> Vector2:
+	if theme == 2:
+		var width := 12.0
+		var depth := 12.0
+		if WorldGen.annex_room_id(wseed, room_root + Vector2i(1, 0)) == room_root:
+			width = 24.0
+		if WorldGen.annex_room_id(wseed, room_root + Vector2i(0, 1)) == room_root:
+			depth = 24.0
+		return Vector2(width, depth)
 	if room_n >= 4:
 		return Vector2(24.0, 24.0)
 	var mx := WorldGen.merge_dir(wseed, Vector2i(room_root.x - 1, room_root.y)) == 0
@@ -11583,7 +13089,8 @@ func _prison_locked_door_wall(dir: int, plane: float) -> void:
 
 func _security_camera_wall(dir: int, plane: float) -> void:
 	var n := -1.0 if dir == 0 or dir == 2 else 1.0
-	var inner := plane + n * (T * 0.5)
+	var wall_t := ANNEX_WALL_T if theme == 2 else T
+	var inner := plane + n * (wall_t * 0.5)
 	var along := lerpf(3.5, 8.5, _r(1820 + dir))
 	var mount := Vector3(inner, minf(2.75, ceil_h - 0.35), along) if dir < 2 \
 		else Vector3(along, minf(2.75, ceil_h - 0.35), inner)

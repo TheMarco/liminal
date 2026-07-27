@@ -26,7 +26,7 @@ const VARIANT_W := [0.16, 0.15, 0.14, 0.13, 0.14, 0.14, 0.14]
 # be, keep to the floors where something could have got in from below. Nothing
 # gets into the office.
 const UNDERNEATH := [ShadowFigure.TRAILING, ShadowFigure.DRIFTER]
-const UNDERNEATH_THEMES := [2, 5]  # the sewers, the asylum
+const UNDERNEATH_THEMES := [2, 5]  # the Annex, the asylum
 
 signal stared_away
 signal burned_away
@@ -286,7 +286,7 @@ func _figure_volume_clear(ground: Vector3) -> bool:
 
 ## Distance a real walkable floor may sit off the level's ground plane. A dais
 ## or a shallow step is fine; a table top at 0.73m, a bed at 0.60m or the
-## sewer's channel invert at -0.48m are not. The old probe accepted anything
+## old retired sewer channel invert at -0.48m are not. The old probe accepted anything
 ## within 1.3m, which is why figures stood on furniture and sank into trenches —
 ## and why they read as the wrong size when they did.
 const FLOOR_TOL := 0.34

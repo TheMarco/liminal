@@ -16,16 +16,14 @@ const DIR := "res://sounds/%s.mp3"
 const BED_TARGET := -37.0    # ~9 dB under the music: present, never leading
 const WALK_TARGET := -37.0   # transient, so it still cuts through the bed
 
-# theme -> [file, measured mean dB]. The casino and the school have no room
-# tone recorded for them yet and borrow the office one — it is the most
-# neutral of the four, near-featureless fluorescent air. The casino's own
-# recording is of the MACHINES, which belongs on the machines and not humming
-# out of an empty corridor; see slots() below.
+# theme -> [file, measured mean dB]. The Annex uses the user-supplied 30-second
+# ambient loop as its only continuous score; main.gd explicitly suppresses
+# music on that floor. The casino and school borrow the office room tone.
 const BEDS := {
 	0: ["sound-office", -40.9],
 	1: ["sound-office", -40.9],
+	2: ["ambient-annex", -54.6],
 	6: ["sound-office", -40.9],
-	2: ["sound-sewer-ambient", -32.0],
 	4: ["sound-airport", -43.3],
 	5: ["sound-asylum", -12.7],
 	7: ["sound-airport", -43.3],

@@ -11,6 +11,10 @@ var failures := 0
 
 func _init() -> void:
 	for theme in WorldGen.THEMES:
+		# The Annex has its own mixed-scale topology and sparse architecture,
+		# not the shared room/landmark district contract checked here.
+		if theme == 2:
+			continue
 		_audit_theme(theme)
 	if failures > 0:
 		printerr("ZONE AUDIT FAILED: %d contract violations" % failures)

@@ -26,7 +26,7 @@ startup, elevator and anomaly designs below deliberately replace it.
 Start in the casino and descend through eight floors. Each floor has exactly one
 objective lift or exit, chosen deterministically from the seed. A restrained
 HUD needle points toward the next real open doorway in the generated topology.
-Call and enter the lift to move down one floor. The bottom of the sewers
+Call and enter the lift to move down one floor. The far end of the Annex
 contains a unique way out.
 
 Descent order is not the Wander key order:
@@ -40,12 +40,12 @@ Descent order is not the Wander key order:
 | 5 | 6 | the school |
 | 6 | 8 | the prison |
 | 7 | 5 | the asylum |
-| 8 | 2 | the sewers |
+| 8 | 2 | the Annex |
 
 The sequence reads as a physical and psychological descent:
 
 > garish → deserted consumer space → sterile → vast and cold → institutional
-> → confined → wrong → underneath
+> → confined → wrong → watched
 
 It also reserves the two themes that admit the least-human figure variants
 (`ShadowFigures.UNDERNEATH_THEMES == [2, 5]`) for the final two floors.
@@ -97,8 +97,23 @@ the idea without risking world connectivity.
 ### Target length
 
 A successful first run should take roughly 20–30 minutes. The objective route
-on each floor should normally be 7–12 graph edges from the arrival cell. The
-route is controlled; the surrounding world remains endless.
+runs from the arrival room and lengthens with depth: normally 9–13 graph edges
+on the casino, rising to 16–22 in the last floor. The route is controlled; the
+surrounding world remains endless.
+
+Route length alone never made a floor take long. A needle that names the exact
+next doorway turns any distance into a walk, so the depth ramp is carried by
+three things together:
+
+1. the objective is further away;
+2. the needle degrades with depth, so later floors are searched rather than
+   followed (§6.6);
+3. reaching the lift is not the end of the floor — calling it starts a wait
+   that has to be paced on foot (§6.5).
+
+The audited walking floor is about 7 minutes across eight floors, plus about
+2.5 minutes of lift waits. The rest of the target is searching, riding,
+figures and mistakes.
 
 ---
 
@@ -117,7 +132,7 @@ experience:
 - sprint remains available;
 - figure cadence and behaviour at default values remain unchanged;
 - no Descent HUD needle, objective lift cars, rule feedback, attention,
-  blackouts, pursuer, anomalies or sewer exit appear.
+  blackouts, pursuer, anomalies or Annex exit appear.
 
 “Unchanged” means observable runtime behaviour and deterministic generation,
 not identical source bytes. Existing Wander audits must continue to pass
@@ -210,7 +225,7 @@ Wander terminal/elevator/door assertions are part of the regression contract.
 12. **`--quit-after` counts frames, not seconds.** Use wall-clock timestamps
     for cadence tests.
 13. **Run all existing audits after generation, doorway, arrival or
-    interaction changes.** CI currently covers corridors, sewers, zones,
+    interaction changes.** CI currently covers corridors, the Annex, zones,
     doorway clearance, interactions, arrivals and runtime level switching.
 
 Useful APIs:
@@ -362,7 +377,7 @@ Wander retains every current input.
 
 ---
 
-## 6. Phase 2 — deterministic route, objective lift and sewer exit
+## 6. Phase 2 — deterministic route, objective lift and Annex exit
 
 This is the largest phase. Build it before any rule logic.
 
@@ -410,7 +425,7 @@ const DESCENT_ELEV_STYLES := {
 		WorldGen.SCH_LIBRARY, WorldGen.SCH_ADMIN],
 	5: [WorldGen.ASY_OFFICE, WorldGen.ASY_WARD,
 		WorldGen.ASY_DAYROOM],
-	2: [WorldGen.SEWER_DRY],
+	2: [WorldGen.ANNEX_QUIET, WorldGen.ANNEX_OPEN, WorldGen.ANNEX_LONG],
 }
 ```
 
@@ -425,8 +440,8 @@ the one-time BFS farther, but it must never silently produce a floor with no
 objective. The route audit must record which fallback tier was used for every
 tested seed.
 
-The sewer never relaxes its `SEWER_DRY` requirement. Expand its one-time search
-rather than placing the exit over a channel, pool or basin.
+The Annex prefers its empty and long-view room grammars so its final objective
+does not compete with one of the sparse architectural slabs.
 
 The resulting object exposes:
 
@@ -509,9 +524,12 @@ Descent mode:
 
 - receives the current floor index and `OUT` flag;
 - has no destination-selection button;
-- opens automatically on approach;
+- opens only when the car it summoned actually arrives (§6.5);
 - contains a physical car and commit area;
 - calls the `"descent_listener"` group after the player is safely inside.
+
+A floor also owns a second car, in `DescentRoute.origin`: the one the player
+rides in on. See §6.4a.
 
 ### 6.4 Descent lift geometry
 
@@ -537,12 +555,69 @@ island. Wander keeps its current shallow wall-mounted facade.
 The set piece remains a closed island against one solid wall. It must not reach
 perpendicular walls or real doorway approach zones.
 
+### 6.4a The arrival car
+
+A floor begins inside a sealed car, facing shut doors, which then part onto the
+new world. It is the same shell as the objective lift, so the ride out of one
+car and into another reads as one continuous descent across the fade.
+
+`DescentRoute.origin` is a second authored cell, chosen under the same contract
+as the target — single-cell room anchor, unsplit, non-corridor, wall-backed —
+and as close to `Vector2i.ZERO` as that contract allows. Cell `(0,0)` itself is
+almost never usable: every one of its edges is a guaranteed doorway, so it owns
+no solid wall to back a car against.
+
+Consequences:
+
+- the arrival room suppresses its seeded furnishing, exactly as the target does
+  — the player is teleported into that car and nothing may be standing in it;
+- `main._jump_to()` takes an `exact` flag for this arrival and skips
+  `ArrivalSafety.find_safe()`. The interior is authored clear, but it is sealed,
+  and `escape_count()` can never pass inside a 2.2m box. It still refuses a
+  point that fails the capsule and floor tests, and falls back if so;
+- `_settle_initial_arrival()` skips a Descent car for the same reason;
+- when the player steps out, the car shuts behind them and its indicator goes
+  dark. It never opens again. That is rule three, in steel;
+- a car is never sealed on a player who stepped back in: the close re-checks
+  the interior overlap first, because the car has no inside control;
+- `run.arrival_used` persists that state so a room streaming out and back does
+  not resurrect the car — and `descent_arrival_spent` is ignored while
+  `_switching`, since freeing the outgoing floor makes its arrival area report
+  the player as having left it.
+
+If a floor genuinely has no wall-backed room near the origin, `origin_wall`
+stays `-1`, no car is built and the floor uses the ordinary audited arrival.
+The route audit reports how often that happens; across 200 seeds × 8 floors it
+is currently never.
+
 ### 6.5 Lift behaviour
 
-Two `Area3D`s:
+Three `Area3D`s and one `Interactable`:
 
-- approach: opens the doors and chimes when the player enters;
+- call plate: starts the wait; it does **not** open anything;
+- approach: opens the doors on the final `OUT` passage only;
 - car: commits when the player fully enters.
+
+**The wait.** Pressing the plate summons a car that is genuinely somewhere
+else. It takes `DescentRun.lift_wait_for(floor_idx)` — 14s on the casino rising
+to 34s on the asylum — during which the shaft works audibly overhead and the
+indicator fills. This is the most exposed stretch of a floor: rule two forbids
+standing still, so the wait has to be walked out in one room at whatever the
+current attention level is spawning.
+
+The clock is **run state**, not chunk state. A player who walks off during the
+wait can stream the target room out and back; `ChunkManager` mirrors
+`lift_called` / `lift_wait_left` / `lift_open` into the chunk config so a
+rebuilt room resumes the same wait, and only `DescentRun` decides that the car
+has arrived. The chunk presents; it never opens itself.
+
+**The ride.** Once the player is inside and the leaves seal, the car travels
+before the world changes. A sealed box gives the eye no parallax, so the ride
+is carried by the motor loop, the car light sagging under load, the indicator
+running through floors that are not on the route, and a periodic camera rumble
+(`Player.set_rumble`) — deliberately periodic, not jittered, because a machine
+has a period and white noise reads as a bad camera. It decelerates, settles,
+and only then does the fade take the floor away.
 
 Commit sequence:
 
@@ -550,48 +625,49 @@ Commit sequence:
 2. disable repeat triggers;
 3. close doors after the player is inside;
 4. wait for the leaves to seal;
-5. call `descent_listener._on_descent_lift()`;
-6. transition using the existing `_jump_to()` fade/audio/rebuild path;
-7. clear visited/anomaly state and apply an 8-second arrival grace;
-8. resume rule detection.
+5. run the ride (~6.4s), ending with the car settling;
+6. call `descent_listener._on_descent_lift()`;
+7. transition using the existing `_jump_to()` fade/audio/rebuild path, landing
+   inside the next floor's arrival car;
+8. clear visited/anomaly/lift state and apply an 8-second arrival grace;
+9. open the arrival car, caption the floor, resume rule detection.
 
 Door bodies and their collision shapes move together. Never close a
 `StaticBody3D` through a player standing in the threshold.
 
-Main receives the commit explicitly:
-
-```gdscript
-func _on_descent_lift() -> void:
-	if not descent or run == null or run.ended or _switching:
-		return
-	if run.floor_idx >= DescentRun.ORDER.size() - 1:
-		return # the sewer uses the exit trigger, not the lift callback
-	run.floor_idx += 1
-	var theme := run.theme()
-	run.prepare_floor()
-	descent_route = DescentRoute.build(_level_seed(theme), theme)
-	_jump_to(theme, _safe_arrival(theme, Vector2i.ZERO, DEFAULT_SPAWN), false)
-```
-
-`run.prepare_floor()` clears per-floor visited/anomaly state and suspends rules
-until the arrival grace expires. `main._build_level()` gives
-`descent_route` to the new `ChunkManager` before `warm_up()`.
+The ride is a chain of awaits, and a run that never leaves the car is
+unrecoverable. `tools/audit_descent_runtime.gd` therefore asserts that it
+completes inside its authored window, that it drives and then releases the
+rumble, and that its indicator lands on the floor below.
 
 ### 6.6 HUD route needle
 
 Do not place route markings in the world. They flatten the level art and turn
 the building into a marked course.
 
-`DescentHUD` renders one small top-centre compass needle. In each cell it aims
-at the exact generated doorway selected by
-`descent_route.next_from(cell)`, including that doorway's seeded offset along
-the wall. In the target room it aims at the lift facade. It hides during the
+`DescentHUD` renders one small top-centre compass needle, and it is
+**deliberately a worse instrument the deeper you go**. This, more than route
+length, is what makes the objective take a while to find: the player stops
+following and starts searching.
+
+| Floors | Mode | Behaviour |
+|---|---|---|
+| 1–2 casino, mall | `EXACT` | aims at the exact generated doorway from `next_from(cell)`, including its seeded offset along the wall |
+| 3–5 office, airport, school | `BEARING` | aims at the objective room in a straight line, through walls; translating that into a route is the player's job |
+| 6–7 prison, asylum | `PING` | takes a bearing every 8s and holds it; the needle fades as the reading goes stale and brightens at the next one |
+| 8 the last floor | `NONE` | nothing |
+
+In the objective room every mode falls back to `EXACT` and points at the
+facade — by then the set piece is in front of you and coyness is only annoying.
+
+The needle is the building's instrument, not the player's: it dies for the
+length of a blackout along with everything else. It also hides during the
 title, transitions, summary, and whenever the player is outside the audited
 reverse route map.
 
-### 6.7 Final sewer exit
+### 6.7 Final Annex exit
 
-The sewer target is not another ordinary elevator ride.
+The Annex target is not another ordinary elevator ride.
 
 Reuse the facade language so the route remains readable, but opening it reveals
 an impossible overexposed service passage with moving air and exterior sound
@@ -626,7 +702,7 @@ For at least 200 seeds × 6 themes:
 
 Visually inspect one closed and open lift per theme from about 5m away. Confirm
 car opacity, flush threshold, readable light, no wall clipping and no doorway
-obstruction. Inspect the sewer exit separately.
+obstruction. Inspect the Annex exit separately.
 
 Run `--chunktime`; routing must be computed once per floor, not 81 times per
 chunk.
@@ -650,7 +726,7 @@ signal run_ended(won: bool)
 const ORDER: Array[int] = [0, 7, 1, 4, 6, 8, 5, 2]
 const NAMES := [
 	"the casino", "the mall", "the office", "the airport",
-	"the school", "the prison", "the asylum", "the sewers",
+	"the school", "the prison", "the asylum", "the Annex",
 ]
 
 var floor_idx := 0
@@ -908,7 +984,7 @@ Failure:
 
 Success:
 
-- physically enter the final light at the end of the sewer exit passage.
+- physically enter the final light at the end of the Annex exit passage.
 
 Both fade to black and show a summary above the CRT:
 
@@ -944,7 +1020,7 @@ Restart rebuilds mode state from `main` without reloading the project scene:
 - only one exists;
 - floor descent removes it;
 - contact produces one failure;
-- sewer exit produces one success;
+- Annex exit produces one success;
 - same-seed restart reproduces all eight objective routes.
 
 ---
@@ -1027,7 +1103,11 @@ All values require playtesting.
 
 | Constant | Initial value | Intent |
 |---|---:|---|
-| objective graph distance | `7–12` edges | longer eight-floor target |
+| objective graph distance | `9–13 → 16–22` edges | the walk lengthens with depth |
+| route needle | exact → bearing → ping → none | searching, not following, is the real cost |
+| ping interval | `8s` | a held reading goes stale as you walk off it |
+| lift call wait | `14s → 34s` | reaching the lift is not the end of the floor |
+| lift ride | `~6.4s` | the one thing that happens to the player |
 | route scan fallback radius | `16` cells | guarantee a valid objective |
 | arrival rule grace | `8s` | no punishment while orienting |
 | floor pressure | `0.00 → 0.64` | later floors escalate even on a clean run |
@@ -1053,6 +1133,12 @@ All values require playtesting.
 Tune route length before elevator rarity. Descent has one objective per floor;
 it does not use a probability such as `ELEV_P`.
 
+`tools/audit_descent_routes.gd` prints the mean route length, metres and
+walking seconds per floor, plus the whole-run floor including lift waits. Tune
+against that number rather than against a stopwatch — but remember it is a
+floor: it assumes the player walks every route optimally, which the needle
+stops letting them do from floor three.
+
 ---
 
 ## 11. Implementation and commit order
@@ -1074,7 +1160,7 @@ Commit only when Wander is unchanged and direct Descent startup works.
 - shared elevator refactor;
 - objective car, usable call button and HUD needle;
 - floor order;
-- sewer exit;
+- Annex exit;
 - interaction/runtime CI coverage;
 - per-theme visual verification.
 
@@ -1127,7 +1213,7 @@ The first playable is Phase B plus the simplest Phase C rule loop:
 - one guaranteed graph-routed objective per floor;
 - a HUD needle that always points through a real doorway;
 - reused physical lifts;
-- unique sewer exit;
+- unique Annex exit;
 - four detected rules;
 - hidden attention with violation feedback;
 - blackouts with exact restoration;
@@ -1142,7 +1228,7 @@ Playtest questions:
 4. Are blackout transitions unmistakable and fair?
 5. Does disabling sprint create tension or merely make traversal slow?
 6. Is attention escalation perceptible without a meter?
-7. Does the sewer exit feel like a payoff?
+7. Does the Annex exit feel like a payoff?
 
 Do not tune the pursuer or anomalies until those answers are good.
 

@@ -50,8 +50,11 @@ jobs:
       - name: Audit corridor topology
         run: godot --headless --path . --script tools/audit_corridors.gd
 
-      - name: Audit sewer topology
-        run: godot --headless --path . --script tools/audit_sewers.gd
+      - name: Audit Annex topology and minimalism
+        run: godot --headless --path . --script tools/audit_annex.gd
+
+      - name: Audit office and Annex wall utilities
+        run: godot --headless --path . --script tools/audit_wall_utilities.gd
 
       - name: Audit semantic zones and landmarks
         run: godot --headless --path . --script tools/audit_zones.gd

@@ -638,6 +638,107 @@ static func office_ceiling() -> Material:
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
 
 
+# --- Annex theme ------------------------------------------------------------
+
+## Yasu's Backrooms carpet color map supplied by the user.
+## World triplanar mapping gives every generated chunk the same physical scale.
+static func annex_carpet() -> StandardMaterial3D:
+	return _std("annex_carpet", func(m: StandardMaterial3D):
+		var tex := load("res://textures/annex/backrooms_carpet_01_color.jpg")
+		m.albedo_texture = tex
+		# Keep the supplied pale-yellow color map intact.
+		m.albedo_color = Color.WHITE
+		m.roughness = 0.98
+		m.metallic_specular = 0.20
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE / 1.75
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
+
+
+static func annex_wall_variant(idx: int) -> StandardMaterial3D:
+	idx = posmod(idx, 5)
+	var key := "annex_wall_%d" % idx
+	if _c.has(key):
+		return _c[key]
+	var m := StandardMaterial3D.new()
+	var plain := [
+		Color(0.82, 0.76, 0.47),
+		Color(0.76, 0.70, 0.42),
+		Color(0.88, 0.82, 0.56),
+	]
+	if idx < 3:
+		m.albedo_color = plain[idx]
+	else:
+		var path := "res://textures/annex/wallpaper_damask_warm.png" if idx == 3 \
+			else "res://textures/annex/wallpaper_chevron_warm.png"
+		m.albedo_texture = load(path)
+		# These maps are palette-matched directly to the carpet and plain-wall
+		# colors; keep the material neutral so no green cast is reintroduced.
+		m.albedo_color = Color.WHITE
+	m.roughness = 0.82
+	m.metallic_specular = 0.28
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	# The geometric source has a much larger repeat than the references. Keep
+	# the damask scale, but halve the chevron motif in both dimensions.
+	m.uv1_scale = Vector3.ONE / (1.175 if idx == 4 else 2.05)
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_c[key] = m
+	return m
+
+
+static func annex_ceiling() -> Material:
+	return _std("annex_ceiling", func(m: StandardMaterial3D):
+		var root := "res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_"
+		var albedo := load(root + "0.jpg")
+		m.albedo_texture = albedo
+		m.albedo_color = Color(1.0, 0.95, 0.74)
+		m.emission_enabled = true
+		m.emission_texture = albedo
+		m.emission = Color(0.56, 0.49, 0.24)
+		# A faint lift keeps unlit tiles readable, but the ceiling must not act
+		# as one giant area light: real troffers now create the bright pools.
+		m.emission_energy_multiplier = 0.08
+		m.normal_enabled = true
+		m.normal_texture = load(root + "2.png")
+		m.normal_scale = 0.55
+		var orm := load(root + "1.png")
+		m.roughness = 1.0
+		m.roughness_texture = orm
+		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		m.metallic = 1.0
+		m.metallic_texture = orm
+		m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		# The source image is a 2x2 grid. With this world-triplanar projection,
+		# each visible square measures 1.2m in game; Annex troffers use the same
+		# measured footprint.
+		m.uv1_scale = Vector3.ONE / 1.20
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
+
+
+static func annex_panel() -> StandardMaterial3D:
+	return _std("annex_panel", func(m: StandardMaterial3D):
+		m.albedo_color = Color(1.0, 0.97, 0.82)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.93, 0.70)
+		m.emission_energy_multiplier = 2.8)
+
+
+static func annex_panel_dead() -> StandardMaterial3D:
+	return _std("annex_panel_dead", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.37, 0.34, 0.19)
+		m.roughness = 0.72)
+
+
+static func annex_trim() -> StandardMaterial3D:
+	return _std("annex_trim", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.47, 0.43, 0.27)
+		m.roughness = 0.8)
+
+
 ## Textured black task chair from 3DModelsCC0/OpenGameArt. The source FBX
 ## references an absent authoring-time TIFF, so bind the supplied PBR set
 ## explicitly rather than allowing the importer to render it flat white.

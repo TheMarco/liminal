@@ -4,7 +4,7 @@ extends AudioStreamPlayer
 ## Theme 0 (casino): warm 60Hz hum with air noise and a slow swell.
 ## Theme 1 (office): harsher fluorescent 120Hz ballast tone with bright hiss
 ## and almost no movement — sterile and constant.
-## Theme 2 (sewers): cavernous low water rumble, slowly breathing.
+## Theme 2 (the Annex): a user-supplied looping ambient recording.
 ## Theme 4 (airport): vast HVAC air mass — deep, wide, never off.
 ## Theme 5 (asylum): dead-building air — a hollow draught through broken
 ## windows over a faint mains hum, breathing far too slowly.
@@ -21,8 +21,8 @@ var _lp2 := 0.0
 
 func _init(p_theme := 0) -> void:
 	theme = p_theme
-	# A recorded room tone exists for every floor but the school, which keeps
-	# the synthesized one. Levels are set in Sfx, measured per file.
+	# Recorded room tone exists for most floors. Levels are set in Sfx and
+	# normalized from a measured per-file mean.
 	if Sfx.has_bed(theme):
 		var b := Sfx.bed(theme)
 		stream = b[0]
@@ -73,11 +73,13 @@ func _process(_dt: float) -> void:
 			v += 0.012 * (randf() * 2.0 - 1.0)
 			v *= 0.88 + 0.12 * sin(TAU * 0.025 * _t)
 		elif theme == 2:
-			_lp = lerpf(_lp, randf() * 2.0 - 1.0, 0.055)
-			_lp2 = lerpf(_lp2, _lp, 0.4)
-			v = 0.15 * _lp2
-			v += 0.018 * sin(TAU * 46.0 * _t)
-			v *= 0.76 + 0.24 * sin(TAU * 0.04 * _t + 1.0)
+			# Dry, unwavering commercial-building air. A tiny slow amplitude
+			# drift keeps the loop alive without suggesting water or machinery.
+			v = 0.050 * sin(TAU * 120.0 * _t)
+			v += 0.020 * sin(TAU * 240.0 * _t + 0.8)
+			_lp = lerpf(_lp, randf() * 2.0 - 1.0, 0.20)
+			v += 0.038 * _lp
+			v *= 0.96 + 0.04 * sin(TAU * 0.025 * _t + 1.0)
 		elif theme == 1:
 			v = 0.055 * sin(TAU * 120.0 * _t)
 			v += 0.03 * sin(TAU * 240.0 * _t + 0.9)

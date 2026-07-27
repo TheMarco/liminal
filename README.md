@@ -9,8 +9,10 @@ procedurally generated liminal spaces** across eight floors:
 - **Floor 2 — the office**: sterile Severance-style corporate limbo. Endless
   flat-white corridors, teal-green carpet, shadowless fluorescent grids, and
   MDR-style desk clusters where CRT terminals show drifting numbers to no one.
-- **Floor 3 — the sewers**: dripping concrete works. Black water sliding
-  through channels and basins, caged bulbs, rusting pumps and pipe runs.
+- **Floor 3 — the Annex**: a bright desaturated-mint office maze. Low drop
+  ceilings, narrow fluorescent corridors and doglegs connect medium rooms,
+  with only occasional larger spaces, patterned wallpaper, and surveillance
+  cameras — almost nothing else.
 - **Floor 4 — the airport**: a vast terminal at 3 a.m. Terrazzo halls, gate
   lounges behind black glass, a docked jetway out on the apron, moving
   walkways that still carry you, baggage carousels turning for no one,
@@ -84,14 +86,14 @@ and it is a scare in the endless floors and the end of a Descent run.
 
 There are seven of them, and every one is animated — hooded wraiths of drifting
 smoke with lit eyes, all but one of them red. Two hang rather than walk and
-trail into nothing where legs should be; those keep to the sewers and the
-asylum, the floors where something could have got in from below. They are
+trail into nothing where legs should be; those keep to the Annex and the
+asylum, the floors where the building feels least trustworthy. They are
 sprite-sheet flipbooks rather than video: Godot's only codec is Theora, which
 carries no alpha, so an animated silhouette would be a black rectangle.
 
 The title has a track of its own (`music/title.mp3`), and while the card is up
 it is the only thing you hear. The world behind it is already built and already
-running, but the building is silent: room tone, slot banks, dripping sewers and
+running, but the building is silent: room tone, slot banks, fluorescent hum and
 the odd distant knock under a title card read as a mix that has not been
 mastered rather than as atmosphere. Everything the building makes routes through
 one "Hall" bus, so the card mutes that bus and stops the room tone, and starting
@@ -137,8 +139,8 @@ but you can never walk around the wall and discover the back of its door.
 The grid also carves **corridor bands**: whole rows and columns collapse
 into narrow passages that run cell after cell — numbered-door hotel
 corridors in the casino, sealed private offices and return-walled vestibules
-in the office, locked patient wards and tiled cross-passages in the asylum, pipe
-galleries with the channel running down the middle in the sewers, and
+in the office, locked patient wards and tiled cross-passages in the asylum,
+blank mint passages in the Annex, and
 continuous low-ceilinged transit tubes in the airport. Airport walkway banks
 sit inside finished panel walls with steel-framed, return-walled access portals
 where the graph genuinely connects to a concourse. School halls reserve sealed
@@ -149,12 +151,12 @@ through.
 The world generation, lighting, shaders and audio are procedural — but
 every floor is now dressed with **downloaded CC0 assets**: photo PBR
 textures from [ambientCG](https://ambientcg.com) applied with world-space
-triplanar mapping (glossy marble and red hotel runners in the casino, old
-brick in the sewers, real terrazzo in the airport, peeling plaster and broken tile in the asylum),
+triplanar mapping (glossy marble and red hotel runners in the casino, pale
+carpet and ceiling tiles in the Annex, real terrazzo in the airport, peeling plaster and broken tile in the asylum),
 and glTF props from [Poly Haven](https://polyhaven.com): Victorian sofas,
 chandeliers and gilt-framed oils in the casino; CRT televisions, coffee
-carts and wet-floor signs in the office; oil drums, crates, tyres and
-trash bags in the sewers; abandoned trunks in baggage claim; bed frames, wheelchairs and
+carts and wet-floor signs in the office; sparse CCTV cameras in the Annex;
+abandoned trunks in baggage claim; bed frames, wheelchairs and
 crutches in the asylum; adjustable desks and moulded chairs in the school.
 Anything animated or bespoke (slot machines,
 travelators, water, departure boards) stays procedural. The
@@ -207,7 +209,7 @@ export templates installed):
 | Shift | Sprint |
 | E | Use a focused terminal, elevator panel or working door |
 | F | Toggle the handheld flashlight |
-| 1–8 | Switch floor (casino / office / sewers / airport / asylum / school / mall / prison) |
+| 1–8 | Switch floor (casino / office / Annex / airport / asylum / school / mall / prison) |
 | V | Toggle the CRT tube effect |
 | Q | Ask to end the current mode and return to the title |
 | Esc | Release mouse |
@@ -230,7 +232,8 @@ a glowing EXIT sign.
 
 Room styles per floor range from empty halls to set pieces: slot rows,
 lounges and grand halls in the casino; corridors, cubicle clusters, storage
-and break rooms in the office; tunnels, basins and pump rooms in the sewers;
+and break rooms in the office; open plans, offset mazes, long passages and
+quiet dead-light rooms in the Annex;
 gate lounges, moving-walkway concourses, transit corridors (banks of three
 walkways running in opposite directions), check-in rows, baggage claims and
 escalator mezzanines in the airport; patient rooms, bed wards, treatment
@@ -239,16 +242,16 @@ asylum; shuttered stores, atriums, food courts and cinema lobbies in the mall;
 and cell blocks, mess halls, showers, workshops and guard posts in the prison.
 Set dressing runs deep: neon amenity signs, blackjack tables and
 velvet ropes in the casino; filing banks, motivational posters, department
-signs and idling copiers in the office; stencilled markings, control
-cabinets, hanging chains and knee-deep mist in the sewers; scrawled walls
+signs and idling copiers in the office; deliberately blank walls and sparse
+surveillance cameras in the Annex; scrawled walls
 in two different hands, cork noticeboards, ward signs and numbered steel
 doors in the asylum.
 
 Rooms are grouped into deterministic **96m semantic districts**, so a run of
 spaces now belongs to the same part of the building instead of every doorway
 rolling independently. Casino gaming floors give way to hotel and convention
-areas; offices resolve into operations, records and staff departments; sewer
-conveyance reaches treatment and maintenance works; airport airside becomes
+areas; offices resolve into operations, records and staff departments; the
+Annex drifts from open plan through service maze to dead offices; airport airside becomes
 departures and arrivals; patient wings transition through treatment to
 administration; school academic wings open into commons and front-office
 zones; mall retail galleries decay toward food/cinema and service wings; prison
@@ -257,7 +260,7 @@ airport wayfinding, asylum ward plates and school room labels agree with the
 surrounding district.
 
 True 24x24m halls can very rarely become a memorable **landmark**: the Silver
-Room ballroom, an impossible corporate boardroom, a four-pool cistern under a
+Room ballroom, an impossible corporate boardroom, a mint open-plan lobby,
 pipe manifold, a shuttered airport food court, the asylum chapel, or the school
 auditorium, along with a dead six-screen cinema and prison guard rotunda. Landmarks are
 deterministic, never claim a corridor or small room, and leave a clear route
@@ -266,9 +269,8 @@ through the space.
 Merged rooms furnish against their full generated footprint rather than
 repeating a 12×12 m layout in the middle: grand casino halls extend their
 column grid and gaming islands, open offices grow into multiple cubicle
-neighbourhoods, sewer pump works place a complete machine train in every
-occupied cell while treatment banks dress every pool with rails and inspection
-bridges, baggage claims gain perimeter seating and trolley ranks, and large
+neighbourhoods, Annex rooms retain only a few structural slabs and columns,
+baggage claims gain perimeter seating and trolley ranks, and large
 asylum dayrooms divide into separate abandoned activity groups.
 
 Surface finishes also change in deterministic six-cell maintenance districts:
@@ -278,9 +280,9 @@ took over. Every cell of a merged room agrees on the finish. Sparse casino and
 office rooms receive occasional abandonment vignettes—an uncleared service cart
 or archive boxes with forms spilled across the carpet—without blocking routes.
 The existing CC0 pool is used more broadly as well: food-court tables and carts,
-modelled auditorium seating, office edge furniture, and several generations of
-sewer crates, stoves, wheel rims, lanterns and industrial fixtures break up the
-most recognizable procedural repeats.
+modelled auditorium seating and office edge furniture break up the most
+recognizable procedural repeats. The Annex is the deliberate exception: its
+near-absence of props is enforced as part of its generation contract.
 
 ### Fidelity features
 
@@ -321,10 +323,12 @@ most recognizable procedural repeats.
   deterministic corridor topology across many seeds and fails if a narrow
   corridor exposes its reserved backing space, interrupts a through-spine, or
   disagrees with the neighbouring cell about a shared edge.
-- `godot --headless --path . --script tools/audit_sewers.gd` — verifies the
-  sewer channel and flow graph from both sides of every edge, the protected dry
-  spawn edge, and the room-size contracts for tunnels, basins, pump rooms, dry
-  chambers and service galleries.
+- `godot --headless --path . --script tools/audit_annex.gd` — verifies the low
+  ceiling band, six room grammars, sparse structural density, doorway clearance,
+  occasional CCTV coverage, and the absence of legacy sewer effects or props.
+- `godot --headless --path . --script tools/audit_wall_utilities.gd` — verifies
+  authored outlets and light switches at realistic heights in Annex rooms,
+  office rooms, and the office corridor shells the player actually sees.
 - `godot --headless --path . --script tools/audit_zones.gd` — samples more than
   26,000 rooms per theme, verifies room-level district/style consistency and
   checks that landmarks only occupy eligible 2x2 halls at the intended rarity.
@@ -377,7 +381,7 @@ most recognizable procedural repeats.
   seventeen active paintings across the seven art-bearing floors and verifies
   that every piece remains wall-mounted, inside the solid wall bounds and at
   its original aspect ratio without being bisected by an interior partition.
-  The sewer is explicitly audited to remain bare.
+  The Annex is explicitly audited to remain art-free.
 - `godot --headless --path . --script tools/profile_generation.gd` — constructs
   real chunks for every floor, reporting first-pass and steady-state build
   latency plus mesh, collision, light and reflection-probe counts.

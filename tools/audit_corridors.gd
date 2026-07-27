@@ -8,6 +8,8 @@ extends SceneTree
 ## able to reach that space from an uncased/open corridor boundary.  This tool
 ## exercises many seeds and checks the data contract the corridor shells rely on.
 
+# Theme 2 deliberately replaces the shared corridor/room graph with a dedicated
+# mixed-scale Annex room-and-passage topology covered by audit_annex.gd instead.
 const THEMES := [0, 1, 4, 5, 6, 7, 8]
 const DIRV := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const OPP := [1, 0, 3, 2]
