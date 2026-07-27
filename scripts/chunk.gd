@@ -24,6 +24,12 @@ const ANNEX_CEILING_TILE := 1.20
 ## end cap at every 12m chunk boundary.
 const ANNEX_WALL_T := 0.30
 const ANNEX_FIXTURE_CLEARANCE := 0.08
+## The authored outlet and switch models measure a real 7-8cm by 11-12cm — the
+## size of an actual wall plate. Against the Annex's unbroken 12m walls that is
+## close to invisible, so its fixtures are deliberately oversized for
+## readability. The office keeps them at measured 1:1: it carries far more
+## other detail to place the eye, and audit_wall_utilities asserts that scale.
+const ANNEX_UTILITY_SCALE := 1.35
 const HAIR := 5.0    # airport hall height
 const HASY := 3.0    # asylum corridor height
 const HSCH := 3.05   # school corridor height
@@ -1926,10 +1932,18 @@ func _wall_utility_mount(p: Vector3, yaw: float, height: float,
 	mount.set_meta("wall_utility_height", height)
 	add_child(mount)
 	var path := LIGHT_SWITCH_PATH if is_switch else OUTLET_PATH
-	var correction := -PI * 0.5 if is_switch else 0.0
+	# The outlet's authored front — the face carrying the receptacle photo with
+	# its slots — points down its own -Z, so mounting it unrotated buried the
+	# only detailed face in the wall and presented its blank back to the room.
+	# That is why outlets read as featureless plates at any distance or scale.
+	var correction := -PI * 0.5 if is_switch else PI
 	var depth := 0.015266 if is_switch else 0.005001
+	# Both models are centred on their own origin, so scaling leaves the plate
+	# centred on the authored mount height; only the standoff has to follow.
+	var plate := ANNEX_UTILITY_SCALE if theme == 2 else 1.0
 	var inst := _attributed_prop_local(mount, path,
-		Vector3(0, 0, depth * 0.5 + 0.001), correction)
+		Vector3(0, 0, depth * plate * 0.5 + 0.001), correction,
+		Vector3.ONE * plate)
 	if inst == null:
 		mount.get_parent().remove_child(mount)
 		mount.free()
