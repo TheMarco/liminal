@@ -1854,15 +1854,20 @@ func _wall_utilities(dir: int, plane: float, info: Dictionary) -> void:
 		return
 	var base := 1400 + dir * 37 + theme * 211
 	var split := _resolved_room_split()
-	var outlet_chance := 0.62 if theme == 1 else 0.24
-	var switch_chance := 0.86 if theme == 1 else 0.32
+	var outlet_chance := 0.62 if theme == 1 else 0.55
+	var switch_chance := 0.86 if theme == 1 else 0.68
 	if bool(info["wall"]):
-		if _r(base) >= outlet_chance:
-			return
-		var along := 0.78 if _r(base + 1) < 0.5 else S - 0.78
-		if not _wall_utility_along_clear(dir, along, split):
-			along = S - along
-		if _wall_utility_along_clear(dir, along, split):
+		# A 12m blank run carries several receptacles in any real building.
+		# The Annex owns only its east/south edges, so a single outlet per
+		# wall left most of the floor with no electrical evidence at all.
+		var slots := [0.78, S * 0.5, S - 0.78] if theme == 2 \
+			else [0.78 if _r(base + 1) < 0.5 else S - 0.78]
+		for i in slots.size():
+			if _r(base + 20 + i) >= outlet_chance:
+				continue
+			var along: float = slots[i]
+			if not _wall_utility_along_clear(dir, along, split):
+				continue
 			_wall_utility(dir, plane, along, 0.31, false)
 		return
 
@@ -5910,26 +5915,40 @@ func _annex_lived_in_dressing() -> void:
 	var roll := _r(1630)
 	# Quiet rooms stay the sparsest branch even after the lived-in pass.
 	if style == WorldGen.ANNEX_QUIET:
-		if roll < 0.055:
+		if roll < 0.12:
 			_annex_chair_cluster(1, 1631, false)
-		elif roll < 0.095:
+		elif roll < 0.20:
 			_annex_loose_boxes(1, 1632)
-		elif roll < 0.125:
+		elif roll < 0.30:
 			_annex_school_chair_scatter(1, 1641)
 		return
-	if roll < 0.085:
+	if roll < 0.16:
 		_annex_shelving(1633)
-	elif roll < 0.175:
+	elif roll < 0.32:
 		_annex_loose_boxes(1 + int(_r(1634) * 2.99), 1635)
-	elif roll < 0.285:
+	elif roll < 0.48:
 		_annex_chair_cluster(1, 1636, false)
-	elif roll < 0.345:
+	elif roll < 0.60:
 		_annex_chair_cluster(2 + int(_r(1637) * 2.99), 1638, false)
-	elif roll < 0.415:
+	elif roll < 0.72:
 		_annex_school_chair_scatter(
 			1 + int(_r(1642) * 2.99), 1643)
-	elif roll < 0.442 and room_n >= 2:
+	elif roll < 0.78 and room_n >= 2:
 		_annex_chair_cluster(8 + int(_r(1639) * 2.99), 1640, true)
+	# The Annex's broad openings mean its doorway clearance zones cover most
+	# of a cell, so roughly half of everything rolled above is culled before
+	# the player sees it. A second independent group lets a room read as used
+	# rather than as one object in an empty box; the placement helpers still
+	# refuse occupied spots and the cull still protects every route.
+	var second := _r(1650)
+	if second < 0.14:
+		_annex_shelving(1651)
+	elif second < 0.28:
+		_annex_loose_boxes(1 + int(_r(1652) * 1.99), 1653)
+	elif second < 0.40:
+		_annex_chair_cluster(1, 1654, false)
+	elif second < 0.46:
+		_annex_school_chair_scatter(1 + int(_r(1655) * 1.99), 1656)
 
 
 func _annex_wall_floor_point(dir: int, along: float, off: float,

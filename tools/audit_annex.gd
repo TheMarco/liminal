@@ -394,7 +394,12 @@ func _init() -> void:
 			runtime["floating_utilities"]])
 	var utility_density := float(runtime["wall_utilities"]) \
 		/ float(maxi(runtime_chunks, 1))
-	if utility_density > 1.35:
+	# Raised from 1.35 deliberately. A 12x12m room reading as a former office
+	# needs visible electrical evidence, and one fixture per four cells did not
+	# supply it; solid walls now carry up to three receptacles. This is still a
+	# real bound — a genuine office wall would hold several times this — and it
+	# exists to catch runaway density, not to keep the walls bare.
+	if utility_density > 2.6:
 		failures.append("Annex wall utilities are too dense: %.3f/chunk" % [
 			utility_density])
 	if int(runtime["authored_chairs"]) == 0 \
