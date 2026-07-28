@@ -28,6 +28,9 @@ const BEDS := {
 	5: ["sound-asylum", -12.7],
 	7: ["sound-airport", -43.3],
 	8: ["sound-asylum", -12.7],
+	# Tiled hall over standing water: the airport bed is the only one with the
+	# right amount of empty room reverb in it, run quieter than the terminal.
+	9: ["sound-airport", -46.0],
 }
 
 # surface -> [file, measured mean dB]
@@ -243,3 +246,21 @@ static func random_player_death() -> Array:
 		i = (i + 1 + randi() % (n - 1)) % n
 	_last_player_death_idx = i
 	return player_death(i)
+
+
+# --- water --------------------------------------------------------------------
+# Only the Poolrooms play these. Getting in and getting out are one-shots at
+# the moment the waterline crosses your chest; the wade is a loop whose volume
+# follows how hard you are actually pushing through it, so standing still in
+# the water is silent rather than a tape running under you.
+
+static func water_enter() -> Array:
+	return [_stream("sound-water-enter", false), -6.0]
+
+
+static func water_exit() -> Array:
+	return [_stream("sound-water-exit", false), -6.0]
+
+
+static func water_wade() -> AudioStream:
+	return _stream("sound-water-wade", true)

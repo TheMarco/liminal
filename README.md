@@ -72,17 +72,32 @@ Trinitron aperture grille, RGB convergence error, halation, interlace
 flicker, a rolling scan band, and rounded tube corners. Press **V** to
 look at the world with your own eyes instead.
 
-You are, occasionally, not alone. A dark figure sometimes stands where
-nothing stood — down a corridor, at the edge of the frame, behind you (one
-soft footstep, so you know to turn). **It closes the distance whenever you
-are not looking straight at it**, and freezes the instant you are: glance
-away, glance back, and it is nearer than it was. Holding it in the centre of
-your vision pins it and slowly wears it down; the flashlight burns it away in
-a fraction of the time, and burns it away spectacularly — a ragged front runs
-up the body, the walls light up, and it goes out screaming. Seven recordings
-for that, its own sound rather than a stinger pitched up: a stinger is
-something arriving, and this is something ending. Let one reach you instead
-and it is a scare in the endless floors and the end of a Descent run.
+In Descent, you are not alone. **The figures belong to Descent and only to
+Descent** — Wander is a peaceful place to explore and photograph the building,
+and nothing hunts you there. Everything in the next two paragraphs describes a
+Descent run.
+
+A dark figure stands where nothing stood — down a corridor, at the edge of the
+frame, behind you (one soft footstep, so you know to turn). **It closes the
+distance whenever you are not looking at it.** Keep it on screen and it barely
+creeps; take your eyes off it altogether and it comes on nearly four times as
+fast, so glancing away and back finds it several metres nearer than it was,
+and arriving like that earns it a stinger of its own — lower and heavier than
+the one that announced it, because that one said something is there and this
+one says it moved. Holding it in the centre of your vision pins it outright
+and slowly wears it down; the flashlight burns it away in a fraction of the
+time, and burns it away spectacularly — a ragged front runs up the body, the
+walls light up, and it goes out screaming. Seven recordings for that, its own
+sound rather than a stinger pitched up: a stinger is something arriving, and
+this is something ending.
+
+Nothing else ends an encounter. A figure does not lose interest and does not
+time out: while you are both in the same procedural room it keeps closing until
+you burn it, stare it away, or it reaches you — which ends the run. Walking out
+of the room is the one non-violent escape, and it dissolves behind you. Some
+are already there when you arrive, standing in a corner waiting for you to
+walk in; those hold perfectly still until you are in the room with them, and
+are exactly as dangerous as the rest once you are.
 
 There are seven of them, and every one is animated — hooded wraiths of drifting
 smoke with lit eyes, all but one of them red. Two hang rather than walk and
@@ -210,7 +225,8 @@ export templates installed):
 | E | Use a focused terminal, elevator panel or working door |
 | F | Toggle the handheld flashlight |
 | 1–8 | Switch floor (casino / office / Annex / airport / asylum / school / mall / prison) |
-| V | Toggle the CRT tube effect |
+| V | Toggle the active video filter |
+| B | Switch between CRT and recovered-tape video modes |
 | Q | Ask to end the current mode and return to the title |
 | Esc | Release mouse |
 | Click | Recapture mouse |

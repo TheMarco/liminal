@@ -4,14 +4,13 @@ extends Node3D
 ## textures/ghosts/) on a cylindrical billboard, edges eaten by drifting
 ## noise. It watches for your attention: look straight at it — after a
 ## moment's grace, long enough to be sure you saw something — and it stops
-## existing. Walk at it and it is gone sooner. It never closes the distance.
+## existing. Otherwise it keeps closing until one of you is gone.
 
 const GAZE_ANG := 0.22      # radians off screen-centre that counts as looking
 ## Looking at one used to banish it in half a second, which would make the
 ## flashlight pointless. A stare now HOLDS it — it cannot move while you are
 ## looking — and wears it down slowly. The torch is the fast way.
 const GAZE_TIME := 3.0
-const NEAR_D := 5.0         # only applies to the ones that do not advance
 const FADE_T := 0.95
 
 ## It closes the distance unless you are looking straight at it. Freezing it on
@@ -20,16 +19,29 @@ const FADE_T := 0.95
 ## moved. Holding it now costs you your centre of vision — anything you have
 ## merely clocked in the corner of your eye is still coming.
 const ADVANCE_SPD := 1.25
+## The weeping-angel speed. While it is genuinely off screen — or behind
+## something — it does not creep, it closes. Turning your back is the expensive
+## act, and the distance you lose for it has to be large enough to read as a
+## jump when you turn round again, not as a slow walk you merely missed.
+const UNSEEN_SPD := 4.5
+## Ground it must gain while unobserved before looking back at it is its own
+## event. Below this it was only walking; at or above it, it lunged.
+const REVEAL_GAIN := 2.0
+const REVEAL_SCARE_GAP := 3.0
 const ADVANCE_MIN := 1.05   # it has you at arm's length
 ## Half-angle that counts as looking straight at it. Wider than the stare that
 ## wears it down, so holding one still is easier than banishing it.
 const HOLD_CONE := 0.42
-## A figure advances through geometry on purpose, but both defences need line of
-## sight — the hold and the beam alike. Behind a partition it was therefore
-## invulnerable and still closing, with no counter at all. It still crosses the
-## cover; it just has to stand in the open for a beat when it comes out, which
-## is a window to aim and reads as the thing stepping into view.
+## Coming out from behind cover costs it a beat, which gives the player a fair
+## window to aim after the figure has walked around an obstruction.
 const REVEAL_HOLD := 0.6
+## The widest camera-facing cutout is roughly 1.3m across. Movement reserves
+## that entire silhouette, not just an invisible point at its feet, so no part
+## of a ghost can protrude through a wall while it approaches.
+const MOVE_RADIUS := 0.68
+const MOVE_HEIGHT := 2.55
+const MOVE_LOOKAHEAD := 0.18
+const NO_ROOM := Vector2i(2147483647, 2147483647)
 
 ## Flashlight burn. The beam has to stay on it; look away and the progress
 ## bleeds back. It keeps coming the whole time.
@@ -51,7 +63,12 @@ signal reached_player
 ## stinger — the moment the player registers that something is there.
 signal seen_by_player
 
-enum Mode { AMBIENT, INERT, PURSUER }
+## WAITING is the Descent anomaly that is already standing in the corner when
+## you walk in. It is a full figure — it burns, it kills, it feeds the
+## heartbeat — it simply holds its ground until the player is in its room.
+## INERT is the opposite and is only ever a shell: the pursuer's silhouette and
+## nothing else, driven entirely by its parent.
+enum Mode { AMBIENT, INERT, PURSUER, WAITING }
 ## Seven of them, and every one is animated. The static photo-traced cutouts
 ## that came before were replaced wholesale: a still silhouette standing
 ## perfectly motionless reads as a decal the moment it shares a frame with one
@@ -110,19 +127,24 @@ static var _mats := {}
 ## Shared across every figure: a scare that fires twice in a minute is a
 ## sound effect, not a scare. Wall-clock so it survives level switches.
 static var _last_scare := -1000.0
+## The reveal cue keeps its own clock. It is allowed to fire much more often
+## than a first-sighting stinger, because it is the payoff for a thing the
+## player just did rather than an announcement they had no part in.
+static var _last_reveal := -1000.0
 
 var player: Player
 var variant := REVENANT
 var mode := Mode.AMBIENT
 var grace := 0.9            # can't be stared away until this runs out
 var announce := false       # a soft footstep as it arrives
+## Set by ShadowFigures before the node enters the tree. Crossing into another
+## procedural room is the one non-combat way to leave this encounter behind.
+var origin_room := NO_ROOM
 
 var _quad: MeshInstance3D
 var _gaze := 0.0
-var _life := 0.0
 var _fade := -1.0
 var _fade_len := FADE_T
-var _drift := Vector3.ZERO
 var _bob_t := 0.0
 var _bob_base := 0.0
 var _floats := false
@@ -138,6 +160,15 @@ var _sway := 0.0
 var suppressed := false
 var _was_sighted := true
 var _reveal := 0.0
+## Whether the player could actually see it last frame — in frustum AND not
+## behind anything. Distinct from `_held`, which is only about the middle of
+## the screen: you can have a figure plainly in view and still not be holding
+## it, and it is the seeing that governs how fast it closes.
+var _observed := false
+var _lost_dist := INF
+var _avoid_sign := 0.0
+var _move_shape: CapsuleShape3D
+var _move_query: PhysicsShapeQueryParameters3D
 
 
 static func _mat_for(texname: String) -> ShaderMaterial:
@@ -201,20 +232,18 @@ func _ready() -> void:
 	add_child(_quad)
 	_bob_base = position.y
 	_bob_t = randf() * TAU
-	_life = randf_range(10.0, 19.0)
-	# Almost all of them stalk. A leaver now and then keeps the behaviour from
-	# being one rule you can read off a single encounter, but at eight percent
-	# they were common enough to be the first thing a player saw.
-	if mode == Mode.AMBIENT and randf() < (0.07 if _floats else 0.03):
-		# Some are already leaving — but only ever straight away from you,
-		# never across you. The billboard turns to face the camera whatever it
-		# does, so sideways travel is a cutout sliding on rails with its legs
-		# held still; going away is just distance opening up. Fixed at the
-		# moment it appears, so it walks a line rather than tracking you.
-		var away := global_position - player.global_position
-		away.y = 0.0
-		if away.length() > 0.01:
-			_drift = away.normalized() * randf_range(0.2, 0.35)
+	# INERT figures are visual set pieces owned by chunks or the separate
+	# topology-aware pursuer, and intentionally have no Player reference.
+	if player != null:
+		_move_shape = CapsuleShape3D.new()
+		_move_shape.radius = MOVE_RADIUS
+		_move_shape.height = MOVE_HEIGHT
+		_move_query = PhysicsShapeQueryParameters3D.new()
+		_move_query.shape = _move_shape
+		_move_query.exclude = [player.get_rid()]
+		_move_query.collision_mask = 1
+		_move_query.collide_with_areas = false
+		_move_query.collide_with_bodies = true
 	_shiver = AudioStreamPlayer3D.new()
 	_shiver.stream = SoundBank.shiver()
 	_shiver.max_distance = 24.0
@@ -222,6 +251,11 @@ func _ready() -> void:
 	_shiver.volume_db = -14.0
 	_shiver.bus = "Hall"
 	add_child(_shiver)
+	# A world-placed figure is not on the haunt manager's books, so it hands
+	# itself over: the manager owns the signal wiring that makes a kill refund
+	# the torch, a stare cost attention and a contact end the run.
+	if mode == Mode.WAITING:
+		get_tree().call_group("figure_manager", "adopt", self)
 	if announce:
 		var sh := AudioStreamPlayer3D.new()
 		sh.stream = SoundBank.randomized(SoundBank.step_carpet(), 1.2, 2.0)
@@ -240,11 +274,23 @@ func _physics_process(dt: float) -> void:
 	if player == null or not player.is_inside_tree():
 		queue_free()
 		return
-	_life -= dt
+	# A waiting figure is a fixture of its own room until the player walks into
+	# that room. From that moment it is an ordinary encounter in every respect,
+	# including being left behind if the player walks back out.
+	if mode == Mode.WAITING:
+		var here := room_for(player, player.global_position)
+		if here == room_for(player, global_position):
+			mode = Mode.AMBIENT
+			origin_room = here
+			grace = maxf(grace, 0.6)
+	# Do not age out. A live figure persists for the entire encounter and is
+	# only left behind once the player has genuinely entered another room.
+	if origin_room != NO_ROOM and room_for(player, player.global_position) != origin_room \
+			and _fade < 0.0:
+		_fade = 0.38
+		_fade_len = 0.38
 	if grace > 0.0:
 		grace -= dt
-	if _drift != Vector3.ZERO:
-		position += _drift * dt
 	if _floats:
 		# it does not stand. it hangs.
 		_bob_t += dt
@@ -264,12 +310,26 @@ func _physics_process(dt: float) -> void:
 		_reveal = maxf(0.0, _reveal - dt)
 	var stared := grace <= 0.0 and aim < GAZE_ANG and sighted
 	# It only ever moves while you cannot see it. In frame, it is a photograph.
-	# The few that are already walking away are leavers and never turn back:
-	# one thing cannot be both retreating and stalking.
 	_held = aim < HOLD_CONE and sighted
-	if _fade < 0.0 and not _held and not suppressed and _reveal <= 0.0 \
-			and grace <= 0.0 and _drift == Vector3.ZERO:
-		_advance(dt)
+	# Whether the player can see it at all, which is a much weaker condition
+	# than holding it: a figure at the edge of the frame is still being looked
+	# at, and only creeps. Take your eyes off it entirely and it closes hard.
+	var observed := sighted and (cam.is_position_in_frustum(eye)
+		or cam.is_position_in_frustum(global_position
+			+ Vector3(0, _eye_h * 0.55, 0)))
+	if observed != _observed:
+		if observed:
+			# You turned back into it. If it used the dark to cover real ground,
+			# that is an event in its own right and gets its own cue.
+			if _lost_dist < INF and _lost_dist - dist >= REVEAL_GAIN \
+					and _fade < 0.0 and _seen:
+				_reveal_scare()
+		else:
+			_lost_dist = dist
+		_observed = observed
+	if mode == Mode.AMBIENT and _fade < 0.0 and not _held and not suppressed \
+			and _reveal <= 0.0 and grace <= 0.0:
+		_advance(dt, ADVANCE_SPD if observed else UNSEEN_SPD)
 	_sway += dt
 	_quad.set_instance_shader_parameter("sway",
 		sin(_sway * 0.9 + _bob_t) * (0.0 if _held else 1.0))
@@ -302,17 +362,11 @@ func _physics_process(dt: float) -> void:
 			_maybe_scare()
 	if stared:
 		_gaze += dt
-	# NEAR_D used to delete anything that got within five metres, which would
-	# stop an advancing figure dead before it could ever reach you. It now only
-	# applies to the ones standing still.
-	var too_close := dist < NEAR_D and _drift != Vector3.ZERO
-	if _fade < 0.0 and (_gaze > GAZE_TIME or too_close or _life <= 0.0):
+	if _fade < 0.0 and _gaze > GAZE_TIME:
 		_fade = FADE_T
 		_fade_len = FADE_T
-		if _gaze > GAZE_TIME:
-			stared_away.emit()
-		if _gaze > GAZE_TIME or too_close:
-			_shiver.play()  # it noticed you noticing
+		stared_away.emit()
+		_shiver.play()  # it noticed you noticing
 	if _fade >= 0.0:
 		_fade -= dt
 		# Normalise against the length this particular exit started with: a burn
@@ -330,37 +384,52 @@ func is_pressing() -> bool:
 	return _seen and _fade < 0.0
 
 
-## One step closer, but never through a wall and never past arm's length. The
-## billboard always faces the camera, so travel toward you is the only motion
-## that does not read as a cutout sliding on rails.
-##
-## It walks through whatever is in the way. Testing the path against geometry
-## was tried and abandoned: rooms are full of furniture and split by partitions,
-## so a figure stopped the first time its line clipped a table or a sofa back
-## and then stood there until it faded — which is indistinguishable from one
-## that never moved. Widening the search to seven angles did not help, because
-## a partition spans the whole room and blocks all of them.
-##
-## Passing through is also the truer answer. It is an apparition, it is only
-## ever seen in glimpses, and a shape that comes through the furniture is worse
-## than one politely walking around it. The path converges on the player, who is
-## always standing in navigable space, so it arrives in the open.
-func _advance(dt: float) -> void:
+## One step closer, never through a wall and never past arm's length. A capsule
+## reserves the complete camera-facing silhouette. When the direct route is
+## blocked, a stable left/right preference makes it skirt the obstruction
+## instead of vibrating between two equally valid directions.
+func _advance(dt: float, spd := ADVANCE_SPD) -> void:
 	var to := player.global_position - global_position
 	to.y = 0.0
 	var d := to.length()
 	if d < 0.001:
 		return
-	var step := ADVANCE_SPD * dt
+	var step := spd * dt
 	if d - step <= ADVANCE_MIN:
 		_seize()
 		return
-	# Horizontal only — `to.y` was zeroed above, so the height it hangs at is
-	# already correct and must not be written back. Copying `position.y` into
-	# `_bob_base` here made the floating variants levitate: the hover offset is
-	# applied from `_bob_base` every frame, so feeding the result back in added
-	# it again on the next one, and they rose at nearly two metres a second.
-	position += (to / d) * step
+	var direct := to / d
+	if _can_move(direct, step):
+		global_position += direct * step
+		_avoid_sign = 0.0
+		return
+	var signs := [_avoid_sign, -_avoid_sign] if _avoid_sign != 0.0 else [-1.0, 1.0]
+	# Shallow angles preserve forward pressure; the final wider choices let it
+	# follow a long partition until a doorway or wall end becomes available.
+	for angle_deg in [28.0, 52.0, 76.0, 92.0, 112.0, 138.0]:
+		for side: float in signs:
+			var dirv := direct.rotated(Vector3.UP, deg_to_rad(angle_deg) * side)
+			if _can_move(dirv, step):
+				global_position += dirv * step
+				_avoid_sign = side
+				return
+
+
+func _can_move(dirv: Vector3, step: float) -> bool:
+	var probe := maxf(step, MOVE_LOOKAHEAD)
+	var candidate := global_position + dirv * probe
+	if origin_room != NO_ROOM and room_for(player, candidate) != origin_room:
+		return false
+	_move_query.transform = Transform3D(Basis.IDENTITY,
+		candidate + Vector3(0, MOVE_HEIGHT * 0.5 + 0.04, 0))
+	return player.get_world_3d().direct_space_state \
+		.intersect_shape(_move_query, 1).is_empty()
+
+
+static func room_for(p: Player, at: Vector3) -> Vector2i:
+	var cell := Vector2i(floori(at.x / Chunk.S), floori(at.z / Chunk.S))
+	return WorldGen.annex_room_id(p.world_seed, cell) \
+		if p.level_theme == 2 else WorldGen.room_id(p.world_seed, cell)
 
 
 ## Is the torch actually on it? The light is mounted on the camera, so this is
@@ -415,8 +484,7 @@ func _ignite() -> void:
 		pl.play()
 
 
-## It got to you. In the endless floors this is a scare and nothing more; the
-## owner decides whether a Descent run survives it.
+## It got to you. The owning game mode decides the outcome.
 func _seize() -> void:
 	if _fade >= 0.0:
 		return
@@ -452,6 +520,34 @@ func _maybe_scare() -> void:
 		return
 	host.add_child(pl)
 	pl.global_position = global_position + Vector3(0, 1.4, 0)
+	pl.finished.connect(pl.queue_free)
+	pl.play()
+
+
+## You looked away and it used the time. This is deliberately not the arrival
+## stinger: that one is airy and says something is there, while this is pitched
+## down and pushed louder because it has to say the thing MOVED, and it lands
+## while the player is already looking at the proof.
+func _reveal_scare() -> void:
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	if now - _last_reveal < REVEAL_SCARE_GAP:
+		return
+	_last_reveal = now
+	# The pulse should spike for this exactly as it does for a first sighting.
+	seen_by_player.emit()
+	var sc := Sfx.random_scare()
+	var pl := AudioStreamPlayer3D.new()
+	pl.stream = sc[0]
+	pl.volume_db = float(sc[1]) + 3.0
+	pl.pitch_scale = randf_range(0.68, 0.80)
+	pl.unit_size = 8.0
+	pl.max_distance = 30.0
+	pl.bus = "Hall"
+	var host := get_parent()
+	if host == null:
+		return
+	host.add_child(pl)
+	pl.global_position = global_position + Vector3(0, _eye_h, 0)
 	pl.finished.connect(pl.queue_free)
 	pl.play()
 

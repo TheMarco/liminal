@@ -130,7 +130,9 @@ experience:
 - `F` toggles the handheld flashlight;
 - `Q` opens a Y/N return-to-title confirmation;
 - sprint remains available;
-- figure cadence and behaviour at default values remain unchanged;
+- no hostile figures appear at all. Wander is the peaceful mode — a place to
+  explore and photograph the building — so `ShadowFigures` stays suspended for
+  its entire duration;
 - no Descent HUD needle, objective lift cars, rule feedback, attention,
   blackouts, pursuer, anomalies or Annex exit appear.
 
@@ -851,8 +853,9 @@ interval_scale = lerpf(1.0, 0.35, attention)
 Keep `MAX_FIGS == 3` initially. More than three simultaneous figures is likely
 to become noisy or comic.
 
-At attention zero, `ShadowFigures` must retain its current Wander cadence when
-not in Descent.
+Attention zero is the baseline cadence, not a Wander cadence: `ShadowFigures`
+is suspended for the whole of Wander, which is a peaceful mode with nothing
+hunting in it. Descent is the only mode that releases the manager.
 
 ### 7.6 Blackouts
 

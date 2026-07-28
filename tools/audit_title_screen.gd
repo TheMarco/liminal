@@ -79,7 +79,7 @@ func _run() -> void:
 	_expect(_only_page_visible(title, TitleScreen.Page.CREDITS),
 		"Credits is not a separate visible page")
 	for required in ["3D MODEL CREATORS", "Jawahar Yokesh",
-			"Matt LeMoine", "THIRD_PARTY_ASSETS.md"]:
+			"Matt LeMoine", "carlcapu9", "THIRD_PARTY_ASSETS.md"]:
 		_expect(credits.contains(required),
 			"Credits is missing %s" % required)
 

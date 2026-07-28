@@ -26,6 +26,19 @@ and remove it from the distributed build.
 
 ## Attributed work
 
+### Extracted exit door from `backrooms_vr.glb`
+
+- **Title:** `Backrooms VR`
+- **Creator:** [carlcapu9](https://sketchfab.com/carlcapu9)
+- **Source:** <https://sketchfab.com/3d-models/backrooms-vr-d9b98eca8d064d0eafcd7f5484bb61ed>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** One complete double-door assembly was spatially extracted
+  from the supplied 81-metre, material-merged environment, including its frame,
+  leaves, handles and EXIT sign. It was rebased to a floor-centred origin and
+  its opaque surfaces were restored to dynamic per-pixel lighting. The rest of
+  the source environment is not distributed or instantiated.
+- **Local record:** [`models/cc_by/backrooms_vr_exit_door/SOURCE.md`](models/cc_by/backrooms_vr_exit_door/SOURCE.md)
+
 ### `light_switch.glb`
 
 - **Title:** `Light Switch`

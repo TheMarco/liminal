@@ -23,6 +23,19 @@ const ANNEX_CEILING_TILE := 1.20
 ## constant made its door returns look like paper and exposed a separately-lit
 ## end cap at every 12m chunk boundary.
 const ANNEX_WALL_T := 0.30
+## Tall, shallow painted skirting. The first pass projected 4cm and stood only
+## 11cm high, which read as a chunky floor rail at close range.
+const ANNEX_BASEBOARD_H := 0.16
+const ANNEX_BASEBOARD_D := 0.02
+## Raised apertures occasionally cut through the Annex's deep wall masses.
+## Their carpeted sill sits at waist height and the top crosses the 1.38m eye
+## line, so the player can peer through without being able to enter.
+const ANNEX_TUNNEL_W := 1.20
+const ANNEX_TUNNEL_SILL := 0.72
+const ANNEX_TUNNEL_H := 0.72
+## A tunnel has to read as a passage through a mass, not a window cut into an
+## ordinary partition. Every tunneled mass is therefore over two metres deep.
+const ANNEX_TUNNEL_MIN_DEPTH := 2.10
 const ANNEX_FIXTURE_CLEARANCE := 0.08
 ## The authored outlet and switch models measure a real 7-8cm by 11-12cm — the
 ## size of an actual wall plate. Against the Annex's unbroken 12m walls that is
@@ -59,9 +72,6 @@ static var TOR := TorusMesh.new()
 static var QUAD := QuadMesh.new()
 static var CONE := CylinderMesh.new()
 static var _cone_ready := false
-## Four unit-prism variants per run axis: neither, either, or both genuine end
-## caps. Annex continuation joins use no cap, so two adjacent chunks can meet
-## without a perpendicular face or coplanar overlap catching the light.
 
 const ASY_PROP_NAMES := ["BarberShopChair_01", "Rockingchair_01", "SchoolChair_01",
 	"medical_box", "metal_office_desk", "mounted_fluorescent_lights",
@@ -220,6 +230,8 @@ const ANNEX_CHAIR_PATH := \
 	"res://models/cc_by/wood_dining_chair/wood_dining_chair.glb"
 const ANNEX_CHAIR_SCALE := 0.45
 const ANNEX_CHAIR_CENTRE := Vector3(0.0, -1.0, 0.0)
+const ANNEX_EXIT_DOOR_PATH := \
+	"res://models/cc_by/backrooms_vr_exit_door/backrooms_exit_door.scn"
 const AIRPORT_SEATS_PATH := \
 	"res://models/cc_by/airport_seats/airport_seats.glb"
 const AIRPORT_SEATS_SCALE := 0.04
@@ -531,6 +543,8 @@ var descent_lift_called := false
 var descent_lift_wait := 0.0
 var descent_lift_open := false
 var anomaly_kind := -1
+## Only used by the waiting-figure anomaly, which needs a hunt target.
+var anomaly_player: Player
 var _descent_lift_rig := {}
 var _descent_arrival_rig := {}
 var _blackout := false
@@ -599,6 +613,7 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(OUTLET_PATH)
 	paths.append(ANNEX_SHELVING_PATH)
 	paths.append(ANNEX_CHAIR_PATH)
+	paths.append(ANNEX_EXIT_DOOR_PATH)
 	paths.append(AIRPORT_SEATS_PATH)
 	paths.append(AIRPORT_DEPARTURE_BOARD_PATH)
 	paths.append(AIRPORT_LUGGAGE_PATH)
@@ -662,6 +677,11 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	descent_lift_wait = float(p_config.get("lift_wait", 0.0))
 	descent_lift_open = bool(p_config.get("lift_open", false))
 	anomaly_kind = int(p_config.get("anomaly", -1))
+	# The waiting-figure anomaly is a live figure, and a live figure is useless
+	# without the player it is hunting. It has to arrive with the config: the
+	# figure is built during construction, and its own _ready — which sizes the
+	# capsule it moves with — runs before anything outside could set this.
+	anomaly_player = p_config.get("player", null) as Player
 	var requested_blackout := bool(p_config.get("blackout", false))
 	body = StaticBody3D.new()
 	add_child(body)
@@ -767,21 +787,97 @@ func _box(pos: Vector3, size: Vector3, mat: Material, collide := true) -> MeshIn
 	return mi
 
 
-## A substantial Annex wall. Keep this on Godot's native BoxMesh rendering
-## path: the former hand-built ArrayMesh developed intermittent black faces on
-## Metal when several streamed chunks met. Shared boundaries still have one
-## canonical owner and cross-corridor corners are single solids, which removes
-## the actual coplanar overlaps without replacing the stable wall primitive.
+## One native QuadMesh face of an Annex wall prism. QuadMesh keeps this on
+## Godot's stable primitive rendering path; unlike the former hand-authored
+## ArrayMesh, it has not produced intermittent black faces on Metal.
+func _annex_wall_face(pos: Vector3, size: Vector2, basis: Basis,
+		mat: Material, role: String) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = QUAD
+	mi.material_override = mat
+	mi.transform = Transform3D(basis, pos)
+	mi.scale = Vector3(size.x, size.y, 1.0)
+	mi.set_meta("annex_wall_face", role)
+	add_child(mi)
+	return mi
+
+
+## A substantial Annex wall with native primitive faces and one solid box
+## collider. Consecutive BoxMesh walls used to place two opposing end-cap
+## faces on every 12m chunk boundary. Those coincident caps produced the dark
+## or bright vertical ribs that changed with camera distance. Continuations
+## now have no visual caps at all; genuine doorway/corner ends keep one cap.
 func _annex_wall_prism(pos: Vector3, size: Vector3, along_x: bool,
 		cap_min: bool, cap_max: bool, mat: Material) -> MeshInstance3D:
-	var mi := _box(pos, size, mat)
-	mi.set_meta("annex_native_box", true)
-	# Retain the intended continuation metadata for audits and future batching;
-	# the geometry itself must remain the engine-native primitive.
-	mi.set_meta("annex_wall_along_x", along_x)
-	mi.set_meta("annex_wall_cap_min", cap_min)
-	mi.set_meta("annex_wall_cap_max", cap_max)
-	return mi
+	var half := size * 0.5
+	var primary: MeshInstance3D
+	if along_x:
+		primary = _annex_wall_face(
+			pos + Vector3(0, 0, half.z), Vector2(size.x, size.y),
+			Basis.IDENTITY, mat, "side_positive")
+		_annex_wall_face(
+			pos - Vector3(0, 0, half.z), Vector2(size.x, size.y),
+			Basis(Vector3(-1, 0, 0), Vector3.UP, Vector3(0, 0, -1)),
+			mat, "side_negative")
+		if cap_min:
+			_annex_wall_face(
+				pos - Vector3(half.x, 0, 0), Vector2(size.z, size.y),
+				Basis(Vector3(0, 0, 1), Vector3.UP, Vector3(-1, 0, 0)),
+				mat, "cap_min")
+		if cap_max:
+			_annex_wall_face(
+				pos + Vector3(half.x, 0, 0), Vector2(size.z, size.y),
+				Basis(Vector3(0, 0, -1), Vector3.UP, Vector3(1, 0, 0)),
+				mat, "cap_max")
+	else:
+		primary = _annex_wall_face(
+			pos + Vector3(half.x, 0, 0), Vector2(size.z, size.y),
+			Basis(Vector3(0, 0, -1), Vector3.UP, Vector3(1, 0, 0)),
+			mat, "side_positive")
+		_annex_wall_face(
+			pos - Vector3(half.x, 0, 0), Vector2(size.z, size.y),
+			Basis(Vector3(0, 0, 1), Vector3.UP, Vector3(-1, 0, 0)),
+			mat, "side_negative")
+		if cap_min:
+			_annex_wall_face(
+				pos - Vector3(0, 0, half.z), Vector2(size.x, size.y),
+				Basis(Vector3(-1, 0, 0), Vector3.UP, Vector3(0, 0, -1)),
+				mat, "cap_min")
+		if cap_max:
+			_annex_wall_face(
+				pos + Vector3(0, 0, half.z), Vector2(size.x, size.y),
+				Basis.IDENTITY, mat, "cap_max")
+	# Header undersides and any intentionally short partitions remain closed.
+	var bottom := pos.y - half.y
+	if bottom > 0.01:
+		var bottom_basis := Basis(
+			Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1),
+			Vector3(0, 0, 1) if along_x else Vector3(-1, 0, 0),
+			Vector3(0, -1, 0))
+		_annex_wall_face(
+			Vector3(pos.x, bottom, pos.z),
+			Vector2(size.x if along_x else size.z, size.z if along_x else size.x),
+			bottom_basis, mat, "bottom")
+	var top := pos.y + half.y
+	if top < ceil_h - 0.01:
+		var top_basis := Basis(
+			Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1),
+			Vector3(0, 0, -1) if along_x else Vector3(1, 0, 0),
+			Vector3(0, 1, 0))
+		_annex_wall_face(
+			Vector3(pos.x, top, pos.z),
+			Vector2(size.x if along_x else size.z, size.z if along_x else size.x),
+			top_basis, mat, "top")
+	_collider_box(pos, size)
+	primary.set_meta("annex_uncapped_native_prism", true)
+	primary.set_meta("annex_wall_along_x", along_x)
+	primary.set_meta("annex_wall_cap_min", cap_min)
+	primary.set_meta("annex_wall_cap_max", cap_max)
+	# Audits and wall-mounted prop placement need the complete solid volume;
+	# the primary render face itself is intentionally only a zero-depth quad.
+	primary.set_meta("annex_wall_volume_position", pos)
+	primary.set_meta("annex_wall_volume_size", size)
+	return primary
 
 
 ## Is there room on the floor at `p` for something `radius` wide and `height`
@@ -1028,6 +1124,9 @@ func _build_floor_ceiling() -> void:
 	if theme == 2:
 		_annex_floor_ceiling()
 		return
+	if theme == 9:
+		_pool_floor_ceiling()
+		return
 	if theme == 1:
 		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.office_carpet())
 		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.office_ceiling())
@@ -1131,9 +1230,12 @@ func _build_walls() -> void:
 			if owns_annex_wall:
 				_wall_seg(dir, plane, 0.0, a, 0.0, _wall_h())
 				_wall_seg(dir, plane, b, S, 0.0, _wall_h())
-				_wall_seg(dir, plane, a, b,
-					AIR_DOOR if theme == 4 or theme == 7 else DOOR_TOP,
-					_wall_h())
+				var head: float = DOOR_TOP
+				if theme == 4 or theme == 7:
+					head = AIR_DOOR
+				elif theme == 9:
+					head = POOL_DOOR_TOP
+				_wall_seg(dir, plane, a, b, head, _wall_h())
 				_door_casing(dir, plane, a, b)
 				_maybe_swing_door(dir, plane, a, b)
 			if (theme == 1 or theme == 2) \
@@ -1153,7 +1255,7 @@ func _build_walls() -> void:
 func _maybe_swing_door(dir: int, plane: float, a: float, b: float) -> void:
 	if dir != 0 and dir != 2:
 		return
-	if theme == 2 or theme == 4 or theme == 7 or b - a > 2.25:
+	if theme == 2 or theme == 4 or theme == 7 or theme == 9 or b - a > 2.25:
 		return
 	if WorldGen.h(wseed, cell.x, cell.y, 1760 + dir + theme * 11) % 100 >= 14:
 		return
@@ -1323,25 +1425,31 @@ func _annex_edge_solid(at: Vector2i, dir: int) -> bool:
 
 func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: float) -> void:
 	var wall_t := ANNEX_WALL_T if theme == 2 else T
+	var exposed_min := theme == 2 and not is_zero_approx(from)
+	var exposed_max := theme == 2 and not is_equal_approx(to, S)
 	if theme == 2:
 		if is_zero_approx(from):
 			from += _annex_corner_shift(dir, false)
 		if is_equal_approx(to, S):
 			to += _annex_corner_shift(dir, true)
 	var ln := to - from
-	if ln < 0.05:
+	# A few low-ceiling themes can place their nominal door-head height at or
+	# above the local ceiling. That means there is no header to build; passing
+	# the negative height to BoxShape3D only produces an invalid collider.
+	if ln < 0.05 or y1 - y0 < 0.05:
 		return
 	var c := (from + to) * 0.5
 	var yc := (y0 + y1) * 0.5
 	var hh := y1 - y0
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner := plane + n * (wall_t * 0.5)
+	var annex_finish := -1
 	var wmat: Material = Mats.wallpaper_variant(_finish_variant())
 	if theme == 1:
 		wmat = Mats.office_wall_variant(_finish_variant())
 	elif theme == 2:
-		wmat = Mats.annex_wall_variant(
-			WorldGen.annex_wall_finish(wseed, cell, dir))
+		annex_finish = WorldGen.annex_wall_finish(wseed, cell, dir)
+		wmat = Mats.annex_wall_variant(annex_finish)
 	elif theme == 4:
 		wmat = Mats.airport_wall_variant(_finish_variant())
 	elif theme == 5:
@@ -1352,6 +1460,8 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		wmat = Mats.mall_wall()
 	elif theme == 8:
 		wmat = Mats.prison_tile() if style == WorldGen.PRISON_SHOWER else Mats.prison_wall()
+	elif theme == 9:
+		wmat = Mats.pool_wall_tile()
 	var wall_mesh: MeshInstance3D
 	if dir < 2:
 		if theme == 2:
@@ -1380,8 +1490,55 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		wall_mesh.set_meta("annex_wall_seam_safe", true)
 		wall_mesh.set_meta("annex_wall_cap_min", not is_zero_approx(from))
 		wall_mesh.set_meta("annex_wall_cap_max", not is_equal_approx(to, S))
-		# The Annex references meet carpet directly. A contrasting baseboard
-		# reads as a freestanding bar whenever generated openings line up.
+		wall_mesh.set_meta("annex_finish", annex_finish)
+		wall_mesh.set_meta("annex_wallpaper", annex_finish >= 3)
+		if y0 <= 0.01 and annex_finish >= 3:
+			# Trim both visible faces of the one canonically owned wall. Each
+			# strip starts exactly at the wall face and projects only 2cm, so it
+			# reads as attached skirting instead of the former floor-level bar.
+			var outer := plane - n * wall_t * 0.5
+			if dir < 2:
+				_annex_baseboard_box(
+					Vector3(inner + n * ANNEX_BASEBOARD_D * 0.5,
+						ANNEX_BASEBOARD_H * 0.5, c),
+					Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H, ln))
+				_annex_baseboard_box(
+					Vector3(outer - n * ANNEX_BASEBOARD_D * 0.5,
+						ANNEX_BASEBOARD_H * 0.5, c),
+					Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H, ln))
+				if exposed_min:
+					_annex_baseboard_box(
+						Vector3(plane, ANNEX_BASEBOARD_H * 0.5,
+							from - ANNEX_BASEBOARD_D * 0.5),
+						Vector3(wall_t + ANNEX_BASEBOARD_D * 2.0,
+							ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
+				if exposed_max:
+					_annex_baseboard_box(
+						Vector3(plane, ANNEX_BASEBOARD_H * 0.5,
+							to + ANNEX_BASEBOARD_D * 0.5),
+						Vector3(wall_t + ANNEX_BASEBOARD_D * 2.0,
+							ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
+			else:
+				_annex_baseboard_box(
+					Vector3(c, ANNEX_BASEBOARD_H * 0.5,
+						inner + n * ANNEX_BASEBOARD_D * 0.5),
+					Vector3(ln, ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
+				_annex_baseboard_box(
+					Vector3(c, ANNEX_BASEBOARD_H * 0.5,
+						outer - n * ANNEX_BASEBOARD_D * 0.5),
+					Vector3(ln, ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
+				if exposed_min:
+					_annex_baseboard_box(
+						Vector3(from - ANNEX_BASEBOARD_D * 0.5,
+							ANNEX_BASEBOARD_H * 0.5, plane),
+						Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H,
+							wall_t + ANNEX_BASEBOARD_D * 2.0))
+				if exposed_max:
+					_annex_baseboard_box(
+						Vector3(to + ANNEX_BASEBOARD_D * 0.5,
+							ANNEX_BASEBOARD_H * 0.5, plane),
+						Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H,
+							wall_t + ANNEX_BASEBOARD_D * 2.0))
 		return
 	if theme == 5:
 		# tiled wainscot to shoulder height — unless the whole room is tiled
@@ -1432,7 +1589,63 @@ func _strip(dir: int, off: float, y: float, c: float, ln: float, depth: float, h
 		_box(Vector3(c, y, off), Vector3(ln, height, depth), mat, false)
 
 
+func _configure_annex_non_occluding(node: Node) -> void:
+	if node is GeometryInstance3D:
+		var geometry := node as GeometryInstance3D
+		geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		geometry.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	for child in node.get_children():
+		_configure_annex_non_occluding(child)
+
+
+func _configure_annex_baseboard(trim: MeshInstance3D, size: Vector3) -> void:
+	# This 2cm decorative projection produced an implausibly broad wedge under
+	# the Annex's many overhead lights. The substantial wall still casts the
+	# room shadow; the painted skirting should not add a second detached one.
+	_configure_annex_non_occluding(trim)
+	trim.set_meta("annex_baseboard", true)
+	trim.set_meta("annex_baseboard_height", size.y)
+	trim.set_meta("annex_baseboard_projection", minf(size.x, size.z))
+	trim.set_meta("annex_baseboard_attached", true)
+
+
+func _annex_baseboard_box(pos: Vector3, size: Vector3) -> void:
+	var trim := _box(pos, size, Mats.annex_baseboard(), false)
+	_configure_annex_baseboard(trim, size)
+
+
+func _annex_local_baseboard(parent: Node3D, pos: Vector3,
+		size: Vector3) -> void:
+	var trim := _mbox(parent, pos, size, Mats.annex_baseboard())
+	_configure_annex_baseboard(trim, size)
+
+
+## Wallpaper on a freestanding partition or deep wall mass is one treatment
+## around the whole architectural piece, so its skirting must wrap every
+## exposed face as well. The return strips extend through the corner by exactly
+## one trim projection, producing a closed mitre instead of four loose bars.
+func _annex_wrap_local_baseboards(parent: Node3D, width: float,
+		depth: float) -> void:
+	var y := ANNEX_BASEBOARD_H * 0.5
+	var d := ANNEX_BASEBOARD_D
+	_annex_local_baseboard(parent,
+		Vector3(0.0, y, depth * 0.5 + d * 0.5),
+		Vector3(width, ANNEX_BASEBOARD_H, d))
+	_annex_local_baseboard(parent,
+		Vector3(0.0, y, -depth * 0.5 - d * 0.5),
+		Vector3(width, ANNEX_BASEBOARD_H, d))
+	_annex_local_baseboard(parent,
+		Vector3(width * 0.5 + d * 0.5, y, 0.0),
+		Vector3(d, ANNEX_BASEBOARD_H, depth + d * 2.0))
+	_annex_local_baseboard(parent,
+		Vector3(-width * 0.5 - d * 0.5, y, 0.0),
+		Vector3(d, ANNEX_BASEBOARD_H, depth + d * 2.0))
+
+
 func _door_casing(dir: int, plane: float, a: float, b: float) -> void:
+	# Pool openings are cut straight through tile — no frame, no threshold.
+	if theme == 9:
+		return
 	if theme == 7 or theme == 8:
 		var cm: Material = Mats.mall_trim() if theme == 7 else Mats.prison_iron()
 		var top := 3.15 if theme == 7 else DOOR_TOP
@@ -1675,6 +1888,8 @@ func _wall_art_mount(pos: Vector3, yaw: float, dir: int, path: String,
 
 
 func _wall_art_chance() -> float:
+	if theme == 9:
+		return 0.0
 	match theme:
 		1:
 			return 0.12 if style == WorldGen.OFFICE_STORAGE else 0.22
@@ -1748,6 +1963,10 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 
 
 func _wall_decor(dir: int, plane: float) -> void:
+	# Bare tile is the whole point of this floor; a poster or a clock on it
+	# would immediately make it a building with a purpose.
+	if theme == 9:
+		return
 	var r := _r(40 + dir)
 	var art_chance := _wall_art_chance()
 	if art_chance > 0.0 and _r(1040 + dir) < art_chance:
@@ -1949,6 +2168,13 @@ func _wall_utility_mount(p: Vector3, yaw: float, height: float,
 		mount.free()
 		return null
 	inst.set_meta("wall_mounted_utility", true)
+	if theme == 2:
+		# These plates sit only millimetres off the wall. Their tiny authored
+		# depth used to become a large, unstable contact shadow/SDFGI blotch at
+		# distance. The wall provides the room occlusion; the plate should only
+		# supply visible surface detail.
+		_configure_annex_non_occluding(inst)
+		mount.set_meta("wall_utility_non_occluding", true)
 	return mount
 
 
@@ -2013,6 +2239,9 @@ func _office_clock(dir: int, plane: float) -> void:
 # --- lighting ----------------------------------------------------------------
 
 func _build_lighting() -> void:
+	if theme == 9:
+		_pool_lighting()
+		return
 	if theme == 7:
 		_mall_lighting()
 		return
@@ -2515,6 +2744,22 @@ func _build_props() -> void:
 			_prison_visitation()
 		WorldGen.PRISON_ROTUNDA:
 			_prison_rotunda()
+		WorldGen.POOL_BASIN:
+			_pool_basin_room()
+		WorldGen.POOL_CHANNEL:
+			_pool_channel_room()
+		WorldGen.POOL_DECK:
+			_pool_deck_room()
+		WorldGen.POOL_SOLARIUM:
+			_pool_solarium_room()
+		WorldGen.POOL_ALCOVE:
+			_pool_alcove_room()
+		WorldGen.POOL_STAIRS:
+			_pool_stairs_room()
+		WorldGen.POOL_GALLERY:
+			_pool_gallery_room()
+		WorldGen.POOL_CISTERN:
+			_pool_cistern_room()
 	if theme == 2:
 		_annex_lived_in_dressing()
 	_shift_props(off, n0, b0)
@@ -3494,16 +3739,24 @@ func activate_anomaly(kind: int) -> void:
 				_blackout_meshes[mesh] = false
 			mesh.visible = false
 	elif kind == 1 and (WorldGen.corridor(wseed, cell) != 0 \
-			or not WorldGen.room_split(wseed, room_root, theme).is_empty()):
-		# A narrow or partitioned cell has no universally safe standing corner.
-		# Fall back to the collider-free dead-light mutation.
+			or not WorldGen.room_split(wseed, room_root, theme).is_empty() \
+			or anomaly_player == null):
+		# A narrow or partitioned cell has no universally safe standing corner,
+		# and without a player there is nothing for a figure to hunt — an
+		# audit or a headless build lands here. Fall back to the collider-free
+		# dead-light mutation either way.
 		activate_anomaly(0)
 	elif kind == 1 and not has_node("WaitingFigure"):
 		var f := ShadowFigure.new()
 		f.name = "WaitingFigure"
 		# stands in a corner rather than hangs, so it reads as watching
 		f.variant = ShadowFigure.GAOLER
-		f.mode = ShadowFigure.Mode.INERT
+		# WAITING, never INERT. As an INERT node this was the one figure in the
+		# game that could not be burned, could not touch the player and never
+		# faded — the player emptied a torch into it and nothing happened. It
+		# holds its corner until the player is in the room, then it hunts.
+		f.mode = ShadowFigure.Mode.WAITING
+		f.player = anomaly_player
 		var corners := [
 			Vector3(1.45, 0, 1.45), Vector3(10.55, 0, 1.45),
 			Vector3(1.45, 0, 10.55), Vector3(10.55, 0, 10.55),
@@ -5824,11 +6077,22 @@ func _annex_block(p: Vector3, yaw: float, width: float, depth: float,
 		return
 	var first := body.get_child_count()
 	var pivot := _furnishing_pivot(p, yaw, kind, false)
+	var finish_idx := _finish_variant()
+	var wallpapered := finish_idx >= 3
 	pivot.set_meta("annex_architecture", kind)
+	pivot.set_meta("annex_finish", finish_idx)
+	pivot.set_meta("annex_wallpaper", wallpapered)
+	pivot.set_meta("annex_baseboard_expected", wallpapered)
+	pivot.set_meta("annex_baseboard_expected_count", 4 if wallpapered else 0)
 	if kind == "annex_wall" or kind == "annex_half_wall":
 		pivot.set_meta("annex_partition_thickness", depth)
-	_mbox(pivot, Vector3(0, height * 0.5, 0),
-		Vector3(width, height, depth), Mats.annex_wall_variant(_finish_variant()))
+	var wall_mesh := _mbox(pivot, Vector3(0, height * 0.5, 0),
+		Vector3(width, height, depth), Mats.annex_wall_variant(finish_idx))
+	wall_mesh.set_meta("annex_architecture_wall", true)
+	wall_mesh.set_meta("annex_finish", finish_idx)
+	wall_mesh.set_meta("annex_wallpaper", wallpapered)
+	if wallpapered:
+		_annex_wrap_local_baseboards(pivot, width, depth)
 	_annex_register_ceiling_obstruction(p, width, depth, yaw, height)
 	if height < ceil_h - 0.2:
 		_mbox(pivot, Vector3(0, height + 0.025, 0),
@@ -5836,6 +6100,77 @@ func _annex_block(p: Vector3, yaw: float, width: float, depth: float,
 	_collider_yaw_box(p + Vector3(0, height * 0.5, 0),
 		Vector3(width, height, depth), yaw)
 	_bind_furnishing_colliders(pivot, first)
+
+
+## Replace one sufficiently deep wall mass with a raised rectangular tunnel.
+## Four visible wall pieces and matching colliders leave an honest void. A
+## fitted carpet strip covers its sill at waist height; the eye line passes
+## through the opening, but its height is far below the standing capsule.
+func _annex_tunnel_mass(p: Vector3, yaw: float, width: float,
+		depth: float, height: float) -> bool:
+	if width < ANNEX_TUNNEL_W + 0.8 \
+			or depth < ANNEX_TUNNEL_MIN_DEPTH \
+			or _annex_blocks_doorway(p, yaw, width, depth):
+		return false
+	var first := body.get_child_count()
+	var pivot := _furnishing_pivot(p, yaw, "annex_wall_mass", false)
+	pivot.set_meta("annex_architecture", "annex_wall_mass")
+	pivot.set_meta("annex_tunnel", true)
+	pivot.set_meta("annex_tunnel_width", ANNEX_TUNNEL_W)
+	pivot.set_meta("annex_tunnel_sill", ANNEX_TUNNEL_SILL)
+	pivot.set_meta("annex_tunnel_height", ANNEX_TUNNEL_H)
+	pivot.set_meta("annex_tunnel_depth", depth)
+	pivot.set_meta("annex_tunnel_carpeted", true)
+	pivot.set_meta("annex_tunnel_crawlable", false)
+	var finish_idx := _finish_variant()
+	var wallpapered := finish_idx >= 3
+	pivot.set_meta("annex_finish", finish_idx)
+	pivot.set_meta("annex_wallpaper", wallpapered)
+	pivot.set_meta("annex_baseboard_expected", wallpapered)
+	pivot.set_meta("annex_baseboard_expected_count", 4 if wallpapered else 0)
+	var wall_mat := Mats.annex_wall_variant(finish_idx)
+	var side_w := (width - ANNEX_TUNNEL_W) * 0.5
+	var side_x := ANNEX_TUNNEL_W * 0.5 + side_w * 0.5
+	var opening_top := ANNEX_TUNNEL_SILL + ANNEX_TUNNEL_H
+	var header_h := height - opening_top
+	for side in [-1.0, 1.0]:
+		var local := Vector3(side * side_x, height * 0.5, 0.0)
+		var wall_piece := _mbox(pivot, local,
+			Vector3(side_w, height, depth), wall_mat)
+		wall_piece.set_meta("annex_tunnel_wall_piece", true)
+		wall_piece.set_meta("annex_architecture_wall", true)
+		wall_piece.set_meta("annex_finish", finish_idx)
+		wall_piece.set_meta("annex_wallpaper", wallpapered)
+		_collider_yaw_box(_wp(p, local, yaw),
+			Vector3(side_w, height, depth), yaw)
+	var sill_local := Vector3(0.0, ANNEX_TUNNEL_SILL * 0.5, 0.0)
+	var sill := _mbox(pivot, sill_local,
+		Vector3(ANNEX_TUNNEL_W, ANNEX_TUNNEL_SILL, depth), wall_mat)
+	sill.set_meta("annex_tunnel_sill_piece", true)
+	sill.set_meta("annex_architecture_wall", true)
+	sill.set_meta("annex_finish", finish_idx)
+	sill.set_meta("annex_wallpaper", wallpapered)
+	_collider_yaw_box(_wp(p, sill_local, yaw),
+		Vector3(ANNEX_TUNNEL_W, ANNEX_TUNNEL_SILL, depth), yaw)
+	var header_local := Vector3(0.0, opening_top + header_h * 0.5, 0.0)
+	var header := _mbox(pivot, header_local,
+		Vector3(ANNEX_TUNNEL_W, header_h, depth), wall_mat)
+	header.set_meta("annex_tunnel_header", true)
+	header.set_meta("annex_architecture_wall", true)
+	header.set_meta("annex_finish", finish_idx)
+	header.set_meta("annex_wallpaper", wallpapered)
+	_collider_yaw_box(_wp(p, header_local, yaw),
+		Vector3(ANNEX_TUNNEL_W, header_h, depth), yaw)
+	var carpet := _mbox(pivot,
+		Vector3(0.0, ANNEX_TUNNEL_SILL + 0.012, 0.0),
+		Vector3(ANNEX_TUNNEL_W, 0.024, depth), Mats.annex_carpet())
+	carpet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	carpet.set_meta("annex_tunnel_carpet", true)
+	if wallpapered:
+		_annex_wrap_local_baseboards(pivot, width, depth)
+	_annex_register_ceiling_obstruction(p, width, depth, yaw, height)
+	_bind_furnishing_colliders(pivot, first)
+	return true
 
 
 func _annex_room_member_architecture() -> void:
@@ -5868,9 +6203,15 @@ func _annex_open() -> void:
 		var mass_yaw := PI * 0.5 if _r(521) < 0.5 else 0.0
 		var mass_width := lerpf(2.25, 3.15, _r(522))
 		var mass_depth := lerpf(1.10, 1.75, _r(523))
-		_annex_block(c + Vector3((_r(524) - 0.5) * 2.8, 0,
-			(_r(525) - 0.5) * 2.8), mass_yaw,
-			mass_width, mass_depth, ceil_h, "annex_wall_mass")
+		var mass_p := c + Vector3((_r(524) - 0.5) * 2.8, 0,
+			(_r(525) - 0.5) * 2.8)
+		var tunneled := _r(534) < 0.55 \
+			and _annex_tunnel_mass(
+				mass_p, mass_yaw, mass_width,
+				maxf(mass_depth, ANNEX_TUNNEL_MIN_DEPTH), ceil_h)
+		if not tunneled:
+			_annex_block(mass_p, mass_yaw,
+				mass_width, mass_depth, ceil_h, "annex_wall_mass")
 	elif roll < 0.84:
 		var yaw := PI / 2.0 if _r(529) < 0.5 else 0.0
 		var side := -1.0 if _r(530) < 0.5 else 1.0
@@ -5921,6 +6262,17 @@ func _annex_quiet() -> void:
 ## unrelated props. Large chair heaps are limited to genuinely broad spaces.
 func _annex_lived_in_dressing() -> void:
 	if portal_dest >= 0 or style == WorldGen.ANNEX_PASSAGE:
+		return
+	# The Backrooms VR download is one baked environment, not a modular kit.
+	# Its complete authored exit assembly was spatially extracted into a
+	# standalone scene. Use it only as a rare sealed facade on an honest solid
+	# wall: the procedural traversable openings retain their working door logic.
+	if cell != Vector2i.ZERO \
+			and (style == WorldGen.ANNEX_OPEN \
+				or style == WorldGen.ANNEX_LONG \
+				or style == WorldGen.ANNEX_LOBBY) \
+			and _r(1617) < 0.18 \
+			and _annex_exit_door(1618):
 		return
 	if _r(1620) < 0.12:
 		_annex_air_conditioner(1621)
@@ -6016,6 +6368,32 @@ func _annex_air_conditioner(salt: int) -> void:
 		pivot.free()
 		return
 	unit.set_meta("authored_model", "annex_air_conditioner")
+
+
+## Place the attributed double exit door as a sealed architectural facade.
+## Its source-authored front points +Z, exactly the convention used by
+## `_wall_facing`, and its rebased origin is centred on the frame at floor
+## level. The 12cm stand-off seats the rear of the 20cm-deep frame against the
+## room face without embedding its handles or sign in the wall.
+func _annex_exit_door(salt: int) -> bool:
+	var dir := _annex_pick_solid_wall(salt, true)
+	if dir < 0:
+		return false
+	var along := 3.25 if _r(salt + 1) < 0.5 else 8.75
+	var p := _annex_wall_floor_point(dir, along, 0.12)
+	var pivot := _furnishing_pivot(
+		p, _wall_facing(dir), "annex_exit_door", true)
+	pivot.set_meta("attributed_furnishing", "annex_exit_door")
+	pivot.set_meta("annex_sealed_exit", true)
+	pivot.set_meta("annex_exit_wall_dir", dir)
+	var authored := _attributed_prop_local(
+		pivot, ANNEX_EXIT_DOOR_PATH, Vector3.ZERO, 0.0)
+	if authored == null:
+		pivot.get_parent().remove_child(pivot)
+		pivot.free()
+		return false
+	authored.set_meta("authored_model", "annex_exit_door")
+	return true
 
 
 func _annex_chair_cluster(count: int, salt: int, piled: bool) -> void:
@@ -6225,12 +6603,16 @@ func _annex_passage() -> void:
 		return
 	var horizontal_width := WorldGen.annex_horizontal_width(wseed, cell.y)
 	var vertical_width := WorldGen.annex_vertical_width(wseed, cell.x)
+	var corridor_finish := WorldGen.annex_corridor_finish(wseed)
+	var corridor_mat := Mats.annex_wall_variant(corridor_finish)
+	var corridor_baseboard := corridor_finish >= 3
 	var marker := Node3D.new()
 	marker.set_meta("annex_corridor_shell", axis)
 	marker.set_meta("annex_horizontal_width", horizontal_width)
 	marker.set_meta("annex_vertical_width", vertical_width)
+	marker.set_meta("annex_corridor_finish", corridor_finish)
 	add_child(marker)
-	# Each corridor run owns one of three stable widths. At an intersection the
+	# Each corridor run owns one of four stable widths. At an intersection the
 	# four corner masses are sized independently, so a narrow hall can suddenly
 	# release into a broad cross-axis without gaps or backing voids.
 	if axis == 3:
@@ -6239,9 +6621,6 @@ func _annex_passage() -> void:
 		for xi in 2:
 			var x := block_width * 0.5 if xi == 0 \
 				else S - block_width * 0.5
-			var x_dir := 1 if xi == 0 else 0
-			var x_mat := Mats.annex_wall_variant(
-				WorldGen.annex_wall_finish(wseed, cell, x_dir))
 			for zi in 2:
 				var z := block_depth * 0.5 if zi == 0 \
 					else S - block_depth * 0.5
@@ -6249,11 +6628,34 @@ func _annex_passage() -> void:
 				# The former perpendicular "skins" were coplanar with this block,
 				# causing the recurring bright vertical ridges seen in motion.
 				var corner := _box(Vector3(x, ceil_h * 0.5, z),
-					Vector3(block_width, ceil_h, block_depth), x_mat)
+					Vector3(block_width, ceil_h, block_depth), corridor_mat)
 				corner.set_meta("annex_cross_corner", true)
 				corner.set_meta("annex_single_finish", true)
+				corner.set_meta("annex_finish", corridor_finish)
+				corner.set_meta("annex_wallpaper", corridor_baseboard)
 				_annex_register_ceiling_obstruction(
 					Vector3(x, 0.0, z), block_width, block_depth, 0.0, ceil_h)
+				# Both exposed faces inherit the corridor's one committed finish.
+				# This prevents a straight wall from changing treatment as it
+				# enters the solid corner at an intersection.
+				if corridor_baseboard:
+					var x_face := block_width if xi == 0 \
+						else S - block_width
+					var x_sign := 1.0 if xi == 0 else -1.0
+					_annex_baseboard_box(
+						Vector3(
+							x_face + x_sign * ANNEX_BASEBOARD_D * 0.5,
+							ANNEX_BASEBOARD_H * 0.5, z),
+						Vector3(ANNEX_BASEBOARD_D,
+							ANNEX_BASEBOARD_H, block_depth))
+					var z_face := block_depth if zi == 0 \
+						else S - block_depth
+					var z_sign := 1.0 if zi == 0 else -1.0
+					_annex_baseboard_box(
+						Vector3(x, ANNEX_BASEBOARD_H * 0.5,
+							z_face + z_sign * ANNEX_BASEBOARD_D * 0.5),
+						Vector3(block_width,
+							ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
 		return
 	# near/far_plane are the walkable corridor faces. The shell boxes are
 	# centred half a wall thickness outside them, so their corridor faces land
@@ -6264,12 +6666,8 @@ func _annex_passage() -> void:
 	if axis == 1:
 		var near_shell := S * 0.5 - horizontal_width * 0.5 - ANNEX_WALL_T * 0.5
 		var far_shell := S * 0.5 + horizontal_width * 0.5 + ANNEX_WALL_T * 0.5
-		_annex_corridor_side(true, near_shell, 3,
-			Mats.annex_wall_variant(
-				WorldGen.annex_wall_finish(wseed, cell, 3)))
-		_annex_corridor_side(true, far_shell, 2,
-			Mats.annex_wall_variant(
-				WorldGen.annex_wall_finish(wseed, cell, 2)))
+		_annex_corridor_side(true, near_shell, 3, corridor_finish)
+		_annex_corridor_side(true, far_shell, 2, corridor_finish)
 		if _r(560) < 0.11:
 			var camera_dir := 3 if _r(561) < 0.5 else 2
 			if WorldGen.edge_info(wseed, cell, camera_dir, theme)["wall"]:
@@ -6278,12 +6676,8 @@ func _annex_passage() -> void:
 	else:
 		var near_shell := S * 0.5 - vertical_width * 0.5 - ANNEX_WALL_T * 0.5
 		var far_shell := S * 0.5 + vertical_width * 0.5 + ANNEX_WALL_T * 0.5
-		_annex_corridor_side(false, near_shell, 1,
-			Mats.annex_wall_variant(
-				WorldGen.annex_wall_finish(wseed, cell, 1)))
-		_annex_corridor_side(false, far_shell, 0,
-			Mats.annex_wall_variant(
-				WorldGen.annex_wall_finish(wseed, cell, 0)))
+		_annex_corridor_side(false, near_shell, 1, corridor_finish)
+		_annex_corridor_side(false, far_shell, 0, corridor_finish)
 		if _r(560) < 0.11:
 			var camera_dir := 1 if _r(561) < 0.5 else 0
 			if WorldGen.edge_info(wseed, cell, camera_dir, theme)["wall"]:
@@ -6295,10 +6689,14 @@ func _annex_passage() -> void:
 ## into a room, the same opening is repeated here and connected with two return
 ## walls, creating a real short passage instead of exposing a fake backing bay.
 func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
-		mat: Material) -> void:
+		finish_idx: int) -> void:
 	var info := WorldGen.edge_info(wseed, cell, outer_dir, theme)
+	var toward := 1.0 if plane < S * 0.5 else -1.0
+	var mat := Mats.annex_wall_variant(finish_idx)
+	var baseboard := finish_idx >= 3
 	if info["wall"]:
-		_annex_corridor_segment(along_x, plane, 0.0, S, 0.0, ceil_h, mat)
+		_annex_corridor_segment(along_x, plane, 0.0, S, 0.0, ceil_h,
+			mat, baseboard, toward)
 		_wall_utilities(outer_dir, plane, info)
 		return
 	# The shell repeats the outer boundary opening EXACTLY. The former clamps
@@ -6306,8 +6704,10 @@ func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
 	# as a second doorway floating inside the first.
 	var a := float(info["t"]) - float(info["w"]) * 0.5
 	var b := float(info["t"]) + float(info["w"]) * 0.5
-	_annex_corridor_segment(along_x, plane, 0.0, a, 0.0, ceil_h, mat)
-	_annex_corridor_segment(along_x, plane, b, S, 0.0, ceil_h, mat)
+	_annex_corridor_segment(along_x, plane, 0.0, a, 0.0, ceil_h,
+		mat, baseboard, toward)
+	_annex_corridor_segment(along_x, plane, b, S, 0.0, ceil_h,
+		mat, baseboard, toward)
 	_wall_utilities(outer_dir, plane, info)
 	var outer_plane := ANNEX_WALL_T * 0.5 \
 		if outer_dir == 1 or outer_dir == 3 \
@@ -6319,7 +6719,6 @@ func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
 	# beam hanging behind the first, no ceiling slot over the passage.
 	var boundary := 0.0 if outer_dir == 1 or outer_dir == 3 else S
 	var reach := boundary if bool(info["full_open"]) else outer_plane
-	var toward := 1.0 if plane < S * 0.5 else -1.0
 	var shell_face := plane + toward * ANNEX_WALL_T * 0.5
 	var head_mid := (reach + shell_face) * 0.5
 	var head_depth := absf(shell_face - reach)
@@ -6352,6 +6751,20 @@ func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
 			_annex_register_ceiling_obstruction(
 				Vector3(x, 0.0, ret_mid),
 				ANNEX_WALL_T, ret_depth, 0.0, ceil_h)
+		if baseboard:
+			# Carry the selected skirting through the two doorway returns.
+			# The corridor-segment end caps below bridge the wall thickness,
+			# leaving one continuous wrap instead of an untrimmed wall tip.
+			_annex_baseboard_box(
+				Vector3(a + ANNEX_BASEBOARD_D * 0.5,
+					ANNEX_BASEBOARD_H * 0.5, ret_mid),
+				Vector3(ANNEX_BASEBOARD_D,
+					ANNEX_BASEBOARD_H, ret_depth))
+			_annex_baseboard_box(
+				Vector3(b - ANNEX_BASEBOARD_D * 0.5,
+					ANNEX_BASEBOARD_H * 0.5, ret_mid),
+				Vector3(ANNEX_BASEBOARD_D,
+					ANNEX_BASEBOARD_H, ret_depth))
 	else:
 		for z in [a - ANNEX_WALL_T * 0.5, b + ANNEX_WALL_T * 0.5]:
 			_box(Vector3(ret_mid, ceil_h * 0.5, z),
@@ -6359,10 +6772,22 @@ func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
 			_annex_register_ceiling_obstruction(
 				Vector3(ret_mid, 0.0, z),
 				ret_depth, ANNEX_WALL_T, 0.0, ceil_h)
+		if baseboard:
+			_annex_baseboard_box(
+				Vector3(ret_mid, ANNEX_BASEBOARD_H * 0.5,
+					a + ANNEX_BASEBOARD_D * 0.5),
+				Vector3(ret_depth,
+					ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
+			_annex_baseboard_box(
+				Vector3(ret_mid, ANNEX_BASEBOARD_H * 0.5,
+					b - ANNEX_BASEBOARD_D * 0.5),
+				Vector3(ret_depth,
+					ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
 
 
 func _annex_corridor_segment(along_x: bool, plane: float, a: float, b: float,
-		y0: float, y1: float, mat: Material) -> void:
+		y0: float, y1: float, mat: Material, baseboard: bool,
+		face_sign: float) -> void:
 	if b - a <= 0.02 or y1 - y0 <= 0.02:
 		return
 	var wall_mesh: MeshInstance3D
@@ -6386,6 +6811,44 @@ func _annex_corridor_segment(along_x: bool, plane: float, a: float, b: float,
 	wall_mesh.set_meta("annex_wall_seam_safe", true)
 	wall_mesh.set_meta("annex_wall_cap_min", not is_zero_approx(a))
 	wall_mesh.set_meta("annex_wall_cap_max", not is_equal_approx(b, S))
+	wall_mesh.set_meta("annex_wallpaper", baseboard)
+	if y0 <= 0.01 and baseboard:
+		var face := plane + face_sign * ANNEX_WALL_T * 0.5
+		if along_x:
+			_annex_baseboard_box(
+				Vector3((a + b) * 0.5, ANNEX_BASEBOARD_H * 0.5,
+					face + face_sign * ANNEX_BASEBOARD_D * 0.5),
+				Vector3(b - a, ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
+			if not is_zero_approx(a):
+				_annex_baseboard_box(
+					Vector3(a - ANNEX_BASEBOARD_D * 0.5,
+						ANNEX_BASEBOARD_H * 0.5, plane),
+					Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H,
+						ANNEX_WALL_T + ANNEX_BASEBOARD_D * 2.0))
+			if not is_equal_approx(b, S):
+				_annex_baseboard_box(
+					Vector3(b + ANNEX_BASEBOARD_D * 0.5,
+						ANNEX_BASEBOARD_H * 0.5, plane),
+					Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H,
+						ANNEX_WALL_T + ANNEX_BASEBOARD_D * 2.0))
+		else:
+			_annex_baseboard_box(
+				Vector3(face + face_sign * ANNEX_BASEBOARD_D * 0.5,
+					ANNEX_BASEBOARD_H * 0.5,
+					(a + b) * 0.5),
+				Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H, b - a))
+			if not is_zero_approx(a):
+				_annex_baseboard_box(
+					Vector3(plane, ANNEX_BASEBOARD_H * 0.5,
+						a - ANNEX_BASEBOARD_D * 0.5),
+					Vector3(ANNEX_WALL_T + ANNEX_BASEBOARD_D * 2.0,
+						ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
+			if not is_equal_approx(b, S):
+				_annex_baseboard_box(
+					Vector3(plane, ANNEX_BASEBOARD_H * 0.5,
+						b + ANNEX_BASEBOARD_D * 0.5),
+					Vector3(ANNEX_WALL_T + ANNEX_BASEBOARD_D * 2.0,
+						ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
 
 
 func _annex_lobby() -> void:
@@ -6394,8 +6857,12 @@ func _annex_lobby() -> void:
 	# An asymmetrical deep mass plus one smaller support creates the framed,
 	# layered sightlines in the references without turning the lobby into a
 	# regular procedural column grid.
-	_annex_block(_wp(c, Vector3(-2.0, 0, -0.18), yaw), yaw,
-		2.35, 1.35, ceil_h, "annex_wall_mass")
+	var mass_p := _wp(c, Vector3(-2.0, 0, -0.18), yaw)
+	if _r(552) >= 0.55 \
+			or not _annex_tunnel_mass(
+				mass_p, yaw, 2.35, ANNEX_TUNNEL_MIN_DEPTH, ceil_h):
+		_annex_block(mass_p, yaw,
+			2.35, 1.35, ceil_h, "annex_wall_mass")
 	_annex_block(_wp(c, Vector3(2.65, 0, 0.32), yaw), 0.0,
 		1.10, 1.10, ceil_h, "annex_column")
 	if _r(551) < 0.92:
@@ -7891,7 +8358,7 @@ func _air_window_wall(o: Vector3, yw: float) -> void:
 	var barrier_glass := _mbox(W, Vector3(0, ceil_h / 2.0, gz),
 		Vector3(S - 0.1, ceil_h - 0.2, 0.024), Mats.airport_glass())
 	barrier_glass.set_meta("airport_barrier_glass", true)
-	barrier_glass.set_meta("barrier_alpha", 0.24)
+	barrier_glass.set_meta("barrier_alpha", 0.38)
 	_collider_yaw_box(_wp(o, Vector3(0, ceil_h / 2.0, gz), yw), Vector3(S, ceil_h, 0.1), yw)
 	# Two rows of ceramic manifestation dots make the full-height pane legible
 	# head-on without turning the apron view into an opaque wall.
@@ -8166,7 +8633,7 @@ func _travelator(p: Vector3, yaw: float, flow: float, salt: int, L := 8.4) -> vo
 		var bg := _mbox(v, Vector3(0, 0.78, z),
 			Vector3(L - 0.3, 0.55, 0.024), Mats.airport_glass())
 		bg.set_meta("airport_barrier_glass", true)
-		bg.set_meta("barrier_alpha", 0.24)
+		bg.set_meta("barrier_alpha", 0.38)
 		bg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var bh := _mrbox(v, Vector3(0, 1.08, z), Vector3(L, 0.075, 0.09), Mats.rubber_black(), 0.03)
 		bh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -14000,3 +14467,672 @@ func _prison_rotunda() -> void:
 		var lane := _box(lp + Vector3(0, 0.012, 0), Vector3(0.07, 0.015, 2.6),
 			Mats.caution_yellow(), false)
 		lane.rotation.y = -a + PI / 2.0
+
+
+# --- the Poolrooms ------------------------------------------------------------
+#
+# Every cell of this floor floods to exactly POOL_WATER_Y, so the water is one
+# continuous body over the whole level and is always the same depth: chest high
+# on the player, whose eye sits at 1.377m. Nothing sinks the walkable floor —
+# it stays on the y=0 datum every other theme uses, which is what lets arrival,
+# collision and the existing audits go on working untouched. What varies
+# between rooms is what stands in the water and what you can climb out onto.
+
+## Surface height. Deliberately below the camera so the horizon of the water
+## sits just under your eyeline, which is the framing the reference renders use.
+const POOL_WATER_Y := 1.05
+## Dry walkways sit clear of the surface with a coping lip above that.
+const POOL_DECK_Y := 1.42
+## Dry halls stand just clear of the water next door, so the step between a
+## pool and a dry floor is one flight of treads rather than a climb.
+const POOL_DRY_Y := 1.42
+## Openings on this floor are cut tall enough to be walked through from the
+## DRY side too. The generic DOOR_TOP assumes a floor at y=0; a dry hall stands
+## at POOL_DRY_Y, so a normal doorway left only 1.1m of headroom there and the
+## ladder delivered you to a gap you could not fit through.
+const POOL_DOOR_TOP := POOL_DRY_Y + 2.15
+const POOL_PIER := 1.05      # a tiled pier is a metre across and square
+const POOL_LADDER_W := 0.52
+const POOL_LADDER_PATH := "res://models/cc_by/pool_ladder/pool_ladder.glb"
+## Life size. Measured per-mesh in model space: the mounting flanges sit at
+## y ≈ 0 — the model's origin is the DECK PLANE, not its base — with the grab
+## rails arching to +0.79 above it and the treads hanging to −0.46 below, on
+## the +Z side. Every earlier placement here failed by assuming the origin was
+## at the bottom of the assembly.
+const POOL_LADDER_SCALE := 1.0
+
+
+func _pool_floor_ceiling() -> void:
+	_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S),
+		Mats.pool_wall_tile())
+	if _pool_dry():
+		# A dry hall. Its floor is a solid slab standing just clear of the
+		# water next door, so you walk out of the pool onto it rather than
+		# climbing, and it is genuinely somewhere to stand and dry off.
+		_box(Vector3(S / 2.0, POOL_DRY_Y * 0.5 - 0.15, S / 2.0),
+			Vector3(S, POOL_DRY_Y + 0.3, S), Mats.pool_tile())
+		_pool_edge_steps()
+		return
+	_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.pool_tile())
+	# The surface itself carries no collider: you wade through it, and the
+	# basin floor underneath is what holds you up.
+	# A subdivided plane, never a box. A box showed its side faces at every
+	# chunk join — those were the black seams — and having no interior vertices
+	# it left the vertex swell with nothing to displace, so the surface read
+	# dead flat.
+	#
+	# Exactly one cell across, with NO overlap onto the neighbour. Lapping the
+	# plane past the cell stacked two translucent surfaces at every join, and
+	# 0.6 opacity over 0.6 is 0.84 — a darker strip that a grazing view smears
+	# into a broad bar across the water. The swell is a pure function of world
+	# position, so neighbouring planes agree along the shared edge anyway and
+	# meeting exactly is seamless.
+	var surf := PlaneMesh.new()
+	surf.size = Vector2(S, S)
+	surf.subdivide_width = 28
+	surf.subdivide_depth = 28
+	var water := MeshInstance3D.new()
+	water.mesh = surf
+	water.material_override = Mats.pool_water()
+	water.position = Vector3(S / 2.0, POOL_WATER_Y, S / 2.0)
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water.set_meta("pool_water_surface", true)
+	add_child(water)
+	_pool_edge_steps()
+
+
+## Which halls hold water. Roughly a third of the floor is dry tile, because a
+## level that is nothing but standing water gives the player nowhere to stand,
+## nothing to contrast the water against, and no way out of it.
+static func pool_style_dry(st: int) -> bool:
+	# Over half the floor is dry tile. An endless sheet of water gives the
+	# player nowhere to stand, nothing to read the water against, and no sense
+	# of having arrived anywhere — the pools should be rooms in a building.
+	return st == WorldGen.POOL_DECK or st == WorldGen.POOL_ALCOVE \
+		or st == WorldGen.POOL_GALLERY or st == WorldGen.POOL_SOLARIUM
+
+
+func _pool_dry() -> bool:
+	return pool_style_dry(style)
+
+
+## Where a dry hall meets a flooded one, the floor has to step. Three broad
+## tiled treads in the doorway, always built by whichever side is dry so the
+## two cells cannot each build their own and interleave.
+func _pool_edge_steps() -> void:
+	if not _pool_dry():
+		return
+	for dir in 4:
+		var info := WorldGen.edge_info(wseed, cell, dir, theme)
+		if bool(info["wall"]):
+			continue
+		var nb: Vector2i = cell + WorldGen.DIRV[dir]
+		if pool_style_dry(WorldGen.cell_style(wseed, nb, theme)):
+			continue
+		var t := float(info["t"])
+		var w := maxf(float(info["w"]), 2.6)
+		var steps := 3
+		for i in steps:
+			# Each tread is lower and reaches further out into the water.
+			var top := POOL_DRY_Y * (1.0 - float(i) / float(steps))
+			var out := 0.55 + float(i) * 0.55
+			var pos: Vector3
+			var size: Vector3
+			match dir:
+				0:
+					pos = Vector3(S - out * 0.5 + out, top * 0.5, t)
+					pos.x = S + out * 0.5 - out
+					size = Vector3(out, maxf(top, 0.10), w)
+					pos.x = S - out * 0.5
+				1:
+					pos = Vector3(out * 0.5, top * 0.5, t)
+					size = Vector3(out, maxf(top, 0.10), w)
+				2:
+					pos = Vector3(t, top * 0.5, S - out * 0.5)
+					size = Vector3(w, maxf(top, 0.10), out)
+				_:
+					pos = Vector3(t, top * 0.5, out * 0.5)
+					size = Vector3(w, maxf(top, 0.10), out)
+			var tread := _box(pos, size, Mats.pool_tile())
+			tread.set_meta("pool_step", true)
+		# Every single water-to-dry edge gets one — hunting for the one wall
+		# that happens to have a ladder is not a mechanic — and a broad opening
+		# gets a second, so no climbable run is more than a few metres from one.
+		_pool_wall_ladder(dir, t - w * 0.26)
+		if w > 5.0:
+			_pool_wall_ladder(dir, t + w * 0.34)
+
+
+## A square tiled pier from the basin floor to the ceiling. These are the
+## columns standing in the water in every reference image, and they are what
+## breaks the sight lines into something you can get lost in.
+func _pool_pier(at: Vector3) -> void:
+	var p := _box(Vector3(at.x, ceil_h * 0.5, at.z),
+		Vector3(POOL_PIER, ceil_h, POOL_PIER), Mats.pool_tile())
+	p.set_meta("pool_pier", true)
+
+
+## A dry walkway along one wall, its coping lip proud of the water, plus the
+## ladder that is the only way back up onto it. `dir` picks the wall.
+func _pool_deck(dir: int, width: float) -> void:
+	var half := width * 0.5
+	var centre := half
+	var deck_pos: Vector3
+	var deck_size: Vector3
+	match dir:
+		0:
+			deck_pos = Vector3(S - centre, POOL_DECK_Y * 0.5, S / 2.0)
+			deck_size = Vector3(width, POOL_DECK_Y, S)
+		1:
+			deck_pos = Vector3(centre, POOL_DECK_Y * 0.5, S / 2.0)
+			deck_size = Vector3(width, POOL_DECK_Y, S)
+		2:
+			deck_pos = Vector3(S / 2.0, POOL_DECK_Y * 0.5, S - centre)
+			deck_size = Vector3(S, POOL_DECK_Y, width)
+		_:
+			deck_pos = Vector3(S / 2.0, POOL_DECK_Y * 0.5, centre)
+			deck_size = Vector3(S, POOL_DECK_Y, width)
+	var deck := _box(deck_pos, deck_size, Mats.pool_tile())
+	deck.set_meta("pool_deck", true)
+	# The coping: a darker rounded band capping the edge, which is what makes
+	# this read as a built pool rather than a hole cut in a floor.
+	var lip_pos := deck_pos
+	var lip_size := deck_size
+	var inward := -1.0 if dir == 0 or dir == 2 else 1.0
+	if dir < 2:
+		lip_pos.x = deck_pos.x + inward * (half - 0.11)
+		lip_size = Vector3(0.22, 0.10, S)
+	else:
+		lip_pos.z = deck_pos.z + inward * (half - 0.11)
+		lip_size = Vector3(S, 0.10, 0.22)
+	lip_pos.y = POOL_DECK_Y + 0.05
+	_box(lip_pos, lip_size, Mats.pool_coping(), false)
+	var along := lerpf(3.0, S - 3.0, _r(2210 + dir))
+	_pool_ladder(dir, half, along)
+
+
+## Stainless grab rails hooping out of the deck edge down into the water. The
+## rails are the climbable volume: the player script looks for the area, not
+## for the geometry, so the ladder works no matter how it is dressed.
+func _pool_ladder(dir: int, deck_half: float, along: float) -> void:
+	var inward := -1.0 if dir == 0 or dir == 2 else 1.0
+	var edge: float = (S - deck_half) if dir == 0 \
+		else (deck_half if dir == 1 else 0.0)
+	var pivot := Node3D.new()
+	if dir < 2:
+		pivot.position = Vector3(edge + inward * 0.16, 0.0, along)
+	else:
+		edge = (S - deck_half) if dir == 2 else deck_half
+		pivot.position = Vector3(along, 0.0, edge + inward * 0.16)
+	pivot.rotation.y = 0.0 if dir < 2 else PI / 2.0
+	pivot.set_meta("pool_ladder", true)
+	add_child(pivot)
+	var rail := Mats.pool_rail()
+	# two uprights curving over the coping, and three rungs between them
+	for side in [-1.0, 1.0]:
+		_mcyl(pivot, Vector3(0, POOL_DECK_Y * 0.5 + 0.25, side * 0.24),
+			0.028, POOL_DECK_Y + 0.5, rail)
+	for i in 3:
+		var y := 0.30 + float(i) * 0.34
+		_mbox(pivot, Vector3(0, y, 0), Vector3(0.06, 0.035, POOL_LADDER_W),
+			rail)
+	var area := Area3D.new()
+	area.position = Vector3(0, POOL_DECK_Y * 0.5, 0)
+	area.set_meta("pool_ladder_volume", true)
+	# The player finds this with a point query on its own layer; it must never
+	# collide with anything, only be findable.
+	area.collision_layer = Player.LADDER_LAYER
+	area.collision_mask = 0
+	area.monitorable = true
+	area.monitoring = false
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.95, POOL_DECK_Y + 1.2, POOL_LADDER_W + 0.5)
+	cs.shape = box
+	area.add_child(cs)
+	pivot.add_child(area)
+
+
+## A wide tiled stair walking down into the water, the calmest way in.
+func _pool_stairs(dir: int) -> void:
+	var steps := 4
+	for i in steps:
+		var h := POOL_DECK_Y * (1.0 - float(i) / float(steps))
+		var depth := 0.55
+		var run := 1.3 + float(i) * depth
+		var pos: Vector3
+		var size: Vector3
+		if dir < 2:
+			var x: float = (S - run * 0.5) if dir == 0 else run * 0.5
+			pos = Vector3(x, h * 0.5, S / 2.0)
+			size = Vector3(run, maxf(h, 0.08), 4.6)
+		else:
+			var z: float = (S - run * 0.5) if dir == 2 else run * 0.5
+			pos = Vector3(S / 2.0, h * 0.5, z)
+			size = Vector3(4.6, maxf(h, 0.08), run)
+		var st := _box(pos, size, Mats.pool_tile())
+		st.set_meta("pool_step", true)
+
+
+## Every window on this floor is the same rounded pill. The old flat variant
+## built a stacked-box "arch" that read as a lumpy white rectangle pasted on
+## the tile rather than an opening — it had no reveal, so nothing about it
+## said the wall had thickness. Kept as a name so callers need not care.
+func _pool_window(dir: int, along: float, tall := true) -> void:
+	# Only ever on a solid outside wall. Placed on an edge that is actually an
+	# opening, the pane hangs in mid-air in the middle of the doorway — which
+	# is exactly what it was doing. This also keeps them sparse for free:
+	# a room with three ways out can only carry one.
+	if not bool(WorldGen.edge_info(wseed, cell, dir, theme)["wall"]):
+		return
+	_pool_round_window(dir, along, tall)
+
+
+func _pool_round_window(dir: int, along: float, tall := true) -> void:
+	# A CylinderMesh's axis is +Y. The caps therefore have to be turned onto the
+	# wall normal individually — rotating the parent instead sent them spinning
+	# off axis and left huge unshaded discs hanging in the room.
+	var plane := (S - 0.12) if (dir == 0 or dir == 2) else 0.12
+	var inward := -1.0 if (dir == 0 or dir == 2) else 1.0
+	var r := 0.55
+	var body := 1.45 if tall else 0.0
+	var mid := POOL_WATER_Y + 1.05 + body * 0.5
+	var pivot := Node3D.new()
+	pivot.position = Vector3(plane, mid, along) if dir < 2 \
+		else Vector3(along, mid, plane)
+	pivot.set_meta("pool_window", true)
+	pivot.set_meta("pool_window_round", true)
+	add_child(pivot)
+	# A reveal in front of the light. Without this the pane sits flush on the
+	# tile and reads as a decal; recessed, the jamb catches a highlight and the
+	# wall finally has thickness.
+	var reveal := Mats.pool_wall_tile()
+	var rw := r + 0.16
+	var rsize := Vector3(0.20, body + rw * 2.0, rw * 2.0) if dir < 2 \
+		else Vector3(rw * 2.0, body + rw * 2.0, 0.20)
+	var frame := _mbox(pivot, Vector3(inward * -0.11, 0.0, 0.0) if dir < 2 \
+		else Vector3(0.0, 0.0, inward * -0.11), rsize, reveal)
+	frame.set_meta("pool_window_reveal", true)
+	var glow := Mats.pool_daylight()
+	var caps: Array = [-1.0, 1.0] if body > 0.01 else [0.0]
+	for sgn: float in caps:
+		var c := _mcyl(pivot, Vector3(0, sgn * body * 0.5, 0), r, 0.09, glow)
+		if dir < 2:
+			c.rotation.z = PI / 2.0
+		else:
+			c.rotation.x = PI / 2.0
+	if body > 0.01:
+		var size := Vector3(0.09, body, r * 2.0) if dir < 2 \
+			else Vector3(r * 2.0, body, 0.09)
+		_mbox(pivot, Vector3.ZERO, size, glow)
+	if has_meta("pool_window_lit"):
+		return
+	set_meta("pool_window_lit", true)
+	var lamp := SpotLight3D.new()
+	lamp.light_color = Color(1.0, 0.98, 0.90)
+	lamp.light_energy = 3.8
+	lamp.spot_range = 17.0
+	lamp.spot_angle = 46.0
+	lamp.shadow_enabled = false
+	lamp.position = pivot.position + (Vector3(inward * 0.35, 0, 0) if dir < 2 \
+		else Vector3(0, 0, inward * 0.35))
+	lamp.rotation.y = (-PI / 2.0 if dir == 0 else PI / 2.0) if dir < 2 \
+		else (PI if dir == 2 else 0.0)
+	lamp.rotation.x = -0.30
+	lamp.set_meta("pool_window_light", true)
+	add_child(lamp)
+
+
+## A quarter-round tiled corner. Real bath houses coved their corners so they
+## could be swabbed out, and it is the single cheapest thing that stops every
+## room reading as a box: the tile grid bends round it because the shader maps
+## in world space rather than per-face.
+func _pool_curved_corner(cx: float, cz: float, radius: float) -> void:
+	var pivot := Node3D.new()
+	pivot.position = Vector3(cx, 0.0, cz)
+	pivot.set_meta("pool_cove", true)
+	add_child(pivot)
+	var mat := Mats.pool_wall_tile()
+	var steps := 4
+	var sx := -1.0 if cx > S * 0.5 else 1.0
+	var sz := -1.0 if cz > S * 0.5 else 1.0
+	for i in steps:
+		var a := (float(i) + 0.5) / float(steps) * (PI / 2.0)
+		var seg := _mbox(pivot,
+			Vector3(sx * cos(a) * radius * 0.5, ceil_h * 0.5,
+				sz * sin(a) * radius * 0.5),
+			Vector3(0.52, ceil_h, 0.52), mat)
+		seg.rotation.y = -a * sx * sz
+	# One box stands in for the whole cove. Six colliders per corner, four
+	# corners a room, was a large part of why the floor streamed in visibly.
+	_collider_box(pivot.position
+		+ Vector3(sx * radius * 0.32, ceil_h * 0.5, sz * radius * 0.32),
+		Vector3(radius * 1.05, ceil_h, radius * 1.05))
+
+
+## Cove two or four corners of a room, so the floor is not uniformly boxy.
+func _pool_cove_corners(salt: int) -> void:
+	var radius := lerpf(1.1, 1.9, _r(salt))
+	var corners := [
+		Vector2(radius, radius), Vector2(S - radius, radius),
+		Vector2(radius, S - radius), Vector2(S - radius, S - radius),
+	]
+	for i in corners.size():
+		if _r(salt + 1 + i) > 0.68:
+			continue
+		var c: Vector2 = corners[i]
+		if not bool(WorldGen.edge_info(wseed, cell,
+				0 if c.x > S * 0.5 else 1, theme)["wall"]):
+			continue
+		_pool_curved_corner(c.x, c.y, radius)
+
+
+## A ladder out of the water at a pool/dry boundary, climbing the 1.15m to the
+## dry floor. Built alongside the treads rather than instead of them, so a
+## player who wants the ladder finds one and a player who does not can walk.
+func _pool_wall_ladder(dir: int, along: float) -> void:
+	# Hung off the dry cell's edge, out over the water it serves.
+	var edge: float = S if dir == 0 else (0.0 if dir == 1 else (S if dir == 2 else 0.0))
+	_pool_ladder_at(dir, edge, along, -1.0 if (dir == 0 or dir == 2) else 1.0)
+
+
+
+## Rooms are lit by daylight they cannot see the source of, plus the odd
+## working fluorescent over a dry hall. The water does the rest: its specular
+## picks the fixtures up as the long rectangles the reference is full of.
+func _pool_lighting() -> void:
+	var warm := Color(0.94, 0.97, 0.95)
+	var lamp := OmniLight3D.new()
+	lamp.light_color = warm
+	lamp.light_energy = 1.05
+	lamp.omni_range = 14.0
+	lamp.shadow_enabled = false
+	lamp.position = Vector3(S / 2.0, ceil_h - 0.7, S / 2.0)
+	add_child(lamp)
+	if style == WorldGen.POOL_ALCOVE:
+		lamp.light_energy = 0.45
+		return
+	if style == WorldGen.POOL_DECK or style == WorldGen.POOL_GALLERY \
+			or style == WorldGen.POOL_CHANNEL:
+		var strip := _box(Vector3(S / 2.0, ceil_h - 0.06, S / 2.0),
+			Vector3(0.55, 0.06, S - 2.2), Mats.pool_daylight(), false)
+		strip.set_meta("pool_strip", true)
+		var s2 := OmniLight3D.new()
+		s2.light_color = warm
+		s2.light_energy = 1.0
+		s2.omni_range = 11.0
+		s2.shadow_enabled = false
+		s2.position = Vector3(S / 2.0, ceil_h - 0.5, S / 2.0)
+		add_child(s2)
+
+
+const POOL_BUOY_PATH := "res://models/cc_by/pool_buoy/pool_buoy.glb"
+## One abandoned float reads as a place people left; a dozen reads as a ball
+## pit. Kept rare, and re-tinted per instance so the same ring is never
+## obviously the same ring twice.
+const POOL_BUOY_TINTS := [
+	Color(0.62, 0.24, 0.72), Color(0.86, 0.32, 0.30),
+	Color(0.28, 0.52, 0.80), Color(0.92, 0.74, 0.26),
+	Color(0.30, 0.68, 0.48),
+]
+
+
+## A grid of piers. Offset so the rows never line up into a corridor, which is
+## what turns an open hall into somewhere you lose track of yourself.
+func _pool_piers(salt: int, count: int) -> void:
+	var placed := 0
+	for i in 9:
+		if placed >= count:
+			return
+		var gx := 2.4 + float(i % 3) * 3.6
+		var gz := 2.4 + float(i / 3) * 3.6
+		gx += (_r(salt + i * 3) - 0.5) * 1.1
+		gz += (_r(salt + i * 3 + 1) - 0.5) * 1.1
+		if _r(salt + i * 3 + 2) > 0.72:
+			continue
+		_pool_pier(Vector3(gx, 0, gz))
+		placed += 1
+
+
+func _pool_float(salt: int) -> void:
+	if _pool_dry() or _r(salt) > 0.16:
+		return
+	var at := Vector3(lerpf(2.6, S - 2.6, _r(salt + 1)), POOL_WATER_Y - 0.05,
+		lerpf(2.6, S - 2.6, _r(salt + 2)))
+	if not _floor_spot_clear(Vector3(at.x, 0.0, at.z), 0.6, 0.4):
+		return
+	var pivot := _furnishing_pivot(at, _r(salt + 3) * TAU, "pool_float", false)
+	var inst := _attributed_prop_local(pivot, POOL_BUOY_PATH, Vector3.ZERO, 0.0,
+		Vector3.ONE * 0.55)
+	if inst == null:
+		return
+	var tint: Color = POOL_BUOY_TINTS[
+		WorldGen.h(wseed, cell.x, cell.y, salt + 7) % POOL_BUOY_TINTS.size()]
+	for node in inst.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		var m := StandardMaterial3D.new()
+		m.albedo_color = tint
+		m.roughness = 0.34
+		mi.material_override = m
+	inst.set_meta("pool_float_tint", tint)
+
+
+## Handrail along a dry edge — the detail that most says "municipal pool".
+func _pool_handrail(dir: int, inset: float) -> void:
+	var rail := Mats.pool_rail()
+	var pivot := Node3D.new()
+	var base := POOL_DRY_Y if _pool_dry() else 0.0
+	if dir < 2:
+		pivot.position = Vector3((S - inset) if dir == 0 else inset, base, S / 2.0)
+	else:
+		pivot.position = Vector3(S / 2.0, base, (S - inset) if dir == 2 else inset)
+	pivot.rotation.y = 0.0 if dir < 2 else PI / 2.0
+	pivot.set_meta("pool_handrail", true)
+	add_child(pivot)
+	var span := S - 1.6
+	var top := _mcyl(pivot, Vector3(0, 0.92, 0), 0.026, span, rail)
+	top.rotation.x = PI / 2.0
+	for i in 4:
+		var z := -span * 0.5 + span * (float(i) / 3.0)
+		_mcyl(pivot, Vector3(0, 0.46, z), 0.024, 0.92, rail)
+
+
+## A dry walkway along one wall of a flooded room, standing at the same height
+## as the dry halls, with a ladder down into the water. This is what stops the
+## floor being all-or-nothing: most pools should have an edge you can walk.
+func _pool_side_walk(dir: int, width: float) -> void:
+	var pos: Vector3
+	var size: Vector3
+	var half := width * 0.5
+	match dir:
+		0:
+			pos = Vector3(S - half, POOL_DRY_Y * 0.5, S / 2.0)
+			size = Vector3(width, POOL_DRY_Y, S)
+		1:
+			pos = Vector3(half, POOL_DRY_Y * 0.5, S / 2.0)
+			size = Vector3(width, POOL_DRY_Y, S)
+		2:
+			pos = Vector3(S / 2.0, POOL_DRY_Y * 0.5, S - half)
+			size = Vector3(S, POOL_DRY_Y, width)
+		_:
+			pos = Vector3(S / 2.0, POOL_DRY_Y * 0.5, half)
+			size = Vector3(S, POOL_DRY_Y, width)
+	var walk := _box(pos, size, Mats.pool_tile())
+	walk.set_meta("pool_side_walk", true)
+	# The ladder hangs off its inner edge, over the water it serves.
+	var inner: float = (S - width) if dir == 0 else (width if dir == 1 else 0.0)
+	if dir >= 2:
+		inner = (S - width) if dir == 2 else width
+	_pool_ledge_ladder(dir, inner, S * 0.28 + (_r(2500 + dir) - 0.5) * 1.6)
+	_pool_ledge_ladder(dir, inner, S * 0.72 + (_r(2504 + dir) - 0.5) * 1.6)
+
+
+## A narrow raised causeway straight across a flooded room.
+func _pool_bridge(along_x: bool) -> void:
+	var w := 2.1
+	var pos := Vector3(S / 2.0, POOL_DRY_Y * 0.5, S / 2.0)
+	var size := Vector3(S, POOL_DRY_Y, w) if along_x \
+		else Vector3(w, POOL_DRY_Y, S)
+	var deck := _box(pos, size, Mats.pool_tile())
+	deck.set_meta("pool_bridge", true)
+	if along_x:
+		_pool_ledge_ladder(3, (S + w) * 0.5, lerpf(3.0, S - 3.0, _r(2510)))
+		_pool_ledge_ladder(2, (S - w) * 0.5, lerpf(3.0, S - 3.0, _r(2511)))
+	else:
+		_pool_ledge_ladder(1, (S + w) * 0.5, lerpf(3.0, S - 3.0, _r(2510)))
+		_pool_ledge_ladder(0, (S - w) * 0.5, lerpf(3.0, S - 3.0, _r(2511)))
+
+
+## A real pool ladder: two uprights from the basin floor, rungs at and below
+## the lip, and — the part that was missing — grab rails that bend over the
+## edge and run back across the deck. Without that top return it is two bare
+## posts standing in the water with its rungs hidden under the surface.
+func _pool_ladder_at(dir: int, edge: float, along: float, inward: float) -> void:
+	along = clampf(along, 1.1, S - 1.1)
+	# Placement computed from the model's measured anatomy, not guessed. In its
+	# own space: the deck flanges sit at y ≈ 0 and z ≈ 0, the grab rails arch
+	# to +0.79 ABOVE that plane, and the treads hang to −0.46 BELOW it at
+	# z 0.47–0.58. So y = 0 is the DECK PLANE and +Z is the WATER direction.
+	# Seating it is therefore exact: origin a hand's width onto the dry side of
+	# the lip, raised to POOL_DRY_Y, +Z yawed toward the water. The flanges
+	# land on tile, the rails stand over the deck, and the treads overhang the
+	# edge and descend through the waterline — the reference photo, verbatim.
+	var setback := 0.15
+	var pivot := Node3D.new()
+	var off := inward * setback
+	match dir:
+		0: pivot.position = Vector3(edge + off, 0.0, along)
+		1: pivot.position = Vector3(edge + off, 0.0, along)
+		2: pivot.position = Vector3(along, 0.0, edge + off)
+		_: pivot.position = Vector3(along, 0.0, edge + off)
+	pivot.rotation.y = 0.0 if dir < 2 else PI / 2.0
+	pivot.set_meta("pool_ladder", true)
+	add_child(pivot)
+	# Water direction along the working axis is -inward; the pivot's own PI/2
+	# for dir >= 2 flips the sense, hence the sign split.
+	var model_yaw := (-inward if dir < 2 else inward) * PI / 2.0
+	var inst := _attributed_prop_local(pivot, POOL_LADDER_PATH,
+		Vector3(0.0, POOL_DRY_Y, 0.0), model_yaw,
+		Vector3.ONE * POOL_LADDER_SCALE)
+	if inst != null:
+		inst.set_meta("pool_ladder_model", true)
+	var area := Area3D.new()
+	area.position = Vector3(0, 0.9, 0)
+	area.set_meta("pool_ladder_volume", true)
+	area.collision_layer = Player.LADDER_LAYER
+	area.collision_mask = 0
+	area.monitorable = true
+	area.monitoring = false
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(1.6, 3.0, POOL_LADDER_W + 1.1)
+	cs.shape = box
+	area.add_child(cs)
+	pivot.add_child(area)
+
+
+func _pool_ledge_ladder(dir: int, edge: float, along: float) -> void:
+	_pool_ladder_at(dir, edge, along, 1.0 if (dir == 0 or dir == 2) else -1.0)
+
+
+func _pool_basin_room() -> void:
+	# Most pools have an edge. Only a minority are wall-to-wall water.
+	var roll := _r(2380)
+	if roll < 0.46:
+		_pool_side_walk(int(_r(2381) * 3.99), lerpf(2.2, 3.2, _r(2382)))
+	elif roll < 0.64:
+		_pool_bridge(_r(2383) < 0.5)
+	_pool_piers(2300, 3 + int(_r(2301) * 2.99))
+	if _r(2306) < 0.7:
+		_pool_cove_corners(2307)
+	if _r(2302) < 0.42:
+		_pool_window(0 if _r(2303) < 0.5 else 1, lerpf(3.0, S - 3.0, _r(2304)))
+	_pool_float(2305)
+
+
+func _pool_channel_room() -> void:
+	# A swimming lane: walled either side of the through axis, with both ends
+	# open so the water keeps running out of sight.
+	var axis := WorldGen.corridor(wseed, cell)
+	var along_x := axis == 1
+	for side in [-1.0, 1.0]:
+		var pos := Vector3(S / 2.0, ceil_h * 0.5, S / 2.0)
+		var size := Vector3(S, ceil_h, 1.9)
+		if along_x:
+			pos.z = S / 2.0 + side * 4.05
+		else:
+			pos.x = S / 2.0 + side * 4.05
+			size = Vector3(1.9, ceil_h, S)
+		var w := _box(pos, size, Mats.pool_wall_tile())
+		w.set_meta("pool_channel_side", true)
+	if _r(2310) < 0.34:
+		_pool_window(2 if along_x else 0, lerpf(3.5, S - 3.5, _r(2311)), false)
+	# A towpath down one side of the lane, so a channel is swimmable or
+	# walkable rather than forcing you into the water every time.
+	if _r(2313) < 0.5:
+		_pool_side_walk(3 if along_x else 1, 2.0)
+	_pool_float(2312)
+
+
+func _pool_deck_room() -> void:
+	# Dry. Tiled floor to tiled wall, a few structural piers and the light.
+	var dir := int(_r(2320) * 3.99)
+	_pool_piers(2322, 2 + int(_r(2323) * 1.99))
+	if _r(2324) < 0.6:
+		_pool_window(dir, lerpf(3.0, S - 3.0, _r(2325)))
+	if _r(2328) < 0.7:
+		_pool_cove_corners(2329)
+
+
+func _pool_solarium_room() -> void:
+	# The room the light comes into: a wall of tall windows and almost nothing
+	# else, so the shafts have the whole space to fall through.
+	var dir := int(_r(2330) * 3.99)
+	for i in 3:
+		_pool_window(dir, 2.6 + float(i) * 3.4)
+	_pool_cove_corners(2337)
+	_pool_piers(2331, 2)
+
+
+func _pool_alcove_room() -> void:
+	# No windows at all. Still, dim, and coved to a tiled tank.
+	_pool_cove_corners(2343)
+	_pool_piers(2340, 1 + int(_r(2341) * 1.99))
+
+
+func _pool_stairs_room() -> void:
+	var dir := int(_r(2350) * 3.99)
+	_pool_stairs(dir)
+	if _r(2354) < 0.5:
+		_pool_side_walk((dir + 2) % 4, 2.2)
+	if _r(2351) < 0.45:
+		_pool_window((dir + 2) % 4, lerpf(3.0, S - 3.0, _r(2352)))
+	_pool_float(2353)
+
+
+func _pool_gallery_room() -> void:
+	var dir := int(_r(2360) * 3.99)
+	_pool_handrail(dir, 1.5)
+	_pool_piers(2361, 3 + int(_r(2362) * 2.99))
+	if _r(2366) < 0.7:
+		_pool_cove_corners(2367)
+	if _r(2363) < 0.5:
+		_pool_window((dir + 2) % 4, lerpf(3.0, S - 3.0, _r(2364)))
+
+
+func _pool_cistern_room() -> void:
+	# The landmark: a wide dim hall of piers lit only from high skylights, so
+	# the far end of the water is never quite resolvable.
+	_pool_piers(2370, 7)
+	for i in 3:
+		var sky := _box(Vector3(3.0 + float(i) * 3.0, ceil_h - 0.05, S * 0.5),
+			Vector3(1.5, 0.08, 3.4), Mats.pool_daylight(), false)
+		sky.set_meta("pool_skylight", true)
+		var lamp := OmniLight3D.new()
+		lamp.light_color = Color(1.0, 0.98, 0.92)
+		lamp.light_energy = 1.4
+		lamp.omni_range = 12.0
+		lamp.shadow_enabled = false
+		lamp.position = Vector3(3.0 + float(i) * 3.0, ceil_h - 1.2, S * 0.5)
+		add_child(lamp)
+	_pool_float(2371)

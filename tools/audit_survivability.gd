@@ -172,10 +172,6 @@ func _figure_holds_still() -> int:
 	f.position = Vector3(0, 0, 6.0)
 	f.suppressed = true
 	host.add_child(f)
-	# A small minority spawn already walking away and never turn back. They are
-	# not what suppression is for — one leaving is welcome to keep leaving — so
-	# pin this to the stalking case, which is the one that can kill you.
-	f._drift = Vector3.ZERO
 	var start := _flat_dist(f.position, stub.global_position)
 	for i in 240:
 		f._physics_process(STEP)

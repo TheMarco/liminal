@@ -23,7 +23,8 @@ const INSTRUCTION_ROWS := [
 	["E", "Use terminals, lifts and selected doors"],
 	["F", "Toggle the flashlight"],
 	["1  —  8", "Move between floors  ·  Wander only"],
-	["V", "Toggle the CRT view  ·  Wander only"],
+	["V", "Toggle the video filter  ·  Wander only"],
+	["B", "Switch CRT / recovered-tape video mode"],
 	["Q", "Ask to leave the current mode"],
 	["ESC", "Release the mouse"],
 ]
@@ -36,6 +37,7 @@ const CREDIT_SECTIONS := [
 			"CASINO   morrrtu1o · Audrey Gonçalves · nermin · Dudzy · juliegraham178",
 			"OFFICE   Red Fox / nokillnando · NotAnotherApocalypticCo. · AquaEquinox",
 			"    Rylae Shylna · maxdragonn · dannaki_ · R3indeer",
+			"ANNEX   carlcapu9 · Avot · Drake · jimbogies · Doverlock",
 			"AIRPORT   Bucks / Its_Bucks · Ellis Fossett · n.philipsen · assetfactory",
 			"ASYLUM   Veterock · loxfear · Ellie · creative_beast · Mehdi Shahsavan",
 			"    Matt LeMoine",
@@ -150,8 +152,8 @@ func _build_instructions() -> void:
 	page.add_child(wander)
 	var descent := _paragraph(
 		"DESCENT  /  Cross all eight floors in order. Follow the route needle. "
-		+ "There is no sprinting, floor selection or CRT toggle. The rules are "
-		+ "shown after you choose the mode.", 17, BODY, 820)
+		+ "There is no sprinting, floor selection or way to disable the video "
+		+ "filter. The rules are shown after you choose the mode.", 17, BODY, 820)
 	page.add_child(descent)
 	page.add_child(_rule(820))
 

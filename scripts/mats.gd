@@ -178,7 +178,7 @@ static func panel_on() -> StandardMaterial3D:
 		m.albedo_color = Color(0.95, 0.9, 0.8)
 		m.emission_enabled = true
 		m.emission = Color(1.0, 0.85, 0.62)
-		m.emission_energy_multiplier = 2.6)
+		m.emission_energy_multiplier = 3.1)
 
 
 static func panel_dead() -> StandardMaterial3D:
@@ -462,7 +462,9 @@ static func glass_tint() -> StandardMaterial3D:
 static func airport_glass() -> StandardMaterial3D:
 	return _std("airport_glass", func(m: StandardMaterial3D):
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		m.albedo_color = Color(0.48, 0.64, 0.72, 0.24)
+		# This is collision glass, not decorative glass. At 0.24 it could vanish
+		# against the black apron and feel like an invisible wall head-on.
+		m.albedo_color = Color(0.48, 0.64, 0.72, 0.38)
 		m.roughness = 0.16
 		m.metallic_specular = 0.88
 		m.clearcoat_enabled = true
@@ -662,13 +664,18 @@ static func annex_wall_variant(idx: int) -> StandardMaterial3D:
 	if _c.has(key):
 		return _c[key]
 	var m := StandardMaterial3D.new()
-	var plain := [
-		Color(0.82, 0.76, 0.47),
-		Color(0.76, 0.70, 0.42),
-		Color(0.88, 0.82, 0.56),
+	var plain_tint := [
+		# The supplied plaster map already carries a pale cream/yellow base.
+		# These near-neutral multipliers preserve the three existing Annex
+		# brightness variants without crushing its fine surface detail.
+		Color(0.86, 0.87, 0.71),
+		Color(0.79, 0.80, 0.63),
+		Color(0.92, 0.93, 0.84),
 	]
 	if idx < 3:
-		m.albedo_color = plain[idx]
+		m.albedo_texture = load(
+			"res://textures/annex/plain_wall_plaster.png")
+		m.albedo_color = plain_tint[idx]
 	else:
 		var path := "res://textures/annex/wallpaper_damask_warm.png" if idx == 3 \
 			else "res://textures/annex/wallpaper_chevron_warm.png"
@@ -680,9 +687,10 @@ static func annex_wall_variant(idx: int) -> StandardMaterial3D:
 	m.metallic_specular = 0.28
 	m.uv1_triplanar = true
 	m.uv1_world_triplanar = true
-	# The geometric source has a much larger repeat than the references. Keep
-	# the damask scale, but halve the chevron motif in both dimensions.
-	m.uv1_scale = Vector3.ONE / (1.175 if idx == 4 else 2.05)
+	# The plaster source represents one broad wall sample, while the geometric
+	# wallpaper needs a tighter repeat. Keep both at believable physical scale.
+	var physical_repeat := 2.40 if idx < 3 else (1.175 if idx == 4 else 2.05)
+	m.uv1_scale = Vector3.ONE / physical_repeat
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	_c[key] = m
 	return m
@@ -737,6 +745,15 @@ static func annex_trim() -> StandardMaterial3D:
 	return _std("annex_trim", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.47, 0.43, 0.27)
 		m.roughness = 0.8)
+
+
+## Pale painted skirting used selectively along complete Annex wall lines.
+## It stays within the carpet/plain-wall palette instead of reading as a dark
+## freestanding rail at floor level.
+static func annex_baseboard() -> StandardMaterial3D:
+	return _std("annex_baseboard", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.86, 0.82, 0.60)
+		m.roughness = 0.88)
 
 
 ## Textured black task chair from 3DModelsCC0/OpenGameArt. The source FBX
@@ -1123,6 +1140,7 @@ const PORTAL_COLS := [
 	[Color(0.85, 0.22, 0.18), Color(1.0, 0.86, 0.72)], # -> school: the red line
 	[Color(0.22, 0.82, 0.78), Color(1.0, 0.68, 0.28)], # -> mall: faded teal / sodium
 	[Color(0.36, 0.48, 0.42), Color(0.78, 0.84, 0.76)],# -> prison: oxidised iron
+	[Color(0.18, 0.62, 0.55), Color(0.86, 0.98, 0.94)],# -> Poolrooms: chlorine green
 ]
 
 
@@ -1345,7 +1363,7 @@ static func asy_panel() -> StandardMaterial3D:
 		m.albedo_color = Color(0.75, 0.82, 0.72)
 		m.emission_enabled = true
 		m.emission = Color(0.8, 0.95, 0.74)
-		m.emission_energy_multiplier = 2.6)
+		m.emission_energy_multiplier = 3.1)
 
 
 # --- school -------------------------------------------------------------------
@@ -1679,4 +1697,110 @@ static func prison_panel() -> StandardMaterial3D:
 		m.albedo_color = Color(0.70, 0.75, 0.68)
 		m.emission_enabled = true
 		m.emission = Color(0.68, 0.82, 0.70)
-		m.emission_energy_multiplier = 2.6)
+		m.emission_energy_multiplier = 3.1)
+
+
+# --- the Poolrooms ------------------------------------------------------------
+
+## Seamless ripple normal map for the water. The spec asks for a 2048 OpenGL
+## normal map; generating it rather than shipping one keeps the floor free of
+## another downloaded dependency and lets the ripple be tuned in code. Low
+## frequency and many octaves is what makes it read as calm water rather than
+## as hammered metal.
+static func pool_ripple_normal() -> NoiseTexture2D:
+	if _c.has("pool_ripple_normal"):
+		return _c["pool_ripple_normal"]
+	var n := FastNoiseLite.new()
+	n.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	n.frequency = 0.014
+	n.fractal_octaves = 4
+	n.fractal_gain = 0.42
+	var t := NoiseTexture2D.new()
+	t.noise = n
+	t.width = 1024
+	t.height = 1024
+	t.seamless = true
+	t.generate_mipmaps = true
+	t.as_normal_map = true
+	t.bump_strength = 1.6
+	_c["pool_ripple_normal"] = t
+	return t
+
+
+## Small white mosaic tile. One material dresses the basin, the piers, the
+## walls and the deck; the shader decides what is submerged from world height,
+## so nothing has to be told which side of the waterline it sits on.
+const POOL_TILE_DIR := "res://models/cc_by/white_tiles/"
+
+
+static func _pool_tile_maps(m: ShaderMaterial) -> void:
+	m.set_shader_parameter("albedo_tex",
+		load(POOL_TILE_DIR + "white_tiles_albedo.png"))
+	m.set_shader_parameter("normal_tex",
+		load(POOL_TILE_DIR + "white_tiles_normal.png"))
+	m.set_shader_parameter("orm_tex",
+		load(POOL_TILE_DIR + "white_tiles_orm.png"))
+	m.set_shader_parameter("water_y", Chunk.POOL_WATER_Y)
+
+
+static func pool_tile() -> ShaderMaterial:
+	if _c.has("pool_tile"):
+		return _c["pool_tile"]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/pool_tile.gdshader")
+	_pool_tile_maps(m)
+	# Small mosaic underfoot: ten tiles to 1.15m puts each one at 11.5cm.
+	m.set_shader_parameter("tex_metres", 1.642)
+	_c["pool_tile"] = m
+	return m
+
+
+## The larger, slightly greyer tile used on walls above the waterline, so a
+## room is not one uniform grid from floor to ceiling.
+static func pool_wall_tile() -> ShaderMaterial:
+	if _c.has("pool_wall_tile"):
+		return _c["pool_wall_tile"]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/pool_tile.gdshader")
+	_pool_tile_maps(m)
+	# Walls and ceilings take a coarser run of the same sheet, so a room is not
+	# one uniform grid from the water to the roof.
+	m.set_shader_parameter("tex_metres", 3.15)
+	m.set_shader_parameter("tile_tint", Color(1.0, 1.0, 0.97))
+	m.set_shader_parameter("caustic_strength", 0.55)
+	_c["pool_wall_tile"] = m
+	return m
+
+
+static func pool_water() -> ShaderMaterial:
+	var m := _shader("pool_water", "res://shaders/pool_water.gdshader")
+	m.set_shader_parameter("normal_tex", pool_ripple_normal())
+	return m
+
+
+## The daylight coming in is not a view of anywhere — it is a blown-out plane
+## that reads as a window because of its shape and its bloom. Giving it real
+## sky would immediately answer the question the floor exists to keep open.
+static func pool_daylight() -> StandardMaterial3D:
+	return _std("pool_daylight", func(m: StandardMaterial3D):
+		m.albedo_color = Color(1.0, 0.99, 0.94)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.985, 0.93)
+		m.emission_energy_multiplier = 3.1
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED)
+
+
+## Wet stainless: the ladders, the grab rails and the mezzanine handrails.
+static func pool_rail() -> StandardMaterial3D:
+	return _std("pool_rail", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.74, 0.77, 0.78)
+		m.metallic = 0.92
+		m.roughness = 0.19)
+
+
+## The deck lip — a rounded darker band capping every pool edge, which is what
+## makes a basin read as a built pool rather than a hole in the floor.
+static func pool_coping() -> StandardMaterial3D:
+	return _std("pool_coping", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.80, 0.81, 0.77)
+		m.roughness = 0.52)

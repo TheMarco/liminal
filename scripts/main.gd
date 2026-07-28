@@ -39,6 +39,22 @@ var _ding: AudioStreamPlayer
 var _warp: AudioStreamPlayer
 var _post: ColorRect
 var _crt := true
+enum PostMode { CRT, FOUND_FOOTAGE }
+var _post_mode := PostMode.CRT
+var _crt_material: ShaderMaterial
+var _found_footage_material: ShaderMaterial
+var _post_signal_corruption := 0.0
+var _post_minor_at := 0.0
+var _post_major_at := 0.0
+var _post_glitch_until := 0.0
+var _post_damage_until := 0.0
+var _post_glitch_active := false
+var _post_glitch_major := false
+var _post_glitch_jitter := 0.006
+var _post_glitch_tracking := 0.18
+var _post_glitch_aberration := 0.0035
+var _post_glitch_noise := 0.10
+var _post_damage_intensity := 0.0
 var _bench := false
 var _bench_t := 0.0
 var _bench_frames := 0
@@ -88,6 +104,8 @@ const MUSIC_TRACKS := {
 	4: "res://music/lim5.mp3", 5: "res://music/lim6.mp3",
 	6: "res://music/lim4.mp3",
 	7: "res://music/lim7.mp3", 8: "res://music/lim8.mp3",
+	# lim3 belonged to the retired theme park and no live floor claimed it.
+	9: "res://music/lim3.mp3",
 }
 # A distinct late-run cue gives Descent's final two floors an audible rise in
 # pressure without changing Wander mode's established per-level soundtrack.
@@ -123,6 +141,8 @@ func _ready() -> void:
 			active_level = lv if WorldGen.THEMES.has(lv) else 0
 		elif arg == "--mode=descent":
 			descent = true
+		elif arg == "--found-footage":
+			_post_mode = PostMode.FOUND_FOOTAGE
 		elif arg.begins_with("--attention="):
 			_attention_override = clampf(float(arg.substr(12)), 0.0, 1.0)
 	if world_seed == 0:
@@ -178,6 +198,7 @@ func _ready() -> void:
 	player = Player.new()
 	player.world_seed = _level_seed(active_level)
 	player.level_theme = active_level
+	player.water_y = _water_level_for(active_level)
 	player.allow_sprint = not descent
 	if descent and run != null:
 		run.player = player
@@ -186,6 +207,10 @@ func _ready() -> void:
 	player.position = spawn
 	player.rotation.y = yaw
 	add_child(player)
+	# Live tuning panel for the Poolrooms. Dragging a slider beats editing a
+	# constant, rebuilding and guessing from a screenshot.
+	if OS.get_cmdline_user_args().has("--tune"):
+		add_child(PoolTuner.new())
 	if OS.get_cmdline_user_args().has("--flashlight"):
 		player.set_flashlight(true)
 
@@ -257,7 +282,9 @@ func _ready() -> void:
 		if descent:
 			_begin_descent_floor()
 		else:
-			_figures.suspended = false
+			# Wander is the pressure-free level browser: keep hostile figures
+			# disabled while leaving the ambient soundscape active.
+			_figures.suspended = true
 			_whispers.suspended = false
 			_heart.suspended = false
 	_maybe_screenshot()
@@ -308,6 +335,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_crt = not _crt
 			_post.visible = _crt
 			_apply_scaling()
+		elif event.physical_keycode == KEY_B:
+			_toggle_post_mode()
 
 
 func _show_return_prompt() -> void:
@@ -342,7 +371,7 @@ func _cancel_return_to_title() -> void:
 		if is_instance_valid(_descent_hud):
 			_descent_hud.set_active(true)
 	else:
-		_figures.suspended = false
+		_figures.suspended = true
 		_whispers.suspended = false
 		_heart.suspended = false
 
@@ -567,16 +596,16 @@ func _on_figure_stared_away() -> void:
 		run.add_stare_violation()
 
 
-## One of them reached you. The endless floors cannot be lost, so there it is a
-## scare and nothing else; a Descent run ends the same way the pursuer ends it.
-## One of them reached you. This is the only way to lose in Wander: the floors
-## are endless and cannot be completed, so the run simply ends and you are put
-## back at the title. A Descent run ends the way the pursuer already ends it.
+## One of them reached you during Descent. Wander deliberately keeps the figure
+## system suspended; the guard below also makes a stale signal harmless.
 ##
 ## Nothing here is recoverable on purpose. The flashlight is the answer, it is
 ## on a ten-second cell, and letting one close the distance while you decide is
 ## the mistake being punished.
 func _on_figure_reached_player() -> void:
+	if not descent:
+		_figures.despawn()
+		return
 	if _dying:
 		return
 	_dying = true
@@ -642,9 +671,7 @@ func _on_descent_attention(_value: float) -> void:
 	if not descent:
 		return
 	var threat := run.threat() if run != null else 0.0
-	if _post != null and _post.material is ShaderMaterial:
-		(_post.material as ShaderMaterial).set_shader_parameter(
-			"noise_amount", 1.0 + threat * 1.6)
+	_set_post_corruption(threat)
 	if _figures != null:
 		_figures.interval_scale = lerpf(1.0, 0.35, threat)
 	# Never into a blackout: the player is standing still by rule and this thing
@@ -732,19 +759,33 @@ func _on_descent_violation(kind: int) -> void:
 	groan.global_position = player.global_position + Vector3(0, 1.0, 0)
 	groan.finished.connect(groan.queue_free)
 	groan.play()
-	if _post != null and _post.material is ShaderMaterial:
-		var mat := _post.material as ShaderMaterial
+	if _crt_material != null:
 		var base := 1.0 + run.threat() * 1.6
-		mat.set_shader_parameter("noise_amount", minf(3.0, base + 0.7))
+		_crt_material.set_shader_parameter(
+			"noise_amount", minf(3.0, base + 0.7))
 		var tw := create_tween()
 		tw.tween_method(_set_post_noise,
 			minf(3.0, base + 0.7), base, 0.32)
+	_camera_damage_hit(0.78)
 
 
 func _set_post_noise(value: float) -> void:
-	if _post != null and _post.material is ShaderMaterial:
-		(_post.material as ShaderMaterial).set_shader_parameter(
-			"noise_amount", value)
+	if _crt_material != null:
+		_crt_material.set_shader_parameter("noise_amount", value)
+
+
+## Drive both recording treatments from the same supernatural pressure. The
+## CRT gets stronger snow; the found-footage mode loses color and tracking.
+func _set_post_corruption(amount: float) -> void:
+	_post_signal_corruption = clampf(amount, 0.0, 1.0)
+	_set_post_noise(1.0 + _post_signal_corruption * 1.6)
+	_apply_found_footage_state()
+
+
+func _camera_damage_hit(intensity := 1.0) -> void:
+	_post_damage_intensity = clampf(intensity, 0.0, 1.0)
+	_post_damage_until = Time.get_ticks_msec() * 0.001 + 0.15
+	_apply_found_footage_state()
 
 
 func _on_descent_blackout(on: bool) -> void:
@@ -984,6 +1025,7 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
 	_events.set_level(level_root)
 	player.world_seed = _level_seed(level)
 	player.level_theme = level
+	player.water_y = _water_level_for(level)
 	await get_tree().physics_frame
 	var cellv := Vector2i(floori(pos.x / 12.0), floori(pos.z / 12.0))
 	var safe := pos
@@ -1037,6 +1079,7 @@ func _settle_initial_arrival() -> void:
 
 func _process(dt: float) -> void:
 	_check_torch_hint()
+	_update_post_effects()
 	# The chunk config is read at build time, so the mirrored lift clock has to
 	# stay current for a target room that streams back in mid-wait.
 	if descent and cm != null and run != null and run.lift_called \
@@ -1216,6 +1259,111 @@ func _apply_hud_scaling() -> void:
 		style.corner_radius_bottom_right = roundi(7.0 * scale)
 
 
+func _toggle_post_mode() -> void:
+	if _post == null or _crt_material == null \
+			or _found_footage_material == null:
+		return
+	_post_mode = PostMode.FOUND_FOOTAGE \
+		if _post_mode == PostMode.CRT else PostMode.CRT
+	_post.material = _found_footage_material \
+		if _post_mode == PostMode.FOUND_FOOTAGE else _crt_material
+	if _post_mode == PostMode.FOUND_FOOTAGE:
+		_schedule_post_glitches(Time.get_ticks_msec() * 0.001)
+		_apply_found_footage_state()
+	if _title == null:
+		_show_event_message(
+			"VIDEO MODE — RECOVERED TAPE"
+			if _post_mode == PostMode.FOUND_FOOTAGE
+			else "VIDEO MODE — 480i CRT"
+		)
+	_set_mode_hint()
+
+
+func _schedule_post_glitches(now: float) -> void:
+	_post_minor_at = now + randf_range(1.5, 5.0)
+	_post_major_at = now + randf_range(10.0, 28.0)
+	_post_glitch_active = false
+
+
+func _start_post_glitch(major: bool, now: float) -> void:
+	_post_glitch_active = true
+	_post_glitch_major = major
+	if major:
+		_post_glitch_until = now + randf_range(0.12, 0.42)
+		_post_glitch_jitter = randf_range(0.025, 0.05)
+		_post_glitch_tracking = randf_range(0.55, 1.0)
+		_post_glitch_noise = randf_range(0.22, 0.48)
+		_post_glitch_aberration = randf_range(0.012, 0.02)
+		_post_major_at = now + randf_range(10.0, 28.0)
+	else:
+		_post_glitch_until = now + randf_range(0.04, 0.16)
+		_post_glitch_jitter = randf_range(0.012, 0.028)
+		_post_glitch_aberration = randf_range(0.006, 0.013)
+		_post_minor_at = now + randf_range(1.5, 5.0)
+	_apply_found_footage_state()
+
+
+func _update_post_effects() -> void:
+	if _found_footage_material == null:
+		return
+	var now := Time.get_ticks_msec() * 0.001
+	var changed := false
+	if _post_damage_intensity > 0.0 and now >= _post_damage_until:
+		_post_damage_intensity = 0.0
+		changed = true
+	if _post_glitch_active and now >= _post_glitch_until:
+		_post_glitch_active = false
+		changed = true
+	if _post_mode == PostMode.FOUND_FOOTAGE and _crt:
+		if _post_minor_at <= 0.0 or _post_major_at <= 0.0:
+			_schedule_post_glitches(now)
+		if not _post_glitch_active:
+			if now >= _post_major_at:
+				_start_post_glitch(true, now)
+				return
+			if now >= _post_minor_at:
+				_start_post_glitch(false, now)
+				return
+	if changed:
+		_apply_found_footage_state()
+
+
+func _apply_found_footage_state() -> void:
+	if _found_footage_material == null:
+		return
+	var corruption := _post_signal_corruption
+	var jitter := lerpf(0.006, 0.032, corruption)
+	var tracking := lerpf(0.18, 0.85, corruption)
+	var noise := lerpf(0.10, 0.42, corruption)
+	var aberration := 0.0035
+	var saturation_value := lerpf(0.72, 0.30, corruption)
+	var shake := 0.0015
+	var exposure := 0.06
+	if _post_glitch_active:
+		jitter = maxf(jitter, _post_glitch_jitter)
+		aberration = maxf(aberration, _post_glitch_aberration)
+		if _post_glitch_major:
+			tracking = maxf(tracking, _post_glitch_tracking)
+			noise = maxf(noise, _post_glitch_noise)
+	if _post_damage_intensity > 0.0:
+		shake = lerpf(0.003, 0.012, _post_damage_intensity)
+		aberration = maxf(aberration,
+			lerpf(0.006, 0.018, _post_damage_intensity))
+		exposure = lerpf(0.10, 0.30, _post_damage_intensity)
+	_found_footage_material.set_shader_parameter(
+		"horizontal_jitter", jitter)
+	_found_footage_material.set_shader_parameter(
+		"tracking_damage", tracking)
+	_found_footage_material.set_shader_parameter("static_noise", noise)
+	_found_footage_material.set_shader_parameter(
+		"chromatic_aberration", aberration)
+	_found_footage_material.set_shader_parameter(
+		"saturation", saturation_value)
+	_found_footage_material.set_shader_parameter("camera_shake", shake)
+	_found_footage_material.set_shader_parameter(
+		"exposure_pumping", exposure)
+
+
 ## Everything the building makes — all twenty-four spatial emitters, the
 ## whispers, the heartbeat, the slot banks — routes through "Hall", so one bus
 ## mute covers the lot. `Ambience` is the exception: it is a plain
@@ -1265,6 +1413,33 @@ func _build_env(theme: int) -> Environment:
 	env.sdfgi_min_cell_size = 0.15
 	env.sdfgi_bounce_feedback = 0.4
 
+	if theme == 9:
+		# The Poolrooms are lit by daylight from windows that never show
+		# anywhere. Bright, humid and slightly overexposed: the haze is doing
+		# most of the work, because volumetric fog is what turns the window
+		# spots into real shafts rather than painted ones.
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.56, 0.63, 0.61)
+		env.ambient_light_energy = 0.425
+		env.fog_light_color = Color(0.86, 0.90, 0.87)
+		env.fog_density = 0.0027
+		env.fog_light_energy = 0.65
+		env.volumetric_fog_density = 0.0038
+		env.volumetric_fog_albedo = Color(0.94, 0.97, 0.95)
+		env.volumetric_fog_emission = Color(0.10, 0.12, 0.11)
+		env.volumetric_fog_length = 30.0
+		env.volumetric_fog_gi_inject = 0.15
+		# Chlorine glare. The windows are emissive well past white, so the
+		# bloom is what sells them as daylight instead of as lit panels.
+		env.glow_enabled = true
+		env.glow_intensity = 0.0
+		env.glow_bloom = 0.35
+		env.glow_hdr_threshold = 1.05
+		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+		env.ssr_enabled = true
+		env.ssr_max_steps = 48
+		env.ssr_fade_in = 0.4
+		return env
 	if theme == 7:
 		# A 1980s mall after closing. The sodium warmth belongs to the
 		# maintenance FIXTURES, not the air: ambient and fog stay near-neutral
@@ -1273,7 +1448,7 @@ func _build_env(theme: int) -> Environment:
 		env.background_color = Color(0.010, 0.010, 0.011)
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.ambient_light_color = Color(0.62, 0.59, 0.54)
-		env.ambient_light_energy = 0.30
+		env.ambient_light_energy = 0.46
 		env.tonemap_exposure = 1.24
 		env.sdfgi_energy = 1.22
 		env.glow_enabled = true
@@ -1315,11 +1490,11 @@ func _build_env(theme: int) -> Environment:
 		env.background_color = Color(0.02, 0.021, 0.024)
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.ambient_light_color = Color(0.72, 0.75, 0.80)
-		env.ambient_light_energy = 0.42
+		env.ambient_light_energy = 0.46
 		env.tonemap_exposure = 1.2
 		env.sdfgi_energy = 1.2
 		env.glow_enabled = true
-		env.glow_intensity = 0.42
+		env.glow_intensity = 0.30
 		env.glow_bloom = 0.03
 		env.fog_light_color = Color(0.12, 0.13, 0.14)
 		env.fog_density = 0.006
@@ -1344,7 +1519,7 @@ func _build_env(theme: int) -> Environment:
 		env.fog_density = 0.011
 		env.volumetric_fog_density = 0.005
 		env.volumetric_fog_albedo = Color(0.62, 0.72, 0.55)
-		env.volumetric_fog_length = 44.0
+		env.volumetric_fog_length = 30.0
 		env.ssao_radius = 1.6
 		env.ssao_intensity = 1.6
 		return env
@@ -1385,8 +1560,10 @@ func _build_env(theme: int) -> Environment:
 		env.volumetric_fog_density = 0.0012
 		env.volumetric_fog_albedo = Color(0.88, 0.78, 0.49)
 		env.volumetric_fog_length = 52.0
-		env.ssao_radius = 1.25
-		env.ssao_intensity = 1.05
+		# Even contact-scale SSAO turned the two-centimetre skirting projection
+		# into a detached dark wedge across the carpet. The Annex already has
+		# SDFGI for structural depth, so remove this redundant screen-space pass.
+		env.ssao_enabled = false
 	elif theme == 1:
 		# sterile daylight-white: corridors dissolve into bright haze
 		env.background_color = Color(0.55, 0.58, 0.55)
@@ -1427,20 +1604,27 @@ func _build_env(theme: int) -> Environment:
 
 
 func _build_ui() -> void:
-	# CRT tube finish over the 3D view, under UI (V toggles)
+	# Screen treatment over the 3D view, under UI. V enables/disables it and B
+	# changes recording media between the established CRT and recovered tape.
 	var post_layer := CanvasLayer.new()
 	post_layer.layer = 1
 	_post = ColorRect.new()
 	_post.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_post.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var pm := ShaderMaterial.new()
-	pm.shader = load("res://shaders/post.gdshader")
+	_crt_material = ShaderMaterial.new()
+	_crt_material.shader = load("res://shaders/post.gdshader")
 	# these floors run far darker than an arcade cabinet — push the tube
-	pm.set_shader_parameter("bright_boost", 1.4)
-	_post.material = pm
+	_crt_material.set_shader_parameter("bright_boost", 1.4)
+	_found_footage_material = ShaderMaterial.new()
+	_found_footage_material.shader = load(
+		"res://shaders/found_footage.gdshader")
+	_post.material = _found_footage_material \
+		if _post_mode == PostMode.FOUND_FOOTAGE else _crt_material
 	_post.visible = _crt
 	post_layer.add_child(_post)
 	add_child(post_layer)
+	_schedule_post_glitches(Time.get_ticks_msec() * 0.001)
+	_apply_found_footage_state()
 
 	var cl := CanvasLayer.new()
 	cl.layer = 2
@@ -1624,7 +1808,7 @@ func _on_start(selected_descent: bool) -> void:
 	if selected_descent:
 		_begin_descent_floor()
 	else:
-		_figures.suspended = false
+		_figures.suspended = true
 		_whispers.suspended = false
 		_heart.suspended = false
 	_start_hint_fade()
@@ -1634,9 +1818,9 @@ func _set_mode_hint() -> void:
 	if _hint == null:
 		return
 	if descent:
-		_hint.text = "WASD / arrows move   ·   E interact   ·   F flashlight   ·   follow the HUD needle   ·   Q title   ·   Esc release mouse"
+		_hint.text = "WASD / arrows move   ·   E interact   ·   F flashlight   ·   B video mode   ·   follow the HUD needle   ·   Q title   ·   Esc release mouse"
 	else:
-		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-8 floors   ·   V CRT   ·   Q title   ·   Esc release mouse"
+		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-8 floors   ·   V filter   ·   B video mode   ·   Q title   ·   Esc release mouse"
 
 
 ## Dev helper: `godot --path . -- --screenshot=/tmp/shot.png` renders a couple
@@ -1650,3 +1834,10 @@ func _maybe_screenshot() -> void:
 			print("player at ", player.global_position)
 			get_viewport().get_texture().get_image().save_png(path)
 			get_tree().quit()
+
+
+## The Poolrooms are the only floor with standing water. Everywhere else the
+## surface is parked far below the world so the player's wading and ladder
+## code costs nothing and can never trigger.
+func _water_level_for(level: int) -> float:
+	return Chunk.POOL_WATER_Y if level == 9 else -1.0e9

@@ -99,6 +99,9 @@ func _build(c: Vector2i) -> void:
 			"lift_wait": descent_lift_wait,
 			"lift_open": descent_lift_open,
 		}
+	# The waiting-figure anomaly builds a live figure during construction, so
+	# its target has to be in the config rather than assigned afterwards.
+	config["player"] = player
 	var ch := Chunk.new(world_seed, c, theme, config)
 	if _dev_timing:
 		var ms := float(Time.get_ticks_usec() - t0) / 1000.0

@@ -14,7 +14,10 @@ const SPRINT_SPEED := 6.2
 const ACCEL := 12.0
 const GRAVITY := 16.0
 const SENS := 0.0022
-const CAM_H := 1.62
+## Lowered 15% from the original 1.62m eye line. The collision capsule remains
+## a full 1.8m tall; only the viewpoint changes, so clearance and movement stay
+## identical while the player no longer reads as unusually tall.
+const CAM_H := 1.377
 const GRAB_SETTLE_MS := 150   # mouse motion to swallow after taking the cursor
 const INTERACT_DIST := 3.2
 
@@ -30,6 +33,17 @@ const FLASH_RECHARGE := 7.0   # seconds in the dark for a full charge
 const FLASH_MIN_START := 2.2
 const FLASH_WARN := 2.5       # it starts to fail this long before it goes out
 
+## Chest-deep water halves your pace and takes the spring out of the step. The
+## Poolrooms are the only floor that sets `water_y`; everywhere else it stays
+## far below the world and none of this costs anything.
+const WADE_SPEED := 0.52
+const WADE_ACCEL := 0.45
+## Physics layer the pool ladders register on. Climbing is resolved with a
+## point query rather than an Area3D on the player, so nothing else in the
+## game has to grow a collision shape it did not need.
+const LADDER_LAYER := 8
+const CLIMB_SPEED := 2.1
+
 signal interaction_prompt_changed(text: String)
 
 var cam: Camera3D
@@ -37,6 +51,13 @@ var flashlight: SpotLight3D
 var world_seed := 0   # set by main; used to pick footstep surface per cell
 var level_theme := 0  # set by main on level switch
 var _flash_charge := FLASH_MAX
+## World height of the water surface on this floor, or far below everything if
+## the floor has no water. Set by main on every level switch.
+var water_y := -1.0e9
+var _on_ladder := false
+var _was_submerged := false
+var _wade_p: AudioStreamPlayer
+var _splash_p: AudioStreamPlayer
 var _flash_t := 0.0
 var _bob := 0.0
 ## 0..1. A sealed lift car gives the eye nothing to move against, so the ride
@@ -112,6 +133,14 @@ func _ready() -> void:
 	_flash_click.stream = SoundBank.key_click()
 	_flash_click.volume_db = -10.0
 	add_child(_flash_click)
+	# Water. Silent and idle on every floor that has none.
+	_wade_p = AudioStreamPlayer.new()
+	_wade_p.stream = Sfx.water_wade()
+	_wade_p.volume_db = -60.0
+	add_child(_wade_p)
+	_splash_p = AudioStreamPlayer.new()
+	_splash_p.volume_db = -6.0
+	add_child(_splash_p)
 
 
 ## Move without the camera sweeping across the world to catch up — the
@@ -238,20 +267,37 @@ func _physics_process(dt: float) -> void:
 	var sprinting := allow_sprint and Input.is_physical_key_pressed(KEY_SHIFT)
 	var speed := SPRINT_SPEED if sprinting else WALK_SPEED
 
+	# Chest deep in water you do not stride, and you certainly do not sprint.
+	var submerged := global_position.y + 0.55 < water_y
+	if submerged:
+		speed *= WADE_SPEED
+
 	var wish := Vector3.ZERO
 	if input != Vector2.ZERO:
 		input = input.normalized()
 		wish = (global_transform.basis * Vector3(input.x, 0.0, input.y)).normalized()
 
 	var flat := Vector3(velocity.x, 0, velocity.z)
-	flat = flat.lerp(wish * speed, minf(1.0, ACCEL * dt))
+	var accel := ACCEL * (WADE_ACCEL if submerged else 1.0)
+	flat = flat.lerp(wish * speed, minf(1.0, accel * dt))
 	velocity.x = flat.x
 	velocity.z = flat.z
-	if is_on_floor():
+	# On a ladder the world stops pulling: forward climbs, back descends, and
+	# stepping off the top is just walking forward onto the deck.
+	_on_ladder = water_y > -1.0e8 and _ladder_here()
+	if _on_ladder:
+		velocity.y = -input.y * CLIMB_SPEED
+		velocity.x *= 0.35
+		velocity.z *= 0.35
+	elif is_on_floor():
 		if velocity.y < 0.0:
 			velocity.y = -0.6
 	else:
 		velocity.y -= GRAVITY * dt
+		# Water resists a fall rather than arresting it, so dropping off a deck
+		# lands you with a slump instead of a thud.
+		if submerged and velocity.y < -2.2:
+			velocity.y = lerpf(velocity.y, -2.2, minf(1.0, dt * 6.0))
 	var vy_before := velocity.y
 	move_and_slide()
 	_prev_pos = _curr_pos
@@ -261,6 +307,7 @@ func _physics_process(dt: float) -> void:
 	if is_on_floor() and not _was_floor:
 		_land = clampf(-vy_before * 0.02, 0.0, 0.15)
 
+	_update_water_audio(dt, submerged)
 	_was_floor = is_on_floor()
 	_land = lerpf(_land, 0.0, minf(1.0, dt * 6.0))
 	_strafe = input.x
@@ -374,3 +421,51 @@ func _update_walk(dt: float) -> void:
 		_walk_p.pitch_scale = clampf(hs / 3.4, 0.85, 1.7)
 		if _walk_vol < -38.0 and not moving and _walk_p.playing:
 			_walk_p.stop()
+
+
+## Is the player standing in a pool ladder's climbable volume?
+func _ladder_here() -> bool:
+	var space := get_world_3d().direct_space_state
+	if space == null:
+		return false
+	var q := PhysicsPointQueryParameters3D.new()
+	q.position = global_position + Vector3(0, 0.9, 0)
+	q.collide_with_areas = true
+	q.collide_with_bodies = false
+	q.collision_mask = LADDER_LAYER
+	q.exclude = [get_rid()]
+	return not space.intersect_point(q, 1).is_empty()
+
+
+## 0 when dry, 1 when the surface is at chin height. The HUD and the footstep
+## picker both read this rather than recomputing the waterline.
+func submersion() -> float:
+	if water_y < -1.0e8:
+		return 0.0
+	return clampf((water_y - global_position.y) / 1.2, 0.0, 1.0)
+
+
+## Entering and leaving the water are events; wading through it is a loop that
+## only speaks while you are actually shifting water. The loop is faded rather
+## than started and stopped, because a hard cut on a body of water is the one
+## thing that instantly reads as a sound effect.
+func _update_water_audio(dt: float, submerged: bool) -> void:
+	if _wade_p == null:
+		return
+	if submerged != _was_submerged:
+		_was_submerged = submerged
+		if water_y > -1.0e8 and _splash_p != null:
+			var cue: Array = Sfx.water_enter() if submerged else Sfx.water_exit()
+			_splash_p.stream = cue[0]
+			_splash_p.volume_db = float(cue[1])
+			_splash_p.play()
+	var speed_now := Vector2(velocity.x, velocity.z).length()
+	var want := -60.0
+	if submerged and speed_now > 0.25:
+		want = lerpf(-26.0, -11.0, clampf(speed_now / (WALK_SPEED * WADE_SPEED),
+			0.0, 1.0))
+	if submerged and not _wade_p.playing:
+		_wade_p.play()
+	elif not submerged and _wade_p.playing and _wade_p.volume_db <= -55.0:
+		_wade_p.stop()
+	_wade_p.volume_db = lerpf(_wade_p.volume_db, want, minf(1.0, dt * 5.0))

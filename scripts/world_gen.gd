@@ -12,7 +12,7 @@ const OPP := [1, 0, 3, 2]
 ## 3 was the derelict theme park, cut because it never held up beside the
 ## interiors. Ids are NOT renumbered — every other theme keeps the seed salt and
 ## world it always had, so old seeds still reproduce.
-const THEMES: Array[int] = [0, 1, 2, 4, 5, 6, 7, 8]
+const THEMES: Array[int] = [0, 1, 2, 4, 5, 6, 7, 8, 9]
 
 const STYLE_EMPTY := 0
 const STYLE_PILLARS := 1
@@ -97,6 +97,18 @@ const PRISON_INDUSTRY := 86 # prison workshop / laundry
 const PRISON_VISITATION := 87 # divided booths and a dead telephone line
 const PRISON_ROTUNDA := 88  # landmark radial guard hub
 
+# The Poolrooms. Every cell floods to the same level, so the water is one
+# continuous body across the whole floor and is always chest deep — the styles
+# differ in what stands in it and what you can climb out onto, never in depth.
+const POOL_BASIN := 90      # open water under a grid of tiled piers
+const POOL_CHANNEL := 91    # the narrow swimming lane between rooms
+const POOL_DECK := 92       # a dry walkway along one or two walls, with ladders
+const POOL_SOLARIUM := 93   # window wall, blown-out daylight, god rays
+const POOL_ALCOVE := 94     # a small still bay with no windows at all
+const POOL_STAIRS := 95     # a wide tiled stair descending into the water
+const POOL_GALLERY := 96    # piers and a mezzanine walkway with handrails
+const POOL_CISTERN := 97    # landmark: a vast dim hall of piers and skylights
+
 # Eight-cell (96m) semantic districts. Room styles still vary within a zone,
 # but the weights now agree over a meaningful walk: a run of gates gives way
 # to baggage handling, patient wards yield to treatment, and so on. The room
@@ -118,6 +130,7 @@ static func level_seed(base: int, theme: int) -> int:
 		6: 179424673,
 		7: 463670041,
 		8: 805306457,
+		9: 217645177,
 	}
 	return ((base ^ int(salts.get(theme, 348039917))) & 0x7FFFFFFF) | 1
 
@@ -345,6 +358,25 @@ static func annex_wall_finish(ws: int, cell: Vector2i, dir: int) -> int:
 	return 3 if roll < 9 else 4
 
 
+## Baseboards belong to the wallpaper treatment itself. Plain painted walls
+## meet the carpet directly; both wallpaper finishes receive continuous trim.
+## annex_wall_finish() is keyed by the complete physical wall line, so both
+## faces and every streamed segment make the same decision.
+static func annex_wall_baseboard(ws: int, cell: Vector2i, dir: int) -> bool:
+	return annex_wall_finish(ws, cell, dir) >= 3
+
+
+## Corridor shells and their solid intersection corners are one continuous
+## architectural system. A single seed-stable finish prevents a straight run
+## from changing between wallpaper and paint where it crosses an intersection.
+## Rooms and freestanding wall masses still provide the broader finish variety.
+static func annex_corridor_finish(ws: int) -> int:
+	var roll := h(ws, 0, 0, 1301) % 10
+	if roll < 7:
+		return roll % 3
+	return 3 if roll < 9 else 4
+
+
 ## Semantic district for a room: 0..2, interpreted separately by each theme.
 ## This is intentionally independent of finish_variant — a department can
 ## cross an old repaint boundary, and a renovation can cut across departments.
@@ -367,6 +399,7 @@ static func macro_zone_name(zone: int, theme: int) -> String:
 		6: ["academic", "commons", "administration"],
 		7: ["retail galleries", "food and cinema", "service wing"],
 		8: ["cell blocks", "institutional", "custody"],
+		9: ["bathing halls", "channels", "plant"],
 	}
 	var labels: Array = names.get(theme, ["zone 0", "zone 1", "zone 2"])
 	return labels[clampi(zone, 0, labels.size() - 1)]
@@ -390,6 +423,7 @@ static func landmark_style(ws: int, cell: Vector2i, theme: int) -> int:
 		6: return SCH_AUDITORIUM
 		7: return MALL_CINEMA
 		8: return PRISON_ROTUNDA
+		9: return POOL_CISTERN
 	return -1
 
 
@@ -421,6 +455,11 @@ static func room_height(ws: int, root: Vector2i, theme: int) -> float:
 	if theme == 8:
 		if n >= 4: return 6.8
 		return 4.4 if n >= 2 else lerpf(3.25, 3.65, r)
+	if theme == 9:
+		# Measured from the deck datum, not the basin floor, so every room is
+		# another 1.55m taller than this once you are standing in the water.
+		if n >= 4: return 7.4
+		return 5.2 if n >= 2 else lerpf(4.1, 4.6, r)
 	if n >= 4:
 		return 6.4
 	if n >= 2:
@@ -479,6 +518,10 @@ static func room_split(ws: int, root: Vector2i, theme: int) -> Array:
 	if theme == 7 and st != MALL_STORE and st != MALL_SERVICE:
 		return []
 	if theme == 8 and st != PRISON_INDUSTRY:
+		return []
+	# A partition dropped into standing water reads as a mistake, and would cut
+	# the one continuous body of water the floor depends on.
+	if theme == 9:
 		return []
 	var r := r01(ws, root.x, root.y, 613)
 	# the asylum is mostly small rooms: split single cells aggressively
@@ -541,18 +584,22 @@ static func annex_corridor_axis(_ws: int, cell: Vector2i) -> int:
 ## a long run before opening into a differently scaled crossing or room.
 static func annex_horizontal_width(ws: int, row: int) -> float:
 	var roll := h(ws, row, 0, 2827) % 100
-	if roll < 40:
+	if roll < 48:
+		return 2.2
+	if roll < 78:
 		return 3.4
-	if roll < 80:
+	if roll < 94:
 		return 4.8
 	return 6.4
 
 
 static func annex_vertical_width(ws: int, column: int) -> float:
 	var roll := h(ws, column, 0, 2831) % 100
-	if roll < 40:
+	if roll < 48:
+		return 2.2
+	if roll < 78:
 		return 3.4
-	if roll < 80:
+	if roll < 94:
 		return 4.8
 	return 6.4
 
@@ -772,6 +819,7 @@ static func _fo_p(theme: int) -> float:
 		6: return 0.08   # a school is rooms off corridors, and doors between
 		7: return 0.52   # a mall is one public interior interrupted by shopfronts
 		8: return 0.06   # a prison boundary is always legible
+		9: return 0.58   # one continuous body of water, only lightly interrupted
 	return 0.45
 
 
@@ -880,6 +928,13 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 		var m8 := w / 2.0 + 0.75
 		t = lerpf(m8, 12.0 - m8, hr01(eh, 3))
 		has_sign = false
+	elif theme == 9:
+		# Broad tiled openings: you swim between halls, and a doorway you have
+		# to aim at would make the water feel like a corridor system.
+		w = lerpf(3.2, 5.4, hr01(eh, 2))
+		var m9 := w / 2.0 + 0.9
+		t = lerpf(m9, 12.0 - m9, hr01(eh, 3))
+		has_sign = false
 	# Narrow circulation spines need an architectural boundary wherever an edge
 	# is not their straight-through link. Letting it become fully open exposes
 	# the service/guest-room
@@ -951,6 +1006,7 @@ static func portal(ws: int, cell: Vector2i, theme := 0) -> int:
 		6: ok = st == SCH_GYM
 		7: ok = st == MALL_ATRIUM
 		8: ok = st == PRISON_GUARD
+		9: ok = st == POOL_DECK
 	if not ok:
 		return -1
 	# Preserve Wander's cross-floor portal contract while keeping the minimalist
@@ -982,7 +1038,8 @@ static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
 	var eligible := st == STYLE_EMPTY or st == OFFICE_EMPTY \
 		or st == ANNEX_QUIET or st == AIR_HALL \
 		or st == ASY_DAYROOM or st == SCH_ADMIN \
-		or st == MALL_ATRIUM or st == PRISON_GUARD
+		or st == MALL_ATRIUM or st == PRISON_GUARD \
+		or st == POOL_DECK
 	return eligible and r01(ws, cell.x, cell.y, 1700) < 0.28 \
 		and anchor_wall(ws, cell, 1701, theme) >= 0
 
@@ -1028,6 +1085,7 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 			6: return SCH_CORRIDOR
 			7: return MALL_CORRIDOR
 			8: return PRISON_CORRIDOR
+			9: return POOL_CHANNEL
 			_: return STYLE_HALLWAY
 	var root := room_id(ws, cell)
 	var n := room_size(ws, root)
@@ -1036,6 +1094,41 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 	var landmark := landmark_style(ws, root, theme)
 	if landmark >= 0:
 		return landmark
+	if theme == 9:
+		# The floor is water first and rooms second, so the open basin is the
+		# default everywhere and the named grammars are what interrupts it.
+		if root == Vector2i.ZERO:
+			return POOL_DECK
+		if n >= 4:
+			if r < 0.40: return POOL_GALLERY
+			if r < 0.72: return POOL_BASIN
+			return POOL_SOLARIUM
+		if n >= 2:
+			if zone == 0:
+				if r < 0.44: return POOL_BASIN
+				if r < 0.68: return POOL_SOLARIUM
+				return POOL_GALLERY
+			if zone == 1:
+				if r < 0.52: return POOL_BASIN
+				if r < 0.76: return POOL_DECK
+				return POOL_STAIRS
+			if r < 0.50: return POOL_BASIN
+			if r < 0.74: return POOL_GALLERY
+			return POOL_DECK
+		if zone == 0:
+			if r < 0.38: return POOL_BASIN
+			if r < 0.60: return POOL_SOLARIUM
+			if r < 0.80: return POOL_DECK
+			return POOL_ALCOVE
+		if zone == 1:
+			if r < 0.44: return POOL_BASIN
+			if r < 0.64: return POOL_STAIRS
+			if r < 0.84: return POOL_DECK
+			return POOL_ALCOVE
+		if r < 0.36: return POOL_BASIN
+		if r < 0.58: return POOL_ALCOVE
+		if r < 0.80: return POOL_DECK
+		return POOL_STAIRS
 	if theme == 8:
 		if root == Vector2i.ZERO:
 			return PRISON_CELLBLOCK

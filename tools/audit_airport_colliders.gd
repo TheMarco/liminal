@@ -19,7 +19,9 @@ func _mesh_bounds(node: Node, parent_xf: Transform3D, out: Array[AABB]) -> void:
 func _barrier_glass(node: Node, report: Dictionary) -> void:
 	if node.has_meta("airport_barrier_glass"):
 		report["panes"] = int(report["panes"]) + 1
-		if float(node.get_meta("barrier_alpha", 0.0)) < 0.18:
+		# Anything subtler still disappears against the black apron at a shallow
+		# angle and functions as an invisible wall even when a mesh exists.
+		if float(node.get_meta("barrier_alpha", 0.0)) < 0.32:
 			report["violations"] = int(report["violations"]) + 1
 	for child in node.get_children():
 		_barrier_glass(child, report)

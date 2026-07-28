@@ -3,8 +3,8 @@ extends Node3D
 ## You are not alone. Figures appear where nothing was — down a corridor, at
 ## the edge of the frame, and above all BEHIND you: whip around and there is
 ## a good chance one is already standing there. Each gets a moment's grace so
-## you always register it, then it dissolves under your gaze. They never
-## approach. Up to MAX_FIGS exist at once.
+## you always register it, then stalks until it is destroyed, reaches you, or
+## is left behind in another room. Up to MAX_FIGS exist at once.
 
 const MAX_FIGS := 3
 const TURN_TRIG := 1.9      # accumulated fast-turn radians that trigger a check
@@ -31,8 +31,8 @@ const UNDERNEATH_THEMES := [2, 5]  # the Annex, the asylum
 signal stared_away
 signal burned_away
 signal seen_by_player
-## One of them closed the distance. In the endless floors this is a scare and
-## nothing more; whoever owns this node decides whether a run survives it.
+## One of them closed the distance. The owning game mode decides the outcome;
+## Wander keeps this manager suspended, while Descent treats contact as fatal.
 signal reached_player
 
 var player: Player
@@ -61,6 +61,8 @@ var _pending := 0.0
 
 
 func _ready() -> void:
+	# Figures the world places rather than the haunt timer find us through this.
+	add_to_group("figure_manager")
 	_t = randf_range(5.0, 13.0)
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--haunt":
@@ -74,6 +76,25 @@ func _ready() -> void:
 				_dev = true
 			if parts.size() >= 3:
 				_force_variant = int(parts[2])
+
+
+## Take ownership of a figure the world placed — the Descent anomaly already
+## standing in a corner when the player walks in. It stays parented to its
+## chunk so it streams out with the cell it belongs to, but from here it is
+## wired exactly like a spawned one: it burns and refunds the torch, a stare
+## costs attention, and contact ends the run. Before this existed such a figure
+## was INERT, which made it the one thing in the building that could be neither
+## killed nor escaped because it never did anything at all.
+func adopt(f: ShadowFigure) -> void:
+	if f == null or not is_instance_valid(f) or _figs.has(f):
+		return
+	f.player = player
+	f.suppressed = passive
+	f.stared_away.connect(func(): stared_away.emit())
+	f.burned_away.connect(func(): burned_away.emit())
+	f.seen_by_player.connect(func(): seen_by_player.emit())
+	f.reached_player.connect(func(): reached_player.emit())
+	_figs.append(f)
 
 
 ## Level switch or portal jump: whatever was standing there stays behind.
@@ -96,11 +117,16 @@ func despawn() -> void:
 
 func _physics_process(dt: float) -> void:
 	if suspended or player == null or not player.is_inside_tree():
+		# Forget where the player was facing. Coming back from a pause with a
+		# stale yaw turns however far they happened to turn while pinned into
+		# one enormous delta, which reads as a whip-around that never happened.
+		_prev_yaw = NAN
 		return
 	for i in range(_figs.size() - 1, -1, -1):
 		if not is_instance_valid(_figs[i]):
 			_figs.remove_at(i)
 	if passive:
+		_prev_yaw = NAN
 		return
 	_track_turn(dt)
 	if _figs.size() >= MAX_FIGS:
@@ -153,6 +179,8 @@ func _turn_spawn() -> bool:
 		var ground := _floor_at(player.global_position + dirv * randf_range(6.0, 14.0))
 		if ground == Vector3.INF:
 			continue
+		if not _same_room_as_player(ground):
+			continue
 		if not _figure_volume_clear(ground):
 			continue
 		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
@@ -179,12 +207,14 @@ func _try_spawn() -> bool:
 		var ground := _floor_at(player.global_position + dirv * randf_range(7.0, 16.0))
 		if ground == Vector3.INF:
 			continue
+		if not _same_room_as_player(ground):
+			continue
 		if not _figure_volume_clear(ground):
 			continue
-		# glimpsable, mostly: front spawns want a sight line
-		if not behind and not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
-			if randf() < 0.55:
-				continue
+		# Every encounter starts on a route that is physically open. The figure
+		# may have spawned behind the player, but never behind a wall.
+		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
+			continue
 		_spawn_at(ground, behind, 0.9)
 		if _dev:
 			print("figure at t=%.1fs behind=%s alive=%d" % [Time.get_ticks_msec()/1000.0, behind, _figs.size()])
@@ -202,6 +232,7 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> void:
 	f.grace = grace
 	f.announce = announce or randf() < 0.3
 	f.position = ground
+	f.origin_room = ShadowFigure.room_for(player, player.global_position)
 	f.suppressed = passive
 	add_child(f)
 	f.stared_away.connect(func(): stared_away.emit())
@@ -260,6 +291,11 @@ func _flat_fwd() -> Vector3:
 	var fwd := -player.cam.global_transform.basis.z
 	fwd.y = 0.0
 	return fwd.normalized() if fwd.length() > 0.01 else Vector3.ZERO
+
+
+func _same_room_as_player(at: Vector3) -> bool:
+	return ShadowFigure.room_for(player, at) \
+		== ShadowFigure.room_for(player, player.global_position)
 
 
 func _clear_line(a: Vector3, b: Vector3) -> bool:

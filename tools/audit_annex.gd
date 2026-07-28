@@ -16,6 +16,19 @@ const VALID_STYLES := [
 ]
 
 
+func _decorative_occlusion_violations(node: Node) -> int:
+	var bad := 0
+	if node is GeometryInstance3D:
+		var geometry := node as GeometryInstance3D
+		if geometry.cast_shadow \
+				!= GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+				or geometry.gi_mode != GeometryInstance3D.GI_MODE_DISABLED:
+			bad += 1
+	for child in node.get_children():
+		bad += _decorative_occlusion_violations(child)
+	return bad
+
+
 func _walk(node: Node, report: Dictionary) -> void:
 	if node is SewerSounds:
 		report["legacy"] += 1
@@ -45,6 +58,10 @@ func _walk(node: Node, report: Dictionary) -> void:
 			report["bad_utilities"] += 1
 		if int(node.get_meta("wall_utility_theme", -1)) != 2:
 			report["bad_utilities"] += 1
+		if not bool(node.get_meta("wall_utility_non_occluding", false)):
+			report["shadowing_utilities"] += 1
+		report["shadowing_utilities"] += \
+			_decorative_occlusion_violations(node)
 	if node.has_meta("annex_ceiling_light_size"):
 		report["ceiling_lights"] += 1
 		if not is_equal_approx(
@@ -61,9 +78,24 @@ func _walk(node: Node, report: Dictionary) -> void:
 		if bool(node.get_meta("annex_wall_seam_safe", false)):
 			report["seam_safe_wall_segments"] += 1
 		if not node is MeshInstance3D \
-				or not (node as MeshInstance3D).mesh is BoxMesh \
-				or not bool(node.get_meta("annex_native_box", false)):
+				or not (node as MeshInstance3D).mesh is QuadMesh \
+				or not bool(node.get_meta(
+					"annex_uncapped_native_prism", false)):
 			report["unstable_wall_meshes"] += 1
+	if node.has_meta("annex_baseboard"):
+		report["baseboards"] += 1
+		if not bool(node.get_meta("annex_baseboard_attached", false)) \
+				or absf(float(node.get_meta(
+					"annex_baseboard_height", 0.0)) - 0.16) > 0.001 \
+				or float(node.get_meta(
+					"annex_baseboard_projection", INF)) > 0.021:
+			report["bad_baseboards"] += 1
+		if not node is GeometryInstance3D \
+				or (node as GeometryInstance3D).cast_shadow \
+				!= GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+				or (node as GeometryInstance3D).gi_mode \
+				!= GeometryInstance3D.GI_MODE_DISABLED:
+			report["shadowing_baseboards"] += 1
 	if node.has_meta("annex_partition_thickness"):
 		report["partitions"] += 1
 		if float(node.get_meta("annex_partition_thickness", 0.0)) < 0.299:
@@ -83,12 +115,60 @@ func _walk(node: Node, report: Dictionary) -> void:
 			report["small_room_piles"] += 1
 	if node.has_meta("annex_architecture"):
 		report["architecture_assemblies"] += 1
+		var finish_idx := int(node.get_meta("annex_finish", -1))
+		var wallpapered := bool(node.get_meta("annex_wallpaper", false))
+		var expected := bool(node.get_meta(
+			"annex_baseboard_expected", false))
+		var expected_count := int(node.get_meta(
+			"annex_baseboard_expected_count", -1))
+		var actual_count := 0
+		for descendant in node.find_children(
+				"*", "MeshInstance3D", true, false):
+			if descendant.has_meta("annex_baseboard"):
+				actual_count += 1
+		if finish_idx < 0 or finish_idx > 4 \
+				or wallpapered != (finish_idx >= 3) \
+				or expected != wallpapered \
+				or expected_count != (4 if wallpapered else 0) \
+				or actual_count != expected_count:
+			report["bad_architecture_baseboards"] += 1
+	if node.has_meta("annex_tunnel"):
+		report["tunnels"] += 1
+		var carpet_found := false
+		for descendant in node.find_children(
+				"*", "MeshInstance3D", true, false):
+			if descendant.has_meta("annex_tunnel_carpet"):
+				carpet_found = true
+				report["tunnel_carpet_strips"] += 1
+				if (descendant as GeometryInstance3D).cast_shadow \
+						!= GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+					report["bad_tunnels"] += 1
+				if absf((descendant as Node3D).position.y - 0.732) > 0.002:
+					report["bad_tunnels"] += 1
+		if str(node.get_meta("annex_architecture", "")) \
+				!= "annex_wall_mass" \
+				or float(node.get_meta("annex_tunnel_width", 0.0)) < 1.19 \
+				or absf(float(node.get_meta(
+					"annex_tunnel_sill", 0.0)) - 0.72) > 0.001 \
+				or absf(float(node.get_meta(
+					"annex_tunnel_height", 0.0)) - 0.72) > 0.001 \
+				or float(node.get_meta("annex_tunnel_sill", 0.0)) \
+					+ float(node.get_meta("annex_tunnel_height", 0.0)) \
+					< 1.38 \
+				or float(node.get_meta("annex_tunnel_depth", 0.0)) < 2.10 \
+				or not bool(node.get_meta(
+					"annex_tunnel_carpeted", false)) \
+				or bool(node.get_meta("annex_tunnel_crawlable", true)) \
+				or not carpet_found:
+			report["bad_tunnels"] += 1
 	if str(node.get_meta("authored_model", "")) == "annex_dining_chair":
 		report["authored_chairs"] += 1
 	elif str(node.get_meta("authored_model", "")) == "annex_school_chair":
 		report["authored_school_chairs"] += 1
 		if bool(node.get_meta("annex_school_chair_tipped", false)):
 			report["tipped_school_chairs"] += 1
+	elif str(node.get_meta("authored_model", "")) == "annex_exit_door":
+		report["authored_exit_doors"] += 1
 	var attributed_kind := str(node.get_meta("attributed_furnishing", ""))
 	if attributed_kind == "annex_shelving":
 		report["authored_shelving"] += 1
@@ -132,11 +212,49 @@ func _utility_backing_violations(chunk: Chunk) -> int:
 		var mount := candidate as Node3D
 		var backed := false
 		for wall in walls:
-			var half := wall.scale.abs() * 0.5
-			var delta := (mount.position - wall.position).abs()
+			var wall_pos: Vector3 = wall.get_meta(
+				"annex_wall_volume_position", wall.position)
+			var wall_size: Vector3 = wall.get_meta(
+				"annex_wall_volume_size", wall.scale.abs())
+			var half := wall_size * 0.5
+			var delta := (mount.position - wall_pos).abs()
 			if delta.x <= half.x + 0.035 \
 					and delta.y <= half.y + 0.035 \
 					and delta.z <= half.z + 0.035:
+				backed = true
+				break
+		if not backed:
+			bad += 1
+	return bad
+
+
+func _baseboard_backing_violations(chunk: Chunk) -> int:
+	var walls: Array[MeshInstance3D] = []
+	var baseboards: Array[MeshInstance3D] = []
+	for candidate in chunk.find_children("*", "MeshInstance3D", true, false):
+		if candidate.has_meta("annex_wall_thickness") \
+				or candidate.has_meta("annex_cross_corner") \
+				or candidate.has_meta("annex_architecture_wall"):
+			walls.append(candidate as MeshInstance3D)
+		if candidate.has_meta("annex_baseboard"):
+			baseboards.append(candidate as MeshInstance3D)
+	var bad := 0
+	for baseboard in baseboards:
+		var base_half := baseboard.scale.abs() * 0.5
+		var backed := false
+		for wall in walls:
+			var wall_pos: Vector3 = wall.get_meta(
+				"annex_wall_volume_position", wall.position)
+			var wall_size: Vector3 = wall.get_meta(
+				"annex_wall_volume_size", wall.scale.abs())
+			var wall_half := wall_size * 0.5
+			var delta := (baseboard.position - wall_pos).abs()
+			# Every trim box must touch a wall volume across all three axes.
+			# This detects the old floor-level bars without requiring the trim
+			# to overlap the wall and risk coplanar flashing.
+			if delta.x <= base_half.x + wall_half.x + 0.002 \
+					and delta.y <= base_half.y + wall_half.y + 0.002 \
+					and delta.z <= base_half.z + wall_half.z + 0.002:
 				backed = true
 				break
 		if not backed:
@@ -161,7 +279,9 @@ func _init() -> void:
 	var room_roots := 0
 	var room_sizes := {1: 0, 2: 0, 3: 0, 4: 0}
 	var open_edges := 0
-	var corridor_widths := {34: 0, 48: 0, 64: 0}
+	var baseboard_edges := 0
+	var plain_base_edges := 0
+	var corridor_widths := {22: 0, 34: 0, 48: 0, 64: 0}
 	for style in VALID_STYLES:
 		style_counts[style] = 0
 	for finish in 5:
@@ -226,12 +346,29 @@ func _init() -> void:
 					var wall_finish := WorldGen.annex_wall_finish(ws, cell, dir)
 					var reverse_finish := WorldGen.annex_wall_finish(
 						ws, nb, OPP[dir])
+					var has_baseboard := WorldGen.annex_wall_baseboard(
+						ws, cell, dir)
+					var reverse_baseboard := WorldGen.annex_wall_baseboard(
+						ws, nb, OPP[dir])
+					if has_baseboard:
+						baseboard_edges += 1
+					else:
+						plain_base_edges += 1
 					wall_finish_counts[wall_finish] = int(
 						wall_finish_counts.get(wall_finish, 0)) + 1
+					if has_baseboard != (wall_finish >= 3):
+						failures.append(
+							"Annex baseboard/wallpaper mismatch seed=%d cell=%s dir=%d finish=%d baseboard=%s" % [
+								base_seed, cell, dir, wall_finish,
+								str(has_baseboard)])
 					if wall_finish != reverse_finish:
 						failures.append(
 							"shared Annex wall changes finish seed=%d cell=%s dir=%d %d!=%d" % [
 								base_seed, cell, dir, wall_finish, reverse_finish])
+					if has_baseboard != reverse_baseboard:
+						failures.append(
+							"shared Annex wall changes baseboard seed=%d cell=%s dir=%d" % [
+								base_seed, cell, dir])
 					if edge["wall"] != reverse["wall"] \
 							or edge["full_open"] != reverse["full_open"]:
 						failures.append("asymmetric Annex edge seed=%d cell=%s dir=%d" % [
@@ -263,6 +400,14 @@ func _init() -> void:
 			failures.append("wallpaper finish never generated: %d" % wallpaper)
 		if int(wall_finish_counts.get(wallpaper, 0)) == 0:
 			failures.append("wall-line wallpaper finish never generated: %d" % wallpaper)
+	for plain_finish in range(3):
+		var plain_mat := Mats.annex_wall_variant(plain_finish)
+		if plain_mat.albedo_texture == null \
+				or plain_mat.albedo_texture.resource_path \
+				!= "res://textures/annex/plain_wall_plaster.png":
+			failures.append(
+				"plain Annex finish %d does not use supplied plaster texture" % [
+					plain_finish])
 	var plain_ratio := float(int(finish_counts[0]) + int(finish_counts[1]) \
 		+ int(finish_counts[2])) / float(maxi(checked, 1))
 	if plain_ratio < 0.60 or plain_ratio > 0.72:
@@ -292,10 +437,26 @@ func _init() -> void:
 	if light_gap_ratio < 0.02 or light_gap_ratio > 0.10:
 		failures.append("fixture-free gap ratio outside intended range: %.3f" % [
 			light_gap_ratio])
-	for width_key in [34, 48, 64]:
+	var narrow_ratio := float(int(corridor_widths.get(22, 0))) / float(maxi(
+		int(corridor_widths.get(22, 0))
+		+ int(corridor_widths.get(34, 0))
+		+ int(corridor_widths.get(48, 0))
+		+ int(corridor_widths.get(64, 0)), 1))
+	# The generator chooses 48% of unique corridor lines, while this cell-based
+	# sample weights crossings and long in-radius runs unevenly. Keep a broad
+	# deterministic guard around the intended substantial-minority result.
+	if narrow_ratio < 0.34 or narrow_ratio > 0.56:
+		failures.append("true narrow-hall ratio outside intended range: %.3f" % [
+			narrow_ratio])
+	for width_key in [22, 34, 48, 64]:
 		if int(corridor_widths.get(width_key, 0)) == 0:
 			failures.append("Annex passage width never generated: %.1fm" % [
 				float(width_key) / 10.0])
+	var baseboard_ratio := float(baseboard_edges) / float(maxi(
+		baseboard_edges + plain_base_edges, 1))
+	if baseboard_ratio < 0.25 or baseboard_ratio > 0.50:
+		failures.append("selective baseboard ratio outside intended range: %.3f" % [
+			baseboard_ratio])
 	if not ResourceLoader.exists("res://sounds/ambient-annex.mp3"):
 		failures.append("Annex ambient loop is missing")
 	elif not Sfx.has_bed(2):
@@ -321,18 +482,24 @@ func _init() -> void:
 		"cross_corners": 0, "bad_cross_corners": 0,
 		"wall_utilities": 0, "outlets": 0, "switches": 0,
 		"bad_utilities": 0, "floating_utilities": 0,
+		"shadowing_utilities": 0,
 		"authored_chairs": 0, "authored_shelving": 0,
 		"authored_school_chairs": 0, "tipped_school_chairs": 0,
 		"authored_boxes": 0, "floating_shelf_boxes": 0, "authored_ac": 0,
+		"authored_exit_doors": 0,
 		"ceiling_lights": 0, "bad_ceiling_lights": 0,
 		"unlit_ceiling_fixtures": 0, "misaligned_ceiling_lights": 0,
 		"fixture_architecture_intersections": 0,
 		"wall_segments": 0, "seam_safe_wall_segments": 0,
 		"unstable_wall_meshes": 0,
+		"baseboards": 0, "bad_baseboards": 0,
+		"floating_baseboards": 0, "shadowing_baseboards": 0,
+		"bad_architecture_baseboards": 0,
 		"partitions": 0, "thin_walls": 0,
 		"dim_zones": 0, "light_gaps": 0,
 		"bad_light_zones": 0,
 		"furniture_piles": 0, "small_room_piles": 0,
+		"tunnels": 0, "bad_tunnels": 0, "tunnel_carpet_strips": 0,
 		"kinds": {},
 	}
 	var runtime_chunks := 0
@@ -355,6 +522,8 @@ func _init() -> void:
 					chunk.annex_fixture_obstruction_violations()
 				runtime["floating_utilities"] += \
 					_utility_backing_violations(chunk)
+				runtime["floating_baseboards"] += \
+					_baseboard_backing_violations(chunk)
 				chunk.free()
 
 	if int(runtime["legacy"]) > 0:
@@ -377,6 +546,22 @@ func _init() -> void:
 	for required_kind in ["annex_column", "annex_half_wall", "annex_wall_mass"]:
 		if int(runtime["kinds"].get(required_kind, 0)) == 0:
 			failures.append("reference architecture never generated: %s" % required_kind)
+	if int(runtime["tunnels"]) == 0:
+		failures.append("deep Annex wall masses never generated a viewing tunnel")
+	if int(runtime["bad_tunnels"]) > 0 \
+			or int(runtime["tunnel_carpet_strips"]) != int(runtime["tunnels"]):
+		failures.append(
+			"Annex wall tunnels violate depth/clearance/carpet contract: bad=%d carpet=%d tunnels=%d" % [
+				runtime["bad_tunnels"], runtime["tunnel_carpet_strips"],
+				runtime["tunnels"]])
+	var tunnel_ratio := float(runtime["tunnels"]) / float(maxi(
+		int(runtime["kinds"].get("annex_wall_mass", 0)), 1))
+	if tunnel_ratio < 0.25:
+		failures.append("Annex wall tunnels are still too rare: %.3f" % [
+			tunnel_ratio])
+	if tunnel_ratio > 0.65:
+		failures.append("Annex wall tunnels are no longer occasional: %.3f" % [
+			tunnel_ratio])
 	if int(runtime["corridor_shells"]) == 0:
 		failures.append("no physical narrow corridor shells generated")
 	if int(runtime["cross_corners"]) == 0:
@@ -392,6 +577,10 @@ func _init() -> void:
 	if int(runtime["floating_utilities"]) > 0:
 		failures.append("Annex utilities lack a wall in their own streamed chunk: %d" % [
 			runtime["floating_utilities"]])
+	if int(runtime["shadowing_utilities"]) > 0:
+		failures.append(
+			"Annex utility plates still create unstable contact occlusion: %d" % [
+				runtime["shadowing_utilities"]])
 	var utility_density := float(runtime["wall_utilities"]) \
 		/ float(maxi(runtime_chunks, 1))
 	# Raised from 1.35 deliberately. A 12x12m room reading as a former office
@@ -413,6 +602,8 @@ func _init() -> void:
 				runtime["authored_chairs"], runtime["authored_school_chairs"],
 				runtime["tipped_school_chairs"], runtime["authored_shelving"],
 				runtime["authored_boxes"], runtime["authored_ac"]])
+	if int(runtime["authored_exit_doors"]) == 0:
+		failures.append("extracted carlcapu9 Annex exit door was not generated")
 	if int(runtime["floating_shelf_boxes"]) > 0:
 		failures.append("Annex shelf boxes do not rest on measured decks: %d" % [
 			runtime["floating_shelf_boxes"]])
@@ -440,6 +631,21 @@ func _init() -> void:
 	if int(runtime["unstable_wall_meshes"]) > 0:
 		failures.append("Annex wall runs use a non-native render mesh: %d" % [
 			runtime["unstable_wall_meshes"]])
+	if int(runtime["baseboards"]) == 0:
+		failures.append("selective Annex baseboards were not generated")
+	if int(runtime["bad_baseboards"]) > 0:
+		failures.append("Annex baseboards have invalid dimensions/attachment metadata: %d" % [
+			runtime["bad_baseboards"]])
+	if int(runtime["floating_baseboards"]) > 0:
+		failures.append("Annex baseboards are not physically backed by a wall: %d" % [
+			runtime["floating_baseboards"]])
+	if int(runtime["shadowing_baseboards"]) > 0:
+		failures.append("Annex baseboards still cast detached floor shadows: %d" % [
+			runtime["shadowing_baseboards"]])
+	if int(runtime["bad_architecture_baseboards"]) > 0:
+		failures.append(
+			"Wallpapered Annex architecture lacks a complete baseboard wrap: %d" % [
+				runtime["bad_architecture_baseboards"]])
 	if int(runtime["dim_zones"]) == 0 or int(runtime["light_gaps"]) == 0:
 		failures.append("runtime sample has no deliberate low-light areas")
 	if int(runtime["bad_light_zones"]) > 0:
@@ -457,19 +663,22 @@ func _init() -> void:
 		style_counts[WorldGen.ANNEX_PASSAGE], style_counts[WorldGen.ANNEX_LOBBY]]])
 	print("  plain wall ratio: %.3f | room finishes: %s | wall-line finishes: %s" % [
 		plain_ratio, finish_counts, wall_finish_counts])
-	print("  mixed scale: %d corridors / %d rooms | widths %s | room sizes %s | large-room ratio %.3f | pile ratio %.3f (%d roots) | dim %.3f / gaps %.3f | %d open edges" % [
-		corridor_cells, room_cells, corridor_widths, room_sizes,
-		large_room_ratio, furniture_pile_ratio, furniture_pile_roots,
-		dim_ratio, light_gap_ratio, open_edges])
-	print("  runtime: %d chunks | %d corridor shells / %d solid corners | %d full-tile lights | %d dim zones / %d gaps | %d cameras | utilities %d (%d outlets/%d switches) | props chairs=%d+%d (%d tipped) shelves=%d boxes=%d ac=%d | %d furniture piles | %d wall segments / %d partitions | %d architecture assemblies %s" % [
+	print("  mixed scale: %d corridors / %d rooms | widths %s (2.2m %.3f) | room sizes %s | large-room ratio %.3f | pile ratio %.3f (%d roots) | dim %.3f / gaps %.3f | baseboards %.3f | %d open edges" % [
+		corridor_cells, room_cells, corridor_widths, narrow_ratio,
+		room_sizes, large_room_ratio, furniture_pile_ratio,
+		furniture_pile_roots, dim_ratio, light_gap_ratio, baseboard_ratio,
+		open_edges])
+	print("  runtime: %d chunks | %d corridor shells / %d solid corners | %d baseboards | %d full-tile lights | %d dim zones / %d gaps | %d cameras | utilities %d (%d outlets/%d switches) | props chairs=%d+%d (%d tipped) shelves=%d boxes=%d ac=%d exits=%d | %d furniture piles / %d carpeted wall tunnels | %d wall segments / %d partitions | %d architecture assemblies %s" % [
 		runtime_chunks, runtime["corridor_shells"], runtime["cross_corners"],
-		runtime["ceiling_lights"],
+		runtime["baseboards"], runtime["ceiling_lights"],
 		runtime["dim_zones"], runtime["light_gaps"], runtime["cameras"],
 		runtime["wall_utilities"], runtime["outlets"], runtime["switches"],
 		runtime["authored_chairs"], runtime["authored_school_chairs"],
 		runtime["tipped_school_chairs"], runtime["authored_shelving"],
 		runtime["authored_boxes"], runtime["authored_ac"],
-		runtime["furniture_piles"], runtime["wall_segments"], runtime["partitions"],
+		runtime["authored_exit_doors"],
+		runtime["furniture_piles"], runtime["tunnels"],
+		runtime["wall_segments"], runtime["partitions"],
 		runtime["architecture_assemblies"], runtime["kinds"]])
 	if failures.is_empty():
 		print("  PASS — full-tile unobstructed fixtures, substantial seamless walls, deliberate dim zones, warm-yellow rooms, ambient-only audio, rare furniture piles, sparse CCTV")

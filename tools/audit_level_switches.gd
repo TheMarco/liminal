@@ -47,15 +47,21 @@ func _run() -> void:
 			failures.append("Wander soundtrack was changed by Descent escalation")
 
 	# The shared Q flow must pause Wander without labelling it as a Descent run,
-	# then restore ordinary haunt/input state when cancelled.
+	# then restore ordinary input state when cancelled. Haunt timers are NOT
+	# part of that restore: Wander is the peaceful mode and keeps its figures
+	# suspended throughout, so cancelling the prompt must leave them suspended.
+	# This assertion used to demand the opposite, from when figures still ran
+	# in Wander.
 	game._show_return_prompt()
 	if not is_instance_valid(game._return_prompt) or game._return_prompt.descent:
 		failures.append("Wander return prompt received Descent-specific context")
 	if not game._figures.suspended:
 		failures.append("Wander return prompt did not suspend haunt timers")
 	game._cancel_return_to_title()
-	if game._figures.suspended:
-		failures.append("cancelling the Wander return prompt did not resume haunt timers")
+	if game._figures.suspended != true:
+		failures.append("cancelling the Wander return prompt released haunt timers")
+	if game._whispers.suspended:
+		failures.append("cancelling the Wander return prompt left ambience muted")
 
 	print("level-switch audit: seed=%d target=school cell=%s player=%s" % [
 		REGRESSION_SEED, SCHOOL_CELL, game.player.global_position])

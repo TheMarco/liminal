@@ -104,6 +104,9 @@ jobs:
       - name: Audit Descent runtime contracts
         run: godot --headless --path . --script tools/audit_descent_runtime.gd -- --mode=descent --nologo
 
+      - name: Audit hostile figure contract
+        run: godot --headless --path . --script tools/audit_ghost_room_contract.gd
+
       - name: Audit title navigation and attribution
         run: godot --headless --path . --script tools/audit_title_screen.gd
 
