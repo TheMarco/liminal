@@ -3539,9 +3539,48 @@ func atomic_furnishing_support_violations() -> int:
 
 func _airport_apron_audit_walk(node: Node, parent_xf: Transform3D,
 		inside_setpiece: bool, report: Dictionary) -> void:
-	_level_builder._airport_apron_audit_walk(node, parent_xf, inside_setpiece, report)
+	var xf := parent_xf
+	if node is Node3D:
+		xf = parent_xf * (node as Node3D).transform
+	var active := inside_setpiece
+	if node.has_meta("airport_apron_setpiece"):
+		active = true
+		report["setpieces"] = int(report["setpieces"]) + 1
+	if active and node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null:
+			var a := mi.get_aabb()
+			var overflow := false
+			for ix in 2:
+				for iy in 2:
+					for iz in 2:
+						var p := xf * (a.position + Vector3(
+							a.size.x * ix, a.size.y * iy, a.size.z * iz))
+						if p.x < -0.01 or p.x > S + 0.01 \
+								or p.z < -0.01 or p.z > S + 0.01:
+							overflow = true
+			if overflow:
+				report["violations"] = int(report["violations"]) + 1
+	for child in node.get_children():
+		_airport_apron_audit_walk(child, xf, active, report)
+
+
+## Airport exterior scenery is only a window-box illusion. No aircraft mesh
+## may cross the chunk boundary into the terminal room next door.
+## Airport exterior scenery is only a window-box illusion. No aircraft mesh
+## may cross the chunk boundary into the terminal room next door.
 func airport_apron_setpiece_audit() -> Dictionary:
-	return _level_builder.airport_apron_setpiece_audit()
+	var report := {"setpieces": 0, "violations": 0}
+	if theme != 4:
+		return report
+	for child in get_children():
+		_airport_apron_audit_walk(child, Transform3D.IDENTITY, false, report)
+	return report
+
+
+## Audit hook for the two newest levels. Named enrichment markers let the
+## multi-seed suite prove that each essential prop family is actually emitted,
+## rather than merely existing in the asset folder.
 func enrichment_prop_counts() -> Dictionary:
 	var counts := {}
 	var pending: Array[Node] = [self]
@@ -4273,15 +4312,53 @@ func _slot_machine_alt(x: float, z: float, f: float, idx: int) -> void:
 func _procedural_slot_machine(x: float, z: float, f: float, idx: int) -> void:
 	_level_builder._procedural_slot_machine(x, z, f, idx)
 func _has_slot_rear(node: Node) -> bool:
-	return _level_builder._has_slot_rear(node)
+	if node.has_meta("slot_rear_shell"):
+		return true
+	for child in node.get_children():
+		if _has_slot_rear(child):
+			return true
+	return false
 func _has_slot_front(node: Node) -> bool:
-	return _level_builder._has_slot_front(node)
+	if node.has_meta("slot_front_shell"):
+		return true
+	for child in node.get_children():
+		if _has_slot_front(child):
+			return true
+	return false
+
+
+## Regression hooks for the casino audit. Every surviving machine needs an
+## explicit closed front and rear volume; relying on custom-mesh faces or a
+## stack of display quads is not enough because every bank is walkable.
+## Regression hooks for the casino audit. Every surviving machine needs an
+## explicit closed front and rear volume; relying on custom-mesh faces or a
+## stack of display quads is not enough because every bank is walkable.
 func slot_machine_count() -> int:
-	return _level_builder.slot_machine_count()
+	var count := 0
+	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("slot_machine"):
+			count += 1
+	return count
 func slot_back_violations() -> int:
-	return _level_builder.slot_back_violations()
+	var bad := 0
+	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("slot_machine") and not _has_slot_rear(node):
+			bad += 1
+	return bad
 func slot_front_violations() -> int:
-	return _level_builder.slot_front_violations()
+	var bad := 0
+	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("slot_machine") and not _has_slot_front(node):
+			bad += 1
+	return bad
+
+
+## Upholstered swivel chair built in a yawed sub-node; the backrest sits on
+## the local +z side.
+## A casino stool. This was three cylinders and a leaning box, which read as a
+## primitive the moment it stood anywhere near the authored tables — so it is
+## the real CC0 bar stool now. The material argument is kept because callers
+## pass one, but the model brings its own.
 func _chair_at(p: Vector3, yaw: float, _mat: Material) -> Node3D:
 	return _level_builder._chair_at(p, yaw, _mat)
 func _slots_sign() -> void:
@@ -4398,11 +4475,49 @@ func _office_desk(c: Vector3, d: Vector2, qi := 0) -> void:
 func _office_desk_phone(workstation: Node3D, deskc: Vector3, yaw: float,
 		qi: int) -> void:
 	_level_builder._office_desk_phone(workstation, deskc, yaw, qi)
+## The authored IBM 3278 set down on a desk top. Its screen faces model +X, so
+## a quarter turn off the desk's own yaw points it at whoever sat there. The
+## source scene left a `Lamp` node behind; it is dropped on the way in.
 func _office_ibm_terminal(workstation: Node3D, deskc: Vector3, yaw: float,
 		qi: int) -> bool:
-	return _level_builder._office_ibm_terminal(workstation, deskc, yaw, qi)
+	var top := deskc + Vector3(0, 0.7475, 0)
+	var pivot := _attributed_floor_prop(OFFICE_TERMINAL_PATH, top,
+		yaw - PI / 2.0 + (_r(1240 + qi) - 0.5) * 0.16, OFFICE_TERMINAL_SCALE,
+		OFFICE_TERMINAL_CENTRE, "ibm_3278", workstation)
+	if pivot == null:
+		return false
+	var stray := pivot.find_child("Lamp", true, false)
+	if stray != null:
+		stray.get_parent().remove_child(stray)
+		stray.free()
+	_set_office_terminal_screen(pivot)
+	return true
+
+
+## Replace the imported prop's original fictional login image while preserving
+## its authored curved screen geometry and UV mapping.
+## Replace the imported prop's original fictional login image while preserving
+## its authored curved screen geometry and UV mapping.
 func _set_office_terminal_screen(terminal: Node3D) -> void:
-	_level_builder._set_office_terminal_screen(terminal)
+	var screen := terminal.find_child("ibm_3278_1", true, false) as MeshInstance3D
+	if screen == null:
+		return
+	var source := screen.mesh.surface_get_material(0) as BaseMaterial3D
+	var display := source.duplicate() as BaseMaterial3D \
+		if source != null else StandardMaterial3D.new()
+	display.albedo_texture = OFFICE_TERMINAL_SCREEN
+	display.emission_enabled = true
+	display.emission_texture = OFFICE_TERMINAL_SCREEN
+	# The source image is deliberately near-black; a strong CRT emission keeps
+	# its fine lettering readable under the office's exposure and post-process.
+	display.emission_energy_multiplier = 4.2
+	screen.material_override = display
+	screen.set_meta("office_terminal_custom_screen", true)
+
+
+## A row of payphones on a concourse wall, each on its own dark backboard.
+## The authored handset is re-origined on its own mounting plane, so it takes a
+## wall point and a facing and nothing else.
 func _mall_payphone_bank(dir: int, count: int) -> void:
 	_level_builder._mall_payphone_bank(dir, count)
 func _mall_directory_pylon(p: Vector3, yaw: float) -> void:
@@ -4518,14 +4633,108 @@ func _use_terminal(_actor: Node, hit: Interactable, readout: Label3D,
 func _reset_terminal(hit: Interactable, readout: Label3D,
 		screen: MeshInstance3D) -> void:
 	_level_builder._reset_terminal(hit, readout, screen)
+## Audit hook: Label3D has no scissor rectangle, so protect the physical CRT
+## with the selected font's real metrics whenever terminal copy changes.
 func terminal_readout_violations() -> int:
-	return _level_builder.terminal_readout_violations()
+	var bad := 0
+	for node in find_children("*", "Label3D", true, false):
+		var readout := node as Label3D
+		if not readout.has_meta("terminal_readout"):
+			continue
+		var lines := readout.text.split("\n")
+		var text_width_px := 0.0
+		for line in lines:
+			text_width_px = maxf(text_width_px, readout.font.get_string_size(
+				line, HORIZONTAL_ALIGNMENT_LEFT, -1, readout.font_size).x)
+		var text_height_px := readout.font.get_height(readout.font_size) * float(lines.size())
+		if text_width_px * readout.pixel_size > TERMINAL_SCREEN_SIZE.x * 0.92 \
+				or text_height_px * readout.pixel_size > TERMINAL_SCREEN_SIZE.y * 0.90 \
+				or readout.width * readout.pixel_size > TERMINAL_SCREEN_SIZE.x * 0.94 \
+				or readout.double_sided:
+			bad += 1
+	return bad
+
+
+## Every CRT belongs beneath a workstation pivot. Doorway clearance operates
+## on that pivot, preventing the desk from disappearing independently of the
+## terminal and its loose desktop props.
+## Every CRT belongs beneath a workstation pivot. Doorway clearance operates
+## on that pivot, preventing the desk from disappearing independently of the
+## terminal and its loose desktop props.
 func terminal_support_violations() -> int:
-	return _level_builder.terminal_support_violations()
+	var bad := 0
+	for node in find_children("*", "Node3D", true, false):
+		if not node.has_meta("terminal_body"):
+			continue
+		var ancestor := node.get_parent()
+		var supported := false
+		while ancestor != null and ancestor != self:
+			if ancestor.has_meta("office_workstation"):
+				supported = true
+				break
+			ancestor = ancestor.get_parent()
+		if not supported:
+			bad += 1
+	return bad
+
+
+## Teacher-desk accessories may only exist beneath the complete teacher
+## station. This specifically guards against the cup-and-pens orphan that
+## doorway clearance exposed in classrooms.
+## Teacher-desk accessories may only exist beneath the complete teacher
+## station. This specifically guards against the cup-and-pens orphan that
+## doorway clearance exposed in classrooms.
 func school_stationery_support_violations() -> int:
-	return _level_builder.school_stationery_support_violations()
+	var bad := 0
+	for node in find_children("*", "Node3D", true, false):
+		if not node.has_meta("school_teacher_stationery"):
+			continue
+		var ancestor := node.get_parent()
+		var supported := false
+		while ancestor != null and ancestor != self:
+			if str(ancestor.get_meta("atomic_furnishing", "")) \
+					== "school_teacher_station":
+				supported = true
+				break
+			ancestor = ancestor.get_parent()
+		if not supported:
+			bad += 1
+	return bad
 func school_fixture_integrity_audit() -> Dictionary:
-	return _level_builder.school_fixture_integrity_audit()
+	var report := {"carts": 0, "stalls": 0, "violations": 0}
+	if theme != 6:
+		return report
+	for node in find_children("*", "Node3D", true, false):
+		# The authored cart carries its own opaque materials. The generated one
+		# is still the fallback and still has to be checked: its tub was once
+		# built from translucent water-jug plastic, and the wheels and the wall
+		# behind it showed through.
+		if str(node.get_meta("attributed_furnishing", "")) \
+				== "school_janitor_trolley":
+			report["carts"] = int(report["carts"]) + 1
+		if node.has_meta("school_cart_opaque_body"):
+			report["carts"] = int(report["carts"]) + 1
+			var mesh := node as MeshInstance3D
+			var mat := mesh.material_override as BaseMaterial3D
+			if mat == null \
+					or mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+				report["violations"] = int(report["violations"]) + 1
+		if not node.has_meta("school_stall_complete"):
+			continue
+		report["stalls"] = int(report["stalls"]) + 1
+		var doors := 0
+		var toilets := 0
+		for child in node.find_children("*", "Node3D", true, false):
+			if child.has_meta("school_stall_door"):
+				doors += 1
+			if child.has_meta("school_stall_toilet"):
+				toilets += 1
+		if doors != 1 or toilets != 1:
+			report["violations"] = int(report["violations"]) + 1
+	return report
+
+
+## Matching wedge keyboard: beige base, dark key deck, rows of black caps.
 func _vt100_keyboard(pos: Vector3, yaw: float) -> Node3D:
 	var p := Node3D.new()
 	p.position = Vector3(pos.x, 0, pos.z)
@@ -4642,10 +4851,33 @@ func _annex_tile_center(local_v: float, cell_axis: int) -> float:
 	return _level_builder._annex_tile_center(local_v, cell_axis)
 func _annex_troffer(at: Vector3, pmat: Material) -> void:
 	_level_builder._annex_troffer(at, pmat)
+## Reserve a small margin around each complete ceiling tile. The rectangles are
+## populated by perimeter walls, corridor shells and full-height prop-pass
+## architecture before lighting is generated.
 func _annex_fixture_clear(at: Vector3) -> bool:
-	return _level_builder._annex_fixture_clear(at)
+	var half := ANNEX_CEILING_TILE * 0.5 + ANNEX_FIXTURE_CLEARANCE
+	var fixture := Rect2(
+		Vector2(at.x - half, at.z - half),
+		Vector2(half * 2.0, half * 2.0))
+	for obstruction in _annex_ceiling_obstructions:
+		if fixture.intersects(obstruction):
+			return false
+	return true
+
+
+## Runtime regression hook: every visible Annex panel must still own a complete,
+## unobstructed ceiling tile after all deterministic architecture is present.
+## Runtime regression hook: every visible Annex panel must still own a complete,
+## unobstructed ceiling tile after all deterministic architecture is present.
 func annex_fixture_obstruction_violations() -> int:
-	return _level_builder.annex_fixture_obstruction_violations()
+	if theme != 2:
+		return 0
+	var bad := 0
+	for node in find_children("*", "MeshInstance3D", true, false):
+		if node.has_meta("annex_ceiling_light_size") \
+				and not _annex_fixture_clear((node as MeshInstance3D).position):
+			bad += 1
+	return bad
 func _annex_register_ceiling_obstruction(p: Vector3, width: float,
 		depth: float, yaw: float, top: float) -> void:
 	_level_builder._annex_register_ceiling_obstruction(p, width, depth, yaw, top)
@@ -6569,16 +6801,102 @@ func _sch_cupboard(p: Vector3, yaw: float, salt: int) -> void:
 	_level_builder._sch_cupboard(p, yaw, salt)
 func _sch_chalk(board_root: Node3D, dir: int, cen: float, ln: float) -> void:
 	_level_builder._sch_chalk(board_root, dir, cen, ln)
+## Audit hook: chalk must be a descendant of a board pivot, and every board
+## pivot must belong to a solid generated edge.
 func school_chalkboard_violations() -> int:
-	return _level_builder.school_chalkboard_violations()
+	if theme != 6:
+		return 0
+	return _school_chalkboard_violations_at(self, false)
 func _school_chalkboard_violations_at(node: Node, board_seen: bool) -> int:
-	return _level_builder._school_chalkboard_violations_at(node, board_seen)
+	var seen := board_seen
+	var bad := 0
+	if node.has_meta("school_chalkboard"):
+		seen = true
+		var dir := int(node.get_meta("school_chalkboard"))
+		if not WorldGen.edge_info(wseed, cell, dir, theme)["wall"]:
+			bad += 1
+	if node.has_meta("school_chalk") and not seen:
+		bad += 1
+	for ch in node.get_children():
+		bad += _school_chalkboard_violations_at(ch, seen)
+	return bad
+
+
+## School wall-screen audit: every roller must be owned by an atomic fixture
+## and attached to a genuinely solid generated edge. Portable projector models
+## are deliberately no longer part of classroom generation.
+## School wall-screen audit: every roller must be owned by an atomic fixture
+## and attached to a genuinely solid generated edge. Portable projector models
+## are deliberately no longer part of classroom generation.
 func school_projector_screen_audit() -> Dictionary:
-	return _level_builder.school_projector_screen_audit()
+	var report := {"screens": 0, "violations": 0}
+	if theme != 6:
+		return report
+	for node in find_children("*", "Node3D", true, false):
+		if not node.has_meta("school_projector_screen"):
+			continue
+		report["screens"] += 1
+		var dir := int(node.get_meta("school_projector_screen", -1))
+		if dir < 0 or dir > 3 \
+				or not node.has_meta("atomic_furnishing") \
+				or not bool(WorldGen.edge_info(wseed, cell, dir, theme)["wall"]):
+			report["violations"] += 1
+	return report
+
+
+## EXIT lettering is legal only as part of `_exit_sign`'s physical housing.
+## This catches raw labels placed for atmosphere without a real door.
+## EXIT lettering is legal only as part of `_exit_sign`'s physical housing.
+## This catches raw labels placed for atmosphere without a real door.
 func orphan_exit_label_violations() -> int:
-	return _level_builder.orphan_exit_label_violations()
+	var bad := 0
+	for node in find_children("*", "Label3D", true, false):
+		var lab := node as Label3D
+		if lab.text.strip_edges().to_upper() == "EXIT" \
+				and not lab.has_meta("structural_exit_label"):
+			bad += 1
+	return bad
+
+
+## A lit EXIT must be a complete, visible fixture. Non-mall cabinets belong
+## above the lintel and must project beyond the wall skin; mall cabinets are
+## suspended in open air and are covered by `mall_fixture_audit`'s hangers.
+## A lit EXIT must be a complete, visible fixture. Non-mall cabinets belong
+## above the lintel and must project beyond the wall skin; mall cabinets are
+## suspended in open air and are covered by `mall_fixture_audit`'s hangers.
 func exit_sign_fixture_audit() -> Dictionary:
-	return _level_builder.exit_sign_fixture_audit()
+	var report := {
+		"housings": 0,
+		"labels": 0,
+		"lights": 0,
+		"violations": 0,
+	}
+	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("structural_exit_label"):
+			report["labels"] += 1
+		if node.has_meta("structural_exit_light"):
+			report["lights"] += 1
+		if not node.has_meta("structural_exit_housing"):
+			continue
+		report["housings"] += 1
+		var sign_top := float(node.get_meta("sign_top", INF))
+		var face_offset := float(node.get_meta("face_offset", 0.0))
+		var normal_half := float(node.get_meta("normal_half_extent", 0.0))
+		if sign_top >= ceil_h - 0.01 or face_offset <= normal_half:
+			report["violations"] += 1
+		if theme != 7:
+			var sign_bottom := float(node.get_meta("sign_bottom", -INF))
+			var opening_head := float(node.get_meta("opening_head", INF))
+			if sign_bottom <= opening_head + 0.04 \
+					or normal_half <= T * 0.5 + 0.02:
+				report["violations"] += 1
+	if int(report["labels"]) != int(report["housings"]) * 2 \
+			or int(report["lights"]) != int(report["housings"]) * 2:
+		report["violations"] += 1
+	return report
+
+
+## Pull-down projector screen, half unrolled above the board.
 func _sch_screen(dir: int) -> void:
 	_level_builder._sch_screen(dir)
 func _sch_caf_table(p: Vector3, yaw: float, salt: int) -> void:
@@ -6651,10 +6969,114 @@ func _mall_painted_sign(dir: int, plane: float, uc: float, index: int,
 func _mall_unit_sign(dir: int, plane: float, uc: float, giv: int, y: float,
 		painted := -1) -> void:
 	_level_builder._mall_unit_sign(dir, plane, uc, giv, y, painted)
+## Mall regression hook: storefront lettering must fit its fascia, and exit
+## housings must overlap the solid wall above an opening rather than float
+## below the lintel.
 func mall_fixture_audit() -> Dictionary:
-	return _level_builder.mall_fixture_audit()
+	var report := {
+		"store_signs": 0,
+		"painted_signs": 0,
+		"payphones": 0,
+		"directories": 0,
+		"exit_signs": 0,
+		"foodcourt_brands": 0,
+		"violations": 0,
+	}
+	if theme != 7:
+		return report
+	# A downloaded model that fails to import falls back silently and would
+	# otherwise just quietly stop appearing; count the real ones.
+	for node in find_children("*", "Node3D", true, false):
+		match str(node.get_meta("authored_model", "")):
+			"payphone":
+				report["payphones"] += 1
+			"mall_directory":
+				report["directories"] += 1
+	for node in find_children("*", "MeshInstance3D", true, false):
+		if not node.has_meta("mall_painted_sign"):
+			continue
+		report["painted_signs"] += 1
+		# A cropped fascia must keep the artwork's own aspect and stay inside
+		# the 4.4 x 0.50m sign band, or it reads as a stretched decal.
+		var fit: Vector2 = node.get_meta("mall_sign_fit", Vector2.ZERO)
+		var name := str(node.get_meta("mall_painted_sign"))
+		var want := 0.0
+		for entry in MALL_SIGN_FACES:
+			if entry[0] == name:
+				want = entry[1]
+				break
+		if want <= 0.0 or fit.y <= 0.0 \
+				or absf(fit.x / fit.y - want) > 0.02 \
+				or fit.x > MALL_SIGN_MAX_W + 0.001 \
+				or fit.y > MALL_SIGN_MAX_H + 0.001:
+			report["violations"] += 1
+	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("mall_store_sign") and node is Label3D:
+			report["store_signs"] += 1
+			var lab := node as Label3D
+			var sign_font: Font = lab.font if lab.font != null else ThemeDB.fallback_font
+			var text_px := sign_font.get_string_size(lab.text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, lab.font_size).x
+			var max_world := float(lab.get_meta("safe_world_width", 0.0))
+			if lab.width + 0.5 < text_px \
+					or text_px * lab.pixel_size > max_world + 0.001:
+				report["violations"] += 1
+		if node.has_meta("mall_foodcourt_brand") and node is Label3D:
+			report["foodcourt_brands"] += 1
+		if node.has_meta("mall_exit_mount") and node is MeshInstance3D:
+			report["exit_signs"] += 1
+			var mi := node as MeshInstance3D
+			var sign_top := float(mi.get_meta("sign_top", INF))
+			if int(mi.get_meta("hanger_count", 0)) != 2 \
+					or sign_top >= float(mi.get_meta("opening_head", 0.0)) \
+					or sign_top >= ceil_h:
+				report["violations"] += 1
+	if style == WorldGen.MALL_FOODCOURT:
+		# A food-court serving counter owns exactly one vendor identity when a
+		# solid wall is available. Storefront signs behind it or multiple brands
+		# are context errors even if each individual label fits.
+		if int(report["store_signs"]) != 0 \
+				or int(report["foodcourt_brands"]) > 1:
+			report["violations"] += 1
+	return report
+
+
+## Regression hook for mounted art: every image must retain its source aspect,
+## remain inside the wall/ceiling bounds, and only exist on a genuinely solid
+## edge. The generator never treats these textures as decals or floor props.
+## Regression hook for mounted art: every image must retain its source aspect,
+## remain inside the wall/ceiling bounds, and only exist on a genuinely solid
+## edge. The generator never treats these textures as decals or floor props.
 func wall_art_audit() -> Dictionary:
-	return _level_builder.wall_art_audit()
+	var report := {"mounts": 0, "violations": 0, "paths": {}}
+	var split := _resolved_room_split()
+	for node in find_children("*", "Node3D", true, false):
+		if not node.has_meta("wall_art_mount"):
+			continue
+		report["mounts"] += 1
+		var path := str(node.get_meta("wall_art_path", ""))
+		report["paths"][path] = int(report["paths"].get(path, 0)) + 1
+		var shown := float(node.get_meta("wall_art_aspect", 0.0))
+		var source := float(node.get_meta("wall_art_source_aspect", -1.0))
+		var dir := int(node.get_meta("wall_art_dir", -1))
+		var size: Vector2 = node.get_meta("wall_art_size", Vector2.ZERO)
+		var p := (node as Node3D).position
+		var along := p.z if dir < 2 else p.x
+		var partition_overlap := not split.is_empty() \
+			and ((bool(split[0]) and dir < 2) \
+				or (not bool(split[0]) and dir >= 2)) \
+			and absf(along - float(split[1])) < size.x * 0.5 + 0.18
+		if path.is_empty() or absf(shown - source) > 0.002 \
+				or dir < 0 or dir > 3 \
+				or not bool(WorldGen.edge_info(wseed, cell, dir, theme)["wall"]) \
+				or size.x <= 0.0 or size.y <= 0.0 \
+				or p.y - size.y * 0.5 < 0.25 \
+				or p.y + size.y * 0.5 > ceil_h - 0.12 \
+				or along - size.x * 0.5 < 0.20 \
+				or along + size.x * 0.5 > S - 0.20 \
+				or partition_overlap:
+			report["violations"] += 1
+	return report
 func _mall_sign(pos: Vector3, yaw: float, text: String, size := 0.12,
 		suspended := true) -> Node3D:
 	return _level_builder._mall_sign(pos, yaw, text, size, suspended)
@@ -6723,8 +7145,52 @@ func _prison_bunk(p: Vector3, yaw: float, cell_context := false) -> void:
 	_level_builder._prison_bunk(p, yaw, cell_context)
 func _prison_toilet(p: Vector3, yaw: float, cell_context := false) -> void:
 	_level_builder._prison_toilet(p, yaw, cell_context)
+## Cell-only context audit. Bunks and detention toilet/sink units are allowed
+## only inside actual barred cell strips, never as generic room enrichment.
 func prison_cell_fixture_audit() -> Dictionary:
-	return _level_builder.prison_cell_fixture_audit()
+	var report := {
+		"bunks": 0, "toilets": 0,
+		"authored_bunks": 0, "authored_toilets": 0,
+		"violations": 0,
+	}
+	if theme != 8:
+		return report
+	var valid_style := style == WorldGen.PRISON_CELLBLOCK \
+		or style == WorldGen.PRISON_CELLS
+	for node in find_children("*", "Node3D", true, false):
+		if not node.has_meta("enrichment_prop"):
+			continue
+		var prop := str(node.get_meta("enrichment_prop"))
+		if prop != "double_bunk" and prop != "detention_toilet_sink":
+			continue
+		if prop == "double_bunk":
+			report["bunks"] += 1
+		else:
+			report["toilets"] += 1
+		if not bool(node.get_meta("prison_cell_context", false)) \
+				or not valid_style:
+			report["violations"] += 1
+		var expected_path := PRISON_BUNK_PATH if prop == "double_bunk" \
+			else PRISON_TOILET_PATH
+		var has_authored_model := false
+		for child in node.find_children("*", "Node3D", true, false):
+			if str(child.get_meta("attributed_asset", "")) == expected_path:
+				has_authored_model = true
+				break
+		if has_authored_model:
+			if prop == "double_bunk":
+				report["authored_bunks"] += 1
+			else:
+				report["authored_toilets"] += 1
+		else:
+			report["violations"] += 1
+	return report
+
+
+## Every authored furnishing this chunk placed, by kind. `_attributed_floor_prop`
+## tags each pivot as it builds it, so a downloaded model that stops reaching
+## its rooms — a renamed file, a failed import, a placement gate that drifted
+## shut — shows up here as a zero instead of quietly disappearing.
 func authored_furnishing_counts() -> Dictionary:
 	var counts := {}
 	for node in find_children("*", "Node3D", true, false):
@@ -6740,11 +7206,72 @@ func authored_furnishing_counts() -> Dictionary:
 ## legal mounts: a sealed leaf against a solid wall, or a leaf inside a
 ## generated corridor casing. A leaf loose in a room would be a floating slab.
 func asylum_authored_audit() -> Dictionary:
-	return _level_builder.asylum_authored_audit()
+	var report := {
+		"beds": 0, "gurneys": 0, "trolleys": 0, "baths": 0, "sinks": 0,
+		"notices": 0, "facade_doors": 0, "casing_leaves": 0, "violations": 0,
+	}
+	if theme != 5:
+		return report
+	var kinds := {
+		"ward_bed": "beds", "gurney": "gurneys",
+		"instrument_trolley": "trolleys", "hydro_bath": "baths",
+		"scrub_sink": "sinks",
+	}
+	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("attributed_furnishing"):
+			var kind := str(node.get_meta("attributed_furnishing"))
+			if kinds.has(kind):
+				report[kinds[kind]] += 1
+		if node.has_meta("asylum_wall_notices"):
+			report["notices"] += 1
+		if bool(node.get_meta("wall_mounted_asylum_door", false)):
+			report["facade_doors"] += 1
+			if not bool(node.get_meta("locked_facade", false)):
+				report["violations"] += 1
+		if not node.has_meta("asylum_authored_leaf"):
+			continue
+		report["casing_leaves"] += 1
+		var pick := int(node.get_meta("asylum_authored_leaf"))
+		if pick < 0 or pick >= ASY_DOOR_PATHS.size() \
+				or str(node.get_meta("attributed_asset", "")) \
+				!= ASY_DOOR_PATHS[pick]:
+			report["violations"] += 1
+	return report
 func prison_visitation_phone_audit() -> Dictionary:
-	return _level_builder.prison_visitation_phone_audit()
+	var report := {"booths": 0, "phones": 0, "violations": 0}
+	if theme != 8:
+		return report
+	for node in find_children("*", "Node3D", true, false):
+		if not node.has_meta("atomic_furnishing") \
+				or str(node.get_meta("atomic_furnishing")) != \
+				"prison_visitation_booth":
+			continue
+		report["booths"] = int(report["booths"]) + 1
+		var booth_phones := 0
+		for child in node.find_children("*", "Node3D", true, false):
+			if child.has_meta("prison_visitation_phone"):
+				booth_phones += 1
+		report["phones"] = int(report["phones"]) + booth_phones
+		if booth_phones != 2:
+			report["violations"] = int(report["violations"]) + 1
+	return report
 func prison_authored_door_audit() -> Dictionary:
-	return _level_builder.prison_authored_door_audit()
+	var report := {"locked_facades": 0, "interactive_leaves": 0, "violations": 0}
+	for node in find_children("*", "Node3D", true, false):
+		if bool(node.get_meta("wall_mounted_prison_door", false)):
+			report["locked_facades"] += 1
+			if theme != 8 \
+					or str(node.get_meta("attributed_asset", "")) != \
+					PRISON_DOOR_OLD_PATH \
+					or node.find_child("Null_1", true, false) != null:
+				report["violations"] += 1
+		if bool(node.get_meta("interactive_prison_door", false)):
+			report["interactive_leaves"] += 1
+			if theme != 8 \
+					or str(node.get_meta("attributed_asset", "")) != \
+					SOLITARY_CELL_DOOR_PATH:
+				report["violations"] += 1
+	return report
 func _prison_corridor() -> void:
 	_level_builder._prison_corridor()
 func _wall_facing(dir: int) -> float:

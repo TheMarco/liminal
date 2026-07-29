@@ -1,52 +1,6 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 
 
-func _airport_apron_audit_walk(node: Node, parent_xf: Transform3D,
-		inside_setpiece: bool, report: Dictionary) -> void:
-	var xf = parent_xf
-	if node is Node3D:
-		xf = parent_xf * (node as Node3D).transform
-	var active = inside_setpiece
-	if node.has_meta("airport_apron_setpiece"):
-		active = true
-		report["setpieces"] = int(report["setpieces"]) + 1
-	if active and node is MeshInstance3D:
-		var mi = node as MeshInstance3D
-		if mi.mesh != null:
-			var a = mi.get_aabb()
-			var overflow = false
-			for ix in 2:
-				for iy in 2:
-					for iz in 2:
-						var p = xf * (a.position + Vector3(
-							a.size.x * ix, a.size.y * iy, a.size.z * iz))
-						if p.x < -0.01 or p.x > chunk.S + 0.01 \
-								or p.z < -0.01 or p.z > chunk.S + 0.01:
-							overflow = true
-			if overflow:
-				report["violations"] = int(report["violations"]) + 1
-	for child in node.get_children():
-		_airport_apron_audit_walk(child, xf, active, report)
-
-
-## Airport exterior scenery is only a window-box illusion. No aircraft mesh
-## may cross the chunk boundary into the terminal room next door.
-
-
-func airport_apron_setpiece_audit() -> Dictionary:
-	var report = {"setpieces": 0, "violations": 0}
-	if chunk.theme != 4:
-		return report
-	for child in chunk.get_children():
-		_airport_apron_audit_walk(child, Transform3D.IDENTITY, false, report)
-	return report
-
-
-## Audit hook for the two newest levels. Named enrichment markers let the
-## multi-seed suite prove that each essential prop family is actually emitted,
-## rather than merely existing in the asset folder.
-
-
 func _air_zone_sign(salt: int) -> String:
 	var zone = WorldGen.macro_zone(chunk.wseed, chunk.cell, chunk.theme)
 	var labels: Array = chunk.AIR_ZONE_SIGNS[zone]

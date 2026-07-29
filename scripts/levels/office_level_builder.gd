@@ -609,7 +609,7 @@ func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
 	# complete, non-interactive display-and-keyboard assembly, replacing the old
 	# generated E-query terminal and its separate keyboard.
 	var yaw = atan2(dv.x, dv.z)
-	_office_ibm_terminal(workstation, deskc, yaw, qi)
+	chunk._office_ibm_terminal(workstation, deskc, yaw, qi)
 	# Real paper and stationery silhouettes replace the old anonymous white
 	# slabs on selected desks, while leaving room for the terminal and keyboard.
 	var clutter = chunk._r(59 + qi)
@@ -663,48 +663,6 @@ func _office_desk_phone(workstation: Node3D, deskc: Vector3, yaw: float,
 ## The authored IBM 3278 set down on a desk top. Its screen faces model +X, so
 ## a quarter turn off the desk's own yaw points it at whoever sat there. The
 ## source scene left a `Lamp` node behind; it is dropped on the way in.
-
-
-func _office_ibm_terminal(workstation: Node3D, deskc: Vector3, yaw: float,
-		qi: int) -> bool:
-	var top = deskc + Vector3(0, 0.7475, 0)
-	var pivot = chunk._attributed_floor_prop(chunk.OFFICE_TERMINAL_PATH, top,
-		yaw - PI / 2.0 + (chunk._r(1240 + qi) - 0.5) * 0.16, chunk.OFFICE_TERMINAL_SCALE,
-		chunk.OFFICE_TERMINAL_CENTRE, "ibm_3278", workstation)
-	if pivot == null:
-		return false
-	var stray = pivot.find_child("Lamp", true, false)
-	if stray != null:
-		stray.get_parent().remove_child(stray)
-		stray.free()
-	_set_office_terminal_screen(pivot)
-	return true
-
-
-## Replace the imported prop's original fictional login image while preserving
-## its authored curved screen geometry and UV mapping.
-
-
-func _set_office_terminal_screen(terminal: Node3D) -> void:
-	var screen = terminal.find_child("ibm_3278_1", true, false) as MeshInstance3D
-	if screen == null:
-		return
-	var source = screen.mesh.surface_get_material(0) as BaseMaterial3D
-	var display = source.duplicate() as BaseMaterial3D \
-		if source != null else StandardMaterial3D.new()
-	display.albedo_texture = chunk.OFFICE_TERMINAL_SCREEN
-	display.emission_enabled = true
-	display.emission_texture = chunk.OFFICE_TERMINAL_SCREEN
-	# The source image is deliberately near-black; a strong CRT emission keeps
-	# its fine lettering readable under the office's exposure and post-process.
-	display.emission_energy_multiplier = 4.2
-	screen.material_override = display
-	screen.set_meta("office_terminal_custom_screen", true)
-
-
-## A row of payphones on a concourse wall, each on its own dark backboard.
-## The authored handset is re-origined on its own mounting plane, so it takes a
-## wall point and a facing and nothing else.
 
 
 func _office_poster(dir: int, plane: float) -> void:
@@ -812,53 +770,6 @@ func _reset_terminal(hit: Interactable, readout: Label3D,
 
 ## Audit hook: Label3D has no scissor rectangle, so protect the physical CRT
 ## with the selected font's real metrics whenever terminal copy changes.
-
-
-func terminal_readout_violations() -> int:
-	var bad = 0
-	for node in chunk.find_children("*", "Label3D", true, false):
-		var readout = node as Label3D
-		if not readout.has_meta("terminal_readout"):
-			continue
-		var lines = readout.text.split("\n")
-		var text_width_px = 0.0
-		for line in lines:
-			text_width_px = maxf(text_width_px, readout.font.get_string_size(
-				line, HORIZONTAL_ALIGNMENT_LEFT, -1, readout.font_size).x)
-		var text_height_px = readout.font.get_height(readout.font_size) * float(lines.size())
-		if text_width_px * readout.pixel_size > chunk.TERMINAL_SCREEN_SIZE.x * 0.92 \
-				or text_height_px * readout.pixel_size > chunk.TERMINAL_SCREEN_SIZE.y * 0.90 \
-				or readout.width * readout.pixel_size > chunk.TERMINAL_SCREEN_SIZE.x * 0.94 \
-				or readout.double_sided:
-			bad += 1
-	return bad
-
-
-## Every CRT belongs beneath a workstation pivot. Doorway clearance operates
-## on that pivot, preventing the desk from disappearing independently of the
-## terminal and its loose desktop props.
-
-
-func terminal_support_violations() -> int:
-	var bad = 0
-	for node in chunk.find_children("*", "Node3D", true, false):
-		if not node.has_meta("terminal_body"):
-			continue
-		var ancestor = node.get_parent()
-		var supported = false
-		while ancestor != null and ancestor != chunk:
-			if ancestor.has_meta("office_workstation"):
-				supported = true
-				break
-			ancestor = ancestor.get_parent()
-		if not supported:
-			bad += 1
-	return bad
-
-
-## Teacher-desk accessories may only exist beneath the complete teacher
-## station. This specifically guards against the cup-and-pens orphan that
-## doorway clearance exposed in classrooms.
 
 
 func _office_storage() -> void:

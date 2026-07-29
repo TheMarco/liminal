@@ -394,61 +394,6 @@ func _procedural_slot_machine(x: float, z: float, f: float, idx: int) -> void:
 	chunk._collider_box(Vector3(x, 1.42, z), Vector3(0.68, 2.85, 0.72))
 
 
-func _has_slot_rear(node: Node) -> bool:
-	if node.has_meta("slot_rear_shell"):
-		return true
-	for child in node.get_children():
-		if _has_slot_rear(child):
-			return true
-	return false
-
-
-func _has_slot_front(node: Node) -> bool:
-	if node.has_meta("slot_front_shell"):
-		return true
-	for child in node.get_children():
-		if _has_slot_front(child):
-			return true
-	return false
-
-
-## Regression hooks for the casino audit. Every surviving machine needs an
-## explicit closed front and rear volume; relying on custom-mesh faces or a
-## stack of display quads is not enough because every bank is walkable.
-
-
-func slot_machine_count() -> int:
-	var count = 0
-	for node in chunk.find_children("*", "Node3D", true, false):
-		if node.has_meta("slot_machine"):
-			count += 1
-	return count
-
-
-func slot_back_violations() -> int:
-	var bad = 0
-	for node in chunk.find_children("*", "Node3D", true, false):
-		if node.has_meta("slot_machine") and not _has_slot_rear(node):
-			bad += 1
-	return bad
-
-
-func slot_front_violations() -> int:
-	var bad = 0
-	for node in chunk.find_children("*", "Node3D", true, false):
-		if node.has_meta("slot_machine") and not _has_slot_front(node):
-			bad += 1
-	return bad
-
-
-## Upholstered swivel chair built in a yawed sub-node; the backrest sits on
-## the local +z side.
-## A casino stool. This was three cylinders and a leaning box, which read as a
-## primitive the moment it stood anywhere near the authored tables — so it is
-## the real CC0 bar stool now. The material argument is kept because callers
-## pass one, but the model brings its own.
-
-
 func _chair_at(p: Vector3, yaw: float, _mat: Material) -> Node3D:
 	var ch = chunk._cc0_prop("bar_chair_round_01", p, yaw)
 	chunk._collider_cyl(p + Vector3(0, 0.38, 0), 0.25, 0.76)

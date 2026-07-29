@@ -1154,36 +1154,3 @@ func _asy_sign(o: Vector3, yw: float) -> void:
 # ground until it mirrors the strip lights, and locker runs down every corridor.
 # The rooms are all the ones you remember and none of them are in use.
 
-
-func asylum_authored_audit() -> Dictionary:
-	var report = {
-		"beds": 0, "gurneys": 0, "trolleys": 0, "baths": 0, "sinks": 0,
-		"notices": 0, "facade_doors": 0, "casing_leaves": 0, "violations": 0,
-	}
-	if chunk.theme != 5:
-		return report
-	var kinds = {
-		"ward_bed": "beds", "gurney": "gurneys",
-		"instrument_trolley": "trolleys", "hydro_bath": "baths",
-		"scrub_sink": "sinks",
-	}
-	for node in chunk.find_children("*", "Node3D", true, false):
-		if node.has_meta("attributed_furnishing"):
-			var kind = str(node.get_meta("attributed_furnishing"))
-			if kinds.has(kind):
-				report[kinds[kind]] += 1
-		if node.has_meta("asylum_wall_notices"):
-			report["notices"] += 1
-		if bool(node.get_meta("wall_mounted_asylum_door", false)):
-			report["facade_doors"] += 1
-			if not bool(node.get_meta("locked_facade", false)):
-				report["violations"] += 1
-		if not node.has_meta("asylum_authored_leaf"):
-			continue
-		report["casing_leaves"] += 1
-		var pick = int(node.get_meta("asylum_authored_leaf"))
-		if pick < 0 or pick >= chunk.ASY_DOOR_PATHS.size() \
-				or str(node.get_meta("attributed_asset", "")) \
-				!= chunk.ASY_DOOR_PATHS[pick]:
-			report["violations"] += 1
-	return report

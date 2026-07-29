@@ -48,7 +48,7 @@ func _annex_lighting() -> void:
 			_annex_tile_center(pt.x, chunk.cell.x),
 			0.0,
 			_annex_tile_center(pt.y, chunk.cell.y))
-		if not _annex_fixture_clear(at):
+		if not chunk._annex_fixture_clear(at):
 			continue
 		_annex_troffer(at, pmat)
 		built_fixtures += 1
@@ -114,32 +114,6 @@ func _annex_troffer(at: Vector3, pmat: Material) -> void:
 ## Reserve a small margin around each complete ceiling tile. The rectangles are
 ## populated by perimeter walls, corridor shells and full-height prop-pass
 ## architecture before lighting is generated.
-
-
-func _annex_fixture_clear(at: Vector3) -> bool:
-	var half = chunk.ANNEX_CEILING_TILE * 0.5 + chunk.ANNEX_FIXTURE_CLEARANCE
-	var fixture = Rect2(
-		Vector2(at.x - half, at.z - half),
-		Vector2(half * 2.0, half * 2.0))
-	for obstruction in chunk._annex_ceiling_obstructions:
-		if fixture.intersects(obstruction):
-			return false
-	return true
-
-
-## Runtime regression hook: every visible Annex panel must still own a complete,
-## unobstructed ceiling tile after all deterministic architecture is present.
-
-
-func annex_fixture_obstruction_violations() -> int:
-	if chunk.theme != 2:
-		return 0
-	var bad = 0
-	for node in chunk.find_children("*", "MeshInstance3D", true, false):
-		if node.has_meta("annex_ceiling_light_size") \
-				and not _annex_fixture_clear((node as MeshInstance3D).position):
-			bad += 1
-	return bad
 
 
 func _annex_register_ceiling_obstruction(p: Vector3, width: float,
