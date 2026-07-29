@@ -819,7 +819,7 @@ static func _fo_p(theme: int) -> float:
 		6: return 0.08   # a school is rooms off corridors, and doors between
 		7: return 0.52   # a mall is one public interior interrupted by shopfronts
 		8: return 0.06   # a prison boundary is always legible
-		9: return 0.58   # one continuous body of water, only lightly interrupted
+		9: return 0.12   # compact pool rooms, with occasional broad connections
 	return 0.45
 
 
@@ -871,7 +871,14 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 		return {"wall": wall, "full_open": false,
 			"t": st, "w": sw,
 			"exit_sign": hr01(eh, 4) < (0.10 if theme == 8 else 0.2)}
-	if not wall and not full_open:
+	if theme == 9 and not wall:
+		# Pool Rooms used to inherit the open-hall heuristic below.  Because
+		# water already joins visually through every doorway, that heuristic
+		# dissolved more than a third of all room boundaries and produced
+		# hundreds-of-cells-wide spaces.  Keep a small deterministic minority
+		# fully open and leave the rest as broad tiled openings.
+		full_open = hr01(eh, 1) < _fo_p(theme)
+	elif not wall and not full_open:
 		# A cased doorway only sells "a room behind this wall" when both
 		# sides feel enclosed. If either side is already a merged open hall
 		# (2+ other fully open edges), a lone door-wall standing in open
@@ -1040,6 +1047,10 @@ static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
 		or st == ASY_DAYROOM or st == SCH_ADMIN \
 		or st == MALL_ATRIUM or st == PRISON_GUARD \
 		or st == POOL_DECK
+	if st == POOL_DECK and eligible:
+		# The facade stands on the dry deck at 1.42, which lifts its header
+		# display to 4.37 — only decks with headroom to spare may carry one.
+		eligible = room_height(ws, cell, theme) >= 4.45
 	return eligible and r01(ws, cell.x, cell.y, 1700) < 0.28 \
 		and anchor_wall(ws, cell, 1701, theme) >= 0
 

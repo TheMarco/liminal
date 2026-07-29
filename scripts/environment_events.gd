@@ -1,8 +1,7 @@
 class_name EnvironmentEvents
 extends Node
 ## Sparse physical reactions that make the building answer the player: local
-## power sags, a lift arriving where there is no lobby, and knocks from a room
-## the topology insists is inaccessible.
+## power sags and knocks from a room the topology insists is inaccessible.
 
 signal message(text: String)
 
@@ -39,9 +38,6 @@ func _process(dt: float) -> void:
 	var pick := randf()
 	if pick < 0.48:
 		_power_sag(0.7, "THE POWER DIPS")
-	elif pick < 0.76:
-		_spatial_sound(SoundBank.elev(), 9.0, -11.0)
-		message.emit("AN ELEVATOR ARRIVES SOMEWHERE ELSE")
 	else:
 		_spatial_sound(SoundBank.thud(), 5.0, -8.0)
 		message.emit("THREE KNOCKS FROM BEHIND THE WALL")

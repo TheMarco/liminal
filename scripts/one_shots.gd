@@ -1,7 +1,7 @@
 class_name OneShots
 extends Node3D
-## Rare distant sounds from elsewhere in the hotel — a structural thud, an
-## elevator chime — placed at a random position around the player.
+## Rare distant structural thuds from elsewhere in the hotel, placed at a
+## random position around the player.
 
 var player: Node3D
 
@@ -26,6 +26,6 @@ func _process(dt: float) -> void:
 	var ang := randf() * TAU
 	var dist := randf_range(9.0, 20.0)
 	_p3d.position = player.global_position + Vector3(cos(ang) * dist, 1.6, sin(ang) * dist)
-	_p3d.stream = SoundBank.thud() if randf() < 0.75 else SoundBank.elev()
+	_p3d.stream = SoundBank.thud()
 	_p3d.pitch_scale = randf_range(0.85, 1.1)
 	_p3d.play()

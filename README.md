@@ -48,13 +48,22 @@ procedurally generated liminal spaces** across eight floors:
   close cells and stacked bunks open into mess halls, communal showers, guard
   cages, workshops and visitation booths. Rare cell blocks rise into false
   upper tiers and a central rotunda watches every direction at once.
+- **Floor 9 — the Poolrooms**: endless flooded bathing halls in white mosaic
+  tile. One continuous body of chest-deep green water runs under the whole
+  floor; you wade at half speed with the surface just below your eyeline, and
+  climb out on real pool ladders at every water-to-dry edge. Dry tiled halls,
+  side walkways and bridges break up the pools; tiled piers stand in the
+  water under tall ceilings; rounded pill windows admit blown-out daylight
+  from nowhere, submerged LED units glow below the waterline, caustics dance
+  on everything the water touches — and occasionally a single white plastic
+  chair waits alone in a coved, windowless room.
 
 It opens on a focused title menu over a world that is already built and
 already running behind it. **Wander** and **Descent** remain immediate choices;
 Instructions, About and Credits each have their own screen. Nothing moves until
 you choose a mode.
 
-Press **1**–**8** to ride the elevator between floors — each floor keeps
+Press **1**–**9** to ride the elevator between floors — each floor keeps
 its own geography and remembers where you were. Or don't press anything:
 **swirling portals** hang in the roomier chambers of every floor, tinted the
 colour of wherever they lead. Step in and you emerge in the same cell of
@@ -224,7 +233,7 @@ export templates installed):
 | Shift | Sprint |
 | E | Use a focused terminal, elevator panel or working door |
 | F | Toggle the handheld flashlight |
-| 1–8 | Switch floor (casino / office / Annex / airport / asylum / school / mall / prison) |
+| 1–9 | Switch floor (casino / office / Annex / airport / asylum / school / mall / prison / Poolrooms) |
 | V | Toggle the active video filter |
 | B | Switch between CRT and recovered-tape video modes |
 | Q | Ask to end the current mode and return to the title |
@@ -370,6 +379,12 @@ near-absence of props is enforced as part of its generation contract.
 - `godot --headless --path . --script tools/audit_slots.gd` — samples casino
   banks across many seeds and requires every slot cabinet to have explicit,
   opaque front and rear volume.
+- `godot --headless --path . --script tools/audit_ceiling_seams.gd` — finds
+  fully open edges joining rooms of unequal ceiling height on every themed
+  floor and requires the taller room to seal the band between the two ceiling
+  planes with a wall-finish fascia. Unsealed, that band is raw void: a huge
+  black slab hanging over the opening, at its most glaring above the bright
+  tile of the Poolrooms.
 - `godot --headless --path . --script tools/audit_new_levels.gd` — builds every
   mall and prison room style, checks support and doorway clearance, enforces
   one coherent food-court identity, and keeps bunks and detention fixtures

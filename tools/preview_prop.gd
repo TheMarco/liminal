@@ -76,6 +76,8 @@ func _theme_for(name: String) -> int:
 		return 0
 	if name.begins_with("_sewer"):
 		return 2
+	if name.begins_with("_annex"):
+		return 2
 	if name.begins_with("_air") or name == "_checkin_desk" \
 			or name == "_stanchion_line":
 		return 4
@@ -114,6 +116,9 @@ func _build(c: Chunk, n: String) -> bool:
 		"_shelf_unit": c.call("_shelf_unit", mid, true, 7)
 		"_sewer_pump_skid": c.call("_sewer_pump_skid", mid, 1.0, 1.0, 7)
 		"_sewer_panel": c.call("_sewer_panel", 3, plane)
+		"_annex_half_wall":
+			c.call("_annex_block", mid, 0.0, 4.8, 0.30, 1.05,
+				"annex_half_wall")
 		"_air_adboxes": c.call("_air_adboxes", 3, plane)
 		"_air_bin": c.call("_air_bin", mid)
 		"_air_trolley": c.call("_air_trolley", mid, 0.0, 7, 3)
@@ -168,6 +173,9 @@ func _build(c: Chunk, n: String) -> bool:
 			c.call("_prison_bars", mid, 0.0, 3.1, 2.6, true, false)
 		"_sch_locker_run":
 			c.call("_sch_locker_run", true, 6.0, 2.0, 10.0, 1.0,
+				Mats.sch_trim(), 0.45, 1.85, 7)
+		"_sch_short_locker_run":
+			c.call("_sch_locker_run", true, 6.0, 5.7, 6.3, 1.0,
 				Mats.sch_trim(), 0.45, 1.85, 7)
 		"_prison_visitation_phone":
 			var v := Node3D.new()

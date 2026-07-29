@@ -747,6 +747,21 @@ static func annex_trim() -> StandardMaterial3D:
 		m.roughness = 0.8)
 
 
+## User-supplied hardwood used only on the Annex's half-height wall caps.
+## The source grain runs vertically, so the stored texture is losslessly
+## quarter-turned: native BoxMesh U now follows the cap's local X/long axis,
+## including when the complete half-wall assembly is yawed ninety degrees.
+static func annex_half_wall_cap() -> StandardMaterial3D:
+	return _std("annex_half_wall_cap", func(m: StandardMaterial3D):
+		m.albedo_texture = load(
+			"res://textures/annex/half_wall_cap_wood.png")
+		m.albedo_color = Color.WHITE
+		m.roughness = 0.70
+		m.metallic_specular = 0.28
+		m.texture_filter = \
+			BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
+
+
 ## Pale painted skirting used selectively along complete Annex wall lines.
 ## It stays within the carpet/plain-wall palette instead of reading as a dark
 ## freestanding rail at floor level.
@@ -1764,8 +1779,10 @@ static func pool_wall_tile() -> ShaderMaterial:
 	m.shader = load("res://shaders/pool_tile.gdshader")
 	_pool_tile_maps(m)
 	# Walls and ceilings take a coarser run of the same sheet, so a room is not
-	# one uniform grid from the water to the roof.
-	m.set_shader_parameter("tex_metres", 3.15)
+	# one uniform grid from the water to the roof. 1.575 puts one tile at
+	# 15.75cm and the sheet seam every 1.6m; the previous 3.15 read as huge
+	# metre-plus squares across every tall wall.
+	m.set_shader_parameter("tex_metres", 1.575)
 	m.set_shader_parameter("tile_tint", Color(1.0, 1.0, 0.97))
 	m.set_shader_parameter("caustic_strength", 0.55)
 	_c["pool_wall_tile"] = m

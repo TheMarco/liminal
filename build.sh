@@ -24,8 +24,12 @@ godot --headless --path . --export-release "Windows Desktop" >/dev/null
 
 echo "==> macOS"
 mkdir -p build/macos
-godot --headless --path . --export-release "macOS" >/dev/null
 APP=build/macos/LiminalVegas.app
+# A previously notarized+stapled .app resists in-place overwrite (macOS App
+# Management protection), which surfaces as a bogus "template binary not
+# found" export error. Always export into a clean path.
+rm -rf "$APP"
+godot --headless --path . --export-release "macOS" >/dev/null
 
 IDENTITY="$(security find-identity -v -p codesigning \
 	| awk -F'"' '/Developer ID Application/{print $2; exit}')"

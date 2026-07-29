@@ -11,8 +11,9 @@ extends Node3D
 ## The number key is an index into WorldGen.THEMES, NOT the theme id — theme 3
 ## was a derelict theme park, cut, and the rest keep their original ids so every
 ## existing seed still generates the world it always did.
-## Switching floors fades to black with an elevator chime, rebuilds the world
-## with that floor's theme and seed, and restores your position on that floor.
+## Switching floors fades to black, rebuilds the world with that floor's theme,
+## and restores your position on that floor. Physical elevators own their
+## chime; menu/debug/descent transitions must never impersonate one.
 
 @export var world_seed: int = 0
 
@@ -35,7 +36,6 @@ var active_level := 0
 var _saved_pos := {}
 var _switching := false
 var _fade: ColorRect
-var _ding: AudioStreamPlayer
 var _warp: AudioStreamPlayer
 var _post: ColorRect
 var _crt := true
@@ -104,8 +104,9 @@ const MUSIC_TRACKS := {
 	4: "res://music/lim5.mp3", 5: "res://music/lim6.mp3",
 	6: "res://music/lim4.mp3",
 	7: "res://music/lim7.mp3", 8: "res://music/lim8.mp3",
-	# lim3 belonged to the retired theme park and no live floor claimed it.
-	9: "res://music/lim3.mp3",
+	# lim10 is the user-supplied calm/tranquil loop cut for the Poolrooms;
+	# lim3 (ex theme park) is unclaimed again.
+	9: "res://music/lim10.mp3",
 }
 # A distinct late-run cue gives Descent's final two floors an audible rise in
 # pressure without changing Wander mode's established per-level soundtrack.
@@ -995,8 +996,6 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
 		_saved_pos[active_level] = player.position
 	if via_portal:
 		_warp.play()
-	else:
-		_ding.play()
 	var tw := create_tween()
 	tw.tween_property(_fade, "color:a", 1.0, 0.16 if via_portal else 0.3)
 	await tw.finished
@@ -1564,6 +1563,10 @@ func _build_env(theme: int) -> Environment:
 		# into a detached dark wedge across the carpet. The Annex already has
 		# SDFGI for structural depth, so remove this redundant screen-space pass.
 		env.ssao_enabled = false
+		# SDFGI's 15cm occlusion cells still expanded a zero-gap wall/floor
+		# contact into thick, rectangular dark bands. Keep its bounce light and
+		# color bleed, but drop only the coarse occlusion term for this floor.
+		env.sdfgi_use_occlusion = false
 	elif theme == 1:
 		# sterile daylight-white: corridors dissolve into bright haze
 		env.background_color = Color(0.55, 0.58, 0.55)
@@ -1684,10 +1687,6 @@ func _build_ui() -> void:
 	_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	cl.add_child(_fade)
 	add_child(cl)
-	_ding = AudioStreamPlayer.new()
-	_ding.stream = SoundBank.elev()
-	_ding.volume_db = -8.0
-	add_child(_ding)
 	_warp = AudioStreamPlayer.new()
 	_warp.stream = SoundBank.warp()
 	_warp.volume_db = -6.0
@@ -1820,7 +1819,7 @@ func _set_mode_hint() -> void:
 	if descent:
 		_hint.text = "WASD / arrows move   ·   E interact   ·   F flashlight   ·   B video mode   ·   follow the HUD needle   ·   Q title   ·   Esc release mouse"
 	else:
-		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-8 floors   ·   V filter   ·   B video mode   ·   Q title   ·   Esc release mouse"
+		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-9 floors   ·   V filter   ·   B video mode   ·   Q title   ·   Esc release mouse"
 
 
 ## Dev helper: `godot --path . -- --screenshot=/tmp/shot.png` renders a couple

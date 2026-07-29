@@ -38,10 +38,48 @@ func _walk(node: Node, report: Dictionary) -> void:
 		report["cameras"] += 1
 	if node.has_meta("annex_corridor_shell"):
 		report["corridor_shells"] += 1
+	if node.has_meta("annex_corridor_connection"):
+		report["corridor_connections"] += 1
+		var corridor_finish := int(node.get_meta(
+			"annex_corridor_finish", -1))
+		var boundary_finish := int(node.get_meta(
+			"annex_boundary_finish", -1))
+		var connection_finish := int(node.get_meta(
+			"annex_connection_finish", -1))
+		var uses_boundary := bool(node.get_meta(
+			"annex_connection_uses_boundary_finish", false))
+		var expected_finish := boundary_finish \
+			if uses_boundary else corridor_finish
+		var expected_baseboards := int(node.get_meta(
+			"annex_connection_baseboards_expected", -1))
+		report["corridor_connection_baseboards_expected"] += \
+			maxi(expected_baseboards, 0)
+		if connection_finish != expected_finish or expected_baseboards != 2:
+			report["bad_corridor_connections"] += 1
+	if node.has_meta("annex_corridor_connection_part"):
+		report["corridor_connection_parts"] += 1
+		var part_corridor_finish := int(node.get_meta(
+			"annex_corridor_finish", -1))
+		var part_boundary_finish := int(node.get_meta(
+			"annex_boundary_finish", -1))
+		var part_finish := int(node.get_meta(
+			"annex_connection_finish", -1))
+		var part_uses_boundary := bool(node.get_meta(
+			"annex_connection_uses_boundary_finish", false))
+		var expected_part_finish := part_boundary_finish \
+			if part_uses_boundary else part_corridor_finish
+		if part_finish != expected_part_finish:
+			report["bad_corridor_connections"] += 1
+	if node.has_meta("annex_corridor_connection_baseboard"):
+		report["corridor_connection_baseboards"] += 1
 	if node.has_meta("annex_cross_corner"):
 		report["cross_corners"] += 1
 		if not bool(node.get_meta("annex_single_finish", false)):
 			report["bad_cross_corners"] += 1
+	if node.has_meta("annex_deep_mass_candidate"):
+		report["deep_mass_candidates"] += 1
+		if float(node.get_meta("annex_deep_mass_depth", 0.0)) < 2.10:
+			report["bad_deep_mass_candidates"] += 1
 	if node.has_meta("wall_utility_kind"):
 		report["wall_utilities"] += 1
 		var utility_kind := str(node.get_meta("wall_utility_kind"))
@@ -73,6 +111,30 @@ func _walk(node: Node, report: Dictionary) -> void:
 			report["misaligned_ceiling_lights"] += 1
 	if node.has_meta("annex_wall_thickness"):
 		report["wall_segments"] += 1
+		var wall_owner := str(node.get_meta(
+			"annex_visual_wall_owner", ""))
+		if wall_owner != "collinear_line" \
+				and wall_owner != "corridor_shell" \
+				and wall_owner != "perpendicular_wall_min" \
+				and wall_owner != "perpendicular_wall_max":
+			report["bad_wall_owners"] += 1
+		var wall_finish := int(node.get_meta("annex_finish", -1))
+		var raw_finish := int(node.get_meta(
+			"annex_raw_finish", wall_finish))
+		var line_winner_min := int(node.get_meta(
+			"annex_line_t_winner_finish_min", -1))
+		var line_winner_max := int(node.get_meta(
+			"annex_line_t_winner_finish_max", -1))
+		var expected_finish := raw_finish
+		if line_winner_min >= 0:
+			expected_finish = line_winner_min
+		elif line_winner_max >= 0:
+			expected_finish = line_winner_max
+		if wall_finish < 0 or wall_finish > 4 \
+				or bool(node.get_meta("annex_wallpaper", false)) \
+					!= (wall_finish >= 3) \
+				or wall_finish != expected_finish:
+			report["bad_wall_finish_contracts"] += 1
 		if float(node.get_meta("annex_wall_thickness", 0.0)) < 0.299:
 			report["thin_walls"] += 1
 		if bool(node.get_meta("annex_wall_seam_safe", false)):
@@ -82,6 +144,21 @@ func _walk(node: Node, report: Dictionary) -> void:
 				or not bool(node.get_meta(
 					"annex_uncapped_native_prism", false)):
 			report["unstable_wall_meshes"] += 1
+		for end_name in ["min", "max"]:
+			if not node.has_meta("annex_t_junction_stub_" + end_name):
+				continue
+			report["t_junction_stubs"] += 1
+			var winner_finish := int(node.get_meta(
+				"annex_t_junction_winner_finish_" + end_name, -1))
+			var winner_baseboard := bool(node.get_meta(
+				"annex_t_junction_winner_baseboard_" + end_name, false))
+			# The continuous wall owns the complete terminating edge's visible
+			# treatment. Material and baseboard may not diverge at the join.
+			if bool(node.get_meta("annex_wall_cap_" + end_name, true)) \
+					or winner_finish < 0 or winner_finish > 4 \
+					or winner_baseboard != (winner_finish >= 3) \
+					or wall_finish != expected_finish:
+				report["bad_t_junction_stubs"] += 1
 	if node.has_meta("annex_baseboard"):
 		report["baseboards"] += 1
 		if not bool(node.get_meta("annex_baseboard_attached", false)) \
@@ -100,6 +177,17 @@ func _walk(node: Node, report: Dictionary) -> void:
 		report["partitions"] += 1
 		if float(node.get_meta("annex_partition_thickness", 0.0)) < 0.299:
 			report["thin_walls"] += 1
+	if node.has_meta("annex_half_wall_wood_cap"):
+		report["half_wall_wood_caps"] += 1
+		var cap := node as MeshInstance3D
+		var material := cap.material_override as StandardMaterial3D \
+			if cap != null else null
+		if str(node.get_meta("annex_wood_grain_axis", "")) != "local_x" \
+				or material == null \
+				or material.albedo_texture == null \
+				or material.albedo_texture.resource_path \
+					!= "res://textures/annex/half_wall_cap_wood.png":
+			report["bad_half_wall_wood_caps"] += 1
 	if node.has_meta("annex_dim_zone"):
 		if bool(node.get_meta("annex_dim_zone")):
 			report["dim_zones"] += 1
@@ -128,25 +216,55 @@ func _walk(node: Node, report: Dictionary) -> void:
 				actual_count += 1
 		if finish_idx < 0 or finish_idx > 4 \
 				or wallpapered != (finish_idx >= 3) \
-				or expected != wallpapered \
-				or expected_count != (4 if wallpapered else 0) \
-				or actual_count != expected_count:
+				or not expected \
+			or expected_count < 0 \
+			or actual_count != expected_count:
 			report["bad_architecture_baseboards"] += 1
+	if node.has_meta("annex_attached_half_wall"):
+		report["attached_half_walls"] += 1
+		var attached_wallpapered := bool(node.get_meta("annex_wallpaper", false))
+		var attached_expected := int(node.get_meta("annex_baseboard_expected_count", -1))
+		var cap_ok := false
+		for descendant in node.find_children("*", "MeshInstance3D", true, false):
+			if descendant.has_meta("annex_half_wall_cap_reaches_owner"):
+				cap_ok = bool(descendant.get_meta("annex_half_wall_cap_reaches_owner", false))
+		if not bool(node.get_meta("annex_finish_inherited", false)) \
+				or attached_expected != 3 \
+				or not bool(node.get_meta("annex_cap_continuous_to_owner", false)) \
+				or not cap_ok:
+			report["bad_attached_half_walls"] += 1
 	if node.has_meta("annex_tunnel"):
 		report["tunnels"] += 1
-		var carpet_found := false
+		var tunnel_kind := str(node.get_meta(
+			"annex_tunnel_kind",
+			node.get_meta("annex_architecture", "")))
+		if tunnel_kind == "annex_wall_mass":
+			report["wall_mass_tunnels"] += 1
+		elif tunnel_kind == "annex_cross_corner":
+			report["deep_mass_tunnels"] += 1
+		else:
+			report["bad_tunnels"] += 1
+		var tunnel_path := str(node.get_meta("annex_tunnel_path", ""))
+		if tunnel_path == "straight":
+			report["tunnel_straight"] += 1
+		elif tunnel_path == "L":
+			report["tunnel_l"] += 1
+		var carpet_count := 0
 		for descendant in node.find_children(
 				"*", "MeshInstance3D", true, false):
 			if descendant.has_meta("annex_tunnel_carpet"):
-				carpet_found = true
+				carpet_count += 1
 				report["tunnel_carpet_strips"] += 1
 				if (descendant as GeometryInstance3D).cast_shadow \
-						!= GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+						!= GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+						or (descendant as GeometryInstance3D).gi_mode \
+						!= GeometryInstance3D.GI_MODE_DISABLED:
 					report["bad_tunnels"] += 1
 				if absf((descendant as Node3D).position.y - 0.732) > 0.002:
 					report["bad_tunnels"] += 1
-		if str(node.get_meta("annex_architecture", "")) \
-				!= "annex_wall_mass" \
+		var expected_carpet_count := int(node.get_meta(
+			"annex_tunnel_carpet_pieces", 1))
+		if carpet_count != expected_carpet_count \
 				or float(node.get_meta("annex_tunnel_width", 0.0)) < 1.19 \
 				or absf(float(node.get_meta(
 					"annex_tunnel_sill", 0.0)) - 0.72) > 0.001 \
@@ -159,7 +277,7 @@ func _walk(node: Node, report: Dictionary) -> void:
 				or not bool(node.get_meta(
 					"annex_tunnel_carpeted", false)) \
 				or bool(node.get_meta("annex_tunnel_crawlable", true)) \
-				or not carpet_found:
+				or carpet_count == 0:
 			report["bad_tunnels"] += 1
 	if str(node.get_meta("authored_model", "")) == "annex_dining_chair":
 		report["authored_chairs"] += 1
@@ -373,6 +491,14 @@ func _init() -> void:
 							or edge["full_open"] != reverse["full_open"]:
 						failures.append("asymmetric Annex edge seed=%d cell=%s dir=%d" % [
 							base_seed, cell, dir])
+					# Collinear wall runs must retain one canonical finish and trim
+					# decision along their tangent, independent of local winner order.
+					var tangent_nb := cell + (Vector2i(0, 1) if dir < 2 else Vector2i(1, 0))
+					var tangent_finish := WorldGen.annex_wall_finish(ws, tangent_nb, dir)
+					var tangent_baseboard := WorldGen.annex_wall_baseboard(ws, tangent_nb, dir)
+					if wall_finish != tangent_finish or has_baseboard != tangent_baseboard:
+						failures.append("collinear Annex wall changes finish seed=%d cell=%s dir=%d" % [
+							base_seed, cell, dir])
 					if not edge["wall"]:
 						open_edges += 1
 				if axis == 1 or axis == 3:
@@ -454,7 +580,8 @@ func _init() -> void:
 				float(width_key) / 10.0])
 	var baseboard_ratio := float(baseboard_edges) / float(maxi(
 		baseboard_edges + plain_base_edges, 1))
-	if baseboard_ratio < 0.25 or baseboard_ratio > 0.50:
+	# Skirting is universal now: this is recorded for reference, not enforced.
+	if false:
 		failures.append("selective baseboard ratio outside intended range: %.3f" % [
 			baseboard_ratio])
 	if not ResourceLoader.exists("res://sounds/ambient-annex.mp3"):
@@ -471,6 +598,10 @@ func _init() -> void:
 	main_node.set("descent", true)
 	if main_node.call("_music_track_for", 2) != "":
 		failures.append("Annex still selects a music track")
+	var annex_env := main_node.call("_build_env", 2) as Environment
+	if annex_env.ssao_enabled or annex_env.sdfgi_use_occlusion:
+		failures.append(
+			"Annex contact-occlusion passes still create dark wall/floor bands")
 	main_node.free()
 
 	# Runtime construction is more expensive than pure topology, so exercise a
@@ -480,6 +611,10 @@ func _init() -> void:
 		"assemblies": 0, "architecture_assemblies": 0,
 		"foreign": 0, "corridor_shells": 0,
 		"cross_corners": 0, "bad_cross_corners": 0,
+		"corridor_connections": 0, "corridor_connection_parts": 0,
+		"corridor_connection_baseboards": 0,
+		"corridor_connection_baseboards_expected": 0,
+		"bad_corridor_connections": 0,
 		"wall_utilities": 0, "outlets": 0, "switches": 0,
 		"bad_utilities": 0, "floating_utilities": 0,
 		"shadowing_utilities": 0,
@@ -492,14 +627,23 @@ func _init() -> void:
 		"fixture_architecture_intersections": 0,
 		"wall_segments": 0, "seam_safe_wall_segments": 0,
 		"unstable_wall_meshes": 0,
+		"t_junction_stubs": 0, "bad_t_junction_stubs": 0,
 		"baseboards": 0, "bad_baseboards": 0,
 		"floating_baseboards": 0, "shadowing_baseboards": 0,
 		"bad_architecture_baseboards": 0,
+		"bad_wall_owners": 0, "attached_half_walls": 0,
+		"bad_wall_finish_contracts": 0,
+		"bad_attached_half_walls": 0,
 		"partitions": 0, "thin_walls": 0,
+		"half_wall_wood_caps": 0, "bad_half_wall_wood_caps": 0,
 		"dim_zones": 0, "light_gaps": 0,
 		"bad_light_zones": 0,
 		"furniture_piles": 0, "small_room_piles": 0,
-		"tunnels": 0, "bad_tunnels": 0, "tunnel_carpet_strips": 0,
+		"tunnels": 0, "wall_mass_tunnels": 0,
+		"deep_mass_candidates": 0, "bad_deep_mass_candidates": 0,
+		"deep_mass_tunnels": 0,
+		"bad_tunnels": 0, "tunnel_carpet_strips": 0,
+		"tunnel_straight": 0, "tunnel_l": 0,
 		"kinds": {},
 	}
 	var runtime_chunks := 0
@@ -546,22 +690,44 @@ func _init() -> void:
 	for required_kind in ["annex_column", "annex_half_wall", "annex_wall_mass"]:
 		if int(runtime["kinds"].get(required_kind, 0)) == 0:
 			failures.append("reference architecture never generated: %s" % required_kind)
+	if int(runtime["half_wall_wood_caps"]) == 0 \
+			or int(runtime["bad_half_wall_wood_caps"]) > 0:
+		failures.append(
+			"Annex half-wall hardwood cap contract failed: caps=%d bad=%d" % [
+				runtime["half_wall_wood_caps"],
+				runtime["bad_half_wall_wood_caps"]])
 	if int(runtime["tunnels"]) == 0:
 		failures.append("deep Annex wall masses never generated a viewing tunnel")
-	if int(runtime["bad_tunnels"]) > 0 \
-			or int(runtime["tunnel_carpet_strips"]) != int(runtime["tunnels"]):
+	if int(runtime["bad_tunnels"]) > 0:
 		failures.append(
-			"Annex wall tunnels violate depth/clearance/carpet contract: bad=%d carpet=%d tunnels=%d" % [
+			"Annex wall tunnels violate depth/clearance/carpet contract: bad=%d carpet-pieces=%d tunnels=%d" % [
 				runtime["bad_tunnels"], runtime["tunnel_carpet_strips"],
 				runtime["tunnels"]])
-	var tunnel_ratio := float(runtime["tunnels"]) / float(maxi(
+	if int(runtime["tunnel_straight"]) == 0 or int(runtime["tunnel_l"]) == 0:
+		failures.append("Annex tunnel path sample missing straight or L topology: straight=%d L=%d" % [
+			runtime["tunnel_straight"], runtime["tunnel_l"]])
+	if int(runtime["bad_attached_half_walls"]) > 0:
+		failures.append("Annex attached half-wall inheritance/cap contract failed: %d" % [
+			runtime["bad_attached_half_walls"]])
+	var tunnel_ratio := float(runtime["wall_mass_tunnels"]) / float(maxi(
 		int(runtime["kinds"].get("annex_wall_mass", 0)), 1))
 	if tunnel_ratio < 0.25:
-		failures.append("Annex wall tunnels are still too rare: %.3f" % [
+		failures.append("Annex freestanding wall tunnels are still too rare: %.3f" % [
 			tunnel_ratio])
-	if tunnel_ratio > 0.65:
-		failures.append("Annex wall tunnels are no longer occasional: %.3f" % [
+	# Freestanding wall masses are themselves sparse; most should contain a tunnel
+	# so players reliably encounter both straight and L-shaped variants.
+	if tunnel_ratio > 0.95:
+		failures.append("Annex freestanding wall tunnel coverage is unexpectedly saturated: %.3f" % [
 			tunnel_ratio])
+	if int(runtime["bad_deep_mass_candidates"]) > 0:
+		failures.append("invalid deep Annex wall candidates: %d" % [
+			runtime["bad_deep_mass_candidates"]])
+	var deep_tunnel_ratio := float(runtime["deep_mass_tunnels"]) / float(maxi(
+		int(runtime["deep_mass_candidates"]), 1))
+	if deep_tunnel_ratio < 0.24 or deep_tunnel_ratio > 0.52:
+		failures.append(
+			"cross-corridor deep-wall tunnel coverage out of range: %.3f" % [
+				deep_tunnel_ratio])
 	if int(runtime["corridor_shells"]) == 0:
 		failures.append("no physical narrow corridor shells generated")
 	if int(runtime["cross_corners"]) == 0:
@@ -569,6 +735,18 @@ func _init() -> void:
 	if int(runtime["bad_cross_corners"]) > 0:
 		failures.append("cross-corridor corners still split wall finishes: %d" % [
 			runtime["bad_cross_corners"]])
+	if int(runtime["corridor_connections"]) == 0 \
+			or int(runtime["corridor_connection_parts"]) == 0:
+		failures.append("Annex corridor connection inheritance was not exercised")
+	if int(runtime["bad_corridor_connections"]) > 0 \
+			or int(runtime["corridor_connection_baseboards"]) \
+				!= int(runtime["corridor_connection_baseboards_expected"]):
+		failures.append(
+			"Annex corridor connection finish/baseboard inheritance failed: "
+			+ "bad=%d expected_trim=%d actual_trim=%d" % [
+				runtime["bad_corridor_connections"],
+				runtime["corridor_connection_baseboards_expected"],
+				runtime["corridor_connection_baseboards"]])
 	if int(runtime["outlets"]) == 0 or int(runtime["switches"]) == 0:
 		failures.append("Annex outlets/switches were not both generated")
 	if int(runtime["bad_utilities"]) > 0:
@@ -630,7 +808,20 @@ func _init() -> void:
 		failures.append("Annex wall runs still use capped or overlapping chunk seams")
 	if int(runtime["unstable_wall_meshes"]) > 0:
 		failures.append("Annex wall runs use a non-native render mesh: %d" % [
-			runtime["unstable_wall_meshes"]])
+			 runtime["unstable_wall_meshes"]])
+	if int(runtime["bad_wall_owners"]) > 0:
+		failures.append("Annex wall segments do not identify a continuous visual owner: %d" % [
+			runtime["bad_wall_owners"]])
+	if int(runtime["bad_wall_finish_contracts"]) > 0:
+		failures.append(
+			"Annex wall segments violate finish/baseboard ownership: %d" % [
+				runtime["bad_wall_finish_contracts"]])
+	if int(runtime["t_junction_stubs"]) == 0:
+		failures.append("Annex runtime sample never exercised a T-junction stub")
+	if int(runtime["bad_t_junction_stubs"]) > 0:
+		failures.append(
+			"Annex T-junction stubs still override the continuous wall: %d" % [
+				runtime["bad_t_junction_stubs"]])
 	if int(runtime["baseboards"]) == 0:
 		failures.append("selective Annex baseboards were not generated")
 	if int(runtime["bad_baseboards"]) > 0:
