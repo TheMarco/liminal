@@ -113,5 +113,23 @@ jobs:
       - name: Audit bundled fonts
         run: godot --headless --path . --script tools/font_check.gd
 
+      # The Wander regression contract (docs/DESCENT.md) is the most emphasised
+      # invariant in the project and was the only one with an audit that CI did
+      # not run.
+      - name: Audit Wander mode contract
+        run: godot --headless --path . --script tools/audit_wander_mode.gd
+
+      - name: Audit ceiling seams
+        run: godot --headless --path . --script tools/audit_ceiling_seams.gd
+
+      - name: Audit chunk construction smoke
+        run: godot --headless --path . --script tools/audit_chunk_smoke.gd
+
+      - name: Audit Pool Rooms corner geometry
+        run: godot --headless --path . --script tools/audit_pool_corners.gd
+
+      - name: Audit Pool Rooms scale
+        run: godot --headless --path . --script tools/audit_pool_scale.gd
+
       - name: Build distributable resource pack
         run: godot --headless --quiet --path . --export-pack "macOS" "$RUNNER_TEMP/LiminalVegas-ci.pck"
