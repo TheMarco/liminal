@@ -117,7 +117,7 @@ jobs:
       # invariant in the project and was the only one with an audit that CI did
       # not run.
       - name: Audit Wander mode contract
-        run: godot --headless --path . --script tools/audit_wander_mode.gd
+        run: godot --headless --path . --script tools/audit_wander_mode.gd -- --nologo
 
       - name: Audit ceiling seams
         run: godot --headless --path . --script tools/audit_ceiling_seams.gd

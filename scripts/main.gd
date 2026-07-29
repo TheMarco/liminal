@@ -18,13 +18,20 @@ extends Node3D
 @export var world_seed: int = 0
 
 const DEFAULT_SPAWN := Vector3(6.0, 0.15, 2.0)
-# Safe arrival offsets within a cell, per theme, for portal jumps.
+# Safe arrival offsets within a cell, per theme, for portal jumps. Only a hint:
+# _safe_arrival() sweeps outward from here for somewhere the player actually
+# fits. WorldGen.portal() can return any live theme, so every entry in
+# WorldGen.THEMES needs one -- Pool Rooms was added as theme 9 without one, and
+# arriving through a portal into the Poolrooms read PORTAL_ARRIVE[9] and failed
+# the jump. PORTAL_ARRIVE_DEFAULT keeps the next added theme from doing it again.
+const PORTAL_ARRIVE_DEFAULT := Vector3(3.2, 0.15, 2.0)
 const PORTAL_ARRIVE := {
 	0: Vector3(3.2, 0.15, 2.0), 1: Vector3(3.2, 0.15, 2.0),
 	2: Vector3(3.2, 0.15, 2.0),
 	4: Vector3(3.2, 0.15, 2.0), 5: Vector3(3.2, 0.15, 2.0),
 	6: Vector3(3.2, 0.15, 2.0),
 	7: Vector3(3.2, 0.15, 2.0), 8: Vector3(3.2, 0.15, 2.0),
+	9: Vector3(3.2, 0.15, 2.0),
 }
 
 var player: Player
@@ -409,7 +416,8 @@ func _switch_level(level: int) -> void:
 func _on_portal(dest: int, cellv: Vector2i) -> void:
 	if descent or _switching or dest == active_level:
 		return
-	_jump_to(dest, _safe_arrival(dest, cellv, PORTAL_ARRIVE[dest]), true)
+	_jump_to(dest, _safe_arrival(dest, cellv,
+		PORTAL_ARRIVE.get(dest, PORTAL_ARRIVE_DEFAULT)), true)
 
 
 ## Called by physical lift panels built into selected generated rooms.

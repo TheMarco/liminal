@@ -37,11 +37,15 @@ JOBS=$(( $(sysctl -n hw.ncpu 2>/dev/null || nproc) - 2 ))
 FILTER=""
 DO_IMPORT=1
 TIMEOUT=${TIMEOUT:-300}
+BASELINE=""
+SAVE_BASELINE=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-j) JOBS="$2"; shift 2 ;;
 		-f) FILTER="$2"; shift 2 ;;
 		-t) TIMEOUT="$2"; shift 2 ;;
+		--baseline) BASELINE="$2"; shift 2 ;;
+		--save-baseline) SAVE_BASELINE="$2"; shift 2 ;;
 		--no-import) DO_IMPORT=0; shift ;;
 		-h|--help) sed -n '2,30p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 2 ;;
@@ -81,7 +85,7 @@ AUDITS=(
 	"chunk_smoke|tools/audit_chunk_smoke.gd|"
 	"pool_corners|tools/audit_pool_corners.gd|"
 	"pool_scale|tools/audit_pool_scale.gd|"
-	"wander_mode|tools/audit_wander_mode.gd|"
+	"wander_mode|tools/audit_wander_mode.gd|--nologo"
 	"pool_basins|tools/audit_pool_basins.gd|"
 	"pool_lighting|tools/audit_pool_lighting.gd|"
 )
@@ -191,8 +195,51 @@ if [ "$fails" -gt 0 ]; then
 	done
 fi
 
+if [ -n "$SAVE_BASELINE" ]; then
+	: >"$SAVE_BASELINE"
+	for entry in "${AUDITS[@]}"; do
+		IFS='|' read -r name script extra <<<"$entry"
+		echo "$name=$(cat "$LOGDIR/$name.status" 2>/dev/null || echo '?')" >>"$SAVE_BASELINE"
+	done
+	echo
+	echo "baseline saved to $SAVE_BASELINE"
+fi
+
 echo
 echo "logs: $LOGDIR"
+
+# Comparing against a recorded baseline answers the only question a refactor
+# actually needs -- "did I break something that was working" -- without hiding
+# failures that were already there.
+if [ -n "$BASELINE" ] && [ -f "$BASELINE" ]; then
+	newfail=0
+	fixed=0
+	known=0
+	for entry in "${AUDITS[@]}"; do
+		IFS='|' read -r name script extra <<<"$entry"
+		[ -n "$FILTER" ] && [[ "$name" != *"$FILTER"* ]] && continue
+		now=$(cat "$LOGDIR/$name.status" 2>/dev/null || echo "?")
+		was=$(grep "^$name=" "$BASELINE" 2>/dev/null | cut -d= -f2)
+		[ -z "$was" ] && was="?"
+		if [ "$now" != "0" ] && [ "$was" = "0" ]; then
+			echo "  NEW FAILURE: $name (was passing)"
+			newfail=$((newfail + 1))
+		elif [ "$now" = "0" ] && [ "$was" != "0" ] && [ "$was" != "?" ]; then
+			echo "  fixed: $name (was $was)"
+			fixed=$((fixed + 1))
+		elif [ "$now" != "0" ]; then
+			known=$((known + 1))
+		fi
+	done
+	echo
+	if [ "$newfail" -gt 0 ]; then
+		echo "RESULT: $newfail NEW failure(s) vs baseline, $known known, $fixed fixed"
+		exit 1
+	fi
+	echo "RESULT: no new failures ($known known, $fixed fixed)"
+	exit 0
+fi
+
 if [ "$fails" -gt 0 ]; then
 	echo "RESULT: $fails gating failure(s)"
 	exit 1

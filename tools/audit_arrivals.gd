@@ -4,10 +4,13 @@ extends SceneTree
 ## saved positions. Default: 16 base seeds × every live source floor.
 ## Run: godot --headless --path . --script tools/audit_arrivals.gd -- [seeds]
 
+## Mirrors main.PORTAL_ARRIVE. Every theme in WorldGen.THEMES needs an entry:
+## portals can lead anywhere, and a missing key aborted this audit's _init, which
+## left it idling instead of failing.
 const ARRIVE := {
 	0: Vector2(3.2, 2.0), 1: Vector2(3.2, 2.0), 2: Vector2(3.9, 1.0),
 	4: Vector2(3.2, 2.0), 5: Vector2(3.2, 2.0), 6: Vector2(3.2, 2.0),
-	7: Vector2(3.2, 2.0), 8: Vector2(3.2, 2.0),
+	7: Vector2(3.2, 2.0), 8: Vector2(3.2, 2.0), 9: Vector2(3.2, 2.0),
 }
 const SAVED_OFFSETS := [
 	Vector2(1.0, 1.0), Vector2(6.0, 6.0), Vector2(11.0, 11.0),
