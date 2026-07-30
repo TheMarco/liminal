@@ -1,0 +1,41 @@
+# Audit status at the start of the modularisation work.
+# Used by run_audits.sh --baseline to distinguish a new breakage from a
+# failure that was already there. Two entries are known faults, both
+# pre-dating this work and both outside it:
+#   prop_overlap  annex cell (-2,3): annex_column intersects
+#                 annex_half_wall by 0.53m. Passed at 4260a99, so it came
+#                 in with the Annex dressing work.
+#   arrivals      32 unsafe portal/saved-position destinations, all
+#                 theme 9, in POOL_SOLARIUM/ALCOVE/GALLERY. Only visible
+#                 since ARRIVE gained its missing theme-9 entry; the
+#                 audit aborted before testing anything.
+airport_colliders=0
+airport_luggage=0
+annex=0
+arrivals=1
+ceiling_seams=0
+chemistry_props=0
+chunk_smoke=0
+corridors=0
+descent_routes=0
+descent_runtime=0
+doorways=0
+font_check=0
+ghost_room_contract=0
+interactions=0
+level_switches=0
+mall_shopping_carts=0
+new_levels=0
+pool_basins=0
+pool_corners=0
+pool_lighting=SKIP
+pool_scale=0
+prop_overlap=1
+slots=0
+survivability=0
+title_screen=0
+wall_art=0
+wall_utilities=0
+wander_mode=0
+world_hash=0
+zones=0
