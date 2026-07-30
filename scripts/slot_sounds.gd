@@ -16,6 +16,6 @@ func _ready() -> void:
 	# volume_db is the level at unit_size metres; inside that it climbs
 	unit_size = 4.0
 	max_distance = 26.0
-	bus = "Hall"
+	bus = SoundBank.HALL_BUS
 	# machines in different rooms are not in lockstep
 	play(randf() * 25.0)

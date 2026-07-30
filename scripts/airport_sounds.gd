@@ -1,5 +1,5 @@
 class_name AirportSounds
-extends Node3D
+extends ThemeSounds
 ## Terminal PA life: a gentle three-tone chime, then a muffled announcement
 ## in no language you can place. Every few minutes a heavy jet rolls somewhere
 ## far out on a runway you will never see.
@@ -12,30 +12,10 @@ var _voice_in := -1.0
 
 
 func _ready() -> void:
-	_chime = AudioStreamPlayer3D.new()
-	_chime.stream = SoundBank.pa_chime()
-	_chime.max_distance = 30.0
-	_chime.unit_size = 7.0
-	_chime.volume_db = -12.0
-	_chime.bus = "Hall"
-	_chime.position = Vector3(0, 4.6, 0)
-	add_child(_chime)
-	_voice = AudioStreamPlayer3D.new()
-	_voice.stream = SoundBank.pa_voice()
-	_voice.max_distance = 26.0
-	_voice.unit_size = 6.0
-	_voice.volume_db = -14.0
-	_voice.bus = "Hall"
-	_voice.position = Vector3(0, 4.6, 0)
-	add_child(_voice)
-	_jet = AudioStreamPlayer3D.new()
-	_jet.stream = SoundBank.jet_far()
-	_jet.max_distance = 46.0
-	_jet.unit_size = 12.0
-	_jet.volume_db = -10.0
-	_jet.bus = "Hall"
-	_jet.position = Vector3(0, 2.0, 0)
-	add_child(_jet)
+	# The PA hangs at ceiling height; the jet is somewhere outside at ground level.
+	_chime = emitter(SoundBank.pa_chime(), 30.0, 7.0, -12.0, Vector3(0, 4.6, 0))
+	_voice = emitter(SoundBank.pa_voice(), 26.0, 6.0, -14.0, Vector3(0, 4.6, 0))
+	_jet = emitter(SoundBank.jet_far(), 46.0, 12.0, -10.0, Vector3(0, 2.0, 0))
 	_t = randf_range(10.0, 60.0)
 
 

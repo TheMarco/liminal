@@ -5,6 +5,13 @@ class_name SoundBank
 
 const RATE := 22050.0
 
+## The reverberant bus every world sound plays on, created in
+## main.gd::_setup_audio_bus and muted wholesale while a title card is up. It was
+## a bare "Hall" string literal at 28 sites across twelve files, which is a
+## rename waiting to go wrong and gave no clue that muting it is what silences
+## the building.
+const HALL_BUS := "Hall"
+
 static var _c := {}
 
 

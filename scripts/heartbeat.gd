@@ -64,7 +64,7 @@ func _ready() -> void:
 		_breath = AudioStreamPlayer.new()
 		_breath.stream = br[0]
 		_breath_db = float(br[1])
-		_breath.bus = "Hall"
+		_breath.bus = SoundBank.HALL_BUS
 		_breath.volume_db = _breath_db + BREATH_SILENT_DB
 		add_child(_breath)
 	var hb := Sfx.heartbeat()
@@ -72,7 +72,7 @@ func _ready() -> void:
 		return
 	stream = hb[0]
 	_base_db = float(hb[1])
-	bus = "Hall"
+	bus = SoundBank.HALL_BUS
 	volume_db = _base_db + SILENT_DB
 
 

@@ -93,7 +93,7 @@ func _spatial_sound(stream: AudioStream, distance: float, volume: float) -> void
 	a.volume_db = volume
 	a.max_distance = 30.0
 	a.unit_size = 4.0
-	a.bus = "Hall"
+	a.bus = SoundBank.HALL_BUS
 	var fwd := -player.cam.global_transform.basis.z
 	fwd.y = 0.0
 	if fwd.length_squared() < 0.01:

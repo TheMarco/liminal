@@ -155,13 +155,23 @@ static func scare(idx: int) -> Array:
 static var _last_scare_idx := -1
 
 
+## Pick an index other than the one picked last time. Hearing the same phrase or
+## cry twice running reads as a bug in the audio rather than as a coincidence, and
+## every randomised set here wants the same rule -- it was written out four times.
+## Returns the new index; the caller keeps its own "last" so the sets do not
+## interfere with each other.
+static func _next_index(count: int, last: int) -> int:
+	if count <= 1:
+		return 0
+	var i := randi() % count
+	if i == last:
+		i = (i + 1 + randi() % (count - 1)) % count
+	return i
+
+
 static func random_scare() -> Array:
-	var n := SCARE_MEANS.size()
-	var i := randi() % n
-	if n > 1 and i == _last_scare_idx:
-		i = (i + 1 + randi() % (n - 1)) % n
-	_last_scare_idx = i
-	return scare(i)
+	_last_scare_idx = _next_index(SCARE_MEANS.size(), _last_scare_idx)
+	return scare(_last_scare_idx)
 
 
 static func whisper_count() -> int:
@@ -180,12 +190,8 @@ static var _last_whisper_idx := -1
 ## Same no-repeat rule as the scares: hearing the same phrase twice running
 ## turns a voice into a tape.
 static func random_whisper() -> Array:
-	var n := WHISPER_MEANS.size()
-	var i := randi() % n
-	if n > 1 and i == _last_whisper_idx:
-		i = (i + 1 + randi() % (n - 1)) % n
-	_last_whisper_idx = i
-	return whisper(i)
+	_last_whisper_idx = _next_index(WHISPER_MEANS.size(), _last_whisper_idx)
+	return whisper(_last_whisper_idx)
 
 
 static func death_count() -> int:
@@ -205,12 +211,8 @@ static var _last_death_idx := -1
 ## one they will hear most often in a row. No repeats matters more here than
 ## anywhere else.
 static func random_death() -> Array:
-	var n := DEATH_MEANS.size()
-	var i := randi() % n
-	if n > 1 and i == _last_death_idx:
-		i = (i + 1 + randi() % (n - 1)) % n
-	_last_death_idx = i
-	return death(i)
+	_last_death_idx = _next_index(DEATH_MEANS.size(), _last_death_idx)
+	return death(_last_death_idx)
 
 
 ## Looping. The trim brings it to HEARTBEAT_TARGET at full tension; the caller
@@ -240,12 +242,8 @@ static var _last_player_death_idx := -1
 
 
 static func random_player_death() -> Array:
-	var n := PLAYER_DEATH_MEANS.size()
-	var i := randi() % n
-	if n > 1 and i == _last_player_death_idx:
-		i = (i + 1 + randi() % (n - 1)) % n
-	_last_player_death_idx = i
-	return player_death(i)
+	_last_player_death_idx = _next_index(PLAYER_DEATH_MEANS.size(), _last_player_death_idx)
+	return player_death(_last_player_death_idx)
 
 
 # --- water --------------------------------------------------------------------

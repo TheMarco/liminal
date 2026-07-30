@@ -36,7 +36,7 @@ func _ready() -> void:
 	# the attenuation is gentler than the one-shots and the reach is longer.
 	_p3d.max_distance = 44.0
 	_p3d.unit_size = 10.0
-	_p3d.bus = "Hall"
+	_p3d.bus = SoundBank.HALL_BUS
 	add_child(_p3d)
 	_t = randf_range(25.0, 60.0)
 	if dev:

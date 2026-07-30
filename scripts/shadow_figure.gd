@@ -249,7 +249,7 @@ func _ready() -> void:
 	_shiver.max_distance = 24.0
 	_shiver.unit_size = 6.0
 	_shiver.volume_db = -14.0
-	_shiver.bus = "Hall"
+	_shiver.bus = SoundBank.HALL_BUS
 	add_child(_shiver)
 	# A world-placed figure is not on the haunt manager's books, so it hands
 	# itself over: the manager owns the signal wiring that makes a kill refund
@@ -263,7 +263,7 @@ func _ready() -> void:
 		sh.max_distance = 22.0
 		sh.unit_size = 6.0
 		sh.volume_db = -14.0
-		sh.bus = "Hall"
+		sh.bus = SoundBank.HALL_BUS
 		add_child(sh)
 		sh.play()
 
@@ -475,7 +475,7 @@ func _ignite() -> void:
 	pl.pitch_scale = randf_range(0.93, 1.06)
 	pl.unit_size = 8.0
 	pl.max_distance = 34.0
-	pl.bus = "Hall"
+	pl.bus = SoundBank.HALL_BUS
 	var host := get_parent()
 	if host != null:
 		host.add_child(pl)
@@ -512,7 +512,7 @@ func _maybe_scare() -> void:
 	pl.volume_db = float(sc[1])
 	pl.unit_size = 8.0
 	pl.max_distance = 30.0
-	pl.bus = "Hall"
+	pl.bus = SoundBank.HALL_BUS
 	# hung on the parent, not on us: this figure stops existing in FADE_T
 	# seconds and would take the sound with it half a second in
 	var host := get_parent()
@@ -542,7 +542,7 @@ func _reveal_scare() -> void:
 	pl.pitch_scale = randf_range(0.68, 0.80)
 	pl.unit_size = 8.0
 	pl.max_distance = 30.0
-	pl.bus = "Hall"
+	pl.bus = SoundBank.HALL_BUS
 	var host := get_parent()
 	if host == null:
 		return

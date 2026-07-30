@@ -891,7 +891,7 @@ func _lounge() -> void:
 	mz.unit_size = 4.0
 	mz.max_distance = 24.0
 	mz.volume_db = -14.0
-	mz.bus = "Hall"
+	mz.bus = SoundBank.HALL_BUS
 	mz.position = Vector3(chunk.S / 2.0, chunk.ceil_h - 0.3, chunk.S / 2.0)
 	chunk.add_child(mz)
 	mz.ready.connect(func(): mz.play(randf() * 11.0))

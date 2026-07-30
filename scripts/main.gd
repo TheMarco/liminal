@@ -635,7 +635,7 @@ func _play_player_death() -> void:
 	var pl := AudioStreamPlayer.new()
 	pl.stream = d[0]
 	pl.volume_db = float(d[1])
-	pl.bus = "Hall"
+	pl.bus = SoundBank.HALL_BUS
 	add_child(pl)
 	pl.finished.connect(pl.queue_free)
 	pl.play()
@@ -1368,7 +1368,7 @@ func _apply_found_footage_state() -> void:
 ## mute covers the lot. `Ambience` is the exception: it is a plain
 ## AudioStreamPlayer on Master, so it is stopped by hand.
 func _set_world_audio(on: bool) -> void:
-	var idx := AudioServer.get_bus_index("Hall")
+	var idx := AudioServer.get_bus_index(SoundBank.HALL_BUS)
 	if idx >= 0:
 		AudioServer.set_bus_mute(idx, not on)
 	if is_instance_valid(ambience):
@@ -1382,11 +1382,11 @@ func _set_world_audio(on: bool) -> void:
 ## Shared "Hall" bus: every spatial emitter routes through a soft reverb so
 ## sounds feel like they happen inside the building.
 func _setup_audio_bus() -> void:
-	if AudioServer.get_bus_index("Hall") >= 0:
+	if AudioServer.get_bus_index(SoundBank.HALL_BUS) >= 0:
 		return
 	var idx := AudioServer.bus_count
 	AudioServer.add_bus(idx)
-	AudioServer.set_bus_name(idx, "Hall")
+	AudioServer.set_bus_name(idx, SoundBank.HALL_BUS)
 	var rev := AudioEffectReverb.new()
 	rev.room_size = 0.8
 	rev.damping = 0.5

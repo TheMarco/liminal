@@ -14,7 +14,7 @@ func _ready() -> void:
 	_p3d.max_distance = 40.0
 	_p3d.unit_size = 8.0
 	_p3d.volume_db = -4.0
-	_p3d.bus = "Hall"
+	_p3d.bus = SoundBank.HALL_BUS
 	add_child(_p3d)
 
 

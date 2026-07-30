@@ -1,5 +1,5 @@
 class_name OfficeSounds
-extends Node3D
+extends ThemeSounds
 ## Ambient life for a cubicle cluster: sparse bursts of keyboard typing from
 ## no one in particular, and the occasional terminal beep.
 
@@ -10,22 +10,12 @@ var _queue: Array = []
 
 
 func _ready() -> void:
-	_keys = AudioStreamPlayer3D.new()
-	_keys.stream = SoundBank.randomized(SoundBank.key_click(), 1.25, 3.0)
+	_keys = emitter(SoundBank.randomized(SoundBank.key_click(), 1.25, 3.0), 18.0, 4.0, -12.0)
+	# Overlapping keystrokes within one burst, so the typing does not sound
+	# metronomic.
 	_keys.max_polyphony = 3
-	_keys.max_distance = 18.0
-	_keys.unit_size = 4.0
-	_keys.volume_db = -12.0
-	_keys.bus = "Hall"
-	add_child(_keys)
-	_beep = AudioStreamPlayer3D.new()
-	_beep.stream = SoundBank.randomized(SoundBank.ding(), 1.08, 2.0)
+	_beep = emitter(SoundBank.randomized(SoundBank.ding(), 1.08, 2.0), 20.0, 5.0, -20.0)
 	_beep.pitch_scale = 2.2
-	_beep.max_distance = 20.0
-	_beep.unit_size = 5.0
-	_beep.volume_db = -20.0
-	_beep.bus = "Hall"
-	add_child(_beep)
 	_t = randf_range(2.0, 8.0)
 
 

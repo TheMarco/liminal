@@ -2972,7 +2972,7 @@ func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float) ->
 	bz.unit_size = 3.0
 	bz.max_distance = 15.0
 	bz.volume_db = -26.0
-	bz.bus = "Hall"
+	bz.bus = SoundBank.HALL_BUS
 	bz.autoplay = true
 	bz.position = Vector3(S / 2.0, _wall_h() - 0.5, S / 2.0)
 	add_child(bz)
@@ -5216,7 +5216,7 @@ func _build_portal(dest: int) -> void:
 	hum.unit_size = 3.0
 	hum.max_distance = 18.0
 	hum.volume_db = -9.0
-	hum.bus = "Hall"
+	hum.bus = SoundBank.HALL_BUS
 	hum.autoplay = true
 	hum.position = Vector3(0, 1.35, 0)
 	pt.add_child(hum)
