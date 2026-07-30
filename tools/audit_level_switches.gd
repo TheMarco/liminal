@@ -1,7 +1,7 @@
-extends SceneTree
-## Regression test for the real runtime level-swap sequence. The outgoing
-## floor must leave the physics world before the destination arrival resolver
-## runs, or overlapping collision trees can reject every school landing.
+extends "res://tools/lib/audit_base.gd"
+## Regression test for the real runtime level-swap sequence. The outgoing floor
+## must leave the physics world before the destination arrival resolver runs, or
+## overlapping collision trees can reject every school landing.
 ## Run: godot --headless --path . --script tools/audit_level_switches.gd -- --nologo
 
 const REGRESSION_SEED := 1760336105
@@ -9,86 +9,62 @@ const SCHOOL_CELL := Vector2i(-1, 0)
 const SAVED_POSITION := Vector3(-6.0, 0.0, 6.0)
 
 
-func _init() -> void:
-	call_deferred("_run")
-
-
-func _run() -> void:
-	var scene: PackedScene = load("res://scenes/main.tscn")
-	var game := scene.instantiate()
-	game.world_seed = REGRESSION_SEED
-	get_root().add_child(game)
-	await physics_frame
+func run() -> void:
+	var game := await boot_game(REGRESSION_SEED)
 
 	game._jump_to(6, SAVED_POSITION, false)
-	var deadline := Time.get_ticks_msec() + 5000
-	while game._switching and Time.get_ticks_msec() < deadline:
-		await process_frame
+	await await_until(func(): return not game._switching)
 
-	var failures := []
 	if game._switching or game.active_level != 6:
-		failures.append("school transition did not complete")
+		fail("school transition did not complete")
 	elif game.level_root == null or not game.level_root.is_inside_tree():
-		failures.append("school level is not active in the scene tree")
+		fail("school level is not active in the scene tree")
 	else:
 		await physics_frame
 		var landed: Vector3 = game.player.global_position
 		var actual_cell := Vector2i(floori(landed.x / 12.0), floori(landed.z / 12.0))
+		var world: World3D = game.get_world_3d()
+		var exclude: Array[RID] = [game.player.get_rid()]
 		if actual_cell != SCHOOL_CELL:
-			failures.append("landing left regression cell: %s" % actual_cell)
-		if not ArrivalSafety.is_clear(game.get_world_3d(), landed, [game.player.get_rid()]):
-			failures.append("landed capsule overlaps generated geometry")
-		if not ArrivalSafety.has_floor(game.get_world_3d(), landed, [game.player.get_rid()]):
-			failures.append("landing has no supporting floor")
-		if ArrivalSafety.escape_count(game.get_world_3d(), landed, [game.player.get_rid()]) < 2:
-			failures.append("landing has fewer than two escape directions")
+			fail("landing left regression cell: %s" % actual_cell)
+		if not ArrivalSafety.is_clear(world, landed, exclude):
+			fail("landed capsule overlaps generated geometry")
+		if not ArrivalSafety.has_floor(world, landed, exclude):
+			fail("landing has no supporting floor")
+		if ArrivalSafety.escape_count(world, landed, exclude) < 2:
+			fail("landing has fewer than two escape directions")
 		if game._music_track_for(game.active_level) \
 				!= game.MUSIC_TRACKS[game.active_level]:
-			failures.append("Wander soundtrack was changed by Descent escalation")
+			fail("Wander soundtrack was changed by Descent escalation")
 
 	# The shared Q flow must pause Wander without labelling it as a Descent run,
-	# then restore ordinary input state when cancelled. Haunt timers are NOT
-	# part of that restore: Wander is the peaceful mode and keeps its figures
-	# suspended throughout, so cancelling the prompt must leave them suspended.
-	# This assertion used to demand the opposite, from when figures still ran
-	# in Wander.
+	# then restore ordinary input state when cancelled. Haunt timers are NOT part
+	# of that restore: Wander is the peaceful mode and keeps its figures suspended
+	# throughout, so cancelling the prompt must leave them suspended. This
+	# assertion used to demand the opposite, from when figures still ran in
+	# Wander.
 	game._show_return_prompt()
-	if not is_instance_valid(game._return_prompt) or game._return_prompt.descent:
-		failures.append("Wander return prompt received Descent-specific context")
-	if not game._figures.suspended:
-		failures.append("Wander return prompt did not suspend haunt timers")
+	expect(is_instance_valid(game._return_prompt) and not game._return_prompt.descent,
+		"Wander return prompt received Descent-specific context")
+	expect(game._figures.suspended,
+		"Wander return prompt did not suspend haunt timers")
 	game._cancel_return_to_title()
-	if game._figures.suspended != true:
-		failures.append("cancelling the Wander return prompt released haunt timers")
-	if game._whispers.suspended:
-		failures.append("cancelling the Wander return prompt left ambience muted")
+	expect(game._figures.suspended,
+		"cancelling the Wander return prompt released haunt timers")
+	expect(not game._whispers.suspended,
+		"cancelling the Wander return prompt left ambience muted")
 
 	print("level-switch audit: seed=%d target=school cell=%s player=%s" % [
 		REGRESSION_SEED, SCHOOL_CELL, game.player.global_position])
-	if failures.is_empty():
-		print("  PASS — outgoing collision retired before the school arrival probe")
-	else:
-		for failure in failures:
-			print("FAIL ", failure)
+	if not failures.is_empty():
 		_print_candidate_colliders(game)
-	_stop_audio(game)
-	game.free()
-	Chunk.finish_prop_preloads()
-	SoundBank._c.clear()
-	Sfx._c.clear()
-	await process_frame
-	await physics_frame
-	await create_timer(0.1).timeout
-	quit(0 if failures.is_empty() else 1)
+	await teardown_game(game)
+	finish("outgoing collision retired before the school arrival probe")
 
 
-func _stop_audio(root: Node) -> void:
-	for node in root.find_children("*", "AudioStreamPlayer", true, false):
-		(node as AudioStreamPlayer).stop()
-	for node in root.find_children("*", "AudioStreamPlayer3D", true, false):
-		(node as AudioStreamPlayer3D).stop()
-
-
+## Only on failure: which generated bodies the arrival probe actually hit, which
+## is the difference between "the resolver is wrong" and "the outgoing floor was
+## still in the physics world".
 func _print_candidate_colliders(game: Node) -> void:
 	var world: World3D = game.get_world_3d()
 	var exclude: Array[RID] = [game.player.get_rid()]
