@@ -67,6 +67,14 @@ static func _pool(env: Environment) -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.56, 0.63, 0.61)
 	env.ambient_light_energy = 0.425
+	# Provisional, and the reason the Poolrooms read darker than every other
+	# floor rather than brighter. This was the only theme of nine that set
+	# neither of these, so it ran at Godot's defaults of 1.0 while its siblings
+	# sit at 1.16-1.38 exposure and 1.10-1.30 GI. Worth a --tune pass to settle;
+	# the intent above ("bright, humid and slightly overexposed") argues for the
+	# upper end.
+	env.tonemap_exposure = 1.30
+	env.sdfgi_energy = 1.20
 	env.fog_light_color = Color(0.86, 0.90, 0.87)
 	env.fog_density = 0.0027
 	env.fog_light_energy = 0.65
@@ -77,8 +85,13 @@ static func _pool(env: Environment) -> void:
 	env.volumetric_fog_gi_inject = 0.15
 	# Chlorine glare. The windows are emissive well past white, so the
 	# bloom is what sells them as daylight instead of as lit panels.
+	#
+	# glow_intensity multiplies the whole glow contribution, so at 0.0 the pass
+	# ran and produced nothing -- the effect this comment describes was switched
+	# off. The top of the range across the other floors (0.26-0.55), because
+	# these windows are the only emitters pushed that far past white.
 	env.glow_enabled = true
-	env.glow_intensity = 0.0
+	env.glow_intensity = 0.50
 	env.glow_bloom = 0.35
 	env.glow_hdr_threshold = 1.05
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN

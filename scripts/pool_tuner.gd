@@ -53,6 +53,12 @@ const TILE := [
 ## Environment properties, driven straight onto the live Environment.
 const ENV := [
 	["ambient_light_energy", 0.0, 2.0],
+	# Both of these were left at Godot's default 1.0 for theme 9 alone, and
+	# neither was reachable from this panel -- so the two values most responsible
+	# for the floor reading dark were the two that could not be found by dragging
+	# a slider, which is the whole point of the panel.
+	["tonemap_exposure", 0.8, 1.8],
+	["sdfgi_energy", 0.6, 1.8],
 	["glow_intensity", 0.0, 2.0],
 	["glow_bloom", 0.0, 1.0],
 	["fog_density", 0.0, 0.05],
@@ -249,7 +255,7 @@ func _print_values() -> void:
 	print("\n=== shaders/pool_tile.gdshader ===")
 	for l in tile:
 		print(l)
-	print("\n=== main._build_env(), theme 9 ===")
+	print("\n=== scripts/env_builder.gd::_pool() ===")
 	for l in env:
 		print(l)
 	print("")
