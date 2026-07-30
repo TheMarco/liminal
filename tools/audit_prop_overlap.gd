@@ -12,7 +12,9 @@ extends SceneTree
 ##
 ## Run: godot --headless --path . --script tools/audit_prop_overlap.gd -- [seeds] [radius]
 
-const OVERLAP_TOL := 0.12   # shapes may kiss; they may not interpenetrate
+## The overlap predicate and its tolerance live on Chunk, so the test the
+## generator applies before placing a piece is literally the same one this audit
+## applies afterwards. Two copies would be free to drift.
 const FLOOR_MAX := 0.55     # ignore anything mounted off the floor
 
 
@@ -46,7 +48,7 @@ func _init() -> void:
 					for i in keys.size():
 						for j in range(i + 1, keys.size()):
 							var d := _group_overlap(groups[keys[i]], groups[keys[j]])
-							if d <= OVERLAP_TOL:
+							if d <= Chunk.FURNISHING_OVERLAP_TOL:
 								continue
 							pairs += 1
 							worst = maxf(worst, d)
@@ -114,36 +116,6 @@ func _group_overlap(a: Dictionary, b: Dictionary) -> float:
 	var worst := 0.0
 	for ba in a["boxes"]:
 		for bb in b["boxes"]:
-			worst = maxf(worst, _obb_overlap(ba, bb))
+			worst = maxf(worst, Chunk.plan_box_overlap(ba, bb))
 	return worst
 
-
-## Separating-axis depth for two yawed boxes in plan, gated on their heights
-## actually overlapping. Returns the smallest penetration across all four axes,
-## which is 0 the moment any axis separates them.
-func _obb_overlap(a: Dictionary, b: Dictionary) -> float:
-	var dy := minf(float(a["y1"]), float(b["y1"])) \
-		- maxf(float(a["y0"]), float(b["y0"]))
-	if dy <= 0.0:
-		return 0.0
-	var axes := [
-		Vector2(cos(a["yaw"]), -sin(a["yaw"])),
-		Vector2(sin(a["yaw"]), cos(a["yaw"])),
-		Vector2(cos(b["yaw"]), -sin(b["yaw"])),
-		Vector2(sin(b["yaw"]), cos(b["yaw"])),
-	]
-	var least := INF
-	for axis in axes:
-		var d: Vector2 = b["c"] - a["c"]
-		var gap: float = absf(d.dot(axis)) - _project(a, axis) - _project(b, axis)
-		if gap >= 0.0:
-			return 0.0
-		least = minf(least, -gap)
-	return least
-
-
-func _project(box: Dictionary, axis: Vector2) -> float:
-	var ax := Vector2(cos(box["yaw"]), -sin(box["yaw"]))
-	var az := Vector2(sin(box["yaw"]), cos(box["yaw"]))
-	var e: Vector2 = box["e"]
-	return absf(ax.dot(axis)) * e.x + absf(az.dot(axis)) * e.y

@@ -129,6 +129,26 @@ func _annex_register_ceiling_obstruction(p: Vector3, width: float,
 		Vector2(half_x * 2.0, half_z * 2.0)))
 
 
+## Record an interior slab so later architecture can refuse to stand inside it,
+## and ask whether a candidate would. Separate from the ceiling registry above,
+## which only wants full-height pieces and only cares about tile coverage: a
+## 1.08m half wall obstructs nothing overhead but is still solid to walk into.
+func _annex_register_footprint(p: Vector3, yaw: float, width: float,
+		depth: float, height: float) -> void:
+	chunk._annex_architecture_footprints.append(
+		Chunk.plan_box(p, yaw, width, depth, height))
+
+
+func _annex_footprint_free(p: Vector3, yaw: float, width: float,
+		depth: float, height: float) -> bool:
+	var candidate := Chunk.plan_box(p, yaw, width, depth, height)
+	for placed in chunk._annex_architecture_footprints:
+		if Chunk.plan_box_overlap(candidate, placed) \
+				> Chunk.FURNISHING_OVERLAP_TOL:
+			return false
+	return true
+
+
 ## A wall-like slab standing inside the approach zone of a generated doorway
 ## reads, from the other side of the opening, as a second offset doorframe with
 ## a light-leak gap beside the jamb — an "indented doorway". The route
@@ -187,6 +207,12 @@ func _annex_block(p: Vector3, yaw: float, width: float, depth: float,
 		depth = maxf(depth, chunk.ANNEX_WALL_T)
 	if kind != "annex_column" and _annex_blocks_doorway(p, yaw, width, depth):
 		return null
+	# Columns are exempt from the doorway rule above by design, but not from this
+	# one: interpenetrating architecture is a fault on any piece, and it is the
+	# same test audit_prop_overlap.gd applies afterwards, so only a piece that
+	# would fail the build is refused here.
+	if not _annex_footprint_free(p, yaw, width, depth, height):
+		return null
 	var first = chunk.body.get_child_count()
 	var pivot = chunk._furnishing_pivot(p, yaw, kind, false)
 	var finish_idx = int(finish_override) \
@@ -211,6 +237,7 @@ func _annex_block(p: Vector3, yaw: float, width: float, depth: float,
 		pivot, width, depth,
 		attached_local_end < 0, attached_local_end > 0)
 	_annex_register_ceiling_obstruction(p, width, depth, yaw, height)
+	_annex_register_footprint(p, yaw, width, depth, height)
 	if height < chunk.ceil_h - 0.2:
 		var cap_mat: Material = Mats.annex_half_wall_cap() \
 			if kind == "annex_half_wall" else Mats.annex_trim()
@@ -304,6 +331,9 @@ func _annex_tunnel_mass(p: Vector3, yaw: float, width: float,
 	carpet.set_meta("annex_tunnel_carpet", true)
 	chunk._annex_wrap_local_baseboards(pivot, width, depth)
 	_annex_register_ceiling_obstruction(p, width, depth, yaw, height)
+	# The mass is always the first architecture in its room, so it only needs
+	# recording; there is nothing yet for it to test against.
+	_annex_register_footprint(p, yaw, width, depth, height)
 	chunk._bind_furnishing_colliders(pivot, first)
 	return true
 

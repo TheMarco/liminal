@@ -662,6 +662,11 @@ var _level_builder: RefCounted
 ## Local XZ footprints of walls and columns that reach the drop ceiling.
 ## Annex fixtures are built after its architecture and reject these rectangles.
 var _annex_ceiling_obstructions: Array[Rect2] = []
+## Every interior architecture slab already standing in this Annex cell, as
+## plan_box() dictionaries. The architecture pass had no notion of what it had
+## already placed, so a lobby's half wall could be driven straight through its
+## column; each piece now tests against these before it is built.
+var _annex_architecture_footprints: Array[Dictionary] = []
 # props are laid out in cell coords, then shifted onto the room centre
 
 
@@ -890,6 +895,57 @@ static func cell_ceil_h(ws: int, c: Vector2i, p_theme: int) -> float:
 			(HSCH if p_theme == 6 else (HMALL if p_theme == 7 else \
 			(HPRISON if p_theme == 8 else (HPOOL if p_theme == 9 else HOFF)))))
 	return WorldGen.room_height(ws, WorldGen.room_id(ws, c), p_theme)
+
+
+## Shapes may kiss; they may not interpenetrate. Shared by the generator, which
+## uses it to reject a piece before placing it, and by audit_prop_overlap.gd,
+## which uses it to fail the build if one slipped through. One value, so a piece
+## the generator accepts cannot be one the audit rejects.
+const FURNISHING_OVERLAP_TOL := 0.12
+
+
+## A yawed box in plan, with its vertical extent, for plan_box_overlap.
+static func plan_box(p: Vector3, yaw: float, width: float, depth: float,
+		height: float) -> Dictionary:
+	return {
+		"c": Vector2(p.x, p.z),
+		"e": Vector2(width * 0.5, depth * 0.5),
+		"yaw": yaw,
+		"y0": p.y,
+		"y1": p.y + height,
+	}
+
+
+## Separating-axis depth for two yawed boxes in plan, gated on their heights
+## actually overlapping. Returns the smallest penetration across all four axes,
+## which is 0 the moment any axis separates them.
+static func plan_box_overlap(a: Dictionary, b: Dictionary) -> float:
+	var dy := minf(float(a["y1"]), float(b["y1"])) \
+		- maxf(float(a["y0"]), float(b["y0"]))
+	if dy <= 0.0:
+		return 0.0
+	var axes := [
+		Vector2(cos(a["yaw"]), -sin(a["yaw"])),
+		Vector2(sin(a["yaw"]), cos(a["yaw"])),
+		Vector2(cos(b["yaw"]), -sin(b["yaw"])),
+		Vector2(sin(b["yaw"]), cos(b["yaw"])),
+	]
+	var least := INF
+	for axis in axes:
+		var d: Vector2 = b["c"] - a["c"]
+		var gap: float = absf(d.dot(axis)) - _plan_project(a, axis) \
+			- _plan_project(b, axis)
+		if gap >= 0.0:
+			return 0.0
+		least = minf(least, -gap)
+	return least
+
+
+static func _plan_project(box: Dictionary, axis: Vector2) -> float:
+	var ax := Vector2(cos(box["yaw"]), -sin(box["yaw"]))
+	var az := Vector2(sin(box["yaw"]), cos(box["yaw"]))
+	var e: Vector2 = box["e"]
+	return absf(ax.dot(axis)) * e.x + absf(az.dot(axis)) * e.y
 
 
 ## The Y a cell's walkable surface sits at. Static for the same reason

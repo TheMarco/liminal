@@ -2,9 +2,8 @@
 # Used by run_audits.sh --baseline to distinguish a new breakage from a
 # failure that was already there. Two entries are known faults, both
 # pre-dating this work and both outside it:
-#   prop_overlap  annex cell (-2,3): annex_column intersects
-#                 annex_half_wall by 0.53m. Passed at 4260a99, so it came
-#                 in with the Annex dressing work.
+# (prop_overlap was the first, fixed by the annex occupancy commit: the
+#  architecture pass had no notion of what it had already placed.)
 # (arrivals was the second, fixed by the arrival-datum commit: the resolver
 #  assumed every floor is flat at y=0, so the Poolrooms' raised dry slab was
 #  1.27m above the requested point.)
@@ -29,7 +28,7 @@ pool_basins=0
 pool_corners=0
 pool_lighting=SKIP
 pool_scale=0
-prop_overlap=1
+prop_overlap=0
 slots=0
 survivability=0
 title_screen=0
