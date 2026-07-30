@@ -110,7 +110,7 @@ func _office_floor_files(p: Vector3, salt: int) -> void:
 		var y = 0.70 if i == 2 else 0.24
 		chunk._mrbox(v, Vector3(0, y, 0), Vector3(0.58, 0.46, 0.48), Mats.box_white(), 0.015)
 		chunk._mbox(v, Vector3(0, y + 0.235, 0), Vector3(0.5, 0.018, 0.4), Mats.paint_white())
-	chunk._asy_papers(p + Vector3(0.6, 0, 0.35), salt + 8, 6)
+	chunk._scattered_papers(p + Vector3(0.6, 0, 0.35), salt + 8, 6)
 	chunk._collider_box(p + Vector3(0, 0.42, 0), Vector3(1.25, 0.84, 1.0))
 
 
@@ -636,7 +636,7 @@ func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
 	# so the two never share the same corner of the desk.
 	_office_desk_phone(workstation, deskc, yaw, qi)
 	# chair facing the desk, never perfectly parked
-	chunk._office_task_chair(c + dv * 1.95 + Vector3((chunk._r(97 + qi) - 0.5) * 0.2, 0, 0),
+	chunk._task_chair(c + dv * 1.95 + Vector3((chunk._r(97 + qi) - 0.5) * 0.2, 0, 0),
 		yaw + (chunk._r(87 + qi) - 0.5) * 0.5)
 
 
@@ -778,7 +778,7 @@ func _office_break() -> void:
 	for i in 4:
 		var ang = TAU * float(i) / 4.0 + 0.4
 		var cp = c + Vector3(cos(ang) * 1.15, 0, sin(ang) * 1.15)
-		chunk._office_task_chair(cp, ang + PI / 2.0 + (chunk._r(98 + i) - 0.5) * 0.7)
+		chunk._task_chair(cp, ang + PI / 2.0 + (chunk._r(98 + i) - 0.5) * 0.7)
 	# counter along the south wall with a coffee maker
 	chunk._rbox(Vector3(4.5, 0.45, 0.75), Vector3(3.0, 0.9, 0.6), Mats.desk_white(), 0.015)
 	chunk._rbox(Vector3(3.6, 1.08, 0.75), Vector3(0.3, 0.36, 0.3), Mats.charcoal(), 0.02, false)
@@ -821,9 +821,9 @@ func _office_boardroom() -> void:
 		for i in 8:
 			var x = -4.9 + 1.4 * float(i)
 			var cp = c + Vector3(x, 0, side * 1.75)
-			chunk._office_task_chair(cp, 0.0 if side < 0.0 else PI)
+			chunk._task_chair(cp, 0.0 if side < 0.0 else PI)
 	# One chair sits conspicuously far from the head of the table.
-	chunk._office_task_chair(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18)
+	chunk._task_chair(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18)
 	# Dark wall-sized presentation display with a stubborn status line.
 	chunk._box(c + Vector3(-8.9, 1.75, 0), Vector3(0.10, 2.3, 5.8), Mats.charcoal(), false)
 	var screen = Label3D.new()

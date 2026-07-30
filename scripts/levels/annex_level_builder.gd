@@ -827,7 +827,7 @@ func _annex_school_chair_scatter(count: int, salt: int) -> void:
 	var added = 0
 	var tipped_count = 0
 	for i in mini(count, offsets.size()):
-		var chair = chunk._asy_model("SchoolChair_01", Vector3.ZERO, 0.0)
+		var chair = chunk._load_model("SchoolChair_01", Vector3.ZERO, 0.0)
 		if chair == null:
 			continue
 		chunk._adopt_local(group, chair)
@@ -880,7 +880,7 @@ func _annex_loose_boxes(count: int, salt: int) -> void:
 		var variant = posmod(
 			WorldGen.h(chunk.wseed, chunk.cell.x + i, chunk.cell.y - i, salt + 30),
 			chunk.OFFICE_BOX_VARIANTS.size())
-		if chunk._office_shelf_box(group, offsets[i],
+		if chunk._shelf_box(group, offsets[i],
 				(chunk._r(salt + 35 + i) - 0.5) * 0.26, variant,
 				"annex_loose_box"):
 			added += 1
@@ -928,7 +928,7 @@ func _annex_shelving(salt: int) -> void:
 		var variant = posmod(
 			WorldGen.h(chunk.wseed, chunk.cell.x + i, chunk.cell.y, salt + 50),
 			chunk.OFFICE_BOX_VARIANTS.size())
-		if chunk._office_shelf_box(shelf, box_slots[i],
+		if chunk._shelf_box(shelf, box_slots[i],
 				(chunk._r(salt + 60 + i) - 0.5) * 0.12, variant,
 				"annex_shelf_box"):
 			box_count += 1

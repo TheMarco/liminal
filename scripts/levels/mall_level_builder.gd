@@ -480,7 +480,7 @@ func _mall_shelves(dir: int, salt: int) -> void:
 		return
 	var v = Node3D.new()
 	v.position = Vector3(6.0, 0, 6.0)
-	v.rotation.y = chunk._air_yaw_for(dir)
+	v.rotation.y = chunk._yaw_for(dir)
 	chunk.add_child(v)
 	# local +z faces the wall: boards hang at z 5.42, run 7m along x
 	for ux in [-3.5, -1.75, 0.0, 1.75, 3.5]:
@@ -500,8 +500,8 @@ func _mall_shelves(dir: int, salt: int) -> void:
 			chunk._cc0_prop_local(v, "long_life_food",
 				Vector3(sx, 0.99 + float(si) * 0.55, 5.15),
 				PI + 0.08 * float(si), 0.9)
-	chunk._collider_yaw_box(chunk._wp(Vector3(6, 0, 6), Vector3(0, 1.1, 5.42), chunk._air_yaw_for(dir)),
-		Vector3(7.1, 2.2, 0.45), chunk._air_yaw_for(dir))
+	chunk._collider_yaw_box(chunk._wp(Vector3(6, 0, 6), Vector3(0, 1.1, 5.42), chunk._yaw_for(dir)),
+		Vector3(7.1, 2.2, 0.45), chunk._yaw_for(dir))
 
 
 ## A chrome garment rack, picked clean but for a few dark shapes.
@@ -669,7 +669,7 @@ func _mall_foodcourt() -> void:
 	for d in [3, 2, 1, 0]:
 		if not _solid_wall(d):
 			continue
-		var yw = chunk._air_yaw_for(d)
+		var yw = chunk._yaw_for(d)
 		var v = Node3D.new()
 		v.position = Vector3(6.0, 0, 6.0)
 		v.rotation.y = yw

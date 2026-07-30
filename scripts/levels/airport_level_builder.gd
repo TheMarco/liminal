@@ -365,7 +365,7 @@ func _stanchion_line(a: Vector3, b: Vector3, n: int) -> void:
 
 func _air_gate() -> void:
 	var wdir = _air_pick_wall(310)
-	var yw = chunk._air_yaw_for(wdir) if wdir >= 0 else float(int(chunk._r(311) * 3.99)) * PI / 2.0
+	var yw = chunk._yaw_for(wdir) if wdir >= 0 else float(int(chunk._r(311) * 3.99)) * PI / 2.0
 	var o = Vector3(chunk.S / 2.0, 0, chunk.S / 2.0)
 	var code = _gate_code()
 	if wdir >= 0:
@@ -931,7 +931,7 @@ func _air_transit_ad_t(si: int, bay: Array) -> float:
 
 func _air_checkin() -> void:
 	var wdir = _air_pick_wall(360)
-	var yw = chunk._air_yaw_for(wdir) if wdir >= 0 else ((PI / 2.0) if chunk._r(361) < 0.5 else 0.0)
+	var yw = chunk._yaw_for(wdir) if wdir >= 0 else ((PI / 2.0) if chunk._r(361) < 0.5 else 0.0)
 	var o = Vector3(chunk.S / 2.0, 0, chunk.S / 2.0)
 	# The authored position is 4.78m wide, so a row of two fills the same span
 	# three narrow generated desks used to. Falling back to the generated desk
@@ -1183,7 +1183,7 @@ func _air_escalator() -> void:
 	if wdir < 0:
 		_air_hall()
 		return
-	var yw = chunk._air_yaw_for(wdir)
+	var yw = chunk._yaw_for(wdir)
 	var o = Vector3(chunk.S / 2.0, 0, chunk.S / 2.0)
 	for cx in [-1.15, 1.15]:
 		_escalator_flight(o, yw, cx)

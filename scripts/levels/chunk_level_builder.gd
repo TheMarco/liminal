@@ -19,7 +19,7 @@ extends RefCounted
 ##                     _collider_rot_box
 ##   furnishing groups _furnishing_pivot _bind_furnishing_colliders _adopt_local
 ##   authored props    _cc0_prop _attributed_floor_prop _attributed_prop_local
-##                     _asy_model _prop_scene
+##                     _load_model _prop_scene
 ##   determinism       _r(salt) -- a pure hash of (seed, cell, salt), so it is
 ##                     call-order independent and safe to move between files
 ##   cell facts        wseed cell theme style ceil_h room_root room_n

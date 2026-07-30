@@ -522,7 +522,7 @@ func _sch_stack_chairs(p: Vector3, yaw: float, salt: int) -> void:
 	var n = 3 + int(chunk._r(salt + 1) * 1.99)
 	for i in n:
 		var nested = Vector3(0, 0.065 * float(i), 0.035 * float(i)).rotated(Vector3.UP, yaw)
-		chunk._asy_model("SchoolChair_01", p + nested,
+		chunk._load_model("SchoolChair_01", p + nested,
 			yaw + (chunk._r(salt + 4 + i) - 0.5) * 0.035)
 	chunk._collider_yaw_box(p + Vector3(0, 0.57, 0), Vector3(0.62, 1.14, 0.76), yaw)
 
@@ -695,7 +695,7 @@ func _sch_classroom() -> void:
 	# as a specific abandoned workplace rather than another student table. The
 	# desk, supplies and chair are one atomic furnishing: a doorway can remove
 	# the station, but can never leave its cup and pens hovering behind.
-	var teacher_desk = chunk._asy_model("metal_office_desk", td, yaw)
+	var teacher_desk = chunk._load_model("metal_office_desk", td, yaw)
 	chunk._adopt_local(teacher, teacher_desk)
 	chunk._collider_yaw_box(td + Vector3(0, 0.4, 0), Vector3(2.0, 0.8, 0.95), yaw)
 	var supplies = chunk._cc0_prop("stationery_supplies",
@@ -703,7 +703,7 @@ func _sch_classroom() -> void:
 		yaw + PI / 2.0 + (chunk._r(73) - 0.5) * 0.12)
 	supplies.set_meta("school_teacher_stationery", true)
 	chunk._adopt_local(teacher, supplies)
-	var teacher_chair = chunk._office_task_chair(
+	var teacher_chair = chunk._task_chair(
 		td + Vector3(fx, 0, fz) * 1.0, yaw)
 	chunk._adopt_local(teacher, teacher_chair)
 	chunk._bind_furnishing_colliders(teacher, teacher_b0)
@@ -914,7 +914,7 @@ func _sch_bathroom() -> void:
 
 
 func _sch_stalls(dir: int) -> void:
-	var yaw = chunk._air_yaw_for(dir)
+	var yaw = chunk._yaw_for(dir)
 	var depth = 1.58
 	var pm = Mats.sch_chair(0.35)
 	var cnt = 3
@@ -1125,10 +1125,10 @@ func _sch_auditorium() -> void:
 				var p = row_c + Vector3(x, 0, 0)
 				var chair_yaw = PI + \
 					(chunk._r(1200 + row * 10 + col) - 0.5) * 0.05
-				chunk._asy_model("SchoolChair_01", p, chair_yaw)
+				chunk._load_model("SchoolChair_01", p, chair_yaw)
 			chunk._collider_box(row_c + Vector3(0, 0.58, 0), Vector3(6.0, 1.16, 0.78))
 	var loose = c + Vector3(0.25, 0, 5.8)
-	chunk._asy_model("SchoolChair_01", loose, PI + 0.48)
+	chunk._load_model("SchoolChair_01", loose, PI + 0.48)
 	chunk._collider_yaw_box(loose + Vector3(0, 0.5, 0), Vector3(0.58, 1.02, 0.7), PI + 0.48)
 	# Structural openings add their own housed EXIT cabinets. Decorative raw
 	# words on this back wall looked like floating navigation markers and could
@@ -1349,7 +1349,7 @@ func _sch_admin() -> void:
 	chunk._mbox(v, Vector3(0, 1.08, 0), Vector3(4.6, 0.07, 0.66), Mats.sch_desk())
 	chunk._collider_yaw_box(c + Vector3(0, 0.55, 0), Vector3(4.4, 1.1, 0.55), yaw)
 	var back = c - Vector3(sin(yaw), 0, cos(yaw)) * 2.4
-	chunk._office_desk_small(back, yaw + PI)
+	chunk._small_desk(back, yaw + PI)
 	chunk._shelf_unit(back + Vector3(cos(yaw) * 2.2, 0, -sin(yaw) * 2.2), absf(cos(yaw)) > 0.5, 810)
 
 

@@ -300,7 +300,7 @@ func _prison_cell_strip(dir: int, salt: int) -> void:
 		# what a man's whole world was: bunk, toilet, shelf
 		_prison_bunk(_wall_pt(dir, bc - 0.58, 1.30), byaw, true)
 		_prison_toilet(_wall_pt(dir, bc + 0.74, 0.62),
-			chunk._air_yaw_for(dir), true)
+			chunk._yaw_for(dir), true)
 		var effects = chunk._furnishing_pivot(Vector3.ZERO, 0.0,
 			"prison_cell_personal_effects", false)
 		effects.set_meta("enrichment_prop", "cell_personal_effects")
@@ -313,13 +313,13 @@ func _prison_cell_strip(dir: int, salt: int) -> void:
 		var effect_pos = _wall_pt(dir, bc + 0.7, 0.16, 1.535)
 		if WorldGen.hr01(giv, 8) < 0.58:
 			var books = chunk._cc0_prop("book_encyclopedia_set_01", effect_pos,
-				chunk._air_yaw_for(dir), 0.72)
+				chunk._yaw_for(dir), 0.72)
 			chunk._adopt_local(effects, books)
 		if WorldGen.hr01(giv, 9) < 0.48:
 			var tin_offset = Vector3(0.25, 0, 0).rotated(
-				Vector3.UP, chunk._air_yaw_for(dir))
+				Vector3.UP, chunk._yaw_for(dir))
 			var tin = chunk._cc0_prop("can_rusted", effect_pos + tin_offset,
-				chunk._air_yaw_for(dir) + 0.25, 0.86)
+				chunk._yaw_for(dir) + 0.25, 0.86)
 			chunk._adopt_local(effects, tin)
 		# number plate over the door
 		var lab = Label3D.new()
@@ -467,7 +467,7 @@ func _prison_mess() -> void:
 	if service_dir >= 0:
 		var clock_plane = (chunk.S - chunk.T / 2.0) if (service_dir == 0 or service_dir == 2) \
 			else (chunk.T / 2.0)
-		chunk._office_clock(service_dir, clock_plane)
+		chunk._wall_clock(service_dir, clock_plane)
 	if chunk._r(1883) < 0.75:
 		chunk._cc0_floor_prop("industrial_storage_cart", Vector3(10.5, 0, 6.0),
 			-PI / 2.0, 0.72, "prison_mess_service_cart",
@@ -476,7 +476,7 @@ func _prison_mess() -> void:
 
 func _prison_shower_station(wall: int, along: float) -> void:
 	var mount = _wall_pt(wall, along, 0.02)
-	var v = chunk._furnishing_pivot(mount, chunk._air_yaw_for(wall),
+	var v = chunk._furnishing_pivot(mount, chunk._yaw_for(wall),
 		"prison_shower_fixture", false)
 	v.set_meta("enrichment_prop", "detention_shower_head")
 	# Exposed riser, wall flange and vandal-resistant cross valve.
@@ -537,14 +537,14 @@ func _prison_shower() -> void:
 	# slat benches by the entrance
 	var bench_b0 = chunk.body.get_child_count()
 	var bench_pos = _wall_pt(wall, 6.0, 9.75)
-	var bench = chunk._furnishing_pivot(bench_pos, chunk._air_yaw_for(wall),
+	var bench = chunk._furnishing_pivot(bench_pos, chunk._yaw_for(wall),
 		"prison_shower_bench")
 	chunk._mbox(bench, Vector3(0, 0.72, 0), Vector3(5.8, 0.10, 0.45), Mats.prison_green())
 	for bx in [-2.7, 0.0, 2.7]:
 		chunk._mbox(bench, Vector3(bx, 0.36, 0), Vector3(0.08, 0.72, 0.38),
 			Mats.prison_iron())
 	chunk._collider_yaw_box(bench_pos + Vector3(0, 0.42, 0),
-		Vector3(5.8, 0.84, 0.48), chunk._air_yaw_for(wall))
+		Vector3(5.8, 0.84, 0.48), chunk._yaw_for(wall))
 	chunk._bind_furnishing_colliders(bench, bench_b0)
 	if chunk._r(1885) < 0.5:
 		chunk._cc0_prop("WetFloorSign_01", Vector3(4.4, 0, 6.6), chunk._r(1886) * TAU, 0.9)
@@ -553,7 +553,7 @@ func _prison_shower() -> void:
 	# survive without their placement context.
 	var sanitation_pos = _wall_pt(wall, 9.15, 1.05)
 	var sanitation = chunk._furnishing_pivot(sanitation_pos,
-		chunk._air_yaw_for(wall), "prison_sanitation_clutter")
+		chunk._yaw_for(wall), "prison_sanitation_clutter")
 	sanitation.set_meta("enrichment_prop", "sanitation_clutter")
 	chunk._cc0_prop_local(sanitation, "plunger", Vector3(0, 0, 0), -0.18, 1.0)
 	chunk._cc0_prop_local(sanitation, "drain_cleaner", Vector3(0.23, 0, 0.10), 0.25, 1.0)
@@ -569,7 +569,7 @@ func _prison_guard_desk(p: Vector3, yaw: float) -> void:
 	var b0 = chunk.body.get_child_count()
 	var station = chunk._furnishing_pivot(p, yaw, "prison_guard_desk")
 	station.set_meta("office_workstation", true)
-	var desk = chunk._asy_model("metal_office_desk", p, yaw)
+	var desk = chunk._load_model("metal_office_desk", p, yaw)
 	chunk._adopt_local(station, desk)
 	chunk._collider_yaw_box(p + Vector3(0, 0.42, 0), Vector3(2.05, 0.84, 1.0), yaw)
 	var terminal = chunk._vt100(p, yaw)
@@ -588,7 +588,7 @@ func _prison_guard_desk(p: Vector3, yaw: float) -> void:
 		chunk.DESK_PHONE_SCALE, Vector3.ZERO, "desk_phone", station)
 	if phone != null:
 		chunk._set_model_material(phone, Mats.prison_handset())
-	var chair = chunk._office_task_chair(p + forward * 1.02, yaw + PI)
+	var chair = chunk._task_chair(p + forward * 1.02, yaw + PI)
 	chunk._adopt_local(station, chair)
 	chunk._bind_furnishing_colliders(station, b0)
 
@@ -666,7 +666,7 @@ func _prison_industry() -> void:
 	for lz in [3.6, 8.2]:
 		var lamp = chunk._cc0_prop("hanging_industrial_lamp", Vector3(6, chunk.ceil_h - 0.06, lz),
 			0.0, 0.85)
-		chunk._asy_no_shadows(lamp)
+		chunk._disable_shadows(lamp)
 	if chunk._r(1897) < 0.6:
 		chunk._cc0_prop("wooden_crate_02", Vector3(1.8, 0, 9.6), chunk._r(1898) * TAU, 0.9)
 	if chunk._r(1899) < 0.4:

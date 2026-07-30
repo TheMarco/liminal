@@ -77,8 +77,8 @@ func _asy_lighting() -> void:
 func _asy_fixture(at: Vector3, pmat: Material) -> void:
 	var drop = 0.22
 	var y = chunk.ceil_h - drop
-	var fixture = chunk._asy_model("mounted_fluorescent_lights", Vector3(at.x, y, at.z), 0.0)
-	chunk._asy_no_shadows(fixture)
+	var fixture = chunk._load_model("mounted_fluorescent_lights", Vector3(at.x, y, at.z), 0.0)
+	chunk._disable_shadows(fixture)
 	for dz in [-0.26, 0.26]:
 		var rod = chunk._cyl(Vector3(at.x, y + drop / 2.0, at.z + dz), 0.012, drop, Mats.asy_metal(), false)
 		rod.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -104,7 +104,7 @@ func _asy_bed(p: Vector3, yaw: float, salt: int) -> void:
 			chunk._collider_yaw_box(p + Vector3(0, 0.6, 0),
 				Vector3(1.05, 1.2, 1.95), yaw)
 			return
-	chunk._asy_model("old_bed_frame", p, yaw)
+	chunk._load_model("old_bed_frame", p, yaw)
 	chunk._collider_yaw_box(p + Vector3(0, 0.6, 0), Vector3(0.95, 1.2, 2.05), yaw)
 	if chunk._r(salt) >= 0.8:
 		return
@@ -251,14 +251,14 @@ func _asy_wheelchair(p: Vector3, yaw: float) -> void:
 	var pivot = chunk._furnishing_pivot(p, yaw, "asylum_wheelchair")
 	pivot.set_meta("asylum_transport_kind", "wheelchair")
 	pivot.set_meta("asylum_transport_radius", transport_radius)
-	var model = chunk._asy_model("wheelchair_01", p, yaw)
+	var model = chunk._load_model("wheelchair_01", p, yaw)
 	chunk._adopt_local(pivot, model)
 	chunk._collider_yaw_box(p + Vector3(0, 0.55, 0), Vector3(0.85, 1.1, 1.1), yaw)
 	chunk._bind_furnishing_colliders(pivot, b0)
 
 
 func _asy_chair(p: Vector3, yaw: float, tipped: bool) -> void:
-	var ch = chunk._asy_model("SchoolChair_01", p, yaw)
+	var ch = chunk._load_model("SchoolChair_01", p, yaw)
 	if tipped:
 		ch.position.y = 0.28
 		ch.rotation.z = PI / 2.0 - 0.06
@@ -267,7 +267,7 @@ func _asy_chair(p: Vector3, yaw: float, tipped: bool) -> void:
 
 
 func _asy_medbox(p: Vector3, yaw: float) -> void:
-	chunk._asy_model("medical_box", p, yaw)
+	chunk._load_model("medical_box", p, yaw)
 
 
 func _asy_iv(p: Vector3) -> void:
@@ -381,7 +381,7 @@ func _asy_wall_notices(dir: int, plane: float) -> void:
 		pivot.free()
 		return
 	pivot.set_meta("asylum_wall_notices", true)
-	chunk._asy_no_shadows(pivot)
+	chunk._disable_shadows(pivot)
 
 
 ## A sealed hospital leaf on a genuinely solid wall. The wall stays the
@@ -544,7 +544,7 @@ func _asy_cell_props() -> void:
 	if chunk._r(771) < 0.5:
 		_asy_chair(Vector3(2.5 + 7.0 * chunk._r(772), 0, 3.5 + 5.0 * chunk._r(773)), chunk._r(774) * TAU, chunk._r(775) < 0.25)
 	if chunk._r(776) < 0.55:
-		chunk._asy_papers(Vector3(4.0 + 4.0 * chunk._r(777), 0, 4.0 + 4.0 * chunk._r(778)), 780, 6)
+		chunk._scattered_papers(Vector3(4.0 + 4.0 * chunk._r(777), 0, 4.0 + 4.0 * chunk._r(778)), 780, 6)
 	if chunk._r(781) < 0.35:
 		_asy_iv(Vector3(bx + 1.3, 0, 1.6))
 	if chunk._r(782) < 0.3:
@@ -592,7 +592,7 @@ func _asy_ward() -> void:
 		_asy_wheelchair(c - aisle * 2.4 - cross * 0.65,
 			transport_yaw + (chunk._r(863) - 0.5) * 0.16)
 	if chunk._r(864) < 0.6:
-		chunk._asy_papers(c + Vector3((chunk._r(865) - 0.5) * 4.0, 0, (chunk._r(866) - 0.5) * 4.0), 867, 7)
+		chunk._scattered_papers(c + Vector3((chunk._r(865) - 0.5) * 4.0, 0, (chunk._r(866) - 0.5) * 4.0), 867, 7)
 	if chunk._r(868) < 0.35:
 		_asy_gurney(c + aisle * 2.0 + cross * 0.55,
 			transport_yaw + (chunk._r(871) - 0.5) * 0.12, 872)
@@ -626,12 +626,12 @@ func _asy_dayroom() -> void:
 		_asy_dayroom_table(c + Vector3(-6.2, 0, 5.0), 940)
 		_asy_dayroom_table(c + Vector3(6.2, 0, -5.0), 950)
 	var rp = c + Vector3(7.6, 0, 7.9)
-	var rock = chunk._asy_model("Rockingchair_01", rp, PI * 0.83)
+	var rock = chunk._load_model("Rockingchair_01", rp, PI * 0.83)
 	rock.position.y = -0.1
 	chunk._collider_yaw_box(rp + Vector3(0, 0.5, 0), Vector3(0.72, 1.0, 0.85), PI * 0.83)
 	if chunk._r(902) < 0.6:
 		_asy_wheelchair(c + Vector3(-6.2 * chunk._r(903), 0, 5.0 * (chunk._r(904) - 0.5)), chunk._r(905) * TAU)
-	chunk._asy_papers(c + Vector3((chunk._r(906) - 0.5) * 5.0, 0, (chunk._r(907) - 0.5) * 5.0), 908, 9)
+	chunk._scattered_papers(c + Vector3((chunk._r(906) - 0.5) * 5.0, 0, (chunk._r(907) - 0.5) * 5.0), 908, 9)
 	if chunk._r(909) < 0.5:
 		_asy_gurney(c + Vector3(-5.5, 0, -5.0 * (chunk._r(910) - 0.5)), chunk._r(911) * TAU, 912)
 	# a long-dead television would be too kind; a fallen noticeboard instead
@@ -725,7 +725,7 @@ func _asy_treatment() -> void:
 	if chunk._r(923) < 0.6:
 		var bp = Vector3(2.2, 0, 2.4)
 		var byaw = chunk._r(924) * TAU
-		chunk._asy_model("BarberShopChair_01", bp, byaw)
+		chunk._load_model("BarberShopChair_01", bp, byaw)
 		chunk._collider_yaw_box(bp + Vector3(0, 0.7, 0), Vector3(0.8, 1.5, 1.35), byaw)
 	if chunk._r(925) < 0.6:
 		_asy_medbox(c + side * -1.6 + Vector3(0, 0, 0.6), chunk._r(926) * TAU)
@@ -755,7 +755,7 @@ func _asy_treatment() -> void:
 				chunk._wall_pt(dir, chunk.S / 2.0 + (chunk._r(1214) - 0.5) * 2.2, 0.62),
 				chunk._wall_facing(dir) + PI / 2.0)
 			break
-	chunk._asy_papers(c + Vector3(1.8, 0, 1.6), 927, 5)
+	chunk._scattered_papers(c + Vector3(1.8, 0, 1.6), 927, 5)
 	# floor drain
 	var dr = chunk._cyl(c + Vector3(0.9 * cos(yaw), 0.006, 0.7), 0.14, 0.012, Mats.iron_dark(), false)
 	dr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -806,14 +806,14 @@ func _asy_office() -> void:
 	var c = Vector3(chunk.S / 2.0, 0, chunk.S / 2.0)
 	var yaw = [0.0, PI / 2.0, PI, -PI / 2.0][int(chunk._r(970) * 3.99)] as float
 	var dp = c + Vector3((chunk._r(971) - 0.5) * 2.0, 0, (chunk._r(972) - 0.5) * 2.0)
-	chunk._asy_model("metal_office_desk", dp, yaw)
+	chunk._load_model("metal_office_desk", dp, yaw)
 	chunk._collider_yaw_box(dp + Vector3(0, 0.4, 0), Vector3(2.0, 0.8, 0.95), yaw)
 	var back = Vector3(sin(yaw), 0, cos(yaw))
 	_asy_chair(dp + back * 0.95, yaw + PI + (chunk._r(973) - 0.5) * 0.6, chunk._r(974) < 0.3)
 	_asy_medbox(dp + Vector3(0, 0.79, 0) + back * -0.1 + Vector3(cos(yaw) * 0.55, 0, -sin(yaw) * 0.55), yaw + 0.3)
 	# papers drifted off the desk years ago
-	chunk._asy_papers(dp + back * 1.2, 975, 8)
-	chunk._asy_papers(c + Vector3(2.5 * (chunk._r(976) - 0.5), 0, 2.5 * (chunk._r(977) - 0.5)), 978, 6)
+	chunk._scattered_papers(dp + back * 1.2, 975, 8)
+	chunk._scattered_papers(c + Vector3(2.5 * (chunk._r(976) - 0.5), 0, 2.5 * (chunk._r(977) - 0.5)), 978, 6)
 	# filing cabinets against the first solid wall
 	for dir in 4:
 		if WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]:
@@ -850,9 +850,9 @@ func _asy_chapel() -> void:
 			chunk._collider_box(p + Vector3(0, 0.65, 0), Vector3(5.7, 1.3, 0.75))
 	# Human-scale detail makes the symmetry feel abandoned rather than staged.
 	_asy_wheelchair(c + Vector3(0.7, 0, 4.2), PI + 0.22)
-	chunk._asy_papers(c + Vector3(-0.8, 0, 6.5), 1101, 11)
+	chunk._scattered_papers(c + Vector3(-0.8, 0, 6.5), 1101, 11)
 	var rockp = front + Vector3(4.8, 0, 0.2)
-	chunk._asy_model("Rockingchair_01", rockp, -PI / 2.0)
+	chunk._load_model("Rockingchair_01", rockp, -PI / 2.0)
 	chunk._collider_yaw_box(rockp + Vector3(0, 0.5, 0), Vector3(0.72, 1.0, 0.85), -PI / 2.0)
 
 
@@ -905,7 +905,7 @@ func _asy_corridor() -> void:
 			elif rr < 0.59:
 				_asy_iv(pp)
 			elif rr < 0.76:
-				chunk._asy_papers(pp, 733 + si * 7 + di, 5)
+				chunk._scattered_papers(pp, 733 + si * 7 + di, 5)
 	if chunk._r(740) < 0.4:
 		_asy_sign(o, yw)
 

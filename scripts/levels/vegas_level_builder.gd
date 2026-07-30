@@ -65,7 +65,7 @@ func _chandelier() -> void:
 	# a real ornate chandelier (CC0 model, hangs 1.04m below its origin) with
 	# a warm bulb glowing in its heart
 	var ch = chunk._cc0_prop("Chandelier_03", Vector3(chunk.S / 2.0, chunk.ceil_h - 0.05, chunk.S / 2.0), chunk._r(30) * TAU, 1.35)
-	chunk._asy_no_shadows(ch)
+	chunk._disable_shadows(ch)
 	chunk._sphere(Vector3(chunk.S / 2.0, chunk.ceil_h - 0.95, chunk.S / 2.0), 0.13, Mats.bulb())
 
 

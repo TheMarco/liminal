@@ -245,7 +245,7 @@ const ANNEX_SHELVING_PATH := \
 const ANNEX_SHELVING_SCALE := 0.025
 const ANNEX_SHELVING_CENTRE := Vector3(1.75, 0.0, 0.75)
 # Measured tops of the first three load-bearing decks in the imported rack.
-# Boxes are bottom-aligned by `_office_shelf_box`, so these are contact planes,
+# Boxes are bottom-aligned by `_shelf_box`, so these are contact planes,
 # not approximate visual offsets.
 const ANNEX_SHELVING_DECK_TOPS := [0.09375, 0.69375, 1.14375]
 const ANNEX_CHAIR_PATH := \
@@ -1587,14 +1587,14 @@ func _annex_corner_rule(dir: int, at_max: bool) -> Dictionary:
 			collinear = [cell + Vector2i(1 if at_max else -1, 0), 3]
 			perp_a = [cell, 0 if at_max else 1]
 			perp_b = [cell + Vector2i(0, -1), 0 if at_max else 1]
-	if _annex_edge_solid(collinear[0], collinear[1]):
+	if _edge_solid(collinear[0], collinear[1]):
 		return {
 			"shift": 0.0,
 			"t_stub": false,
 			"winner_finish": -1,
 		}
-	var has_perp_a := _annex_edge_solid(perp_a[0], perp_a[1])
-	var has_perp_b := _annex_edge_solid(perp_b[0], perp_b[1])
+	var has_perp_a := _edge_solid(perp_a[0], perp_a[1])
+	var has_perp_b := _edge_solid(perp_b[0], perp_b[1])
 	if not has_perp_a and not has_perp_b:
 		return {
 			"shift": 0.0,
@@ -1656,7 +1656,7 @@ func _annex_resolved_wall_treatment(dir: int) -> Dictionary:
 ## Whether an edge carries any wall mass at its corners. Openings keep at
 ## least 0.55m of wall beside each jamb, so any non-full-open edge has solid
 ## material at both cell corners.
-func _annex_edge_solid(at: Vector2i, dir: int) -> bool:
+func _edge_solid(at: Vector2i, dir: int) -> bool:
 	return not bool(WorldGen.edge_info(wseed, at, dir, theme)["full_open"])
 
 
@@ -1686,10 +1686,10 @@ func _pool_boundary_rule(dir: int, at_max: bool) -> float:
 			collinear = [cell + Vector2i(1 if at_max else -1, 0), 3]
 			perp_a = [cell, 0 if at_max else 1]
 			perp_b = [cell + Vector2i(0, -1), 0 if at_max else 1]
-	if _annex_edge_solid(collinear[0], collinear[1]):
+	if _edge_solid(collinear[0], collinear[1]):
 		return 0.0
-	var has_a := _annex_edge_solid(perp_a[0], perp_a[1])
-	var has_b := _annex_edge_solid(perp_b[0], perp_b[1])
+	var has_a := _edge_solid(perp_a[0], perp_a[1])
+	var has_b := _edge_solid(perp_b[0], perp_b[1])
 	if not has_a and not has_b:
 		return 0.0
 	var h := POOL_WALL_T * 0.5
@@ -2651,7 +2651,7 @@ func _wall_decor(dir: int, plane: float) -> void:
 				_level_builder._mall_poster_case(dir, plane)
 			return
 		if r < 0.18:
-			_office_clock(dir, plane)
+			_wall_clock(dir, plane)
 		return
 	if theme == 8:
 		if r < 0.24:
@@ -2661,7 +2661,7 @@ func _wall_decor(dir: int, plane: float) -> void:
 		elif r < 0.52:
 			_level_builder._prison_locked_door_wall(dir, plane)
 		elif r < 0.64:
-			_sewer_pipes(dir, plane)
+			_ceiling_pipes(dir, plane)
 		return
 	if theme == 5:
 		if r < 0.13:
@@ -2677,9 +2677,9 @@ func _wall_decor(dir: int, plane: float) -> void:
 		elif r < 0.63:
 			_level_builder._asy_wall_notices(dir, plane)
 		elif r < 0.72:
-			_sewer_pipes(dir, plane)
+			_ceiling_pipes(dir, plane)
 		elif r < 0.79:
-			_office_clock(dir, plane)
+			_wall_clock(dir, plane)
 		return
 	if theme == 6:
 		if r < 0.20:
@@ -2689,7 +2689,7 @@ func _wall_decor(dir: int, plane: float) -> void:
 		elif r < 0.42:
 			_level_builder._sch_case(dir, plane)
 		elif r < 0.52:
-			_office_clock(dir, plane)
+			_wall_clock(dir, plane)
 		elif r < 0.62:
 			_level_builder._sch_poster(dir, plane)
 		return
@@ -2711,7 +2711,7 @@ func _wall_decor(dir: int, plane: float) -> void:
 		if r < 0.20:
 			_level_builder._office_door_decor(dir, plane)
 		elif r < 0.30:
-			_office_clock(dir, plane)
+			_wall_clock(dir, plane)
 		elif r < 0.46:
 			_filing_bank(dir, plane)
 		elif r < 0.58:
@@ -2868,7 +2868,7 @@ func _sconces(dir: int, plane: float) -> void:
 		add_child(l)
 
 
-func _office_clock(dir: int, plane: float) -> void:
+func _wall_clock(dir: int, plane: float) -> void:
 	var along := S / 2.0
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner := plane + n * (T / 2.0)
@@ -4635,7 +4635,7 @@ func _shelf_unit(c: Vector3, along_x: bool, salt: int) -> void:
 					if along_x else Vector3(0, sy + 0.02, t))
 				var box_yaw := (WorldGen.r01(wseed, cell.x + bi,
 					cell.y + int(sy * 7.0), salt + 1) - 0.5) * 0.14
-				var authored := theme == 1 and _office_shelf_box(rack,
+				var authored := theme == 1 and _shelf_box(rack,
 					shelf_pos, box_yaw, WorldGen.h(wseed, cell.x + bi,
 						cell.y + int(sy * 10.0), salt + 91) % OFFICE_BOX_VARIANTS.size())
 				if not authored:
@@ -4649,7 +4649,7 @@ func _shelf_unit(c: Vector3, along_x: bool, salt: int) -> void:
 
 ## Pull one real-world box variant out of the supplied Sketchfab set, discard
 ## the staged duplicates, then centre and bottom-align it on a generated shelf.
-func _office_shelf_box(parent: Node3D, pos: Vector3, yaw: float,
+func _shelf_box(parent: Node3D, pos: Vector3, yaw: float,
 		variant: int, kind := "office_shelf_box") -> bool:
 	var ps: PackedScene = _attributed_scenes.get(OFFICE_BOXES_PATH)
 	if ps == null:
@@ -4782,7 +4782,7 @@ func _sewer_pump_skid(c: Vector3, sx: float, sz: float, salt: int) -> void:
 
 ## Wall-hung service pipes: long horizontal runs with brackets, flanges and
 ## the odd vertical branch.
-func _sewer_pipes(dir: int, plane: float) -> void:
+func _ceiling_pipes(dir: int, plane: float) -> void:
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner := plane + n * (T * 0.5)
 	var count := 1 + int(_r(42 + dir) * 1.99)
@@ -4940,7 +4940,7 @@ func _wp(o: Vector3, local: Vector3, yaw: float) -> Vector3:
 	return o + local.rotated(Vector3.UP, yaw)
 
 
-func _air_yaw_for(dir: int) -> float:
+func _yaw_for(dir: int) -> float:
 	match dir:
 		0: return PI / 2.0
 		1: return -PI / 2.0
@@ -5070,7 +5070,7 @@ func _small_room_props(along_x: bool, off: float) -> void:
 				if pick < 0.45:
 					_shelf_unit(p, along_x, 640 + idx * 3)
 				elif pick < 0.8:
-					_office_desk_small(p, _r(644 + idx) * TAU)
+					_small_desk(p, _r(644 + idx) * TAU)
 				else:
 					_level_builder._copier(p, 646 + idx)
 			4:
@@ -5098,7 +5098,7 @@ func _small_room_props(along_x: bool, off: float) -> void:
 				elif pick < 0.8:
 					_level_builder._asy_chair(p, _r(645 + idx) * TAU, _r(646 + idx) < 0.2)
 				else:
-					_asy_papers(p, 654 + idx, 5)
+					_scattered_papers(p, 654 + idx, 5)
 					_level_builder._asy_medbox(p + Vector3(0.4, 0, 0.25), _r(656 + idx) * TAU)
 			7:
 				if pick < 0.32:
@@ -5134,7 +5134,7 @@ func _small_room_props(along_x: bool, off: float) -> void:
 
 ## A single desk with the same authored terminal as the cubicle clusters — for
 ## rooms too small for a cluster.
-func _office_desk_small(p: Vector3, yaw: float) -> void:
+func _small_desk(p: Vector3, yaw: float) -> void:
 	var v := Node3D.new()
 	v.set_meta("office_workstation", true)
 	v.position = p
@@ -5149,7 +5149,7 @@ func _office_desk_small(p: Vector3, yaw: float) -> void:
 	var paper := _cc0_prop("office_notepads", p + paper_side + Vector3(0, 0.752, 0),
 		yaw + (_r(648) - 0.5) * 0.14, 0.48)
 	_adopt_local(v, paper)
-	_office_task_chair(p + Vector3(sin(yaw) * 0.95, 0, cos(yaw) * 0.95), yaw + PI)
+	_task_chair(p + Vector3(sin(yaw) * 0.95, 0, cos(yaw) * 0.95), yaw + PI)
 
 
 # --- portals ------------------------------------------------------------------
@@ -5257,7 +5257,7 @@ static func _prop_scene(path: String) -> PackedScene:
 
 ## Instance a downloaded glTF prop. Scenes are load()-cached, so each model's
 ## meshes and textures exist once no matter how many chunks place it.
-func _asy_model(mname: String, pos: Vector3, yaw: float) -> Node3D:
+func _load_model(mname: String, pos: Vector3, yaw: float) -> Node3D:
 	var ps: PackedScene = _asy_scenes.get(mname)
 	if ps == null:
 		ps = _prop_scene("res://models/asylum/%s/%s_1k.gltf" % [mname, mname])
@@ -5504,7 +5504,7 @@ func _set_model_material(node: Node, mat: Material) -> void:
 ## Real five-star caster chair with restrained upholstered back and arms.
 ## Its FBX origin is at the model centre, so lift it 0.507m to put the wheels
 ## on the generated floor. The compact collider follows the caster footprint.
-func _office_task_chair(pos: Vector3, yaw: float) -> Node3D:
+func _task_chair(pos: Vector3, yaw: float) -> Node3D:
 	var ps: PackedScene = _cc0_scenes.get("office_chair")
 	if ps == null:
 		ps = _prop_scene(OFFICE_CHAIR_PATH)
@@ -5531,16 +5531,16 @@ func _security_camera(mount: Vector3, lens_yaw: float) -> void:
 	cam.set_meta("security_camera_mount", mount)
 
 
-func _asy_no_shadows(n: Node) -> void:
+func _disable_shadows(n: Node) -> void:
 	if n is GeometryInstance3D:
 		(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for c in n.get_children():
-		_asy_no_shadows(c)
+		_disable_shadows(c)
 
 
 # --- asylum: lighting ---------------------------------------------------------
 
-func _asy_papers(p: Vector3, salt: int, count: int) -> void:
+func _scattered_papers(p: Vector3, salt: int, count: int) -> void:
 	for i in count:
 		var q := MeshInstance3D.new()
 		q.mesh = QUAD
