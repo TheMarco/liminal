@@ -34,6 +34,9 @@ const PORTAL_ARRIVE := {
 	9: Vector3(3.2, 0.15, 2.0),
 }
 
+## Command line, parsed once in _ready. Dev-flag consumers read it from here
+## rather than each re-parsing OS.get_cmdline_user_args().
+var opts := CliOptions.new()
 var player: Player
 var level_root: Node3D
 var cm: ChunkManager
@@ -128,39 +131,28 @@ const TITLE_MUSIC := "res://music/title.mp3"
 
 func _ready() -> void:
 	randomize()
-	var spawn := DEFAULT_SPAWN
-	var pos_given := false
-	var yaw := PI  # face into the room
-	var yaw_given := false
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--seed="):
-			world_seed = int(arg.substr(7))
-		elif arg.begins_with("--pos="):
-			var parts := arg.substr(6).split(",")
-			if parts.size() >= 2:
-				spawn = Vector3(float(parts[0]), 0.15, float(parts[1]))
-				pos_given = true
-		elif arg.begins_with("--yaw="):
-			yaw = deg_to_rad(float(arg.substr(6)))
-			yaw_given = true
-		elif arg.begins_with("--level="):
-			# --level takes a THEME id, not a key index, so old commands still work
-			var lv := int(arg.substr(8))
-			active_level = lv if WorldGen.THEMES.has(lv) else 0
-		elif arg == "--mode=descent":
-			descent = true
-		elif arg == "--found-footage":
-			_post_mode = PostMode.FOUND_FOOTAGE
-		elif arg.begins_with("--attention="):
-			_attention_override = clampf(float(arg.substr(12)), 0.0, 1.0)
+	opts = CliOptions.parse()
+	var spawn := opts.spawn if opts.spawn_given else DEFAULT_SPAWN
+	var pos_given := opts.spawn_given
+	var yaw := opts.yaw
+	var yaw_given := opts.yaw_given
+	if opts.world_seed != 0:
+		world_seed = opts.world_seed
+	# --level takes a THEME id, not a key index, so old commands still work
+	if opts.active_level != 0:
+		active_level = opts.active_level
+	descent = descent or opts.descent
+	if opts.found_footage:
+		_post_mode = PostMode.FOUND_FOOTAGE
+	if opts.attention >= 0.0:
+		_attention_override = opts.attention
 	if world_seed == 0:
 		world_seed = (randi() & 0x7FFFFFFF) | 1
 	if descent:
 		run = DescentRun.new()
-		for arg in OS.get_cmdline_user_args():
-			if arg.begins_with("--descent-floor="):
-				run.floor_idx = clampi(int(arg.substr(16)) - 1, 0,
-					DescentRun.ORDER.size() - 1)
+		if opts.descent_floor > 0:
+			run.floor_idx = clampi(opts.descent_floor - 1, 0,
+				DescentRun.ORDER.size() - 1)
 		active_level = run.theme()
 		if _attention_override >= 0.0:
 			run.attention = _attention_override
@@ -181,19 +173,15 @@ func _ready() -> void:
 	print("Liminal Vegas — seed %d" % world_seed)
 	# Audits and screenshot helpers intentionally quit after a few seconds;
 	# don't leave background resource workers alive during their forced exit.
-	var quick_exit := OS.get_cmdline_user_args().has("--audit")
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--screenshot="):
-			quick_exit = true
-	if not quick_exit:
+	if not opts.quick_exit():
 		Chunk.request_prop_preloads()
 	add_to_group("portal_listener")
 	add_to_group("level_manager")
 	add_to_group("descent_listener")
-	if OS.get_cmdline_user_args().has("--notaa"):
+	if opts.notaa:
 		get_viewport().use_taa = false
 	# dev: start with the tube off, so screenshots show the raw full-res render
-	if OS.get_cmdline_user_args().has("--nocrt"):
+	if opts.nocrt:
 		_crt = false
 	_apply_scaling()
 	get_viewport().size_changed.connect(_apply_scaling)
@@ -217,19 +205,19 @@ func _ready() -> void:
 	add_child(player)
 	# Live tuning panel for the Poolrooms. Dragging a slider beats editing a
 	# constant, rebuilding and guessing from a screenshot.
-	if OS.get_cmdline_user_args().has("--tune"):
+	if opts.tune:
 		add_child(PoolTuner.new())
-	if OS.get_cmdline_user_args().has("--flashlight"):
+	if opts.flashlight:
 		player.set_flashlight(true)
 
-	if OS.get_cmdline_user_args().has("--spin"):
+	if opts.spin:
 		player.dev_spin = true
-	if OS.get_cmdline_user_args().has("--audit"):
+	if opts.audit:
 		_audit_partitions()
 		return
-	if OS.get_cmdline_user_args().has("--chunktime"):
+	if opts.chunktime:
 		ChunkManager._dev_timing = true
-	if OS.get_cmdline_user_args().has("--bench"):
+	if opts.bench:
 		# walk forward while turning — the exact motion that looks choppy
 		player.dev_spin = true
 		player.dev_walk = true
@@ -241,11 +229,16 @@ func _ready() -> void:
 	add_child(oneshots)
 	_whispers = Whispers.new()
 	_whispers.player = player
+	_whispers.dev = opts.whispers
 	# Same gate as the figures: nothing mutters behind a title or a rule card.
 	_whispers.suspended = true
 	add_child(_whispers)
 	_figures = ShadowFigures.new()
 	_figures.player = player
+	_figures.dev_haunt = opts.haunt
+	_figures.dev_haunt_at = opts.haunt_at
+	_figures.dev_haunt_at_given = opts.haunt_at_given
+	_figures.dev_haunt_variant = opts.haunt_variant
 	# No haunt timers run behind a title or rule card. Screenshot/--nologo
 	# starts explicitly release this gate below.
 	_figures.suspended = true
@@ -256,6 +249,7 @@ func _ready() -> void:
 	# figures exist so it can sample how close the nearest one is.
 	_heart = Heartbeat.new()
 	_heart.figures = _figures
+	_heart.dev = opts.heartbeat
 	_heart.suspended = true
 	add_child(_heart)
 	_figures.seen_by_player.connect(
@@ -283,7 +277,7 @@ func _ready() -> void:
 	_build_ui()
 	player.interaction_prompt_changed.connect(_on_interaction_prompt)
 	_events.message.connect(_show_event_message)
-	if OS.get_cmdline_user_args().has("--caption-preview"):
+	if opts.caption_preview:
 		_preview_captions()
 	_build_title()
 	if _title == null:
@@ -1187,10 +1181,7 @@ func _music_track_for(level: int) -> String:
 
 ## Screenshot and `--nologo` starts go straight into the world with no card.
 func _will_show_title() -> bool:
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--screenshot=") or arg == "--nologo":
-			return false
-	return true
+	return not opts.skips_title()
 
 
 ## While the title is up the track is fixed, whatever floor is loaded behind it.
@@ -1748,13 +1739,12 @@ func _start_hint_fade() -> void:
 ## world.
 ## Skipped for `--screenshot=` runs, which want the view and not the titles.
 func _build_title() -> void:
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--screenshot=") or arg == "--nologo":
-			# These starts never show a card, so the world was never silenced.
-			_title_music = false
-			_set_world_audio(true)
-			_start_hint_fade()
-			return
+	if opts.skips_title():
+		# These starts never show a card, so the world was never silenced.
+		_title_music = false
+		_set_world_audio(true)
+		_start_hint_fade()
+		return
 	if _hint != null:
 		_hint.modulate.a = 1.0
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1833,14 +1823,13 @@ func _set_mode_hint() -> void:
 ## Dev helper: `godot --path . -- --screenshot=/tmp/shot.png` renders a couple
 ## of seconds and saves a frame, for checking visuals from the command line.
 func _maybe_screenshot() -> void:
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--screenshot="):
-			var path := arg.substr(13)
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-			await get_tree().create_timer(2.5).timeout
-			print("player at ", player.global_position)
-			get_viewport().get_texture().get_image().save_png(path)
-			get_tree().quit()
+	if opts.screenshot.is_empty():
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	await get_tree().create_timer(2.5).timeout
+	print("player at ", player.global_position)
+	get_viewport().get_texture().get_image().save_png(opts.screenshot)
+	get_tree().quit()
 
 
 ## The Poolrooms are the only floor with standing water. Everywhere else the

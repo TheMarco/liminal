@@ -26,6 +26,8 @@ var suspended := false
 var _t := 0.0
 var _p3d: AudioStreamPlayer3D
 var _dev := false
+## Set by main from CliOptions before this enters the tree.
+var dev := false
 
 
 func _ready() -> void:
@@ -37,7 +39,7 @@ func _ready() -> void:
 	_p3d.bus = "Hall"
 	add_child(_p3d)
 	_t = randf_range(25.0, 60.0)
-	if OS.get_cmdline_user_args().has("--whispers"):
+	if dev:
 		_t = 1.5          # dev: hear one almost immediately
 		_dev = true
 

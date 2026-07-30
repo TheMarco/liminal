@@ -51,10 +51,12 @@ var _base_db := 0.0
 var _breath: AudioStreamPlayer
 var _breath_db := 0.0
 var _dev := false
+## Set by main from CliOptions before this enters the tree.
+var dev := false
 
 
 func _ready() -> void:
-	_dev = OS.get_cmdline_user_args().has("--heartbeat")
+	_dev = dev
 	var br := Sfx.breathing()
 	if br[0] != null:
 		# A child rather than a second stream on this node: both layers have to

@@ -58,24 +58,27 @@ var _prev_yaw := NAN
 var _turn_acc := 0.0
 var _turn_cd := 8.0
 var _pending := 0.0
+## Dev haunt settings, assigned by main from CliOptions before this enters the
+## tree. Previously read straight off the command line here.
+var dev_haunt := false
+var dev_haunt_at := Vector3.ZERO
+var dev_haunt_at_given := false
+var dev_haunt_variant := -1
 
 
 func _ready() -> void:
 	# Figures the world places rather than the haunt timer find us through this.
 	add_to_group("figure_manager")
 	_t = randf_range(5.0, 13.0)
-	for arg in OS.get_cmdline_user_args():
-		if arg == "--haunt":
-			_t = 1.2  # dev: first figure almost immediately
-			_dev = true
-		elif arg.begins_with("--haunt-at="):
-			var parts := arg.substr(11).split(",")
-			if parts.size() >= 2:
-				_force_at = Vector3(float(parts[0]), 0, float(parts[1]))
-				_t = 1.2
-				_dev = true
-			if parts.size() >= 3:
-				_force_variant = int(parts[2])
+	if dev_haunt:
+		_t = 1.2  # dev: first figure almost immediately
+		_dev = true
+	if dev_haunt_at_given:
+		_force_at = dev_haunt_at
+		_t = 1.2
+		_dev = true
+	if dev_haunt_variant >= 0:
+		_force_variant = dev_haunt_variant
 
 
 ## Take ownership of a figure the world placed — the Descent anomaly already
