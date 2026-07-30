@@ -24,6 +24,11 @@ const DEFAULT_SPAWN := Vector3(6.0, 0.15, 2.0)
 # WorldGen.THEMES needs one -- Pool Rooms was added as theme 9 without one, and
 # arriving through a portal into the Poolrooms read PORTAL_ARRIVE[9] and failed
 # the jump. PORTAL_ARRIVE_DEFAULT keeps the next added theme from doing it again.
+#
+# The y component is clearance ABOVE the destination cell's floor, matching
+# ArrivalSafety.STANDING_CLEARANCE -- not an absolute world height. It reads the
+# same as it always did, but _safe_arrival now adds Chunk.cell_floor_h() to it,
+# which is what makes the Poolrooms' raised dry slab arrive correctly.
 const PORTAL_ARRIVE_DEFAULT := Vector3(3.2, 0.15, 2.0)
 const PORTAL_ARRIVE := {
 	0: Vector3(3.2, 0.15, 2.0), 1: Vector3(3.2, 0.15, 2.0),
@@ -954,7 +959,13 @@ func door_activity() -> void:
 ## their anchor wall. If a fixed arrival offset would land inside that strip
 ## — an inescapable pocket — mirror it across the cell.
 func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
-	var pos := Vector3(cellv.x * 12.0 + base.x, 0.15, cellv.y * 12.0 + base.z)
+	# base.y is clearance ABOVE this cell's floor, not an absolute height. Every
+	# floor is flat at zero except the Poolrooms' dry styles, which are a raised
+	# slab; this used to hardcode 0.15 and discard base.y, which asked to place
+	# the player 1.27m inside that slab.
+	var floor_y := Chunk.cell_floor_h(_level_seed(level), cellv, level)
+	var pos := Vector3(cellv.x * 12.0 + base.x, floor_y + base.y,
+		cellv.y * 12.0 + base.z)
 	# The first school room is a classroom. Its desks rotate to face whichever
 	# solid wall owns the board, so a fixed corner can become the back row. Land
 	# in the clear teaching aisle between the first row and the teacher's desk.
@@ -973,7 +984,7 @@ func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
 		# away from the teacher immediately meets the first student desk; here
 		# every initial heading has room to resolve before reaching furniture.
 		var side := Vector2(facing.y, -facing.x)
-		return Vector3(centre.x + facing.x * 2.2 + side.x * 3.0, 0.15,
+		return Vector3(centre.x + facing.x * 2.2 + side.x * 3.0, floor_y + base.y,
 			centre.y + facing.y * 2.2 + side.y * 3.0)
 	if level != 4:
 		return pos
@@ -1042,8 +1053,21 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
 			push_warning("Descent arrival car interior was not clear in theme %d cell %s; falling back" % [level, cellv])
 		safe = ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
 		if safe == Vector3.INF:
-			push_warning("No audited arrival candidate in theme %d cell %s; using requested position" % [level, cellv])
-			safe = pos
+			# Last resort. Standing the player on whatever is under the requested
+			# point beats teleporting into it: the old behaviour used `pos`
+			# unchanged, which buried them and left Godot's depenetration to pick a
+			# direction. Report the style and the floor datum, because the useful
+			# distinction is "furniture in the way" versus "this floor is not where
+			# the caller thinks it is".
+			var support := ArrivalSafety.support_top(get_world_3d(), pos.x, pos.z,
+				pos.y, [player.get_rid()])
+			safe = pos if support == -INF \
+				else Vector3(pos.x, support + ArrivalSafety.STANDING_CLEARANCE, pos.z)
+			push_error(("No audited arrival candidate in theme %d cell %s " +
+				"(style %d, floor y %.2f, requested y %.2f); using %s") % [
+					level, cellv, WorldGen.cell_style(_level_seed(level), cellv, level),
+					Chunk.cell_floor_h(_level_seed(level), cellv, level), pos.y,
+					"supported point" if support != -INF else "requested position"])
 	player.teleport(safe)
 	if is_finite(yaw):
 		player.rotation.y = yaw

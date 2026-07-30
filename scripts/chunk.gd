@@ -892,6 +892,22 @@ static func cell_ceil_h(ws: int, c: Vector2i, p_theme: int) -> float:
 	return WorldGen.room_height(ws, WorldGen.room_id(ws, c), p_theme)
 
 
+## The Y a cell's walkable surface sits at. Static for the same reason
+## cell_ceil_h is: anything that plants something on "the floor" -- a portal, a
+## lift, an arriving player -- needs this answer, and the callers outside
+## generation cannot build a chunk to ask.
+##
+## Every floor is flat at zero except the Poolrooms, whose dry styles are a
+## raised tile slab over the water line. Getting this wrong does not fail
+## loudly: main.gd assumed zero and asked to place the player 1.27m inside that
+## slab on every entry to floor 9, and Godot's depenetration quietly pushed them
+## out again.
+static func cell_floor_h(ws: int, c: Vector2i, p_theme: int) -> float:
+	if p_theme == 9 and pool_style_dry(WorldGen.cell_style(ws, c, p_theme)):
+		return POOL_DRY_Y
+	return 0.0
+
+
 # --- primitive helpers -------------------------------------------------------
 
 func _box(pos: Vector3, size: Vector3, mat: Material, collide := true) -> MeshInstance3D:
@@ -5931,5 +5947,5 @@ static func pool_style_dry(st: int) -> bool:
 
 
 func _floor_h() -> float:
-	return POOL_DRY_Y if theme == 9 and _level_builder._pool_dry() else 0.0
+	return cell_floor_h(wseed, cell, theme)
 

@@ -5,14 +5,13 @@
 #   prop_overlap  annex cell (-2,3): annex_column intersects
 #                 annex_half_wall by 0.53m. Passed at 4260a99, so it came
 #                 in with the Annex dressing work.
-#   arrivals      32 unsafe portal/saved-position destinations, all
-#                 theme 9, in POOL_SOLARIUM/ALCOVE/GALLERY. Only visible
-#                 since ARRIVE gained its missing theme-9 entry; the
-#                 audit aborted before testing anything.
+# (arrivals was the second, fixed by the arrival-datum commit: the resolver
+#  assumed every floor is flat at y=0, so the Poolrooms' raised dry slab was
+#  1.27m above the requested point.)
 airport_colliders=0
 airport_luggage=0
 annex=0
-arrivals=1
+arrivals=0
 ceiling_seams=0
 chemistry_props=0
 chunk_smoke=0
