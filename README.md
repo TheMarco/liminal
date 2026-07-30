@@ -344,6 +344,23 @@ near-absence of props is enforced as part of its generation contract.
 - Performance: the biggest costs are SDFGI, TAA, volumetric fog and omni
   shadows — set in `scripts/main.gd::_build_env`, `project.godot` and
   `chunk.gd::_build_lighting` if you need to trade fidelity for FPS.
+- `tools/run_audits.sh` — the whole suite in parallel, which is how to run it.
+  Each audit gets a timeout, because an `extends SceneTree` audit that errors
+  mid-run never reaches its `quit()` and would otherwise idle forever instead of
+  failing. It also runs a compile preflight first: `chunk.gd` preloads every
+  level builder, so one unparseable builder takes the whole `Chunk` class down
+  and every audit below it fails for that reason alone. Several audits need
+  arguments documented only in their own header (`-- --nologo` and friends), and
+  the script carries those. `--baseline tools/golden/audit_baseline.txt` reports
+  new breakage separately from the faults already recorded there.
+- `godot --headless --path . --script tools/audit_world_hash.gd -- --check=tools/golden/world_hash.txt`
+  — fingerprints the generated scene graph of 423 chunks covering every theme and
+  style. `Chunk._r()` is a pure hash of (seed, cell, salt) rather than a
+  sequential stream, so moving code between files has to reproduce the graph
+  exactly; this is what makes a behaviour-preserving refactor checkable rather
+  than merely plausible. `--dump=` writes per-node detail so a changed hash can be
+  diffed down to the node that moved. Only comparable between runs of the same
+  Godot build.
 - `godot --headless --path . --script tools/audit_corridors.gd` — exercises
   deterministic corridor topology across many seeds and fails if a narrow
   corridor exposes its reserved backing space, interrupts a through-spine, or
@@ -447,16 +464,16 @@ shopping mall — only its separately-modelled objects are extracted, re-origine
 and redistributed; the building itself is not. Those extractions are listed
 individually in the asset's `SOURCE.md` with their source node names.
 
-Every CC BY-NC dependency is deliberately confined to a single function in
-`scripts/chunk.gd`, so each one lifts out in one edit and leaves a generated or
-CC0 fallback behind:
+Every CC BY-NC dependency is deliberately confined to a single function, so each
+one lifts out in one edit and leaves a generated or CC0 fallback behind. All four
+now live in their theme's level builder under `scripts/levels/`:
 
 | Asset | Entry point | Falls back to |
 | --- | --- | --- |
-| Mall storefront sign faces | `_mall_painted_sign` | generated `MALL_NAMES` lettering |
-| `office_phone.glb` | `_office_desk_phone` | no phone on the desk |
-| `prison_bunk_bed.glb` | `_prison_bunk` | generated bunk frame |
-| `cleaning_cart.glb` | `_sch_trolley` | `_sch_trolley_generated` |
+| Mall storefront sign faces | `mall_level_builder._mall_painted_sign` | generated `MALL_NAMES` lettering |
+| `office_phone.glb` | `office_level_builder._office_desk_phone` | no phone on the desk |
+| `prison_bunk_bed.glb` | `prison_level_builder._prison_bunk` | generated bunk frame |
+| `cleaning_cart.glb` | `school_level_builder._sch_trolley` | `_sch_trolley_generated` |
 
 A commercial build removes those four and nothing else.
 
@@ -500,7 +517,9 @@ scenes/main.tscn          minimal root scene (everything else is code-built)
 scripts/main.gd           environment, player, streamer, UI bootstrap
 scripts/world_gen.gd      deterministic hash queries (walls, styles, doors)
 scripts/chunk_manager.gd  chunk streaming
-scripts/chunk.gd          per-cell geometry, furnishing, lights
+scripts/chunk.gd          shared geometry kernel, wall topology, per-cell dispatch
+scripts/levels/           one builder per theme; chunk.gd's LEVEL_BUILDERS picks one
+scripts/levels/chunk_level_builder.gd  base class: the typed host and its contract
 scripts/mats.gd           shared material cache
 scripts/player.gd         FPS controller
 scripts/flicker_light.gd  fluorescent flicker behaviour
