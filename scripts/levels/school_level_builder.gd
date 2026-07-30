@@ -292,12 +292,7 @@ func _sch_corridor_door(o: Vector3, yw: float, t: float,
 
 
 func _sch_corridor_clear(t: float, doors: Array, bay: Array, clearance: float) -> bool:
-	if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + clearance:
-		return false
-	for dt in doors:
-		if absf(t - float(dt)) < 0.63 + clearance:
-			return false
-	return true
+	return corridor_clear_at(t, doors, bay, clearance, 0.63)
 
 
 func _sch_corridor_prop_t(si: int, salt: int, doors: Array, bay: Array,

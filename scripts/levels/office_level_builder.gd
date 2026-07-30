@@ -323,12 +323,7 @@ func _office_corridor_doors(si: int, bay: Array) -> Array:
 
 
 func _office_corridor_clear(t: float, doors: Array, bay: Array, clearance: float) -> bool:
-	if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + clearance:
-		return false
-	for dt in doors:
-		if absf(t - float(dt)) < 0.66 + clearance:
-			return false
-	return true
+	return corridor_clear_at(t, doors, bay, clearance, 0.66)
 
 
 func _office_corridor_clear_t(si: int, doors: Array, bay: Array) -> float:

@@ -928,12 +928,7 @@ func _asy_corridor_doors(si: int, bay: Array) -> Array:
 
 
 func _asy_corridor_clear(t: float, doors: Array, bay: Array, clearance: float) -> bool:
-	if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + clearance:
-		return false
-	for dt in doors:
-		if absf(t - float(dt)) < 0.62 + clearance:
-			return false
-	return true
+	return corridor_clear_at(t, doors, bay, clearance, 0.62)
 
 
 func _asy_corridor_prop_t(si: int, index: int, doors: Array, bay: Array) -> float:

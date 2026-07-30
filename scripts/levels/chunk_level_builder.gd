@@ -38,3 +38,21 @@ var chunk: Chunk
 
 func _init(host: Chunk) -> void:
 	chunk = host
+
+
+## Is position `t` along a corridor wall far enough from every door and from the
+## seating bay to place something against it?
+##
+## Five floors run the same corridor algorithm with different trim, and this test
+## was four byte-identical copies whose only difference was the door half-width:
+## 0.62 in the casino and the asylum, 0.66 in the office, 0.63 in the school. Each
+## floor still calls it through its own named wrapper, so the difference is a
+## visible argument rather than a constant buried in a duplicate.
+static func corridor_clear_at(t: float, doors: Array, bay: Array,
+		clearance: float, door_half_width: float) -> bool:
+	if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + clearance:
+		return false
+	for dt in doors:
+		if absf(t - float(dt)) < door_half_width + clearance:
+			return false
+	return true
