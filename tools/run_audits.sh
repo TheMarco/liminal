@@ -86,6 +86,10 @@ AUDITS=(
 	"pool_corners|tools/audit_pool_corners.gd|"
 	"pool_scale|tools/audit_pool_scale.gd|"
 	"wander_mode|tools/audit_wander_mode.gd|--nologo"
+	# Not just a generation fingerprint: it builds 423 chunks across every theme
+	# and style, so a method reached through the wrong level builder shows up here
+	# as a SCRIPT ERROR, which run_one treats as a failure.
+	"world_hash|tools/audit_world_hash.gd|--check=tools/golden/world_hash.txt"
 	"pool_basins|tools/audit_pool_basins.gd|"
 	"pool_lighting|tools/audit_pool_lighting.gd|"
 )

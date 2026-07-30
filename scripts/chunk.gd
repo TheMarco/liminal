@@ -828,7 +828,7 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 		# be cut in half by later architecture.
 		_build_props()
 		if not is_room_anchor:
-			_annex_room_member_architecture()
+			_level_builder._annex_room_member_architecture()
 		_build_lighting()
 	else:
 		_build_lighting()
@@ -1273,10 +1273,10 @@ func _mrbox(parent: Node3D, pos: Vector3, size: Vector3, mat: Material, r := 0.0
 
 func _build_floor_ceiling() -> void:
 	if theme == 2:
-		_annex_floor_ceiling()
+		_level_builder._annex_floor_ceiling()
 		return
 	if theme == 9:
-		_pool_floor_ceiling()
+		_level_builder._pool_floor_ceiling()
 		return
 	if theme == 1:
 		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.office_carpet())
@@ -1297,7 +1297,7 @@ func _build_floor_ceiling() -> void:
 		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.asy_ceiling())
 		return
 	if theme == 6:
-		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), _sch_floor_mat())
+		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), _level_builder._sch_floor_mat())
 		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.sch_ceiling())
 		return
 	if theme == 7:
@@ -1410,7 +1410,7 @@ func _build_walls() -> void:
 				_wall_utilities(dir, plane, info)
 			if (dir == 0 or dir == 2) and info["exit_sign"]:
 				if theme == 4:
-					_air_portal_sign(dir, info["t"])
+					_level_builder._air_portal_sign(dir, info["t"])
 				else:
 					_exit_sign(dir, info["t"])
 		else:
@@ -2008,9 +2008,9 @@ func _wall_material() -> Material:
 	if theme == 4:
 		return Mats.airport_wall_variant(_finish_variant())
 	if theme == 5:
-		return _asy_wall_mat()
+		return _level_builder._asy_wall_mat()
 	if theme == 6:
-		return _sch_wall_mat()
+		return _level_builder._sch_wall_mat()
 	if theme == 7:
 		return Mats.mall_wall()
 	if theme == 8:
@@ -2091,7 +2091,7 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 			wall_mesh = _box(
 				Vector3(plane, yc, c), Vector3(wall_t, hh, ln), wmat)
 		if theme == 2:
-			_annex_register_ceiling_obstruction(
+			_level_builder._annex_register_ceiling_obstruction(
 				Vector3(plane, 0.0, c), wall_t, ln, 0.0, y1)
 	else:
 		if theme == 2:
@@ -2102,7 +2102,7 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 			wall_mesh = _box(
 				Vector3(c, yc, plane), Vector3(ln, hh, wall_t), wmat)
 		if theme == 2:
-			_annex_register_ceiling_obstruction(
+			_level_builder._annex_register_ceiling_obstruction(
 				Vector3(c, 0.0, plane), ln, wall_t, 0.0, y1)
 	if theme == 9:
 		# Final extents let the audit verify the topology contract: true L ends
@@ -2206,11 +2206,11 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		# old fall-through to the vegas trim set also laid darkwood
 		# baseboards, all underwater or buried inside the dry slab; dropped.
 		if y1 >= ceil_h - 0.01:
-			_pool_crown_trims(dir, plane, from, to)
+			_level_builder._pool_crown_trims(dir, plane, from, to)
 		return
 	if theme == 5:
 		# tiled wainscot to shoulder height — unless the whole room is tiled
-		if y0 <= 0.01 and not _asy_tiled_room():
+		if y0 <= 0.01 and not _level_builder._asy_tiled_room():
 			_strip(dir, inner + n * 0.03, 0.7, c, ln, 0.05, 1.4, Mats.asy_tile())
 		return
 	if theme == 6:
@@ -2488,7 +2488,7 @@ func _wall_band_top() -> float:
 			# Vegas chair rail: centre 1.00m, 0.08m tall.
 			return 1.04
 		5:
-			return 0.0 if _asy_tiled_room() else 1.40
+			return 0.0 if _level_builder._asy_tiled_room() else 1.40
 		6:
 			return 1.51
 		7:
@@ -2662,36 +2662,36 @@ func _wall_decor(dir: int, plane: float) -> void:
 				or style == WorldGen.MALL_KIOSKS
 		if retail:
 			if r < 0.78:
-				_mall_storefront(dir, plane)
+				_level_builder._mall_storefront(dir, plane)
 			elif r < 0.96:
-				_mall_poster_case(dir, plane)
+				_level_builder._mall_poster_case(dir, plane)
 			return
 		if r < 0.18:
 			_office_clock(dir, plane)
 		return
 	if theme == 8:
 		if r < 0.24:
-			_prison_number_wall(dir, plane)
+			_level_builder._prison_number_wall(dir, plane)
 		elif r < 0.43:
 			_security_camera_wall(dir, plane)
 		elif r < 0.52:
-			_prison_locked_door_wall(dir, plane)
+			_level_builder._prison_locked_door_wall(dir, plane)
 		elif r < 0.64:
 			_sewer_pipes(dir, plane)
 		return
 	if theme == 5:
 		if r < 0.13:
-			_asy_straitjacket(dir, plane)
+			_level_builder._asy_straitjacket(dir, plane)
 		elif r < 0.27:
-			_asy_scrawl(dir, plane)
+			_level_builder._asy_scrawl(dir, plane)
 		elif r < 0.36:
-			_asy_crutches(dir, plane)
+			_level_builder._asy_crutches(dir, plane)
 		elif r < 0.45:
-			_asy_noticeboard(dir, plane)
+			_level_builder._asy_noticeboard(dir, plane)
 		elif r < 0.54:
-			_asy_locked_door_wall(dir, plane)
+			_level_builder._asy_locked_door_wall(dir, plane)
 		elif r < 0.63:
-			_asy_wall_notices(dir, plane)
+			_level_builder._asy_wall_notices(dir, plane)
 		elif r < 0.72:
 			_sewer_pipes(dir, plane)
 		elif r < 0.79:
@@ -2699,21 +2699,21 @@ func _wall_decor(dir: int, plane: float) -> void:
 		return
 	if theme == 6:
 		if r < 0.20:
-			_sch_noticeboard(dir, plane)
+			_level_builder._sch_noticeboard(dir, plane)
 		elif r < 0.32:
-			_sch_fountain(dir, plane)
+			_level_builder._sch_fountain(dir, plane)
 		elif r < 0.42:
-			_sch_case(dir, plane)
+			_level_builder._sch_case(dir, plane)
 		elif r < 0.52:
 			_office_clock(dir, plane)
 		elif r < 0.62:
-			_sch_poster(dir, plane)
+			_level_builder._sch_poster(dir, plane)
 		return
 	if theme == 4:
 		if r < 0.30:
-			_air_adboxes(dir, plane)
+			_level_builder._air_adboxes(dir, plane)
 		elif r < 0.42:
-			_air_wall_fids(dir, plane)
+			_level_builder._air_wall_fids(dir, plane)
 		return
 	if theme == 2:
 		# Cameras are the Annex's one intentional furnishing. Keeping them rare
@@ -2725,22 +2725,22 @@ func _wall_decor(dir: int, plane: float) -> void:
 		return
 	if theme == 1:
 		if r < 0.20:
-			_office_door_decor(dir, plane)
+			_level_builder._office_door_decor(dir, plane)
 		elif r < 0.30:
 			_office_clock(dir, plane)
 		elif r < 0.46:
 			_filing_bank(dir, plane)
 		elif r < 0.58:
-			_office_poster(dir, plane)
+			_level_builder._office_poster(dir, plane)
 		return
 	if r < 0.32:
 		_art(dir, plane)
 	elif r < 0.5:
 		_sconces(dir, plane)
 	elif r < 0.62:
-		_casino_neon(dir, plane)
+		_level_builder._casino_neon(dir, plane)
 	elif r < 0.70:
-		_change_machine(dir, plane)
+		_level_builder._change_machine(dir, plane)
 
 
 ## Building infrastructure shared by the office and Annex. Receptacles stay
@@ -2884,9 +2884,6 @@ func _sconces(dir: int, plane: float) -> void:
 		add_child(l)
 
 
-## Decorative wood veneer door with chrome handle on an office wall.
-func _office_door_decor(dir: int, plane: float) -> void:
-	_level_builder._office_door_decor(dir, plane)
 func _office_clock(dir: int, plane: float) -> void:
 	var along := S / 2.0
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
@@ -2902,31 +2899,31 @@ func _office_clock(dir: int, plane: float) -> void:
 
 func _build_lighting() -> void:
 	if theme == 9:
-		_pool_lighting()
+		_level_builder._pool_lighting()
 		return
 	if theme == 7:
-		_mall_lighting()
+		_level_builder._mall_lighting()
 		return
 	if theme == 8:
-		_prison_lighting()
+		_level_builder._prison_lighting()
 		return
 	if theme == 1:
-		_office_lighting()
+		_level_builder._office_lighting()
 		return
 	if theme == 5:
-		_asy_lighting()
+		_level_builder._asy_lighting()
 		return
 	if theme == 2:
-		_annex_lighting()
+		_level_builder._annex_lighting()
 		return
 	if theme == 4:
-		_air_lighting()
+		_level_builder._air_lighting()
 		return
 	if theme == 6:
-		_sch_lighting()
+		_level_builder._sch_lighting()
 		return
 	if style == WorldGen.STYLE_HALLWAY:
-		_hall_lighting()
+		_level_builder._hall_lighting()
 		return
 	var is_spawn := cell == Vector2i.ZERO
 	var dead := (not is_spawn) and _r(8) < 0.07
@@ -2946,11 +2943,11 @@ func _build_lighting() -> void:
 	# mount inside a rosette instead of stranded on the moulding intersection.
 	for p in [Vector2(3.6, 3.6), Vector2(8.4, 3.6),
 			Vector2(3.6, 8.4), Vector2(8.4, 8.4)]:
-		_casino_flush_mount(Vector3(p.x, 0, p.y), pmat)
+		_level_builder._casino_flush_mount(Vector3(p.x, 0, p.y), pmat)
 
 	var grand := style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_BALLROOM
 	if grand:
-		_chandelier()
+		_level_builder._chandelier()
 	if dead:
 		return
 
@@ -2967,16 +2964,6 @@ func _build_lighting() -> void:
 	add_child(light)
 
 
-## A shallow 1930s-style opaline dome in concentric brass rings. The material
-## is passed through to FlickerLight, so the visible glass dies with the room.
-func _casino_flush_mount(at: Vector3, lens_mat: Material) -> void:
-	_level_builder._casino_flush_mount(at, lens_mat)
-func _hall_lighting() -> void:
-	_level_builder._hall_lighting()
-func _office_lighting() -> void:
-	_level_builder._office_lighting()
-func _office_corridor_lighting() -> void:
-	_level_builder._office_corridor_lighting()
 func _troffer(at: Vector3, lens: Vector2, pmat: Material, frame: Material) -> void:
 	_box(Vector3(at.x, ceil_h - 0.055, at.z), Vector3(lens.x, 0.05, lens.y), pmat, false)
 	var fx := lens.x / 2.0 + 0.055
@@ -3009,8 +2996,6 @@ func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float) ->
 	return fl
 
 
-func _chandelier() -> void:
-	_level_builder._chandelier()
 func _resolved_room_split() -> Array:
 	var split := WorldGen.room_split(wseed, room_root, theme)
 	if split.is_empty():
@@ -3034,7 +3019,7 @@ func _build_props() -> void:
 	# builds its own — the anchor-only path would leave the rest of the block
 	# as bare box rooms.
 	if not is_room_anchor and style == WorldGen.PRISON_CELLBLOCK and not descent_target:
-		_prison_cellblock()
+		_level_builder._prison_cellblock()
 	# one room is furnished once, by its anchor cell, around its true centre
 	if not is_room_anchor:
 		return
@@ -3046,7 +3031,7 @@ func _build_props() -> void:
 		return
 	var split := _resolved_room_split()
 	if theme == 1 and style != WorldGen.OFFICE_CORRIDOR:
-		_office_air_conditioners(split)
+		_level_builder._office_air_conditioners(split)
 	if not split.is_empty():
 		_partition(split[0], split[1])
 		if portal_dest < 0:
@@ -3079,209 +3064,209 @@ func _build_props() -> void:
 	var b0 := body.get_child_count()
 	# On rare 24x24 Annex rooms the furniture hoard replaces that room's usual
 	# architectural dressing. It remains one atomic, clearance-aware set piece.
-	if theme == 2 and _annex_furniture_pile():
+	if theme == 2 and _level_builder._annex_furniture_pile():
 		_shift_props(off, n0, b0)
 		_clear_furnishings_from_doorways(n0, b0)
 		return
 	match style:
 		WorldGen.STYLE_PILLARS:
-			_pillars(ceil_h, Mats.brass())
+			_level_builder._pillars(ceil_h, Mats.brass())
 			# A pillared hall is casino floor. Grand halls are 1.4% of the
 			# level, so gating table games on them left a Vegas with almost no
 			# tables in it; the common room styles carry them instead.
 			if _r(240) < 0.62:
-				_blackjack(Vector3(6.0, 0, 6.0), 242)
+				_level_builder._blackjack(Vector3(6.0, 0, 6.0), 242)
 			elif _r(241) < 0.55:
-				_roulette(Vector3(6.0, 0, 6.0), 243)
+				_level_builder._roulette(Vector3(6.0, 0, 6.0), 243)
 		WorldGen.STYLE_SLOTS:
-			_slots()
+			_level_builder._slots()
 			# Table games sit at either end of the machine floor, clear of both
 			# banks. This is the room that most reads as a casino and it had
 			# nothing but slots in it.
 			if _r(250) < 0.72:
 				var table_z := 1.95 if _r(251) < 0.5 else 10.05
 				if _r(252) < 0.55:
-					_blackjack(Vector3(6.0, 0, table_z), 253)
+					_level_builder._blackjack(Vector3(6.0, 0, table_z), 253)
 				else:
-					_roulette(Vector3(6.0, 0, table_z), 254)
+					_level_builder._roulette(Vector3(6.0, 0, table_z), 254)
 		WorldGen.STYLE_LOUNGE:
-			_lounge()
+			_level_builder._lounge()
 			if _r(240) < 0.58:
-				_blackjack(Vector3(9.4, 0, 4.6), 242)
+				_level_builder._blackjack(Vector3(9.4, 0, 4.6), 242)
 			elif _r(244) < 0.5:
-				_roulette(Vector3(8.4, 0, 4.4), 245)
+				_level_builder._roulette(Vector3(8.4, 0, 4.4), 245)
 		WorldGen.STYLE_GRAND:
-			_pillars(ceil_h, Mats.marble_photo())
+			_level_builder._pillars(ceil_h, Mats.marble_photo())
 			if room_n >= 4:
-				_blackjack(Vector3(1.6, 0, 1.6), 248)
-				_blackjack(Vector3(10.4, 0, 10.4), 286)
+				_level_builder._blackjack(Vector3(1.6, 0, 1.6), 248)
+				_level_builder._blackjack(Vector3(10.4, 0, 10.4), 286)
 				# One roulette table anchors the middle of a grand hall, where
 				# there is genuinely room for a 3m layout.
 				if _r(287) < 0.62:
-					_roulette(Vector3(S / 2.0, 0, S / 2.0), 288)
+					_level_builder._roulette(Vector3(S / 2.0, 0, S / 2.0), 288)
 			elif _r(289) < 0.62:
-				_roulette(Vector3(S / 2.0, 0, S / 2.0), 290)
+				_level_builder._roulette(Vector3(S / 2.0, 0, S / 2.0), 290)
 			else:
-				_blackjack(Vector3(S / 2.0, 0, S / 2.0), 291)
+				_level_builder._blackjack(Vector3(S / 2.0, 0, S / 2.0), 291)
 			if _r(246) < 0.5:
-				_velvet_ropes()
+				_level_builder._velvet_ropes()
 		WorldGen.STYLE_BALLROOM:
-			_casino_ballroom()
+			_level_builder._casino_ballroom()
 		WorldGen.STYLE_HALLWAY:
-			_hallway()
+			_level_builder._hallway()
 		WorldGen.STYLE_EMPTY:
 			if portal_dest < 0 and _r(20) < 0.35:
 				_planter(Vector3(2.6 + 6.8 * _r(21), 0, 2.6 + 6.8 * _r(22)))
 			if portal_dest < 0 and _r(24) < 0.48:
-				_casino_service_cart(Vector3(2.1 if _r(25) < 0.5 else 9.9, 0,
+				_level_builder._casino_service_cart(Vector3(2.1 if _r(25) < 0.5 else 9.9, 0,
 					2.1 if _r(26) < 0.5 else 9.9), 27)
 		WorldGen.OFFICE_CORRIDOR:
-			_office_corridor()
+			_level_builder._office_corridor()
 		WorldGen.OFFICE_CUBICLES:
-			_office_cubicles()
+			_level_builder._office_cubicles()
 		WorldGen.OFFICE_STORAGE:
-			_office_storage()
+			_level_builder._office_storage()
 		WorldGen.OFFICE_BREAK:
-			_office_break()
+			_level_builder._office_break()
 		WorldGen.OFFICE_BOARDROOM:
-			_office_boardroom()
+			_level_builder._office_boardroom()
 		WorldGen.OFFICE_EMPTY:
 			if portal_dest < 0 and _r(20) < 0.15:
 				_planter(Vector3(2.6 + 6.8 * _r(21), 0, 2.6 + 6.8 * _r(22)))
 			if _r(250) < 0.35:
-				_copier(Vector3(3.0, 0, 8.8), 252)
+				_level_builder._copier(Vector3(3.0, 0, 8.8), 252)
 			elif portal_dest < 0 and _r(254) < 0.62:
-				_office_floor_files(Vector3(2.2 if _r(255) < 0.5 else 9.8, 0,
+				_level_builder._office_floor_files(Vector3(2.2 if _r(255) < 0.5 else 9.8, 0,
 					2.1 if _r(256) < 0.5 else 9.9), 257)
 		WorldGen.ANNEX_OPEN:
-			_annex_open()
+			_level_builder._annex_open()
 		WorldGen.ANNEX_MAZE:
-			_annex_maze()
+			_level_builder._annex_maze()
 		WorldGen.ANNEX_LONG:
-			_annex_long()
+			_level_builder._annex_long()
 		WorldGen.ANNEX_QUIET:
-			_annex_quiet()
+			_level_builder._annex_quiet()
 		WorldGen.ANNEX_PASSAGE:
-			_annex_passage()
+			_level_builder._annex_passage()
 		WorldGen.ANNEX_LOBBY:
-			_annex_lobby()
+			_level_builder._annex_lobby()
 		WorldGen.AIR_GATE:
-			_air_gate()
-			_air_common()
+			_level_builder._air_gate()
+			_level_builder._air_common()
 		WorldGen.AIR_CONCOURSE:
-			_air_concourse()
-			_air_common()
+			_level_builder._air_concourse()
+			_level_builder._air_common()
 		WorldGen.AIR_TRANSIT:
-			_air_transit()
-			_air_common()
+			_level_builder._air_transit()
+			_level_builder._air_common()
 		WorldGen.AIR_CHECKIN:
-			_air_checkin()
-			_air_common()
+			_level_builder._air_checkin()
+			_level_builder._air_common()
 		WorldGen.AIR_BAGGAGE:
-			_air_baggage()
-			_air_common()
+			_level_builder._air_baggage()
+			_level_builder._air_common()
 		WorldGen.AIR_ESCALATOR:
-			_air_escalator()
-			_air_common()
+			_level_builder._air_escalator()
+			_level_builder._air_common()
 		WorldGen.AIR_HALL:
-			_air_hall()
-			_air_common()
+			_level_builder._air_hall()
+			_level_builder._air_common()
 		WorldGen.AIR_FOODCOURT:
-			_air_foodcourt()
-			_air_common()
+			_level_builder._air_foodcourt()
+			_level_builder._air_common()
 		WorldGen.ASY_CELL:
-			_asy_cell_props()
+			_level_builder._asy_cell_props()
 		WorldGen.ASY_WARD:
-			_asy_ward()
-			_asy_sounds()
+			_level_builder._asy_ward()
+			_level_builder._asy_sounds()
 		WorldGen.ASY_DAYROOM:
-			_asy_dayroom()
-			_asy_sounds()
+			_level_builder._asy_dayroom()
+			_level_builder._asy_sounds()
 		WorldGen.ASY_TREATMENT:
-			_asy_treatment()
-			_asy_sounds()
+			_level_builder._asy_treatment()
+			_level_builder._asy_sounds()
 		WorldGen.ASY_HYDRO:
-			_asy_hydro()
-			_asy_sounds()
+			_level_builder._asy_hydro()
+			_level_builder._asy_sounds()
 		WorldGen.ASY_OFFICE:
-			_asy_office()
+			_level_builder._asy_office()
 		WorldGen.ASY_CORRIDOR:
-			_asy_corridor()
+			_level_builder._asy_corridor()
 			if _r(779) < 0.35:
-				_asy_sounds()
+				_level_builder._asy_sounds()
 		WorldGen.ASY_CHAPEL:
-			_asy_chapel()
-			_asy_sounds()
+			_level_builder._asy_chapel()
+			_level_builder._asy_sounds()
 		WorldGen.SCH_CORRIDOR:
-			_sch_corridor()
+			_level_builder._sch_corridor()
 		WorldGen.SCH_CLASSROOM:
-			_sch_classroom()
+			_level_builder._sch_classroom()
 		WorldGen.SCH_CAFETERIA:
-			_sch_cafeteria()
+			_level_builder._sch_cafeteria()
 		WorldGen.SCH_BATHROOM:
-			_sch_bathroom()
+			_level_builder._sch_bathroom()
 		WorldGen.SCH_GYM:
-			_sch_gym()
+			_level_builder._sch_gym()
 		WorldGen.SCH_LIBRARY:
-			_sch_library()
+			_level_builder._sch_library()
 		WorldGen.SCH_LAB:
-			_sch_lab()
+			_level_builder._sch_lab()
 		WorldGen.SCH_ADMIN:
-			_sch_admin()
+			_level_builder._sch_admin()
 		WorldGen.SCH_AUDITORIUM:
-			_sch_auditorium()
+			_level_builder._sch_auditorium()
 		WorldGen.MALL_CORRIDOR:
-			_mall_corridor()
+			_level_builder._mall_corridor()
 		WorldGen.MALL_STORE:
-			_mall_store()
+			_level_builder._mall_store()
 		WorldGen.MALL_ANCHOR:
-			_mall_anchor()
+			_level_builder._mall_anchor()
 		WorldGen.MALL_FOODCOURT:
-			_mall_foodcourt()
+			_level_builder._mall_foodcourt()
 		WorldGen.MALL_ATRIUM:
-			_mall_atrium()
+			_level_builder._mall_atrium()
 		WorldGen.MALL_SERVICE:
-			_mall_service()
+			_level_builder._mall_service()
 		WorldGen.MALL_KIOSKS:
-			_mall_kiosks()
+			_level_builder._mall_kiosks()
 		WorldGen.MALL_CINEMA:
-			_mall_cinema()
+			_level_builder._mall_cinema()
 		WorldGen.PRISON_CORRIDOR:
-			_prison_corridor()
+			_level_builder._prison_corridor()
 		WorldGen.PRISON_CELLBLOCK:
-			_prison_cellblock()
+			_level_builder._prison_cellblock()
 		WorldGen.PRISON_CELLS:
-			_prison_cells()
+			_level_builder._prison_cells()
 		WorldGen.PRISON_MESS:
-			_prison_mess()
+			_level_builder._prison_mess()
 		WorldGen.PRISON_SHOWER:
-			_prison_shower()
+			_level_builder._prison_shower()
 		WorldGen.PRISON_GUARD:
-			_prison_guard()
+			_level_builder._prison_guard()
 		WorldGen.PRISON_INDUSTRY:
-			_prison_industry()
+			_level_builder._prison_industry()
 		WorldGen.PRISON_VISITATION:
-			_prison_visitation()
+			_level_builder._prison_visitation()
 		WorldGen.PRISON_ROTUNDA:
-			_prison_rotunda()
+			_level_builder._prison_rotunda()
 		WorldGen.POOL_BASIN:
-			_pool_basin_room()
+			_level_builder._pool_basin_room()
 		WorldGen.POOL_CHANNEL:
-			_pool_channel_room()
+			_level_builder._pool_channel_room()
 		WorldGen.POOL_DECK:
-			_pool_deck_room()
+			_level_builder._pool_deck_room()
 		WorldGen.POOL_SOLARIUM:
-			_pool_solarium_room()
+			_level_builder._pool_solarium_room()
 		WorldGen.POOL_ALCOVE:
-			_pool_alcove_room()
+			_level_builder._pool_alcove_room()
 		WorldGen.POOL_STAIRS:
-			_pool_stairs_room()
+			_level_builder._pool_stairs_room()
 		WorldGen.POOL_GALLERY:
-			_pool_gallery_room()
+			_level_builder._pool_gallery_room()
 		WorldGen.POOL_CISTERN:
-			_pool_cistern_room()
+			_level_builder._pool_cistern_room()
 	if theme == 2:
-		_annex_lived_in_dressing()
+		_level_builder._annex_lived_in_dressing()
 	if theme == 9:
 		# Pool dressing is cell-local ARCHITECTURE: decks, bridges, stairs,
 		# piers and channel flanks hug their own cell's walls. Recentring it
@@ -4301,16 +4286,6 @@ func _mesh_is_emissive(mesh: MeshInstance3D) -> bool:
 	return false
 
 
-func _pillars(h: float, mat: Material) -> void:
-	_level_builder._pillars(h, mat)
-func _slots() -> void:
-	_level_builder._slots()
-func _slot_machine(x: float, z: float, f: float, idx: int) -> void:
-	_level_builder._slot_machine(x, z, f, idx)
-func _slot_machine_alt(x: float, z: float, f: float, idx: int) -> void:
-	_level_builder._slot_machine_alt(x, z, f, idx)
-func _procedural_slot_machine(x: float, z: float, f: float, idx: int) -> void:
-	_level_builder._procedural_slot_machine(x, z, f, idx)
 func _has_slot_rear(node: Node) -> bool:
 	if node.has_meta("slot_rear_shell"):
 		return true
@@ -4353,28 +4328,6 @@ func slot_front_violations() -> int:
 	return bad
 
 
-## Upholstered swivel chair built in a yawed sub-node; the backrest sits on
-## the local +z side.
-## A casino stool. This was three cylinders and a leaning box, which read as a
-## primitive the moment it stood anywhere near the authored tables — so it is
-## the real CC0 bar stool now. The material argument is kept because callers
-## pass one, but the model brings its own.
-func _chair_at(p: Vector3, yaw: float, _mat: Material) -> Node3D:
-	return _level_builder._chair_at(p, yaw, _mat)
-func _slots_sign() -> void:
-	_level_builder._slots_sign()
-func _casino_neon(dir: int, plane: float) -> void:
-	_level_builder._casino_neon(dir, plane)
-func _change_machine(dir: int, plane: float) -> void:
-	_level_builder._change_machine(dir, plane)
-func _blackjack_authored(p: Vector3, salt: int) -> bool:
-	return _level_builder._blackjack_authored(p, salt)
-func _roulette(p: Vector3, salt: int) -> void:
-	_level_builder._roulette(p, salt)
-func _blackjack(p: Vector3, salt: int) -> void:
-	_level_builder._blackjack(p, salt)
-func _velvet_ropes() -> void:
-	_level_builder._velvet_ropes()
 func _rope_barrier(p: Vector3, yaw: float, kind: String) -> Node3D:
 	var b0 := body.get_child_count()
 	var pivot := _attributed_floor_prop(ROPE_BARRIER_PATH, p, yaw,
@@ -4391,35 +4344,6 @@ func _rope_barrier(p: Vector3, yaw: float, kind: String) -> Node3D:
 	return pivot
 
 
-## Landmark: the casino's forgotten ballroom. A clear marble dance floor,
-## bandstand and perimeter supper tables make the whole 24m hall legible at a
-## glance without filling its main circulation axis.
-func _casino_ballroom() -> void:
-	_level_builder._casino_ballroom()
-func _hallway() -> void:
-	_level_builder._hallway()
-func _hall_locked_doors(si: int, bay: Array) -> Array:
-	return _level_builder._hall_locked_doors(si, bay)
-func _hall_clear_at(t: float, doors: Array, bay: Array, clearance: float) -> bool:
-	return _level_builder._hall_clear_at(t, doors, bay, clearance)
-func _hall_sconce_t(si: int, doors: Array, bay: Array) -> float:
-	return _level_builder._hall_sconce_t(si, doors, bay)
-func _hall_wall_side(o: Vector3, yw: float, side: float, doors: Array, bay: Array) -> void:
-	_level_builder._hall_wall_side(o, yw, side, doors, bay)
-func _hall_wall_run(o: Vector3, yw: float, side: float, a: float, b: float) -> void:
-	_level_builder._hall_wall_run(o, yw, side, a, b)
-func _hall_header(o: Vector3, yw: float, side: float, t: float, width: float) -> void:
-	_level_builder._hall_header(o, yw, side, t, width)
-func _hall_bay_returns(o: Vector3, yw: float, side: float, t: float, width: float) -> void:
-	_level_builder._hall_bay_returns(o, yw, side, t, width)
-func _hall_open_casing(o: Vector3, yw: float, side: float, t: float, width: float) -> void:
-	_level_builder._hall_open_casing(o, yw, side, t, width)
-func _hall_door(o: Vector3, yw: float, t: float, side: float, salt: int) -> void:
-	_level_builder._hall_door(o, yw, t, side, salt)
-func _lounge() -> void:
-	_level_builder._lounge()
-func _sofa(center: Vector3, face: float) -> void:
-	_level_builder._sofa(center, face)
 func _planter(p: Vector3) -> void:
 	# real potted plants; the office gets the sadder, squatter one
 	var mname := "potted_plant_02" if theme == 1 else "potted_plant_01"
@@ -4427,57 +4351,6 @@ func _planter(p: Vector3) -> void:
 	_collider_cyl(p + Vector3(0, 0.5, 0), 0.32, 1.0)
 
 
-## A room-service cart abandoned after the glasses were poured. Its low,
-## asymmetric silhouette gives otherwise empty casino rooms a lived-in past.
-func _casino_service_cart(p: Vector3, salt: int) -> void:
-	_level_builder._casino_service_cart(p, salt)
-func _office_floor_files(p: Vector3, salt: int) -> void:
-	_level_builder._office_floor_files(p, salt)
-func _office_air_conditioners(split: Array) -> void:
-	_level_builder._office_air_conditioners(split)
-func _office_corridor() -> void:
-	_level_builder._office_corridor()
-func _office_corridor_doors(si: int, bay: Array) -> Array:
-	return _level_builder._office_corridor_doors(si, bay)
-func _office_corridor_clear(t: float, doors: Array, bay: Array, clearance: float) -> bool:
-	return _level_builder._office_corridor_clear(t, doors, bay, clearance)
-func _office_corridor_clear_t(si: int, doors: Array, bay: Array) -> float:
-	return _level_builder._office_corridor_clear_t(si, doors, bay)
-func _office_corridor_utilities(o: Vector3, yw: float, side: float, si: int,
-		doors: Array, bay: Array) -> void:
-	_level_builder._office_corridor_utilities(o, yw, side, si, doors, bay)
-func _office_corridor_wall_side(o: Vector3, yw: float, side: float,
-		doors: Array, bay: Array) -> void:
-	_level_builder._office_corridor_wall_side(o, yw, side, doors, bay)
-func _office_corridor_wall_run(o: Vector3, yw: float, side: float,
-		a: float, b: float) -> void:
-	_level_builder._office_corridor_wall_run(o, yw, side, a, b)
-func _office_corridor_header(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._office_corridor_header(o, yw, side, t, width)
-func _office_corridor_bay_returns(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._office_corridor_bay_returns(o, yw, side, t, width)
-func _office_corridor_open_casing(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._office_corridor_open_casing(o, yw, side, t, width)
-func _office_corridor_door(o: Vector3, yw: float, t: float,
-		side: float, salt: int) -> void:
-	_level_builder._office_corridor_door(o, yw, t, side, salt)
-func _office_corridor_directory(o: Vector3, yw: float, side: float, t: float) -> void:
-	_level_builder._office_corridor_directory(o, yw, side, t)
-func _office_cubicles() -> void:
-	_level_builder._office_cubicles()
-func _office_cubicle_cluster(c: Vector3, qi_base: int) -> void:
-	_level_builder._office_cubicle_cluster(c, qi_base)
-func _office_desk(c: Vector3, d: Vector2, qi := 0) -> void:
-	_level_builder._office_desk(c, d, qi)
-func _office_desk_phone(workstation: Node3D, deskc: Vector3, yaw: float,
-		qi: int) -> void:
-	_level_builder._office_desk_phone(workstation, deskc, yaw, qi)
-## The authored IBM 3278 set down on a desk top. Its screen faces model +X, so
-## a quarter turn off the desk's own yaw points it at whoever sat there. The
-## source scene left a `Lamp` node behind; it is dropped on the way in.
 func _office_ibm_terminal(workstation: Node3D, deskc: Vector3, yaw: float,
 		qi: int) -> bool:
 	var top := deskc + Vector3(0, 0.7475, 0)
@@ -4515,13 +4388,6 @@ func _set_office_terminal_screen(terminal: Node3D) -> void:
 	screen.set_meta("office_terminal_custom_screen", true)
 
 
-## A row of payphones on a concourse wall, each on its own dark backboard.
-## The authored handset is re-origined on its own mounting plane, so it takes a
-## wall point and a facing and nothing else.
-func _mall_payphone_bank(dir: int, count: int) -> void:
-	_level_builder._mall_payphone_bank(dir, count)
-func _mall_directory_pylon(p: Vector3, yaw: float) -> void:
-	_level_builder._mall_directory_pylon(p, yaw)
 func _filing_bank(dir: int, plane: float) -> void:
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner := plane + n * (T * 0.5)
@@ -4562,13 +4428,6 @@ const OFFICE_POSTERS := ["SAFETY IS EVERYONE'S JOB", "HAVE YOU FILED YOUR 4-19?"
 	"THE BUILDING THANKS YOU", "PLEASE CONSERVE LIGHT", "TIDY DESK, TIDY MIND"]
 
 
-## Framed motivational poster; the motivation has long since left.
-func _office_poster(dir: int, plane: float) -> void:
-	_level_builder._office_poster(dir, plane)
-func _office_dept_sign(along_x: bool) -> void:
-	_level_builder._office_dept_sign(along_x)
-func _copier(p: Vector3, salt: int) -> void:
-	_level_builder._copier(p, salt)
 func _vt100(pos: Vector3, yaw: float) -> Node3D:
 	var p := Node3D.new()
 	p.set_meta("terminal_body", true)
@@ -4627,14 +4486,36 @@ func _vt100(pos: Vector3, yaw: float) -> Node3D:
 	return p
 
 
+## The interaction callbacks belong with _vt100 rather than in the office
+## builder: prison guard desks build the same terminal, so reaching these
+## through the active builder failed on any theme but office, which aborted
+## _vt100 and left the terminal parented to the chunk instead of the desk.
 func _use_terminal(_actor: Node, hit: Interactable, readout: Label3D,
 		screen: MeshInstance3D) -> void:
-	_level_builder._use_terminal(_actor, hit, readout, screen)
+	var page := int(hit.get_meta("page", 0))
+	if not bool(hit.get_meta("queried", false)):
+		hit.set_meta("queried", true)
+		readout.visible = true
+		screen.set_instance_shader_parameter("queried", 1.0)
+	else:
+		page = (page + 1) % TERMINAL_PAGES.size()
+		hit.set_meta("page", page)
+		readout.text = TERMINAL_PAGES[page]
+	hit.prompt_text = "E — next record"
+	get_tree().call_group("level_manager", "terminal_activity", page)
+
+
 func _reset_terminal(hit: Interactable, readout: Label3D,
 		screen: MeshInstance3D) -> void:
-	_level_builder._reset_terminal(hit, readout, screen)
-## Audit hook: Label3D has no scissor rectangle, so protect the physical CRT
-## with the selected font's real metrics whenever terminal copy changes.
+	var page := int(hit.get_meta("initial_page", 0))
+	hit.set_meta("page", page)
+	hit.set_meta("queried", false)
+	hit.prompt_text = "E — query terminal"
+	readout.text = TERMINAL_PAGES[page]
+	readout.visible = false
+	screen.set_instance_shader_parameter("queried", 0.0)
+
+
 func terminal_readout_violations() -> int:
 	var bad := 0
 	for node in find_children("*", "Label3D", true, false):
@@ -4751,8 +4632,6 @@ func _vt100_keyboard(pos: Vector3, yaw: float) -> Node3D:
 	return p
 
 
-func _office_storage() -> void:
-	_level_builder._office_storage()
 func _shelf_unit(c: Vector3, along_x: bool, salt: int) -> void:
 	var body0 := body.get_child_count()
 	var rack := _furnishing_pivot(c, 0.0, "shelf_unit")
@@ -4839,21 +4718,6 @@ func _collect_model_bounds(node: Node, parent_xf: Transform3D,
 		_collect_model_bounds(child, xf, state)
 
 
-func _office_break() -> void:
-	_level_builder._office_break()
-func _office_boardroom() -> void:
-	_level_builder._office_boardroom()
-func _annex_floor_ceiling() -> void:
-	_level_builder._annex_floor_ceiling()
-func _annex_lighting() -> void:
-	_level_builder._annex_lighting()
-func _annex_tile_center(local_v: float, cell_axis: int) -> float:
-	return _level_builder._annex_tile_center(local_v, cell_axis)
-func _annex_troffer(at: Vector3, pmat: Material) -> void:
-	_level_builder._annex_troffer(at, pmat)
-## Reserve a small margin around each complete ceiling tile. The rectangles are
-## populated by perimeter walls, corridor shells and full-height prop-pass
-## architecture before lighting is generated.
 func _annex_fixture_clear(at: Vector3) -> bool:
 	var half := ANNEX_CEILING_TILE * 0.5 + ANNEX_FIXTURE_CLEARANCE
 	var fixture := Rect2(
@@ -4878,73 +4742,6 @@ func annex_fixture_obstruction_violations() -> int:
 				and not _annex_fixture_clear((node as MeshInstance3D).position):
 			bad += 1
 	return bad
-func _annex_register_ceiling_obstruction(p: Vector3, width: float,
-		depth: float, yaw: float, top: float) -> void:
-	_level_builder._annex_register_ceiling_obstruction(p, width, depth, yaw, top)
-func _annex_blocks_doorway(p: Vector3, yaw: float,
-		width: float, depth: float) -> bool:
-	return _level_builder._annex_blocks_doorway(p, yaw, width, depth)
-func _annex_block(p: Vector3, yaw: float, width: float, depth: float,
-		height: float, kind: String, finish_override := -1,
-		visual_owner := "self", attached_local_end := 0) -> Node3D:
-	return _level_builder._annex_block(p, yaw, width, depth, height, kind, finish_override, visual_owner, attached_local_end)
-func _annex_tunnel_mass(p: Vector3, yaw: float, width: float,
-		depth: float, height: float, finish_override := -1,
-		visual_owner := "self") -> bool:
-	return _level_builder._annex_tunnel_mass(p, yaw, width, depth, height, finish_override, visual_owner)
-func _annex_cross_corner_tunnel(p: Vector3, yaw: float, width: float,
-		depth: float, finish_idx: int) -> bool:
-	return _level_builder._annex_cross_corner_tunnel(p, yaw, width, depth, finish_idx)
-func _annex_room_member_architecture() -> void:
-	_level_builder._annex_room_member_architecture()
-func _annex_open() -> void:
-	_level_builder._annex_open()
-func _annex_maze() -> void:
-	_level_builder._annex_maze()
-func _annex_long() -> void:
-	_level_builder._annex_long()
-func _annex_quiet() -> void:
-	_level_builder._annex_quiet()
-func _annex_lived_in_dressing() -> void:
-	_level_builder._annex_lived_in_dressing()
-func _annex_wall_floor_point(dir: int, along: float, off: float,
-		y := 0.0) -> Vector3:
-	return _level_builder._annex_wall_floor_point(dir, along, off, y)
-func _annex_wall_has_utility(dir: int) -> bool:
-	return _level_builder._annex_wall_has_utility(dir)
-func _annex_pick_solid_wall(salt: int, avoid_utilities := false) -> int:
-	return _level_builder._annex_pick_solid_wall(salt, avoid_utilities)
-func _annex_attached_half_wall(salt: int, width: float,
-		height: float) -> bool:
-	return _level_builder._annex_attached_half_wall(salt, width, height)
-func _annex_air_conditioner(salt: int) -> void:
-	_level_builder._annex_air_conditioner(salt)
-func _annex_exit_door(salt: int) -> bool:
-	return _level_builder._annex_exit_door(salt)
-func _annex_chair_cluster(count: int, salt: int, piled: bool) -> void:
-	_level_builder._annex_chair_cluster(count, salt, piled)
-func _annex_school_chair_scatter(count: int, salt: int) -> void:
-	_level_builder._annex_school_chair_scatter(count, salt)
-func _annex_loose_boxes(count: int, salt: int) -> void:
-	_level_builder._annex_loose_boxes(count, salt)
-func _annex_shelving(salt: int) -> void:
-	_level_builder._annex_shelving(salt)
-func _annex_passage() -> void:
-	_level_builder._annex_passage()
-func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
-		finish_idx: int) -> void:
-	_level_builder._annex_corridor_side(along_x, plane, outer_dir, finish_idx)
-func _annex_corridor_segment(along_x: bool, plane: float, a: float, b: float,
-		y0: float, y1: float, finish_idx: int, face_sign: float,
-		cap_mat: Material = null) -> void:
-	_level_builder._annex_corridor_segment(along_x, plane, a, b, y0, y1, finish_idx, face_sign, cap_mat)
-func _annex_lobby() -> void:
-	_level_builder._annex_lobby()
-func _annex_furniture_pile() -> bool:
-	return _level_builder._annex_furniture_pile()
-func _annex_pile_chair(parent: Node3D, pos: Vector3,
-		rot: Vector3) -> void:
-	_level_builder._annex_pile_chair(parent, pos, rot)
 func _sewer_ch() -> Array:
 	return [
 		WorldGen.sewer_channel(wseed, cell, 0),
@@ -5860,8 +5657,6 @@ const AIR_ZONE_SIGNS := [
 ]
 
 
-func _air_zone_sign(salt: int) -> String:
-	return _level_builder._air_zone_sign(salt)
 func _msphere(parent: Node3D, pos: Vector3, r: float, mat: Material) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = SPH
@@ -5897,10 +5692,6 @@ func _wp(o: Vector3, local: Vector3, yaw: float) -> Vector3:
 	return o + local.rotated(Vector3.UP, yaw)
 
 
-## First solid edge, scanning from a hashed start — the anchor wall for gate
-## glass, check-in backs and escalator mezzanines. -1 if the cell has none.
-func _air_pick_wall(salt: int) -> int:
-	return _level_builder._air_pick_wall(salt)
 func _air_yaw_for(dir: int) -> float:
 	match dir:
 		0: return PI / 2.0
@@ -5909,91 +5700,6 @@ func _air_yaw_for(dir: int) -> float:
 	return PI
 
 
-func _gate_code() -> String:
-	return _level_builder._gate_code()
-func _air_lighting() -> void:
-	_level_builder._air_lighting()
-func _hang_sign(pos: Vector3, yaw: float, text: String, top := 0.0) -> void:
-	_level_builder._hang_sign(pos, yaw, text, top)
-func _air_portal_sign(dir: int, t: float) -> void:
-	_level_builder._air_portal_sign(dir, t)
-func _fids(parent: Node3D, lpos: Vector3, lyaw: float, big: bool, hang: bool) -> void:
-	_level_builder._fids(parent, lpos, lyaw, big, hang)
-func _air_wall_fids(dir: int, plane: float) -> void:
-	_level_builder._air_wall_fids(dir, plane)
-func _air_adboxes(dir: int, plane: float) -> void:
-	_level_builder._air_adboxes(dir, plane)
-func _seat_row(p: Vector3, yaw: float, _n: int, _salt: int) -> void:
-	_level_builder._seat_row(p, yaw, _n, _salt)
-func _airport_luggage_model(parent: Node3D, p: Vector3, yaw: float,
-		salt: int, backpack_only := false) -> Node3D:
-	return _level_builder._airport_luggage_model(parent, p, yaw, salt, backpack_only)
-func _airport_luggage(p: Vector3, yaw: float, salt: int,
-		backpack_only := false) -> void:
-	_level_builder._airport_luggage(p, yaw, salt, backpack_only)
-func _air_column(p: Vector2) -> void:
-	_level_builder._air_column(p)
-func _air_bin(p: Vector3) -> void:
-	_level_builder._air_bin(p)
-func _air_trolley(p: Vector3, yaw: float, salt: int, count := 1) -> void:
-	_level_builder._air_trolley(p, yaw, salt, count)
-func _stanchion_line(a: Vector3, b: Vector3, n: int) -> void:
-	_level_builder._stanchion_line(a, b, n)
-func _air_gate() -> void:
-	_level_builder._air_gate()
-func _air_window_wall(o: Vector3, yw: float) -> void:
-	_level_builder._air_window_wall(o, yw)
-func _air_docked_plane(W: Node3D) -> void:
-	_level_builder._air_docked_plane(W)
-func _air_jetway(W: Node3D) -> void:
-	_level_builder._air_jetway(W)
-func _air_gate_desk(o: Vector3, yw: float, code: String) -> void:
-	_level_builder._air_gate_desk(o, yw, code)
-func _air_concourse() -> void:
-	_level_builder._air_concourse()
-func _travelator(p: Vector3, yaw: float, flow: float, salt: int, L := 8.4) -> void:
-	_level_builder._travelator(p, yaw, flow, salt, L)
-func _air_transit() -> void:
-	_level_builder._air_transit()
-func _air_transit_side_data(si: int, along_x: bool, wall_half: float) -> Dictionary:
-	return _level_builder._air_transit_side_data(si, along_x, wall_half)
-func _air_transit_wall_side(o: Vector3, yw: float, side: float,
-		wh: float, bay: Array) -> void:
-	_level_builder._air_transit_wall_side(o, yw, side, wh, bay)
-func _air_transit_wall_run(o: Vector3, yw: float, side: float,
-		wh: float, a: float, b: float) -> void:
-	_level_builder._air_transit_wall_run(o, yw, side, wh, a, b)
-func _air_transit_header(o: Vector3, yw: float, side: float,
-		wh: float, t: float, width: float) -> void:
-	_level_builder._air_transit_header(o, yw, side, wh, t, width)
-func _air_transit_open_casing(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._air_transit_open_casing(o, yw, side, t, width)
-func _air_transit_bay_returns(o: Vector3, yw: float, side: float,
-		wh: float, t: float, width: float) -> void:
-	_level_builder._air_transit_bay_returns(o, yw, side, wh, t, width)
-func _air_transit_ad_t(si: int, bay: Array) -> float:
-	return _level_builder._air_transit_ad_t(si, bay)
-func _air_checkin() -> void:
-	_level_builder._air_checkin()
-func _checkin_desk(o: Vector3, yw: float, dx: float, salt: int) -> void:
-	_level_builder._checkin_desk(o, yw, dx, salt)
-func _air_baggage() -> void:
-	_level_builder._air_baggage()
-func _air_baggage_large_dressing(c: Vector3) -> void:
-	_level_builder._air_baggage_large_dressing(c)
-func _air_escalator() -> void:
-	_level_builder._air_escalator()
-func _air_rail(p: Vector3, yaw: float, ln: float) -> void:
-	_level_builder._air_rail(p, yaw, ln)
-func _escalator_flight(o: Vector3, yw: float, cx: float) -> void:
-	_level_builder._escalator_flight(o, yw, cx)
-func _air_hall() -> void:
-	_level_builder._air_hall()
-func _air_foodcourt() -> void:
-	_level_builder._air_foodcourt()
-func _air_common() -> void:
-	_level_builder._air_common()
 func _room_members() -> Array:
 	var out := []
 	# Merges only reach one cell toward -x/-z, while a 2x2 hall reaches one
@@ -6048,9 +5754,9 @@ func _partition(along_x: bool, off: float) -> void:
 	elif theme == 4:
 		wmat = Mats.airport_wall_variant(_finish_variant())
 	elif theme == 5:
-		wmat = _asy_wall_mat()
+		wmat = _level_builder._asy_wall_mat()
 	elif theme == 6:
-		wmat = _sch_wall_mat()
+		wmat = _level_builder._sch_wall_mat()
 	elif theme == 7:
 		wmat = Mats.mall_wall()
 	elif theme == 8:
@@ -6126,41 +5832,41 @@ func _small_room_props(along_x: bool, off: float) -> void:
 				elif pick < 0.8:
 					_office_desk_small(p, _r(644 + idx) * TAU)
 				else:
-					_copier(p, 646 + idx)
+					_level_builder._copier(p, 646 + idx)
 			4:
 				if pick < 0.5:
-					_seat_row(p, airport_seat_yaw, 3, 648 + idx * 3)
+					_level_builder._seat_row(p, airport_seat_yaw, 3, 648 + idx * 3)
 				elif pick < 0.8:
-					_air_bin(p)
+					_level_builder._air_bin(p)
 				else:
-					_airport_luggage(p, _r(645 + idx) * TAU, 652 + idx, false)
+					_level_builder._airport_luggage(p, _r(645 + idx) * TAU, 652 + idx, false)
 			6:
 				if pick < 0.34:
-					_sch_desk_row(p, PI / 2.0 if along_x else 0.0, 2, 640 + idx * 3)
+					_level_builder._sch_desk_row(p, PI / 2.0 if along_x else 0.0, 2, 640 + idx * 3)
 				elif pick < 0.58:
 					_shelf_unit(p, along_x, 642 + idx * 3)
 				elif pick < 0.8:
-					_sch_stack_chairs(p, _r(644 + idx) * TAU, 646 + idx)
+					_level_builder._sch_stack_chairs(p, _r(644 + idx) * TAU, 646 + idx)
 				else:
-					_sch_trolley(p, _r(645 + idx) * TAU)
+					_level_builder._sch_trolley(p, _r(645 + idx) * TAU)
 			5:
 				# bed runs along the partition so it cannot poke through it
 				if pick < 0.4:
-					_asy_bed(p, (PI / 2.0 if along_x else 0.0) + (PI if _r(650 + idx) < 0.5 else 0.0), 652 + idx)
+					_level_builder._asy_bed(p, (PI / 2.0 if along_x else 0.0) + (PI if _r(650 + idx) < 0.5 else 0.0), 652 + idx)
 				elif pick < 0.6:
-					_asy_wheelchair(p, _r(644 + idx) * TAU)
+					_level_builder._asy_wheelchair(p, _r(644 + idx) * TAU)
 				elif pick < 0.8:
-					_asy_chair(p, _r(645 + idx) * TAU, _r(646 + idx) < 0.2)
+					_level_builder._asy_chair(p, _r(645 + idx) * TAU, _r(646 + idx) < 0.2)
 				else:
 					_asy_papers(p, 654 + idx, 5)
-					_asy_medbox(p + Vector3(0.4, 0, 0.25), _r(656 + idx) * TAU)
+					_level_builder._asy_medbox(p + Vector3(0.4, 0, 0.25), _r(656 + idx) * TAU)
 			7:
 				if pick < 0.32:
-					_mall_display_table(p, _r(644 + idx) * TAU, 660 + idx)
+					_level_builder._mall_display_table(p, _r(644 + idx) * TAU, 660 + idx)
 				elif pick < 0.57:
-					_mall_bench(p, _r(645 + idx) * TAU)
+					_level_builder._mall_bench(p, _r(645 + idx) * TAU)
 				elif pick < 0.80:
-					_mall_shopping_cart(p, _r(645 + idx) * TAU, pick > 0.70)
+					_level_builder._mall_shopping_cart(p, _r(645 + idx) * TAU, pick > 0.70)
 				else:
 					_cc0_prop("potted_plant_02", p, _r(646 + idx) * TAU, 0.85)
 			8:
@@ -6180,9 +5886,9 @@ func _small_room_props(along_x: bool, off: float) -> void:
 				if pick < 0.4:
 					_planter(p)
 				elif pick < 0.75:
-					_chair_at(p, _r(644 + idx) * TAU, Mats.velvet())
+					_level_builder._chair_at(p, _r(644 + idx) * TAU, Mats.velvet())
 				else:
-					_sofa(p + Vector3(0, 0, 0), 1.0)
+					_level_builder._sofa(p + Vector3(0, 0, 0), 1.0)
 		idx += 1
 
 
@@ -6585,14 +6291,6 @@ func _security_camera(mount: Vector3, lens_yaw: float) -> void:
 	cam.set_meta("security_camera_mount", mount)
 
 
-func _asy_tiled_room() -> bool:
-	return _level_builder._asy_tiled_room()
-func _asy_wall_mat() -> Material:
-	return _level_builder._asy_wall_mat()
-func _asy_wall_clear(dir: int, want: float, span: float) -> float:
-	return _level_builder._asy_wall_clear(dir, want, span)
-func _asy_sounds() -> void:
-	_level_builder._asy_sounds()
 func _asy_no_shadows(n: Node) -> void:
 	if n is GeometryInstance3D:
 		(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -6602,32 +6300,6 @@ func _asy_no_shadows(n: Node) -> void:
 
 # --- asylum: lighting ---------------------------------------------------------
 
-func _asy_lighting() -> void:
-	_level_builder._asy_lighting()
-func _asy_fixture(at: Vector3, pmat: Material) -> void:
-	_level_builder._asy_fixture(at, pmat)
-func _asy_bed(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._asy_bed(p, yaw, salt)
-func _asy_gurney(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._asy_gurney(p, yaw, salt)
-func _asy_restraint_table(p: Vector3, yaw: float) -> void:
-	_level_builder._asy_restraint_table(p, yaw)
-func _asy_ect(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._asy_ect(p, yaw, salt)
-func _asy_wire(parent: Node3D, a: Vector3, b: Vector3) -> void:
-	_level_builder._asy_wire(parent, a, b)
-func _asy_transport_clear(p: Vector3, radius: float) -> bool:
-	return _level_builder._asy_transport_clear(p, radius)
-func _asy_wheelchair(p: Vector3, yaw: float) -> void:
-	_level_builder._asy_wheelchair(p, yaw)
-func _asy_chair(p: Vector3, yaw: float, tipped: bool) -> void:
-	_level_builder._asy_chair(p, yaw, tipped)
-func _asy_medbox(p: Vector3, yaw: float) -> void:
-	_level_builder._asy_medbox(p, yaw)
-func _asy_iv(p: Vector3) -> void:
-	_level_builder._asy_iv(p)
-func _asy_tub(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._asy_tub(p, yaw, salt)
 func _asy_papers(p: Vector3, salt: int, count: int) -> void:
 	for i in count:
 		var q := MeshInstance3D.new()
@@ -6643,18 +6315,6 @@ func _asy_papers(p: Vector3, salt: int, count: int) -> void:
 		add_child(q)
 
 
-## Two-shelf castored instrument trolley. Every treatment room had one beside
-## the table; this is the one nobody wheeled back.
-func _asy_trolley(p: Vector3, yaw: float) -> void:
-	_level_builder._asy_trolley(p, yaw)
-func _asy_scrub_sink(p: Vector3, yaw: float) -> void:
-	_level_builder._asy_scrub_sink(p, yaw)
-func _asy_wall_notices(dir: int, plane: float) -> void:
-	_level_builder._asy_wall_notices(dir, plane)
-func _asy_locked_door_wall(dir: int, plane: float) -> void:
-	_level_builder._asy_locked_door_wall(dir, plane)
-func _asy_straitjacket(dir: int, plane: float) -> void:
-	_level_builder._asy_straitjacket(dir, plane)
 static func _scrawl_font(which: int) -> FontFile:
 	var f: FontFile = _scrawl_fonts.get(which)
 	if f == null:
@@ -6664,145 +6324,6 @@ static func _scrawl_font(which: int) -> FontFile:
 	return f
 
 
-func _asy_scrawl(dir: int, plane: float) -> void:
-	_level_builder._asy_scrawl(dir, plane)
-func _asy_noticeboard(dir: int, plane: float) -> void:
-	_level_builder._asy_noticeboard(dir, plane)
-func _asy_crutches(dir: int, plane: float) -> void:
-	_level_builder._asy_crutches(dir, plane)
-func _asy_cell_props() -> void:
-	_level_builder._asy_cell_props()
-func _asy_ward() -> void:
-	_level_builder._asy_ward()
-func _asy_dayroom() -> void:
-	_level_builder._asy_dayroom()
-func _asy_dayroom_table(c: Vector3, salt: int) -> void:
-	_level_builder._asy_dayroom_table(c, salt)
-func _asy_chemistry_counter(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._asy_chemistry_counter(p, yaw, salt)
-func _asy_treatment() -> void:
-	_level_builder._asy_treatment()
-func _asy_hydro() -> void:
-	_level_builder._asy_hydro()
-func _asy_office() -> void:
-	_level_builder._asy_office()
-func _asy_chapel() -> void:
-	_level_builder._asy_chapel()
-func _asy_corridor() -> void:
-	_level_builder._asy_corridor()
-func _asy_corridor_doors(si: int, bay: Array) -> Array:
-	return _level_builder._asy_corridor_doors(si, bay)
-func _asy_corridor_clear(t: float, doors: Array, bay: Array, clearance: float) -> bool:
-	return _level_builder._asy_corridor_clear(t, doors, bay, clearance)
-func _asy_corridor_prop_t(si: int, index: int, doors: Array, bay: Array) -> float:
-	return _level_builder._asy_corridor_prop_t(si, index, doors, bay)
-func _asy_corridor_wall_side(o: Vector3, yw: float, side: float,
-		doors: Array, bay: Array) -> void:
-	_level_builder._asy_corridor_wall_side(o, yw, side, doors, bay)
-func _asy_corridor_wall_run(o: Vector3, yw: float, side: float,
-		a: float, b: float) -> void:
-	_level_builder._asy_corridor_wall_run(o, yw, side, a, b)
-func _asy_corridor_header(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._asy_corridor_header(o, yw, side, t, width)
-func _asy_corridor_bay_returns(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._asy_corridor_bay_returns(o, yw, side, t, width)
-func _asy_corridor_open_casing(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._asy_corridor_open_casing(o, yw, side, t, width)
-func _asy_corridor_door(o: Vector3, yw: float, t: float,
-		side: float, salt: int) -> void:
-	_level_builder._asy_corridor_door(o, yw, t, side, salt)
-func _asy_authored_leaf(v: Node3D, salt: int) -> bool:
-	return _level_builder._asy_authored_leaf(v, salt)
-func _asy_door_number(v: Node3D, t: float, salt: int) -> void:
-	_level_builder._asy_door_number(v, t, salt)
-func _asy_sign(o: Vector3, yw: float) -> void:
-	_level_builder._asy_sign(o, yw)
-func _sch_tiled_room() -> bool:
-	return _level_builder._sch_tiled_room()
-func _sch_wall_mat() -> Material:
-	return _level_builder._sch_wall_mat()
-func _sch_floor_mat() -> Material:
-	return _level_builder._sch_floor_mat()
-func _sch_corridor_axis() -> int:
-	return _level_builder._sch_corridor_axis()
-func _sch_strip(at: Vector3, along_x: bool, ln: float, pmat: Material) -> void:
-	_level_builder._sch_strip(at, along_x, ln, pmat)
-func _sch_lighting() -> void:
-	_level_builder._sch_lighting()
-func _sch_corridor_side_data(si: int, along_x: bool) -> Dictionary:
-	return _level_builder._sch_corridor_side_data(si, along_x)
-func _sch_corridor_doors(si: int, bay: Array) -> Array:
-	return _level_builder._sch_corridor_doors(si, bay)
-func _sch_narrow() -> void:
-	_level_builder._sch_narrow()
-func _sch_corridor_wall_side(o: Vector3, yw: float, side: float,
-		doors: Array, bay: Array) -> void:
-	_level_builder._sch_corridor_wall_side(o, yw, side, doors, bay)
-func _sch_corridor_wall_run(o: Vector3, yw: float, side: float,
-		a: float, b: float) -> void:
-	_level_builder._sch_corridor_wall_run(o, yw, side, a, b)
-func _sch_corridor_header(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._sch_corridor_header(o, yw, side, t, width)
-func _sch_corridor_open_casing(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._sch_corridor_open_casing(o, yw, side, t, width)
-func _sch_corridor_bay_returns(o: Vector3, yw: float, side: float,
-		t: float, width: float) -> void:
-	_level_builder._sch_corridor_bay_returns(o, yw, side, t, width)
-func _sch_corridor_bay_light(o: Vector3, yw: float, side: float, t: float) -> void:
-	_level_builder._sch_corridor_bay_light(o, yw, side, t)
-func _sch_corridor_door(o: Vector3, yw: float, t: float,
-		side: float, salt: int) -> void:
-	_level_builder._sch_corridor_door(o, yw, t, side, salt)
-func _sch_corridor_clear(t: float, doors: Array, bay: Array, clearance: float) -> bool:
-	return _level_builder._sch_corridor_clear(t, doors, bay, clearance)
-func _sch_corridor_prop_t(si: int, salt: int, doors: Array, bay: Array,
-		clearance: float) -> float:
-	return _level_builder._sch_corridor_prop_t(si, salt, doors, bay, clearance)
-func _sch_passage_lockers(salt: int) -> void:
-	_level_builder._sch_passage_lockers(salt)
-func _sch_locker_run(along_x: bool, off: float, from: float, to: float,
-		facing: float, mat: Material, depth: float, hgt: float, salt: int) -> void:
-	_level_builder._sch_locker_run(along_x, off, from, to, facing, mat, depth, hgt, salt)
-func _sch_locker_run_authored(along_x: bool, off: float, from: float,
-		to: float, facing: float, gen_depth: float) -> bool:
-	return _level_builder._sch_locker_run_authored(along_x, off, from, to, facing, gen_depth)
-func _sch_locker_run_generated(along_x: bool, off: float, from: float,
-		to: float, facing: float, mat: Material, depth: float, hgt: float,
-		salt: int) -> void:
-	_level_builder._sch_locker_run_generated(along_x, off, from, to, facing, mat, depth, hgt, salt)
-func _sch_corridor() -> void:
-	_level_builder._sch_corridor()
-func _sch_bin(p: Vector3) -> void:
-	_level_builder._sch_bin(p)
-func _sch_stack_chairs(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._sch_stack_chairs(p, yaw, salt)
-func _sch_trolley(p: Vector3, yaw: float) -> void:
-	_level_builder._sch_trolley(p, yaw)
-func _sch_trolley_generated(p: Vector3, yaw: float) -> void:
-	_level_builder._sch_trolley_generated(p, yaw)
-func _sch_face_yaw(dir: int) -> float:
-	return _level_builder._sch_face_yaw(dir)
-func _sch_front_wall(salt: int) -> int:
-	return _level_builder._sch_front_wall(salt)
-func _sch_desk(p: Vector3, yaw: float, _salt: int) -> void:
-	_level_builder._sch_desk(p, yaw, _salt)
-func _sch_desk_row(p: Vector3, yaw: float, n: int, salt: int) -> void:
-	_level_builder._sch_desk_row(p, yaw, n, salt)
-func _sch_chalkboard(dir: int) -> void:
-	_level_builder._sch_chalkboard(dir)
-func _sch_classroom() -> void:
-	_level_builder._sch_classroom()
-func _sch_cupboard(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._sch_cupboard(p, yaw, salt)
-func _sch_chalk(board_root: Node3D, dir: int, cen: float, ln: float) -> void:
-	_level_builder._sch_chalk(board_root, dir, cen, ln)
-## Audit hook: chalk must be a descendant of a board pivot, and every board
-## pivot must belong to a solid generated edge.
 func school_chalkboard_violations() -> int:
 	if theme != 6:
 		return 0
@@ -6896,55 +6417,6 @@ func exit_sign_fixture_audit() -> Dictionary:
 	return report
 
 
-## Pull-down projector screen, half unrolled above the board.
-func _sch_screen(dir: int) -> void:
-	_level_builder._sch_screen(dir)
-func _sch_caf_table(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._sch_caf_table(p, yaw, salt)
-func _sch_cafeteria() -> void:
-	_level_builder._sch_cafeteria()
-func _sch_servery(dir: int) -> void:
-	_level_builder._sch_servery(dir)
-func _sch_bathroom() -> void:
-	_level_builder._sch_bathroom()
-func _sch_stalls(dir: int) -> void:
-	_level_builder._sch_stalls(dir)
-func _sch_sinks(dir: int) -> void:
-	_level_builder._sch_sinks(dir)
-func _sch_urinals(dir: int) -> void:
-	_level_builder._sch_urinals(dir)
-func _sch_gym() -> void:
-	_level_builder._sch_gym()
-func _sch_auditorium() -> void:
-	_level_builder._sch_auditorium()
-func _sch_hoop(p: Vector3, yaw: float) -> void:
-	_level_builder._sch_hoop(p, yaw)
-func _sch_bleachers(p: Vector3, yaw: float, ln: float) -> void:
-	_level_builder._sch_bleachers(p, yaw, ln)
-func _sch_library() -> void:
-	_level_builder._sch_library()
-func _sch_stack(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._sch_stack(p, yaw, salt)
-func _sch_lab() -> void:
-	_level_builder._sch_lab()
-func _sch_chemistry_table(p: Vector3, yaw: float, salt: int) -> bool:
-	return _level_builder._sch_chemistry_table(p, yaw, salt)
-func _sch_stool(p: Vector3, salt: int) -> void:
-	_level_builder._sch_stool(p, salt)
-func _sch_admin() -> void:
-	_level_builder._sch_admin()
-func _sch_noticeboard(dir: int, plane: float) -> void:
-	_level_builder._sch_noticeboard(dir, plane)
-func _sch_fountain(dir: int, plane: float) -> void:
-	_level_builder._sch_fountain(dir, plane)
-func _sch_case(dir: int, plane: float) -> void:
-	_level_builder._sch_case(dir, plane)
-func _sch_poster(dir: int, plane: float) -> void:
-	_level_builder._sch_poster(dir, plane)
-func _mall_lighting() -> void:
-	_level_builder._mall_lighting()
-func _mall_poster_case(dir: int, plane: float) -> void:
-	_level_builder._mall_poster_case(dir, plane)
 func _sfb(dir: int, plane: float, off: float, along: float, y: float,
 		w: float, h: float, d: float, mat: Material, collide := false) -> MeshInstance3D:
 	var n := -1.0 if dir == 0 or dir == 2 else 1.0
@@ -6954,24 +6426,6 @@ func _sfb(dir: int, plane: float, off: float, along: float, y: float,
 	return _box(Vector3(along, y, p), Vector3(w, h, d), mat, collide)
 
 
-## Real shopfronts where a blank gallery wall would be: two retail units under
-## sign fascias, each shuttered, half-shuttered, or dead glass over a black
-## interior. This is the thing that makes the gallery read as a mall.
-func _mall_storefront(dir: int, plane: float) -> void:
-	_level_builder._mall_storefront(dir, plane)
-func _mall_unit(dir: int, plane: float, uc: float, w: float, salt: int) -> void:
-	_level_builder._mall_unit(dir, plane, uc, w, salt)
-func _mall_painted_sign_index(giv: int) -> int:
-	return _level_builder._mall_painted_sign_index(giv)
-func _mall_painted_sign(dir: int, plane: float, uc: float, index: int,
-		y: float) -> bool:
-	return _level_builder._mall_painted_sign(dir, plane, uc, index, y)
-func _mall_unit_sign(dir: int, plane: float, uc: float, giv: int, y: float,
-		painted := -1) -> void:
-	_level_builder._mall_unit_sign(dir, plane, uc, giv, y, painted)
-## Mall regression hook: storefront lettering must fit its fascia, and exit
-## housings must overlap the solid wall above an opening rather than float
-## below the lintel.
 func mall_fixture_audit() -> Dictionary:
 	var report := {
 		"store_signs": 0,
@@ -7077,55 +6531,8 @@ func wall_art_audit() -> Dictionary:
 				or partition_overlap:
 			report["violations"] += 1
 	return report
-func _mall_sign(pos: Vector3, yaw: float, text: String, size := 0.12,
-		suspended := true) -> Node3D:
-	return _level_builder._mall_sign(pos, yaw, text, size, suspended)
-func _mall_shopping_cart(p: Vector3, yaw: float, loaded := false) -> void:
-	_level_builder._mall_shopping_cart(p, yaw, loaded)
-func _mall_bench(p: Vector3, yaw: float) -> void:
-	_level_builder._mall_bench(p, yaw)
-func _mrbox_bench_fallback(p: Vector3, yaw: float) -> void:
-	_level_builder._mrbox_bench_fallback(p, yaw)
-func _mall_corridor() -> void:
-	_level_builder._mall_corridor()
-func _mall_display_table(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._mall_display_table(p, yaw, salt)
 func _solid_wall(dir: int) -> bool:
 	return WorldGen.edge_info(wseed, cell, dir, theme)["wall"]
-func _mall_shelves(dir: int, salt: int) -> void:
-	_level_builder._mall_shelves(dir, salt)
-func _mall_rack(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._mall_rack(p, yaw, salt)
-func _mall_counter(p: Vector3, yaw: float) -> void:
-	_level_builder._mall_counter(p, yaw)
-func _mall_store() -> void:
-	_level_builder._mall_store()
-func _mall_gondola(p: Vector3, yaw: float, ln: float, salt: int) -> void:
-	_level_builder._mall_gondola(p, yaw, ln, salt)
-func _mall_anchor() -> void:
-	_level_builder._mall_anchor()
-func _mall_food_table(p: Vector3, salt: int) -> void:
-	_level_builder._mall_food_table(p, salt)
-func _mall_foodcourt() -> void:
-	_level_builder._mall_foodcourt()
-func _mall_atrium() -> void:
-	_level_builder._mall_atrium()
-func _mall_service() -> void:
-	_level_builder._mall_service()
-func _mall_kiosk(p: Vector3, yaw: float, salt: int) -> void:
-	_level_builder._mall_kiosk(p, yaw, salt)
-func _mall_kiosks() -> void:
-	_level_builder._mall_kiosks()
-func _mall_cinema() -> void:
-	_level_builder._mall_cinema()
-func _mall_poster_stand(p: Vector3) -> void:
-	_level_builder._mall_poster_stand(p)
-func _prison_lighting() -> void:
-	_level_builder._prison_lighting()
-func _prison_number_wall(dir: int, plane: float) -> void:
-	_level_builder._prison_number_wall(dir, plane)
-func _prison_locked_door_wall(dir: int, plane: float) -> void:
-	_level_builder._prison_locked_door_wall(dir, plane)
 func _security_camera_wall(dir: int, plane: float) -> void:
 	var n := -1.0 if dir == 0 or dir == 2 else 1.0
 	var wall_t := ANNEX_WALL_T if theme == 2 else T
@@ -7138,15 +6545,6 @@ func _security_camera_wall(dir: int, plane: float) -> void:
 	_security_camera(mount, yaw)
 
 
-func _prison_bars(origin: Vector3, yaw: float, width: float, height: float,
-		with_gate := true, solid := true) -> void:
-	_level_builder._prison_bars(origin, yaw, width, height, with_gate, solid)
-func _prison_bunk(p: Vector3, yaw: float, cell_context := false) -> void:
-	_level_builder._prison_bunk(p, yaw, cell_context)
-func _prison_toilet(p: Vector3, yaw: float, cell_context := false) -> void:
-	_level_builder._prison_toilet(p, yaw, cell_context)
-## Cell-only context audit. Bunks and detention toilet/sink units are allowed
-## only inside actual barred cell strips, never as generic room enrichment.
 func prison_cell_fixture_audit() -> Dictionary:
 	var report := {
 		"bunks": 0, "toilets": 0,
@@ -7272,8 +6670,6 @@ func prison_authored_door_audit() -> Dictionary:
 					SOLITARY_CELL_DOOR_PATH:
 				report["violations"] += 1
 	return report
-func _prison_corridor() -> void:
-	_level_builder._prison_corridor()
 func _wall_facing(dir: int) -> float:
 	match dir:
 		0: return -PI / 2.0
@@ -7286,38 +6682,6 @@ func _wall_pt(dir: int, along: float, off: float, y := 0.0) -> Vector3:
 		1: return Vector3(T + off, y, along)
 		2: return Vector3(along, y, S - T - off)
 	return Vector3(along, y, T + off)
-func _prison_cell_strip(dir: int, salt: int) -> void:
-	_level_builder._prison_cell_strip(dir, salt)
-func _prison_cellblock() -> void:
-	_level_builder._prison_cellblock()
-func _prison_cells() -> void:
-	_level_builder._prison_cells()
-func _prison_mess_table(p: Vector3, yaw: float) -> void:
-	_level_builder._prison_mess_table(p, yaw)
-func _prison_mess() -> void:
-	_level_builder._prison_mess()
-func _prison_shower_station(wall: int, along: float) -> void:
-	_level_builder._prison_shower_station(wall, along)
-func _prison_shower() -> void:
-	_level_builder._prison_shower()
-func _prison_guard_desk(p: Vector3, yaw: float) -> void:
-	_level_builder._prison_guard_desk(p, yaw)
-func _prison_guard() -> void:
-	_level_builder._prison_guard()
-func _prison_industry() -> void:
-	_level_builder._prison_industry()
-func _prison_visitation_phone(parent: Node3D, side_z: float) -> void:
-	_level_builder._prison_visitation_phone(parent, side_z)
-func _prison_visitation_booth(p: Vector3) -> void:
-	_level_builder._prison_visitation_booth(p)
-func _prison_visitation() -> void:
-	_level_builder._prison_visitation()
-func _prison_rotunda() -> void:
-	_level_builder._prison_rotunda()
-func _pool_floor_ceiling() -> void:
-	_level_builder._pool_floor_ceiling()
-func _pool_dry_slab() -> void:
-	_level_builder._pool_dry_slab()
 static func pool_style_dry(st: int) -> bool:
 	# Over half the floor is dry tile. An endless sheet of water gives the
 	# player nowhere to stand, nothing to read the water against, and no sense
@@ -7326,73 +6690,5 @@ static func pool_style_dry(st: int) -> bool:
 		or st == WorldGen.POOL_GALLERY or st == WorldGen.POOL_SOLARIUM
 
 
-func _pool_dry() -> bool:
-	return _level_builder._pool_dry()
 func _floor_h() -> float:
-	return POOL_DRY_Y if theme == 9 and _pool_dry() else 0.0
-func _pool_edge_steps() -> void:
-	_level_builder._pool_edge_steps()
-func _pool_pier(at: Vector3) -> void:
-	_level_builder._pool_pier(at)
-func _pool_step_ramp(dir: int, at: float, width: float, edge: float,
-		drop: float, run: float, start := 0.0) -> void:
-	_level_builder._pool_step_ramp(dir, at, width, edge, drop, run, start)
-func _pool_deck(dir: int, width: float) -> void:
-	_level_builder._pool_deck(dir, width)
-func _pool_ladder(dir: int, deck_half: float, along: float) -> void:
-	_level_builder._pool_ladder(dir, deck_half, along)
-func _pool_stairs(dir: int, at := S / 2.0) -> void:
-	_level_builder._pool_stairs(dir, at)
-func _pool_window(dir: int, along: float, tall := true) -> void:
-	_level_builder._pool_window(dir, along, tall)
-func _pool_round_window(dir: int, along: float, tall := true) -> void:
-	_level_builder._pool_round_window(dir, along, tall)
-func _pool_crown_trims(dir: int, plane: float, from: float, to: float) -> void:
-	_level_builder._pool_crown_trims(dir, plane, from, to)
-func _pool_face_cell(dir: int, side: float) -> Vector2i:
-	return _level_builder._pool_face_cell(dir, side)
-func _pool_stairs_exit(c: Vector2i) -> int:
-	return _level_builder._pool_stairs_exit(c)
-func _pool_nb_deck_blocks(nb: Vector2i, dir: int, t: float, w: float) -> bool:
-	return _level_builder._pool_nb_deck_blocks(nb, dir, t, w)
-func _pool_wall_ladder(dir: int, along: float) -> void:
-	_level_builder._pool_wall_ladder(dir, along)
-func _pool_lighting() -> void:
-	_level_builder._pool_lighting()
-func _pool_piers(salt: int, count: int) -> void:
-	_level_builder._pool_piers(salt, count)
-func _pool_float(salt: int) -> void:
-	_level_builder._pool_float(salt)
-func _pool_handrail(dir: int, inset: float) -> void:
-	_level_builder._pool_handrail(dir, inset)
-func _pool_side_walk(dir: int, width: float) -> void:
-	_level_builder._pool_side_walk(dir, width)
-func _pool_bridge(along_x: bool) -> void:
-	_level_builder._pool_bridge(along_x)
-func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
-		site := "wall") -> void:
-	_level_builder._pool_ladder_at(dir, edge, along, inward, site)
-func _pool_ledge_ladder(dir: int, edge: float, along: float) -> void:
-	_level_builder._pool_ledge_ladder(dir, edge, along)
-func _pool_basin_room() -> void:
-	_level_builder._pool_basin_room()
-func _pool_channel_room() -> void:
-	_level_builder._pool_channel_room()
-func _pool_channel_fill(dir: int, cuts: Array, a0 := 0.0, a1 := S) -> void:
-	_level_builder._pool_channel_fill(dir, cuts, a0, a1)
-func _pool_deck_room() -> void:
-	_level_builder._pool_deck_room()
-func _pool_solarium_room() -> void:
-	_level_builder._pool_solarium_room()
-func _pool_lone_chair(salt: int) -> void:
-	_level_builder._pool_lone_chair(salt)
-func _pool_underwater_lights(salt: int) -> void:
-	_level_builder._pool_underwater_lights(salt)
-func _pool_alcove_room() -> void:
-	_level_builder._pool_alcove_room()
-func _pool_stairs_room() -> void:
-	_level_builder._pool_stairs_room()
-func _pool_gallery_room() -> void:
-	_level_builder._pool_gallery_room()
-func _pool_cistern_room() -> void:
-	_level_builder._pool_cistern_room()
+	return POOL_DRY_Y if theme == 9 and _level_builder._pool_dry() else 0.0

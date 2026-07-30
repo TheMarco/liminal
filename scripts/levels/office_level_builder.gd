@@ -737,41 +737,6 @@ func _copier(p: Vector3, salt: int) -> void:
 		Vector3(1.21, 1.352, 0.70), yaw)
 	chunk._bind_furnishing_colliders(printer, body0)
 
-
-## DEC VT100 lookalike, built in local space facing +Z under one pivot so the
-## random desk-jitter yaw can never shear the screen out of its housing.
-
-
-func _use_terminal(_actor: Node, hit: Interactable, readout: Label3D,
-		screen: MeshInstance3D) -> void:
-	var page = int(hit.get_meta("page", 0))
-	if not bool(hit.get_meta("queried", false)):
-		hit.set_meta("queried", true)
-		readout.visible = true
-		screen.set_instance_shader_parameter("queried", 1.0)
-	else:
-		page = (page + 1) % chunk.TERMINAL_PAGES.size()
-		hit.set_meta("page", page)
-		readout.text = chunk.TERMINAL_PAGES[page]
-	hit.prompt_text = "E — next record"
-	chunk.get_tree().call_group("level_manager", "terminal_activity", page)
-
-
-func _reset_terminal(hit: Interactable, readout: Label3D,
-		screen: MeshInstance3D) -> void:
-	var page = int(hit.get_meta("initial_page", 0))
-	hit.set_meta("page", page)
-	hit.set_meta("queried", false)
-	hit.prompt_text = "E — query terminal"
-	readout.text = chunk.TERMINAL_PAGES[page]
-	readout.visible = false
-	screen.set_instance_shader_parameter("queried", 0.0)
-
-
-## Audit hook: Label3D has no scissor rectangle, so protect the physical CRT
-## with the selected font's real metrics whenever terminal copy changes.
-
-
 func _office_storage() -> void:
 	# The floor-standing copier, parked against a wall with its finisher trays
 	# out. It is the one machine everyone walked to, so the storage room is

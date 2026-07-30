@@ -92,6 +92,20 @@ func _theme_for(name: String) -> int:
 	return 0
 
 
+
+## Prop recipes moved out of Chunk into the per-theme level builders, so a name
+## may live on either. Resolve whichever object owns it instead of requiring
+## Chunk to keep a forwarder for every previewable prop.
+func _recipe(c: Chunk, n: String) -> Object:
+	if c.has_method(n):
+		return c
+	var builder: Object = c._level_builder
+	if builder != null and builder.has_method(n):
+		return builder
+	push_error("no object owns prop recipe %s" % n)
+	return c
+
+
 ## One call per prop, with arguments chosen to show it at its most typical.
 ## Wall-mounted props are given wall 3 and its inner plane.
 func _build(c: Chunk, n: String) -> bool:
@@ -99,89 +113,88 @@ func _build(c: Chunk, n: String) -> bool:
 	var plane := T / 2.0
 	match n:
 		"_troffer":
-			c.call("_troffer", Vector3(6, 2.6, 6), Vector2(1.2, 0.3),
+			_recipe(c, "_troffer").call("_troffer", Vector3(6, 2.6, 6), Vector2(1.2, 0.3),
 				Mats.office_panel(), Mats.metal_gray())
 		"_procedural_slot_machine":
-			c.call("_procedural_slot_machine", 6.0, 6.0, 1.0, 0)
-		"_change_machine": c.call("_change_machine", 3, plane)
-		"_slot_machine_alt": c.call("_slot_machine_alt", 6.0, 6.0, 1.0, 4)
-		"_rope_barrier": c.call("_rope_barrier", mid, 0.0, "preview")
-		"_velvet_ropes": c.call("_velvet_ropes")
-		"_casino_ballroom": c.call("_casino_ballroom")
-		"_hallway": c.call("_hallway")
-		"_office_air_conditioners": c.call("_office_air_conditioners", [])
-		"_office_cubicle_cluster": c.call("_office_cubicle_cluster", mid, 0)
-		"_office_desk": c.call("_office_desk", mid, Vector2(0, 1), 0)
-		"_vt100": c.call("_vt100", Vector3(6, 0.75, 6), 0.0)
-		"_shelf_unit": c.call("_shelf_unit", mid, true, 7)
-		"_sewer_pump_skid": c.call("_sewer_pump_skid", mid, 1.0, 1.0, 7)
-		"_sewer_panel": c.call("_sewer_panel", 3, plane)
+			_recipe(c, "_procedural_slot_machine").call("_procedural_slot_machine", 6.0, 6.0, 1.0, 0)
+		"_change_machine": _recipe(c, "_change_machine").call("_change_machine", 3, plane)
+		"_slot_machine_alt": _recipe(c, "_slot_machine_alt").call("_slot_machine_alt", 6.0, 6.0, 1.0, 4)
+		"_rope_barrier": _recipe(c, "_rope_barrier").call("_rope_barrier", mid, 0.0, "preview")
+		"_velvet_ropes": _recipe(c, "_velvet_ropes").call("_velvet_ropes")
+		"_casino_ballroom": _recipe(c, "_casino_ballroom").call("_casino_ballroom")
+		"_hallway": _recipe(c, "_hallway").call("_hallway")
+		"_office_air_conditioners": _recipe(c, "_office_air_conditioners").call("_office_air_conditioners", [])
+		"_office_cubicle_cluster": _recipe(c, "_office_cubicle_cluster").call("_office_cubicle_cluster", mid, 0)
+		"_office_desk": _recipe(c, "_office_desk").call("_office_desk", mid, Vector2(0, 1), 0)
+		"_vt100": _recipe(c, "_vt100").call("_vt100", Vector3(6, 0.75, 6), 0.0)
+		"_shelf_unit": _recipe(c, "_shelf_unit").call("_shelf_unit", mid, true, 7)
+		"_sewer_pump_skid": _recipe(c, "_sewer_pump_skid").call("_sewer_pump_skid", mid, 1.0, 1.0, 7)
+		"_sewer_panel": _recipe(c, "_sewer_panel").call("_sewer_panel", 3, plane)
 		"_annex_half_wall":
-			c.call("_annex_block", mid, 0.0, 4.8, 0.30, 1.05,
+			_recipe(c, "_annex_block").call("_annex_block", mid, 0.0, 4.8, 0.30, 1.05,
 				"annex_half_wall")
-		"_air_adboxes": c.call("_air_adboxes", 3, plane)
-		"_air_bin": c.call("_air_bin", mid)
-		"_air_trolley": c.call("_air_trolley", mid, 0.0, 7, 3)
+		"_air_adboxes": _recipe(c, "_air_adboxes").call("_air_adboxes", 3, plane)
+		"_air_bin": _recipe(c, "_air_bin").call("_air_bin", mid)
+		"_air_trolley": _recipe(c, "_air_trolley").call("_air_trolley", mid, 0.0, 7, 3)
 		"_stanchion_line":
-			c.call("_stanchion_line", Vector3(3, 0, 6), Vector3(9, 0, 6), 3)
+			_recipe(c, "_stanchion_line").call("_stanchion_line", Vector3(3, 0, 6), Vector3(9, 0, 6), 3)
 		"_air_jetway":
 			var w := Node3D.new()
 			c.add_child(w)
-			c.call("_air_jetway", w)
-		"_air_gate_desk": c.call("_air_gate_desk", mid, 0.0, "B12")
-		"_checkin_desk": c.call("_checkin_desk", mid, 0.0, 0.0, 7)
-		"_asy_fixture": c.call("_asy_fixture", Vector3(6, 2.7, 6), Mats.office_panel())
-		"_asy_restraint_table": c.call("_asy_restraint_table", mid, 0.0)
-		"_asy_ect": c.call("_asy_ect", mid, 0.0, 7)
-		"_asy_iv": c.call("_asy_iv", mid)
-		"_asy_straitjacket": c.call("_asy_straitjacket", 3, plane)
-		"_asy_dayroom_table": c.call("_asy_dayroom_table", mid, 7)
-		"_asy_chemistry_counter": c.call("_asy_chemistry_counter", mid, 0.0, 7)
-		"_sch_bin": c.call("_sch_bin", mid)
-		"_sch_trolley": c.call("_sch_trolley", mid, 0.0)
-		"_sch_caf_table": c.call("_sch_caf_table", mid, 0.0, 7)
-		"_sch_servery": c.call("_sch_servery", 3)
-		"_sch_stalls": c.call("_sch_stalls", 3)
-		"_sch_sinks": c.call("_sch_sinks", 3)
-		"_sch_urinals": c.call("_sch_urinals", 3)
-		"_sch_hoop": c.call("_sch_hoop", Vector3(6, 0, 1.0), 0.0)
-		"_sch_bleachers": c.call("_sch_bleachers", mid, 0.0, 6.0)
-		"_sch_stack": c.call("_sch_stack", mid, 0.0, 7)
-		"_sch_stool": c.call("_sch_stool", mid, 7)
-		"_sch_fountain": c.call("_sch_fountain", 3, plane)
-		"_sch_case": c.call("_sch_case", 3, plane)
-		"_mall_bench": c.call("_mall_bench", mid, 0.0)
-		"_mall_display_table": c.call("_mall_display_table", mid, 0.0, 7)
+			_recipe(c, "_air_jetway").call("_air_jetway", w)
+		"_air_gate_desk": _recipe(c, "_air_gate_desk").call("_air_gate_desk", mid, 0.0, "B12")
+		"_checkin_desk": _recipe(c, "_checkin_desk").call("_checkin_desk", mid, 0.0, 0.0, 7)
+		"_asy_fixture": _recipe(c, "_asy_fixture").call("_asy_fixture", Vector3(6, 2.7, 6), Mats.office_panel())
+		"_asy_restraint_table": _recipe(c, "_asy_restraint_table").call("_asy_restraint_table", mid, 0.0)
+		"_asy_ect": _recipe(c, "_asy_ect").call("_asy_ect", mid, 0.0, 7)
+		"_asy_iv": _recipe(c, "_asy_iv").call("_asy_iv", mid)
+		"_asy_straitjacket": _recipe(c, "_asy_straitjacket").call("_asy_straitjacket", 3, plane)
+		"_asy_dayroom_table": _recipe(c, "_asy_dayroom_table").call("_asy_dayroom_table", mid, 7)
+		"_asy_chemistry_counter": _recipe(c, "_asy_chemistry_counter").call("_asy_chemistry_counter", mid, 0.0, 7)
+		"_sch_bin": _recipe(c, "_sch_bin").call("_sch_bin", mid)
+		"_sch_trolley": _recipe(c, "_sch_trolley").call("_sch_trolley", mid, 0.0)
+		"_sch_caf_table": _recipe(c, "_sch_caf_table").call("_sch_caf_table", mid, 0.0, 7)
+		"_sch_servery": _recipe(c, "_sch_servery").call("_sch_servery", 3)
+		"_sch_stalls": _recipe(c, "_sch_stalls").call("_sch_stalls", 3)
+		"_sch_sinks": _recipe(c, "_sch_sinks").call("_sch_sinks", 3)
+		"_sch_urinals": _recipe(c, "_sch_urinals").call("_sch_urinals", 3)
+		"_sch_hoop": _recipe(c, "_sch_hoop").call("_sch_hoop", Vector3(6, 0, 1.0), 0.0)
+		"_sch_bleachers": _recipe(c, "_sch_bleachers").call("_sch_bleachers", mid, 0.0, 6.0)
+		"_sch_stack": _recipe(c, "_sch_stack").call("_sch_stack", mid, 0.0, 7)
+		"_sch_stool": _recipe(c, "_sch_stool").call("_sch_stool", mid, 7)
+		"_sch_fountain": _recipe(c, "_sch_fountain").call("_sch_fountain", 3, plane)
+		"_sch_case": _recipe(c, "_sch_case").call("_sch_case", 3, plane)
+		"_mall_bench": _recipe(c, "_mall_bench").call("_mall_bench", mid, 0.0)
+		"_mall_display_table": _recipe(c, "_mall_display_table").call("_mall_display_table", mid, 0.0, 7)
 		"_mall_shelves":
 			# only mounts on a genuinely solid wall, and which walls are solid
 			# is per-cell — try each until one takes.
 			for d in 4:
 				var n0 := c.get_child_count()
-				c.call("_mall_shelves", d, 7)
+				_recipe(c, "_mall_shelves").call("_mall_shelves", d, 7)
 				if c.get_child_count() > n0:
 					break
-		"_mall_rack": c.call("_mall_rack", mid, 0.0, 7)
-		"_mall_counter": c.call("_mall_counter", mid, 0.0)
-		"_mall_gondola": c.call("_mall_gondola", mid, 0.0, 4.0, 7)
-		"_mall_food_table": c.call("_mall_food_table", mid, 7)
-		"_mall_kiosk": c.call("_mall_kiosk", mid, 0.0, 7)
-		"_mall_rope_post": c.call("_mall_rope_post", mid)
-		"_prison_mess_table": c.call("_prison_mess_table", mid, 0.0)
-		"_prison_shower_station": c.call("_prison_shower_station", 3, 6.0)
-		"_prison_visitation_booth": c.call("_prison_visitation_booth", mid)
+		"_mall_rack": _recipe(c, "_mall_rack").call("_mall_rack", mid, 0.0, 7)
+		"_mall_counter": _recipe(c, "_mall_counter").call("_mall_counter", mid, 0.0)
+		"_mall_gondola": _recipe(c, "_mall_gondola").call("_mall_gondola", mid, 0.0, 4.0, 7)
+		"_mall_food_table": _recipe(c, "_mall_food_table").call("_mall_food_table", mid, 7)
+		"_mall_kiosk": _recipe(c, "_mall_kiosk").call("_mall_kiosk", mid, 0.0, 7)
+		"_prison_mess_table": _recipe(c, "_prison_mess_table").call("_prison_mess_table", mid, 0.0)
+		"_prison_shower_station": _recipe(c, "_prison_shower_station").call("_prison_shower_station", 3, 6.0)
+		"_prison_visitation_booth": _recipe(c, "_prison_visitation_booth").call("_prison_visitation_booth", mid)
 		"_prison_bars":
-			c.call("_prison_bars", mid, 0.0, 3.1, 2.6, true, false)
+			_recipe(c, "_prison_bars").call("_prison_bars", mid, 0.0, 3.1, 2.6, true, false)
 		"_sch_locker_run":
-			c.call("_sch_locker_run", true, 6.0, 2.0, 10.0, 1.0,
+			_recipe(c, "_sch_locker_run").call("_sch_locker_run", true, 6.0, 2.0, 10.0, 1.0,
 				Mats.sch_trim(), 0.45, 1.85, 7)
 		"_sch_short_locker_run":
-			c.call("_sch_locker_run", true, 6.0, 5.7, 6.3, 1.0,
+			_recipe(c, "_sch_locker_run").call("_sch_locker_run", true, 6.0, 5.7, 6.3, 1.0,
 				Mats.sch_trim(), 0.45, 1.85, 7)
 		"_prison_visitation_phone":
 			var v := Node3D.new()
 			v.position = mid
 			c.add_child(v)
-			c.call("_prison_visitation_phone", v, 1.0)
+			_recipe(c, "_prison_visitation_phone").call("_prison_visitation_phone", v, 1.0)
 		_:
 			return false
 	return true
