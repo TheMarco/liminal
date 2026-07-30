@@ -193,6 +193,32 @@ Instead:
 Extend `tools/audit_interactions.gd` rather than replacing it. Its current
 Wander terminal/elevator/door assertions are part of the regression contract.
 
+### Files added by the modularisation pass
+
+| File | Class | Responsibility |
+|---|---|---|
+| `scripts/levels/*_level_builder.gd` | — | One builder per theme, holding that floor's room styles, lighting and props. `Chunk.LEVEL_BUILDERS` maps a theme id to one. |
+| `scripts/levels/chunk_level_builder.gd` | `ChunkLevelBuilder` | Base class: the typed `chunk` host and the documented contract for what a builder may use on it. |
+| `scripts/cli_options.gd` | `CliOptions` | Every `--flag`, parsed once. Replaces sixteen `OS.get_cmdline_user_args()` sites in main plus three scripts that re-parsed it. |
+| `scripts/env_builder.gd` | `EnvBuilder` | Per-floor `WorldEnvironment` settings, one named function each. |
+| `scripts/theme_sounds.gd` | `ThemeSounds` | Base for the per-theme spatial emitters: shared player setup, not shared timing. |
+| `tools/lib/audit_base.gd` | — | Base for runtime audits: game boot, the non-obvious teardown, one `expect`, one exit convention. |
+| `tools/audit_world_hash.gd` | — | Fingerprints the generated scene graph of 423 chunks so a behaviour-preserving change is provable. |
+| `tools/check_compile.gd` | — | Compile preflight; one unparseable builder otherwise fails every audit for an unrelated-looking reason. |
+| `tools/run_audits.sh` | — | The suite, in parallel, with per-audit timeouts and baseline comparison. |
+
+Two rules the pass established, both learned from breaking them:
+
+- **A method a second theme starts calling belongs on `Chunk` under a neutral
+  name, never on one builder.** Reaching a builder method through
+  `_level_builder` only works when the call site is theme-gated. A *shared*
+  helper that does it fails on every other theme — which is how school admin
+  rooms lost their terminal and prison guard desks lost theirs from the desk
+  pivot, the second one silently, with no crash and a merely wrong scene tree.
+- **The audit facade is theme-agnostic.** The `*_audit()` / `*_violations()`
+  methods are called on chunks of every theme, so they live on `Chunk`. Filing
+  them by name prefix into one builder is what broke four CI audits.
+
 ---
 
 ## 4. Current codebase rules
