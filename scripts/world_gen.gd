@@ -41,14 +41,6 @@ const ANNEX_LOBBY := 25      # rare open landmark with low partitions
 const ANNEX_CORRIDOR_X := 6
 const ANNEX_CORRIDOR_Z := 5
 
-# Retired names kept only so the unreachable legacy sewer construction helpers
-# remain parseable while other themes still reuse their pipe-detail helper.
-const SEWER_TUNNEL := ANNEX_OPEN
-const SEWER_BASIN := ANNEX_MAZE
-const SEWER_PUMP := ANNEX_LONG
-const SEWER_DRY := ANNEX_QUIET
-const SEWER_GALLERY := ANNEX_PASSAGE
-const SEWER_CISTERN := ANNEX_LOBBY
 
 const AIR_GATE := 40
 const AIR_CONCOURSE := 41
@@ -212,7 +204,6 @@ static func corridor_link(ws: int, cell: Vector2i, dir: int) -> bool:
 	if c1 == 0 or corridor(ws, cell + DIRV[dir]) != c1:
 		return false
 	return (c1 == 1 and dir <= 1) or (c1 == 2 and dir >= 2)
-
 
 
 # --- rooms --------------------------------------------------------------------
@@ -965,24 +956,6 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	return {"wall": wall, "full_open": full_open, "t": t, "w": w, "exit_sign": has_sign}
 
 
-## Does a water channel cross this edge? Canonical per edge, so both cells
-## build matching trough halves. The spawn cell's south edge is kept dry so
-## the default spawn point never lands in water.
-static func sewer_channel(ws: int, cell: Vector2i, dir: int) -> bool:
-	var e := _edge(cell, dir)
-	if e[0] == Vector2i(0, -1) and e[1] == 1:
-		return false
-	return hr01(_edge_hash(ws, e[0], e[1]), 9) < 0.62
-
-
-## Deterministic flow sign for the channel crossing an edge: +1 flows toward
-## +x/+z, -1 the other way. Shared by both cells, so streams never collide
-## head-on at a boundary.
-static func sewer_flow(ws: int, cell: Vector2i, dir: int) -> float:
-	var e := _edge(cell, dir)
-	return 1.0 if hr01(_edge_hash(ws, e[0], e[1]), 10) < 0.5 else -1.0
-
-
 ## Corridor bands: certain whole rows/columns of the grid carve into narrow
 ## passages, so tight corridors run cell after cell instead of the world
 ## being nothing but wide rooms. 0 = no corridor, 1 = along x, 2 = along z.
@@ -1311,3 +1284,4 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 	if zone == 0: return STYLE_EMPTY if r < 0.22 else (STYLE_LOUNGE if r < 0.42 else STYLE_PILLARS)
 	if zone == 1: return STYLE_EMPTY if r < 0.38 else (STYLE_LOUNGE if r < 0.82 else STYLE_PILLARS)
 	return STYLE_EMPTY if r < 0.46 else (STYLE_PILLARS if r < 0.78 else STYLE_LOUNGE)
+

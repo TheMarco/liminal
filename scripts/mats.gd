@@ -146,10 +146,6 @@ static func marble() -> Material:
 	return _shader("marble", "res://shaders/marble.gdshader")
 
 
-static func slot_screen() -> Material:
-	return _shader("slot_screen", "res://shaders/slot_screen.gdshader")
-
-
 ## Original fictional cabinet art generated for this project. Each texture has
 ## a real, readable theme instead of procedural pseudo-copy, while the shared
 ## shader keeps it part of the physically lit cabinet rather than an unshaded
@@ -318,13 +314,6 @@ static func slot_service_label() -> StandardMaterial3D:
 		m.roughness = 0.9)
 
 
-static func pot() -> StandardMaterial3D:
-	return _std("pot", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.18, 0.13, 0.1)
-		m.metallic = 0.5
-		m.roughness = 0.5)
-
-
 static func plant() -> StandardMaterial3D:
 	return _std("plant", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.06, 0.17, 0.07)
@@ -361,16 +350,6 @@ static func neon_amber() -> StandardMaterial3D:
 		m.emission_enabled = true
 		m.emission = Color(1.0, 0.6, 0.15)
 		m.emission_energy_multiplier = 5.0)
-
-
-static func chand() -> StandardMaterial3D:
-	return _std("chand", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.71, 0.52, 0.22)
-		m.metallic = 0.9
-		m.roughness = 0.25
-		m.emission_enabled = true
-		m.emission = Color(1.0, 0.68, 0.3)
-		m.emission_energy_multiplier = 0.45)
 
 
 static func slot_reels() -> Material:
@@ -488,24 +467,6 @@ static func body_black() -> StandardMaterial3D:
 		m.clearcoat = 0.8)
 
 
-static func body_red() -> StandardMaterial3D:
-	return _std("body_red", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.45, 0.06, 0.09)
-		m.metallic = 0.5
-		m.roughness = 0.3
-		m.clearcoat_enabled = true
-		m.clearcoat = 0.8)
-
-
-static func body_purple() -> StandardMaterial3D:
-	return _std("body_purple", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.28, 0.09, 0.38)
-		m.metallic = 0.5
-		m.roughness = 0.3
-		m.clearcoat_enabled = true
-		m.clearcoat = 0.8)
-
-
 static func body_blue() -> StandardMaterial3D:
 	return _std("body_blue", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.08, 0.14, 0.4)
@@ -519,27 +480,11 @@ static func velvet_rust() -> Material:
 	return _velvet("velvet_rust", Color(0.55, 0.25, 0.1), Color(1.0, 0.7, 0.45), 0.4)
 
 
-static func neon_cyan() -> StandardMaterial3D:
-	return _std("neon_cyan", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.02, 0.08, 0.1)
-		m.emission_enabled = true
-		m.emission = Color(0.2, 0.8, 1.0)
-		m.emission_energy_multiplier = 5.0)
-
-
 static func chrome() -> StandardMaterial3D:
 	return _std("chrome", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.75, 0.75, 0.78)
 		m.metallic = 0.95
 		m.roughness = 0.15)
-
-
-static func neon_red() -> StandardMaterial3D:
-	return _std("neon_red", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.12, 0.02, 0.02)
-		m.emission_enabled = true
-		m.emission = Color(1.0, 0.12, 0.08)
-		m.emission_energy_multiplier = 4.0)
 
 
 static func red_knob() -> StandardMaterial3D:
@@ -735,12 +680,6 @@ static func annex_panel() -> StandardMaterial3D:
 		m.emission_energy_multiplier = 2.8)
 
 
-static func annex_panel_dead() -> StandardMaterial3D:
-	return _std("annex_panel_dead", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.37, 0.34, 0.19)
-		m.roughness = 0.72)
-
-
 static func annex_trim() -> StandardMaterial3D:
 	return _std("annex_trim", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.47, 0.43, 0.27)
@@ -905,14 +844,6 @@ static func concrete_floor() -> Material:
 	return m
 
 
-static func sewer_water() -> Material:
-	return _shader("sewer_water", "res://shaders/sewer_water.gdshader")
-
-
-static func water_stream() -> Material:
-	return _shader("water_stream", "res://shaders/water_stream.gdshader")
-
-
 static func pipe_rust() -> StandardMaterial3D:
 	return _std("pipe_rust", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.36, 0.23, 0.16)
@@ -932,12 +863,6 @@ static func iron_dark() -> StandardMaterial3D:
 		m.albedo_color = Color(0.13, 0.13, 0.14)
 		m.roughness = 0.5
 		m.metallic = 0.8)
-
-
-static func barrel_rust() -> StandardMaterial3D:
-	return _std("barrel_rust", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.32, 0.20, 0.12)
-		m.roughness = 0.9)
 
 
 ## Standing puddle: near-black gloss, SSR does the rest.
@@ -1042,15 +967,6 @@ static func airport_carpet() -> Material:
 	m.set_shader_parameter("detail_tex", detail_noise())
 	_c["airport_carpet"] = m
 	return m
-
-
-## Gate-seating vinyl: near-black with a tired institutional sheen.
-static func seat_black() -> StandardMaterial3D:
-	return _std("seat_black", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.07, 0.07, 0.09)
-		m.roughness = 0.38
-		m.clearcoat_enabled = true
-		m.clearcoat = 0.5)
 
 
 static func steel() -> StandardMaterial3D:
@@ -1206,14 +1122,6 @@ static func cabin_warm() -> StandardMaterial3D:
 		m.emission_energy_multiplier = 2.4)
 
 
-## Per-instance muted painting canvas — intentionally not cached.
-static func canvas(hue: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color.from_hsv(hue, 0.3, 0.42)
-	m.roughness = 0.85
-	return m
-
-
 ## Mipmapped runtime wall art. Source paintings remain in `paintings/`; the
 ## game uses the 1024px WebP derivatives so a 720x480 presentation never pays
 ## to decode or retain nineteen 2K/3K PNGs.
@@ -1296,11 +1204,6 @@ static func marble_photo() -> StandardMaterial3D:
 ## Red patterned hotel carpet — corridor runners.
 static func carpet_red() -> StandardMaterial3D:
 	return _photo("carpet_red", "cc0", "Fabric026", 0.8, Color(0.85, 0.78, 0.78))
-
-
-## Dirty industrial brick — the older stretches of the sewers.
-static func brick_sewer() -> StandardMaterial3D:
-	return _photo("brick_sewer", "cc0", "Bricks097", 0.5, Color(0.6, 0.64, 0.6))
 
 
 ## Antique black/white terrazzo — the airport underfoot.
@@ -1821,3 +1724,4 @@ static func pool_coping() -> StandardMaterial3D:
 	return _std("pool_coping", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.80, 0.81, 0.77)
 		m.roughness = 0.52)
+

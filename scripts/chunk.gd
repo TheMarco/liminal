@@ -23,7 +23,6 @@ const BASE_LEVEL_BUILDER = preload("res://scripts/levels/chunk_level_builder.gd"
 
 const S := 12.0
 const H := 3.2       # vegas wall/ceiling height
-const H2 := 6.4      # vegas grand hall ceiling
 const HOFF := 3.0    # office ceiling height
 const HANNEX := 2.78 # the Annex's deliberately low drop ceiling
 ## The source ceiling map is a 2x2 grid. At the material's world-triplanar
@@ -54,7 +53,6 @@ const ANNEX_FIXTURE_CLEARANCE := 0.08
 ## readability. The office keeps them at measured 1:1: it carries far more
 ## other detail to place the eye, and audit_wall_utilities asserts that scale.
 const ANNEX_UTILITY_SCALE := 1.35
-const HAIR := 5.0    # airport hall height
 const HASY := 3.0    # asylum corridor height
 const HSCH := 3.05   # school corridor height
 const HMALL := 4.0   # mall gallery height
@@ -71,15 +69,8 @@ const AIR_DOOR := 3.15   # airport portal head height
 const DOOR_CLEAR_DEPTH := 3.6
 const DOOR_CLEAR_PAD := 0.5
 
-# sewer waterway cross-section
-const WATER_Y := -0.22   # water surface below the walkways
 const CH_HW := 0.85      # half width of the channel invert
-const CH_D := 0.48       # channel floor depth below the walkways
 const BANK := 0.62       # horizontal run of each sloped bank (walkable angle)
-const CH_CUT := CH_HW + BANK
-const BAS0 := 3.0        # basin inner square
-const BAS1 := 9.0
-const BAS_D := 0.95      # basin floor depth
 
 static var BOX := BoxMesh.new()
 static var CYL := CylinderMesh.new()
@@ -151,7 +142,6 @@ const ASY_DOOR_PATHS := [
 	"res://models/cc_by/abandoned_hospital/vision_door.glb",
 ]
 const ASY_DOOR_H := 2.4447          # tallest authored leaf
-const ASY_DOOR_FIT := DOOR_TOP / ASY_DOOR_H
 # `ward_door` is modelled with its width down X and its face on +Z; the other
 # three run down Z with their face on +X and need a quarter turn to match.
 const ASY_DOOR_FACE_YAW := [0.0, -PI / 2.0, -PI / 2.0, -PI / 2.0]
@@ -399,7 +389,6 @@ const CHECKIN_DESK_SCALE := 1.0
 const CHECKIN_DESK_CENTRE := Vector3(0.0, 0.0, 0.0)
 ## Half-depth and width of the clipped position, which is what sets both the
 ## desk pitch below and the distance the row stands off the back wall.
-const CHECKIN_DESK_HALF_D := 1.60
 const CHECKIN_DESK_W := 4.78
 
 const GARBAGE_BIN_PATH := "res://models/cc_by/garbage_bin/garbage_bin.glb"
@@ -4742,314 +4731,6 @@ func annex_fixture_obstruction_violations() -> int:
 				and not _annex_fixture_clear((node as MeshInstance3D).position):
 			bad += 1
 	return bad
-func _sewer_ch() -> Array:
-	return [
-		WorldGen.sewer_channel(wseed, cell, 0),
-		WorldGen.sewer_channel(wseed, cell, 1),
-		WorldGen.sewer_channel(wseed, cell, 2),
-		WorldGen.sewer_channel(wseed, cell, 3),
-	]
-
-
-func _sewer_floor_ceiling() -> void:
-	var ch := _sewer_ch()
-	# cast concrete lid with cross beams
-	_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.concrete())
-	for t in [2.0, 6.0, 10.0]:
-		_box(Vector3(S / 2.0, ceil_h - 0.11, t), Vector3(S, 0.24, 0.34), Mats.concrete(), false)
-	if style == WorldGen.SEWER_BASIN or style == WorldGen.SEWER_CISTERN:
-		_sewer_basin_structure(ch)
-		return
-	var a := 6.0 - CH_CUT
-	var b := 6.0 + CH_CUT
-	# corner slabs are always dry ground
-	for xr in [[0.0, a], [b, S]]:
-		for zr in [[0.0, a], [b, S]]:
-			_floor_slab(xr[0], xr[1], zr[0], zr[1])
-	# side tiles: water trough if that edge carries the channel
-	var regions := [[b, S], [0.0, a], [b, S], [0.0, a]]
-	for dir in 4:
-		var t0: float = regions[dir][0]
-		var t1: float = regions[dir][1]
-		if ch[dir]:
-			_channel_stub(dir, t0, t1)
-		elif dir < 2:
-			_floor_slab(t0, t1, a, b)
-		else:
-			_floor_slab(a, b, t0, t1)
-	if ch[0] or ch[1] or ch[2] or ch[3]:
-		_channel_junction(ch)
-	else:
-		_floor_slab(a, b, a, b)
-
-
-func _floor_slab(x0: float, x1: float, z0: float, z1: float) -> void:
-	if x1 - x0 < 0.05 or z1 - z0 < 0.05:
-		return
-	_box(Vector3((x0 + x1) / 2.0, -0.15, (z0 + z1) / 2.0),
-		Vector3(x1 - x0, 0.3, z1 - z0), Mats.concrete_floor())
-
-
-## Sloped concrete slab with matching collider. `lip` is the centre of the top
-## edge; the surface descends `drop` over signed horizontal `run` along z
-## (slope_dz) or x, extended `ext` past the toe to bury the seam.
-func _slope_slab(lip: Vector3, slope_dz: bool, run: float, drop: float, ln: float, th: float, ext: float) -> void:
-	var ang := atan2(drop, absf(run))
-	var sn := signf(run)
-	var base_len := sqrt(run * run + drop * drop)
-	var mid := (base_len + ext) / 2.0
-	var dc := cos(ang) * sn * mid - sin(ang) * sn * th / 2.0
-	var dy := -sin(ang) * mid - cos(ang) * th / 2.0
-	var mi := MeshInstance3D.new()
-	mi.mesh = BOX
-	mi.material_override = Mats.concrete_floor()
-	if slope_dz:
-		mi.position = lip + Vector3(0, dy, dc)
-		mi.rotation.x = ang * sn
-		mi.scale = Vector3(ln, th, base_len + ext)
-	else:
-		mi.position = lip + Vector3(dc, dy, 0)
-		mi.rotation.z = -ang * sn
-		mi.scale = Vector3(base_len + ext, th, ln)
-	add_child(mi)
-	var cs := CollisionShape3D.new()
-	var sh := BoxShape3D.new()
-	sh.size = mi.scale
-	cs.shape = sh
-	cs.position = mi.position
-	cs.rotation = mi.rotation
-	body.add_child(cs)
-
-
-## One straight trough stretch: sunken invert, two walkable banks, water.
-func _trough(along_x: bool, t0: float, t1: float, flow: Vector2) -> void:
-	var ln := t1 - t0
-	var c := (t0 + t1) * 0.5
-	var wm: MeshInstance3D
-	if along_x:
-		_box(Vector3(c, -CH_D - 0.075, 6.0), Vector3(ln, 0.15, CH_HW * 2.0 + 0.2), Mats.concrete_floor())
-		_slope_slab(Vector3(c, 0, 6.0 - CH_CUT), true, BANK, CH_D, ln, 0.14, 0.1)
-		_slope_slab(Vector3(c, 0, 6.0 + CH_CUT), true, -BANK, CH_D, ln, 0.14, 0.1)
-		wm = _box(Vector3(c, WATER_Y - 0.02, 6.0), Vector3(ln, 0.04, 2.5), Mats.sewer_water(), false)
-	else:
-		_box(Vector3(6.0, -CH_D - 0.075, c), Vector3(CH_HW * 2.0 + 0.2, 0.15, ln), Mats.concrete_floor())
-		_slope_slab(Vector3(6.0 - CH_CUT, 0, c), false, BANK, CH_D, ln, 0.14, 0.1)
-		_slope_slab(Vector3(6.0 + CH_CUT, 0, c), false, -BANK, CH_D, ln, 0.14, 0.1)
-		wm = _box(Vector3(6.0, WATER_Y - 0.02, c), Vector3(2.5, 0.04, ln), Mats.sewer_water(), false)
-	wm.set_instance_shader_parameter("flow", flow)
-
-
-func _channel_stub(dir: int, t0: float, t1: float) -> void:
-	var along_x := dir < 2
-	var sgn := WorldGen.sewer_flow(wseed, cell, dir)
-	var flow := Vector2(sgn * 0.32, 0.0) if along_x else Vector2(0.0, sgn * 0.32)
-	_trough(along_x, t0, t1, flow)
-	if WorldGen.edge_info(wseed, cell, dir, theme)["wall"]:
-		_culvert(dir)
-
-
-## Where all channel stubs meet: shared pool tile, closed sides get banks.
-func _channel_junction(ch: Array) -> void:
-	var a := 6.0 - CH_CUT
-	var b := 6.0 + CH_CUT
-	_box(Vector3(6.0, -CH_D - 0.085, 6.0), Vector3(b - a, 0.17, b - a), Mats.concrete_floor())
-	if not ch[0]:
-		_slope_slab(Vector3(b, 0, 6.0), false, -BANK, CH_D, b - a, 0.14, 0.1)
-	if not ch[1]:
-		_slope_slab(Vector3(a, 0, 6.0), false, BANK, CH_D, b - a, 0.14, 0.1)
-	if not ch[2]:
-		_slope_slab(Vector3(6.0, 0, b), true, -BANK, CH_D, b - a, 0.14, 0.1)
-	if not ch[3]:
-		_slope_slab(Vector3(6.0, 0, a), true, BANK, CH_D, b - a, 0.14, 0.1)
-	var fv := Vector2.ZERO
-	for dir in 4:
-		if ch[dir]:
-			var sgn := WorldGen.sewer_flow(wseed, cell, dir)
-			fv += Vector2(sgn, 0.0) if dir < 2 else Vector2(0.0, sgn)
-	fv = fv.normalized() * 0.3 if fv.length() > 0.01 else Vector2(0.17, 0.13)
-	var wm := _box(Vector3(6.0, WATER_Y - 0.02, 6.0), Vector3(b - a, 0.04, b - a), Mats.sewer_water(), false)
-	wm.set_instance_shader_parameter("flow", fv)
-
-
-## Barred opening where the channel slips under a wall.
-func _culvert(dir: int) -> void:
-	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
-	var plane := (S - T / 2.0) if (dir == 0 or dir == 2) else (T / 2.0)
-	var bar_p := plane + n * (T / 2.0 + 0.05)
-	if dir < 2:
-		_box(Vector3(plane, -0.04, 6.0), Vector3(T + 0.1, 0.16, CH_HW * 2.0 + 0.4), Mats.concrete(), false)
-		for i in 5:
-			_cyl(Vector3(bar_p, -0.26, 6.0 - 0.56 + 0.28 * float(i)), 0.024, 0.52, Mats.iron_dark(), false)
-	else:
-		_box(Vector3(6.0, -0.04, plane), Vector3(CH_HW * 2.0 + 0.4, 0.16, T + 0.1), Mats.concrete(), false)
-		for i in 5:
-			_cyl(Vector3(6.0 - 0.56 + 0.28 * float(i), -0.26, bar_p), 0.024, 0.52, Mats.iron_dark(), false)
-
-
-## Basin room: sunken pool spanning the middle, walkways around it, channel
-## stubs pouring in through gaps in the retaining walls.
-func _sewer_basin_structure(ch: Array) -> void:
-	var a := 6.0 - CH_CUT
-	var b := 6.0 + CH_CUT
-	if ch[1]:
-		_floor_slab(0.0, BAS0, 0.0, a)
-		_floor_slab(0.0, BAS0, b, S)
-	else:
-		_floor_slab(0.0, BAS0, 0.0, S)
-	if ch[0]:
-		_floor_slab(BAS1, S, 0.0, a)
-		_floor_slab(BAS1, S, b, S)
-	else:
-		_floor_slab(BAS1, S, 0.0, S)
-	if ch[3]:
-		_floor_slab(BAS0, a, 0.0, BAS0)
-		_floor_slab(b, BAS1, 0.0, BAS0)
-	else:
-		_floor_slab(BAS0, BAS1, 0.0, BAS0)
-	if ch[2]:
-		_floor_slab(BAS0, a, BAS1, S)
-		_floor_slab(b, BAS1, BAS1, S)
-	else:
-		_floor_slab(BAS0, BAS1, BAS1, S)
-	if ch[0]:
-		_channel_stub(0, BAS1, S)
-	if ch[1]:
-		_channel_stub(1, 0.0, BAS0)
-	if ch[2]:
-		_channel_stub(2, BAS1, S)
-	if ch[3]:
-		_channel_stub(3, 0.0, BAS0)
-	_box(Vector3(6.0, -BAS_D - 0.075, 6.0),
-		Vector3(BAS1 - BAS0 + 0.3, 0.15, BAS1 - BAS0 + 0.3), Mats.concrete_floor())
-	_basin_walls(ch)
-	var wm := _box(Vector3(6.0, WATER_Y - 0.02, 6.0),
-		Vector3(BAS1 - BAS0 + 0.1, 0.04, BAS1 - BAS0 + 0.1), Mats.sewer_water(), false)
-	wm.set_instance_shader_parameter("flow", Vector2(0.1, 0.08))
-	var rs := _basin_ramp_spot(ch)
-	_basin_ramp(rs[0], rs[1])
-
-
-func _basin_walls(ch: Array) -> void:
-	var a := 6.0 - CH_CUT
-	var b := 6.0 + CH_CUT
-	for dir in 4:
-		var w := (BAS1 + 0.075) if (dir == 0 or dir == 2) else (BAS0 - 0.075)
-		if ch[dir]:
-			_bwall(dir, w, BAS0, a)
-			_bwall(dir, w, b, BAS1)
-			# submerged step below the inlet trough
-			if dir < 2:
-				_box(Vector3(w, -(BAS_D + CH_D) / 2.0, 6.0), Vector3(0.15, BAS_D - CH_D, b - a), Mats.concrete(), true)
-			else:
-				_box(Vector3(6.0, -(BAS_D + CH_D) / 2.0, w), Vector3(b - a, BAS_D - CH_D, 0.15), Mats.concrete(), true)
-		else:
-			_bwall(dir, w, BAS0, BAS1)
-
-
-func _bwall(dir: int, w: float, t0: float, t1: float) -> void:
-	if t1 - t0 < 0.05:
-		return
-	var c := (t0 + t1) / 2.0
-	if dir < 2:
-		_box(Vector3(w, -BAS_D / 2.0, c), Vector3(0.15, BAS_D, t1 - t0), Mats.concrete())
-	else:
-		_box(Vector3(c, -BAS_D / 2.0, w), Vector3(t1 - t0, BAS_D, 0.15), Mats.concrete())
-
-
-func _basin_ramp_spot(ch: Array) -> Array:
-	var start := int(_r(70) * 3.99)
-	var rdir := start
-	for i in 4:
-		var d := (start + i) % 4
-		if not ch[d]:
-			rdir = d
-			break
-	var lat := 3.9 if _r(71) < 0.5 else 8.1
-	return [rdir, lat]
-
-
-## Concrete ramp descending into the basin — the way back out of the water.
-func _basin_ramp(rdir: int, lat: float) -> void:
-	var run := BAS_D / tan(0.6)
-	match rdir:
-		0: _slope_slab(Vector3(BAS1, 0, lat), false, -run, BAS_D, 1.3, 0.16, 0.2)
-		1: _slope_slab(Vector3(BAS0, 0, lat), false, run, BAS_D, 1.3, 0.16, 0.2)
-		2: _slope_slab(Vector3(lat, 0, BAS1), true, -run, BAS_D, 1.3, 0.16, 0.2)
-		3: _slope_slab(Vector3(lat, 0, BAS0), true, run, BAS_D, 1.3, 0.16, 0.2)
-
-
-func _sewer_basin_props() -> void:
-	var ch := _sewer_ch()
-	var rs := _basin_ramp_spot(ch)
-	# Prefer an inspection bridge between two closed sides. It crosses the
-	# pool rather than pretending a walkway can end in an incoming waterway.
-	var bridge_axis := -1  # 0 = along x, 1 = along z
-	if not ch[0] and not ch[1]:
-		bridge_axis = 0
-	elif not ch[2] and not ch[3]:
-		bridge_axis = 1
-	for dir in 4:
-		var segs := [[BAS0 + 0.05, BAS1 - 0.05]]
-		if ch[dir]:
-			segs = _cut_seg(segs, 6.0 - CH_CUT - 0.15, 6.0 + CH_CUT + 0.15)
-		if rs[0] == dir:
-			segs = _cut_seg(segs, rs[1] - 0.85, rs[1] + 0.85)
-		if (bridge_axis == 0 and dir <= 1) or (bridge_axis == 1 and dir >= 2):
-			segs = _cut_seg(segs, 5.28, 6.72)
-		for sg in segs:
-			_rail_run(dir, sg[0], sg[1])
-	if bridge_axis >= 0:
-		_sewer_basin_bridge(bridge_axis == 0)
-	# ceiling drop pipes discharging into the pool
-	var made := 0
-	for dir in 4:
-		if made >= 2 or ch[dir]:
-			continue
-		if not WorldGen.edge_info(wseed, cell, dir, theme)["wall"]:
-			continue
-		if _r(96 + dir) < 0.55:
-			_outfall(dir, 4.6 if _r(97 + dir) < 0.5 else 7.4)
-			made += 1
-
-
-## Narrow grated inspection bridge over one treatment pool. The solid deck
-## collider keeps it dependable while individual slats sell the open grating.
-func _sewer_basin_bridge(along_x: bool) -> void:
-	var length := BAS1 - BAS0
-	var centre := (BAS0 + BAS1) * 0.5
-	for i in 23:
-		var t := lerpf(BAS0 + 0.16, BAS1 - 0.16, float(i) / 22.0)
-		var p := Vector3(t, 0.055, centre) if along_x else Vector3(centre, 0.055, t)
-		var sz := Vector3(0.12, 0.07, 1.08) if along_x else Vector3(1.08, 0.07, 0.12)
-		_box(p, sz, Mats.iron_dark(), false)
-	# rusted longitudinals visible beneath the grate
-	for side in [-0.48, 0.48]:
-		var bp := Vector3(centre, 0.015, centre + side) if along_x \
-			else Vector3(centre + side, 0.015, centre)
-		var bs := Vector3(length, 0.10, 0.08) if along_x \
-			else Vector3(0.08, 0.10, length)
-		_box(bp, bs, Mats.pipe_rust(), false)
-	# handrails and posts along both exposed sides
-	for side in [-0.58, 0.58]:
-		for t in [BAS0 + 0.12, centre, BAS1 - 0.12]:
-			var pp := Vector3(t, 0.48, centre + side) if along_x \
-				else Vector3(centre + side, 0.48, t)
-			_cyl(pp, 0.022, 0.88, Mats.iron_dark(), false)
-		for ry in [0.52, 0.91]:
-			var rp := Vector3(centre, ry, centre + side) if along_x \
-				else Vector3(centre + side, ry, centre)
-			var rz := Vector3(length, 0.05, 0.05) if along_x \
-				else Vector3(0.05, 0.05, length)
-			_box(rp, rz, Mats.iron_dark(), false)
-	var deck_size := Vector3(length, 0.10, 1.12) if along_x \
-		else Vector3(1.12, 0.10, length)
-	_collider_box(Vector3(centre, 0.05, centre), deck_size)
-	for side in [-0.58, 0.58]:
-		var cp := Vector3(centre, 0.5, centre + side) if along_x \
-			else Vector3(centre + side, 0.5, centre)
-		var cs := Vector3(length, 1.0, 0.06) if along_x \
-			else Vector3(0.06, 1.0, length)
-		_collider_box(cp, cs)
 
 
 func _cut_seg(segs: Array, c0: float, c1: float) -> Array:
@@ -5065,102 +4746,7 @@ func _cut_seg(segs: Array, c0: float, c1: float) -> Array:
 	return out
 
 
-func _rail_run(dir: int, t0: float, t1: float) -> void:
-	if t1 - t0 < 0.5:
-		return
-	var w := (BAS1 + 0.16) if (dir == 0 or dir == 2) else (BAS0 - 0.16)
-	var c := (t0 + t1) / 2.0
-	var n := int(ceilf((t1 - t0) / 1.6))
-	for i in n + 1:
-		var t := lerpf(t0 + 0.05, t1 - 0.05, float(i) / float(n))
-		var pp := Vector3(w, 0.475, t) if dir < 2 else Vector3(t, 0.475, w)
-		_cyl(pp, 0.022, 0.95, Mats.iron_dark(), false)
-	for ry in [0.93, 0.52]:
-		if dir < 2:
-			_box(Vector3(w, ry, c), Vector3(0.05, 0.05, t1 - t0), Mats.iron_dark(), false)
-		else:
-			_box(Vector3(c, ry, w), Vector3(t1 - t0, 0.05, 0.05), Mats.iron_dark(), false)
-	if dir < 2:
-		_collider_box(Vector3(w, 0.5, c), Vector3(0.06, 1.0, t1 - t0))
-	else:
-		_collider_box(Vector3(c, 0.5, w), Vector3(t1 - t0, 1.0, 0.06))
-
-
-func _outfall(dir: int, along: float) -> void:
-	var p: Vector3
-	match dir:
-		0: p = Vector3(BAS1 - 0.5, 0, along)
-		1: p = Vector3(BAS0 + 0.5, 0, along)
-		2: p = Vector3(along, 0, BAS1 - 0.5)
-		3: p = Vector3(along, 0, BAS0 + 0.5)
-	_cyl(Vector3(p.x, (1.55 + ceil_h) / 2.0, p.z), 0.15, ceil_h - 1.55, Mats.pipe_rust(), false)
-	var tor := MeshInstance3D.new()
-	tor.mesh = TOR
-	tor.material_override = Mats.pipe_rust()
-	tor.position = Vector3(p.x, 1.58, p.z)
-	tor.scale = Vector3(0.24, 0.12, 0.24)
-	add_child(tor)
-	_box(Vector3(p.x, (1.55 + WATER_Y) / 2.0, p.z),
-		Vector3(0.24, 1.55 - WATER_Y, 0.24), Mats.water_stream(), false)
-
-
 # --- sewer: props ------------------------------------------------------------
-
-func _sewer_tunnel_props() -> void:
-	var members := _room_members()
-	for mi in members.size():
-		var member: Vector2i = members[mi]
-		var mc := _room_member_local(member)
-		var salt := 330 + mi * 24
-		# Wet patches and abandoned debris live in dry corners, never on the
-		# centre-line water graph that has to remain readable and walkable.
-		for pi in 2:
-			if WorldGen.r01(wseed, member.x, member.y, salt + pi) >= 0.62:
-				continue
-			var sx := -1.0 if WorldGen.r01(wseed, member.x, member.y, salt + 3 + pi) < 0.5 else 1.0
-			var sz := -1.0 if WorldGen.r01(wseed, member.x, member.y, salt + 5 + pi) < 0.5 else 1.0
-			var pp := mc + Vector3(sx * (3.4 + WorldGen.r01(wseed, member.x, member.y, salt + 7 + pi)),
-				0.006, sz * (3.2 + 1.2 * WorldGen.r01(wseed, member.x, member.y, salt + 9 + pi)))
-			_box(pp, Vector3(0.8 + WorldGen.r01(wseed, member.x, member.y, salt + 11 + pi),
-				0.012, 0.65 + 0.7 * WorldGen.r01(wseed, member.x, member.y, salt + 13 + pi)),
-				Mats.puddle(), false)
-		if WorldGen.r01(wseed, member.x, member.y, salt + 15) < 0.28:
-			_barrel(mc + Vector3(-4.25, 0, -4.15))
-		if WorldGen.r01(wseed, member.x, member.y, salt + 16) < 0.24:
-			_cc0_prop("trashbag", mc + Vector3(4.2, 0, -3.8),
-				WorldGen.r01(wseed, member.x, member.y, salt + 17) * TAU)
-		if WorldGen.r01(wseed, member.x, member.y, salt + 18) < 0.24:
-			_chain(mc + Vector3(-3.8, 0, 3.2))
-	# Wall-bound ladders cannot be shifted with a merged room's centre.
-	if room_n == 1 and _r(84) < 0.16:
-		_wall_ladder()
-
-
-func _sewer_pump_props() -> void:
-	var members := _room_members()
-	for i in members.size():
-		var member: Vector2i = members[i]
-		var mc := _room_member_local(member)
-		var sx := -1.0 if WorldGen.r01(wseed, member.x, member.y, 300) < 0.5 else 1.0
-		var sz := -1.0 if WorldGen.r01(wseed, member.x, member.y, 301) < 0.5 else 1.0
-		var machine_pos := mc + Vector3(3.7 * sx, 0, 3.7 * sz)
-		if WorldGen.r01(wseed, member.x, member.y, 302) < 0.48:
-			_sewer_compressor(machine_pos, atan2(-sx, -sz))
-		else:
-			_sewer_pump_skid(machine_pos, sx, sz, 310 + i * 8)
-
-
-## Scanned/modelled compressor used to break up the repeated pump skids. The
-## source scene's origin sits 4.22m behind the actual machine; compensating
-## here keeps placement and collision centred on what the player sees.
-func _sewer_compressor(p: Vector3, yaw: float) -> void:
-	var mesh_centre := Vector3(-0.421985, 0, -4.218817)
-	_cc0_prop("old_military_compressor",
-		p - mesh_centre.rotated(Vector3.UP, yaw), yaw)
-	_collider_yaw_box(p + Vector3(0, 0.59, 0), Vector3(0.68, 1.18, 1.75), yaw)
-	var spill := _box(p + Vector3(0.18, 0.005, 0.08),
-		Vector3(1.0, 0.01, 1.5), Mats.puddle(), false)
-	spill.rotation.y = yaw
 
 
 ## One complete pump train per occupied room cell. Keeping each skid in a dry
@@ -5197,135 +4783,6 @@ func _sewer_pump_skid(c: Vector3, sx: float, sz: float, salt: int) -> void:
 	# oily spill under the works
 	_box(c + Vector3(0.1 * sx, 0.005, 0.3 * sz),
 		Vector3(2.2, 0.01, 1.5), Mats.puddle(), false)
-
-
-func _sewer_dry_props() -> void:
-	var bx := 2.0 + 1.5 * _r(88)
-	var bz := 2.0 + 1.5 * _r(89)
-	if _r(90) < 0.5:
-		bx = S - bx
-	if _r(91) < 0.5:
-		bz = S - bz
-	_barrel(Vector3(bx, 0, bz))
-	if _r(92) < 0.7:
-		_barrel(Vector3(bx + 0.72, 0, bz + 0.25))
-	if _r(93) < 0.5:
-		_barrel(Vector3(bx - 0.3, 0, bz + 0.78))
-	# workmen's junk that never got hauled out
-	if _r(94) < 0.5:
-		var cyaw := _r(95) * TAU
-		var crate_name := "wooden_crate_01" if _r(189) < 0.45 else "wooden_crate_02"
-		_cc0_prop(crate_name, Vector3(bx + 0.6, 0, bz - 1.3), cyaw)
-		var crate_size := Vector3(0.86, 0.38, 0.44) if crate_name == "wooden_crate_01" \
-			else Vector3(0.55, 0.47, 1.17)
-		_collider_yaw_box(Vector3(bx + 0.6, crate_size.y * 0.5, bz - 1.3), crate_size, cyaw)
-	if _r(180) < 0.4:
-		var tp := Vector3(S - bx, 0.085, bz + (_r(181) - 0.5) * 3.0)
-		var tyre := _cc0_prop("old_tyre", tp, _r(182) * TAU)
-		tyre.rotation.x = PI / 2.0
-		_collider_cyl(tp, 0.32, 0.18)
-	if _r(183) < 0.35:
-		_cc0_prop("trashbag", Vector3(bx - 1.1, 0, bz - 0.5), _r(184) * TAU)
-	if _r(185) < 0.3:
-		var lyaw := _r(186) * TAU
-		_cc0_prop("wooden_ladder", Vector3(S - bx, 0, S - bz), lyaw)
-		_collider_yaw_box(Vector3(S - bx, 0.65, S - bz), Vector3(1.0, 1.35, 0.55), lyaw)
-	if _r(187) < 0.3:
-		_cc0_prop("plastic_crate_03", Vector3(bx + 1.4, 0, bz + 1.1), _r(188) * TAU)
-		_collider_box(Vector3(bx + 1.4, 0.13, bz + 1.1), Vector3(0.5, 0.27, 0.28))
-	# More than one generation of maintenance debris: a stove, loose wheel rim
-	# or hand lantern appears in the driest rooms, never in the water channel.
-	if _r(190) < 0.24:
-		var sp := Vector3(S - bx, 0, 2.0 if bz > 6.0 else 10.0)
-		_cc0_prop("barrel_stove", sp, _r(191) * TAU)
-		_collider_cyl(sp + Vector3(0, 0.43, 0), 0.32, 0.86)
-	if _r(192) < 0.34:
-		var rim_name := "rusted_wheel_rim_01" if _r(193) < 0.5 else "rusted_wheel_rim_02"
-		var rp := Vector3(2.0 if bx > 6.0 else 10.0, 0.18, S - bz)
-		var rim := _cc0_prop(rim_name, rp, _r(194) * TAU)
-		rim.rotation.x = PI / 2.0
-	if _r(195) < 0.28:
-		var lp := Vector3(bx + 0.4, 0.48, bz - 0.2)
-		_cc0_prop("Lantern_01", lp, _r(196) * TAU, 1.25)
-		var ll := OmniLight3D.new()
-		ll.position = lp + Vector3(0, 0.15, 0)
-		ll.light_color = Color(1.0, 0.54, 0.22)
-		ll.light_energy = 0.28
-		ll.omni_range = 3.0
-		ll.shadow_enabled = false
-		ll.distance_fade_enabled = true
-		ll.distance_fade_begin = 12.0
-		ll.distance_fade_length = 5.0
-		add_child(ll)
-
-
-## Landmark: four treatment pools meet beneath a huge overhead manifold. The
-## existing per-cell bridges keep every basin traversable; the shared pipe
-## crown and control island make the 24m reservoir read as one place.
-func _sewer_cistern() -> void:
-	var c := Vector3(S / 2.0, 0, S / 2.0)
-	# A compact central operator island, offset so the joins between pool decks
-	# remain passable on both axes.
-	var console := c + Vector3(2.2, 0, 2.2)
-	_rbox(console + Vector3(0, 0.62, 0), Vector3(2.4, 1.24, 1.0), Mats.iron_dark(), 0.04)
-	var face := _rbox(console + Vector3(0, 1.02, -0.51), Vector3(2.2, 0.48, 0.06), Mats.pipe_green(), 0.02, false)
-	face.rotation.x = -0.18
-	for i in 7:
-		_sphere(console + Vector3(-0.85 + 0.28 * float(i), 1.06, -0.57), 0.035,
-			Mats.lamp_green() if i == 2 else Mats.lamp_red())
-	_collider_box(console + Vector3(0, 0.65, 0), Vector3(2.45, 1.3, 1.05))
-	# Four enormous risers feed a square manifold just below the ceiling.
-	for ox in [-5.2, 5.2]:
-		for oz in [-5.2, 5.2]:
-			var p := c + Vector3(ox, 0, oz)
-			_cyl(p + Vector3(0, ceil_h * 0.5, 0), 0.24, ceil_h, Mats.pipe_rust(), false)
-			var wheel := _cc0_prop("rusted_wheel_rim_01", p + Vector3(0.28, 1.35, 0), PI / 2.0, 1.7)
-			wheel.rotation.z = PI / 2.0
-	for oz in [-5.2, 5.2]:
-		var px := _cyl(c + Vector3(0, ceil_h - 0.42, oz), 0.22, 10.4, Mats.pipe_green(), false)
-		px.rotation.z = PI / 2.0
-	for ox in [-5.2, 5.2]:
-		var pz := _cyl(c + Vector3(ox, ceil_h - 0.42, 0), 0.22, 10.4, Mats.pipe_green(), false)
-		pz.rotation.x = PI / 2.0
-	# A pair of real industrial fixtures hangs over the control island.
-	for dx in [-1.1, 1.1]:
-		var lamp := _cc0_prop("industrial_caged_sconce",
-			console + Vector3(dx, 1.85, -0.58), 0.0, 0.58)
-		lamp.rotation.x = -PI / 2.0
-
-
-func _barrel(p: Vector3) -> void:
-	# real drums: battered red or faded blue, picked per spot
-	var mname := "Barrel_01" if WorldGen.r01(wseed, int(p.x * 7.0), int(p.z * 7.0), 96) < 0.6 else "barrel_03"
-	_cc0_prop(mname, p, WorldGen.r01(wseed, int(p.x * 5.0), int(p.z * 5.0), 97) * TAU)
-	_collider_cyl(p + Vector3(0, 0.46, 0), 0.32, 0.92)
-
-
-func _wall_ladder() -> void:
-	for dir in 4:
-		if not WorldGen.edge_info(wseed, cell, dir, theme)["wall"]:
-			continue
-		var n := -1.0 if (dir == 0 or dir == 2) else 1.0
-		var plane := (S - T / 2.0) if (dir == 0 or dir == 2) else (T / 2.0)
-		var inner := plane + n * (T / 2.0)
-		var along := 2.0 + 2.0 * _r(85)
-		if _r(86) < 0.5:
-			along = S - along
-		var off := inner + n * 0.13
-		for sr in [-0.22, 0.22]:
-			var rp := Vector3(off, ceil_h / 2.0, along + sr) if dir < 2 else Vector3(along + sr, ceil_h / 2.0, off)
-			_cyl(rp, 0.025, ceil_h - 0.1, Mats.iron_dark(), false)
-		var ry := 0.35
-		while ry < ceil_h - 0.2:
-			var rung := _cyl(Vector3(off, ry, along) if dir < 2 else Vector3(along, ry, off), 0.02, 0.5, Mats.iron_dark(), false)
-			if dir < 2:
-				rung.rotation.x = PI / 2.0
-			else:
-				rung.rotation.z = PI / 2.0
-			ry += 0.32
-		var hp := Vector3(inner + n * 0.45, ceil_h - 0.02, along) if dir < 2 else Vector3(along, ceil_h - 0.02, inner + n * 0.45)
-		_box(hp, Vector3(0.8, 0.06, 0.8), Mats.iron_dark(), false)
-		return
 
 
 ## Wall-hung service pipes: long horizontal runs with brackets, flanges and
@@ -5368,201 +4825,7 @@ func _sewer_pipes(dir: int, plane: float) -> void:
 		_sphere(Vector3(off2, 2.18, t2) if dir < 2 else Vector3(t2, 2.18, off2), 0.1, Mats.pipe_rust())
 
 
-## Service gallery: the channel runs down a concrete slot barely two arms
-## wide, pipes and cable trays on both walls, cage lamps overhead. Where a
-## cross-channel passes, the walls open into rough archways.
-func _sewer_gallery() -> void:
-	var cdir := WorldGen.corridor(wseed, cell)
-	var along_x := cdir != 2
-	var yw := 0.0 if along_x else PI / 2.0
-	var o := Vector3(S / 2.0, 0, S / 2.0)
-	var perp := false
-	if along_x:
-		perp = WorldGen.sewer_channel(wseed, cell, 2) or WorldGen.sewer_channel(wseed, cell, 3)
-	else:
-		perp = WorldGen.sewer_channel(wseed, cell, 0) or WorldGen.sewer_channel(wseed, cell, 1)
-	for si in 2:
-		var side := -2.2 if si == 0 else 2.2
-		var segs := [[-5.0, 5.0]]
-		if perp:
-			segs = _cut_seg(segs, -CH_CUT - 0.35, CH_CUT + 0.35)
-		for sg in segs:
-			var c0: float = sg[0]
-			var c1: float = sg[1]
-			var wc := _wp(o, Vector3((c0 + c1) / 2.0, ceil_h / 2.0, side), yw)
-			var wl := _mbox(self, wc, Vector3(c1 - c0, ceil_h, 0.18), Mats.concrete())
-			wl.rotation.y = yw
-			_collider_yaw_box(wc, Vector3(c1 - c0, ceil_h, 0.18), yw)
-		if perp:
-			var lt := _mbox(self, _wp(o, Vector3(0, ceil_h - 0.4, side), yw),
-				Vector3(CH_CUT * 2.0 + 0.75, 0.8, 0.18), Mats.concrete())
-			lt.rotation.y = yw
-			_collider_yaw_box(_wp(o, Vector3(0, ceil_h - 0.4, side), yw),
-				Vector3(CH_CUT * 2.0 + 0.75, 0.8, 0.18), yw)
-		# pipe runs and a cable tray on the lane face
-		var inn := side - signf(side) * 0.24
-		for pj in 2:
-			var y := 1.9 + 0.3 * float(pj)
-			var pmat: Material = Mats.pipe_rust() if _r(280 + si * 3 + pj) < 0.5 else Mats.pipe_green()
-			var pp := _mcyl(self, _wp(o, Vector3(0, y, inn), yw), 0.05 + 0.03 * float(pj % 2), 9.6, pmat)
-			pp.rotation = Vector3(0, yw, PI / 2.0)
-		var tr := _mbox(self, _wp(o, Vector3(0, 1.45, inn), yw), Vector3(9.6, 0.05, 0.16), Mats.iron_dark())
-		tr.rotation.y = yw
-	# A flush service grate reconnects the two narrow banks without obstructing
-	# travel along them. Keep it away from the central cross-channel opening.
-	var bridge_t := -3.0 if _r(289) < 0.5 else 3.0
-	_sewer_gallery_grate(o, yw, bridge_t)
-	# lamps strung down the slot
-	for t in [-3.0, 0.0, 3.0]:
-		var lp := _wp(o, Vector3(t, 0, 0), yw)
-		_cage_lamp(Vector2(lp.x, lp.z), false, t == 0.0 and _r(288) < 0.3, false)
-
-
-func _sewer_gallery_grate(o: Vector3, yw: float, along: float) -> void:
-	for i in 7:
-		var x := along + lerpf(-0.48, 0.48, float(i) / 6.0)
-		var bar := _mbox(self, _wp(o, Vector3(x, 0.045, 0), yw),
-			Vector3(0.055, 0.07, 3.45), Mats.iron_dark())
-		bar.rotation.y = yw
-	for z in [-1.45, -0.5, 0.5, 1.45]:
-		var brace := _mbox(self, _wp(o, Vector3(along, 0.025, z), yw),
-			Vector3(1.08, 0.06, 0.055), Mats.pipe_rust())
-		brace.rotation.y = yw
-	# worn hazard paint just outside the load-bearing grate
-	for ex in [-0.58, 0.58]:
-		var edge := _mbox(self, _wp(o, Vector3(along + ex, 0.052, 0), yw),
-			Vector3(0.055, 0.025, 3.45), Mats.lamp_amber())
-		edge.rotation.y = yw
-	_collider_yaw_box(_wp(o, Vector3(along, 0.04, 0), yw),
-		Vector3(1.12, 0.09, 3.5), yw)
-
-
 # --- sewer: lighting & sound -------------------------------------------------
-
-func _sewer_lighting() -> void:
-	var is_spawn := cell == Vector2i.ZERO
-	var dead := (not is_spawn) and _r(8) < 0.06
-	var flicker := (not is_spawn) and (not dead) and _r(9) < 0.22
-	var spots := [Vector2(3.0, 3.2), Vector2(9.0, 3.2), Vector2(3.0, 8.8), Vector2(9.0, 8.8)]
-	var i0 := int(_r(13) * 3.99)
-	_cage_lamp(spots[i0], dead, flicker, true)
-	_cage_lamp(spots[(i0 + 2) % 4], dead, false, false)
-	if style == WorldGen.SEWER_PUMP:
-		# the works always keep their own lamp burning
-		_cage_lamp(Vector2(2.4, 2.4), false, false, false)
-	if style == WorldGen.SEWER_BASIN:
-		# a real industrial pendant over the water (visual — light is below)
-		var pend := _cc0_prop("hanging_industrial_lamp", Vector3(6.0, ceil_h + 0.62, 6.0), _r(14) * TAU)
-		_asy_no_shadows(pend)
-	if dead:
-		return
-	# faint green fill so the water never crushes to black
-	var fill := OmniLight3D.new()
-	fill.light_color = Color(0.5, 0.75, 0.6)
-	fill.light_energy = 0.16
-	fill.omni_range = 10.0
-	fill.position = Vector3(6.0, 2.0, 6.0)
-	fill.shadow_enabled = false
-	fill.distance_fade_enabled = true
-	fill.distance_fade_begin = 18.0
-	fill.distance_fade_length = 8.0
-	add_child(fill)
-
-
-## Bare bulb in a wire cage on a conduit stem. The fixture itself never casts
-## shadows — its umbra would paint giant discs on the ceiling.
-func _cage_lamp(at: Vector2, dead: bool, flicker: bool, shadows: bool) -> void:
-	var y := ceil_h - 0.38
-	var stem := _cyl(Vector3(at.x, ceil_h - 0.17, at.y), 0.02, 0.34, Mats.iron_dark(), false)
-	var cap := _cyl(Vector3(at.x, y + 0.05, at.y), 0.10, 0.09, Mats.iron_dark(), false)
-	stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var bmat: StandardMaterial3D = Mats.charcoal() if dead else Mats.bulb()
-	if flicker:
-		bmat = Mats.bulb().duplicate()
-	var bulb := _sphere(Vector3(at.x, y - 0.03, at.y), 0.055, bmat)
-	bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	for ty in [0.02, 0.11]:
-		var tor := MeshInstance3D.new()
-		tor.mesh = TOR
-		tor.material_override = Mats.iron_dark()
-		tor.position = Vector3(at.x, y - ty, at.y)
-		tor.scale = Vector3(0.11, 0.05, 0.11)
-		tor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(tor)
-	if dead:
-		return
-	var l: OmniLight3D
-	if flicker:
-		var fl := FlickerLight.new()
-		fl.base_energy = 1.35
-		fl.mats = [bmat]
-		fl.rng_seed = WorldGen.h(wseed, cell.x, cell.y, 10)
-		l = fl
-	else:
-		l = OmniLight3D.new()
-		l.light_energy = 1.35
-	l.light_color = Color(1.0, 0.76, 0.48)
-	l.omni_range = 8.5
-	# well below the cap, or its shadow umbra paints a huge disc on the ceiling
-	l.position = Vector3(at.x, y - 0.34, at.y)
-	l.shadow_enabled = shadows
-	l.distance_fade_enabled = true
-	l.distance_fade_begin = 20.0
-	l.distance_fade_length = 8.0
-	l.distance_fade_shadow = 14.0
-	add_child(l)
-
-
-func _sewer_sounds() -> void:
-	var ch := _sewer_ch()
-	if not (ch[0] or ch[1] or ch[2] or ch[3] or style == WorldGen.SEWER_BASIN):
-		return
-	var snd := SewerSounds.new()
-	snd.rush_db = -10.0 if style == WorldGen.SEWER_BASIN else -16.0
-	snd.position = Vector3(6.0, 0.4, 6.0)
-	add_child(snd)
-
-
-func _sewer_mist() -> void:
-	var ch := _sewer_ch()
-	if not (ch[0] or ch[1] or ch[2] or ch[3] or style == WorldGen.SEWER_BASIN):
-		return
-	# cold mist pooling knee-deep over the water
-	if _r(266) < 0.65:
-		var fv := FogVolume.new()
-		fv.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
-		fv.size = Vector3(11.0, 1.5, 11.0)
-		fv.position = Vector3(6.0, 0.45, 6.0)
-		var fm := FogMaterial.new()
-		fm.density = 0.22
-		fm.albedo = Color(0.6, 0.8, 0.66)
-		fv.material = fm
-		add_child(fv)
-
-
-const SEWER_STENCILS := ["OUTFALL 3", "SEC C-12", "PUMP 7", "LEVEL -2",
-	"NO ENTRY", "DRAIN 44", "FLOW >"]
-
-
-## Faded paint stencilled straight onto the concrete, decades ago.
-func _sewer_stencil(dir: int, plane: float) -> void:
-	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
-	var inner := plane + n * (T / 2.0)
-	var along := S / 2.0 + (_r(66 + dir) - 0.5) * 6.0
-	var lb := Label3D.new()
-	lb.text = SEWER_STENCILS[int(_r(67 + dir) * (float(SEWER_STENCILS.size()) - 0.01))]
-	lb.font_size = 150
-	lb.pixel_size = 0.004
-	lb.modulate = Color(0.72, 0.62, 0.28, 0.72)
-	if dir < 2:
-		lb.position = Vector3(inner + n * 0.02, 1.55, along)
-		lb.rotation.y = PI / 2.0 if n > 0.0 else -PI / 2.0
-	else:
-		lb.position = Vector3(along, 1.55, inner + n * 0.02)
-		lb.rotation.y = 0.0 if n > 0.0 else PI
-	lb.rotation.z = (_r(68 + dir) - 0.5) * 0.05
-	add_child(lb)
 
 
 ## Wall-mounted control cabinet: gauges, indicator lamps, conduit to nowhere.
@@ -5629,16 +4892,6 @@ func _beam(a: Vector3, b: Vector3, th: float, mat: Material) -> MeshInstance3D:
 	var up := Vector3.UP if absf(d.normalized().y) < 0.99 else Vector3.RIGHT
 	mi.transform = Transform3D(Basis.looking_at(d, up), (a + b) / 2.0)
 	mi.scale = Vector3(th, th, d.length())
-	add_child(mi)
-	return mi
-
-
-func _cone(base: Vector3, r: float, h: float, mat: Material) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.mesh = CONE
-	mi.material_override = mat
-	mi.position = base + Vector3(0, h / 2.0, 0)
-	mi.scale = Vector3(r / 0.5, h, r / 0.5)
 	add_child(mi)
 	return mi
 
@@ -5710,14 +4963,6 @@ func _room_members() -> Array:
 			if WorldGen.room_id(wseed, candidate) == room_root:
 				out.append(candidate)
 	return out
-
-
-## Local furnishing-space centre of one member cell. The later room-centre
-## shift maps this point back onto that cell in world space, including L rooms.
-func _room_member_local(member: Vector2i) -> Vector3:
-	var rc := WorldGen.room_centre(wseed, room_root)
-	return Vector3(6.0 + float(member.x) * S + S / 2.0 - rc.x, 0,
-		6.0 + float(member.y) * S + S / 2.0 - rc.y)
 
 
 func _room_span() -> Vector2:
@@ -6692,3 +5937,4 @@ static func pool_style_dry(st: int) -> bool:
 
 func _floor_h() -> float:
 	return POOL_DRY_Y if theme == 9 and _level_builder._pool_dry() else 0.0
+

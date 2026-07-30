@@ -1484,6 +1484,3 @@ func _annex_pile_chair(parent: Node3D, pos: Vector3,
 		chair.free()
 		return
 	inst.set_meta("authored_model", "annex_dining_chair")
-
-
-# --- legacy sewer (retired from generation) ---------------------------------

@@ -30,8 +30,9 @@ func _decorative_occlusion_violations(node: Node) -> int:
 
 
 func _walk(node: Node, report: Dictionary) -> void:
-	if node is SewerSounds:
-		report["legacy"] += 1
+	# The SewerSounds class is gone along with the rest of the retired sewer
+	# construction, so there is no type left to test for here. The material
+	# check below still catches a sewer shader finding its way back in.
 	if node is GPUParticles3D:
 		report["particles"] += 1
 	if node.has_meta("security_camera_mount"):
