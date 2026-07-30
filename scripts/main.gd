@@ -34,6 +34,18 @@ const PORTAL_ARRIVE := {
 	9: Vector3(3.2, 0.15, 2.0),
 }
 
+## What the ambient presence systems are allowed to do right now. Only three
+## combinations of {figures, whispers, heartbeat} are ever wanted, and they were
+## previously spelled out three lines at a time in eleven places -- including the
+## one that carries the Wander regression contract, that Wander runs with no
+## hostile figures but a live soundscape. Naming the states puts that contract in
+## _set_presence instead of in eleven copies that have to agree.
+enum Presence {
+	SILENT,   ## title card, rule card, return prompt, death, end of a run
+	WANDER,   ## the pressure-free browser: ambience live, no hostile figures
+	DESCENT,  ## a run in progress: everything live
+}
+
 ## Command line, parsed once in _ready. Dev-flag consumers read it from here
 ## rather than each re-parsing OS.get_cmdline_user_args().
 var opts := CliOptions.new()
@@ -230,8 +242,6 @@ func _ready() -> void:
 	_whispers = Whispers.new()
 	_whispers.player = player
 	_whispers.dev = opts.whispers
-	# Same gate as the figures: nothing mutters behind a title or a rule card.
-	_whispers.suspended = true
 	add_child(_whispers)
 	_figures = ShadowFigures.new()
 	_figures.player = player
@@ -239,9 +249,6 @@ func _ready() -> void:
 	_figures.dev_haunt_at = opts.haunt_at
 	_figures.dev_haunt_at_given = opts.haunt_at_given
 	_figures.dev_haunt_variant = opts.haunt_variant
-	# No haunt timers run behind a title or rule card. Screenshot/--nologo
-	# starts explicitly release this gate below.
-	_figures.suspended = true
 	_figures.stared_away.connect(_on_figure_stared_away)
 	_figures.reached_player.connect(_on_figure_reached_player)
 	add_child(_figures)
@@ -250,8 +257,10 @@ func _ready() -> void:
 	_heart = Heartbeat.new()
 	_heart.figures = _figures
 	_heart.dev = opts.heartbeat
-	_heart.suspended = true
 	add_child(_heart)
+	# Nothing mutters, haunts or races behind a title or a rule card. The
+	# screenshot and --nologo starts release this below.
+	_set_presence(Presence.SILENT)
 	_figures.seen_by_player.connect(
 		func(): _heart.bump(Heartbeat.BUMP_SEEN))
 	_figures.burned_away.connect(
@@ -286,11 +295,19 @@ func _ready() -> void:
 		else:
 			# Wander is the pressure-free level browser: keep hostile figures
 			# disabled while leaving the ambient soundscape active.
-			_figures.suspended = true
-			_whispers.suspended = false
-			_heart.suspended = false
+			_set_presence(Presence.WANDER)
 	_maybe_screenshot()
 	call_deferred("_settle_initial_arrival")
+
+
+## The Wander contract lives here: hostile figures run only during a Descent,
+## while whispers and the heartbeat are silenced only behind a card. Anything
+## that changes what the player can hear or meet should change state here rather
+## than assign the three flags directly.
+func _set_presence(state: Presence) -> void:
+	_figures.suspended = state != Presence.DESCENT
+	_whispers.suspended = state == Presence.SILENT
+	_heart.suspended = state == Presence.SILENT
 
 
 func _level_seed(level: int) -> int:
@@ -350,9 +367,7 @@ func _show_return_prompt() -> void:
 	player.velocity = Vector3.ZERO
 	player.set_process_unhandled_input(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_figures.suspended = true
-	_whispers.suspended = true
-	_heart.suspended = true
+	_set_presence(Presence.SILENT)
 	if descent and run != null:
 		run.suspend_rules()
 	if is_instance_valid(_descent_hud):
@@ -367,15 +382,11 @@ func _cancel_return_to_title() -> void:
 	player.grab_look()
 	if descent and run != null and not run.ended:
 		run.resume_rules()
-		_figures.suspended = false
-		_whispers.suspended = false
-		_heart.suspended = false
+		_set_presence(Presence.DESCENT)
 		if is_instance_valid(_descent_hud):
 			_descent_hud.set_active(true)
 	else:
-		_figures.suspended = true
-		_whispers.suspended = false
-		_heart.suspended = false
+		_set_presence(Presence.WANDER)
 
 
 func _confirm_return_to_title() -> void:
@@ -386,9 +397,7 @@ func _confirm_return_to_title() -> void:
 	if descent:
 		await _leave_descent()
 		return
-	_figures.suspended = true
-	_whispers.suspended = true
-	_heart.suspended = true
+	_set_presence(Presence.SILENT)
 	_saved_pos.clear()
 	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
 	await _jump_to(0, spawn, false)
@@ -547,9 +556,7 @@ func _begin_descent_floor() -> void:
 	run.player = player
 	run.start_floor()
 	player.allow_sprint = false
-	_figures.suspended = false
-	_whispers.suspended = false
-	_heart.suspended = false
+	_set_presence(Presence.DESCENT)
 	_ensure_descent_hud()
 	_descent_hud.set_active(true)
 	_on_descent_attention(run.attention)
@@ -642,9 +649,7 @@ func _die_to_title() -> void:
 	player.set_process_unhandled_input(false)
 	player.velocity = Vector3.ZERO
 	player.set_flashlight(false)
-	_figures.suspended = true
-	_whispers.suspended = true
-	_heart.suspended = true
+	_set_presence(Presence.SILENT)
 	if is_instance_valid(_return_prompt):
 		_return_prompt.queue_free()
 		_return_prompt = null
@@ -850,9 +855,7 @@ func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 
 
 func _on_descent_ended(won: bool) -> void:
-	_figures.suspended = true
-	_whispers.suspended = true
-	_heart.suspended = true
+	_set_presence(Presence.SILENT)
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_active(false)
 	if is_instance_valid(_pursuer):
@@ -927,9 +930,7 @@ func _leave_descent() -> void:
 	player.allow_sprint = true
 	player.set_rumble(0.0)
 	_events.descent_mode = false
-	_figures.suspended = true
-	_whispers.suspended = true
-	_heart.suspended = true
+	_set_presence(Presence.SILENT)
 	_figures.interval_scale = 1.0
 	_set_mode_hint()
 	_set_post_noise(1.0)
@@ -1577,9 +1578,7 @@ func _prepare_descent() -> void:
 		run.floor_idx)
 	_print_descent_route()
 	_events.descent_mode = true
-	_figures.suspended = true
-	_whispers.suspended = true
-	_heart.suspended = true
+	_set_presence(Presence.SILENT)
 	_set_mode_hint()
 	var arrival := _descent_arrival(run.theme())
 	await _jump_to(run.theme(), arrival["position"], false,
@@ -1599,9 +1598,7 @@ func _on_start(selected_descent: bool) -> void:
 	if selected_descent:
 		_begin_descent_floor()
 	else:
-		_figures.suspended = true
-		_whispers.suspended = false
-		_heart.suspended = false
+		_set_presence(Presence.WANDER)
 	_start_hint_fade()
 
 
