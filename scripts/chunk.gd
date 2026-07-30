@@ -21,6 +21,22 @@ const PRISON_LEVEL_BUILDER = preload("res://scripts/levels/prison_level_builder.
 const POOL_LEVEL_BUILDER = preload("res://scripts/levels/pool_level_builder.gd")
 const BASE_LEVEL_BUILDER = preload("res://scripts/levels/chunk_level_builder.gd")
 
+## theme id -> level builder. One place to register a theme's construction,
+## instead of a match arm here plus one in each of the four _build_* dispatchers.
+## Theme ids are sparse on purpose (3 was the cut theme park); a theme with no
+## entry gets the shared kernel and nothing else.
+const LEVEL_BUILDERS := {
+	0: VEGAS_LEVEL_BUILDER,
+	1: OFFICE_LEVEL_BUILDER,
+	2: ANNEX_LEVEL_BUILDER,
+	4: AIRPORT_LEVEL_BUILDER,
+	5: ASYLUM_LEVEL_BUILDER,
+	6: SCHOOL_LEVEL_BUILDER,
+	7: MALL_LEVEL_BUILDER,
+	8: PRISON_LEVEL_BUILDER,
+	9: POOL_LEVEL_BUILDER,
+}
+
 const S := 12.0
 const H := 3.2       # vegas wall/ceiling height
 const HOFF := 3.0    # office ceiling height
@@ -778,28 +794,7 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	body = StaticBody3D.new()
 	add_child(body)
 	style = WorldGen.cell_style(wseed, cell, theme)
-	match theme:
-		0:
-			_level_builder = VEGAS_LEVEL_BUILDER.new(self)
-		1:
-			_level_builder = OFFICE_LEVEL_BUILDER.new(self)
-		2:
-			_level_builder = ANNEX_LEVEL_BUILDER.new(self)
-		4:
-			_level_builder = AIRPORT_LEVEL_BUILDER.new(self)
-		5:
-			_level_builder = ASYLUM_LEVEL_BUILDER.new(self)
-		6:
-			_level_builder = SCHOOL_LEVEL_BUILDER.new(self)
-		7:
-			_level_builder = MALL_LEVEL_BUILDER.new(self)
-		8:
-			_level_builder = PRISON_LEVEL_BUILDER.new(self)
-		9:
-			_level_builder = POOL_LEVEL_BUILDER.new(self)
-		_:
-			# Legacy/cut themes still use only the shared Chunk kernel.
-			_level_builder = BASE_LEVEL_BUILDER.new(self)
+	_level_builder = LEVEL_BUILDERS.get(theme, BASE_LEVEL_BUILDER).new(self)
 	# The Annex has its own room/corridor graph rather than inheriting the
 	# Vegas-era graph shared by the older floors.
 	room_root = WorldGen.annex_room_id(wseed, cell) if theme == 2 \
