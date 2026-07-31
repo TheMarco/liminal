@@ -62,7 +62,8 @@ Largest remaining generated props, by primitive count: `_vt100` (10),
 - No furniture replacements. The almost empty floor is intentional.
 - A second period CCTV housing could be used as an extremely rare variant.
 
-Annex wall art remains prohibited.
+Annex wall art is limited to the Liminal Inc. guest-services poster set; the
+remaining walls stay deliberately sparse and retain the rare camera motif.
 
 ### Airport
 

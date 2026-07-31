@@ -650,10 +650,13 @@ func _annex_wall_has_utility(dir: int) -> bool:
 	return false
 
 
-func _annex_pick_solid_wall(salt: int, avoid_utilities = false) -> int:
+func _annex_pick_solid_wall(salt: int, avoid_utilities = false,
+		avoid_dir := -1) -> int:
 	var start = posmod(WorldGen.h(chunk.wseed, chunk.cell.x, chunk.cell.y, salt), 4)
 	for step in 4:
 		var dir = (start + step) % 4
+		if dir == avoid_dir:
+			continue
 		if not bool(WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]):
 			continue
 		if avoid_utilities and _annex_wall_has_utility(dir):
@@ -714,7 +717,15 @@ func _annex_attached_half_wall(salt: int, width: float,
 
 
 func _annex_air_conditioner(salt: int) -> void:
-	var dir = _annex_pick_solid_wall(salt, false)
+	# Interactions are built after Annex dressing, so the lift facade does not
+	# exist yet when the AC chooses a wall. Reserve its deterministic host wall
+	# explicitly; otherwise the two independent wall-mounted assemblies can be
+	# generated through one another.
+	var elevator_wall := -1
+	if WorldGen.elevator_cell(chunk.wseed, chunk.cell, chunk.theme):
+		elevator_wall = WorldGen.anchor_wall(
+			chunk.wseed, chunk.cell, 1701, chunk.theme)
+	var dir = _annex_pick_solid_wall(salt, false, elevator_wall)
 	if dir < 0:
 		return
 	var along = lerpf(3.0, 9.0, chunk._r(salt + 1))
@@ -766,65 +777,47 @@ func _annex_exit_door(salt: int) -> bool:
 
 
 func _annex_chair_cluster(count: int, salt: int, piled: bool) -> void:
-	var radius = 1.30 if piled else (0.52 if count == 1 else 1.08)
+	# "Piled" used to mean ten chairs physically intersecting one another.
+	# Preserve the disordered group as a readable Annex detail, but keep every
+	# chair floor-supported with enough space for its complete visual envelope.
+	var target_count := mini(count, 4)
+	var radius := 0.52 if target_count == 1 else 1.42
 	var p = chunk._free_floor_spot(salt, radius, 1.45 if piled else 1.25,
-		1.85 if piled else 0.92, 18)
+		0.96, 18)
 	if p == Vector3.INF:
 		return
 	var base_yaw = chunk._r(salt + 41) * TAU
 	var first = chunk.body.get_child_count()
-	var kind = "annex_chair_pile" if piled \
+	var kind = "annex_chair_scatter" if piled \
 		else ("annex_single_chair" if count == 1 else "annex_chair_group")
 	var group = chunk._furnishing_pivot(p, base_yaw, kind)
 	group.set_meta("attributed_furnishing", kind)
-	group.set_meta("annex_chair_count", count)
+	group.set_meta("annex_chair_count", target_count)
+	group.set_meta("annex_chairs_non_intersecting", true)
 	var added = 0
-	if piled:
-		var pile_specs = [
-			# Four tight floor chairs make the physical base.
-			[Vector3(-0.40, 0.56, -0.30), Vector3(0.02, -0.52, 0.08)],
-			[Vector3(0.40, 0.56, -0.28), Vector3(-0.03, 0.68, -0.10)],
-			[Vector3(-0.38, 0.56, 0.32), Vector3(0.05, 2.26, 0.12)],
-			[Vector3(0.38, 0.56, 0.31), Vector3(-0.04, 3.72, -0.12)],
-			# Every upper chair penetrates the layer below slightly. At this
-			# density their legs visibly land on seats/rails instead of hanging
-			# in open air around a loose circle.
-			[Vector3(-0.16, 0.80, -0.12), Vector3(0.24, 1.26, 0.28)],
-			[Vector3(0.17, 0.83, 0.13), Vector3(-0.22, 2.72, -0.30)],
-			[Vector3(-0.13, 0.94, 0.10), Vector3(0.26, 4.10, 0.24)],
-			[Vector3(0.12, 1.02, -0.10), Vector3(-0.28, 5.24, -0.22)],
-			[Vector3(0.02, 1.13, 0.05), Vector3(0.30, 1.90, -0.28)],
-			[Vector3(-0.03, 1.25, -0.02), Vector3(-0.30, 4.76, 0.26)],
-		]
-		for i in mini(count, pile_specs.size()):
-			var spec: Array = pile_specs[i]
-			var before = group.get_child_count()
-			_annex_pile_chair(group, spec[0], spec[1])
-			if group.get_child_count() > before:
-				added += 1
-		if added > 0:
-			chunk._collider_yaw_box(p + Vector3(0, 0.91, 0),
-				Vector3(1.72, 1.82, 1.66), base_yaw)
-	else:
-		var offsets = [
-			Vector3.ZERO,
-			Vector3(-0.48, 0, 0.12),
-			Vector3(0.48, 0, -0.10),
-			Vector3(0.02, 0, 0.60),
-		]
-		for i in mini(count, offsets.size()):
-			var local_yaw = (chunk._r(salt + 50 + i) - 0.5) * 0.52
-			var inst = chunk._attributed_prop_local(
-				group, chunk.ANNEX_CHAIR_PATH,
-				offsets[i] - chunk.ANNEX_CHAIR_CENTRE * chunk.ANNEX_CHAIR_SCALE,
-				local_yaw, Vector3.ONE * chunk.ANNEX_CHAIR_SCALE)
-			if inst == null:
-				continue
-			inst.set_meta("authored_model", "annex_dining_chair")
-			var cp = chunk._wp(p, offsets[i] + Vector3(0, 0.45, 0), base_yaw)
-			chunk._collider_yaw_box(cp, Vector3(0.40, 0.90, 0.49),
-				base_yaw + local_yaw)
-			added += 1
+	var offsets = [
+		Vector3(-0.62, 0, -0.58),
+		Vector3(0.62, 0, -0.56),
+		Vector3(-0.62, 0, 0.58),
+		Vector3(0.62, 0, 0.60),
+	] if target_count > 1 else [Vector3.ZERO]
+	for i in target_count:
+		var local_yaw = (chunk._r(salt + 50 + i) - 0.5) \
+			* (0.34 if piled else 0.26)
+		var inst = chunk._attributed_prop_local(
+			group, chunk.ANNEX_CHAIR_PATH,
+			offsets[i] - chunk.ANNEX_CHAIR_CENTRE * chunk.ANNEX_CHAIR_SCALE,
+			local_yaw, Vector3.ONE * chunk.ANNEX_CHAIR_SCALE)
+		if inst == null:
+			continue
+		inst.set_meta("authored_model", "annex_dining_chair")
+		var cp = chunk._wp(p, offsets[i] + Vector3(0, 0.47, 0), base_yaw)
+		var chair_body_before := chunk.body.get_child_count()
+		chunk._collider_yaw_box(cp, Vector3(0.52, 0.94, 0.62),
+			base_yaw + local_yaw)
+		var chair_collider := chunk.body.get_child(chair_body_before)
+		chair_collider.set_meta("annex_chair_piece", i)
+		added += 1
 	if added == 0:
 		group.get_parent().remove_child(group)
 		group.free()
@@ -931,12 +924,16 @@ func _annex_shelving(salt: int) -> void:
 		return
 	var along = 3.15 if chunk._r(salt + 1) < 0.5 else 8.85
 	var p = _annex_wall_floor_point(dir, along, 0.49)
-	if not chunk._floor_spot_clear(p, 0.42, 2.12):
+	var yaw = chunk._wall_facing(dir)
+	var site_clear := chunk._floor_box_clear(p, yaw, 1.90, 0.68, 2.12) \
+		and _annex_footprint_free(p, yaw, 1.90, 0.68, 2.12)
+	if not site_clear:
 		along = chunk.S - along
 		p = _annex_wall_floor_point(dir, along, 0.49)
-	if not chunk._floor_spot_clear(p, 0.42, 2.12):
+		site_clear = chunk._floor_box_clear(p, yaw, 1.90, 0.68, 2.12) \
+			and _annex_footprint_free(p, yaw, 1.90, 0.68, 2.12)
+	if not site_clear:
 		return
-	var yaw = chunk._wall_facing(dir)
 	var first = chunk.body.get_child_count()
 	var shelf = chunk._attributed_floor_prop(
 		chunk.ANNEX_SHELVING_PATH, p, yaw, chunk.ANNEX_SHELVING_SCALE,

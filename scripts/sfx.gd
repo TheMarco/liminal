@@ -28,9 +28,8 @@ const BEDS := {
 	5: ["sound-asylum", -12.7],
 	7: ["sound-airport", -43.3],
 	8: ["sound-asylum", -12.7],
-	# Tiled hall over standing water: the airport bed is the only one with the
-	# right amount of empty room reverb in it, run quieter than the terminal.
-	9: ["sound-airport", -46.0],
+	# User-supplied Poolrooms ambience, layered beneath the original lim3 score.
+	9: ["poolrooms-calm-tranquil", -39.0],
 }
 
 # surface -> [file, measured mean dB]

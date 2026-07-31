@@ -152,7 +152,7 @@ func _fids(parent: Node3D, lpos: Vector3, lyaw: float, big: bool, hang: bool) ->
 		lb.pixel_size = 0.0018 if big else 0.0016
 		lb.modulate = Color(1.0, 0.72, 0.18)
 		lb.outline_modulate = Color(0.16, 0.08, 0.0, 0.8)
-		lb.outline_size = 2
+		lb.outline_size = 0
 		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		lb.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 		# Clear the model's own "All other airlines" subheader before the first
@@ -182,18 +182,27 @@ func _air_wall_fids(dir: int, plane: float) -> void:
 func _air_adboxes(dir: int, plane: float) -> void:
 	var n = -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner = plane + n * (chunk.T / 2.0)
-	var idx = int(chunk._r(50 + dir) * 3.99)
+	var idx = int(chunk._r(50 + dir) * float(Chunk.POSTER_AIRPORT.size()) * 0.99)
 	for k in 2:
 		var along = chunk.S / 2.0 + (float(k) - 0.5) * 3.4
 		var fc = inner + n * 0.05
+		var poster_path := str(Chunk.POSTER_AIRPORT[
+			posmod(idx + k, Chunk.POSTER_AIRPORT.size())])
+		var lightbox_mat := Mats.poster_lightbox(poster_path)
 		if dir < 2:
 			chunk._box(Vector3(fc, 1.9, along), Vector3(0.08, 1.92, 1.32), Mats.charcoal(), false)
-			var q = chunk._quad(Vector3(fc + n * 0.045, 1.9, along), Vector2(1.2, 1.8), Mats.adbox(idx + k))
+			var q = chunk._quad(Vector3(fc + n * 0.045, 1.9, along), Vector2(1.2, 1.6), lightbox_mat)
 			q.rotation.y = PI / 2.0 if n > 0.0 else -PI / 2.0
+			q.set_meta("airport_poster_lightbox", true)
+			q.set_meta("airport_poster_path", poster_path)
+			q.set_meta("airport_poster_aspect", 0.75)
 		else:
 			chunk._box(Vector3(along, 1.9, fc), Vector3(1.32, 1.92, 0.08), Mats.charcoal(), false)
-			var q = chunk._quad(Vector3(along, 1.9, fc + n * 0.045), Vector2(1.2, 1.8), Mats.adbox(idx + k))
+			var q = chunk._quad(Vector3(along, 1.9, fc + n * 0.045), Vector2(1.2, 1.6), lightbox_mat)
 			q.rotation.y = 0.0 if n > 0.0 else PI
+			q.set_meta("airport_poster_lightbox", true)
+			q.set_meta("airport_poster_path", poster_path)
+			q.set_meta("airport_poster_aspect", 0.75)
 
 
 ## Authored four-seat airport bank. Existing layouts asked for three to five

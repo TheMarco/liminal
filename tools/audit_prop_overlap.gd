@@ -27,6 +27,8 @@ func _init() -> void:
 	var worst := 0.0
 	var per_theme := {}
 	var shown := 0
+	var chair_pairs := 0
+	var chair_worst := 0.0
 	for si in seed_count:
 		var base := WorldGen.h(5150, si * 31, si * 53, 909) | 1
 		for theme in WorldGen.THEMES:
@@ -45,6 +47,16 @@ func _init() -> void:
 					rooms += 1
 					var groups := _groups(chunk)
 					var keys := groups.keys()
+					for key in keys:
+						var chair_depth := _chair_group_overlap(groups[key])
+						if chair_depth <= Chunk.FURNISHING_OVERLAP_TOL:
+							continue
+						chair_pairs += 1
+						chair_worst = maxf(chair_worst, chair_depth)
+						if shown < 12:
+							shown += 1
+							print("FAIL theme=%d cell=%s  chairs within %s overlap by %.2fm" % [
+								theme, c, groups[key]["tag"], chair_depth])
 					for i in keys.size():
 						for j in range(i + 1, keys.size()):
 							var d := _group_overlap(groups[keys[i]], groups[keys[j]])
@@ -62,8 +74,11 @@ func _init() -> void:
 	print("prop overlap audit: %d seeds, radius %d, %d rooms" % [
 		seed_count, radius, rooms])
 	print("  interpenetrating floor furnishings: %d %s" % [pairs, per_theme])
-	if pairs > 0:
+	print("  interpenetrating Annex chair groups: %d" % chair_pairs)
+	if pairs > 0 or chair_pairs > 0:
 		print("  deepest interpenetration: %.2fm" % worst)
+		if chair_pairs > 0:
+			print("  deepest chair interpenetration: %.2fm" % chair_worst)
 		print("  FAIL — floor props are landing inside placed furniture")
 		quit(1)
 		return
@@ -105,6 +120,7 @@ func _groups(chunk: Chunk) -> Dictionary:
 			"yaw": cs.rotation.y,
 			"y0": cs.position.y - half_h,
 			"y1": cs.position.y + half_h,
+			"chair_piece": int(cs.get_meta("annex_chair_piece", -1)),
 		})
 	for gid in out.keys():
 		if out[gid]["boxes"].is_empty():
@@ -119,3 +135,17 @@ func _group_overlap(a: Dictionary, b: Dictionary) -> float:
 			worst = maxf(worst, Chunk.plan_box_overlap(ba, bb))
 	return worst
 
+
+func _chair_group_overlap(group: Dictionary) -> float:
+	if not str(group["tag"]).begins_with("annex_chair"):
+		return 0.0
+	var boxes: Array = group["boxes"]
+	var worst := 0.0
+	for i in boxes.size():
+		if int(boxes[i]["chair_piece"]) < 0:
+			continue
+		for j in range(i + 1, boxes.size()):
+			if int(boxes[j]["chair_piece"]) < 0:
+				continue
+			worst = maxf(worst, Chunk.plan_box_overlap(boxes[i], boxes[j]))
+	return worst

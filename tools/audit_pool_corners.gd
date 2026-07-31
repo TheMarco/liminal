@@ -580,7 +580,13 @@ func _want_end(at_max: bool, kind: String) -> float:
 
 
 func _has_dry_slab(chunk: Chunk) -> bool:
+	var slab_pieces := 0
+	var has_jacuzzi_bottom := false
 	for m in chunk.find_children("*", "MeshInstance3D", true, false):
+		if m.has_meta("pool_dry_slab_piece"):
+			slab_pieces += 1
+		if m.has_meta("pool_jacuzzi_basin_floor"):
+			has_jacuzzi_bottom = true
 		if not (m.mesh is BoxMesh):
 			continue
 		var bb: AABB = m.transform * m.get_aabb()
@@ -588,4 +594,7 @@ func _has_dry_slab(chunk: Chunk) -> bool:
 				and absf(
 					bb.position.y + bb.size.y - Chunk.POOL_DRY_Y) < 0.05:
 			return true
-	return false
+	# An in-ground jacuzzi deliberately cuts one rectangular opening from the
+	# otherwise full slab. Four tagged surround pieces plus its basin floor are
+	# the equivalent complete, walkable structure.
+	return slab_pieces == 4 and has_jacuzzi_bottom

@@ -255,8 +255,13 @@ func _sch_corridor_door(o: Vector3, yw: float, t: float,
 	var v = Node3D.new()
 	v.position = chunk._wp(o, Vector3(t, 0, inn), yw)
 	v.rotation.y = yw + (PI if side > 0.0 else 0.0)
+	const LEAF_HEIGHT := 2.23
+	v.set_meta("school_swing_door", true)
+	v.set_meta("school_door_leaf_top", LEAF_HEIGHT)
+	v.set_meta("school_door_frame_top", chunk.DOOR_TOP)
 	chunk.add_child(v)
-	chunk._mrbox(v, Vector3(0, 1.08, 0), Vector3(1.03, 2.16, 0.075),
+	chunk._mrbox(v, Vector3(0, LEAF_HEIGHT * 0.5, 0),
+		Vector3(1.03, LEAF_HEIGHT, 0.075),
 		Mats.sch_door(), 0.01)
 	chunk._mbox(v, Vector3(-0.575, 1.1, 0), Vector3(0.12, 2.22, 0.26), Mats.sch_red())
 	chunk._mbox(v, Vector3(0.575, 1.1, 0), Vector3(0.12, 2.22, 0.26), Mats.sch_red())
@@ -275,8 +280,9 @@ func _sch_corridor_door(o: Vector3, yw: float, t: float,
 	chunk._mrbox(v, Vector3(-0.27, 2.02, 0.05), Vector3(0.4, 0.1, 0.07),
 		Mats.sch_trim(), 0.008)
 	chunk._mbox(v, Vector3(0.03, 2.04, 0.084), Vector3(0.31, 0.025, 0.025), Mats.sch_trim())
-	chunk._collider_yaw_box(chunk._wp(o, Vector3(t, 1.08, inn), yw),
-		Vector3(1.05, 2.16, 0.12), yw)
+	chunk._collider_yaw_box(
+		chunk._wp(o, Vector3(t, LEAF_HEIGHT * 0.5, inn), yw),
+		Vector3(1.05, LEAF_HEIGHT, 0.12), yw)
 	var plate = chunk._mrbox(v, Vector3(0.79, 1.7, 0.045),
 		Vector3(0.3, 0.22, 0.025), Mats.sch_white(), 0.005)
 	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -693,10 +699,20 @@ func _sch_classroom() -> void:
 	var teacher_desk = chunk._load_model("metal_office_desk", td, yaw)
 	chunk._adopt_local(teacher, teacher_desk)
 	chunk._collider_yaw_box(td + Vector3(0, 0.4, 0), Vector3(2.0, 0.8, 0.95), yaw)
+	# The source pencils run along local X. Quarter-turn them across the desk,
+	# and derive the root height from the measured model bottom so neither the
+	# pencils nor their cup hover above the steel top.
+	const DESK_TOP := 0.7875
+	const STATIONERY_BOTTOM := -0.0737
+	var stationery_jitter := (chunk._r(73) - 0.5) * 0.12
 	var supplies = chunk._cc0_prop("stationery_supplies",
-		chunk._wp(td, Vector3(-0.48, 0.86, 0.05), yaw),
-		yaw + PI / 2.0 + (chunk._r(73) - 0.5) * 0.12)
+		chunk._wp(td, Vector3(
+			-0.48, DESK_TOP - STATIONERY_BOTTOM, 0.05), yaw),
+		yaw + PI / 2.0 + stationery_jitter)
 	supplies.set_meta("school_teacher_stationery", true)
+	supplies.set_meta("school_stationery_quarter_turn", PI / 2.0)
+	supplies.set_meta("school_stationery_source_bottom", STATIONERY_BOTTOM)
+	supplies.set_meta("school_stationery_desk_top", DESK_TOP)
 	chunk._adopt_local(teacher, supplies)
 	var teacher_chair = chunk._task_chair(
 		td + Vector3(fx, 0, fz) * 1.0, yaw)
@@ -790,6 +806,10 @@ func _sch_chalk(board_root: Node3D, dir: int, cen: float, ln: float) -> void:
 
 
 func _sch_screen(dir: int) -> void:
+	# The working lift is a complete wall set piece. A classroom roller on that
+	# same wall used to read as an unexplained grey square covering its doors.
+	if WorldGen.elevator_cell(chunk.wseed, chunk.cell, chunk.theme):
+		return
 	var n = -1.0 if (dir == 0 or dir == 2) else 1.0
 	var plane = (chunk.S - chunk.T / 2.0) if (dir == 0 or dir == 2) else (chunk.T / 2.0)
 	var inner = plane + n * (chunk.T / 2.0)
@@ -803,6 +823,7 @@ func _sch_screen(dir: int) -> void:
 	var screen = chunk._furnishing_pivot(Vector3.ZERO, 0.0,
 		"school_projector_screen", false)
 	screen.set_meta("school_projector_screen", dir)
+	screen.set_meta("school_projector_screen_compact", true)
 	if dir < 2:
 		chunk._mrbox(screen, Vector3(inner + n * 0.09, chunk.ceil_h - 0.3, t),
 			Vector3(0.11, 0.13, 1.95), Mats.sch_trim(), 0.025)
@@ -1034,10 +1055,16 @@ func _sch_urinals(dir: int) -> void:
 	var urinal_yaw = facing + PI / 2.0
 	var cnt = 3
 	var w = 0.78
+	const URINAL_DEPTH := 0.39
+	const WALL_CLEARANCE := 0.015
+	const MOUNT_STANDOFF := URINAL_DEPTH * 0.5 + WALL_CLEARANCE
 	var start = chunk.S / 2.0 - float(cnt) * w * 0.5
 	for i in cnt:
 		var t = start + w * (float(i) + 0.5)
-		var p = chunk._wall_pt(dir, t, 0.0)
+		# `_wall_pt(..., 0)` is already the finished room-side wall face.
+		# Centre the bowl half its depth into the room so its porcelain back,
+		# rather than its middle, meets that plane.
+		var p = chunk._wall_pt(dir, t, MOUNT_STANDOFF)
 		var b0 = chunk.body.get_child_count()
 		var pivot = Node3D.new()
 		pivot.position = p
@@ -1057,12 +1084,16 @@ func _sch_urinals(dir: int) -> void:
 			return
 		pivot.set_meta("attributed_furnishing", "school_urinal")
 		pivot.set_meta("school_urinal_quarter_turn", PI / 2.0)
+		pivot.set_meta("school_urinal_wall_dir", dir)
+		pivot.set_meta("school_urinal_mount_standoff", MOUNT_STANDOFF)
+		pivot.set_meta("school_urinal_depth", URINAL_DEPTH)
+		pivot.set_meta("school_urinal_wall_clearance", WALL_CLEARANCE)
 		unit.set_meta("authored_model", "school_urinal")
 		# The visual quarter-turn swaps the source model's X/Z footprint. Keep
 		# collision in the corrected front-facing frame so no side-on invisible
 		# slab remains in the bathroom.
-		chunk._collider_yaw_box(p + Vector3(0, 1.04, 0.18).rotated(
-			Vector3.UP, facing), Vector3(0.40, 0.90, 0.36), facing)
+		chunk._collider_yaw_box(p + Vector3(0, 1.04, 0),
+			Vector3(0.40, 0.90, URINAL_DEPTH), facing)
 		chunk._bind_furnishing_colliders(pivot, b0)
 
 
@@ -1205,10 +1236,9 @@ func _sch_library() -> void:
 
 
 func _sch_stack(p: Vector3, yaw: float, salt: int) -> void:
-	var v = Node3D.new()
-	v.position = p
-	v.rotation.y = yaw
-	chunk.add_child(v)
+	var body0 = chunk.body.get_child_count()
+	var v = chunk._furnishing_pivot(p, yaw, "school_library_stack")
+	v.set_meta("school_library_stack", true)
 	var ln = 4.4
 	var hgt = 2.0
 	var real_side = -0.17 if chunk._r(salt + 20) < 0.5 else 0.17
@@ -1242,10 +1272,11 @@ func _sch_stack(p: Vector3, yaw: float, salt: int) -> void:
 	chunk._mbox(v, Vector3(0, hgt - 0.02, 0), Vector3(ln, 0.05, 0.42), Mats.sch_desk())
 	var origin_x = real_left if real_side > 0.0 else real_left + 0.55
 	var by = 0.42 + 0.46 * float(real_sh) + 0.025
-	chunk._cc0_prop("book_encyclopedia_set_01",
-		chunk._wp(p, Vector3(origin_x, by, real_side), yaw),
-		yaw if real_side > 0.0 else yaw + PI)
+	var books = chunk._cc0_prop_local(v, "book_encyclopedia_set_01",
+		Vector3(origin_x, by, real_side), 0.0 if real_side > 0.0 else PI)
+	books.set_meta("school_library_encyclopedia_set", true)
 	chunk._collider_yaw_box(p + Vector3(0, hgt / 2.0, 0), Vector3(ln, hgt, 0.46), yaw)
+	chunk._bind_furnishing_colliders(v, body0)
 
 
 func _sch_lab() -> void:
@@ -1332,11 +1363,17 @@ func _sch_stool(p: Vector3, salt: int) -> void:
 
 
 func _sch_admin() -> void:
+	# A working lift gets the whole room-side approach. The former reception
+	# counter and rear desk were placed independently of the lift wall and
+	# could stand directly in front of the doors.
+	if WorldGen.elevator_cell(chunk.wseed, chunk.cell, chunk.theme):
+		return
 	var fw = _sch_front_wall(800)
 	# the counter you wait at, across the room
 	var yaw = _sch_face_yaw(fw if fw >= 0 else 3)
 	var c = Vector3(chunk.S / 2.0, 0, chunk.S / 2.0)
 	var v = Node3D.new()
+	v.set_meta("school_admin_counter", true)
 	v.position = c
 	v.rotation.y = yaw
 	chunk.add_child(v)
@@ -1466,6 +1503,13 @@ func _sch_case(dir: int, plane: float) -> void:
 
 
 func _sch_poster(dir: int, plane: float) -> void:
+	const POSTER_MESSAGES := [
+		"KEEP GOING. THE HALLWAY REMEMBERS.",
+		"BE READY WHEN THE BELL RINGS.",
+		"YOU ARE ALMOST WHERE YOU NEED TO BE.",
+		"STAY CALM. STAY TOGETHER.",
+		"DO YOUR BEST. DO NOT LOOK BACK.",
+	]
 	var n = -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner = plane + n * (chunk.T / 2.0)
 	var along = chunk.S / 2.0 + (chunk._r(940 + dir) - 0.5) * 4.0
@@ -1478,3 +1522,19 @@ func _sch_poster(dir: int, plane: float) -> void:
 	var mi = chunk._box(pp, ps, Mats.sch_chair(hue), false)
 	mi.rotate_object_local(Vector3(1, 0, 0) if dir < 2 else Vector3(0, 0, 1),
 		(chunk._r(956 + dir) - 0.5) * 0.06)
+	var label := Label3D.new()
+	label.text = POSTER_MESSAGES[int(chunk._r(960 + dir) * (float(POSTER_MESSAGES.size()) - 0.01))]
+	label.font_size = 22
+	label.pixel_size = 0.0012
+	label.width = 300.0
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.modulate = Color(0.08, 0.12, 0.12)
+	label.outline_size = 0
+	if dir < 2:
+		label.position = Vector3(0.008, 0, 0)
+		label.rotation.y = PI / 2.0
+	else:
+		label.position = Vector3(0, 0, 0.008)
+	mi.add_child(label)

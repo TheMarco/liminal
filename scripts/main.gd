@@ -131,9 +131,7 @@ const MUSIC_TRACKS := {
 	4: "res://music/lim5.mp3", 5: "res://music/lim6.mp3",
 	6: "res://music/lim4.mp3",
 	7: "res://music/lim7.mp3", 8: "res://music/lim8.mp3",
-	# lim10 is the user-supplied calm/tranquil loop cut for the Poolrooms;
-	# lim3 (ex theme park) is unclaimed again.
-	9: "res://music/lim10.mp3",
+	9: "res://music/lim3.mp3",
 }
 # A distinct late-run cue gives Descent's final two floors an audible rise in
 # pressure without changing Wander mode's established per-level soundtrack.

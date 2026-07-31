@@ -1166,6 +1166,30 @@ static func wall_art(path: String) -> StandardMaterial3D:
 	return m
 
 
+## Printed Airport posters behind a softly glowing ad-box diffuser. The source
+## image remains readable instead of being replaced by the old abstract color
+## shader, while restrained emission makes the case read as backlit signage.
+static func poster_lightbox(path: String) -> StandardMaterial3D:
+	var key := "poster_lightbox:" + path
+	if _c.has(key):
+		return _c[key]
+	var m := StandardMaterial3D.new()
+	var tex := wall_art_texture(path)
+	if tex != null:
+		m.albedo_texture = tex
+		m.emission_enabled = true
+		m.emission_texture = tex
+	m.albedo_color = Color(0.93, 0.93, 0.89)
+	m.emission = Color(0.58, 0.61, 0.59)
+	# Airport exposure is already bright; a low diffuser glow keeps white paper
+	# from blooming over the printed slogan while still reading as backlit.
+	m.emission_energy_multiplier = 0.34
+	m.roughness = 0.42
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_c[key] = m
+	return m
+
+
 # --- photo materials (CC0, ambientCG) ----------------------------------------
 # World-space triplanar mapping: all structural geometry is unit BoxMesh scaled
 # through the node transform, so object UVs are useless — world coordinates
@@ -1698,6 +1722,17 @@ static func pool_water() -> ShaderMaterial:
 	return m
 
 
+## The Mall fountain uses the Poolrooms' exact water shader and ripple normal,
+## but owns a separate material instance. The live Poolrooms tuning panel
+## mutates `pool_water()`; a distinct cache entry keeps that dev control from
+## unexpectedly recolouring a Mall that happens to be streamed at the time.
+static func mall_fountain_water() -> ShaderMaterial:
+	var m := _shader(
+		"mall_fountain_water", "res://shaders/pool_water.gdshader")
+	m.set_shader_parameter("normal_tex", pool_ripple_normal())
+	return m
+
+
 ## The daylight coming in is not a view of anywhere — it is a blown-out plane
 ## that reads as a window because of its shape and its bloom. Giving it real
 ## sky would immediately answer the question the floor exists to keep open.
@@ -1718,10 +1753,10 @@ static func pool_rail() -> StandardMaterial3D:
 		m.roughness = 0.19)
 
 
-## The deck lip — a rounded darker band capping every pool edge, which is what
-## makes a basin read as a built pool rather than a hole in the floor.
+## Pale cast-stone coping. Its dedicated bullnose geometry catches the edge
+## highlight; this material stays softly reflective and distinct from the
+## smaller, greyer ceramic deck tiles.
 static func pool_coping() -> StandardMaterial3D:
 	return _std("pool_coping", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.80, 0.81, 0.77)
-		m.roughness = 0.52)
-
+		m.albedo_color = Color(0.935, 0.938, 0.915)
+		m.roughness = 0.34)

@@ -418,7 +418,7 @@ func _slots_sign() -> void:
 		lb.text = "S L O T S"
 		lb.font_size = 140
 		lb.pixel_size = 0.0028
-		lb.outline_size = 20
+		lb.outline_size = 0
 		lb.outline_modulate = Color(0.4, 0.05, 0.1)
 		lb.modulate = Color(1.0, 0.78, 0.25)
 		if dir < 2:
@@ -447,7 +447,7 @@ func _casino_neon(dir: int, plane: float) -> void:
 	lb.text = txt
 	lb.font_size = 120
 	lb.pixel_size = 0.0026
-	lb.outline_size = 18
+	lb.outline_size = 0
 	lb.outline_modulate = Color(colr.r * 0.22, colr.g * 0.22, colr.b * 0.22)
 	lb.modulate = colr
 	var tube = Mats.neon_col("c%d" % pick, colr)

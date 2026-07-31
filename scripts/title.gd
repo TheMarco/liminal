@@ -47,6 +47,7 @@ const CREDIT_SECTIONS := [
 			"    Some Random Mall Modeller · MaX3Dd",
 			"PRISON   Mihai / mmike0 · Mark Peters · Mehdi Shahsavan / adventurer",
 			"    dudecon · ShepDes",
+			"POOLROOMS   NXTLVLPLY · CadmiumCoffee (bsishir) · JackFarrand",
 			"CC BY 4.0 except  Katydid, R3indeer, mmike0, Kerridge1  ·  CC BY-NC 4.0",
 			"and  dannaki_, assetfactory, MaX3Dd  ·  Sketchfab Standard",
 		]],

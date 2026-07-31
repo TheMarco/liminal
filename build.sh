@@ -49,14 +49,23 @@ else
 	</dict>
 	</plist>
 	XML
-	codesign --force --timestamp --options runtime \
+	codesign --force --deep --timestamp --options runtime \
 		--entitlements /tmp/liminal.entitlements --sign "$IDENTITY" "$APP"
-	codesign --verify --strict "$APP"
+	if ! codesign --verify --deep --strict "$APP"; then
+		if [ "$NOTARIZE" = "0" ]; then
+			echo "   Developer ID signature did not verify — using a valid ad-hoc signature for this local build"
+			codesign --force --deep --sign - "$APP"
+			codesign --verify --deep --strict "$APP"
+		else
+			echo "   Developer ID signature is invalid; refusing to notarize a broken bundle" >&2
+			exit 1
+		fi
+	fi
 
 	if [ "$NOTARIZE" = "1" ]; then
 		echo "==> notarizing (a few minutes)"
 		rm -f build/macos/notarize-submit.zip
-		ditto -c -k --sequesterRsrc --keepParent "$APP" build/macos/notarize-submit.zip
+		ditto -c -k --keepParent "$APP" build/macos/notarize-submit.zip
 		xcrun notarytool submit build/macos/notarize-submit.zip \
 			--keychain-profile "$NOTARY_PROFILE" --wait
 		xcrun stapler staple "$APP"
@@ -67,7 +76,7 @@ fi
 
 # zip AFTER stapling, so the shipped archive carries the notarization ticket
 (cd build/macos && rm -f LiminalVegas-macOS.zip \
-	&& ditto -c -k --sequesterRsrc --keepParent LiminalVegas.app LiminalVegas-macOS.zip)
+	&& ditto -c -k --keepParent LiminalVegas.app LiminalVegas-macOS.zip)
 
 echo
 echo "built:"

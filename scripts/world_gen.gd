@@ -419,6 +419,26 @@ static func landmark_style(ws: int, cell: Vector2i, theme: int) -> int:
 
 
 ## Ceiling height for a room: small rooms are low and close, halls soar.
+const POOL_HEIGHT_SINGLE := 1
+const POOL_HEIGHT_DOUBLE := 2
+const POOL_HEIGHT_TRIPLE := 3
+
+
+## A room-root-stable height class for Poolrooms. Large footprints are the
+## dependable open halls: all of them are at least double-height and a smaller
+## share rise through three storeys. A few two-cell rooms are promoted too, so
+## the effect is not confined to one rare landmark grammar.
+static func pool_room_height_tier(ws: int, root: Vector2i) -> int:
+	var n := room_size(ws, root)
+	var tier_roll := r01(ws, root.x, root.y, 612)
+	if n >= 4:
+		return POOL_HEIGHT_TRIPLE if tier_roll < 0.24 \
+			else POOL_HEIGHT_DOUBLE
+	if n >= 2 and tier_roll < 0.28:
+		return POOL_HEIGHT_DOUBLE
+	return POOL_HEIGHT_SINGLE
+
+
 static func room_height(ws: int, root: Vector2i, theme: int) -> float:
 	var n := room_size(ws, root)
 	var r := r01(ws, root.x, root.y, 612)
@@ -449,7 +469,14 @@ static func room_height(ws: int, root: Vector2i, theme: int) -> float:
 	if theme == 9:
 		# Measured from the deck datum, not the basin floor, so every room is
 		# another 1.55m taller than this once you are standing in the water.
-		if n >= 4: return 7.4
+		# Double-height halls read as two complete poolhouse levels; the rare
+		# triple-height volumes are closer to indoor municipal natatoriums.
+		var pool_tier := pool_room_height_tier(ws, root)
+		var height_roll := r01(ws, root.x, root.y, 613)
+		if pool_tier == POOL_HEIGHT_TRIPLE:
+			return lerpf(11.4, 12.6, height_roll)
+		if pool_tier == POOL_HEIGHT_DOUBLE:
+			return lerpf(8.1, 9.0, height_roll)
 		return 5.2 if n >= 2 else lerpf(4.1, 4.6, r)
 	if n >= 4:
 		return 6.4
@@ -956,6 +983,36 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	return {"wall": wall, "full_open": full_open, "t": t, "w": w, "exit_sign": has_sign}
 
 
+const POOL_OPENING_ROUNDED := 0
+const POOL_OPENING_ARCH := 1
+
+
+## Shape variation for a genuine walk-through Poolrooms edge. The canonical
+## edge hash makes both cells agree without storing additional world state.
+static func pool_doorway_kind(ws: int, cell: Vector2i, dir: int) -> int:
+	var e := _edge(cell, dir)
+	var eh := _edge_hash(ws, e[0], e[1])
+	return POOL_OPENING_ARCH \
+		if hr01(eh, 11) < 0.28 else POOL_OPENING_ROUNDED
+
+
+## A rarer view-only circular aperture on an otherwise solid Poolrooms wall.
+## Topology stays solid: the sill remains above the dry deck, so this reveals
+## the neighboring room without silently creating a new traversal edge.
+static func pool_wall_aperture(ws: int, cell: Vector2i, dir: int) -> bool:
+	if not is_wall(ws, cell, dir, 9):
+		return false
+	var e := _edge(cell, dir)
+	return hr01(_edge_hash(ws, e[0], e[1]), 12) < 0.11
+
+
+static func pool_wall_aperture_along(
+		ws: int, cell: Vector2i, dir: int) -> float:
+	var e := _edge(cell, dir)
+	return lerpf(
+		2.5, 9.5, hr01(_edge_hash(ws, e[0], e[1]), 13))
+
+
 ## Corridor bands: certain whole rows/columns of the grid carve into narrow
 ## passages, so tight corridors run cell after cell instead of the world
 ## being nothing but wide rooms. 0 = no corridor, 1 = along x, 2 = along z.
@@ -1084,34 +1141,47 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 		if root == Vector2i.ZERO:
 			return POOL_DECK
 		if n >= 4:
-			if r < 0.40: return POOL_GALLERY
-			if r < 0.72: return POOL_BASIN
-			return POOL_SOLARIUM
+			# Large halls are the best place for connected water features. Keep
+			# only a small minority dry so the level still has occasional relief.
+			if r < 0.38: return POOL_BASIN
+			if r < 0.56: return POOL_STAIRS
+			if r < 0.68: return POOL_CISTERN
+			if r < 0.80: return POOL_CHANNEL
+			return POOL_GALLERY
 		if n >= 2:
 			if zone == 0:
-				if r < 0.44: return POOL_BASIN
-				if r < 0.68: return POOL_SOLARIUM
+				if r < 0.50: return POOL_BASIN
+				if r < 0.68: return POOL_STAIRS
+				if r < 0.78: return POOL_CISTERN
+				if r < 0.88: return POOL_SOLARIUM
 				return POOL_GALLERY
 			if zone == 1:
-				if r < 0.52: return POOL_BASIN
-				if r < 0.76: return POOL_DECK
-				return POOL_STAIRS
-			if r < 0.50: return POOL_BASIN
-			if r < 0.74: return POOL_GALLERY
+				if r < 0.42: return POOL_BASIN
+				if r < 0.58: return POOL_CHANNEL
+				if r < 0.76: return POOL_STAIRS
+				if r < 0.86: return POOL_CISTERN
+				return POOL_DECK
+			if r < 0.44: return POOL_BASIN
+			if r < 0.60: return POOL_STAIRS
+			if r < 0.72: return POOL_CISTERN
+			if r < 0.84: return POOL_CHANNEL
 			return POOL_DECK
 		if zone == 0:
-			if r < 0.38: return POOL_BASIN
-			if r < 0.60: return POOL_SOLARIUM
-			if r < 0.80: return POOL_DECK
+			if r < 0.42: return POOL_BASIN
+			if r < 0.56: return POOL_STAIRS
+			if r < 0.68: return POOL_CHANNEL
+			if r < 0.82: return POOL_DECK
 			return POOL_ALCOVE
 		if zone == 1:
-			if r < 0.44: return POOL_BASIN
-			if r < 0.64: return POOL_STAIRS
+			if r < 0.40: return POOL_BASIN
+			if r < 0.56: return POOL_STAIRS
+			if r < 0.70: return POOL_CHANNEL
 			if r < 0.84: return POOL_DECK
 			return POOL_ALCOVE
-		if r < 0.36: return POOL_BASIN
-		if r < 0.58: return POOL_ALCOVE
-		if r < 0.80: return POOL_DECK
+		if r < 0.38: return POOL_BASIN
+		if r < 0.52: return POOL_STAIRS
+		if r < 0.66: return POOL_CHANNEL
+		if r < 0.82: return POOL_DECK
 		return POOL_STAIRS
 	if theme == 8:
 		if root == Vector2i.ZERO:
@@ -1284,4 +1354,3 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 	if zone == 0: return STYLE_EMPTY if r < 0.22 else (STYLE_LOUNGE if r < 0.42 else STYLE_PILLARS)
 	if zone == 1: return STYLE_EMPTY if r < 0.38 else (STYLE_LOUNGE if r < 0.82 else STYLE_PILLARS)
 	return STYLE_EMPTY if r < 0.46 else (STYLE_PILLARS if r < 0.78 else STYLE_LOUNGE)
-

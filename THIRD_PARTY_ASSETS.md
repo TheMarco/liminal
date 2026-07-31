@@ -666,6 +666,47 @@ supplied by the project owner and are used only as embedded game content.
 These sources do not require attribution, but are included for provenance and
 to recognize the artists.
 
+### `soulmate_jacuzzi.glb`
+
+- **Title:** `Soulmate Jacuzzi`
+- **Creator:** [NXTLVLPLY](https://sketchfab.com/NXTLVLPLY)
+- **Source:** <https://sketchfab.com/3d-models/soulmate-jacuzzi-ae75ae3e7dd24652b008e95e8b4b93d5>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Embedded model retained as supplied; placement and scale are
+  controlled by the Poolrooms scene.
+- **Local record:** [`models/cc_by/soulmate_jacuzzi/SOURCE.md`](models/cc_by/soulmate_jacuzzi/SOURCE.md)
+
+### `pool_lounge_chair.glb`
+
+- **Title:** `Pool Lounge Chair`
+- **Creator:** [CadmiumCoffee (bsishir)](https://sketchfab.com/bsishir)
+- **Source:** <https://sketchfab.com/3d-models/pool-lounge-chair-2ab5992a50404cd6a7bc33ef346a7be4>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Embedded model retained as supplied; placement and scale are
+  controlled by the Poolrooms scene.
+- **Local record:** [`models/cc_by/pool_lounge_chair/SOURCE.md`](models/cc_by/pool_lounge_chair/SOURCE.md)
+
+### `alarm.glb`
+
+- **Title:** `Alarm`
+- **Creator:** [JackFarrand](https://sketchfab.com/JackFarrand)
+- **Source:** <https://sketchfab.com/3d-models/alarm-c9e3be8efe5e4b0da4e9526b71822441>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Embedded model retained as supplied; placement and scale are
+  controlled by the scene.
+- **Local record:** [`models/cc_by/alarm/SOURCE.md`](models/cc_by/alarm/SOURCE.md)
+
+### `alarm_light.glb`
+
+- **Title:** `Alarm Light`
+- **Creator:** [5CNG5](https://sketchfab.com/5CNG5)
+- **Source:** <https://sketchfab.com/3d-models/alarm-light-0e009c47066d4ab4b4329fdd4820f141>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Embedded model retained as supplied; runtime placement
+  centres and wall-aligns the imported hierarchy and explicitly enables the
+  red lamp material's emissive factor.
+- **Local record:** [`models/cc_by/alarm_light/SOURCE.md`](models/cc_by/alarm_light/SOURCE.md)
+
 ### Poly Haven
 
 - **Creator/source:** [Poly Haven](https://polyhaven.com)

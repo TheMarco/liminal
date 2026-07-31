@@ -149,6 +149,19 @@ func _office_air_conditioners(split: Array) -> void:
 				if partition_hits_wall \
 						and absf(along - float(split[1])) < 0.82:
 					continue
+				# Wall art is emitted by each member chunk before this room-root
+				# fixture exists. Predict its exact interval and reject a true
+				# wall-plane overlap; a score penalty still allowed collisions
+				# whenever every otherwise attractive wall was decorated.
+				var art := chunk._office_wall_art_layout(member, dir)
+				if not suspended and not art.is_empty():
+					var art_size: Vector2 = art["size"]
+					var horizontal_overlap := absf(along - float(art["along"])) \
+						< 0.625 + art_size.x * 0.5 + 0.10
+					var vertical_overlap := absf(mount_y - float(art["y"])) \
+						< 0.21 + art_size.y * 0.5 + 0.08
+					if horizontal_overlap and vertical_overlap:
+						continue
 				var p: Vector3
 				match dir:
 					0:
@@ -188,6 +201,7 @@ func _office_air_conditioners(split: Array) -> void:
 				candidates.append({
 					"member": member, "dir": dir, "slot": slot,
 					"position": p, "score": score, "suspended": suspended,
+					"along": along,
 				})
 	if candidates.is_empty():
 		return
@@ -227,6 +241,7 @@ func _office_air_conditioners(split: Array) -> void:
 		pivot.set_meta("office_ac_member", candidate["member"])
 		pivot.set_meta("office_ac_dir", dir)
 		pivot.set_meta("office_ac_slot", int(candidate["slot"]))
+		pivot.set_meta("office_ac_along", float(candidate["along"]))
 		pivot.set_meta("office_ac_expected", desired)
 		pivot.set_meta("office_ac_suspended", bool(candidate["suspended"]))
 		unit.set_meta("authored_model", "office_air_conditioner")
@@ -413,10 +428,6 @@ func _office_corridor_wall_run(o: Vector3, yw: float, side: float,
 		Mats.office_wall_variant(chunk._finish_variant()))
 	wall.rotation.y = yw
 	chunk._collider_yaw_box(wc, Vector3(ln, chunk.ceil_h, 0.15), yw)
-	var inn = side - signf(side) * 0.105
-	var base = chunk._mbox(chunk, chunk._wp(o, Vector3(c, 0.055, inn), yw),
-		Vector3(ln, 0.11, 0.045), Mats.base_green())
-	base.rotation.y = yw
 
 
 func _office_corridor_header(o: Vector3, yw: float, side: float,
@@ -446,11 +457,6 @@ func _office_corridor_bay_returns(o: Vector3, yw: float, side: float,
 			Mats.office_wall_variant(chunk._finish_variant()))
 		ret.rotation.y = yw
 		chunk._collider_yaw_box(wp, Vector3(0.15, chunk.ceil_h, depth), yw)
-		# Baseboard on the vestibule face of each return.
-		var inward = 0.105 if edge < t else -0.105
-		var bp = chunk._wp(o, Vector3(edge + inward, 0.055, dc), yw)
-		var base = chunk._mbox(chunk, bp, Vector3(0.045, 0.11, depth), Mats.base_green())
-		base.rotation.y = yw
 	var carpet = chunk._mbox(chunk, chunk._wp(o, Vector3(t, 0.013, dc), yw),
 		Vector3(width, 0.026, depth), Mats.office_lane_carpet())
 	carpet.rotation.y = yw
@@ -682,6 +688,7 @@ func _office_poster(dir: int, plane: float) -> void:
 	hd.width = 380.0
 	hd.autowrap_mode = TextServer.AUTOWRAP_WORD
 	hd.modulate = Color(0.1, 0.25, 0.16)
+	hd.outline_size = 0
 	hd.position = Vector3(0, 0.22, 0.01)
 	v.add_child(hd)
 	var bd = Label3D.new()
@@ -689,6 +696,7 @@ func _office_poster(dir: int, plane: float) -> void:
 	bd.font_size = 16
 	bd.pixel_size = 0.0014
 	bd.modulate = Color(0.45, 0.48, 0.45)
+	bd.outline_size = 0
 	bd.position = Vector3(0, -0.3, 0.01)
 	v.add_child(bd)
 

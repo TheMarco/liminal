@@ -100,6 +100,36 @@ func _run() -> void:
 		if lift.enabled or lift.prompt_text != "ELEVATOR ARRIVING":
 			failures.append("elevator call did not lock and begin arrival")
 
+	var annex_ws := _level_seed(2)
+	var annex_lift_cell := _find_cell(annex_ws, 2, func(c: Vector2i) -> bool:
+		return WorldGen.elevator_cell(annex_ws, c, 2))
+	var alc := _chunk(annex_ws, 2, annex_lift_cell)
+	var annex_headers := alc.find_children("*", "MeshInstance3D", true, false) \
+		.filter(func(n: Node) -> bool:
+			return n.has_meta("elevator_indicator_header"))
+	var annex_labels := alc.find_children("*", "Label3D", true, false) \
+		.filter(func(n: Node) -> bool:
+			return n.has_meta("elevator_indicator_label"))
+	if annex_headers.size() != 1 or annex_labels.size() != 1:
+		failures.append("Annex elevator indicator was not built exactly once")
+	else:
+		var header := annex_headers[0] as MeshInstance3D
+		var label := annex_labels[0] as Label3D
+		var top := float(header.get_meta("elevator_indicator_top", INF))
+		var ceiling := float(header.get_meta(
+			"elevator_indicator_ceiling", -INF))
+		if top > ceiling - 0.039:
+			failures.append("Annex elevator indicator still penetrates ceiling")
+		if label.position.y >= ceiling - 0.08 \
+				or label.font_size > 56:
+			failures.append("Annex elevator number is not using compact layout")
+		var elevator_wall := WorldGen.anchor_wall(
+			annex_ws, annex_lift_cell, 1701, 2)
+		for node in alc.find_children("*", "Node3D", true, false):
+			if node.has_meta("annex_ac_dir") \
+					and int(node.get_meta("annex_ac_dir")) == elevator_wall:
+				failures.append("Annex AC overlaps the elevator host wall")
+
 	var door_cell := _find_cell(office_ws, 1, func(c: Vector2i) -> bool:
 		return _has_working_door(office_ws, 1, c))
 	var dc := _chunk(office_ws, 1, door_cell)
@@ -155,8 +185,8 @@ func _run() -> void:
 		if not authored_leaf:
 			failures.append("prison swing door did not use the authored cell leaf")
 
-	print("interaction audit: office=%s elevator=%s door=%s prison_door=%s" % [
-		terminal_cell, lift_cell, door_cell, prison_door_cell])
+	print("interaction audit: office=%s elevator=%s annex_elevator=%s door=%s prison_door=%s" % [
+		terminal_cell, lift_cell, annex_lift_cell, door_cell, prison_door_cell])
 	if failures.is_empty():
 		print("  PASS — office uses authored VT100s without E prompts; lift responds; selected door opens away from both approach sides")
 	else:

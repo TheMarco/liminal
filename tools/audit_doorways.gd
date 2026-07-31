@@ -41,6 +41,11 @@ func _init() -> void:
 	var airport_apron_failures := 0
 	var school_carts := 0
 	var school_stalls := 0
+	var school_urinals := 0
+	var school_doors := 0
+	var school_library_stacks := 0
+	var school_encyclopedia_sets := 0
+	var school_elevators := 0
 	var school_fixture_failures := 0
 	var asylum_authored := {}
 	var authored_census := {}
@@ -92,6 +97,12 @@ func _init() -> void:
 					airport_apron_failures += airport_bad
 					school_carts += int(school_report["carts"])
 					school_stalls += int(school_report["stalls"])
+					school_urinals += int(school_report["urinals"])
+					school_doors += int(school_report["doors"])
+					school_library_stacks += int(school_report["library_stacks"])
+					school_encyclopedia_sets += int(
+						school_report["encyclopedia_sets"])
+					school_elevators += int(school_report["elevators"])
 					school_fixture_failures += school_bad
 					if bad > 0:
 						failures += bad
@@ -148,6 +159,11 @@ func _init() -> void:
 		airport_apron_setpieces, airport_apron_failures])
 	print("  opaque school carts: %d | complete bathroom stalls: %d | violations: %d" % [
 		school_carts, school_stalls, school_fixture_failures])
+	print("  fitted school doors: %d | wall-clear urinals: %d" % [
+		school_doors, school_urinals])
+	print("  atomic school library stacks: %d | supported encyclopedia sets: %d" % [
+		school_library_stacks, school_encyclopedia_sets])
+	print("  unobstructed school elevators: %d" % school_elevators)
 	print("  asylum authored furniture %s | violations: %d" % [
 		asylum_authored, asylum_failures])
 	print("  authored furnishings placed %s" % [authored_census])
@@ -160,6 +176,12 @@ func _init() -> void:
 	if school_carts == 0 or school_stalls == 0:
 		failures += 1
 		print("FAIL — school cart/stall integrity audit was not fully exercised")
+	if school_urinals == 0 or school_doors == 0 \
+			or school_library_stacks == 0 \
+			or school_encyclopedia_sets != school_library_stacks \
+			or school_elevators == 0:
+		failures += 1
+		print("FAIL — school door/urinal/library/elevator audit was not fully exercised")
 	failures += asylum_failures
 	# Every downloaded model has to actually reach the rooms it was chosen for.
 	for kind in ["blackjack_table", "roulette_table", "hotdog_stand",

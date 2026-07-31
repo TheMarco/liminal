@@ -64,6 +64,10 @@ static func _pool(env: Environment) -> void:
 	# anywhere. Bright, humid and slightly overexposed: the haze is doing
 	# most of the work, because volumetric fog is what turns the window
 	# spots into real shafts rather than painted ones.
+	# Match the clear color to the warm white tile. The streamed world ends
+	# roughly three chunks from the player; leaving this unset exposed Godot's
+	# black default through distant doorways until the next chunk appeared.
+	env.background_color = Color(0.72, 0.74, 0.70)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.56, 0.63, 0.61)
 	env.ambient_light_energy = 0.425
@@ -76,12 +80,15 @@ static func _pool(env: Environment) -> void:
 	env.tonemap_exposure = 1.30
 	env.sdfgi_energy = 1.20
 	env.fog_light_color = Color(0.86, 0.90, 0.87)
-	env.fog_density = 0.0027
+	# A shallow chlorine-white distance veil starts gently in the room and is
+	# strong enough by the 36-48m streaming horizon to dissolve geometry into
+	# the tile-colored clear background before chunk pop-in becomes legible.
+	env.fog_density = 0.010
 	env.fog_light_energy = 0.65
-	env.volumetric_fog_density = 0.0038
+	env.volumetric_fog_density = 0.0045
 	env.volumetric_fog_albedo = Color(0.94, 0.97, 0.95)
 	env.volumetric_fog_emission = Color(0.10, 0.12, 0.11)
-	env.volumetric_fog_length = 30.0
+	env.volumetric_fog_length = 48.0
 	env.volumetric_fog_gi_inject = 0.15
 	# Chlorine glare. The windows are emissive well past white, so the
 	# bloom is what sells them as daylight instead of as lit panels.

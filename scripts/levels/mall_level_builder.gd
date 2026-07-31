@@ -292,7 +292,7 @@ func _mall_unit_sign(dir: int, plane: float, uc: float, giv: int, y: float,
 	lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lab.autowrap_mode = TextServer.AUTOWRAP_OFF
 	lab.modulate = Color(1.0, 0.62, 0.42) if lit else Color(0.30, 0.26, 0.22)
-	lab.outline_size = 2
+	lab.outline_size = 0
 	lab.set_meta("mall_store_sign", true)
 	lab.set_meta("safe_world_width", safe_world_width)
 	if dir < 2:
@@ -341,7 +341,7 @@ func _mall_sign(pos: Vector3, yaw: float, text: String, size = 0.12,
 	lab.font_size = 72
 	lab.pixel_size = 0.002
 	lab.modulate = Color(0.92, 0.75, 0.48)
-	lab.outline_size = 3
+	lab.outline_size = 0
 	lab.position = Vector3(0, 0, 0.05)
 	v.add_child(lab)
 	return v
@@ -757,8 +757,18 @@ func _mall_atrium() -> void:
 	chunk._mcyl(fountain, Vector3(0, 0.49, 0), 1.38, 0.08, Mats.mall_glass())
 	chunk._mcyl(fountain, Vector3(0, 0.67, 0), 0.20, 0.36, Mats.brass())
 	chunk._collider_cyl(fc + Vector3(0, 0.28, 0), 1.65, 0.56)
-	# pennies still in the bottom
-	chunk._mcyl(fountain, Vector3(0, 0.505, 0), 1.30, 0.01, Mats.puddle())
+	# The former near-black puddle looked like polished plastic. A top-only
+	# circular surface now uses the Poolrooms' animated refraction/ripples,
+	# without adding a water collider or enabling Poolrooms wading behavior.
+	var water := MeshInstance3D.new()
+	water.mesh = _mall_fountain_water_disc(1.30, 64)
+	water.material_override = Mats.mall_fountain_water()
+	water.position = Vector3(0, 0.51, 0)
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water.set_meta("mall_fountain_water", true)
+	water.set_meta("mall_fountain_water_radius", 1.30)
+	water.set_meta("mall_fountain_water_visual_only", true)
+	fountain.add_child(water)
 	chunk._bind_furnishing_colliders(fountain, fountain_b0)
 	chunk._planter(Vector3(2.2, 0, 8.8))
 	_mall_bench(Vector3(3.2, 0, 3.0), PI / 4.0)
@@ -777,6 +787,25 @@ func _mall_atrium() -> void:
 	if chunk._r(1718) < 0.72:
 		_mall_shopping_cart(Vector3(9.8, 0, 2.2),
 			-PI / 2.0 + (chunk._r(1719) - 0.5) * 0.35, chunk._r(1720) < 0.3)
+
+
+func _mall_fountain_water_disc(radius: float, segments: int) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in maxi(segments, 12):
+		var a0 := TAU * float(i) / float(segments)
+		var a1 := TAU * float(i + 1) / float(segments)
+		var p0 := Vector3(cos(a0) * radius, 0, sin(a0) * radius)
+		var p1 := Vector3(cos(a1) * radius, 0, sin(a1) * radius)
+		# Reverse the XZ winding so the top face points +Y under back-face
+		# culling. The shader derives ripple UVs from world position.
+		for p in [Vector3.ZERO, p1, p0]:
+			st.set_normal(Vector3.UP)
+			st.set_uv(Vector2(
+				p.x / (radius * 2.0) + 0.5,
+				p.z / (radius * 2.0) + 0.5))
+			st.add_vertex(p)
+	return st.commit()
 
 
 func _mall_service() -> void:

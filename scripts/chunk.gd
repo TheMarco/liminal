@@ -240,6 +240,11 @@ const OFFICE_BOX_VARIANTS := [
 const LIGHT_SWITCH_PATH := \
 	"res://models/cc_by/light_switch/light_switch.glb"
 const OUTLET_PATH := "res://models/cc_by/outlet/outlet.glb"
+const ALARM_PATH := "res://models/cc_by/alarm_light/alarm_light.glb"
+const ALARM_SCALE := 0.34
+const ALARM_FITTED_HEIGHT := 1.060429 * ALARM_SCALE
+const ALARM_SIGN_CLEARANCE := 0.008
+const ALARM_MIN_CEILING_CLEARANCE := 0.008
 const ANNEX_SHELVING_PATH := \
 	"res://models/cc_by/stainless_steel_shelving/stainless_steel_shelving.glb"
 const ANNEX_SHELVING_SCALE := 0.025
@@ -504,9 +509,94 @@ const ART_VEGAS := [
 	"res://paintings/runtime/painting4-vegas.webp",
 	"res://paintings/runtime/painting5-vegas.webp",
 ]
+const POSTER_OFFICE := [
+	"res://paintings/runtime/posters/poster-office-01.webp",
+	"res://paintings/runtime/posters/poster-office-02.webp",
+	"res://paintings/runtime/posters/poster-office-03.webp",
+	"res://paintings/runtime/posters/poster-office-04.webp",
+	"res://paintings/runtime/posters/poster-office-05.webp",
+	"res://paintings/runtime/posters/poster-office-06.webp",
+	"res://paintings/runtime/posters/poster-office-07.webp",
+	"res://paintings/runtime/posters/poster-office-08.webp",
+	"res://paintings/runtime/posters/poster-office-09.webp",
+]
+const POSTER_ANNEX := [
+	"res://paintings/runtime/posters/poster-annex-01.webp",
+	"res://paintings/runtime/posters/poster-annex-02.webp",
+	"res://paintings/runtime/posters/poster-annex-03.webp",
+	"res://paintings/runtime/posters/poster-annex-04.webp",
+	"res://paintings/runtime/posters/poster-annex-05.webp",
+	"res://paintings/runtime/posters/poster-annex-06.webp",
+	"res://paintings/runtime/posters/poster-annex-07.webp",
+	"res://paintings/runtime/posters/poster-annex-08.webp",
+	"res://paintings/runtime/posters/poster-annex-09.webp",
+]
+const POSTER_AIRPORT := [
+	"res://paintings/runtime/posters/poster-airport-01.webp",
+	"res://paintings/runtime/posters/poster-airport-02.webp",
+	"res://paintings/runtime/posters/poster-airport-03.webp",
+	"res://paintings/runtime/posters/poster-airport-04.webp",
+	"res://paintings/runtime/posters/poster-airport-05.webp",
+	"res://paintings/runtime/posters/poster-airport-06.webp",
+	"res://paintings/runtime/posters/poster-airport-07.webp",
+	"res://paintings/runtime/posters/poster-airport-08.webp",
+	"res://paintings/runtime/posters/poster-airport-09.webp",
+]
+const POSTER_MALL := [
+	"res://paintings/runtime/posters/poster-mall-01.webp",
+	"res://paintings/runtime/posters/poster-mall-02.webp",
+	"res://paintings/runtime/posters/poster-mall-03.webp",
+	"res://paintings/runtime/posters/poster-mall-04.webp",
+	"res://paintings/runtime/posters/poster-mall-05.webp",
+	"res://paintings/runtime/posters/poster-mall-06.webp",
+	"res://paintings/runtime/posters/poster-mall-07.webp",
+	"res://paintings/runtime/posters/poster-mall-08.webp",
+	"res://paintings/runtime/posters/poster-mall-09.webp",
+]
+const POSTER_SCHOOL := [
+	"res://paintings/runtime/posters/poster-school-01.webp",
+	"res://paintings/runtime/posters/poster-school-02.webp",
+	"res://paintings/runtime/posters/poster-school-03.webp",
+	"res://paintings/runtime/posters/poster-school-04.webp",
+	"res://paintings/runtime/posters/poster-school-05.webp",
+	"res://paintings/runtime/posters/poster-school-06.webp",
+	"res://paintings/runtime/posters/poster-school-07.webp",
+	"res://paintings/runtime/posters/poster-school-08.webp",
+	"res://paintings/runtime/posters/poster-school-09.webp",
+]
+const POSTER_ASYLUM := [
+	"res://paintings/runtime/posters/poster-asylum-01.webp",
+	"res://paintings/runtime/posters/poster-asylum-02.webp",
+	"res://paintings/runtime/posters/poster-asylum-03.webp",
+	"res://paintings/runtime/posters/poster-asylum-04.webp",
+	"res://paintings/runtime/posters/poster-asylum-05.webp",
+	"res://paintings/runtime/posters/poster-asylum-06.webp",
+	"res://paintings/runtime/posters/poster-asylum-07.webp",
+	"res://paintings/runtime/posters/poster-asylum-08.webp",
+	"res://paintings/runtime/posters/poster-asylum-09.webp",
+]
+const POSTER_PRISON := [
+	"res://paintings/runtime/posters/poster-prison-01.webp",
+	"res://paintings/runtime/posters/poster-prison-02.webp",
+	"res://paintings/runtime/posters/poster-prison-03.webp",
+	"res://paintings/runtime/posters/poster-prison-04.webp",
+	"res://paintings/runtime/posters/poster-prison-05.webp",
+	"res://paintings/runtime/posters/poster-prison-06.webp",
+	"res://paintings/runtime/posters/poster-prison-07.webp",
+	"res://paintings/runtime/posters/poster-prison-08.webp",
+	"res://paintings/runtime/posters/poster-prison-09.webp",
+]
 const ART_OFFICE := [
 	"res://paintings/runtime/painting1-office.webp",
 	"res://paintings/runtime/painting2-office.webp",
+	"res://paintings/runtime/posters/poster-office-01.webp",
+	"res://paintings/runtime/posters/poster-office-02.webp",
+	"res://paintings/runtime/posters/poster-office-03.webp",
+]
+const ART_ANNEX := [
+	"res://paintings/runtime/posters/poster-annex-01.webp",
+	"res://paintings/runtime/posters/poster-annex-02.webp",
+	"res://paintings/runtime/posters/poster-annex-03.webp",
 ]
 const ART_SEWER := [
 	"res://paintings/runtime/painting1-sewer.webp",
@@ -515,23 +605,45 @@ const ART_SEWER := [
 const ART_AIRPORT := [
 	"res://paintings/runtime/painting1-airport.webp",
 	"res://paintings/runtime/painting2-airport.webp",
+	"res://paintings/runtime/posters/poster-airport-01.webp",
+	"res://paintings/runtime/posters/poster-airport-02.webp",
+	"res://paintings/runtime/posters/poster-airport-03.webp",
 ]
-const ART_SCHOOL := ["res://paintings/runtime/painting1-school.webp"]
+const ART_ASYLUM := [
+	"res://paintings/runtime/posters/poster-asylum-01.webp",
+	"res://paintings/runtime/posters/poster-asylum-02.webp",
+	"res://paintings/runtime/posters/poster-asylum-03.webp",
+]
+const ART_SCHOOL := [
+	"res://paintings/runtime/painting1-school.webp",
+	"res://paintings/runtime/posters/poster-school-01.webp",
+	"res://paintings/runtime/posters/poster-school-02.webp",
+	"res://paintings/runtime/posters/poster-school-03.webp",
+]
 const ART_MALL := [
 	"res://paintings/runtime/painting2-mall.webp",
 	"res://paintings/runtime/painting3-mall.webp",
 	"res://paintings/runtime/painting4-mall.webp",
 	"res://paintings/runtime/painting5-mall.webp",
+	"res://paintings/runtime/posters/poster-mall-01.webp",
+	"res://paintings/runtime/posters/poster-mall-02.webp",
+	"res://paintings/runtime/posters/poster-mall-03.webp",
 ]
-const ART_PRISON := ["res://paintings/runtime/painting1-prison.webp"]
+const ART_PRISON := [
+	"res://paintings/runtime/painting1-prison.webp",
+	"res://paintings/runtime/posters/poster-prison-01.webp",
+	"res://paintings/runtime/posters/poster-prison-02.webp",
+	"res://paintings/runtime/posters/poster-prison-03.webp",
+]
 const ART_RANDOM := [
 	"res://paintings/runtime/painting1-random.webp",
 	"res://paintings/runtime/painting2-random.webp",
 ]
 # Sewer paintings remain in the supplied source set, but the sewer itself is
 # deliberately bare: damp utility tunnels should not read like a gallery.
-const WALL_ART_ALL := ART_VEGAS + ART_OFFICE + ART_AIRPORT \
-	+ ART_SCHOOL + ART_MALL + ART_PRISON + ART_RANDOM
+const WALL_ART_ALL := ART_VEGAS + POSTER_OFFICE + POSTER_ANNEX \
+	+ POSTER_AIRPORT + POSTER_ASYLUM + POSTER_SCHOOL + POSTER_MALL \
+	+ POSTER_PRISON
 
 # Builder-owned implementations still share a small amount of immutable
 # authored data through Chunk. Keeping these values on the stable host also
@@ -579,6 +691,10 @@ const SCH_CHALK := [
 	"PLEASE REMAIN\nSEATED UNTIL",
 	"IF YOU CAN READ THIS\nYOU ARE STILL HERE",
 	"class of\n19__",
+	"THE BELL RANG\nAFTER EVERYONE LEFT",
+	"DO NOT ERASE\nTHE LAST LINE",
+	"WE COUNTED\nONE TOO MANY",
+	"TODAY'S LESSON:\nSTAY WHERE YOU ARE",
 ]
 const MALL_NAMES := ["ORCHARD", "ARCADE", "HOUSE & HOME", "PARADE",
 	"LEVEL TWO", "FOOD GALLERY", "CLOSED", "COMING SOON",
@@ -605,6 +721,16 @@ const POOL_LADDER_PATH := "res://models/cc_by/pool_ladder/pool_ladder.glb"
 const POOL_CHAIR_PATH := "res://models/cc_by/plastic_chair/plastic_chair.glb"
 const POOL_CHAIR_MESH := "polySurface15_blinn6_0"
 const POOL_CHAIR_CENTRE := Vector3(1.664, 0.0, -0.025)
+const POOL_LOUNGE_CHAIR_PATH := \
+	"res://models/cc_by/pool_lounge_chair/pool_lounge_chair.glb"
+const POOL_LOUNGE_CHAIR_SCALE := 0.75
+const POOL_LOUNGE_CHAIR_CENTRE := Vector3(-0.3787, -0.5870, 0.0008)
+const POOL_JACUZZI_PATH := \
+	"res://models/cc_by/soulmate_jacuzzi/soulmate_jacuzzi.glb"
+# The source scene nests 100x FBX transforms under counter-rotated parents.
+# These are the combined, transformed bounds—not the raw mesh accessor bounds.
+const POOL_JACUZZI_SCALE := 0.0125
+const POOL_JACUZZI_CENTRE := Vector3(1.8269, -43.2387, 25.0056)
 const POOL_LIGHT_PATH := "res://models/cc_by/pool_light/pool_light.glb"
 const POOL_LIGHT_SCALE := 0.045
 const POOL_LADDER_SCALE := 1.0
@@ -712,6 +838,9 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(OFFICE_TERMINAL_PATH)
 	paths.append(OFFICE_WATER_COOLER_PATH)
 	paths.append(OFFICE_AIR_CONDITIONER_PATH)
+	paths.append(ALARM_PATH)
+	paths.append(POOL_JACUZZI_PATH)
+	paths.append(POOL_LOUNGE_CHAIR_PATH)
 	paths.append(DESK_PHONE_PATH)
 	paths.append(MALL_PAYPHONE_PATH)
 	paths.append(MALL_DIRECTORY_PATH)
@@ -1133,6 +1262,32 @@ func _floor_spot_clear(p: Vector3, radius: float, height := 0.9) -> bool:
 	return true
 
 
+## Full-footprint counterpart to `_floor_spot_clear`. Long furniture cannot be
+## represented by a small clearance circle: doing that let the middle of an
+## Annex shelf clear a divider while the rack's far end passed through it.
+func _floor_box_clear(p: Vector3, yaw: float, width: float, depth: float,
+		height := 0.9) -> bool:
+	var candidate := plan_box(p, yaw, width, depth, height)
+	for child in body.get_children():
+		var cs := child as CollisionShape3D
+		if cs == null:
+			continue
+		var box := cs.shape as BoxShape3D
+		var cyl := cs.shape as CylinderShape3D
+		if box == null and cyl == null:
+			continue
+		var placed_width := box.size.x if box != null else cyl.radius * 2.0
+		var placed_depth := box.size.z if box != null else cyl.radius * 2.0
+		var placed_height := box.size.y if box != null else cyl.height
+		var placed := plan_box(
+			Vector3(cs.position.x, cs.position.y - placed_height * 0.5,
+				cs.position.z),
+			cs.rotation.y, placed_width, placed_depth, placed_height)
+		if plan_box_overlap(candidate, placed) > FURNISHING_OVERLAP_TOL:
+			return false
+	return true
+
+
 ## Pick a floor point that is actually free. Returns Vector3.INF when the cell
 ## is too full, which the caller should treat as "no prop here" rather than
 ## forcing one in.
@@ -1438,7 +1593,12 @@ func _build_walls() -> void:
 				wseed, cell + WorldGen.DIRV[dir], theme))
 		if info["wall"]:
 			if owns_annex_wall:
-				_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
+				if theme == 9 \
+						and WorldGen.pool_wall_aperture(wseed, cell, dir):
+					_pool_wall_with_circular_aperture(
+						dir, plane, wtop)
+				else:
+					_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
 			_wall_decor(dir, plane)
 			if (theme == 1 or theme == 2) \
 					and (theme != 2 or owns_annex_wall) \
@@ -1449,14 +1609,16 @@ func _build_walls() -> void:
 			var a: float = info["t"] - info["w"] / 2.0
 			var b: float = info["t"] + info["w"] / 2.0
 			if owns_annex_wall:
-				_wall_seg(dir, plane, 0.0, a, 0.0, wtop)
-				_wall_seg(dir, plane, b, S, 0.0, wtop)
-				var head: float = DOOR_TOP
-				if theme == 4 or theme == 7:
-					head = AIR_DOOR
-				elif theme == 9:
-					head = POOL_DOOR_TOP
-				_wall_seg(dir, plane, a, b, head, wtop)
+				if theme == 9:
+					_pool_shaped_doorway(
+						dir, plane, a, b, wtop)
+				else:
+					_wall_seg(dir, plane, 0.0, a, 0.0, wtop)
+					_wall_seg(dir, plane, b, S, 0.0, wtop)
+					var head: float = DOOR_TOP
+					if theme == 4 or theme == 7:
+						head = AIR_DOOR
+					_wall_seg(dir, plane, a, b, head, wtop)
 				_door_casing(dir, plane, a, b)
 				_maybe_swing_door(dir, plane, a, b)
 			if (theme == 1 or theme == 2) \
@@ -1477,6 +1639,141 @@ func _build_walls() -> void:
 		# L-turn there, after both incident straight runs have been shortened
 		# to their tangent points by _pool_boundary_rule.
 		_pool_rounded_corner()
+
+
+func _pool_shaped_doorway(dir: int, plane: float,
+		a: float, b: float, wall_top: float) -> void:
+	_wall_seg(dir, plane, 0.0, a, 0.0, wall_top)
+	_wall_seg(dir, plane, b, S, 0.0, wall_top)
+	var width := b - a
+	var kind := WorldGen.pool_doorway_kind(wseed, cell, dir)
+	var profile: Array[Vector2]
+	var kind_name := "rounded"
+	if kind == WorldGen.POOL_OPENING_ARCH:
+		var rise := clampf(width * 0.28, 0.95, 1.35)
+		profile = PoolOpeningMesh.arched_door_profile(
+			width, POOL_DOOR_TOP, rise, 18)
+		kind_name = "arch"
+	else:
+		profile = PoolOpeningMesh.rounded_door_profile(
+			width, POOL_DOOR_TOP, 0.52, 9)
+	_pool_opening_header_mesh(
+		dir, plane, (a + b) * 0.5, profile, wall_top, kind_name)
+	_pool_profile_header_colliders(
+		dir, plane, (a + b) * 0.5, profile, wall_top, kind_name)
+	_level_builder._pool_crown_trims(dir, plane, a, b)
+
+
+func _pool_opening_header_mesh(dir: int, plane: float, along: float,
+		profile: Array[Vector2], wall_top: float, kind: String) -> void:
+	var header := MeshInstance3D.new()
+	header.mesh = PoolOpeningMesh.doorway_header(
+		profile, POOL_WALL_T, wall_top)
+	header.material_override = Mats.pool_wall_tile()
+	header.position = Vector3(plane, 0.0, along) if dir < 2 \
+		else Vector3(along, 0.0, plane)
+	if dir < 2:
+		header.rotation.y = -PI * 0.5
+	header.set_meta("pool_opening", true)
+	header.set_meta("pool_opening_kind", kind)
+	header.set_meta("pool_opening_dir", dir)
+	header.set_meta("pool_opening_profile", profile)
+	header.set_meta("pool_opening_wall_top", wall_top)
+	add_child(header)
+
+
+func _pool_profile_header_colliders(dir: int, plane: float, along: float,
+		profile: Array[Vector2], wall_top: float, kind: String) -> void:
+	for i in range(profile.size() - 1):
+		_pool_profile_prism_collider(
+			dir, plane,
+			along + profile[i].x,
+			along + profile[i + 1].x,
+			profile[i].y, profile[i + 1].y,
+			wall_top, wall_top,
+			kind)
+
+
+func _pool_wall_with_circular_aperture(
+		dir: int, plane: float, wall_top: float) -> void:
+	var along := WorldGen.pool_wall_aperture_along(wseed, cell, dir)
+	var neighbor_height := cell_ceil_h(
+		wseed, cell + WorldGen.DIRV[dir], theme)
+	var visible_top := minf(ceil_h, neighbor_height) - 0.28
+	var bottom := POOL_DRY_Y + 0.44
+	var radius := minf(
+		1.25, maxf(0.82, (visible_top - bottom) * 0.5))
+	radius = minf(radius, minf(along - 0.85, S - along - 0.85))
+	var center_y := bottom + radius
+	var a := along - radius
+	var b := along + radius
+	_wall_seg(dir, plane, 0.0, a, 0.0, wall_top)
+	_wall_seg(dir, plane, b, S, 0.0, wall_top)
+
+	var panel := MeshInstance3D.new()
+	panel.mesh = PoolOpeningMesh.circular_aperture_panel(
+		radius, POOL_WALL_T, wall_top, center_y, 28)
+	panel.material_override = Mats.pool_wall_tile()
+	panel.position = Vector3(plane, 0.0, along) if dir < 2 \
+		else Vector3(along, 0.0, plane)
+	if dir < 2:
+		panel.rotation.y = -PI * 0.5
+	panel.set_meta("pool_opening", true)
+	panel.set_meta("pool_opening_kind", "circle")
+	panel.set_meta("pool_opening_dir", dir)
+	panel.set_meta("pool_opening_radius", radius)
+	panel.set_meta("pool_opening_center_y", center_y)
+	panel.set_meta("pool_opening_wall_top", wall_top)
+	add_child(panel)
+
+	var count := 20
+	for i in count:
+		var angle0 := lerpf(PI, 0.0, float(i) / float(count))
+		var angle1 := lerpf(PI, 0.0, float(i + 1) / float(count))
+		var u0 := along + cos(angle0) * radius
+		var u1 := along + cos(angle1) * radius
+		var upper0 := center_y + sin(angle0) * radius
+		var upper1 := center_y + sin(angle1) * radius
+		var lower0 := center_y - sin(angle0) * radius
+		var lower1 := center_y - sin(angle1) * radius
+		_pool_profile_prism_collider(
+			dir, plane, u0, u1,
+			0.0, 0.0, lower0, lower1, "circle_lower")
+		_pool_profile_prism_collider(
+			dir, plane, u0, u1,
+			upper0, upper1, wall_top, wall_top, "circle_upper")
+	_level_builder._pool_crown_trims(dir, plane, a, b)
+
+
+func _pool_profile_prism_collider(
+		dir: int, plane: float,
+		u0: float, u1: float,
+		low0: float, low1: float,
+		high0: float, high1: float,
+		kind: String) -> void:
+	if minf(high0 - low0, high1 - low1) < 0.01:
+		return
+	var half := POOL_WALL_T * 0.5
+	var points := PackedVector3Array()
+	for offset in [-half, half]:
+		if dir < 2:
+			points.append(Vector3(plane + offset, low0, u0))
+			points.append(Vector3(plane + offset, low1, u1))
+			points.append(Vector3(plane + offset, high1, u1))
+			points.append(Vector3(plane + offset, high0, u0))
+		else:
+			points.append(Vector3(u0, low0, plane + offset))
+			points.append(Vector3(u1, low1, plane + offset))
+			points.append(Vector3(u1, high1, plane + offset))
+			points.append(Vector3(u0, high0, plane + offset))
+	var shape := ConvexPolygonShape3D.new()
+	shape.points = points
+	var cs := CollisionShape3D.new()
+	cs.shape = shape
+	cs.set_meta("pool_opening_collider", true)
+	cs.set_meta("pool_opening_kind", kind)
+	cs.set_meta("pool_opening_dir", dir)
+	body.add_child(cs)
 
 
 ## A fully open edge builds no wall at all. That is right at eye level and
@@ -1527,10 +1824,19 @@ func _maybe_swing_door(dir: int, plane: float, a: float, b: float) -> void:
 		panel_mat = Mats.sch_door()
 	elif theme == 8:
 		panel_mat = Mats.prison_green()
-	var panel_pos := Vector3(0, 1.08, width * 0.5) if dir == 0 \
-		else Vector3(width * 0.5, 1.08, 0)
-	var panel_size := Vector3(0.075, 2.16, width) if dir == 0 \
-		else Vector3(width, 2.16, 0.075)
+	# School casings are cut to the full 2.25m opening, while the old generic
+	# 2.16m leaf stopped nine centimetres short and exposed the wall/header
+	# behind it. Retain a small operating gap, but fit the actual frame.
+	var panel_height := DOOR_TOP - 0.02 if theme == 6 else 2.16
+	var panel_y := panel_height * 0.5
+	var panel_pos := Vector3(0, panel_y, width * 0.5) if dir == 0 \
+		else Vector3(width * 0.5, panel_y, 0)
+	var panel_size := Vector3(0.075, panel_height, width) if dir == 0 \
+		else Vector3(width, panel_height, 0.075)
+	if theme == 6:
+		pivot.set_meta("school_swing_door", true)
+		pivot.set_meta("school_door_leaf_top", panel_height)
+		pivot.set_meta("school_door_frame_top", DOOR_TOP)
 	var authored_prison_leaf := false
 	if theme == 8:
 		# The authored solitary-cell leaf is floor-aligned and centred on local
@@ -1664,6 +1970,8 @@ func _annex_corner_rule(dir: int, at_max: bool) -> Dictionary:
 			"shift": 0.0,
 			"t_stub": false,
 			"winner_finish": -1,
+			"kind": "continuation",
+			"needs_cap": false,
 		}
 	var has_perp_a := _edge_solid(perp_a[0], perp_a[1])
 	var has_perp_b := _edge_solid(perp_b[0], perp_b[1])
@@ -1672,6 +1980,8 @@ func _annex_corner_rule(dir: int, at_max: bool) -> Dictionary:
 			"shift": 0.0,
 			"t_stub": false,
 			"winner_finish": -1,
+			"kind": "free",
+			"needs_cap": true,
 		}
 	var h := ANNEX_WALL_T * 0.5
 	# Both perpendicular halves being solid makes them one longer continuous
@@ -1683,6 +1993,8 @@ func _annex_corner_rule(dir: int, at_max: bool) -> Dictionary:
 			"shift": -h if at_max else h,
 			"t_stub": true,
 			"winner_finish": winner_finish,
+			"kind": "t_stub",
+			"needs_cap": false,
 		}
 	# walls along Z (dir 0/1) extend into the turn; walls along X retract
 	var outward := h if dir < 2 else -h
@@ -1690,6 +2002,8 @@ func _annex_corner_rule(dir: int, at_max: bool) -> Dictionary:
 		"shift": outward if at_max else -outward,
 		"t_stub": false,
 		"winner_finish": -1,
+		"kind": "l_corner",
+		"needs_cap": true,
 	}
 
 
@@ -2083,14 +2397,26 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 	var annex_t_stub_max := false
 	var annex_t_winner_min := -1
 	var annex_t_winner_max := -1
+	var annex_boundary_min := false
+	var annex_boundary_max := false
+	var annex_cap_min := false
+	var annex_cap_max := false
+	var annex_endpoint_kind_min := ""
+	var annex_endpoint_kind_max := ""
 	if theme == 2:
 		if is_zero_approx(from):
 			var min_rule := _annex_corner_rule(dir, false)
+			annex_boundary_min = true
+			annex_cap_min = bool(min_rule["needs_cap"])
+			annex_endpoint_kind_min = str(min_rule["kind"])
 			from += float(min_rule["shift"])
 			annex_t_stub_min = bool(min_rule["t_stub"])
 			annex_t_winner_min = int(min_rule["winner_finish"])
 		if is_equal_approx(to, S):
 			var max_rule := _annex_corner_rule(dir, true)
+			annex_boundary_max = true
+			annex_cap_max = bool(max_rule["needs_cap"])
+			annex_endpoint_kind_max = str(max_rule["kind"])
 			to += float(max_rule["shift"])
 			annex_t_stub_max = bool(max_rule["t_stub"])
 			annex_t_winner_max = int(max_rule["winner_finish"])
@@ -2107,8 +2433,10 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 	# wall. Rendering a cap here would put a second coplanar face over that
 	# winner and resurrect both the finish rectangle and distance-dependent
 	# flashing. Genuine doorway cuts and L-corners still receive their caps.
-	var cap_min := not is_zero_approx(from) and not annex_t_stub_min
-	var cap_max := not is_equal_approx(to, S) and not annex_t_stub_max
+	var cap_min := (annex_cap_min if annex_boundary_min \
+		else not is_zero_approx(from)) and not annex_t_stub_min
+	var cap_max := (annex_cap_max if annex_boundary_max \
+		else not is_equal_approx(to, S)) and not annex_t_stub_max
 	var ln := to - from
 	# A few low-ceiling themes can place their nominal door-head height at or
 	# above the local ceiling. That means there is no header to build; passing
@@ -2173,6 +2501,12 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		wall_mesh.set_meta("annex_wall_seam_safe", true)
 		wall_mesh.set_meta("annex_wall_cap_min", cap_min)
 		wall_mesh.set_meta("annex_wall_cap_max", cap_max)
+		if annex_boundary_min:
+			wall_mesh.set_meta(
+				"annex_boundary_endpoint_kind_min", annex_endpoint_kind_min)
+		if annex_boundary_max:
+			wall_mesh.set_meta(
+				"annex_boundary_endpoint_kind_max", annex_endpoint_kind_max)
 		wall_mesh.set_meta("annex_raw_finish", annex_raw_finish)
 		wall_mesh.set_meta("annex_finish", annex_finish)
 		wall_mesh.set_meta("annex_wallpaper", annex_finish >= 3)
@@ -2222,13 +2556,13 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 					Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H, trim_len))
 				# The skirting continues around an exposed end, so a papered
 				# wall's tip is trimmed like the rest of it.
-				if not is_zero_approx(from):
+				if cap_min:
 					_annex_baseboard_box(
 						Vector3(plane, ANNEX_BASEBOARD_H * 0.5,
 							from - ANNEX_BASEBOARD_D * 0.5),
 						Vector3(wall_t + ANNEX_BASEBOARD_D * 2.0,
 							ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
-				if not is_equal_approx(to, S):
+				if cap_max:
 					_annex_baseboard_box(
 						Vector3(plane, ANNEX_BASEBOARD_H * 0.5,
 							to + ANNEX_BASEBOARD_D * 0.5),
@@ -2243,13 +2577,13 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 					Vector3(trim_c, ANNEX_BASEBOARD_H * 0.5,
 						outer - n * ANNEX_BASEBOARD_D * 0.5),
 					Vector3(trim_len, ANNEX_BASEBOARD_H, ANNEX_BASEBOARD_D))
-				if not is_zero_approx(from):
+				if cap_min:
 					_annex_baseboard_box(
 						Vector3(from - ANNEX_BASEBOARD_D * 0.5,
 							ANNEX_BASEBOARD_H * 0.5, plane),
 						Vector3(ANNEX_BASEBOARD_D, ANNEX_BASEBOARD_H,
 							wall_t + ANNEX_BASEBOARD_D * 2.0))
-				if not is_equal_approx(to, S):
+				if cap_max:
 					_annex_baseboard_box(
 						Vector3(to + ANNEX_BASEBOARD_D * 0.5,
 							ANNEX_BASEBOARD_H * 0.5, plane),
@@ -2294,9 +2628,8 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 			_strip(dir, inner + n * 0.025, 0.09, c, ln, 0.05, 0.18, Mats.steel())
 		return
 	if theme == 1:
-		# offices: just a dark green baseboard
-		if y0 <= 0.01:
-			_strip(dir, inner + n * 0.02, 0.055, c, ln, 0.04, 0.11, Mats.base_green())
+		# Office walls meet the carpet directly. The former dark green
+		# baseboard read as detached black bars around every room.
 		return
 	# vegas trim set: crown, baseboard, chair rail
 	if y1 >= ceil_h - 0.01:
@@ -2453,9 +2786,18 @@ func _exit_sign(dir: int, t: float) -> void:
 	# Conventional wall-mounted cabinets sit entirely above the lintel. The
 	# former centre at opening_head + 0.16 buried most of the cabinet in the
 	# overhead wall and door casing, leaving only its red light visible.
+	var sign_height := 0.24
+	var lintel_clearance := 0.045
+	if theme != 7:
+		# Build upward from the lintel. Standard rooms retain a full EXIT
+		# cabinet and a generous ceiling gap; exceptionally low rooms slim the
+		# cabinet and its lintel gap so the now larger alarm still fits whole.
+		var stack_room := ceil_h - ALARM_MIN_CEILING_CLEARANCE \
+			- ALARM_FITTED_HEIGHT - ALARM_SIGN_CLEARANCE - opening_head
+		lintel_clearance = clampf(stack_room - 0.02, 0.008, 0.045)
+		sign_height = clampf(stack_room - lintel_clearance, 0.005, 0.12)
 	var y := opening_head - 0.18 if theme == 7 \
-		else minf(opening_head + 0.46, ceil_h - 0.34)
-	var sign_height := 0.24 if theme == 7 else 0.28
+		else opening_head + lintel_clearance + sign_height * 0.5
 	var normal_depth := 0.09 if theme == 7 else 0.22
 	var base: Vector3
 	var hsize: Vector3
@@ -2508,21 +2850,73 @@ func _exit_sign(dir: int, t: float) -> void:
 			lb.position = base + Vector3(0, 0, sside * face_offset)
 			lb.rotation.y = 0.0 if sside > 0.0 else PI
 		add_child(lb)
-		# Each face gets a restrained local spill in front of the physical
-		# cabinet. A single shadowless light embedded in the wall used to leak
-		# red onto the ceiling even when the sign itself was occluded.
-		var l := OmniLight3D.new()
-		l.set_meta("structural_exit_light", true)
-		l.light_color = Color(1.0, 0.2, 0.15)
-		l.light_energy = 0.18
-		l.omni_range = 1.45
-		l.position = lb.position + (Vector3(sside * 0.08, 0, 0) if dir == 0 \
-			else Vector3(0, 0, sside * 0.08))
-		l.shadow_enabled = false
-		l.distance_fade_enabled = true
-		l.distance_fade_begin = 10.0
-		l.distance_fade_length = 5.0
-		add_child(l)
+		# Mall EXIT lettering is self-lit. Its old shadowless Omni had no
+		# visible bulb and painted a floating red patch on the ceiling; global
+		# power sags then made that patch flash independently of the cabinet.
+		# Other floors put that spill at a visible alarm lens.
+		if theme != 7:
+			_exit_alarm(lb.position, lb.rotation.y, y + sign_height * 0.5,
+				opening_head)
+
+
+## Centre and wall-align the supplied alarm by its imported mesh bounds. The
+## source hierarchy carries several offset conversion transforms, so placing
+## its raw origin made the light effectively invisible even though its red
+## Omni still painted the wall and ceiling.
+func _exit_alarm(face_pos: Vector3, yaw: float, sign_top: float,
+		opening_head: float) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.position = face_pos
+	pivot.rotation.y = yaw
+	pivot.set_meta("structural_exit_alarm", true)
+	pivot.set_meta("attributed_asset", ALARM_PATH)
+	add_child(pivot)
+	var model := _attributed_prop_local(pivot, ALARM_PATH, Vector3.ZERO,
+		0.0, Vector3.ONE * ALARM_SCALE)
+	if model == null:
+		remove_child(pivot)
+		pivot.free()
+		return null
+	# The source's flat mounting plate is normal to local +X, while this
+	# placement frame expects local +Z to point out of the wall. Turn the model
+	# left so the plate is flush and the lamp projects into the room.
+	model.rotation.y = -PI / 2.0
+	pivot.set_meta("alarm_mount_yaw", -PI / 2.0)
+	var state := [AABB(), false]
+	_collect_model_bounds(model, Transform3D.IDENTITY, state)
+	if not bool(state[1]):
+		remove_child(pivot)
+		pivot.free()
+		return null
+	var bounds: AABB = state[0]
+	var height := bounds.size.y
+	# Local +Z faces away from the mounting plate and into the room.
+	model.position = Vector3(-bounds.get_center().x, -bounds.get_center().y,
+		-bounds.position.z + 0.012)
+	pivot.position.y = minf(
+		opening_head + 0.035 + height * 0.5,
+		ceil_h - ALARM_MIN_CEILING_CLEARANCE - height * 0.5)
+	pivot.set_meta("alarm_bottom", pivot.position.y - height * 0.5)
+	pivot.set_meta("alarm_top", pivot.position.y + height * 0.5)
+	pivot.set_meta("alarm_depth", bounds.size.z)
+	pivot.set_meta("alarm_height", height)
+	pivot.set_meta("alarm_sign_top", sign_top)
+	pivot.set_meta("alarm_opening_head", opening_head)
+	model.set_meta("authored_model", "alarm_light")
+
+	var light := OmniLight3D.new()
+	light.set_meta("structural_exit_light", true)
+	light.light_color = Color(1.0, 0.055, 0.035)
+	light.light_energy = 0.22
+	light.omni_range = 1.45
+	# The spill now starts at the physical lens rather than inside the wall.
+	light.position = Vector3(0, -height * 0.08, bounds.size.z + 0.065)
+	light.shadow_enabled = false
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = 10.0
+	light.distance_fade_length = 5.0
+	pivot.add_child(light)
+	return pivot
 
 
 # --- wall decoration ---------------------------------------------------------
@@ -2557,23 +2951,19 @@ func _wall_band_top() -> float:
 func _wall_art_pool() -> Array:
 	match theme:
 		0: return ART_VEGAS
-		1: return ART_OFFICE
-		# Airport concourses also carry the mall's commercial advertisements.
-		4: return ART_AIRPORT + ART_MALL
-		6: return ART_SCHOOL
-		7: return ART_MALL
-		# Institutional/official airport portraits make sense in the prison too.
-		8: return ART_PRISON + ART_AIRPORT
+		1: return POSTER_OFFICE
+		2: return POSTER_ANNEX
+		4: return POSTER_AIRPORT
+		5: return POSTER_ASYLUM
+		6: return POSTER_SCHOOL
+		7: return POSTER_MALL
+		8: return POSTER_PRISON
 	return []
 
 
 func _wall_art_path(salt: int) -> String:
 	var pool: Array = _wall_art_pool()
-	# "Random" is genuinely cross-theme except where the art direction is
-	# explicit: offices use only their monochrome portraits, while sewers never
-	# call this function at all. The asylum has no named set, so its formal
-	# rooms draw exclusively from the two random pieces.
-	if pool.is_empty() or (theme != 1 and _r(salt + 1) < 0.16):
+	if pool.is_empty():
 		pool = ART_RANDOM
 	var pick := posmod(WorldGen.h(wseed, cell.x, cell.y, salt), pool.size())
 	return str(pool[pick])
@@ -2622,43 +3012,59 @@ func _wall_art_chance() -> float:
 		return 0.0
 	match theme:
 		1:
-			return 0.12 if style == WorldGen.OFFICE_STORAGE else 0.22
+			return 0.62 if style == WorldGen.OFFICE_STORAGE else 0.72
 		2:
-			return 0.0
+			return 0.55 if style == WorldGen.ANNEX_PASSAGE else 0.65
 		4:
 			return 0.22
 		5:
-			return 0.30 if style == WorldGen.ASY_DAYROOM \
-				or style == WorldGen.ASY_OFFICE or style == WorldGen.ASY_CHAPEL \
-				else 0.0
+			return 0.52
 		6:
-			return 0.24 if style == WorldGen.SCH_CORRIDOR \
-				or style == WorldGen.SCH_LIBRARY or style == WorldGen.SCH_ADMIN \
-				or style == WorldGen.SCH_AUDITORIUM else 0.0
+			return 0.56
 		7:
 			# Mall art belongs in the poster-case system below. General mounts
 			# can be physically valid yet wind up hidden behind store shelving.
 			return 0.0
 		8:
-			return 0.26 if style == WorldGen.PRISON_MESS \
-				or style == WorldGen.PRISON_GUARD \
-				or style == WorldGen.PRISON_VISITATION \
-				or style == WorldGen.PRISON_ROTUNDA else 0.0
+			return 0.50
 	return 0.0
 
 
-func _wall_art(dir: int, plane: float, salt: int) -> void:
-	var path := _wall_art_path(salt)
-	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
-	var inner := plane + n * (T / 2.0)
-	var max_size := Vector2(1.90, 1.38) if theme == 0 \
-		else Vector2(1.72, 1.34)
-	var size := _wall_art_fit(path, max_size)
+## Classroom and laboratory front walls are authored later by the School
+## builder. Reserve the exact deterministic board wall before general wall
+## decoration runs so a poster can never be hidden behind the chalkboard.
+func _school_chalkboard_wall() -> int:
+	if theme != 6:
+		return -1
+	if style == WorldGen.SCH_CLASSROOM:
+		return _level_builder._sch_front_wall(72)
+	if style == WorldGen.SCH_LAB:
+		return _level_builder._sch_front_wall(710)
+	return -1
+
+
+## Exact wall-plane rectangle of the Office painting that a member chunk will
+## generate, or an empty dictionary when that wall owns no painting. Room-root
+## fixtures use this before sibling chunks exist, so AC placement and art share
+## one deterministic answer instead of discovering their collision afterward.
+func _office_wall_art_layout(member: Vector2i, dir: int) -> Dictionary:
+	if theme != 1:
+		return {}
+	var member_style := WorldGen.cell_style(wseed, member, theme)
+	var chance := 0.62 if member_style == WorldGen.OFFICE_STORAGE else 0.72
+	if WorldGen.r01(wseed, member.x, member.y, 1040 + dir) >= chance:
+		return {}
+	var salt := 1060 + dir * 7
+	var path := str(POSTER_OFFICE[posmod(
+		WorldGen.h(wseed, member.x, member.y, salt), POSTER_OFFICE.size())])
+	var size := _wall_art_fit(path, Vector2(1.72, 1.34))
 	var along := -1.0
-	var split := _resolved_room_split()
+	var split := _resolved_room_split_for(member)
 	for candidate_idx in 6:
 		var candidate := lerpf(0.42 + size.x * 0.5,
-			S - 0.42 - size.x * 0.5, _r(salt + 2 + candidate_idx * 17))
+			S - 0.42 - size.x * 0.5,
+			WorldGen.r01(wseed, member.x, member.y,
+				salt + 2 + candidate_idx * 17))
 		var partition_hits_wall := not split.is_empty() \
 			and ((bool(split[0]) and dir < 2) \
 				or (not bool(split[0]) and dir >= 2))
@@ -2668,12 +3074,54 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 		along = candidate
 		break
 	if along < 0.0:
+		return {}
+	var member_ceil := cell_ceil_h(wseed, member, theme)
+	var y := minf(1.92, member_ceil - size.y * 0.5 - 0.30)
+	y = maxf(y, size.y * 0.5 + 0.48)
+	return {
+		"path": path,
+		"size": size,
+		"along": along,
+		"y": y,
+	}
+
+
+func _wall_art(dir: int, plane: float, salt: int) -> void:
+	var office_layout := _office_wall_art_layout(cell, dir) if theme == 1 else {}
+	var path := str(office_layout["path"]) if not office_layout.is_empty() \
+		else _wall_art_path(salt)
+	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
+	var wall_t := ANNEX_WALL_T if theme == 2 else T
+	var inner := plane + n * (wall_t / 2.0)
+	var max_size := Vector2(1.90, 1.38) if theme == 0 \
+		else Vector2(1.72, 1.34)
+	var size: Vector2 = office_layout["size"] if not office_layout.is_empty() \
+		else _wall_art_fit(path, max_size)
+	var along := float(office_layout["along"]) \
+		if not office_layout.is_empty() else -1.0
+	if office_layout.is_empty():
+		var split := _resolved_room_split()
+		for candidate_idx in 6:
+			var candidate := lerpf(0.42 + size.x * 0.5,
+				S - 0.42 - size.x * 0.5,
+				_r(salt + 2 + candidate_idx * 17))
+			var partition_hits_wall := not split.is_empty() \
+				and ((bool(split[0]) and dir < 2) \
+					or (not bool(split[0]) and dir >= 2))
+			if partition_hits_wall \
+					and absf(candidate - float(split[1])) < size.x * 0.5 + 0.30:
+				continue
+			along = candidate
+			break
+	if along < 0.0:
 		return
 	# A 1.92m centre keeps framed art in the upper wall field instead of
 	# reading like furniture-height signage. Short rooms still clamp it safely
 	# beneath the ceiling.
-	var y := minf(1.92, ceil_h - size.y * 0.5 - 0.30)
-	y = maxf(y, size.y * 0.5 + 0.48)
+	var y := float(office_layout["y"]) if not office_layout.is_empty() \
+		else minf(1.92, ceil_h - size.y * 0.5 - 0.30)
+	if office_layout.is_empty():
+		y = maxf(y, size.y * 0.5 + 0.48)
 	# Lift the frame clear of the wall's horizontal banding. A picture hung
 	# across a tiled wainscot or the school's red line reads as a mistake
 	# rather than as decor, and the old 1.72m centre let a tall Vegas frame sit
@@ -2697,6 +3145,8 @@ func _wall_decor(dir: int, plane: float) -> void:
 	# would immediately make it a building with a purpose.
 	if theme == 9:
 		return
+	if theme == 6 and dir == _school_chalkboard_wall():
+		return
 	var r := _r(40 + dir)
 	var art_chance := _wall_art_chance()
 	if art_chance > 0.0 and _r(1040 + dir) < art_chance:
@@ -2717,7 +3167,7 @@ func _wall_decor(dir: int, plane: float) -> void:
 		var retail := style == WorldGen.MALL_CORRIDOR or style == WorldGen.MALL_ATRIUM \
 				or style == WorldGen.MALL_KIOSKS
 		if retail:
-			if r < 0.78:
+			if r < 0.52:
 				_level_builder._mall_storefront(dir, plane)
 			elif r < 0.96:
 				_level_builder._mall_poster_case(dir, plane)
@@ -2738,7 +3188,7 @@ func _wall_decor(dir: int, plane: float) -> void:
 	if theme == 5:
 		if r < 0.13:
 			_level_builder._asy_straitjacket(dir, plane)
-		elif r < 0.27:
+		elif r < 0.35:
 			_level_builder._asy_scrawl(dir, plane)
 		elif r < 0.36:
 			_level_builder._asy_crutches(dir, plane)
@@ -2772,10 +3222,9 @@ func _wall_decor(dir: int, plane: float) -> void:
 			_level_builder._air_wall_fids(dir, plane)
 		return
 	if theme == 2:
-		# Cameras are the Annex's one intentional furnishing. Keeping them rare
-		# makes the otherwise blank walls feel watched rather than decorated.
-		# Corridor cameras mount on the visible inner shell instead of the outer
-		# backing wall hidden beyond its reserved side strip.
+		# The art branch above owns the new hotel/corporate propaganda. Remaining
+		# bare walls keep the Annex's rare camera motif, so the signs feel issued
+		# by the building rather than laid out as a gallery.
 		if style != WorldGen.ANNEX_PASSAGE and r < 0.095:
 			_security_camera_wall(dir, plane)
 		return
@@ -2786,7 +3235,7 @@ func _wall_decor(dir: int, plane: float) -> void:
 			_wall_clock(dir, plane)
 		elif r < 0.46:
 			_filing_bank(dir, plane)
-		elif r < 0.58:
+		elif r < 0.64:
 			_level_builder._office_poster(dir, plane)
 		return
 	if r < 0.32:
@@ -3053,15 +3502,20 @@ func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float) ->
 
 
 func _resolved_room_split() -> Array:
-	var split := WorldGen.room_split(wseed, room_root, theme)
+	return _resolved_room_split_for(cell)
+
+
+func _resolved_room_split_for(member: Vector2i) -> Array:
+	var member_root := WorldGen.room_id(wseed, member)
+	var split := WorldGen.room_split(wseed, member_root, theme)
 	if split.is_empty():
 		return []
 	var along_x := bool(split[0])
 	var off := float(split[1])
-	var chosen := WorldGen.partition_offset(wseed, cell, theme, along_x, off)
+	var chosen := WorldGen.partition_offset(wseed, member, theme, along_x, off)
 	if chosen < 0.0:
 		along_x = not along_x
-		chosen = WorldGen.partition_offset(wseed, cell, theme, along_x, off)
+		chosen = WorldGen.partition_offset(wseed, member, theme, along_x, off)
 	if chosen < 0.0:
 		return []
 	return [along_x, chosen]
@@ -3666,6 +4120,8 @@ func _interactive_elevator(dir: int) -> void:
 	else:
 		v.position = Vector3(S / 2.0, _floor_h(), inner + n * 0.035)
 		v.rotation.y = PI if dir == 2 else 0.0
+	v.set_meta("elevator_facade", true)
+	v.set_meta("elevator_facade_dir", dir)
 	add_child(v)
 	_mrbox(v, Vector3(0, 1.27, -0.035), Vector3(2.62, 2.54, 0.10),
 		Mats.charcoal(), 0.025)
@@ -3680,14 +4136,33 @@ func _interactive_elevator(dir: int) -> void:
 		_mrbox(leaf, Vector3.ZERO, Vector3(1.07, 2.40, 0.075), Mats.steel(), 0.012)
 		for rib in [-0.36, 0.0, 0.36]:
 			_mbox(leaf, Vector3(rib, 0, 0.045), Vector3(0.018, 2.25, 0.018), Mats.chrome())
-	# Header display and its stubborn amber direction arrow.
-	_mrbox(v, Vector3(0, 2.78, 0.035), Vector3(0.92, 0.34, 0.08), Mats.sign_housing(), 0.018)
+	# Header display and its stubborn amber direction arrow. The Annex ceiling
+	# is only 2.78m high, so the former fixed 2.95m header top disappeared into
+	# the ceiling and cropped the number. Fit a compact housing between the
+	# door frame and the actual local ceiling instead.
+	const INDICATOR_BOTTOM := 2.58
+	const INDICATOR_TOP_NORMAL := 2.95
+	const INDICATOR_CEILING_GAP := 0.04
+	var local_ceiling := ceil_h - _floor_h()
+	var indicator_top := minf(
+		INDICATOR_TOP_NORMAL, local_ceiling - INDICATOR_CEILING_GAP)
+	var indicator_h := maxf(indicator_top - INDICATOR_BOTTOM, 0.12)
+	var indicator_y := indicator_top - indicator_h * 0.5
+	var indicator := _mrbox(
+		v, Vector3(0, indicator_y, 0.035),
+		Vector3(0.92, indicator_h, 0.08), Mats.sign_housing(), 0.018)
+	indicator.set_meta("elevator_indicator_header", true)
+	indicator.set_meta("elevator_indicator_top", indicator_top)
+	indicator.set_meta("elevator_indicator_ceiling", local_ceiling)
 	var floor_lb := Label3D.new()
 	floor_lb.text = "%d  ▼" % (WorldGen.THEMES.find(theme) + 1)
-	floor_lb.font_size = 72
+	floor_lb.font_size = 52 if indicator_h < 0.24 else 72
 	floor_lb.pixel_size = 0.0021
 	floor_lb.modulate = Color(1.0, 0.56, 0.18)
-	floor_lb.position = Vector3(0, 2.78, 0.082)
+	floor_lb.position = Vector3(0, indicator_y, 0.082)
+	floor_lb.set_meta("elevator_indicator_label", true)
+	floor_lb.set_meta("elevator_indicator_top", indicator_top)
+	floor_lb.set_meta("elevator_indicator_ceiling", local_ceiling)
 	v.add_child(floor_lb)
 	# Brushed call plate, button, key switch and Braille-like locator studs.
 	_mrbox(v, Vector3(1.38, 1.16, 0.06), Vector3(0.34, 0.64, 0.08), Mats.steel(), 0.018)
@@ -4450,7 +4925,9 @@ func _filing_bank(dir: int, plane: float) -> void:
 	var along := S / 2.0 + (_r(59 + dir) - 0.5) * 4.0
 	var count := 3 + int(_r(60 + dir) * 1.99)
 	var open_i := int(_r(61 + dir) * float(count) * 0.99)
-	var open_j := int(_r(62 + dir) * 3.99)
+	# Keep the open drawer at a usable hand height. A bottom drawer pulled
+	# nearly its full depth read as a detached cabinet block on the floor.
+	var open_j := 1 + int(_r(62 + dir) * 1.99)
 	for i in count:
 		var t := along + (float(i) - float(count - 1) / 2.0) * 0.5
 		var v := Node3D.new()
@@ -4460,15 +4937,38 @@ func _filing_bank(dir: int, plane: float) -> void:
 		else:
 			v.position = Vector3(t, 0, inner + n * 0.31)
 			v.rotation.y = 0.0 if n > 0.0 else PI
+		v.set_meta("filing_bank_cabinet", true)
+		v.set_meta("filing_bank_dir", dir)
 		add_child(v)
 		_mrbox(v, Vector3(0, 0.66, 0), Vector3(0.46, 1.32, 0.6), Mats.metal_gray(), 0.015)
 		for j in 4:
-			var dy := 0.18 + 0.31 * float(j)
-			_mbox(v, Vector3(0, dy + 0.14, 0.302), Vector3(0.4, 0.27, 0.012), Mats.divider_gray())
-			_mbox(v, Vector3(0, dy + 0.245, 0.315), Vector3(0.13, 0.022, 0.014), Mats.chrome())
+			# The old 0.18m anchor lifted the complete drawer stack 13cm and
+			# pushed the top face beyond the 1.32m cabinet shell.
+			var dy := 0.05 + 0.31 * float(j)
 			if i == open_i and j == open_j:
-				_mbox(v, Vector3(0, dy + 0.13, 0.46), Vector3(0.4, 0.24, 0.32), Mats.metal_gray())
-				_mbox(v, Vector3(0, dy + 0.23, 0.46), Vector3(0.34, 0.02, 0.26), Mats.box_white())
+				# A short 12cm pull exposes the paper insert without projecting
+				# a full filing-box depth into the walkway.
+				var drawer := _mbox(v, Vector3(0, dy + 0.13, 0.365),
+					Vector3(0.4, 0.24, 0.13), Mats.metal_gray())
+				drawer.set_meta("filing_bank_open_drawer", true)
+				drawer.set_meta("filing_bank_open_row", j)
+				drawer.set_meta("filing_bank_projection", 0.128)
+				drawer.set_meta("filing_bank_dir", dir)
+				var open_face := _mbox(v, Vector3(0, dy + 0.14, 0.436),
+					Vector3(0.4, 0.27, 0.012), Mats.divider_gray())
+				open_face.set_meta("filing_bank_drawer_face", true)
+				open_face.set_meta("filing_bank_drawer_row", j)
+				_mbox(v, Vector3(0, dy + 0.245, 0.449),
+					Vector3(0.13, 0.022, 0.014), Mats.chrome())
+				_mbox(v, Vector3(0, dy + 0.23, 0.375),
+					Vector3(0.34, 0.02, 0.10), Mats.box_white())
+			else:
+				var closed_face := _mbox(v, Vector3(0, dy + 0.14, 0.302),
+					Vector3(0.4, 0.27, 0.012), Mats.divider_gray())
+				closed_face.set_meta("filing_bank_drawer_face", true)
+				closed_face.set_meta("filing_bank_drawer_row", j)
+				_mbox(v, Vector3(0, dy + 0.245, 0.315),
+					Vector3(0.13, 0.022, 0.014), Mats.chrome())
 	var cc: Vector3
 	var csize: Vector3
 	if dir < 2:
@@ -4481,7 +4981,9 @@ func _filing_bank(dir: int, plane: float) -> void:
 
 
 const OFFICE_POSTERS := ["SAFETY IS EVERYONE'S JOB", "HAVE YOU FILED YOUR 4-19?",
-	"THE BUILDING THANKS YOU", "PLEASE CONSERVE LIGHT", "TIDY DESK, TIDY MIND"]
+	"THE BUILDING THANKS YOU", "PLEASE CONSERVE LIGHT", "TIDY DESK, TIDY MIND",
+	"YOUR DESK MISSES YOU", "CONSISTENCY IS COMFORT", "STAY UNTIL COMPLETE",
+	"EVERYONE IS COUNTING ON YOU", "A QUIET FLOOR IS A PRODUCTIVE FLOOR"]
 
 
 func _vt100(pos: Vector3, yaw: float) -> Node3D:
@@ -4523,7 +5025,7 @@ func _vt100(pos: Vector3, yaw: float) -> Node3D:
 	readout.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	readout.autowrap_mode = TextServer.AUTOWRAP_OFF
 	readout.modulate = Color(0.45, 0.96, 1.0, 0.94)
-	readout.outline_size = 1
+	readout.outline_size = 0
 	readout.outline_modulate = Color(0.0, 0.045, 0.075, 0.92)
 	readout.double_sided = false
 	readout.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
@@ -4636,12 +5138,80 @@ func school_stationery_support_violations() -> int:
 			ancestor = ancestor.get_parent()
 		if not supported:
 			bad += 1
+		var supplies := node as Node3D
+		var source_bottom := float(
+			node.get_meta("school_stationery_source_bottom", INF))
+		var desk_top := float(node.get_meta("school_stationery_desk_top", -INF))
+		var contact_y := supplies.position.y + source_bottom
+		var quarter_turn_error := absf(wrapf(
+			supplies.rotation.y - PI / 2.0, -PI, PI))
+		if absf(contact_y - desk_top) > 0.004 \
+				or quarter_turn_error > 0.07 \
+				or absf(float(node.get_meta(
+					"school_stationery_quarter_turn", 0.0)) - PI / 2.0) > 0.001:
+			bad += 1
 	return bad
+
+
 func school_fixture_integrity_audit() -> Dictionary:
-	var report := {"carts": 0, "stalls": 0, "violations": 0}
+	var report := {
+		"carts": 0,
+		"stalls": 0,
+		"urinals": 0,
+		"doors": 0,
+		"library_stacks": 0,
+		"encyclopedia_sets": 0,
+		"elevators": 0,
+		"admin_counters": 0,
+		"violations": 0,
+	}
 	if theme != 6:
 		return report
 	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("school_swing_door"):
+			report["doors"] = int(report["doors"]) + 1
+			var leaf_top := float(node.get_meta("school_door_leaf_top", 0.0))
+			var frame_top := float(node.get_meta("school_door_frame_top", INF))
+			var operating_gap := frame_top - leaf_top
+			if operating_gap < 0.0 or operating_gap > 0.031:
+				report["violations"] = int(report["violations"]) + 1
+		if str(node.get_meta("attributed_furnishing", "")) \
+				== "school_urinal":
+			report["urinals"] = int(report["urinals"]) + 1
+			var depth := float(node.get_meta("school_urinal_depth", 0.0))
+			var clearance := float(
+				node.get_meta("school_urinal_wall_clearance", 0.0))
+			var standoff := float(
+				node.get_meta("school_urinal_mount_standoff", 0.0))
+			var dir := int(node.get_meta("school_urinal_wall_dir", -1))
+			if dir < 0 or dir > 3 \
+					or depth < 0.30 \
+					or clearance < 0.01 \
+					or absf(standoff - (depth * 0.5 + clearance)) > 0.002:
+				report["violations"] = int(report["violations"]) + 1
+		if node.has_meta("school_library_stack"):
+			report["library_stacks"] = int(report["library_stacks"]) + 1
+			var owned_books := 0
+			for child in node.find_children("*", "Node3D", true, false):
+				if child.has_meta("school_library_encyclopedia_set"):
+					owned_books += 1
+			if owned_books != 1:
+				report["violations"] = int(report["violations"]) + 1
+		if node.has_meta("school_library_encyclopedia_set"):
+			report["encyclopedia_sets"] = int(report["encyclopedia_sets"]) + 1
+			var support := node.get_parent()
+			var has_stack := false
+			while support != null and support != self:
+				if support.has_meta("school_library_stack"):
+					has_stack = true
+					break
+				support = support.get_parent()
+			if not has_stack:
+				report["violations"] = int(report["violations"]) + 1
+		if node.has_meta("elevator_facade"):
+			report["elevators"] = int(report["elevators"]) + 1
+		if node.has_meta("school_admin_counter"):
+			report["admin_counters"] = int(report["admin_counters"]) + 1
 		# The authored cart carries its own opaque materials. The generated one
 		# is still the fallback and still has to be checked: its tub was once
 		# built from translucent water-jug plastic, and the wheels and the wall
@@ -4668,6 +5238,13 @@ func school_fixture_integrity_audit() -> Dictionary:
 				toilets += 1
 		if doors != 1 or toilets != 1:
 			report["violations"] = int(report["violations"]) + 1
+	if WorldGen.elevator_cell(wseed, cell, theme):
+		if int(report["elevators"]) != 1 \
+				or int(report["admin_counters"]) != 0:
+			report["violations"] = int(report["violations"]) + 1
+		for node in find_children("*", "Node3D", true, false):
+			if node.has_meta("school_projector_screen"):
+				report["violations"] = int(report["violations"]) + 1
 	return report
 
 
@@ -5306,7 +5883,9 @@ func _build_portal(dest: int) -> void:
 const ASY_SCRAWLS := ["LET ME OUT", "THEY LISTEN AT NIGHT", "NO ONE LEFT",
 	"I AM NOT SICK", "IT WATCHES THE DOOR", "ROOM 9 ROOM 9 ROOM 9",
 	"DONT SLEEP HERE", "WHERE DID EVERYONE GO", "HE COUNTS US AT NIGHT",
-	"THE TREATMENT HELPS", "ALL OF US ARE STILL HERE"]
+	"THE TREATMENT HELPS", "ALL OF US ARE STILL HERE", "THE WALLS BREATHE",
+	"SOMEONE IS USING MY NAME", "THEY TURNED OFF THE SUN", "KEEP THE DOOR SHUT",
+	"I HEARD YOU COME IN", "WE NEVER WENT HOME"]
 const ASY_ZONE_SIGNS := [
 	["WARD 3", "WARD 7", "SOLITARY", "DAY ROOM"],
 	["HYDROTHERAPY", "TREATMENT", "NO ADMITTANCE", "SURGERY"],
@@ -5388,7 +5967,8 @@ const ATTRIBUTED_ROUGHNESS_FLOOR := {
 static func _tune_attributed_scene(path: String, scene: PackedScene) -> void:
 	if not ATTRIBUTED_ROUGHNESS_FLOOR.has(path) \
 			and path != SCH_CHEMISTRY_TABLE_PATH \
-			and path != CHEMISTRY_GLASSWARE_PATH:
+			and path != CHEMISTRY_GLASSWARE_PATH \
+			and path != ALARM_PATH:
 		return
 	var probe := scene.instantiate()
 	for node in probe.find_children("*", "MeshInstance3D", true, false):
@@ -5423,6 +6003,15 @@ static func _tune_attributed_scene(path: String, scene: PackedScene) -> void:
 				mat.metallic = 0.0
 				mat.roughness = 0.10
 				mat.albedo_color = Color(0.72, 0.86, 0.80, 0.34)
+			elif path == ALARM_PATH \
+					and mat.resource_name.to_lower().contains("lumina"):
+				# The glTF declares emissive strength but omits emissiveFactor,
+				# whose specified default is black. Make the physical bulb the
+				# visible source of the red spill instead of a glowing point
+				# with no fixture.
+				mat.emission_enabled = true
+				mat.emission = Color(1.0, 0.018, 0.008)
+				mat.emission_energy_multiplier = 7.0
 	probe.free()
 
 
@@ -5672,6 +6261,9 @@ func school_projector_screen_audit() -> Dictionary:
 		var dir := int(node.get_meta("school_projector_screen", -1))
 		if dir < 0 or dir > 3 \
 				or not node.has_meta("atomic_furnishing") \
+				or not bool(node.get_meta(
+					"school_projector_screen_compact", false)) \
+				or WorldGen.elevator_cell(wseed, cell, theme) \
 				or not bool(WorldGen.edge_info(wseed, cell, dir, theme)["wall"]):
 			report["violations"] += 1
 	return report
@@ -5701,6 +6293,7 @@ func exit_sign_fixture_audit() -> Dictionary:
 	var report := {
 		"housings": 0,
 		"labels": 0,
+		"alarms": 0,
 		"lights": 0,
 		"violations": 0,
 	}
@@ -5709,6 +6302,30 @@ func exit_sign_fixture_audit() -> Dictionary:
 			report["labels"] += 1
 		if node.has_meta("structural_exit_light"):
 			report["lights"] += 1
+		if node.has_meta("structural_exit_alarm"):
+			report["alarms"] += 1
+			var alarm_bottom := float(node.get_meta("alarm_bottom", -INF))
+			var alarm_top := float(node.get_meta("alarm_top", INF))
+			var alarm_sign_top := float(node.get_meta("alarm_sign_top", INF))
+			var alarm_opening_head := float(
+				node.get_meta("alarm_opening_head", INF))
+			var alarm_height := float(node.get_meta("alarm_height", 0.0))
+			var alarm_depth := float(node.get_meta("alarm_depth", 0.0))
+			if str(node.get_meta("attributed_asset", "")) != ALARM_PATH \
+					or absf(float(node.get_meta("alarm_mount_yaw", 0.0))
+						+ PI / 2.0) > 0.001 \
+					or alarm_bottom < alarm_opening_head + 0.03 \
+					or alarm_top > ceil_h \
+						- ALARM_MIN_CEILING_CLEARANCE + 0.002 \
+					or absf(alarm_height - ALARM_FITTED_HEIGHT) > 0.006 \
+					or alarm_depth < 0.07:
+				report["violations"] += 1
+				report["alarm_issue"] = {
+					"bottom": alarm_bottom, "top": alarm_top,
+					"sign_top": alarm_sign_top, "height": alarm_height,
+					"opening_head": alarm_opening_head,
+					"depth": alarm_depth, "ceiling": ceil_h,
+				}
 		if not node.has_meta("structural_exit_housing"):
 			continue
 		report["housings"] += 1
@@ -5717,14 +6334,24 @@ func exit_sign_fixture_audit() -> Dictionary:
 		var normal_half := float(node.get_meta("normal_half_extent", 0.0))
 		if sign_top >= ceil_h - 0.01 or face_offset <= normal_half:
 			report["violations"] += 1
+			report["housing_issue"] = {
+				"sign_top": sign_top, "ceiling": ceil_h,
+				"face_offset": face_offset, "normal_half": normal_half,
+			}
 		if theme != 7:
 			var sign_bottom := float(node.get_meta("sign_bottom", -INF))
 			var opening_head := float(node.get_meta("opening_head", INF))
-			if sign_bottom <= opening_head + 0.04 \
+			if sign_bottom <= opening_head + 0.006 \
 					or normal_half <= T * 0.5 + 0.02:
 				report["violations"] += 1
+				report["mount_issue"] = {
+					"sign_bottom": sign_bottom, "opening_head": opening_head,
+					"normal_half": normal_half, "wall_half": T * 0.5,
+				}
+	var expected_lights := 0 if theme == 7 else int(report["housings"]) * 2
 	if int(report["labels"]) != int(report["housings"]) * 2 \
-			or int(report["lights"]) != int(report["housings"]) * 2:
+			or int(report["alarms"]) != expected_lights \
+			or int(report["lights"]) != expected_lights:
 		report["violations"] += 1
 	return report
 
@@ -5746,6 +6373,8 @@ func mall_fixture_audit() -> Dictionary:
 		"directories": 0,
 		"exit_signs": 0,
 		"foodcourt_brands": 0,
+		"fountains": 0,
+		"fountain_waters": 0,
 		"violations": 0,
 	}
 	if theme != 7:
@@ -5753,12 +6382,26 @@ func mall_fixture_audit() -> Dictionary:
 	# A downloaded model that fails to import falls back silently and would
 	# otherwise just quietly stop appearing; count the real ones.
 	for node in find_children("*", "Node3D", true, false):
+		if str(node.get_meta("atomic_furnishing", "")) == "mall_fountain":
+			report["fountains"] += 1
 		match str(node.get_meta("authored_model", "")):
 			"payphone":
 				report["payphones"] += 1
 			"mall_directory":
 				report["directories"] += 1
 	for node in find_children("*", "MeshInstance3D", true, false):
+		if node.has_meta("mall_fountain_water"):
+			report["fountain_waters"] += 1
+			var fountain_mat := (node as MeshInstance3D).material_override \
+				as ShaderMaterial
+			if fountain_mat == null or fountain_mat.shader == null \
+					or fountain_mat.shader.resource_path != \
+						"res://shaders/pool_water.gdshader" \
+					or not bool(node.get_meta(
+						"mall_fountain_water_visual_only", false)) \
+					or absf(float(node.get_meta(
+						"mall_fountain_water_radius", 0.0)) - 1.30) > 0.001:
+				report["violations"] += 1
 		if not node.has_meta("mall_painted_sign"):
 			continue
 		report["painted_signs"] += 1
@@ -5804,6 +6447,9 @@ func mall_fixture_audit() -> Dictionary:
 		if int(report["store_signs"]) != 0 \
 				or int(report["foodcourt_brands"]) > 1:
 			report["violations"] += 1
+	if int(report["fountain_waters"]) != int(report["fountains"]) \
+			or int(report["fountains"]) > 1:
+		report["violations"] += 1
 	return report
 
 
@@ -5832,6 +6478,9 @@ func wall_art_audit() -> Dictionary:
 			and ((bool(split[0]) and dir < 2) \
 				or (not bool(split[0]) and dir >= 2)) \
 			and absf(along - float(split[1])) < size.x * 0.5 + 0.18
+		var school_board_overlap := theme == 6 \
+			and dir == _school_chalkboard_wall() \
+			and absf(along - S * 0.5) < size.x * 0.5 + 2.10
 		if path.is_empty() or absf(shown - source) > 0.002 \
 				or dir < 0 or dir > 3 \
 				or not bool(WorldGen.edge_info(wseed, cell, dir, theme)["wall"]) \
@@ -5840,7 +6489,116 @@ func wall_art_audit() -> Dictionary:
 				or p.y + size.y * 0.5 > ceil_h - 0.12 \
 				or along - size.x * 0.5 < 0.20 \
 				or along + size.x * 0.5 > S - 0.20 \
-				or partition_overlap:
+				or partition_overlap or school_board_overlap:
+			report["violations"] += 1
+	return report
+
+
+## Airport ad cases share the poster texture cache with ordinary wall mounts,
+## but are emissive and have their own placement path in the level builder.
+func airport_poster_lightbox_audit() -> Dictionary:
+	var report := {"lightboxes": 0, "violations": 0, "paths": {}}
+	if theme != 4:
+		return report
+	for node in find_children("*", "MeshInstance3D", true, false):
+		if not node.has_meta("airport_poster_lightbox"):
+			continue
+		report["lightboxes"] += 1
+		var path := str(node.get_meta("airport_poster_path", ""))
+		report["paths"][path] = int(report["paths"].get(path, 0)) + 1
+		var aspect := float(node.get_meta("airport_poster_aspect", 0.0))
+		var mat := (node as MeshInstance3D).material_override \
+			as StandardMaterial3D
+		if not POSTER_AIRPORT.has(path) or absf(aspect - 0.75) > 0.002 \
+				or mat == null or mat.albedo_texture == null \
+				or mat.albedo_texture.resource_path != path \
+				or not mat.emission_enabled or mat.emission_texture == null:
+			report["violations"] += 1
+	return report
+
+
+## Office wall fixtures are generated by the room anchor while paintings are
+## generated by individual member chunks. Recompute the shared deterministic
+## rectangle so an AC can never hide or cut through a painting in another
+## member of the same merged room.
+func office_wall_mount_audit() -> Dictionary:
+	var report := {"air_conditioners": 0, "art_conflicts": 0, "violations": 0}
+	if theme != 1:
+		return report
+	var expected := 0
+	for node in find_children("*", "Node3D", true, false):
+		if not node.has_meta("office_ac_mount"):
+			continue
+		report["air_conditioners"] += 1
+		expected = maxi(expected, int(node.get_meta("office_ac_expected", 0)))
+		if bool(node.get_meta("office_ac_suspended", false)):
+			continue
+		var member: Vector2i = node.get_meta("office_ac_member", cell)
+		var dir := int(node.get_meta("office_ac_dir", -1))
+		var along := float(node.get_meta("office_ac_along", INF))
+		var art := _office_wall_art_layout(member, dir)
+		if dir < 0 or dir > 3 or not is_finite(along):
+			report["violations"] += 1
+			continue
+		if art.is_empty():
+			continue
+		var art_size: Vector2 = art["size"]
+		var horizontal_overlap := absf(along - float(art["along"])) \
+			< 0.625 + art_size.x * 0.5 + 0.10
+		var vertical_overlap := absf((node as Node3D).position.y - float(art["y"])) \
+			< 0.21 + art_size.y * 0.5 + 0.08
+		if horizontal_overlap and vertical_overlap:
+			report["art_conflicts"] += 1
+			report["violations"] += 1
+	if expected > 0 and int(report["air_conditioners"]) != expected:
+		report["violations"] += 1
+	return report
+
+
+## Filing banks deliberately leave one drawer ajar, but it must remain a short
+## reveal at hand height rather than a full-depth box protruding at floor level.
+func filing_bank_audit() -> Dictionary:
+	var report := {
+		"cabinets": 0, "drawer_faces": 0, "open_drawers": 0,
+		"violations": 0,
+	}
+	var cabinets_by_dir := {}
+	var opens_by_dir := {}
+	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("filing_bank_cabinet"):
+			report["cabinets"] += 1
+			var cabinet_dir := int(node.get_meta("filing_bank_dir", -1))
+			cabinets_by_dir[cabinet_dir] = \
+				int(cabinets_by_dir.get(cabinet_dir, 0)) + 1
+		if node.has_meta("filing_bank_drawer_face"):
+			report["drawer_faces"] += 1
+			var face_row := int(node.get_meta("filing_bank_drawer_row", -1))
+			var expected_y := 0.19 + 0.31 * float(face_row)
+			var face_y := (node as Node3D).position.y
+			# The 27cm faces must remain wholly within the 1.32m shell and
+			# centered on the corrected four-row stack.
+			if face_row < 0 or face_row > 3 \
+					or absf(face_y - expected_y) > 0.001 \
+					or face_y - 0.135 < 0.0 or face_y + 0.135 > 1.32:
+				report["violations"] += 1
+		if not node.has_meta("filing_bank_open_drawer"):
+			continue
+		report["open_drawers"] += 1
+		var drawer_dir := int(node.get_meta("filing_bank_dir", -1))
+		opens_by_dir[drawer_dir] = int(opens_by_dir.get(drawer_dir, 0)) + 1
+		var row := int(node.get_meta("filing_bank_open_row", -1))
+		var projection := float(node.get_meta("filing_bank_projection", INF))
+		var drawer_y := (node as Node3D).position.y
+		# Open-drawer body is 0.24m tall and must remain inside the 1.32m
+		# cabinet just like every closed face in the four-row stack.
+		if row < 1 or row > 2 or projection > 0.15 \
+				or drawer_y - 0.12 < 0.0 or drawer_y + 0.12 > 1.32:
+			report["violations"] += 1
+	for bank_dir in cabinets_by_dir:
+		# Doorway cleanup removes whole cabinet pivots. If the authored open
+		# cabinet is the one intersecting a portal, the surviving partial bank
+		# legitimately contains zero open drawers; it must never contain two.
+		if int(opens_by_dir.get(bank_dir, 0)) > 1:
 			report["violations"] += 1
 	return report
 func _solid_wall(dir: int) -> bool:
@@ -6004,4 +6762,3 @@ static func pool_style_dry(st: int) -> bool:
 
 func _floor_h() -> float:
 	return cell_floor_h(wseed, cell, theme)
-

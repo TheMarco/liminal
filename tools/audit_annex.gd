@@ -146,6 +146,19 @@ func _walk(node: Node, report: Dictionary) -> void:
 					"annex_uncapped_native_prism", false)):
 			report["unstable_wall_meshes"] += 1
 		for end_name in ["min", "max"]:
+			var endpoint_key: String = \
+				"annex_boundary_endpoint_kind_" + str(end_name)
+			if node.has_meta(endpoint_key):
+				report["boundary_wall_endpoints"] += 1
+				var endpoint_kind := str(node.get_meta(endpoint_key))
+				report["boundary_endpoint_kinds"][endpoint_kind] = int(
+					report["boundary_endpoint_kinds"].get(
+						endpoint_kind, 0)) + 1
+				var should_cap := endpoint_kind == "free" \
+					or endpoint_kind == "l_corner"
+				if bool(node.get_meta(
+						"annex_wall_cap_" + end_name, false)) != should_cap:
+					report["bad_boundary_wall_caps"] += 1
 			if not node.has_meta("annex_t_junction_stub_" + end_name):
 				continue
 			report["t_junction_stubs"] += 1
@@ -628,6 +641,8 @@ func _init() -> void:
 		"fixture_architecture_intersections": 0,
 		"wall_segments": 0, "seam_safe_wall_segments": 0,
 		"unstable_wall_meshes": 0,
+		"boundary_wall_endpoints": 0, "bad_boundary_wall_caps": 0,
+		"boundary_endpoint_kinds": {},
 		"t_junction_stubs": 0, "bad_t_junction_stubs": 0,
 		"baseboards": 0, "bad_baseboards": 0,
 		"floating_baseboards": 0, "shadowing_baseboards": 0,
@@ -710,6 +725,15 @@ func _init() -> void:
 	if int(runtime["bad_attached_half_walls"]) > 0:
 		failures.append("Annex attached half-wall inheritance/cap contract failed: %d" % [
 			runtime["bad_attached_half_walls"]])
+	if int(runtime["boundary_wall_endpoints"]) == 0 \
+			or int(runtime["bad_boundary_wall_caps"]) > 0 \
+			or int(runtime["boundary_endpoint_kinds"].get("free", 0)) == 0 \
+			or int(runtime["boundary_endpoint_kinds"].get("l_corner", 0)) == 0:
+		failures.append(
+			"Annex boundary wall end-cap contract failed: ends=%d bad=%d kinds=%s" % [
+				runtime["boundary_wall_endpoints"],
+				runtime["bad_boundary_wall_caps"],
+				runtime["boundary_endpoint_kinds"]])
 	var tunnel_ratio := float(runtime["wall_mass_tunnels"]) / float(maxi(
 		int(runtime["kinds"].get("annex_wall_mass", 0)), 1))
 	if tunnel_ratio < 0.25:
