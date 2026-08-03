@@ -16,6 +16,33 @@ const VALID_STYLES := [
 ]
 
 
+func _damage_asset_violations() -> Array[String]:
+	var failures: Array[String] = []
+	for prefix in ["moisture_mask", "carpet_damage"]:
+		for index in range(1, 9):
+			var path := "res://textures/annex/%s_%02d.png" % [prefix, index]
+			var image := Image.load_from_file(ProjectSettings.globalize_path(path))
+			if image.is_empty() or image.get_width() < 1024 or image.get_height() < 1024:
+				failures.append("Annex damage mask missing or undersized: %s" % path)
+				continue
+			var active := 0
+			var sampled := 0
+			for y in range(0, image.get_height(), 32):
+				for x in range(0, image.get_width(), 32):
+					sampled += 1
+					if image.get_pixel(x, y).r > 0.05:
+						active += 1
+			var coverage := float(active) / float(maxi(sampled, 1))
+			if coverage < 0.08 or coverage > 0.82:
+				failures.append("Annex damage mask has unusable coverage %.3f: %s" % [
+					coverage, path])
+	var shader := load("res://shaders/environment_mask_overlay.gdshader") as Shader
+	if shader == null or shader.code.find("boundary_fade") < 0 \
+			or shader.code.find("surface_breakup") < 0:
+		failures.append("Annex damage shader lacks boundary fade or material breakup")
+	return failures
+
+
 func _decorative_occlusion_violations(node: Node) -> int:
 	var bad := 0
 	if node is GeometryInstance3D:
@@ -26,6 +53,24 @@ func _decorative_occlusion_violations(node: Node) -> int:
 			bad += 1
 	for child in node.get_children():
 		bad += _decorative_occlusion_violations(child)
+	return bad
+
+
+func _moisture_fixture_violations(chunk: Chunk) -> int:
+	var moisture: Array[Node] = chunk.find_children("*", "MeshInstance3D", true, false) \
+		.filter(func(node: Node) -> bool: return node.has_meta("annex_moisture_tile"))
+	var fixtures: Array[Node] = chunk.find_children("*", "MeshInstance3D", true, false) \
+		.filter(func(node: Node) -> bool: return node.has_meta("annex_ceiling_light_size"))
+	var bad := 0
+	for node in moisture:
+		var at := (node as Node3D).position
+		if not chunk._annex_fixture_clear(at):
+			bad += 1
+		for fixture in fixtures:
+			var light_at := (fixture as Node3D).position
+			if Vector2(at.x, at.z).distance_squared_to(
+					Vector2(light_at.x, light_at.z)) < 0.01:
+				bad += 1
 	return bad
 
 
@@ -110,6 +155,48 @@ func _walk(node: Node, report: Dictionary) -> void:
 			report["unlit_ceiling_fixtures"] += 1
 		if float(node.get_meta("annex_ceiling_light_grid_error", INF)) > 0.001:
 			report["misaligned_ceiling_lights"] += 1
+	if node.has_meta("annex_moisture_tile"):
+		report["moisture_tiles"] += 1
+		var placement := str(node.get_meta("annex_moisture_placement", ""))
+		report["moisture_placements"][placement] = \
+			int(report["moisture_placements"].get(placement, 0)) + 1
+		var asset := str(node.get_meta("annex_moisture_asset", ""))
+		report["moisture_assets"][asset] = \
+			int(report["moisture_assets"].get(asset, 0)) + 1
+		var strength := float(node.get_meta("annex_moisture_strength", -1.0))
+		if not is_equal_approx(float(node.get_meta(
+				"annex_moisture_tile_size", 0.0)), 1.20) \
+				or float(node.get_meta("annex_moisture_grid_error", INF)) > 0.001 \
+				or strength < 0.48 or strength > 0.68 \
+				or placement.is_empty() or asset.is_empty():
+			report["bad_moisture_tiles"] += 1
+		if node is GeometryInstance3D:
+			var geometry := node as GeometryInstance3D
+			if geometry.cast_shadow \
+					!= GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+				or geometry.gi_mode != GeometryInstance3D.GI_MODE_DISABLED:
+				report["bad_moisture_tiles"] += 1
+	if node.has_meta("annex_carpet_damage"):
+		report["carpet_damage"] += 1
+		var carpet_asset := str(node.get_meta("annex_carpet_damage_asset", ""))
+		report["carpet_damage_assets"][carpet_asset] = \
+			int(report["carpet_damage_assets"].get(carpet_asset, 0)) + 1
+		var carpet_size := float(node.get_meta("annex_carpet_damage_size", 0.0))
+		var carpet_strength := float(node.get_meta("annex_carpet_damage_strength", -1.0))
+		var edge_clearance := float(node.get_meta("annex_carpet_edge_clearance", -INF))
+		if carpet_asset.is_empty() or not is_equal_approx(carpet_size, 5.4) \
+				or carpet_strength < 0.52 or carpet_strength > 0.72 \
+				or edge_clearance < -0.001 \
+				or not bool(node.get_meta("annex_carpet_doorway_clear", false)):
+			report["bad_carpet_damage"] += 1
+		if bool(node.get_meta("annex_carpet_baseboard_creep", false)):
+			report["carpet_baseboard_creep"] += 1
+		if node is GeometryInstance3D:
+			var carpet_geometry := node as GeometryInstance3D
+			if carpet_geometry.cast_shadow \
+					!= GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+					or carpet_geometry.gi_mode != GeometryInstance3D.GI_MODE_DISABLED:
+				report["bad_carpet_damage"] += 1
 	if node.has_meta("annex_wall_thickness"):
 		report["wall_segments"] += 1
 		var wall_owner := str(node.get_meta(
@@ -399,6 +486,7 @@ func _init() -> void:
 	var seed_count := clampi(int(args[0]) if args.size() > 0 else 18, 1, 32)
 	var radius := clampi(int(args[1]) if args.size() > 1 else 12, 4, 18)
 	var failures: Array[String] = []
+	failures.append_array(_damage_asset_violations())
 	var style_counts := {}
 	var finish_counts := {}
 	var wall_finish_counts := {}
@@ -638,6 +726,11 @@ func _init() -> void:
 		"authored_exit_doors": 0,
 		"ceiling_lights": 0, "bad_ceiling_lights": 0,
 		"unlit_ceiling_fixtures": 0, "misaligned_ceiling_lights": 0,
+		"moisture_tiles": 0, "bad_moisture_tiles": 0,
+		"moisture_fixture_intersections": 0,
+		"moisture_placements": {}, "moisture_assets": {},
+		"carpet_damage": 0, "bad_carpet_damage": 0,
+		"carpet_baseboard_creep": 0, "carpet_damage_assets": {},
 		"fixture_architecture_intersections": 0,
 		"wall_segments": 0, "seam_safe_wall_segments": 0,
 		"unstable_wall_meshes": 0,
@@ -680,6 +773,8 @@ func _init() -> void:
 						si, Vector2i(x, z), support_bad])
 				runtime["fixture_architecture_intersections"] += \
 					chunk.annex_fixture_obstruction_violations()
+				runtime["moisture_fixture_intersections"] += \
+					_moisture_fixture_violations(chunk)
 				runtime["floating_utilities"] += \
 					_utility_backing_violations(chunk)
 				runtime["floating_baseboards"] += \
@@ -824,6 +919,46 @@ func _init() -> void:
 	if int(runtime["fixture_architecture_intersections"]) > 0:
 		failures.append("Annex fixtures intersect full-height architecture: %d" % [
 			runtime["fixture_architecture_intersections"]])
+	var moisture_placement_count: int = (runtime["moisture_placements"] as Dictionary).size()
+	var moisture_density := float(moisture_placement_count) \
+		/ float(maxi(runtime_chunks, 1))
+	if moisture_density < 0.22 or moisture_density > 0.42:
+		failures.append("Annex authored moisture density is out of bounds: %.3f/chunk" % [
+			moisture_density])
+	if int(runtime["bad_moisture_tiles"]) > 0 \
+			or int(runtime["moisture_fixture_intersections"]) > 0:
+		failures.append("Annex moisture violates tile/fixture contract: bad=%d conflicts=%d" % [
+			runtime["bad_moisture_tiles"], runtime["moisture_fixture_intersections"]])
+	var single_placements := 0
+	var block_placements := 0
+	for placement in runtime["moisture_placements"]:
+		var tile_count := int(runtime["moisture_placements"][placement])
+		if str(placement).ends_with(":1x1") and tile_count == 1:
+			single_placements += 1
+		elif str(placement).ends_with(":2x2") and tile_count == 4:
+			block_placements += 1
+		else:
+			failures.append("Annex moisture placement has invalid footprint: %s tiles=%d" % [
+				placement, tile_count])
+	if single_placements == 0 or block_placements == 0:
+		failures.append("Annex moisture sample lacks 1x1 or 2x2 placements: singles=%d blocks=%d" % [
+			single_placements, block_placements])
+	if (runtime["moisture_assets"] as Dictionary).size() < 4:
+		failures.append("Annex moisture library selection is not varied: %s" % [
+			runtime["moisture_assets"].keys()])
+	var carpet_density := float(runtime["carpet_damage"]) \
+		/ float(maxi(runtime_chunks, 1))
+	if carpet_density < 0.28 or carpet_density > 0.48:
+		failures.append("Annex carpet damage density is out of bounds: %.3f/chunk" % [
+			carpet_density])
+	if int(runtime["bad_carpet_damage"]) > 0:
+		failures.append("Annex carpet damage violates boundary/material contract: %d" % [
+			runtime["bad_carpet_damage"]])
+	if int(runtime["carpet_baseboard_creep"]) == 0:
+		failures.append("Annex carpet damage never demonstrates baseboard seepage")
+	if (runtime["carpet_damage_assets"] as Dictionary).size() < 4:
+		failures.append("Annex carpet damage library selection is not varied: %s" % [
+			runtime["carpet_damage_assets"].keys()])
 	if int(runtime["wall_segments"]) == 0 or int(runtime["partitions"]) == 0:
 		failures.append("Annex wall-thickness contract was not exercised")
 	if int(runtime["thin_walls"]) > 0:

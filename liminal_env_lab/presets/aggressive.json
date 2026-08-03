@@ -1,0 +1,8 @@
+{
+  "name": "aggressive",
+  "parameters": {
+    "moisture": {"scale": 0.85, "threshold": 20},
+    "dirt": {"scale": 0.85, "threshold": 25, "grime_threshold": 20},
+    "carpet_stains": {"scale": 0.85, "weave_kernel": 7, "threshold": 24, "wear_threshold": 22}
+  }
+}

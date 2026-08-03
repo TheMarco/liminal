@@ -672,6 +672,32 @@ static func annex_ceiling() -> Material:
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
 
 
+static func annex_moisture_overlay(mask_path: String, atlas_scale: Vector2,
+		atlas_offset: Vector2, strength: float, quarter_turns: int) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/environment_mask_overlay.gdshader")
+	m.set_shader_parameter("effect_mask", load(mask_path))
+	m.set_shader_parameter("effect_color", Color(0.28, 0.19, 0.095))
+	m.set_shader_parameter("surface_breakup", 0.07)
+	m.set_shader_parameter("atlas_scale", atlas_scale)
+	m.set_shader_parameter("atlas_offset", atlas_offset)
+	m.set_shader_parameter("strength", strength)
+	m.set_shader_parameter("quarter_turns", float(posmod(quarter_turns, 4)))
+	return m
+
+
+static func annex_carpet_damage_overlay(mask_path: String, strength: float,
+		quarter_turns: int) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/environment_mask_overlay.gdshader")
+	m.set_shader_parameter("effect_mask", load(mask_path))
+	m.set_shader_parameter("effect_color", Color(0.085, 0.055, 0.025))
+	m.set_shader_parameter("surface_breakup", 0.34)
+	m.set_shader_parameter("strength", strength)
+	m.set_shader_parameter("quarter_turns", float(posmod(quarter_turns, 4)))
+	return m
+
+
 static func annex_panel() -> StandardMaterial3D:
 	return _std("annex_panel", func(m: StandardMaterial3D):
 		m.albedo_color = Color(1.0, 0.97, 0.82)

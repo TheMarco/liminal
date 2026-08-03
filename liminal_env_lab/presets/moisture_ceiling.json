@@ -1,0 +1,11 @@
+{
+  "name": "moisture_ceiling",
+  "parameters": {
+    "moisture": {
+      "scale": 1.0,
+      "threshold": 55,
+      "color_weight": 1.0,
+      "dark_weight": 0.38
+    }
+  }
+}

@@ -1,0 +1,2 @@
+recursive-include profiles *.json
+recursive-include presets *.json

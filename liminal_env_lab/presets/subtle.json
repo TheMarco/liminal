@@ -1,0 +1,8 @@
+{
+  "name": "subtle",
+  "parameters": {
+    "moisture": {"scale": 1.2, "threshold": 60},
+    "dirt": {"scale": 1.2, "threshold": 62, "grime_threshold": 52},
+    "carpet_stains": {"scale": 1.2, "weave_kernel": 11, "threshold": 58, "wear_threshold": 55}
+  }
+}

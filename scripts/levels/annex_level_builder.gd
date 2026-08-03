@@ -1,11 +1,178 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 
+const MOISTURE_MASKS := [
+	"res://textures/annex/moisture_mask_01.png",
+	"res://textures/annex/moisture_mask_02.png",
+	"res://textures/annex/moisture_mask_03.png",
+	"res://textures/annex/moisture_mask_04.png",
+	"res://textures/annex/moisture_mask_05.png",
+	"res://textures/annex/moisture_mask_06.png",
+	"res://textures/annex/moisture_mask_07.png",
+	"res://textures/annex/moisture_mask_08.png",
+]
+const CARPET_DAMAGE_MASKS := [
+	"res://textures/annex/carpet_damage_01.png",
+	"res://textures/annex/carpet_damage_02.png",
+	"res://textures/annex/carpet_damage_03.png",
+	"res://textures/annex/carpet_damage_04.png",
+	"res://textures/annex/carpet_damage_05.png",
+	"res://textures/annex/carpet_damage_06.png",
+	"res://textures/annex/carpet_damage_07.png",
+	"res://textures/annex/carpet_damage_08.png",
+]
+
 
 func _annex_floor_ceiling() -> void:
 	chunk._box(Vector3(chunk.S / 2.0, -0.15, chunk.S / 2.0), Vector3(chunk.S, 0.3, chunk.S),
 		Mats.annex_carpet())
 	chunk._box(Vector3(chunk.S / 2.0, chunk.ceil_h + 0.15, chunk.S / 2.0), Vector3(chunk.S, 0.3, chunk.S),
 		Mats.annex_ceiling())
+	_annex_carpet_damage()
+
+
+func _annex_carpet_damage() -> void:
+	# Production density: common enough to establish the damp Annex, sparse
+	# enough that clean carpet still exists. The arrival cell always demonstrates
+	# the treatment; every other choice remains deterministic per world cell.
+	if chunk.cell != Vector2i.ZERO \
+			and posmod(WorldGen.h(chunk.wseed, chunk.cell.x, chunk.cell.y, 19391), 100) >= 38:
+		return
+	var asset_idx := posmod(WorldGen.h(
+		chunk.wseed, chunk.cell.x, chunk.cell.y, 19392), CARPET_DAMAGE_MASKS.size())
+	var quad := QuadMesh.new()
+	const STAIN_SIZE := 5.4
+	quad.size = Vector2(STAIN_SIZE, STAIN_SIZE)
+	quad.orientation = PlaneMesh.FACE_Y
+	var overlay := MeshInstance3D.new()
+	overlay.mesh = quad
+	var strength_roll := posmod(WorldGen.h(
+		chunk.wseed, chunk.cell.x, chunk.cell.y, 19393), 1000)
+	var strength := 0.52 + float(strength_roll) / 1000.0 * 0.20
+	overlay.material_override = Mats.annex_carpet_damage_overlay(
+		CARPET_DAMAGE_MASKS[asset_idx], strength,
+		posmod(WorldGen.h(chunk.wseed, chunk.cell.x, chunk.cell.y, 19394), 4))
+	# Edge candidates touch a closed wall/baseboard without crossing the chunk.
+	# The doorway test rejects the same footprint beside an open connection.
+	var candidates := [
+		Vector3(2.72, 0.012, 6.0), Vector3(9.28, 0.012, 6.0),
+		Vector3(6.0, 0.012, 2.72), Vector3(6.0, 0.012, 9.28),
+		Vector3(6.0, 0.012, 6.0),
+	]
+	var start := posmod(WorldGen.h(
+		chunk.wseed, chunk.cell.x, chunk.cell.y, 19395), candidates.size())
+	var chosen := Vector3.INF
+	for offset in candidates.size():
+		var candidate: Vector3 = candidates[(start + offset) % candidates.size()]
+		if not _annex_blocks_doorway(candidate, 0.0, STAIN_SIZE, STAIN_SIZE):
+			chosen = candidate
+			break
+	if chosen == Vector3.INF:
+		return
+	overlay.position = chosen
+	var half_size := STAIN_SIZE * 0.5
+	var clearance := minf(minf(chosen.x - half_size, chunk.S - chosen.x - half_size),
+		minf(chosen.z - half_size, chunk.S - chosen.z - half_size))
+	var baseboard_creep := clearance <= 0.025
+	overlay.set_meta("annex_carpet_damage", true)
+	overlay.set_meta("annex_carpet_damage_asset", CARPET_DAMAGE_MASKS[asset_idx])
+	overlay.set_meta("annex_carpet_damage_size", STAIN_SIZE)
+	overlay.set_meta("annex_carpet_damage_strength", strength)
+	overlay.set_meta("annex_carpet_edge_clearance", clearance)
+	overlay.set_meta("annex_carpet_baseboard_creep", baseboard_creep)
+	overlay.set_meta("annex_carpet_doorway_clear", true)
+	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	overlay.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	chunk.add_child(overlay)
+
+
+func _annex_moisture_tile(center: Vector2, mask_path: String,
+		atlas_scale: Vector2, atlas_offset: Vector2, strength: float,
+		quarter_turns: int, test_id: String) -> void:
+	var quad := QuadMesh.new()
+	var tile_face := chunk.ANNEX_CEILING_TILE - 0.09
+	quad.size = Vector2(tile_face, tile_face)
+	quad.orientation = PlaneMesh.FACE_Y
+	var overlay := MeshInstance3D.new()
+	overlay.mesh = quad
+	overlay.material_override = Mats.annex_moisture_overlay(
+		mask_path, atlas_scale, atlas_offset, strength, quarter_turns)
+	overlay.position = Vector3(center.x, chunk.ceil_h - 0.012, center.y)
+	overlay.set_meta("annex_moisture_tile", true)
+	overlay.set_meta("annex_moisture_asset", mask_path)
+	overlay.set_meta("annex_moisture_placement", test_id)
+	overlay.set_meta("annex_moisture_tile_size", chunk.ANNEX_CEILING_TILE)
+	overlay.set_meta("annex_moisture_strength", strength)
+	var world_x := float(chunk.cell.x) * chunk.S + center.x
+	var world_z := float(chunk.cell.y) * chunk.S + center.y
+	overlay.set_meta("annex_moisture_grid_error", maxf(
+		absf(world_x - roundf(world_x / chunk.ANNEX_CEILING_TILE) * chunk.ANNEX_CEILING_TILE),
+		absf(world_z - roundf(world_z / chunk.ANNEX_CEILING_TILE) * chunk.ANNEX_CEILING_TILE)))
+	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	overlay.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	chunk.add_child(overlay)
+
+
+func _annex_moisture_spot_clear(center: Vector2, fixtures: Array[Vector2]) -> bool:
+	if not chunk._annex_fixture_clear(Vector3(center.x, 0.0, center.y)):
+		return false
+	for fixture in fixtures:
+		if center.distance_squared_to(fixture) < 0.01:
+			return false
+	return true
+
+
+func _annex_moisture_damage(fixtures: Array[Vector2]) -> void:
+	# Roughly one affected chunk in three; one quarter of those become a rare 2x2
+	# leak. All choices derive from the world seed and cell, so streaming and
+	# revisiting a location reproduce the same ceiling exactly.
+	var roll := posmod(WorldGen.h(chunk.wseed, chunk.cell.x, chunk.cell.y, 19401), 100)
+	if chunk.cell != Vector2i.ZERO and roll >= 32:
+		return
+	var asset_idx := posmod(WorldGen.h(
+		chunk.wseed, chunk.cell.x, chunk.cell.y, 19402), MOISTURE_MASKS.size())
+	var mask_path: String = MOISTURE_MASKS[asset_idx]
+	var strength_roll := posmod(WorldGen.h(
+		chunk.wseed, chunk.cell.x, chunk.cell.y, 19403), 1000)
+	var strength := 0.48 + float(strength_roll) / 1000.0 * 0.20
+	var rotation := posmod(WorldGen.h(
+		chunk.wseed, chunk.cell.x, chunk.cell.y, 19404), 4)
+	var wants_block := posmod(WorldGen.h(
+		chunk.wseed, chunk.cell.x, chunk.cell.y, 19405), 4) == 0
+	var grid_span := 8 if wants_block else 9
+	var candidate_count := grid_span * grid_span
+	var start := posmod(WorldGen.h(
+		chunk.wseed, chunk.cell.x, chunk.cell.y, 19406), candidate_count)
+	for attempt in candidate_count:
+		var candidate := (start + attempt) % candidate_count
+		var gx := candidate % grid_span + 1
+		var gz := candidate / grid_span + 1
+		var origin := Vector2(float(gx), float(gz)) * chunk.ANNEX_CEILING_TILE
+		if wants_block:
+			var valid := true
+			for qz in 2:
+				for qx in 2:
+					var center := origin + Vector2(float(qx), float(qz)) \
+						* chunk.ANNEX_CEILING_TILE
+					if not _annex_moisture_spot_clear(center, fixtures):
+						valid = false
+			if not valid:
+				continue
+			var placement_id := "%s:%s:%s:2x2" % [
+				chunk.wseed, chunk.cell, asset_idx]
+			for qz in 2:
+				for qx in 2:
+					_annex_moisture_tile(
+						origin + Vector2(float(qx), float(qz)) * chunk.ANNEX_CEILING_TILE,
+						mask_path, Vector2(0.5, 0.5),
+						Vector2(float(qx), float(qz)) * 0.5,
+						strength, rotation, placement_id)
+			return
+		if not _annex_moisture_spot_clear(origin, fixtures):
+			continue
+		_annex_moisture_tile(origin, mask_path, Vector2.ONE, Vector2.ZERO,
+			strength, rotation, "%s:%s:%s:1x1" % [
+				chunk.wseed, chunk.cell, asset_idx])
+		return
 
 
 func _annex_lighting() -> void:
@@ -43,6 +210,7 @@ func _annex_lighting() -> void:
 		fixtures = [Vector2(3.0, 3.0), Vector2(9.0, 3.0),
 			Vector2(3.0, 9.0), Vector2(9.0, 9.0)]
 	var built_fixtures = 0
+	var built_fixture_centers: Array[Vector2] = []
 	for pt in fixtures:
 		var at = Vector3(
 			_annex_tile_center(pt.x, chunk.cell.x),
@@ -52,9 +220,11 @@ func _annex_lighting() -> void:
 			continue
 		_annex_troffer(at, pmat)
 		built_fixtures += 1
+		built_fixture_centers.append(Vector2(at.x, at.z))
 	var effective_gap = light_gap or built_fixtures == 0
 	chunk.set_meta("annex_light_gap", effective_gap)
 	chunk.set_meta("annex_ceiling_fixture_count", built_fixtures)
+	_annex_moisture_damage(built_fixture_centers)
 	if effective_gap:
 		return
 	var light = chunk._make_main_light(false, pmat, 0.24 if dim_zone else 1.42)

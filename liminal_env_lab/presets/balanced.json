@@ -1,0 +1,8 @@
+{
+  "name": "balanced",
+  "parameters": {
+    "moisture": {"scale": 1.0, "threshold": 28},
+    "dirt": {"scale": 1.0, "threshold": 42, "grime_threshold": 32},
+    "carpet_stains": {"scale": 1.0, "weave_kernel": 9, "threshold": 38, "wear_threshold": 35}
+  }
+}
