@@ -32,6 +32,13 @@ func _print_node(node: Node, parent_xf: Transform3D, indent: String) -> void:
 		var mesh_node := node as MeshInstance3D
 		detail += " local_aabb=%s world_aabb=%s" % [
 			mesh_node.mesh.get_aabb(), global_xf * mesh_node.mesh.get_aabb()]
+		for surface in mesh_node.mesh.get_surface_count():
+			var mat := mesh_node.mesh.surface_get_material(surface) as BaseMaterial3D
+			if mat == null:
+				continue
+			detail += " material[%d]=%s emission=%s energy=%.2f" % [
+				surface, mat.resource_name, mat.emission_enabled,
+				mat.emission_energy_multiplier]
 	print("%s%s <%s>%s" % [indent, node.name, node.get_class(), detail])
 	for child in node.get_children():
 		_print_node(child, global_xf, indent + "  ")

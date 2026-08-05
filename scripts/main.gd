@@ -1,5 +1,5 @@
 extends Node3D
-## Entry point and level manager. Eight endless floors share one player:
+## Entry point and level manager. Ten endless floors share one player:
 ##   1 — seedy Vegas hotel-casino            (theme 0)
 ##   2 — sterile Severance-style office      (theme 1)
 ##   3 — the yellow Backrooms corridors of the Annex (theme 2)
@@ -8,6 +8,9 @@ extends Node3D
 ##   6 — a high school after the last bell that never rang (theme 6)
 ##   7 — an abandoned shopping mall with every shutter down (theme 7)
 ##   8 — an island prison whose cell blocks never end (theme 8)
+##   9 — flooded white-tile Poolrooms (theme 9)
+##   0 — the monumental concrete Monolith (theme 10)
+##   - — the organic mirror-campus called the Bloom (theme 11)
 ## The number key is an index into WorldGen.THEMES, NOT the theme id — theme 3
 ## was a derelict theme park, cut, and the rest keep their original ids so every
 ## existing seed still generates the world it always did.
@@ -37,6 +40,8 @@ const PORTAL_ARRIVE := {
 	6: Vector3(3.2, 0.15, 2.0),
 	7: Vector3(3.2, 0.15, 2.0), 8: Vector3(3.2, 0.15, 2.0),
 	9: Vector3(3.2, 0.15, 2.0),
+	10: Vector3(3.2, 0.15, 2.0),
+	11: Vector3(3.2, 0.15, 2.0),
 }
 
 ## What the ambient presence systems are allowed to do right now. Only three
@@ -90,7 +95,10 @@ var _bench_slow := 0
 var _bench_prev := Vector3.ZERO
 var _bench_steps: Array[float] = []
 var _figures: ShadowFigures
+var _passers: PassingShadows
+var _corner_apparitions: CornerApparitions
 var _whispers: Whispers
+var _director: HorrorDirector
 var _heart: Heartbeat
 var _dying := false
 var _music: AudioStreamPlayer
@@ -103,16 +111,32 @@ var _event_hint: Label
 var _event_tween: Tween
 var _interact_style: StyleBoxFlat
 var _event_style: StyleBoxFlat
+var _battery_panel: PanelContainer
+var _battery_bar: ProgressBar
+var _charging_panel: PanelContainer
+var _charging_bar: ProgressBar
 var _events: EnvironmentEvents
 var descent := false
 var run: DescentRun
 var descent_route: DescentRoute
+var _descent_progress: DescentProgress
+var _progress_enabled := false
 var _descent_preparing := false
 var _attention_override := -1.0
 var _blackout_ambient := -1.0
+var _blackout_locate_cue := 0
+var _pending_shortcut_reveal := false
+## Environmental bleed presentation: captured baselines for this floor's fog
+## and the next floor's targets, plus the rising next-floor room tone.
+var _bleed_base_fog := Color.BLACK
+var _bleed_base_density := 0.0
+var _bleed_next_fog := Color.BLACK
+var _bleed_next_density := 0.0
+var _bleed_captured := false
+var _bleed_bed: AudioStreamPlayer
 ## Seconds of torch handed back per burned figure, and how close one has to get
 ## before the game says out loud, once, what the torch is for.
-const BURN_REFUND := 1.5
+const BURN_REFUND := 0.25
 const TORCH_HINT_D := 6.0
 var _torch_hint_shown := false
 var _title_music := false
@@ -121,7 +145,6 @@ var _title_music := false
 ## lets a second call stack another fade tween on the same property.
 var _music_target := ""
 var _descent_summary: DescentSummary
-var _pursuer: DescentPursuer
 var _descent_hud: DescentHUD
 var _return_prompt: ReturnPrompt
 
@@ -147,6 +170,11 @@ const TITLE_MUSIC := "res://music/title.mp3"
 func _ready() -> void:
 	randomize()
 	opts = CliOptions.parse()
+	# Command-line starts are isolated QA/dev worlds. Only a normal title-screen
+	# session may read or write the player's real Descent checkpoint.
+	_progress_enabled = not opts.descent and not opts.skips_title() \
+		and not opts.quick_exit()
+	_descent_progress = DescentProgress.new()
 	var spawn := opts.spawn if opts.spawn_given else DEFAULT_SPAWN
 	var pos_given := opts.spawn_given
 	var yaw := opts.yaw
@@ -165,17 +193,18 @@ func _ready() -> void:
 		world_seed = (randi() & 0x7FFFFFFF) | 1
 	if descent:
 		run = DescentRun.new()
+		# The seed varies rooms and routes inside the fixed story order.
+		run.world_seed = world_seed
 		if opts.descent_floor > 0:
 			run.floor_idx = clampi(opts.descent_floor - 1, 0,
-				DescentRun.ORDER.size() - 1)
+				DescentRun.FLOOR_COUNT - 1)
 		active_level = run.theme()
 		if _attention_override >= 0.0:
 			run.attention = _attention_override
 		_connect_descent_run()
 		run.prepare_floor()
 		add_child(run)
-		descent_route = DescentRoute.build(_level_seed(active_level),
-			active_level, run.floor_idx)
+		descent_route = _create_descent_route(active_level, run.floor_idx)
 		_print_descent_route()
 	if not pos_given:
 		if descent:
@@ -185,7 +214,7 @@ func _ready() -> void:
 				yaw = float(arrival["yaw"])
 		else:
 			spawn = _safe_arrival(active_level, Vector2i.ZERO, DEFAULT_SPAWN)
-	print("Liminal Vegas — seed %d" % world_seed)
+	print("It wants you to stay — seed %d" % world_seed)
 	# Audits and screenshot helpers intentionally quit after a few seconds;
 	# don't leave background resource workers alive during their forced exit.
 	if not opts.quick_exit():
@@ -210,7 +239,9 @@ func _ready() -> void:
 	player.world_seed = _level_seed(active_level)
 	player.level_theme = active_level
 	player.water_y = _water_level_for(active_level)
-	player.allow_sprint = not descent
+	# Sprint is legal in Descent since 2026-08-05 — it feeds attention instead
+	# of being switched off. The run charges it; the controller stays ignorant.
+	player.allow_sprint = true
 	if descent and run != null:
 		run.player = player
 	_build_level(active_level, spawn)
@@ -239,20 +270,40 @@ func _ready() -> void:
 		_bench = true
 	ambience = Ambience.new(active_level)
 	add_child(ambience)
+	_director = HorrorDirector.new()
+	add_child(_director)
+	if run != null:
+		run.horror_director = _director
 	var oneshots := OneShots.new()
 	oneshots.player = player
+	oneshots.horror_director = _director
 	add_child(oneshots)
 	_whispers = Whispers.new()
 	_whispers.player = player
+	_whispers.horror_director = _director
 	_whispers.dev = opts.whispers
 	add_child(_whispers)
 	_figures = ShadowFigures.new()
 	_figures.player = player
+	_figures.horror_director = _director
+	_figures.topology = descent_route.topology \
+		if descent_route != null else null
+	_passers = PassingShadows.new()
+	_passers.player = player
+	_passers.horror_director = _director
+	_passers.topology = descent_route.topology \
+		if descent_route != null else null
+	_passers.dev_force = opts.passer
+	add_child(_passers)
+	_corner_apparitions = CornerApparitions.new()
+	_corner_apparitions.player = player
+	_corner_apparitions.horror_director = _director
+	_corner_apparitions.dev_force = opts.passer
+	add_child(_corner_apparitions)
 	_figures.dev_haunt = opts.haunt
 	_figures.dev_haunt_at = opts.haunt_at
 	_figures.dev_haunt_at_given = opts.haunt_at_given
 	_figures.dev_haunt_variant = opts.haunt_variant
-	_figures.stared_away.connect(_on_figure_stared_away)
 	_figures.reached_player.connect(_on_figure_reached_player)
 	add_child(_figures)
 	# Frights raise the pulse; it bleeds away on its own. Wired after the
@@ -261,6 +312,17 @@ func _ready() -> void:
 	_heart.figures = _figures
 	_heart.dev = opts.heartbeat
 	add_child(_heart)
+	_passers.revealed.connect(
+		func():
+			if _corner_apparitions != null:
+				_corner_apparitions.defer_for(
+					CornerApparitions.SHARED_QUIET_SECONDS))
+	_corner_apparitions.revealed.connect(
+		func(_texture_key: String):
+			_heart.bump(Heartbeat.BUMP_SEEN)
+			_camera_damage_hit(0.32)
+			if _passers != null:
+				_passers.defer_for(CornerApparitions.SHARED_QUIET_SECONDS))
 	# Nothing mutters, haunts or races behind a title or a rule card. The
 	# screenshot and --nologo starts release this below.
 	_set_presence(Presence.SILENT)
@@ -270,10 +332,9 @@ func _ready() -> void:
 		func():
 			_heart.bump(Heartbeat.BUMP_BURNED)
 			player.add_flashlight_charge(BURN_REFUND))
-	_figures.stared_away.connect(
-		func(): _heart.bump(Heartbeat.BUMP_STARED))
 	_events = EnvironmentEvents.new()
 	_events.player = player
+	_events.horror_director = _director
 	_events.descent_mode = descent
 	_events.set_level(level_root)
 	add_child(_events)
@@ -308,13 +369,32 @@ func _ready() -> void:
 ## that changes what the player can hear or meet should change state here rather
 ## than assign the three flags directly.
 func _set_presence(state: Presence) -> void:
+	if _director != null:
+		_director.enabled = state == Presence.DESCENT
+		var presentation_hold := state == Presence.SILENT
+		if state == Presence.DESCENT and run != null:
+			presentation_hold = run.watching or run.arrival_grace > 0.0
+		_director.set_scripted_hold(presentation_hold)
 	_figures.suspended = state != Presence.DESCENT
+	if _passers != null:
+		_passers.suspended = state != Presence.DESCENT
+	if _corner_apparitions != null:
+		_corner_apparitions.suspended = state != Presence.DESCENT
 	_whispers.suspended = state == Presence.SILENT
 	_heart.suspended = state == Presence.SILENT
 
 
 func _level_seed(level: int) -> int:
 	return WorldGen.level_seed(world_seed, level)
+
+
+func _create_descent_route(level: int, floor_idx: int) -> DescentRoute:
+	_pending_shortcut_reveal = false
+	var route := DescentRoute.build(_level_seed(level), level, floor_idx)
+	route.set_topology(DescentTopology.new(_level_seed(level), level))
+	if run != null:
+		run.set_route(route)
+	return route
 
 
 func _build_level(level: int, around: Vector3) -> void:
@@ -327,16 +407,39 @@ func _build_level(level: int, around: Vector3) -> void:
 	cm.descent = descent
 	if descent:
 		if descent_route == null or descent_route.theme != level:
-			descent_route = DescentRoute.build(_level_seed(level), level,
-				run.floor_idx)
+			descent_route = _create_descent_route(level, run.floor_idx)
 		cm.descent_floor_idx = run.floor_idx
 		cm.descent_route = descent_route
+		cm.descent_topology = descent_route.topology
+		cm.descent_base_seed = world_seed
+		run.target_cell = descent_route.target
 		cm.blackout = run.blackout
 		cm.anomalies = run.anomalies
 		cm.descent_arrival_used = run.arrival_used
 		cm.descent_lift_called = run.lift_called
 		cm.descent_lift_wait = run.lift_wait_left
 		cm.descent_lift_open = run.lift_open
+		cm.descent_broken_station_tried = run.broken_station_tried
+	if _passers != null:
+		_passers.configure(_level_seed(level), level)
+		_passers.run = run
+		_passers.topology = descent_route.topology \
+			if descent_route != null else null
+	if _figures != null:
+		_figures.topology = descent_route.topology \
+			if descent_route != null else null
+		# Gates the tuned archetypes' debuts; the roster grows as the run
+		# deepens instead of only spawning faster.
+		_figures.floor_idx = run.floor_idx if descent and run != null else 99
+		# Attention rarely changes right at arrival, so the theme's spawn
+		# pacing is applied here too rather than waiting for the next
+		# attention_changed to recompute it.
+		if descent and run != null:
+			_figures.interval_scale = lerpf(1.0, 0.35, run.threat()) \
+				* run.figure_interval_scale()
+	if _corner_apparitions != null:
+		_corner_apparitions.configure(_level_seed(level), level)
+		_corner_apparitions.run = run
 	level_root.add_child(cm)
 	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
 
@@ -351,9 +454,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		# keys 1..N select the Nth live theme — no gap where the park used to be
 		var idx: int = event.physical_keycode - KEY_1
-		if not descent and idx >= 0 and idx < WorldGen.THEMES.size():
+		if not descent and event.physical_keycode == KEY_0:
+			_switch_level(10)
+		elif not descent and (event.physical_keycode == KEY_MINUS \
+				or event.physical_keycode == KEY_KP_SUBTRACT):
+			_switch_level(11)
+		elif not descent and idx >= 0 and idx < mini(9, WorldGen.THEMES.size()):
 			_switch_level(WorldGen.THEMES[idx])
-		elif not descent and event.physical_keycode == KEY_V:
+		elif event.physical_keycode == KEY_V:
 			_crt = not _crt
 			_post.visible = _crt
 			_apply_scaling()
@@ -441,8 +549,10 @@ func use_elevator(dest: int) -> void:
 ## test, and the interior is authored clear by construction.
 func _descent_arrival(theme: int) -> Dictionary:
 	if descent_route != null and descent_route.origin_wall >= 0:
+		var floor_y := Chunk.cell_floor_h(_level_seed(theme),
+			descent_route.origin, theme)
 		var car := Chunk.car_interior_point(descent_route.origin,
-			descent_route.origin_wall)
+			descent_route.origin_wall, floor_y)
 		car["exact"] = true
 		return car
 	var cellv := descent_route.origin if descent_route != null else Vector2i.ZERO
@@ -474,11 +584,128 @@ func descent_lift_called(seconds: float) -> void:
 	_show_event_message("LIFT CALLED")
 
 
+## The ritual television has taken (or released) the player's view. The run
+## holds the rules passive for exactly that long.
+func descent_tape_watch(on: bool) -> void:
+	if run != null:
+		run.watching = on
+	if _director != null:
+		_director.set_scripted_hold(on)
+	if on and _whispers != null:
+		_whispers.stop()
+	# The recording owns the screen: no needle over the footage, and nothing
+	# in the building moves until it lets go — the ambient figures are held by
+	# the run's passive state.
+	if is_instance_valid(_descent_hud):
+		_descent_hud.set_active(not on)
+	# The tape also owns the soundtrack: score and room tone hold their
+	# breath for it and pick up where they left off.
+	if _music != null:
+		_music.stream_paused = on
+	if is_instance_valid(_bleed_bed):
+		_bleed_bed.stream_paused = on
+	_set_ambience_paused(on)
+
+
+## A television claims its recording only when the player presses play. This
+## keeps an endless streamed world from consuming the no-repeat deck merely by
+## building distant chunks. Objective sets request the long-form pool; optional
+## discoveries request the short-form pool.
+func descent_tape_for(setup_key: String, long_form: bool) -> String:
+	if not descent or run == null or run.ended:
+		return ""
+	return run.tape_for_setup(setup_key, long_form)
+
+
+func descent_setup_tape_completed(setup_key: String) -> bool:
+	return run != null and run.setup_tape_completed(setup_key)
+
+
+## An optional recording is a detour with no obligation attached, so it has to
+## pay for itself or a player who knows the loop will walk past every one. What
+## it buys is the honest room count for a few seconds — never a direction, so
+## finding the lift remains the floor. The objective set stands in the lift's
+## own room and would be paying for an answer the player is already standing on.
+func descent_setup_tape_finished(setup_key: String, objective: bool) -> void:
+	if not descent or run == null or run.ended:
+		return
+	run.mark_setup_tape_completed(setup_key)
+	if objective:
+		descent_tape_finished()
+		return
+	if is_instance_valid(_descent_hud):
+		_descent_hud.grant_true_distance()
+		if _descent_hud.showing_true_distance():
+			_show_event_message("THE TAPE COUNTS THE ROOMS AHEAD")
+
+
+func _set_ambience_paused(paused: bool) -> void:
+	if ambience == null or not is_instance_valid(ambience):
+		return
+	var stack: Array[Node] = [ambience]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		stack.append_array(node.get_children())
+		if node is AudioStreamPlayer:
+			(node as AudioStreamPlayer).stream_paused = paused
+		elif node is AudioStreamPlayer3D:
+			(node as AudioStreamPlayer3D).stream_paused = paused
+
+
+## The floor's tape ran to its end with the player in the room. One of the
+## lift's three demands is now met for good — the tape never rewinds itself.
+func descent_tape_finished() -> void:
+	if not descent or run == null or run.ended:
+		return
+	run.mark_tape_watched()
+	_sync_descent_chunk_state()
+	_show_event_message("THE TAPE ENDS")
+	# Finishing the tape costs something: one directed arrival, behind the
+	# player, a beat after the camera has handed the room back. The countdown
+	# only runs once the passive hold releases, so it never lands under the
+	# dolly-back.
+	if _figures != null:
+		_figures.force_encounter(2.2)
+
+
+## The run's one dead charging station just collapsed under the player's
+## press. Caption the death, record the spring so a rebuilt chunk stays
+## sprung, and send what the dark owes a player standing torchless beside a
+## machine that lied to them.
+func descent_station_died() -> void:
+	if not descent or run == null or run.ended:
+		return
+	run.broken_station_tried = true
+	_sync_descent_chunk_state()
+	_show_event_message("THE STATION IS DEAD", true)
+	if _figures != null:
+		_figures.force_encounter(1.4)
+
+
+## The car turned an unready player away at the threshold.
+func descent_commit_refused(reason: String) -> void:
+	if not descent:
+		return
+	_show_event_message(reason, true)
+	_camera_damage_hit(0.25)
+
+
+func _on_descent_lift_cancelled() -> void:
+	if not descent or cm == null or descent_route == null:
+		return
+	_sync_descent_chunk_state()
+	var chunk: Chunk = cm.chunks.get(descent_route.target)
+	if chunk != null:
+		chunk.reset_descent_lift()
+	_show_event_message("THE CALL DIED — THE ROOM WAS LEFT", true)
+
+
 func _on_descent_lift_arrived() -> void:
 	if not descent or run == null or run.ended or cm == null \
 			or descent_route == null:
 		return
 	_sync_descent_chunk_state()
+	_show_event_message("THE LIFT IS HERE")
 	var chunk := cm.chunk_at(descent_route.target)
 	if chunk != null and chunk.has_descent_lift():
 		chunk.open_descent_lift()
@@ -510,6 +737,8 @@ func _sync_descent_chunk_state() -> void:
 	cm.descent_lift_called = run.lift_called
 	cm.descent_lift_wait = run.lift_wait_left
 	cm.descent_lift_open = run.lift_open
+	cm.descent_tape_watched = run.tape_watched
+	cm.descent_broken_station_tried = run.broken_station_tried
 
 
 ## Opens the car the player rode in on, a beat after the floor goes live. Not
@@ -519,7 +748,7 @@ func _reveal_arrival() -> void:
 	if not descent or run == null or run.ended or cm == null \
 			or descent_route == null:
 		return
-	var floor_name: String = DescentRun.NAMES[run.floor_idx]
+	var floor_name: String = run.floor_name()
 	if descent_route.origin_wall < 0:
 		_show_event_message("FLOOR %d — %s" % [
 			run.floor_idx + 1, floor_name.to_upper()])
@@ -540,22 +769,52 @@ func _reveal_arrival() -> void:
 
 func _connect_descent_run() -> void:
 	run.world_seed = world_seed
+	if _director != null:
+		run.horror_director = _director
 	run.pinned_attention = _attention_override
+	if _progress_enabled and _descent_progress.has_checkpoint() \
+			and _descent_progress.run_seed == world_seed:
+		run.restore_short_tape_cycle(_descent_progress.seen_short_tapes)
 	if player != null:
 		run.player = player
+	run.floor_reached.connect(_on_descent_floor_reached)
+	run.short_tape_claimed.connect(_on_short_tape_claimed)
+	run.short_tape_cycle_restarted.connect(_on_short_tape_cycle_restarted)
 	run.attention_changed.connect(_on_descent_attention)
 	run.violation.connect(_on_descent_violation)
 	run.blackout_changed.connect(_on_descent_blackout)
 	run.passive_changed.connect(_on_descent_passive)
-	run.figures = _figures
 	run.anomaly_requested.connect(_on_descent_anomaly)
+	run.blackout_doorway_requested.connect(_on_blackout_doorway)
 	run.lift_arrived.connect(_on_descent_lift_arrived)
+	run.lift_cancelled.connect(_on_descent_lift_cancelled)
+	run.blackout_locate_changed.connect(_on_blackout_locate)
+	run.blackout_ambush.connect(_on_blackout_ambush)
 	run.run_ended.connect(_on_descent_ended)
+
+
+func _on_descent_floor_reached(floor_idx: int) -> void:
+	if _progress_enabled:
+		_descent_progress.reach_floor(world_seed, floor_idx)
+
+
+func _on_short_tape_claimed(path: String) -> void:
+	if _progress_enabled and _descent_progress.run_seed == world_seed:
+		_descent_progress.record_short_tape(path)
+
+
+func _on_short_tape_cycle_restarted() -> void:
+	if _progress_enabled and _descent_progress.run_seed == world_seed:
+		_descent_progress.reset_short_tape_cycle()
 
 
 func _begin_descent_floor() -> void:
 	if not descent or run == null or run.ended:
 		return
+	if _director != null:
+		_director.reset_floor()
+		_director.enabled = true
+		_director.set_pressure(run.threat())
 	run.player = player
 	run.start_floor()
 	player.allow_sprint = false
@@ -564,7 +823,80 @@ func _begin_descent_floor() -> void:
 	_descent_hud.set_active(true)
 	_on_descent_attention(run.attention)
 	_sync_descent_chunk_state()
+	_prepare_bleed()
 	_reveal_arrival()
+	if opts.play_tape:
+		_dev_play_tape()
+
+
+## Screenshot-run helper for `--play-tape`: walk into the objective room and
+## press play without a human at the keys.
+func _dev_play_tape() -> void:
+	await get_tree().create_timer(0.4).timeout
+	if cm == null or descent_route == null:
+		return
+	var chunk: Chunk = cm.chunks.get(descent_route.target)
+	if chunk == null:
+		return
+	var ritual := chunk.get_node_or_null("DescentRitual")
+	if ritual != null:
+		ritual._on_activated(player)
+
+
+## Capture what this floor looks and sounds like clean, and what the next one
+## will pull it toward. The ratchet in _process does the rest.
+func _prepare_bleed() -> void:
+	_bleed_captured = false
+	if is_instance_valid(_bleed_bed):
+		_bleed_bed.queue_free()
+	_bleed_bed = null
+	if run == null or run.is_last_floor():
+		return
+	var next_theme: int = run.order()[run.floor_idx + 1]
+	if cm != null:
+		cm.bleed_theme = next_theme
+		cm.bleed = run.bleed
+	var env := we.environment
+	if env != null:
+		_bleed_base_fog = env.fog_light_color
+		_bleed_base_density = env.fog_density
+		var next_env := _build_env(next_theme)
+		_bleed_next_fog = next_env.fog_light_color
+		_bleed_next_density = next_env.fog_density
+		_bleed_captured = true
+	if Sfx.has_bed(next_theme):
+		var bed: Array = Sfx.bed(next_theme)
+		_bleed_bed = AudioStreamPlayer.new()
+		_bleed_bed.stream = bed[0]
+		_bleed_bed.volume_db = -60.0
+		add_child(_bleed_bed)
+		_bleed_bed.play()
+
+
+func _update_bleed() -> void:
+	if not descent or run == null or run.ended or run.suspended \
+			or cm == null or descent_route == null or player == null:
+		return
+	if run.is_last_floor():
+		return
+	var pc := Vector2i(floori(player.position.x / 12.0),
+		floori(player.position.z / 12.0))
+	var d := maxi(absi(pc.x - descent_route.target.x),
+		absi(pc.y - descent_route.target.y))
+	var closeness := 1.0 - clampf((float(d) - 1.0) / 7.0, 0.0, 1.0)
+	if closeness > run.bleed:
+		run.bleed = closeness
+	cm.bleed = run.bleed
+	if run.bleed <= 0.0:
+		return
+	if _bleed_captured and we.environment != null:
+		var mixv := run.bleed * 0.65
+		we.environment.fog_light_color = _bleed_base_fog.lerp(
+			_bleed_next_fog, mixv)
+		we.environment.fog_density = lerpf(_bleed_base_density,
+			_bleed_next_density, run.bleed * 0.5)
+	if is_instance_valid(_bleed_bed):
+		_bleed_bed.volume_db = lerpf(-58.0, -30.0, run.bleed)
 
 
 func _ensure_descent_hud() -> void:
@@ -590,8 +922,7 @@ func _on_descent_lift() -> void:
 	run.floor_idx += 1
 	run.prepare_floor()
 	var next_theme := run.theme()
-	descent_route = DescentRoute.build(_level_seed(next_theme), next_theme,
-		run.floor_idx)
+	descent_route = _create_descent_route(next_theme, run.floor_idx)
 	_print_descent_route()
 	var arrival := _descent_arrival(next_theme)
 	await _jump_to(next_theme, arrival["position"], false,
@@ -602,11 +933,6 @@ func _on_descent_lift() -> void:
 func _on_descent_exit() -> void:
 	if descent and run != null and run.is_last_floor() and not run.ended:
 		run.finish(true)
-
-
-func _on_figure_stared_away() -> void:
-	if descent and run != null:
-		run.add_stare_violation()
 
 
 ## One of them reached you during Descent. Wander deliberately keeps the figure
@@ -682,69 +1008,30 @@ func _on_descent_attention(_value: float) -> void:
 	if not descent:
 		return
 	var threat := run.threat() if run != null else 0.0
+	if _director != null:
+		_director.set_pressure(threat)
 	_set_post_corruption(threat)
 	if _figures != null:
-		_figures.interval_scale = lerpf(1.0, 0.35, threat)
-	# Never into a blackout: the player is standing still by rule and this thing
-	# has no counter. It waits for the lights.
-	if threat >= 0.85 and run != null and not run.suspended \
-			and not run.blackout and not is_instance_valid(_pursuer):
-		_spawn_descent_pursuer()
+		_figures.interval_scale = lerpf(1.0, 0.35, threat) \
+			* (run.figure_interval_scale() if run != null else 1.0)
 
 
-func _spawn_descent_pursuer() -> void:
-	if not descent or run == null or run.ended or run.suspended:
-		return
-	var ws := _level_seed(active_level)
-	var origin := Vector2i(floori(player.global_position.x / 12.0),
+## The flat direction from the player toward the next route cell, or zero when
+## the player is off the route (or standing on the target). Feeds the whisper
+## bias; deliberately never rendered.
+func _whisper_route_bias() -> Vector3:
+	if descent_route == null or player == null:
+		return Vector3.ZERO
+	var cell := Vector2i(floori(player.global_position.x / 12.0),
 		floori(player.global_position.z / 12.0))
-	var queue: Array[Vector2i] = [origin]
-	var dist := {}
-	dist[origin] = 0
-	var candidates: Array[Vector2i] = []
-	var head := 0
-	while head < queue.size():
-		var at := queue[head]
-		head += 1
-		var d := int(dist[at])
-		if d >= 4:
-			candidates.append(at)
-			continue
-		for dir in 4:
-			if WorldGen.edge_info(ws, at, dir, active_level)["wall"]:
-				continue
-			var nb: Vector2i = at + WorldGen.DIRV[dir]
-			if dist.has(nb):
-				continue
-			dist[nb] = d + 1
-			queue.append(nb)
-	if candidates.is_empty():
-		return
-	candidates.sort_custom(func(a: Vector2i, b: Vector2i):
-		return WorldGen.h(ws, a.x, a.y, 2601) \
-			< WorldGen.h(ws, b.x, b.y, 2601))
-	var chosen := candidates[0]
-	for candidate in candidates:
-		var point := Vector3(float(candidate.x) * 12.0 + 6.0, 1.4,
-			float(candidate.y) * 12.0 + 6.0)
-		if not player.cam.is_position_in_frustum(point):
-			chosen = candidate
-			break
-	_pursuer = DescentPursuer.new()
-	_pursuer.player = player
-	_pursuer.world_seed = ws
-	_pursuer.theme = active_level
-	_pursuer.speed = lerpf(3.0, 3.75, run.floor_progress())
-	_pursuer.position = Vector3(float(chosen.x) * 12.0 + 6.0, 0.0,
-		float(chosen.y) * 12.0 + 6.0)
-	_pursuer.caught.connect(_on_pursuer_caught)
-	level_root.add_child(_pursuer)
-	run.pursuer_active = true
-
-
-func _on_pursuer_caught() -> void:
-	if descent and run != null and not run.ended:
-		run.finish(false)
+	var next := descent_route.next_from(cell)
+	if next == cell:
+		return Vector3.ZERO
+	var centre := Vector3((float(next.x) + 0.5) * 12.0, 0.0,
+		(float(next.y) + 0.5) * 12.0)
+	var dirv := centre - player.global_position
+	dirv.y = 0.0
+	return dirv.normalized() if dirv.length() > 0.5 else Vector3.ZERO
 
 
 func _on_descent_violation(kind: int) -> void:
@@ -752,12 +1039,6 @@ func _on_descent_violation(kind: int) -> void:
 		return
 	var message := "RULE BROKEN"
 	match kind:
-		DescentRun.Rule.STARE:
-			message = "RULE BROKEN — LOOK AWAY"
-		DescentRun.Rule.STOP:
-			message = "RULE BROKEN — KEEP MOVING"
-		DescentRun.Rule.BACKTRACK:
-			message = "RULE BROKEN — DO NOT GO BACK"
 		DescentRun.Rule.BLACKOUT_MOVE:
 			message = "RULE BROKEN — STAND STILL"
 	_show_event_message(message, true)
@@ -803,8 +1084,6 @@ func _on_descent_blackout(on: bool) -> void:
 	if not descent or cm == null:
 		return
 	cm.set_blackout(on)
-	if is_instance_valid(_pursuer):
-		_pursuer.frozen = on
 	if on:
 		if _blackout_ambient < 0.0:
 			_blackout_ambient = we.environment.ambient_light_energy
@@ -815,8 +1094,55 @@ func _on_descent_blackout(on: bool) -> void:
 		if _blackout_ambient >= 0.0:
 			we.environment.ambient_light_energy = _blackout_ambient
 			_blackout_ambient = -1.0
-		_play_descent_cue(SoundBank.ding(), -10.0)
-		_show_event_message("POWER RESTORED — KEEP MOVING")
+		_blackout_locate_cue = 0
+		if _pending_shortcut_reveal:
+			_pending_shortcut_reveal = false
+			_play_descent_cue(SoundBank.creak(), -7.0)
+			_play_descent_cue(SoundBank.thud(), -13.0)
+			_show_event_message("POWER RESTORED — SOMETHING OPENED NEARBY", true)
+		else:
+			# A failed preflight postpones the blackout, so this path is only a
+			# defensive fallback for teardown/level-switch races.
+			_play_descent_cue(SoundBank.ding(), -10.0)
+			_show_event_message("POWER RESTORED")
+
+
+## Something in the dark heard the player move. It closes in three audible
+## steps; the fourth is `_on_blackout_ambush`.
+func _on_blackout_locate(value: float) -> void:
+	if not descent or _dying:
+		return
+	var step := 0
+	if value >= 0.85:
+		step = 3
+	elif value >= 0.6:
+		step = 2
+	elif value >= 0.3:
+		step = 1
+	if step <= _blackout_locate_cue:
+		if step == 0:
+			_blackout_locate_cue = 0
+		return
+	_blackout_locate_cue = step
+	_play_descent_cue(SoundBank.creak(), -18.0 + 5.0 * step)
+	if step >= 2:
+		_play_descent_cue(SoundBank.thud(), -20.0 + 5.0 * step)
+	if step == 3:
+		_camera_damage_hit(0.35)
+
+
+## It found them. The player never sees what it was — one frame of something
+## at the lens, the loudest sound in the game, and the run is over.
+func _on_blackout_ambush() -> void:
+	if not descent or run == null or run.ended or _dying:
+		return
+	_dying = true
+	_blackout_locate_cue = 0
+	var pick := Sfx.random_scare()
+	_play_descent_cue(pick[0], -2.0)
+	_camera_damage_hit(1.0)
+	_play_player_death()
+	run.finish(false)
 
 
 ## The rules have the player pinned. Nothing arrives and nothing closes until
@@ -837,8 +1163,12 @@ func _check_torch_hint() -> void:
 
 
 func _on_descent_passive(on: bool) -> void:
+	if _director != null:
+		_director.set_scripted_hold(on and (run == null or not run.blackout))
 	if _figures != null:
 		_figures.passive = on
+	if _corner_apparitions != null:
+		_corner_apparitions.passive = on
 
 
 func _play_descent_cue(stream: AudioStream, volume: float) -> void:
@@ -857,15 +1187,71 @@ func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 	cm.set_anomaly(at, kind)
 
 
+func _on_blackout_doorway(proposal: Dictionary,
+		assistance_requested: bool) -> void:
+	if not descent or cm == null or run == null or descent_route == null \
+			or descent_route.topology == null or proposal.is_empty():
+		return
+	var edge_cell: Vector2i = proposal["cell"]
+	var dir := int(proposal["dir"])
+	var before := descent_route.distance_from_target(run._cell)
+	if not descent_route.topology.add_shortcut(edge_cell, dir):
+		return
+	descent_route.refresh_topology()
+	var after := descent_route.distance_from_target(run._cell)
+	var other: Vector2i = edge_cell + WorldGen.DIRV[dir]
+	cm.descent_topology = descent_route.topology
+	cm.rebuild_cells(_shortcut_rebuild_cells(edge_cell, other))
+	if _figures != null:
+		_figures.topology = descent_route.topology
+	if _passers != null:
+		_passers.topology = descent_route.topology
+	var far_side_distance := descent_route.distance_from_target(other)
+	var verified_help := assistance_requested and before >= 0 \
+		and far_side_distance >= 0 \
+		and before - far_side_distance >= DescentRoute.MERCY_MIN_SAVING
+	if verified_help:
+		run.mark_helpful_doorway_created()
+	_pending_shortcut_reveal = true
+	print("blackout doorway %s dir=%d, route %d -> %d, assistance=%s" % [
+		edge_cell, dir, before, after, verified_help])
+
+
+## Furniture for a merged room belongs to its root chunk and can extend into
+## every member. Rebuilding the whole owning room makes its ordinary
+## doorway-clearance pass see the supernatural edge as well in every zone.
+func _shortcut_rebuild_cells(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for endpoint in [a, b]:
+		var is_corridor := WorldGen.annex_corridor_axis(
+			descent_route.world_seed, endpoint) != 0 \
+			if descent_route.theme == 2 else \
+			WorldGen.corridor(descent_route.world_seed, endpoint) != 0
+		if is_corridor:
+			if not out.has(endpoint):
+				out.append(endpoint)
+			continue
+		var root := WorldGen.annex_room_id(
+			descent_route.world_seed, endpoint) \
+			if descent_route.theme == 2 else \
+			WorldGen.room_id(descent_route.world_seed, endpoint)
+		for x in range(root.x - 1, root.x + 2):
+			for y in range(root.y - 1, root.y + 2):
+				var member := Vector2i(x, y)
+				var member_root := WorldGen.annex_room_id(
+					descent_route.world_seed, member) \
+					if descent_route.theme == 2 else \
+					WorldGen.room_id(descent_route.world_seed, member)
+				if member_root == root \
+						and not out.has(member):
+					out.append(member)
+	return out
+
+
 func _on_descent_ended(won: bool) -> void:
 	_set_presence(Presence.SILENT)
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_active(false)
-	if is_instance_valid(_pursuer):
-		_pursuer.queue_free()
-	_pursuer = null
-	if run != null:
-		run.pursuer_active = false
 	player.set_process_unhandled_input(false)
 	player.velocity = Vector3.ZERO
 	player.set_rumble(0.0)
@@ -879,15 +1265,45 @@ func _show_descent_summary(won: bool) -> void:
 	_descent_summary = DescentSummary.new()
 	_descent_summary.won = won
 	_descent_summary.floor_idx = run.floor_idx
+	_descent_summary.floor_display = run.floor_name()
 	_descent_summary.elapsed = run.elapsed
 	_descent_summary.violations = run.violations
 	_descent_summary.world_seed = world_seed
-	_descent_summary.retry.connect(_restart_descent)
+	_descent_summary.continue_floor_idx = _continue_floor_idx()
+	_descent_summary.continue_run.connect(_continue_descent)
+	_descent_summary.restart_run.connect(_restart_descent)
+	_descent_summary.new_run.connect(_new_descent)
 	_descent_summary.leave.connect(_leave_descent)
 	add_child(_descent_summary)
 
 
+func _continue_floor_idx() -> int:
+	if _progress_enabled and _descent_progress.has_checkpoint() \
+			and _descent_progress.run_seed == world_seed:
+		return _descent_progress.deepest_floor
+	return run.floor_idx if run != null else 0
+
+
+func _continue_descent() -> void:
+	if _progress_enabled and _descent_progress.has_checkpoint():
+		world_seed = _descent_progress.run_seed
+	await _resume_descent_at(_continue_floor_idx())
+
+
 func _restart_descent() -> void:
+	if _progress_enabled and _descent_progress.has_checkpoint():
+		world_seed = _descent_progress.run_seed
+	await _resume_descent_at(0)
+
+
+func _new_descent() -> void:
+	world_seed = _fresh_descent_seed()
+	if _progress_enabled:
+		_descent_progress.start_new(world_seed)
+	await _resume_descent_at(0)
+
+
+func _resume_descent_at(floor_idx: int) -> void:
 	if _switching:
 		return
 	if is_instance_valid(_descent_summary):
@@ -898,12 +1314,15 @@ func _restart_descent() -> void:
 	if is_instance_valid(run):
 		run.queue_free()
 	run = DescentRun.new()
+	run.floor_idx = clampi(floor_idx, 0, DescentRun.FLOOR_COUNT - 1)
 	_connect_descent_run()
 	run.prepare_floor()
 	add_child(run)
 	run.player = player
-	descent_route = DescentRoute.build(_level_seed(run.theme()), run.theme(),
-		run.floor_idx)
+	player.reset_descent_resources()
+	_dying = false
+	_blackout_locate_cue = 0
+	descent_route = _create_descent_route(run.theme(), run.floor_idx)
 	_print_descent_route()
 	var arrival := _descent_arrival(run.theme())
 	await _jump_to(run.theme(), arrival["position"], false,
@@ -916,6 +1335,7 @@ func _restart_descent() -> void:
 func _leave_descent() -> void:
 	if _switching:
 		return
+	player.set_flashlight(false)
 	if is_instance_valid(_descent_summary):
 		_descent_summary.queue_free()
 	_descent_summary = null
@@ -926,6 +1346,10 @@ func _leave_descent() -> void:
 	run = null
 	descent = false
 	descent_route = null
+	if is_instance_valid(_bleed_bed):
+		_bleed_bed.queue_free()
+	_bleed_bed = null
+	_bleed_captured = false
 	if is_instance_valid(_descent_hud):
 		_descent_hud.queue_free()
 	_descent_hud = null
@@ -1017,11 +1441,6 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
 	# otherwise-safe candidate appear blocked (seen returning to the school at
 	# seed 1760336105, cell -1,0).
 	var old_level := level_root
-	if is_instance_valid(_pursuer):
-		_pursuer.queue_free()
-	_pursuer = null
-	if run != null:
-		run.pursuer_active = false
 	remove_child(old_level)
 	old_level.queue_free()
 	_figures.despawn()
@@ -1104,11 +1523,23 @@ func _settle_initial_arrival() -> void:
 func _process(dt: float) -> void:
 	_check_torch_hint()
 	_update_post_effects()
+	_update_flashlight_hud()
+	_update_bleed()
+	# Once the mercy system has proven a stall, the whispers stop being
+	# uniformly random and lean toward where the route actually continues.
+	if descent and _whispers != null and run != null:
+		_whispers.bias_dir = _whisper_route_bias() if run.mercy_armed \
+			else Vector3.ZERO
 	# The chunk config is read at build time, so the mirrored lift clock has to
 	# stay current for a target room that streams back in mid-wait.
 	if descent and cm != null and run != null and run.lift_called \
 			and not run.lift_open:
 		cm.descent_lift_wait = run.lift_wait_left
+		# The summon wait is scored by the figures instead of blackouts: the
+		# building answers the call with everything except the car.
+		if _figures != null:
+			_figures.interval_scale = minf(_figures.interval_scale,
+				lerpf(0.6, 0.3, run.floor_progress()))
 	if not _bench:
 		return
 	_bench_t += dt
@@ -1197,7 +1628,7 @@ func _music_track_for(level: int) -> String:
 	# during Descent's late-floor music override.
 	if level == 2:
 		return ""
-	if descent and run != null and run.floor_idx >= DescentRun.ORDER.size() - 2:
+	if descent and run != null and run.floor_idx >= DescentRun.FLOOR_COUNT - 2:
 		return DESCENT_LATE_TRACK
 	return MUSIC_TRACKS.get(level, "")
 
@@ -1268,6 +1699,13 @@ func _apply_hud_scaling() -> void:
 		viewport_size.y * 0.5 + 150.0 * scale)
 	_event_hint.add_theme_font_size_override("font_size", roundi(28.0 * scale))
 	_event_hint.add_theme_constant_override("outline_size", roundi(2.0 * scale))
+
+	_battery_panel.custom_minimum_size = Vector2(238.0, 52.0) * scale
+	_battery_panel.position = Vector2(18.0, viewport_size.y - 78.0 * scale)
+	_charging_panel.custom_minimum_size = Vector2(360.0, 66.0) * scale
+	_charging_panel.position = Vector2(
+		(viewport_size.x - _charging_panel.custom_minimum_size.x) * 0.5,
+		viewport_size.y - 174.0 * scale)
 
 	for style in [_interact_style, _event_style]:
 		style.content_margin_left = 18.0 * scale
@@ -1496,6 +1934,69 @@ func _build_ui() -> void:
 	_event_hint.add_theme_constant_override("shadow_offset_x", 2)
 	_event_hint.add_theme_constant_override("shadow_offset_y", 2)
 	_event_panel.add_child(_event_hint)
+
+	_battery_panel = PanelContainer.new()
+	_battery_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var battery_style := StyleBoxFlat.new()
+	battery_style.bg_color = Color(0.018, 0.025, 0.028, 0.84)
+	battery_style.border_color = Color(0.25, 0.70, 0.82, 0.55)
+	battery_style.set_border_width_all(1)
+	battery_style.set_corner_radius_all(5)
+	battery_style.set_content_margin_all(9.0)
+	_battery_panel.add_theme_stylebox_override("panel", battery_style)
+	cl.add_child(_battery_panel)
+	var battery_box := VBoxContainer.new()
+	battery_box.add_theme_constant_override("separation", 4)
+	_battery_panel.add_child(battery_box)
+	var battery_label := Label.new()
+	battery_label.text = "FLASHLIGHT"
+	battery_label.add_theme_font_size_override("font_size", 13)
+	battery_label.add_theme_color_override("font_color", Color(0.66, 0.88, 0.94))
+	battery_box.add_child(battery_label)
+	_battery_bar = ProgressBar.new()
+	_battery_bar.show_percentage = false
+	_battery_bar.max_value = 1.0
+	_battery_bar.value = 1.0
+	_battery_bar.custom_minimum_size = Vector2(220, 11)
+	var battery_bg := StyleBoxFlat.new()
+	battery_bg.bg_color = Color(0.035, 0.055, 0.06, 0.95)
+	var battery_fill := StyleBoxFlat.new()
+	battery_fill.bg_color = Color(0.25, 0.82, 0.92)
+	_battery_bar.add_theme_stylebox_override("background", battery_bg)
+	_battery_bar.add_theme_stylebox_override("fill", battery_fill)
+	battery_box.add_child(_battery_bar)
+
+	_charging_panel = PanelContainer.new()
+	_charging_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_charging_panel.visible = false
+	var charge_style := StyleBoxFlat.new()
+	charge_style.bg_color = Color(0.012, 0.038, 0.028, 0.90)
+	charge_style.border_color = Color(0.30, 1.0, 0.52, 0.72)
+	charge_style.set_border_width_all(1)
+	charge_style.set_corner_radius_all(6)
+	charge_style.set_content_margin_all(11.0)
+	_charging_panel.add_theme_stylebox_override("panel", charge_style)
+	cl.add_child(_charging_panel)
+	var charge_box := VBoxContainer.new()
+	charge_box.add_theme_constant_override("separation", 6)
+	_charging_panel.add_child(charge_box)
+	var charge_label := Label.new()
+	charge_label.text = "CHARGING — E OR F TO DISCONNECT"
+	charge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	charge_label.add_theme_font_size_override("font_size", 15)
+	charge_label.add_theme_color_override("font_color", Color(0.58, 1.0, 0.72))
+	charge_box.add_child(charge_label)
+	_charging_bar = ProgressBar.new()
+	_charging_bar.show_percentage = false
+	_charging_bar.max_value = 1.0
+	_charging_bar.custom_minimum_size = Vector2(338, 14)
+	var charge_bg := StyleBoxFlat.new()
+	charge_bg.bg_color = Color(0.025, 0.09, 0.06, 1.0)
+	var charge_fill := StyleBoxFlat.new()
+	charge_fill.bg_color = Color(0.30, 1.0, 0.52)
+	_charging_bar.add_theme_stylebox_override("background", charge_bg)
+	_charging_bar.add_theme_stylebox_override("fill", charge_fill)
+	charge_box.add_child(_charging_bar)
 	# fullscreen fade for level transitions
 	_fade = ColorRect.new()
 	_fade.color = Color(0, 0, 0, 0)
@@ -1508,6 +2009,19 @@ func _build_ui() -> void:
 	_warp.volume_db = -6.0
 	add_child(_warp)
 	_apply_hud_scaling()
+
+
+func _update_flashlight_hud() -> void:
+	if player == null or _battery_bar == null:
+		return
+	var level := player.flashlight_charge()
+	_battery_bar.value = level
+	_charging_bar.value = level
+	_charging_panel.visible = player.is_charging()
+	var fill := _battery_bar.get_theme_stylebox("fill") as StyleBoxFlat
+	if fill != null:
+		fill.bg_color = Color(0.95, 0.28, 0.18) if level < 0.15 else (
+			Color(1.0, 0.66, 0.20) if level < 0.35 else Color(0.25, 0.82, 0.92))
 
 
 func _on_interaction_prompt(text: String) -> void:
@@ -1570,34 +2084,42 @@ func _build_title() -> void:
 	_set_world_audio(false)
 	_switch_music(active_level)
 	_title = TitleScreen.new()
-	_title.mode_selected.connect(_on_mode_selected)
+	if _progress_enabled and _descent_progress != null \
+			and _descent_progress.has_checkpoint():
+		var checkpoint_theme: int = DescentRun.order_for(
+			_descent_progress.run_seed)[_descent_progress.deepest_floor]
+		_title.configure_descent_progress(true,
+			_descent_progress.deepest_floor,
+			str(DescentRun.THEME_NAMES[checkpoint_theme]))
+	_title.descent_requested.connect(_on_descent_requested)
 	_title.started.connect(_on_start)
 	add_child(_title)
 	if descent:
 		_title.present_descent(true)
 
 
-func _on_mode_selected(wants_descent: bool) -> void:
-	if wants_descent:
-		call_deferred("_prepare_descent")
+func _on_descent_requested(entry: int) -> void:
+	call_deferred("_prepare_descent", entry)
 
 
-func _prepare_descent() -> void:
+func _prepare_descent(entry: int) -> void:
 	if descent or _descent_preparing:
 		if descent and is_instance_valid(_title):
 			_title.set_descent_ready()
 		return
 	_descent_preparing = true
 	descent = true
+	var floor_idx := _apply_descent_entry(entry)
 	player.allow_sprint = false
 	player.set_process_unhandled_input(false)
+	player.reset_descent_resources()
 	_saved_pos.clear()
 	run = DescentRun.new()
+	run.floor_idx = floor_idx
 	_connect_descent_run()
 	run.prepare_floor()
 	add_child(run)
-	descent_route = DescentRoute.build(_level_seed(run.theme()), run.theme(),
-		run.floor_idx)
+	descent_route = _create_descent_route(run.theme(), run.floor_idx)
 	_print_descent_route()
 	_events.descent_mode = true
 	_set_presence(Presence.SILENT)
@@ -1608,6 +2130,31 @@ func _prepare_descent() -> void:
 	_descent_preparing = false
 	if is_instance_valid(_title):
 		_title.set_descent_ready()
+
+
+func _apply_descent_entry(entry: int) -> int:
+	if not _progress_enabled:
+		return 0
+	if entry == TitleScreen.DescentEntry.CONTINUE \
+			and _descent_progress.has_checkpoint():
+		world_seed = _descent_progress.run_seed
+		return _descent_progress.deepest_floor
+	if entry == TitleScreen.DescentEntry.RESTART \
+			and _descent_progress.has_checkpoint():
+		world_seed = _descent_progress.run_seed
+		return 0
+	world_seed = _fresh_descent_seed()
+	_descent_progress.start_new(world_seed)
+	return 0
+
+
+func _fresh_descent_seed() -> int:
+	var previous := _descent_progress.run_seed \
+		if _descent_progress != null and _descent_progress.has_checkpoint() else 0
+	var candidate := (randi() & 0x7FFFFFFF) | 1
+	while candidate == previous:
+		candidate = (randi() & 0x7FFFFFFF) | 1
+	return candidate
 
 
 func _on_start(selected_descent: bool) -> void:
@@ -1628,9 +2175,9 @@ func _set_mode_hint() -> void:
 	if _hint == null:
 		return
 	if descent:
-		_hint.text = "WASD / arrows move   ·   E interact   ·   F flashlight   ·   B video mode   ·   follow the HUD needle   ·   Q title   ·   Esc release mouse"
+		_hint.text = "WASD / arrows move   ·   E interact   ·   F flashlight   ·   B video mode   ·   the counter knows how far   ·   Q title   ·   Esc release mouse"
 	else:
-		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-9 floors   ·   V filter   ·   B video mode   ·   Q title   ·   Esc release mouse"
+		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-9 floors / 0 Monolith / − Bloom   ·   V filter   ·   B video mode   ·   Q title   ·   Esc release mouse"
 
 
 ## Dev helper: `godot --path . -- --screenshot=/tmp/shot.png` renders a couple

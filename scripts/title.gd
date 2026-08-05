@@ -7,6 +7,13 @@ extends CanvasLayer
 
 signal mode_selected(descent: bool)
 signal started(descent: bool)
+signal descent_requested(entry: int)
+
+enum DescentEntry {
+	CONTINUE,
+	RESTART,
+	NEW,
+}
 
 enum Page {
 	MAIN,
@@ -17,13 +24,16 @@ enum Page {
 }
 
 const UI_FONT: Font = preload("res://fonts/VT323-Regular.ttf")
+const TITLE_ART: Texture2D = preload("res://textures/ui/title_screen.png")
 const INSTRUCTION_ROWS := [
 	["WASD  /  ARROWS", "Walk"],
 	["SHIFT", "Run  ·  Wander only"],
-	["E", "Use terminals, lifts and selected doors"],
+	["E", "Use terminals, lifts, doors and charging stations"],
 	["F", "Toggle the flashlight"],
-	["1  —  8", "Move between floors  ·  Wander only"],
-	["V", "Toggle the video filter  ·  Wander only"],
+	["1  —  9", "Move between the original floors  ·  Wander only"],
+	["0", "Enter the Monolith  ·  Wander only"],
+	["−", "Enter the Bloom  ·  Wander only"],
+	["V", "Toggle the video filter"],
 	["B", "Switch CRT / recovered-tape video mode"],
 	["Q", "Ask to leave the current mode"],
 	["ESC", "Release the mouse"],
@@ -36,24 +46,26 @@ const CREDIT_SECTIONS := [
 			"Poly Haven  ·  CC0     nisu / 3DModelsCC0  ·  CC0     WillowBoxArt",
 			"CASINO   morrrtu1o · Audrey Gonçalves · nermin · Dudzy · juliegraham178",
 			"OFFICE   Red Fox / nokillnando · NotAnotherApocalypticCo. · AquaEquinox",
-			"    Rylae Shylna · maxdragonn · dannaki_ · R3indeer",
-			"ANNEX   carlcapu9 · Avot · Drake · jimbogies · Doverlock",
+			"    Rylae Shylna · maxdragonn · dannaki_",
+			"ANNEX   carlcapu9 · Avot · Drake · jimbogies · Doverlock · Archer Sterling",
 			"AIRPORT   Bucks / Its_Bucks · Ellis Fossett · n.philipsen · assetfactory",
 			"ASYLUM   Veterock · loxfear · Ellie · creative_beast · Mehdi Shahsavan",
 			"    Matt LeMoine",
 			"SCHOOL   Jawahar Yokesh · dercruz926 · barism09 · neverfollow81 · CAL21",
-			"    Osian CG · HippoStance · Dun · FLUXIUM3D · Kerridge1",
+			"    Osian CG · HippoStance · Dun · FLUXIUM3D · ap-school",
 			"MALL   AdrianXY · mtaesiri · kapookkt · shirlanne · matejbiskup97 · Katydid",
 			"    Some Random Mall Modeller · MaX3Dd",
-			"PRISON   Mihai / mmike0 · Mark Peters · Mehdi Shahsavan / adventurer",
+			"PRISON   neverfollow81 · Mark Peters · Mehdi Shahsavan / adventurer",
 			"    dudecon · ShepDes",
 			"POOLROOMS   NXTLVLPLY · CadmiumCoffee (bsishir) · JackFarrand",
-			"CC BY 4.0 except  Katydid, R3indeer, mmike0, Kerridge1  ·  CC BY-NC 4.0",
+			"MONOLITH   Mark Peters · carlcapu9",
+			"BLOOM   Somersby · ChopperManiac · Mark Peters",
+			"CC BY 4.0 except  Katydid  ·  CC BY-NC 4.0",
 			"and  dannaki_, assetfactory, MaX3Dd  ·  Sketchfab Standard",
 		]],
 	["SURFACES, TYPE & FIGURES",
 		[
-			"ambientCG  ·  CC0     Peter Hull / VT323  ·  SIL Open Font License",
+			"ambientCG + Poly Haven + TextureCan  ·  CC0     Peter Hull / VT323  ·  SIL Open Font License",
 			"Mette Aumala · Madeleine Price Ball · OpenClipart-Vectors  ·  CC0",
 			"Phil Bronnery / Beao  —  walking woman silhouette  ·  CC BY 2.0",
 		]],
@@ -65,7 +77,9 @@ const BODY := Color(0.66, 0.64, 0.58)
 const DIM := Color(0.46, 0.45, 0.41)
 const BACK := Color8(2, 2, 2)
 
-var _logo: TextureRect
+var _background: TextureRect
+var _page_shade: ColorRect
+var _main_dock: VBoxContainer
 var _pages: Dictionary = {}
 var _scaled: Array[Array] = []   # [Control, base font, width, height]
 var _prompt: Label
@@ -74,16 +88,40 @@ var _t := 0.0
 var _gone := false
 var _descent_selected := false
 var _descent_ready := false
+var _has_descent_progress := false
+var _checkpoint_floor := 0
+var _checkpoint_name := ""
+var _descent_entry := DescentEntry.NEW
 
 
 func _ready() -> void:
 	layer = 3
 	var back := ColorRect.new()
-	# The title image uses RGB 2 black; matching it makes its bounds disappear.
 	back.color = BACK
 	back.set_anchors_preset(Control.PRESET_FULL_RECT)
 	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(back)
+
+	# The supplied composition is the title. Cover the viewport so the corridor
+	# remains immersive at 16:9 while its own black perimeter absorbs the modest
+	# vertical crop from the 3:2 source image.
+	_background = TextureRect.new()
+	_background.texture = TITLE_ART
+	_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_background.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	add_child(_background)
+
+	# Secondary pages retain the artwork as their ground, but quiet it enough
+	# for long-form instructions and credits to remain comfortably readable.
+	_page_shade = ColorRect.new()
+	_page_shade.color = Color(0.002, 0.002, 0.002, 0.91)
+	_page_shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_page_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_page_shade.visible = false
+	add_child(_page_shade)
 
 	_build_main()
 	_build_instructions()
@@ -105,40 +143,50 @@ func _page_root() -> VBoxContainer:
 
 
 func _build_main() -> void:
-	var page := _page_root()
+	var page := Control.new()
+	page.set_anchors_preset(Control.PRESET_FULL_RECT)
+	page.mouse_filter = Control.MOUSE_FILTER_PASS
+	add_child(page)
 	_pages[Page.MAIN] = page
 
-	var eyebrow := _label("AI & DESIGN GAME STUDIOS  /  PRESENTS", 14, DIM)
-	eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	page.add_child(eyebrow)
+	# Keep all interaction below the authored image hierarchy. The footer has no
+	# opaque card: the artwork's heavy lower vignette already supplies contrast.
+	_main_dock = VBoxContainer.new()
+	_main_dock.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_main_dock.alignment = BoxContainer.ALIGNMENT_CENTER
+	page.add_child(_main_dock)
 
-	_logo = TextureRect.new()
-	_logo.texture = load("res://textures/ui/title.png")
-	_logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_logo.custom_minimum_size = Vector2(0, 360)
-	_logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	page.add_child(_logo)
-
-	page.add_child(_rule(520))
-	var menu := VBoxContainer.new()
-	menu.alignment = BoxContainer.ALIGNMENT_CENTER
-	menu.add_theme_constant_override("separation", 3)
-	menu.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	page.add_child(menu)
-	_menu_button(menu, "SPACE        WANDER", _select_wander)
-	_menu_button(menu, "ENTER        DESCENT", _select_descent)
-	_menu_button(menu, "I            INSTRUCTIONS",
-		func(): _set_page(Page.INSTRUCTIONS))
-	_menu_button(menu, "A            ABOUT",
-		func(): _set_page(Page.ABOUT))
-	_menu_button(menu, "C            CREDITS",
-		func(): _set_page(Page.CREDITS))
-
-	_prompt = _label("CHOOSE HOW TO ENTER", 15, GOLD)
+	_prompt = _label(
+		"CHECKPOINT  /  FLOOR %02d  /  %s" % [
+			_checkpoint_floor + 1, _checkpoint_name.to_upper()]
+			if _has_descent_progress else "SELECT ENTRY",
+		15, Color(0.56, 0.58, 0.54))
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	page.add_child(_prompt)
+	_main_dock.add_child(_prompt)
+
+	var menu := HBoxContainer.new()
+	menu.alignment = BoxContainer.ALIGNMENT_CENTER
+	menu.add_theme_constant_override("separation", 8)
+	menu.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_main_dock.add_child(menu)
+	_footer_button(menu, "SPACE  WANDER", _select_wander)
+	if _has_descent_progress:
+		_footer_button(menu, "ENTER  CONTINUE F%02d" % [
+			_checkpoint_floor + 1],
+			func(): _select_descent(DescentEntry.CONTINUE))
+		_footer_button(menu, "R  RESTART DESCENT",
+			func(): _select_descent(DescentEntry.RESTART))
+		_footer_button(menu, "N  NEW DESCENT",
+			func(): _select_descent(DescentEntry.NEW))
+	else:
+		_footer_button(menu, "ENTER  DESCENT",
+			func(): _select_descent(DescentEntry.NEW))
+	_footer_button(menu, "I  INSTRUCTIONS",
+		func(): _set_page(Page.INSTRUCTIONS))
+	_footer_button(menu, "A  ABOUT",
+		func(): _set_page(Page.ABOUT))
+	_footer_button(menu, "C  CREDITS",
+		func(): _set_page(Page.CREDITS))
 
 
 func _build_instructions() -> void:
@@ -147,14 +195,14 @@ func _build_instructions() -> void:
 	_page_heading(page, "INSTRUCTIONS", "THE BUILDING WILL NOT EXPLAIN ITSELF TWICE")
 
 	var wander := _paragraph(
-		"WANDER  /  Explore eight endless procedural worlds. Elevators and "
+		"WANDER  /  Explore eleven endless procedural worlds. Elevators and "
 		+ "portals carry you between floors, and every floor remembers where "
 		+ "you left it.", 17, BODY, 820)
 	page.add_child(wander)
 	var descent := _paragraph(
-		"DESCENT  /  Cross all eight floors in order. Follow the route needle. "
-		+ "There is no sprinting, floor selection or way to disable the video "
-		+ "filter. The rules are shown after you choose the mode.", 17, BODY, 820)
+		"DESCENT  /  Cross all eleven floors in order. Follow the distance counter. "
+		+ "There is no sprinting or floor selection. The rules are shown after "
+		+ "you choose the mode.", 17, BODY, 820)
 	page.add_child(descent)
 	page.add_child(_rule(820))
 
@@ -186,17 +234,24 @@ func _build_instructions() -> void:
 func _build_about() -> void:
 	var page := _page_root()
 	_pages[Page.ABOUT] = page
-	_page_heading(page, "ABOUT", "A GAME ABOUT PLACES THAT HAVE FORGOTTEN THEIR PURPOSE")
+	_page_heading(page, "ABOUT",
+		"A HORROR GAME ABOUT A BUILDING THAT REFUSES TO LET GO")
 
-	var title := _label("LIMINAL SPACES", 38, CREAM)
+	var title := _label("IT WANTS YOU TO STAY", 46, CREAM)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page.add_child(title)
-	page.add_child(_rule(650))
+	page.add_child(_rule(760))
 	var description := _paragraph(
-		"Eight endless procedural interiors, connected by elevators, portals "
-		+ "and the suspicion that the architecture is paying attention.",
-		19, BODY, 720)
+		"A first-person horror descent through eleven procedural spaces. Follow "
+		+ "Dr. Cross's recovered tapes, survive what hunts the halls, and find "
+		+ "the elevator before the architecture decides you belong to it.",
+		20, BODY, 820)
 	page.add_child(description)
+	var modes := _label(
+		"DESCENT  /  THE STORY        WANDER  /  THE ENDLESS BUILDING",
+		17, GOLD)
+	modes.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	page.add_child(modes)
 
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 20
@@ -254,11 +309,8 @@ func _build_credits() -> void:
 func _build_descent() -> void:
 	var page := _page_root()
 	_pages[Page.DESCENT] = page
-	_page_heading(page, "DESCENT", "THE BUILDING HAS FOUR RULES")
+	_page_heading(page, "DESCENT", "THE BUILDING HAS ONE RULE")
 	var rules := [
-		"DO NOT STARE AT THEM",
-		"DO NOT STOP WALKING",
-		"DO NOT GO BACK",
 		"WHEN THE LIGHTS FAIL, STAND STILL",
 	]
 	for i in rules.size():
@@ -277,14 +329,20 @@ func _build_descent() -> void:
 	warn2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page.add_child(warn2)
 	page.add_child(_rule(760))
-	_prompt = _label("PREPARING THE FIRST FLOOR", 19, GOLD)
+	var preparing := "PREPARING THE FIRST FLOOR"
+	if _descent_entry == DescentEntry.CONTINUE:
+		preparing = "PREPARING FLOOR %02d  —  %s" % [
+			_checkpoint_floor + 1, _checkpoint_name.to_upper()]
+	elif _descent_entry == DescentEntry.RESTART:
+		preparing = "PREPARING FLOOR 01  —  THE CASINO  /  SAME BUILDING"
+	_prompt = _label(preparing, 19, GOLD)
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page.add_child(_prompt)
 
 
 func _page_heading(parent: VBoxContainer, heading: String,
 		subheading: String) -> void:
-	var marker := _label("LIMINAL SPACES  /  ARCHIVE", 13, DIM)
+	var marker := _label("IT WANTS YOU TO STAY  /  RECOVERED ARCHIVE", 13, DIM)
 	marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	parent.add_child(marker)
 	var head := _label(heading, 40, CREAM)
@@ -309,6 +367,45 @@ func _return_button(parent: VBoxContainer, page_key: String) -> void:
 func _menu_button(parent: VBoxContainer, text: String,
 		action: Callable) -> void:
 	parent.add_child(_button(text, action, 520, 38))
+
+
+func _footer_button(parent: HBoxContainer, text: String,
+		action: Callable) -> void:
+	var button := Button.new()
+	button.text = text
+	button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.focus_mode = Control.FOCUS_NONE
+	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var width := maxf(108.0, 28.0 + float(text.length()) * 9.2)
+	_style(button, 20, Color(0.76, 0.77, 0.72), width, 44)
+	button.add_theme_color_override("font_hover_color", Color(0.94, 0.92, 0.82))
+	button.add_theme_color_override("font_pressed_color", Color(0.84, 0.79, 0.63))
+	button.add_theme_stylebox_override("normal",
+		_footer_button_box(Color(0.0, 0.0, 0.0, 0.32),
+			Color(0.30, 0.31, 0.28, 0.34)))
+	button.add_theme_stylebox_override("hover",
+		_footer_button_box(Color(0.025, 0.027, 0.024, 0.88),
+			Color(0.72, 0.68, 0.51, 0.78)))
+	button.add_theme_stylebox_override("pressed",
+		_footer_button_box(Color(0.08, 0.075, 0.06, 0.92), CREAM))
+	button.pressed.connect(action)
+	parent.add_child(button)
+
+
+func _footer_button_box(fill: Color, edge: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.border_color = edge
+	box.border_width_top = 1
+	box.border_width_bottom = 1
+	box.content_margin_left = 10
+	box.content_margin_right = 10
+	box.corner_radius_top_left = 1
+	box.corner_radius_top_right = 1
+	box.corner_radius_bottom_left = 1
+	box.corner_radius_bottom_right = 1
+	return box
 
 
 func _button(text: String, action: Callable, width: float,
@@ -392,8 +489,16 @@ func _relayout() -> void:
 	var viewport: Vector2i = get_viewport().size
 	var scale := clampf(minf(float(viewport.x) / 1280.0,
 		float(viewport.y) / 720.0), 0.55, 3.0)
-	if is_instance_valid(_logo):
-		_logo.custom_minimum_size = Vector2(0, 360.0 * scale)
+	# The footer used to retain a 70 px dock while its contents scaled up, which
+	# clipped the buttons on large and tall displays. Scale the dock itself and
+	# keep a generous safe margin below the controls.
+	if is_instance_valid(_main_dock):
+		_main_dock.offset_left = 34.0 * scale
+		_main_dock.offset_right = -34.0 * scale
+		_main_dock.offset_top = -124.0 * scale
+		_main_dock.offset_bottom = -24.0 * scale
+		_main_dock.add_theme_constant_override("separation",
+			maxi(4, roundi(6.0 * scale)))
 	for entry in _scaled:
 		var control: Control = entry[0]
 		if not is_instance_valid(control):
@@ -408,8 +513,14 @@ func _relayout() -> void:
 
 func _process(dt: float) -> void:
 	_t += dt
+	if is_instance_valid(_background):
+		# Almost imperceptible exposure drift keeps the still frame feeling like a
+		# live tape without sliding or distorting the supplied composition.
+		var exposure := 0.985 + sin(_t * 1.7) * 0.007 \
+			+ sin(_t * 7.3) * 0.003
+		_background.modulate = Color(exposure, exposure, exposure, 1.0)
 	if is_instance_valid(_prompt):
-		_prompt.modulate.a = 0.60 + 0.40 * (0.5 + 0.5 * sin(_t * 2.2))
+		_prompt.modulate.a = 0.68 + 0.22 * (0.5 + 0.5 * sin(_t * 2.2))
 
 
 ## The title consumes every key so the already-built world cannot move behind
@@ -430,6 +541,12 @@ func _input(event: InputEvent) -> void:
 				_select_wander()
 			KEY_ENTER, KEY_KP_ENTER:
 				_select_descent()
+			KEY_R:
+				if _has_descent_progress:
+					_select_descent(DescentEntry.RESTART)
+			KEY_N:
+				if _has_descent_progress:
+					_select_descent(DescentEntry.NEW)
 			KEY_I:
 				_set_page(Page.INSTRUCTIONS)
 			KEY_A:
@@ -452,6 +569,8 @@ func _set_page(page: Page) -> void:
 	if _descent_selected and page != Page.DESCENT:
 		return
 	_current_page = page
+	if is_instance_valid(_page_shade):
+		_page_shade.visible = page != Page.MAIN
 	for key in _pages:
 		(_pages[key] as Control).visible = int(key) == int(page)
 
@@ -463,13 +582,19 @@ func _select_wander() -> void:
 	_start(false)
 
 
-func _select_descent() -> void:
+func _select_descent(entry := -1) -> void:
 	if _gone or _descent_selected or _current_page != Page.MAIN:
 		return
+	if entry < 0:
+		_descent_entry = DescentEntry.CONTINUE if _has_descent_progress \
+			else DescentEntry.NEW
+	else:
+		_descent_entry = entry
 	_descent_selected = true
 	if not _pages.has(Page.DESCENT):
 		_build_descent()
 	_set_page(Page.DESCENT)
+	descent_requested.emit(_descent_entry)
 	mode_selected.emit(true)
 	_relayout()
 
@@ -477,7 +602,18 @@ func _select_descent() -> void:
 func set_descent_ready() -> void:
 	_descent_ready = true
 	if _descent_selected and is_instance_valid(_prompt):
-		_prompt.text = "PRESS  SPACE  TO  DESCEND"
+		_prompt.text = "PRESS  SPACE  TO  CONTINUE" \
+			if _descent_entry == DescentEntry.CONTINUE \
+			else "PRESS  SPACE  TO  DESCEND"
+
+
+## Called before this node enters the tree, so the main menu can be built with
+## the saved run as a first-class choice rather than changing labels afterward.
+func configure_descent_progress(has_progress: bool, floor_idx := 0,
+		floor_name := "") -> void:
+	_has_descent_progress = has_progress
+	_checkpoint_floor = maxi(0, floor_idx)
+	_checkpoint_name = floor_name
 
 
 func present_descent(ready := false) -> void:

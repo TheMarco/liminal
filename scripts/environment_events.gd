@@ -7,6 +7,7 @@ signal message(text: String)
 
 var player: Player
 var level_root: Node3D
+var horror_director: HorrorDirector
 var descent_mode := false
 var _time_left := 38.0
 var _busy := false
@@ -27,6 +28,10 @@ func _process(dt: float) -> void:
 		return
 	_time_left -= dt
 	if _time_left > 0.0:
+		return
+	if descent_mode and horror_director != null \
+			and not horror_director.try_start_ambient(3.0):
+		_time_left = randf_range(4.0, 9.0)
 		return
 	_time_left = randf_range(38.0, 72.0)
 	if descent_mode:

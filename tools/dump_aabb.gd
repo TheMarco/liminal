@@ -39,8 +39,9 @@ const CC_BY_MODELS := [
 	["res://models/cc_by/prison_door_old/prison_door_old.glb", "prison_door_old"],
 	["res://models/cc_by/solitary_cell_door/solitary_cell_door.glb",
 		"solitary_cell_door"],
-	["res://models/cc_by_nc/prison_bunk_bed/prison_bunk_bed.glb",
-		"prison_bunk_bed"],
+	["res://models/cc_by/fluorescent_light_fixtures/fluorescent_light_fixtures.glb",
+		"fluorescent_light_fixtures"],
+	["res://models/cc_by/bunk_bed/bunk_bed.glb", "bunk_bed"],
 ]
 
 

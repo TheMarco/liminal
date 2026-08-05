@@ -5,7 +5,6 @@ extends SceneTree
 ## in CI.
 ## Run: godot --headless --path . --script tools/audit_descent_routes.gd -- [seeds]
 
-const ORDER: Array[int] = DescentRun.ORDER
 ## Metres per cell edge, and the Descent walking speed (sprint is disabled), so
 ## the audit can report the number the pacing is actually tuned against.
 const EDGE_M := 12.0
@@ -31,13 +30,16 @@ func _run() -> void:
 	var shortest := 999
 	var longest := 0
 	var per_floor_edges := []
-	for _i in ORDER.size():
+	for _i in DescentRun.FLOOR_COUNT:
 		per_floor_edges.append(0)
 	var run_edge_total := 0
 	for si in seed_count:
 		var base := WorldGen.h(715517, si * 67, si * 113, 2027) | 1
-		for floor_idx in ORDER.size():
-			var theme: int = ORDER[floor_idx]
+		# The macro-order is authored; seeds still vary every floor's route and
+		# geometry, which is what this audit enumerates.
+		var order := DescentRun.order_for(base)
+		for floor_idx in order.size():
+			var theme: int = order[floor_idx]
 			var ws := _level_seed(base, theme)
 			var route := DescentRoute.build(ws, theme, floor_idx)
 			if verbose:
@@ -64,23 +66,23 @@ func _run() -> void:
 				run_edge_total += edges
 
 	print("descent route audit: %d seeds × %d floors = %d routes" % [
-		seed_count, ORDER.size(), seed_count * ORDER.size()])
+		seed_count, DescentRun.FLOOR_COUNT, seed_count * DescentRun.FLOOR_COUNT])
 	print("  route length: %d..%d edges | fallback tiers: ideal=%d styled=%d generic=%d" % [
 		shortest, longest, fallback_counts[0], fallback_counts[1],
 		fallback_counts[2]])
 	print("  arrival rooms: %d of %d floors had no wall-backed car (plain arrival)" % [
-		no_arrival, seed_count * ORDER.size()])
+		no_arrival, seed_count * DescentRun.FLOOR_COUNT])
 	# Walking is the whole of a Descent floor's traversal budget, so state it.
-	# This is a floor: the needle degrades with depth, and searching, calling the
-	# lift and riding it are all on top of these numbers.
-	for floor_idx in ORDER.size():
+	# Calling and riding the lift are on top of these walking numbers; the HUD
+	# now names the exact route exit from every room on every floor.
+	for floor_idx in DescentRun.FLOOR_COUNT:
 		var mean := float(per_floor_edges[floor_idx]) / float(maxi(1, seed_count))
-		print("    floor %d %-12s mean %5.1f edges  %6.0fm  ~%4.0fs walking" % [
-			floor_idx + 1, DescentRun.NAMES[floor_idx], mean, mean * EDGE_M,
+		print("    floor %d mean %5.1f edges  %6.0fm  ~%4.0fs walking" % [
+			floor_idx + 1, mean, mean * EDGE_M,
 			mean * EDGE_M / WALK_SPEED])
 	var run_mean := float(run_edge_total) / float(maxi(1, seed_count))
 	var lift_total := 0.0
-	for floor_idx in ORDER.size() - 1:
+	for floor_idx in DescentRun.FLOOR_COUNT - 1:
 		lift_total += DescentRun.lift_wait_for(floor_idx)
 	print("  full run: ~%.0f edges, %.0fm, ~%.1f min walking + ~%.1f min lift waits = ~%.1f min floor" % [
 		run_mean, run_mean * EDGE_M, run_mean * EDGE_M / WALK_SPEED / 60.0,
@@ -157,6 +159,22 @@ func _validate(ws: int, theme: int, route: DescentRoute,
 			return "path crosses wall at %s dir=%d" % [path[i], dir]
 		if route.next_from(path[i]) != path[i + 1]:
 			return "next-hop map disagrees at %s" % path[i]
+		var room_exit := route.next_room_exit(path[i])
+		if room_exit.is_empty():
+			return "room-aware guide has no exit from %s" % path[i]
+		var exit_cell: Vector2i = room_exit["cell"]
+		var exit_next: Vector2i = room_exit["next"]
+		var exit_dir := int(room_exit["dir"])
+		var start_root := WorldGen.annex_room_id(ws, path[i]) if theme == 2 \
+			else WorldGen.room_id(ws, path[i])
+		var source_root := WorldGen.annex_room_id(ws, exit_cell) if theme == 2 \
+			else WorldGen.room_id(ws, exit_cell)
+		var next_root := WorldGen.annex_room_id(ws, exit_next) if theme == 2 \
+			else WorldGen.room_id(ws, exit_next)
+		if source_root != start_root or next_root == start_root:
+			return "guide points at internal room seam from %s" % path[i]
+		if WorldGen.edge_info(ws, exit_cell, exit_dir, theme)["wall"]:
+			return "guide points at wall from %s" % path[i]
 	return ""
 
 

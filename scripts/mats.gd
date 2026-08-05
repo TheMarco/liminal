@@ -1087,18 +1087,19 @@ static func neon_col(name_key: String, col: Color) -> StandardMaterial3D:
 
 # --- portals -----------------------------------------------------------------
 
-const PORTAL_COLS := [
-	[Color(1.0, 0.45, 0.2), Color(1.0, 0.85, 0.6)],    # -> casino: hot amber
-	[Color(0.6, 1.0, 0.75), Color(0.95, 1.0, 0.97)],   # -> office: sterile mint
-	[Color(0.25, 0.9, 0.45), Color(0.75, 1.0, 0.82)],  # -> sewers: drain green
-	[Color(0.0, 0.0, 0.0), Color(0.0, 0.0, 0.0)],      # 3 = cut theme park; slot kept so 4/5 still index right
-	[Color(0.55, 0.8, 1.0), Color(0.92, 0.97, 1.0)],   # -> airport: ice white
-	[Color(0.72, 0.9, 0.38), Color(0.93, 1.0, 0.8)],   # -> asylum: sick fluorescent
-	[Color(0.85, 0.22, 0.18), Color(1.0, 0.86, 0.72)], # -> school: the red line
-	[Color(0.22, 0.82, 0.78), Color(1.0, 0.68, 0.28)], # -> mall: faded teal / sodium
-	[Color(0.36, 0.48, 0.42), Color(0.78, 0.84, 0.76)],# -> prison: oxidised iron
-	[Color(0.18, 0.62, 0.55), Color(0.86, 0.98, 0.94)],# -> Poolrooms: chlorine green
-]
+const PORTAL_COLS := {
+	0: [Color(1.0, 0.45, 0.2), Color(1.0, 0.85, 0.6)],     # casino: hot amber
+	1: [Color(0.6, 1.0, 0.75), Color(0.95, 1.0, 0.97)],    # office: sterile mint
+	2: [Color(0.25, 0.9, 0.45), Color(0.75, 1.0, 0.82)],   # Annex: exit green
+	4: [Color(0.55, 0.8, 1.0), Color(0.92, 0.97, 1.0)],    # airport: ice white
+	5: [Color(0.72, 0.9, 0.38), Color(0.93, 1.0, 0.8)],    # asylum: sick fluorescent
+	6: [Color(0.85, 0.22, 0.18), Color(1.0, 0.86, 0.72)],  # school: the red line
+	7: [Color(0.22, 0.82, 0.78), Color(1.0, 0.68, 0.28)],  # mall: teal / sodium
+	8: [Color(0.36, 0.48, 0.42), Color(0.78, 0.84, 0.76)], # prison: oxidised iron
+	9: [Color(0.18, 0.62, 0.55), Color(0.86, 0.98, 0.94)], # Poolrooms: chlorine
+	10: [Color(0.30, 0.67, 0.78), Color(0.80, 0.93, 1.0)], # Monolith: cold skylight
+	11: [Color(0.82, 0.018, 0.008), Color(0.54, 0.80, 1.0)], # Bloom: wound / cold route
+}
 
 
 static func portal(dest: int) -> ShaderMaterial:
@@ -1668,6 +1669,220 @@ static func prison_panel() -> StandardMaterial3D:
 		m.emission_energy_multiplier = 3.1)
 
 
+# --- the Monolith -----------------------------------------------------------
+
+## Poly Haven CC0 maps used by the brutalist floor. Unlike the ambientCG
+## directory convention above, these downloads keep Poly Haven's map names.
+## World triplanar projection is essential: every architectural mass is a
+## scaled primitive, and object UVs would stretch one photograph over 12m.
+static func _brutalist_photo(key: String, folder: String, stem: String,
+		per_m: float, tint: Color, rough := 1.0) -> StandardMaterial3D:
+	if _c.has(key):
+		return _c[key]
+	var root := "res://textures/brutalist/%s/%s_" % [folder, stem]
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load(root + "diff_2k.jpg")
+	m.albedo_color = tint
+	m.normal_enabled = true
+	m.normal_texture = load(root + "nor_gl_2k.jpg")
+	m.roughness = rough
+	m.roughness_texture = load(root + "rough_2k.jpg")
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE * per_m
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_c[key] = m
+	return m
+
+
+static func brutal_wall() -> StandardMaterial3D:
+	# Horizontal board-form lines are the floor's signature at eye level.
+	return _brutalist_photo("brutal_wall", "concrete_wall_006",
+		"concrete_wall_006", 0.34, Color(0.72, 0.73, 0.70), 0.94)
+
+
+static func brutal_structure() -> StandardMaterial3D:
+	return _brutalist_photo("brutal_structure", "concrete", "concrete",
+		0.42, Color(0.59, 0.61, 0.60), 0.98)
+
+
+static func brutal_floor() -> StandardMaterial3D:
+	return _brutalist_photo("brutal_floor", "damaged_concrete_floor_02",
+		"damaged_concrete_floor_02", 0.46, Color(0.44, 0.46, 0.46), 0.72)
+
+
+static func brutal_black_water() -> StandardMaterial3D:
+	return _std("brutal_black_water", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.008, 0.012, 0.014)
+		m.metallic = 0.42
+		m.roughness = 0.06
+		m.clearcoat_enabled = true
+		m.clearcoat = 1.0
+		m.clearcoat_roughness = 0.05)
+
+
+static func brutal_steel() -> StandardMaterial3D:
+	return _std("brutal_steel", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.055, 0.065, 0.070)
+		m.metallic = 0.86
+		m.roughness = 0.38)
+
+
+static func brutal_panel() -> StandardMaterial3D:
+	return _std("brutal_panel", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.78, 0.86, 0.91)
+		m.emission_enabled = true
+		m.emission = Color(0.66, 0.78, 0.88)
+		m.emission_energy_multiplier = 4.2)
+
+
+# --- The Bloom ---------------------------------------------------------------
+
+const BLOOM_TEX_DIR := "res://textures/bloom/"
+const BLOOM_FLESH_TEX_DIR := BLOOM_TEX_DIR + "cellular_flesh/"
+
+
+static func bloom_wall() -> StandardMaterial3D:
+	# A cold institutional substrate, still readable beneath the infection.
+	return _brutalist_photo("bloom_wall", "concrete_wall_006",
+		"concrete_wall_006", 0.38, Color(0.46, 0.50, 0.52), 0.88)
+
+
+static func bloom_ceiling() -> StandardMaterial3D:
+	return _brutalist_photo("bloom_ceiling", "concrete", "concrete",
+		0.44, Color(0.31, 0.34, 0.36), 0.94)
+
+
+static func bloom_floor() -> StandardMaterial3D:
+	if _c.has("bloom_floor"):
+		return _c["bloom_floor"]
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load(BLOOM_TEX_DIR + "mud_forest_diff_1k.jpg")
+	m.albedo_color = Color(0.24, 0.27, 0.29)
+	m.normal_enabled = true
+	m.normal_texture = load(BLOOM_TEX_DIR + "mud_forest_nor_gl_1k.jpg")
+	m.normal_scale = 0.72
+	m.roughness = 0.48
+	m.roughness_texture = load(BLOOM_TEX_DIR + "mud_forest_rough_1k.jpg")
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE * 0.52
+	m.clearcoat_enabled = true
+	m.clearcoat = 0.62
+	m.clearcoat_roughness = 0.16
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_c["bloom_floor"] = m
+	return m
+
+
+static func bloom_growth() -> ShaderMaterial:
+	if _c.has("bloom_growth"):
+		return _c["bloom_growth"]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/bloom_growth.gdshader")
+	m.set_shader_parameter("skin_tex",
+		load(BLOOM_FLESH_TEX_DIR + "others_0001_color_2k.jpg"))
+	m.set_shader_parameter("normal_tex",
+		load(BLOOM_FLESH_TEX_DIR + "others_0001_normal_opengl_2k.png"))
+	m.set_shader_parameter("rough_tex",
+		load(BLOOM_FLESH_TEX_DIR + "others_0001_roughness_2k.jpg"))
+	m.set_shader_parameter("height_tex",
+		load(BLOOM_FLESH_TEX_DIR + "others_0001_height_2k.png"))
+	m.set_shader_parameter("ao_tex",
+		load(BLOOM_FLESH_TEX_DIR + "others_0001_ao_2k.jpg"))
+	_c["bloom_growth"] = m
+	return m
+
+
+static func bloom_flesh() -> StandardMaterial3D:
+	return _std("bloom_flesh", func(m: StandardMaterial3D):
+		m.albedo_texture = load(
+			BLOOM_FLESH_TEX_DIR + "others_0001_color_2k.jpg")
+		m.albedo_color = Color(0.38, 0.105, 0.095)
+		m.normal_enabled = true
+		m.normal_texture = load(
+			BLOOM_FLESH_TEX_DIR + "others_0001_normal_opengl_2k.png")
+		m.normal_scale = 0.92
+		m.roughness_texture = load(
+			BLOOM_FLESH_TEX_DIR + "others_0001_roughness_2k.jpg")
+		m.roughness = 0.28
+		m.ao_enabled = true
+		m.ao_texture = load(BLOOM_FLESH_TEX_DIR + "others_0001_ao_2k.jpg")
+		m.ao_light_affect = 0.58
+		m.clearcoat_enabled = true
+		m.clearcoat = 0.76
+		m.clearcoat_roughness = 0.11
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE * 0.72
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
+
+
+static func bloom_wet() -> StandardMaterial3D:
+	return _std("bloom_wet", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.004, 0.008, 0.012)
+		m.metallic = 0.32
+		m.roughness = 0.055
+		m.clearcoat_enabled = true
+		m.clearcoat = 1.0
+		m.clearcoat_roughness = 0.035)
+
+
+static func bloom_metal() -> StandardMaterial3D:
+	return _std("bloom_metal", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.045, 0.055, 0.065)
+		m.metallic = 0.82
+		m.roughness = 0.31)
+
+
+static func bloom_panel() -> StandardMaterial3D:
+	return _std("bloom_panel", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.68, 0.82, 0.96)
+		m.emission_enabled = true
+		m.emission = Color(0.46, 0.66, 0.92)
+		m.emission_energy_multiplier = 4.8)
+
+
+static func bloom_red() -> StandardMaterial3D:
+	return _std("bloom_red", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.22, 0.002, 0.001)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.012, 0.004)
+		m.emission_energy_multiplier = 6.5)
+
+
+static func bloom_membrane() -> StandardMaterial3D:
+	return _std("bloom_membrane", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.105, 0.008, 0.015, 0.68)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		m.alpha_scissor_threshold = 0.31
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.roughness = 0.18
+		m.emission_enabled = true
+		m.emission = Color(0.17, 0.002, 0.003)
+		m.emission_energy_multiplier = 1.4)
+
+
+static func bloom_storm() -> ShaderMaterial:
+	return _shader("bloom_storm", "res://shaders/bloom_storm.gdshader")
+
+
+static func bloom_spore() -> StandardMaterial3D:
+	return _std("bloom_spore", func(m: StandardMaterial3D):
+		var flake := load(BLOOM_TEX_DIR + "bloom_flake_atlas.png") as Texture2D
+		m.albedo_texture = flake
+		m.albedo_color = Color(0.72, 0.78, 0.80, 0.90)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		m.alpha_scissor_threshold = 0.24
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.particles_anim_h_frames = 2
+		m.particles_anim_v_frames = 2
+		m.particles_anim_loop = false
+		m.emission_enabled = false
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
+
+
 # --- the Poolrooms ------------------------------------------------------------
 
 ## Seamless ripple normal map for the water. The spec asks for a 2048 OpenGL
@@ -1708,6 +1923,10 @@ static func _pool_tile_maps(m: ShaderMaterial) -> void:
 		load(POOL_TILE_DIR + "white_tiles_normal.png"))
 	m.set_shader_parameter("orm_tex",
 		load(POOL_TILE_DIR + "white_tiles_orm.png"))
+	m.set_shader_parameter("grout_mineral_atlas",
+		load("res://textures/pool/minerals/grout_mineral_atlas.png"))
+	m.set_shader_parameter("waterline_mineral_atlas",
+		load("res://textures/pool/minerals/waterline_mineral_atlas.png"))
 	m.set_shader_parameter("water_y", Chunk.POOL_WATER_Y)
 
 

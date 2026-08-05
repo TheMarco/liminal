@@ -95,7 +95,7 @@ func _sch_lighting() -> void:
 func _sch_corridor_side_data(si: int, along_x: bool) -> Dictionary:
 	var side = -2.05 if si == 0 else 2.05
 	var sdir = (3 if si == 0 else 2) if along_x else (1 if si == 0 else 0)
-	var info = WorldGen.edge_info(chunk.wseed, chunk.cell, sdir, chunk.theme)
+	var info = chunk._edge_info(chunk.cell, sdir)
 	var bay = []
 	if not info["wall"]:
 		var bt: float = float(info["t"]) - 6.0 if along_x else 6.0 - float(info["t"])
@@ -529,9 +529,8 @@ func _sch_stack_chairs(p: Vector3, yaw: float, salt: int) -> void:
 
 
 ## Janitor's trolley — mop bucket on castors, handle, a bag hanging off it.
-## Janitor's cart. The authored model is the only noncommercial asset the
-## school floor depends on, and this is its single entry point, so the
-## dependency lifts out by deleting one branch.
+## Janitor's cart. The former noncommercial model has been replaced with a
+## compact CC BY cart while keeping the generated fallback.
 
 
 func _sch_trolley(p: Vector3, yaw: float) -> void:
@@ -540,8 +539,8 @@ func _sch_trolley(p: Vector3, yaw: float) -> void:
 		chunk.SCH_CLEANING_CART_SCALE, chunk.SCH_CLEANING_CART_CENTRE,
 		"school_janitor_trolley", null, true)
 	if pivot != null:
-		chunk._collider_yaw_box(p + Vector3(0, 0.42, 0),
-			Vector3(1.05, 0.84, 0.80), yaw)
+		chunk._collider_yaw_box(p + Vector3(0, 0.62, 0),
+			Vector3(0.56, 1.24, 0.94), yaw)
 		chunk._bind_furnishing_colliders(pivot, b0)
 		return
 	_sch_trolley_generated(p, yaw)
@@ -634,7 +633,7 @@ func _sch_desk_row(p: Vector3, yaw: float, n: int, salt: int) -> void:
 func _sch_chalkboard(dir: int) -> void:
 	# A board is only valid on a genuinely solid classroom edge. In particular,
 	# never invent one on the fallback facing used by an all-doorway classroom.
-	var binfo = WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)
+	var binfo = chunk._edge_info(chunk.cell, dir)
 	if not binfo["wall"]:
 		return
 	var n = -1.0 if (dir == 0 or dir == 2) else 1.0
@@ -1208,7 +1207,7 @@ func _sch_library() -> void:
 	var z_doors = 0
 	for member in chunk._room_members():
 		for dir in 4:
-			var edge = WorldGen.edge_info(chunk.wseed, member, dir, chunk.theme)
+			var edge = chunk._edge_info(member, dir)
 			if edge["wall"] or edge["full_open"]:
 				continue
 			if dir < 2:

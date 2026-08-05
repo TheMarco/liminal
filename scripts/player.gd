@@ -21,13 +21,14 @@ const CAM_H := 1.377
 const GRAB_SETTLE_MS := 150   # mouse motion to swallow after taking the cursor
 const INTERACT_DIST := 3.2
 
-## The torch is a resource, not a state you leave switched on. Ten seconds of
-## light, then it dies, and it wants time in the dark before it will run again.
-## Without that the whole game is played with the beam up and nothing out there
-## is worth being afraid of.
+## The torch is a resource, not a state you leave switched on. Its cell is
+## deliberately generous enough for several encounters, but only the charging
+## stations refill it. That turns darkness into route planning instead of a
+## seven-second pause after every use.
 const FLASH_ENERGY := 4.5
-const FLASH_MAX := 10.0
-const FLASH_RECHARGE := 7.0   # seconds in the dark for a full charge
+const FLASH_MAX := 20.0
+const FLASH_CHARGE_TIME := 10.0
+const FLASH_CHARGE_RATE := FLASH_MAX / FLASH_CHARGE_TIME
 ## Refuse to switch on for a useless flicker. Being told "not yet" is fairer
 ## than handing over a beam that dies in the half second you needed it.
 const FLASH_MIN_START := 2.2
@@ -51,6 +52,8 @@ var flashlight: SpotLight3D
 var world_seed := 0   # set by main; used to pick footstep surface per cell
 var level_theme := 0  # set by main on level switch
 var _flash_charge := FLASH_MAX
+var _charge_session_start := 0.0
+var _charging_station: Node3D
 ## World height of the water surface on this floor, or far below everything if
 ## the floor has no water. Set by main on every level switch.
 var water_y := -1.0e9
@@ -191,6 +194,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func set_flashlight(on: bool) -> void:
 	if flashlight == null:
 		return
+	if on and is_charging():
+		stop_charging()
 	if on and _flash_charge < FLASH_MIN_START:
 		# a dead click, so a refusal is legible rather than an unresponsive key
 		if is_instance_valid(_flash_click):
@@ -213,12 +218,51 @@ func flashlight_charge() -> float:
 	return _flash_charge / FLASH_MAX
 
 
-## Burn the cell down while it is lit, and let it recover while it is not. The
-## last couple of seconds visibly fail, so the torch going out is never a
-## surprise — you get to decide whether to spend them.
-## Burning a figure hands a little of the cell back. At peak pressure the torch
-## is on a ten-second cell against a spawn every few seconds, which no amount of
-## good aim could outrun; this makes accuracy the thing that sustains it.
+## A checkpoint restores the player at an arrival elevator, not in the exact
+## state of the death. Resource and motion state therefore reset together.
+func reset_descent_resources() -> void:
+	if is_charging():
+		stop_charging()
+	if flashlight != null:
+		flashlight.visible = false
+		flashlight.light_energy = FLASH_ENERGY
+	_flash_charge = FLASH_MAX
+	_charge_session_start = FLASH_MAX
+	_flash_t = 0.0
+	velocity = Vector3.ZERO
+
+
+func is_charging() -> bool:
+	return is_instance_valid(_charging_station)
+
+
+func is_charging_at(station: Node) -> bool:
+	return is_charging() and _charging_station == station
+
+
+## Connect to a station without locking the player in place. E toggles the
+## connection, F breaks it and raises the torch, and simply stepping away also
+## breaks it. An interrupted session is lost: the cell only keeps what it had
+## when the cable went in, so a charge is something defended, not banked.
+func start_charging(station: Node3D) -> bool:
+	if station == null or _flash_charge >= FLASH_MAX - 0.001:
+		return false
+	set_flashlight(false)
+	_charging_station = station
+	_charge_session_start = _flash_charge
+	return true
+
+
+func stop_charging(completed := false) -> void:
+	if is_charging() and not completed:
+		_flash_charge = minf(_flash_charge, _charge_session_start)
+	_charging_station = null
+
+
+## Burn the cell down while it is lit. The last couple of seconds visibly fail,
+## so the torch going out is never a surprise — you get to decide whether to
+## spend them or save enough to reach a station. A tiny clean-kill refund still
+## rewards accuracy without making the stations optional.
 func add_flashlight_charge(seconds: float) -> void:
 	_flash_charge = minf(FLASH_MAX, _flash_charge + maxf(0.0, seconds))
 
@@ -227,9 +271,17 @@ func _update_flashlight(dt: float) -> void:
 	if flashlight == null:
 		return
 	_flash_t += dt
+	if is_charging():
+		if global_position.distance_to(_charging_station.global_position) > 3.1:
+			stop_charging()
+		else:
+			_flash_charge = minf(FLASH_MAX,
+				_flash_charge + dt * FLASH_CHARGE_RATE)
+			if _flash_charge >= FLASH_MAX - 0.001:
+				_flash_charge = FLASH_MAX
+				stop_charging(true)
+		return
 	if not flashlight.visible:
-		_flash_charge = minf(FLASH_MAX,
-			_flash_charge + dt * (FLASH_MAX / FLASH_RECHARGE))
 		return
 	_flash_charge = maxf(0.0, _flash_charge - dt)
 	if _flash_charge <= 0.0:
@@ -397,6 +449,12 @@ func _surface() -> String:
 				else "marble"
 		8:
 			return "concrete"
+		9:
+			return "wet"
+		10:
+			return "concrete"
+		11:
+			return "wet"
 	if WorldGen.cell_style(world_seed, cellv) == WorldGen.STYLE_GRAND:
 		return "marble"
 	return "carpet"

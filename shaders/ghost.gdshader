@@ -27,9 +27,19 @@ uniform float flip_fps = 12.0;
 uniform float keep_colour = 0.0;
 uniform float colour_gain = 1.0;
 instance uniform float flip_phase = 0.0;
+// Negative keeps ordinary ghosts on their authored loop. Passing shadows set
+// this explicitly from script, advancing once from frame 0 to the final frame
+// so their walk can never wrap back to the entrance side.
+instance uniform float flip_frame = -1.0;
+// Opt-in temporal interpolation for one-shot passer sheets. Ordinary hostile
+// ghosts keep the crisp authored loop and pay no second-frame sample cost.
+instance uniform float flip_blend = 0.0;
 instance uniform float fade = 1.0;
 instance uniform float flip = 0.0;
 instance uniform float dissolve_seed = 0.0;
+// Corner sightings get a stronger black smoke breakup that disperses in place.
+// It never emits light; the warm luminous path remains exclusive to flashlight kills.
+instance uniform float dissolve_smoke = 0.0;
 // 0..1 while the torch is on it, and it falls again the moment the beam slips
 // off. Because it runs both ways it may only ever HEAT the figure — never eat
 // it — or a wavering aim reads as the thing blinking out and back.
@@ -66,16 +76,28 @@ void vertex() {
 // Origin and size of the sprite-sheet cell showing this instant's pose. A
 // static cutout is simply the whole texture, so everything downstream can work
 // in one coordinate system without branching.
-void flip_cell(out vec2 org, out vec2 size) {
+void flip_cells(out vec2 org, out vec2 next_org, out vec2 size,
+		out float frame_mix) {
 	if (flip_cols < 0.5) {
 		org = vec2(0.0);
+		next_org = org;
 		size = vec2(1.0);
+		frame_mix = 0.0;
 		return;
 	}
 	float n = max(flip_count, 1.0);
-	float f = floor(mod(TIME * flip_fps + flip_phase * n, n));
+	float raw_frame;
+	if (flip_frame >= 0.0) {
+		raw_frame = clamp(flip_frame, 0.0, n - 1.0);
+	} else {
+		raw_frame = mod(TIME * flip_fps + flip_phase * n, n);
+	}
+	float f = floor(raw_frame);
+	float next_f = min(f + 1.0, n - 1.0);
+	frame_mix = flip_blend * fract(raw_frame);
 	size = vec2(1.0 / flip_cols, 1.0 / flip_rows);
 	org = vec2(mod(f, flip_cols), floor(f / flip_cols)) * size;
+	next_org = vec2(mod(next_f, flip_cols), floor(next_f / flip_cols)) * size;
 }
 
 
@@ -113,8 +135,10 @@ void fragment() {
 	uv.x = mix(uv.x, 1.0 - uv.x, flip);
 
 	vec2 cell_org;
+	vec2 next_cell_org;
 	vec2 cell_size;
-	flip_cell(cell_org, cell_size);
+	float frame_mix;
+	flip_cells(cell_org, next_cell_org, cell_size, frame_mix);
 
 	float remaining = clamp(fade, 0.0, 1.0);
 	float dissolve = 1.0 - remaining;
@@ -122,35 +146,44 @@ void fragment() {
 
 	// During the dissolve the source silhouette rises slightly and bends on
 	// two moving noise fields. Sampling lower source pixels into higher output
-	// pixels makes the remnants climb like smoke without sliding the whole card.
+	// pixels makes the remnants fray like smoke without sliding the whole card.
 	float bend_a = texture(noise_tex,
 		uv * vec2(1.7, 1.15) + vec2(seed, -TIME * 0.055)).r;
 	float bend_b = texture(noise_tex,
 		uv * vec2(4.8, 2.3) + vec2(-seed * 0.37, -TIME * 0.11)).r;
 	vec2 smoke_uv = uv;
-	smoke_uv.x += (bend_a - 0.5) * dissolve * 0.075
-		+ (bend_b - 0.5) * dissolve * 0.022;
-	smoke_uv.y += dissolve * (0.018 + bend_a * 0.045);
+	float smoke_boost = 1.0 + dissolve_smoke * 0.85;
+	smoke_uv.x += ((bend_a - 0.5) * dissolve * 0.075
+		+ (bend_b - 0.5) * dissolve * 0.022) * smoke_boost;
+	// Corner smoke remains anchored. Its turbulence deforms the silhouette
+	// sideways, but neither the card nor its texture drifts upward.
+	smoke_uv.y += dissolve * (1.0 - dissolve_smoke) * (0.018 + bend_a * 0.045);
 
 	float a = soft_alpha(smoke_uv, cell_org, cell_size);
+	if (frame_mix > 0.001) {
+		float next_a = soft_alpha(smoke_uv, next_cell_org, cell_size);
+		a = mix(a, next_a, frame_mix);
+	}
 	float n1 = texture(noise_tex,
-		smoke_uv * vec2(2.15, 1.15) + vec2(seed + TIME * 0.012, -TIME * 0.075)).r;
+		smoke_uv * vec2(2.15, 1.15) + vec2(seed + TIME * 0.012, -TIME * 0.075 * (1.0 - dissolve_smoke))).r;
 	float n2 = texture(noise_tex,
-		smoke_uv * vec2(6.2, 3.7) + vec2(-seed * 0.61 - TIME * 0.021, -TIME * 0.13)).r;
+		smoke_uv * vec2(6.2, 3.7) + vec2(-seed * 0.61 - TIME * 0.021, -TIME * 0.13 * (1.0 - dissolve_smoke))).r;
 	float edge_noise = n1 * 0.62 + n2 * 0.38;
 	float bite = edge_noise * erode_amt;
 	float shape = smoothstep(edge0, edge1, a - bite + 0.10);
 
-	// Coarse islands vanish at different times. A small upward bias leaves the
-	// head and shoulders hanging for a beat while the legs disperse first.
-	float smoke_field = n1 * 0.58 + n2 * 0.42 + (1.0 - smoke_uv.y) * 0.16;
+	// Coarse islands vanish at different times. Ordinary ghosts retain a slight
+	// bottom-to-top bias; corner smoke breaks apart uniformly in place.
+	float smoke_field = n1 * 0.58 + n2 * 0.42
+		+ (1.0 - smoke_uv.y) * 0.16 * (1.0 - dissolve_smoke);
 	float threshold = mix(-0.24, 1.08, dissolve);
 	float survive = smoothstep(threshold - 0.14, threshold + 0.14, smoke_field);
 
 	// A broader, dimmer rim remains around the broken pieces, making the holes
 	// feather into wisps rather than revealing a hard animated dissolve line.
 	float haze_shape = smoothstep(0.015, 0.46, a - bite * 0.45);
-	float haze = max(haze_shape - shape, 0.0) * (0.34 + dissolve * 0.36);
+	float haze = max(haze_shape - shape, 0.0)
+		* (0.34 + dissolve * (0.36 + dissolve_smoke * 0.24));
 	float opacity = max(shape * survive, haze * survive);
 	opacity *= smoothstep(0.0, 0.10, remaining);
 
@@ -167,6 +200,11 @@ void fragment() {
 	if (keep_colour > 0.5) {
 		vec3 src = texture(tex, cell_org
 			+ clamp(smoke_uv, vec2(0.0), vec2(1.0)) * cell_size).rgb;
+		if (frame_mix > 0.001) {
+			vec3 next_src = texture(tex, next_cell_org
+				+ clamp(smoke_uv, vec2(0.0), vec2(1.0)) * cell_size).rgb;
+			src = mix(src, next_src, frame_mix);
+		}
 		float peak = max(src.r, max(src.g, src.b));
 		float sat = peak - min(src.r, min(src.g, src.b));
 		float lit = smoothstep(0.045, 0.18, sat);

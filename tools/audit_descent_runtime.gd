@@ -13,11 +13,43 @@ func run() -> void:
 
 	expect(game.descent, "Descent CLI mode was not selected")
 	expect(game.run != null, "run state was not constructed")
-	expect(game.active_level == DescentRun.ORDER[0],
+	expect(game.active_level == DescentRun.FIXED_ORDER[0],
 		"run did not start on the casino")
+	expect(DescentRun.order_for(SEED) == DescentRun.FIXED_ORDER \
+		and DescentRun.order_for(SEED + 1) == DescentRun.FIXED_ORDER,
+		"Descent story order still varies with the seed")
+	# Exercise entry selection against an isolated checkpoint file. The CLI run
+	# itself keeps persistence disabled and never touches the player's save.
+	var test_progress := DescentProgress.new(
+		"user://audit_descent_runtime_progress.cfg")
+	test_progress.clear_from_disk()
+	test_progress.start_new(24681)
+	test_progress.reach_floor(24681, 6)
+	game._descent_progress = test_progress
+	game._progress_enabled = true
+	expect(game._apply_descent_entry(TitleScreen.DescentEntry.CONTINUE) == 6 \
+		and game.world_seed == 24681,
+		"Continue did not restore the deepest floor and saved seed")
+	expect(game._apply_descent_entry(TitleScreen.DescentEntry.RESTART) == 0 \
+		and test_progress.deepest_floor == 6 and game.world_seed == 24681,
+		"Restart did not keep the building/deepest checkpoint")
+	var old_checkpoint_seed := test_progress.run_seed
+	expect(game._apply_descent_entry(TitleScreen.DescentEntry.NEW) == 0 \
+		and test_progress.run_seed != old_checkpoint_seed \
+		and test_progress.deepest_floor == 0,
+		"New Descent did not create a fresh floor-one checkpoint")
+	test_progress.clear_from_disk()
+	game._progress_enabled = false
+	game.world_seed = SEED
 	expect(not game.player.allow_sprint, "sprint remains enabled")
 	expect(game.cm.descent and game.cm.descent_route == game.descent_route,
 		"explicit route config did not reach ChunkManager")
+	expect(game.descent_route.topology != null \
+		and game.cm.descent_topology == game.descent_route.topology \
+		and game.run.route == game.descent_route,
+		"shared Descent topology did not reach run, route and ChunkManager")
+	expect(not game.run.blackout_doorway_requested.get_connections().is_empty(),
+		"blackout doorway signal is not wired to the live game")
 	expect(game._saved_pos.is_empty(),
 		"Descent unexpectedly owns Wander saved positions")
 	expect(not game.player.flashlight.visible,
@@ -25,8 +57,16 @@ func run() -> void:
 	expect(game._music_track_for(game.active_level) \
 			== game.MUSIC_TRACKS[game.active_level],
 		"early Descent did not preserve the floor soundtrack")
+	var filter_before: bool = game._crt
+	var video := InputEventKey.new()
+	video.pressed = true
+	video.physical_keycode = KEY_V
+	game._unhandled_input(video)
+	expect(game._crt != filter_before,
+		"V did not toggle the video filter in Descent")
+	game._unhandled_input(video)
 	var starting_floor_idx: int = game.run.floor_idx
-	game.run.floor_idx = DescentRun.ORDER.size() - 2
+	game.run.floor_idx = DescentRun.FLOOR_COUNT - 2
 	expect(game._music_track_for(game.active_level) == game.DESCENT_LATE_TRACK,
 		"late Descent escalation track was not selected")
 	game.run.floor_idx = starting_floor_idx
@@ -43,15 +83,32 @@ func run() -> void:
 			"DescentArrow", "", true, false).is_empty(),
 			"Descent still placed an in-world route arrow")
 	expect(is_instance_valid(game._descent_hud),
-		"Descent HUD route needle was not constructed")
+		"Descent room-aware HUD was not constructed")
 	if is_instance_valid(game._descent_hud):
 		expect(game._descent_hud.route == game.descent_route,
-			"HUD route needle does not own the active route")
+			"HUD marker does not own the active route")
 		game._descent_hud._process(0.016)
-		expect(game._descent_hud._needle.visible,
-			"HUD route needle is hidden during an active floor")
+		expect(game._descent_hud._panel.visible,
+			"HUD route marker is hidden during an active floor")
 
 	var route: DescentRoute = game.descent_route
+	var assistance := _find_assistance_probe(route)
+	expect(not assistance.is_empty(),
+		"live route offered no representative assistance doorway")
+	if not assistance.is_empty():
+		var assistance_from: Vector2i = assistance["from"]
+		game.run.visited = assistance["visited"]
+		game.run._cell = assistance_from
+		var assistance_before := route.distance_from_target(assistance_from)
+		game.cm.set_blackout(true)
+		game._on_blackout_doorway(assistance["proposal"], true)
+		game.cm.set_blackout(false)
+		expect(route.topology.shortcut_count() == 1,
+			"live assistance handler did not create and persist one doorway")
+		var far_side: Vector2i = assistance["proposal"]["other"]
+		expect(assistance_before - route.distance_from_target(far_side) \
+			>= DescentRoute.MERCY_MIN_SAVING,
+			"live assistance doorway did not put its far side closer to the lift")
 	var target_config := {
 		"descent": true,
 		"target": true,
@@ -89,7 +146,7 @@ func run() -> void:
 			"call did not start the run-owned lift wait")
 		expect(game.run.lift_wait_left <= DescentRun.LIFT_WAIT_LAST + 0.01,
 			"lift wait exceeded its authored range")
-		expect(DescentRun.lift_wait_for(DescentRun.ORDER.size() - 2) \
+		expect(DescentRun.lift_wait_for(DescentRun.FLOOR_COUNT - 2) \
 				> DescentRun.lift_wait_for(0),
 			"lift wait does not lengthen with depth")
 		# Only the arrival, not the press, opens the doors.
@@ -115,8 +172,10 @@ func run() -> void:
 				"arrival room did not build the car the player rides in on")
 			expect(arrival_chunk.has_descent_arrival(),
 				"arrival car is not in a usable state at floor start")
+		var seat_floor := Chunk.cell_floor_h(game._level_seed(game.active_level),
+			route.origin, game.active_level)
 		var seat: Dictionary = Chunk.car_interior_point(route.origin,
-			route.origin_wall)
+			route.origin_wall, seat_floor)
 		expect(game.player.global_position.distance_to(
 			seat["position"]) < 1.0,
 			"player did not start inside the arrival car")
@@ -128,10 +187,11 @@ func run() -> void:
 	# contract, not merely appear in ORDER or pass the topology-only route
 	# audit. Construct their authored targets exactly as ChunkManager does and
 	# require the usable lift shell, interaction areas and portal suppression.
-	for added_theme in [7, 8]:
-		var added_idx := DescentRun.ORDER.find(added_theme)
+	var seed_order := DescentRun.order_for(SEED)
+	for added_theme in [7, 8, 9, 10, 11]:
+		var added_idx := seed_order.find(added_theme)
 		expect(added_idx >= 0,
-			"theme %d is missing from DescentRun.ORDER" % added_theme)
+			"theme %d is missing from the seeded Descent order" % added_theme)
 		if added_idx < 0:
 			continue
 		var added_route := DescentRoute.build(
@@ -163,13 +223,13 @@ func run() -> void:
 		added_target.queue_free()
 		await process_frame
 
-	var final_route := DescentRoute.build(game._level_seed(2), 2)
-	var final_target := Chunk.new(game._level_seed(2), final_route.target, 2, {
+	var final_route := DescentRoute.build(game._level_seed(11), 11)
+	var final_target := Chunk.new(game._level_seed(11), final_route.target, 11, {
 		"descent": true,
 		"target": true,
 		"target_wall": final_route.target_wall,
 		"final": true,
-		"floor_idx": DescentRun.ORDER.size() - 1,
+		"floor_idx": DescentRun.FLOOR_COUNT - 1,
 	})
 	expect(final_target.has_node("DescentExit"),
 		"final floor did not build the OUT passage")
@@ -271,29 +331,22 @@ func run() -> void:
 	game.player.set_rumble(0.0)
 	await process_frame
 
-	# The needle degrades with depth: exact doorways early, a bearing in the
-	# middle, held readings late, nothing at the bottom.
-	expect(DescentHUD.FLOOR_GUIDE.size() == DescentRun.ORDER.size(),
-		"guidance table does not cover every floor")
-	expect(DescentHUD.FLOOR_GUIDE[0] == DescentHUD.Guide.EXACT,
-		"first floor does not name real doorways")
-	expect(DescentHUD.FLOOR_GUIDE[DescentRun.ORDER.size() - 1] \
-		== DescentHUD.Guide.NONE,
-		"last floor still hands out route guidance")
+	# Guidance remains exact on every floor and resolves the first real opening
+	# out of the player's whole room, not an invisible internal cell seam.
 	if is_instance_valid(game._descent_hud):
-		game.run.blackout = true
 		game._descent_hud._process(0.016)
-		expect(not game._descent_hud._needle.visible,
-			"route needle survived a blackout")
-		game.run.blackout = false
-		game._descent_hud._process(0.016)
+		expect(game._descent_hud._panel.visible,
+			"room-aware route marker is hidden")
+		var exit: Dictionary = game.descent_route.next_room_exit(
+			game.descent_route.origin)
+		expect(not exit.is_empty(), "arrival room has no route exit")
 
 	# The real async lift callback must rebuild the next floor at the origin,
 	# keep the same run and advance in the authored order.
 	await game._on_descent_lift()
 	expect(game.run.floor_idx == 1, "lift did not advance run floor")
-	expect(game.active_level == DescentRun.ORDER[1],
-		"lift did not reach the mall")
+	expect(game.active_level == DescentRun.order_for(game.world_seed)[1],
+		"lift did not reach the authored second floor")
 	expect(game.cm.descent and game.cm.descent_floor_idx == 1,
 		"new floor lost Descent chunk configuration")
 	expect(not game._switching and game._fade.color.a <= 0.001,
@@ -313,19 +366,14 @@ func run() -> void:
 	expect(game.descent_route.min_dist > DescentRoute.MIN_DIST_FIRST,
 		"second floor did not lengthen its objective route")
 
-	# Rule episodes: one continuous stop counts once, while attention increases.
+	# The stop rule is retired: standing still under working lights is free.
 	game.run.arrival_grace = 0.0
 	game.player.velocity = Vector3.ZERO
 	var prior_violations: int = game.run.violations
-	var prior_attention: float = game.run.attention
 	for i in 7:
 		game.run._physics_process(1.0)
-	expect(game.run.violations == prior_violations + 1,
-		"continuous stop did not count as exactly one episode")
-	expect(game.run.attention > prior_attention,
-		"stop episode did not raise attention")
-	expect(game._event_hint.text == "RULE BROKEN — KEEP MOVING",
-		"stop violation did not identify the broken rule")
+	expect(game.run.violations == prior_violations,
+		"standing still charged a violation despite the rule being retired")
 
 	# Confirming the same dialog cleanly destroys Descent state and rebuilds
 	# the casino title world. --nologo suppresses only the visual title layer.
@@ -344,3 +392,24 @@ func run() -> void:
 		route.graph_distance])
 	await teardown_game(game)
 	finish("arrival car, HUD guidance, lift wait, pressure, rules and transition hold")
+
+
+func _find_assistance_probe(route: DescentRoute) -> Dictionary:
+	var path_cells := {}
+	for cell in route.path_from_origin():
+		path_cells[cell] = true
+	var all_visited := {}
+	for key in route._origin_distance:
+		all_visited[key] = true
+	for key in route._origin_distance:
+		var from: Vector2i = key
+		if path_cells.has(from):
+			continue
+		if route.distance_from_target(from) < \
+				DescentRoute.MERCY_MIN_SAVING + 2:
+			continue
+		var proposal := route.find_blackout_doorway(from, all_visited, true)
+		if bool(proposal.get("assistance", false)):
+			return {"from": from, "visited": all_visited,
+				"proposal": proposal}
+	return {}

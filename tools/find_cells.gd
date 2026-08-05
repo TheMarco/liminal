@@ -17,6 +17,9 @@ const NAMES := {
 	80: "prison corridor", 81: "cellblock", 82: "cells", 83: "mess hall",
 	84: "showers", 85: "guard room", 86: "industry",
 	87: "visitation", 88: "rotunda",
+	110: "Bloom passage", 111: "root commons", 112: "occupied classroom",
+	113: "incubator lab", 114: "spore nest", 115: "hollow atrium",
+	116: "drowned gym", 117: "heart chamber", 118: "storm aperture",
 }
 const ANCHOR_LOCAL_STYLES := [
 	WorldGen.ANNEX_OPEN, WorldGen.ANNEX_MAZE, WorldGen.ANNEX_LONG,
@@ -28,6 +31,7 @@ const ANCHOR_LOCAL_STYLES := [
 	WorldGen.PRISON_CORRIDOR, WorldGen.PRISON_CELLBLOCK,
 	WorldGen.PRISON_CELLS, WorldGen.PRISON_SHOWER, WorldGen.PRISON_GUARD,
 	WorldGen.PRISON_VISITATION, WorldGen.PRISON_INDUSTRY,
+	WorldGen.BLOOM_PASSAGE,
 ]
 
 

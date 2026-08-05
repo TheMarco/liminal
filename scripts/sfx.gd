@@ -30,6 +30,11 @@ const BEDS := {
 	8: ["sound-asylum", -12.7],
 	# User-supplied Poolrooms ambience, layered beneath the original lim3 score.
 	9: ["poolrooms-calm-tranquil", -39.0],
+	# The airport HVAC recording becomes distant megastructure ventilation.
+	10: ["sound-airport", -43.3],
+	# The asylum's hollow building-air becomes the Bloom's breath beneath the
+	# fluorescent buzz and positional heart nodes.
+	11: ["sound-asylum", -12.7],
 }
 
 # surface -> [file, measured mean dB]

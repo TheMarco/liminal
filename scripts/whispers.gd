@@ -21,7 +21,14 @@ const FAR := 26.0
 const BEHIND_ARC := 0.55
 
 var player: Player
+var horror_director: HorrorDirector
 var suspended := false
+## Zero means the voices come from anywhere. When the run has proven the
+## player is lost (the mercy system armed), main points this along the route's
+## actual continuation and most whispers drift in from that side. A taunt, not
+## a compass: the arc is wide, the cadence unchanged, and nothing on screen
+## marks it — the building simply sounds more occupied in the right direction.
+var bias_dir := Vector3.ZERO
 
 var _t := 0.0
 var _p3d: AudioStreamPlayer3D
@@ -57,10 +64,8 @@ func _process(dt: float) -> void:
 	_t -= dt
 	if _t > 0.0:
 		return
-	# Long gaps. Eleven recordings would still wear out fast at one a minute,
-	# and the silence between them is what makes one land.
-	_t = randf_range(38.0, 105.0) * (0.25 if _dev else 1.0)
 	if _p3d.playing:
+		_t = 1.0
 		return
 	var fwd := -player.cam.global_transform.basis.z
 	fwd.y = 0.0
@@ -68,6 +73,8 @@ func _process(dt: float) -> void:
 		return
 	fwd = fwd.normalized()
 	var ang := randf() * TAU
+	if bias_dir.length_squared() > 0.01 and randf() < 0.65:
+		ang = atan2(bias_dir.x, bias_dir.z) + randf_range(-0.7, 0.7)
 	var dirv := Vector3(sin(ang), 0, cos(ang))
 	if dirv.dot(fwd) < -1.0 + BEHIND_ARC:
 		ang += PI * 0.5
@@ -75,7 +82,16 @@ func _process(dt: float) -> void:
 	var dist := randf_range(NEAR, FAR)
 	var w := Sfx.random_whisper()
 	if w[0] == null:
+		_t = randf_range(4.0, 9.0)
 		return
+	var duration := maxf(1.5, float(w[0].get_length()))
+	if horror_director != null \
+			and not horror_director.try_start_whisper(duration):
+		_t = randf_range(4.0, 9.0)
+		return
+	# Long gaps. Eleven recordings would still wear out fast at one a minute,
+	# and the silence between them is what makes one land.
+	_t = randf_range(38.0, 105.0) * (0.25 if _dev else 1.0)
 	_p3d.stream = w[0]
 	_p3d.volume_db = float(w[1])
 	# Slightly below its recorded pitch, always. A whisper that sits high reads

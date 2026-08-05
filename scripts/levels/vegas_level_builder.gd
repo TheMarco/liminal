@@ -92,15 +92,23 @@ func _pillars(h: float, mat: Material) -> void:
 					continue
 				points.append(Vector2(6.0 + px, 6.0 + pz))
 	for p in points:
-		chunk._box(Vector3(p.x, 0.06, p.y), Vector3(0.95, 0.12, 0.95), Mats.darkwood())
-		chunk._cyl(Vector3(p.x, h / 2.0, p.y), 0.34, h, mat)
+		# One pivot per pillar: plinth, shaft and rings cull as a unit. As
+		# loose children the doorway cull could take the shaft and leave an
+		# orphaned plinth lying on the carpet like a dropped crate.
+		var pillar = Node3D.new()
+		pillar.position = Vector3(p.x, 0.0, p.y)
+		chunk.add_child(pillar)
+		chunk._mbox(pillar, Vector3(0, 0.06, 0),
+			Vector3(0.95, 0.12, 0.95), Mats.darkwood())
+		chunk._mcyl(pillar, Vector3(0, h / 2.0, 0), 0.34, h, mat)
+		chunk._collider_cyl(Vector3(p.x, h / 2.0, p.y), 0.36, h)
 		for ring_y in [0.28, h - 0.28]:
 			var tor = MeshInstance3D.new()
 			tor.mesh = chunk.TOR
 			tor.material_override = Mats.brass()
-			tor.position = Vector3(p.x, ring_y, p.y)
+			tor.position = Vector3(0, ring_y, 0)
 			tor.scale = Vector3(0.5, 0.22, 0.5)
-			chunk.add_child(tor)
+			pillar.add_child(tor)
 
 
 # --- vegas: slots ------------------------------------------------------------
@@ -407,7 +415,7 @@ func _slots_sign() -> void:
 	if chunk._r(88) > 0.7:
 		return
 	for dir in 4:
-		var info = WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)
+		var info = chunk._edge_info(chunk.cell, dir)
 		if not info["wall"]:
 			continue
 		var plane = (chunk.S - chunk.T / 2.0) if (dir == 0 or dir == 2) else (chunk.T / 2.0)
@@ -655,7 +663,7 @@ func _hallway() -> void:
 	for si in 2:
 		var side = -1.5 if si == 0 else 1.5
 		var sdir = (3 if si == 0 else 2) if along_x else (1 if si == 0 else 0)
-		var info = WorldGen.edge_info(chunk.wseed, chunk.cell, sdir, chunk.theme)
+		var info = chunk._edge_info(chunk.cell, sdir)
 		var bay = []
 		if not info["wall"]:
 			# Edge t runs in +x or +z.  Local corridor x runs toward -z after

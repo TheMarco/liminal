@@ -3,8 +3,9 @@ extends Node3D
 ## You are not alone. Figures appear where nothing was — down a corridor, at
 ## the edge of the frame, and above all BEHIND you: whip around and there is
 ## a good chance one is already standing there. Each gets a moment's grace so
-## you always register it, then stalks until it is destroyed, reaches you, or
-## is left behind in another room. Up to MAX_FIGS exist at once.
+## you always register it, then stalks through several doorways until it is
+## destroyed, reaches you, or gives up at a safe room boundary. Up to MAX_FIGS
+## exist at once.
 
 const MAX_FIGS := 3
 const TURN_TRIG := 1.9      # accumulated fast-turn radians that trigger a check
@@ -27,8 +28,16 @@ const VARIANT_W := [0.16, 0.15, 0.14, 0.13, 0.14, 0.14, 0.14]
 # gets into the office.
 const UNDERNEATH := [ShadowFigure.TRAILING, ShadowFigure.DRIFTER]
 const UNDERNEATH_THEMES := [2, 5]  # the Annex, the asylum
+# The three tuned archetypes are introductions, not seasoning: each is held
+# back until the Descent floor where it debuts, so the late game gains new
+# behaviour to learn rather than only shorter spawn intervals. Variants
+# absent from this table are eligible everywhere.
+const DEBUT_FLOOR := {
+	ShadowFigure.GAOLER: 3,
+	ShadowFigure.REACHER: 5,
+	ShadowFigure.DRIFTER: 6,
+}
 
-signal stared_away
 signal burned_away
 signal seen_by_player
 ## One of them closed the distance. The owning game mode decides the outcome;
@@ -36,6 +45,8 @@ signal seen_by_player
 signal reached_player
 
 var player: Player
+var topology: DescentTopology
+var horror_director: HorrorDirector
 var suspended := false
 ## The rules have the player pinned — a blackout they must stand still through,
 ## or the arrival caption. Nothing new arrives and nothing already out there
@@ -48,9 +59,15 @@ var passive := false:
 			if is_instance_valid(f):
 				f.suppressed = value
 var interval_scale := 1.0
+## Descent floor index, mirrored in by main on every level switch; gates the
+## archetype debuts. The high default keeps the full roster in any context
+## that never sets it (dev tools, focused audits).
+var floor_idx := 99
 
 var _t := 0.0
 var _dev := false
+var _forced_left := 0.0
+var _forced_tries := 0
 var _force_at := Vector3.INF
 var _force_variant := -1
 var _figs: Array[ShadowFigure] = []
@@ -81,6 +98,44 @@ func _ready() -> void:
 		_force_variant = dev_haunt_variant
 
 
+## An authored encounter: something arrives shortly, behind the player when
+## the room allows it. Descent calls this when the objective tape ends and
+## when a dead charging station has just taken the torch. It deliberately
+## skips the director's pacing gate — it IS the directed beat — but still
+## respects the figure cap and the passive hold, and gives up quietly if the
+## room never offers a legal spot.
+func force_encounter(delay := 1.6) -> void:
+	_forced_left = delay if _forced_left <= 0.0 else minf(_forced_left, delay)
+	_forced_tries = 6
+
+
+func _forced_spawn() -> bool:
+	if _figs.size() >= MAX_FIGS:
+		return true  # the room is already occupied; the beat exists
+	var fwd := _flat_fwd()
+	if fwd == Vector3.ZERO:
+		return false
+	for i in 20:
+		# The rear arc first: the beat is turning round and it is there.
+		# Widen to any bearing once behind has been exhausted.
+		var behind := i < 12
+		var off := deg_to_rad(randf_range(12.0, 58.0)) * signf(randf() - 0.5)
+		var dirv := fwd.rotated(Vector3.UP, off + (PI if behind else 0.0))
+		var ground := _floor_at(player.global_position
+			+ dirv * randf_range(4.5, 11.0))
+		if ground == Vector3.INF:
+			continue
+		if not _figure_volume_clear(ground):
+			continue
+		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
+			continue
+		_spawn_at(ground, behind, 1.2)
+		if _dev:
+			print("forced figure behind=%s" % behind)
+		return true
+	return false
+
+
 ## Take ownership of a figure the world placed — the Descent anomaly already
 ## standing in a corner when the player walks in. It stays parented to its
 ## chunk so it streams out with the cell it belongs to, but from here it is
@@ -92,12 +147,13 @@ func adopt(f: ShadowFigure) -> void:
 	if f == null or not is_instance_valid(f) or _figs.has(f):
 		return
 	f.player = player
+	f.topology = topology
 	f.suppressed = passive
-	f.stared_away.connect(func(): stared_away.emit())
 	f.burned_away.connect(func(): burned_away.emit())
 	f.seen_by_player.connect(func(): seen_by_player.emit())
 	f.reached_player.connect(func(): reached_player.emit())
 	_figs.append(f)
+	_sync_director_count()
 
 
 ## Level switch or portal jump: whatever was standing there stays behind.
@@ -106,6 +162,7 @@ func despawn() -> void:
 		if is_instance_valid(f):
 			f.queue_free()
 	_figs.clear()
+	_sync_director_count(false)
 	# Stingers and death cries are deliberately hung on this node rather than on
 	# the figure, because the figure stops existing while they are still
 	# playing. That also means they outlive a floor change unless they are cut
@@ -116,6 +173,9 @@ func despawn() -> void:
 			child.queue_free()
 	_t = randf_range(4.0, 11.0)
 	_prev_yaw = NAN
+	# A beat owed on this floor does not follow the player to the next one.
+	_forced_left = 0.0
+	_forced_tries = 0
 
 
 func _physics_process(dt: float) -> void:
@@ -128,9 +188,19 @@ func _physics_process(dt: float) -> void:
 	for i in range(_figs.size() - 1, -1, -1):
 		if not is_instance_valid(_figs[i]):
 			_figs.remove_at(i)
+	_sync_director_count()
 	if passive:
 		_prev_yaw = NAN
 		return
+	# The countdown to an authored encounter only runs while the player is
+	# free, so a beat queued during a tape lands after control returns, not
+	# under the dolly-back.
+	if _forced_left > 0.0:
+		_forced_left -= dt
+		if _forced_left <= 0.0:
+			_forced_tries -= 1
+			if not _forced_spawn() and _forced_tries > 0:
+				_forced_left = 0.8
 	_track_turn(dt)
 	if _figs.size() >= MAX_FIGS:
 		return
@@ -173,6 +243,8 @@ func _track_turn(dt: float) -> void:
 
 
 func _turn_spawn() -> bool:
+	if horror_director != null and not horror_director.can_start_hostile():
+		return false
 	var fwd := _flat_fwd()
 	if fwd == Vector3.ZERO:
 		return false
@@ -181,8 +253,6 @@ func _turn_spawn() -> bool:
 		var dirv := fwd.rotated(Vector3.UP, off)
 		var ground := _floor_at(player.global_position + dirv * randf_range(6.0, 14.0))
 		if ground == Vector3.INF:
-			continue
-		if not _same_room_as_player(ground):
 			continue
 		if not _figure_volume_clear(ground):
 			continue
@@ -196,6 +266,8 @@ func _turn_spawn() -> bool:
 
 
 func _try_spawn() -> bool:
+	if horror_director != null and not horror_director.can_start_hostile():
+		return false
 	if _force_at != Vector3.INF:
 		_spawn_at(_force_at, false, 3.0)
 		_force_at = Vector3.INF
@@ -210,12 +282,11 @@ func _try_spawn() -> bool:
 		var ground := _floor_at(player.global_position + dirv * randf_range(7.0, 16.0))
 		if ground == Vector3.INF:
 			continue
-		if not _same_room_as_player(ground):
-			continue
 		if not _figure_volume_clear(ground):
 			continue
-		# Every encounter starts on a route that is physically open. The figure
-		# may have spawned behind the player, but never behind a wall.
+		# Every encounter starts on a route that is physically open — corridors
+		# included, which the old same-room gate made impossible: a corridor
+		# cell is 12m and spawns want 7-16m. Line of sight is the real test.
 		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
 			continue
 		_spawn_at(ground, behind, 0.9)
@@ -230,6 +301,7 @@ func _try_spawn() -> bool:
 func _spawn_at(ground: Vector3, announce: bool, grace: float) -> void:
 	var f := ShadowFigure.new()
 	f.player = player
+	f.topology = topology
 	f.variant = _force_variant if _force_variant >= 0 else _pick_variant()
 	_force_variant = -1
 	f.grace = grace
@@ -238,29 +310,47 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> void:
 	f.origin_room = ShadowFigure.room_for(player, player.global_position)
 	f.suppressed = passive
 	add_child(f)
-	f.stared_away.connect(func(): stared_away.emit())
 	f.burned_away.connect(func(): burned_away.emit())
 	f.seen_by_player.connect(func(): seen_by_player.emit())
 	f.reached_player.connect(func(): reached_player.emit())
 	_figs.append(f)
+	_sync_director_count()
 	if _dev:
 		print("spawned variant %d at %s (player %s)" % [f.variant, ground, player.global_position])
+
+
+func _sync_director_count(start_recovery := true) -> void:
+	if horror_director == null:
+		return
+	var active := 0
+	for f in _figs:
+		# A waiting anomaly is scenery until the player enters its room. Counting
+		# streamed-but-dormant fixtures here could silence a floor indefinitely.
+		if is_instance_valid(f) and f.mode == ShadowFigure.Mode.AMBIENT:
+			active += 1
+	horror_director.set_hostile_count(active, start_recovery)
 
 
 func _pick_variant() -> int:
 	var deep := UNDERNEATH_THEMES.has(player.level_theme)
 	var total := 0.0
 	for i in VARIANT_W.size():
-		if deep or not UNDERNEATH.has(i):
+		if _variant_eligible(i, deep):
 			total += VARIANT_W[i]
 	var r := randf() * total
 	for i in VARIANT_W.size():
-		if not deep and UNDERNEATH.has(i):
+		if not _variant_eligible(i, deep):
 			continue
 		r -= VARIANT_W[i]
 		if r <= 0.0:
 			return i
 	return 0
+
+
+func _variant_eligible(variant: int, deep: bool) -> bool:
+	if not deep and UNDERNEATH.has(variant):
+		return false
+	return floor_idx >= int(DEBUT_FLOOR.get(variant, 0))
 
 
 ## Distance to the nearest live figure, or a large number when none is out

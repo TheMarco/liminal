@@ -1,14 +1,18 @@
 class_name DescentSummary
 extends CanvasLayer
 
-signal retry
+signal continue_run
+signal restart_run
+signal new_run
 signal leave
 
 var won := false
 var floor_idx := 0
+var floor_display := ""
 var elapsed := 0.0
 var violations := 0
 var world_seed := 1
+var continue_floor_idx := 0
 var _accept_input := false
 
 
@@ -26,7 +30,7 @@ func _ready() -> void:
 	add_child(col)
 	var floor_label := Label.new()
 	floor_label.text = "OUT" if won else "CAUGHT — FLOOR %d — %s" % [
-		floor_idx + 1, DescentRun.NAMES[floor_idx].to_upper()]
+		floor_idx + 1, floor_display.to_upper()]
 	_style(floor_label, 38, Color(0.92, 0.86, 0.72))
 	col.add_child(floor_label)
 	var details := Label.new()
@@ -44,7 +48,8 @@ func _ready() -> void:
 	gap.custom_minimum_size.y = 36
 	col.add_child(gap)
 	var prompt := Label.new()
-	prompt.text = "SPACE  TO  DESCEND  AGAIN          ESC  TO  RETURN"
+	prompt.text = "SPACE  CONTINUE FLOOR %02d     R  RESTART RUN     N  NEW DESCENT     ESC  TITLE" % [
+		continue_floor_idx + 1]
 	_style(prompt, 18, Color(0.84, 0.78, 0.64))
 	col.add_child(prompt)
 	var tw := create_tween()
@@ -68,8 +73,18 @@ func _input(event: InputEvent) -> void:
 			or not event.pressed or event.echo:
 		return
 	if event.physical_keycode == KEY_SPACE:
+		_accept_input = false
 		get_viewport().set_input_as_handled()
-		retry.emit()
+		continue_run.emit()
+	elif event.physical_keycode == KEY_R:
+		_accept_input = false
+		get_viewport().set_input_as_handled()
+		restart_run.emit()
+	elif event.physical_keycode == KEY_N:
+		_accept_input = false
+		get_viewport().set_input_as_handled()
+		new_run.emit()
 	elif event.physical_keycode == KEY_ESCAPE:
+		_accept_input = false
 		get_viewport().set_input_as_handled()
 		leave.emit()

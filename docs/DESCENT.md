@@ -1,5 +1,38 @@
 # Descent — revised implementation plan
 
+> **Status update (2026-08-03).** The implementation has moved past this plan.
+> Current live structure: 11 floors in fixed order — Casino, Mall, Office,
+> Airport, School, Prison, Asylum, Poolrooms, Annex, Monolith, then
+> Bloom/Upside Down (theme 11) with
+> the exit passage. The "do not go back" and "do not stare" charges are both gone
+> (backtrack anomalies remain; figures can no longer be banished by staring —
+> they always creep while watched, lunge while unseen, and only the torch
+> ends one), leaving one rule: when the lights fail, stand still (the
+> keep-moving charge was retired 2026-08-04; blackout movement grace is now
+> 2.6s early, 1.6s deep). Each non-final objective room now carries the
+> end-of-floor ritual: a CRT/VCR altar whose tape must be watched to its end,
+> an optional charging station, and the lift, which refuses entry only until
+> the tape is watched. Calling the lift and leaving the room cancels
+> the call; the summon wait suppresses blackouts and raises figure pressure
+> instead. Moving during a blackout is now lethal past roughly three seconds
+> of accumulated movement (`blackout_ambush`). Every actual blackout opens one
+> impossible new doorway through a wall near the player's reachable side. The
+> opening persists through streaming and is shared by geometry, collision, HUD
+> route state and ghost navigation. Under ordinary navigation the selector
+> prefers a route-neutral connection; after 50 seconds of walking without
+> beating the player's best graph distance it secretly selects a doorway that
+> puts its far side at least 24m closer to the lift, preferring one that also
+> shortens the current route when available. Sound and messaging are identical,
+> so the player cannot know whether the building helped. If no safe unopened
+> wall remains, the blackout is postponed rather than faked with debris, a
+> colour wash or an unexplained light. Subtler backtracking anomalies still
+> occur.
+> As the player nears the lift, the floor bleeds one-way into the next theme:
+> fog and room tone shift, and rebuilt cells carry next-theme objects
+> (`Chunk.BLEED_PROPS`). Authoritative details: `scripts/descent_run.gd`,
+> `scripts/vhs_ritual.gd`, `Chunk._descent_ritual_set`, and
+> `tools/audit_descent_ritual.gd`.
+
 Descent is a second play mode for Liminal. The existing endless-wander
 experience remains the default and keeps its current portals, usable elevators,
 floor keys, saved positions, figures, lighting, CRT controls and generation.
@@ -23,11 +56,11 @@ startup, elevator and anomaly designs below deliberately replace it.
 
 ### Core loop
 
-Start in the casino and descend through eight floors. Each floor has exactly one
+Start in the casino and descend through the fixed eleven-floor sequence. Each floor has exactly one
 objective lift or exit, chosen deterministically from the seed. A restrained
 HUD needle points toward the next real open doorway in the generated topology.
-Call and enter the lift to move down one floor. The far end of the Annex
-contains a unique way out.
+Call and enter the lift to move down one floor. Bloom/Upside Down contains the
+unique way out.
 
 Descent order is not the Wander key order:
 
@@ -40,15 +73,23 @@ Descent order is not the Wander key order:
 | 5 | 6 | the school |
 | 6 | 8 | the prison |
 | 7 | 5 | the asylum |
-| 8 | 2 | the Annex |
+| 8 | 9 | the Poolrooms |
+| 9 | 2 | the Annex |
+| 10 | 10 | the Monolith |
+| 11 | 11 | Bloom/Upside Down |
+
+Continue resumes the deepest unlocked floor with the same saved seed/building.
+Restart Descent returns to floor 1 on that seed without lowering the deepest
+checkpoint. New Descent starts floor 1 with a new seed. Respawn uses the
+arrival elevator with clean state and a full flashlight.
 
 The sequence reads as a physical and psychological descent:
 
 > garish → deserted consumer space → sterile → vast and cold → institutional
 > → confined → wrong → watched
 
-It also reserves the two themes that admit the least-human figure variants
-(`ShadowFigures.UNDERNEATH_THEMES == [2, 5]`) for the final two floors.
+It places the more physically hostile and less-human spaces late, while
+reserving the Monolith and Bloom for the ending.
 
 ### The four rules
 
@@ -75,8 +116,7 @@ meter or number. It is expressed through:
 - a consistent, subtle “the building noticed” response after each violation;
 - increasingly frequent figures;
 - stronger CRT instability;
-- increasingly frequent blackouts;
-- at high attention, one persistent pursuer.
+- increasingly frequent blackouts.
 
 Attention recovers slowly while the player obeys. A run can recover from a few
 mistakes, but not immediately.
@@ -134,7 +174,7 @@ experience:
   explore and photograph the building — so `ShadowFigures` stays suspended for
   its entire duration;
 - no Descent HUD needle, objective lift cars, rule feedback, attention,
-  blackouts, pursuer, anomalies or Annex exit appear.
+  blackouts, anomalies or Bloom exit appear.
 
 “Unchanged” means observable runtime behaviour and deterministic generation,
 not identical source bytes. Existing Wander audits must continue to pass
@@ -166,8 +206,7 @@ Instead:
 | `scripts/descent_run.gd` | `DescentRun extends Node` | Floor order, rules, attention, blackout schedule, violations, run state and summary data. |
 | `scripts/descent_route.gd` | `DescentRoute extends RefCounted` | BFS over real open edges, deterministic objective selection and next-hop guidance. |
 | `scripts/descent_hud.gd` | `DescentHUD extends CanvasLayer` | A single compass needle aimed at the next real doorway. |
-| `scripts/descent_pursuer.gd` | `DescentPursuer extends Node3D` | Topology-aware lethal pursuit at high threat. |
-| `scripts/descent_summary.gd` | `DescentSummary extends CanvasLayer` | Win/caught state, time, rule-break count and retry/leave input. |
+| `scripts/descent_summary.gd` | `DescentSummary extends CanvasLayer` | Win/caught state, time, rule-break count and Continue/Restart/New/leave input. |
 
 ### Modified files
 
@@ -179,8 +218,8 @@ Instead:
 | `scripts/chunk_manager.gd` | Explicit route, objective, blackout and anomaly state; `chunk_built` signal; safe mutation activation. |
 | `scripts/chunk.gd` | Build Descent car/exit and usable call button; anomaly activation and blackout fixture hook. |
 | `scripts/environment_events.gd` | Explicit mode gate: suppress misleading random power sags and “elevator elsewhere” events during Descent. |
-| `scripts/shadow_figures.gd` | Attention-scaled cadence, gaze signal forwarding, one pursuer and its cell route. |
-| `scripts/shadow_figure.gd` | `stared_away` signal, inert anomaly mode and pursuer mode. |
+| `scripts/shadow_figures.gd` | Attention-scaled cadence, encounter ownership and signal forwarding. |
+| `scripts/shadow_figure.gd` | Burnable hostile figures, waiting anomalies and topology-aware multi-door chase. |
 | `.github/workflows/audits.yml` | Add route and Descent runtime audits. |
 
 ### New audits
@@ -862,7 +901,7 @@ Keep values continuous, with meaningful thresholds:
 | `0.00–0.25` | baseline Descent ambience; occasional figures |
 | `0.25–0.55` | shorter figure interval, slightly stronger CRT instability |
 | `0.55–0.85` | frequent figures and blackouts |
-| `0.85–1.00` | pursuer eligible |
+| `0.85–1.00` | peak figure cadence and CRT instability |
 
 CRT:
 
@@ -893,8 +932,10 @@ Blackouts are unmistakable run events, not inferred from ambient light:
 - clear power-return sound at the end;
 - 0.75-second movement grace after onset;
 - rule two is suspended while blackout is active;
-- **the figures are suppressed for the duration** (see 7.7);
-- **a blackout never begins while a pursuer is on the floor.**
+- **the figures are suppressed for the duration** (see 7.7).
+- one safe, persistent doorway is selected before onset and built while the
+  darkness hides the transition; assistance and decorative selection use the
+  same sound and message.
 
 ### 7.7 Passivity and the figures
 
@@ -922,11 +963,6 @@ Two states are covered:
   to start immediately and the nearest spawn reaches you in 4.8s, so a run could
   end while the floor caption was still on screen.
 
-The pursuer is handled separately because it cannot be burned: `DescentPursuer`
-gains a `frozen` flag set for the length of a blackout, `DescentRun.pursuer_active`
-holds the blackout timer rather than spending it while one lives, and
-`_on_descent_attention` refuses to spawn one into a blackout in progress.
-
 `tools/audit_survivability.gd` asserts all of this against the real classes.
 
 Do not restore lights with `visible = true`.
@@ -945,11 +981,12 @@ or flickering fixtures must not come alive.
 blackout controller immediately darken chunks streamed during the event.
 There is no process-global `Chunk.blackout`.
 
-Treat blackout as a temporary overlay on persistent chunk state:
+Treat blackout darkness as a temporary overlay on persistent chunk state:
 
 1. a chunk's normal/anomalous light configuration is its base state;
 2. `chunk.set_blackout(true)` snapshots that base and hides it;
-3. anomaly activation updates the stored base if it occurs during blackout;
+3. the guaranteed doorway rebuild and optional anomaly activation happen while
+   darkness still hides the transition;
 4. `chunk.set_blackout(false)` reveals the current base, not a stale global
    “all lights on” state.
 
@@ -964,52 +1001,29 @@ Snapshot and restore ambient energy separately on `main.we.environment`.
 - Blackout movement grace works at both onset and restoration.
 - New chunks arrive dark during blackout.
 - Restore returns intentionally dead/flickering fixtures to exact prior state.
+- Every actual blackout reveals one new doorway after restoration; a blackout
+  with no safe unopened edge is postponed before it begins.
+- A blackout doorway is a shared runtime edge, not a decal or teleport: both
+  neighbouring chunks and every route consumer resolve the same opening.
+- Decorative and assistance doorways have identical presentation; ordinary
+  choices are normally route-neutral, while a proven stall gets a far side at
+  least two graph steps closer to the lift (with true shortcuts preferred).
 - Wander has no rule feedback, attention, blackout or cadence change.
 - Descent never emits a fake power sag or misleading remote-elevator event.
 - `--attention=N` allows deterministic consequence screenshots.
 
 ---
 
-## 8. Phase 4 — pursuer and run ending
+## 8. Phase 4 — run ending
 
 Build a complete run before adding anomalies.
 
-### 8.1 Pursuer
-
-At attention `>= 0.85`, Descent may own one persistent pursuer:
-
-- it does not dissolve under gaze, proximity or time;
-- it uses the existing figure visuals and smoke treatment;
-- it moves at about `3.0 m/s` against the player's `3.4 m/s` walk;
-- it despawns on floor transition;
-- contact ends the run.
-
-Do not rely on straight-line drift that repeatedly catches on walls.
-
-Use lightweight cell navigation:
-
-1. identify pursuer and player cells;
-2. BFS real open edges within a bounded radius;
-3. select the next cell toward the player;
-4. move toward the shared doorway centre;
-5. after crossing, compute the next step;
-6. apply a local floor raycast and wall slide for movement inside the cell.
-
-Recompute at a low rate such as 2 Hz, not every physics tick. If the pursuer is
-out of sight and has made no progress for several seconds, allow a controlled
-reposition to the next valid route cell. Never teleport it inside the player's
-view.
-
-Because sprint is disabled in Descent, the speed relationship remains
-meaningful. Continuous walking holds it off; stopping or navigating poorly
-lets it close.
-
-### 8.2 End states
+### 8.1 End states
 
 Failure:
 
-- pursuer contact;
-- no other rule directly kills the player.
+- ordinary figure contact;
+- moving long enough during a blackout to be located.
 
 Success:
 
@@ -1041,14 +1055,12 @@ Restart rebuilds mode state from `main` without reloading the project scene:
 - an explicit reroll action may be added after the first playable;
 - all attention, blackout, anomaly, figure and route state is reset.
 
-### 8.3 Phase acceptance
+### 8.2 Phase acceptance
 
-- pursuer reaches a walking player through corners and doorway sequences;
-- it never crosses a closed wall;
-- it never appears in Wander;
-- only one exists;
-- floor descent removes it;
-- contact produces one failure;
+- ordinary figures pursue through real doorway sequences and remain burnable;
+- figures never cross a closed wall;
+- hostile figures never appear in Wander;
+- figure contact produces one failure;
 - Annex exit produces one success;
 - same-seed restart reproduces all eight objective routes.
 
@@ -1120,7 +1132,7 @@ Boundary jitter must not count:
 - leaving a cell never drops or collides with the player;
 - returning reveals the already-applied anomaly;
 - dead-light anomalies restore correctly after a global blackout;
-- inert figures never dissolve, chase or trigger the pursuer logic;
+- waiting figure anomalies become ordinary burnable encounters when activated;
 - anomaly choices reproduce from seed/cell;
 - graph connectivity and every existing procedural audit remain unchanged.
 
@@ -1156,8 +1168,6 @@ All values require playtesting.
 | blackout duration | `5–8s → 6.5–9.5s` | longer decisions with depth |
 | CRT noise | `1.0 → 2.6` | shader range remains valid |
 | figure interval scale | `1.0 → 0.35` | ~11s → ~4s |
-| pursuer threshold | `0.85` | late consequence |
-| pursuer speed | `3.0 → 3.75 m/s` | eventually faster than the player |
 
 Tune route length before elevator rarity. Descent has one objective per floor;
 it does not use a probability such as `ELEV_P`.
@@ -1203,12 +1213,12 @@ At the end of Phase B, a player can complete eight floors with no rule system.
 - exact blackout snapshot/restore;
 - attention presentation and debug pin.
 
-Stop and play several complete runs before adding pursuit.
+Stop and play several complete runs before adding more failure conditions.
 
-### Phase D — pursuer and summary
+### Phase D — summary and end states
 
-- graph-guided pursuer;
-- contact failure;
+- ordinary-figure contact failure;
+- blackout ambush failure;
 - final exit success;
 - summary and same-seed restart.
 
@@ -1246,7 +1256,6 @@ The first playable is Phase B plus the simplest Phase C rule loop:
 - four detected rules;
 - hidden attention with violation feedback;
 - blackouts with exact restoration;
-- no pursuer;
 - no anomalies.
 
 Playtest questions:
@@ -1259,7 +1268,7 @@ Playtest questions:
 6. Is attention escalation perceptible without a meter?
 7. Does the Annex exit feel like a payoff?
 
-Do not tune the pursuer or anomalies until those answers are good.
+Do not tune anomalies until those answers are good.
 
 ---
 

@@ -136,13 +136,16 @@ func _office_air_conditioners(split: Array) -> void:
 			var neighbour: Vector2i = member + directions[dir]
 			if WorldGen.room_id(chunk.wseed, neighbour) == chunk.room_root:
 				continue
-			var info = WorldGen.edge_info(chunk.wseed, member, dir, chunk.theme)
-			var suspended = bool(info["full_open"])
+			var info = chunk._edge_info(member, dir)
+			# A split-system unit belongs on an uninterrupted structural wall.
+			# Doorway headers and open/glass partitions are not mounts: both made
+			# the cabinet visibly float or straddle circulation openings.
+			if not bool(info["wall"]) or bool(info["full_open"]):
+				continue
 			# Two edge-biased bays leave the centre available for pictures,
 			# clocks and door signage while still allowing a pair in a large room.
 			for slot in 2:
-				var along = (4.0 if slot == 0 else 8.0) if suspended \
-					else (3.0 if slot == 0 else 9.0)
+				var along = 3.0 if slot == 0 else 9.0
 				var partition_hits_wall = not split.is_empty() \
 					and ((bool(split[0]) and dir < 2) \
 						or (not bool(split[0]) and dir >= 2))
@@ -154,7 +157,7 @@ func _office_air_conditioners(split: Array) -> void:
 				# wall-plane overlap; a score penalty still allowed collisions
 				# whenever every otherwise attractive wall was decorated.
 				var art := chunk._office_wall_art_layout(member, dir)
-				if not suspended and not art.is_empty():
+				if not art.is_empty():
 					var art_size: Vector2 = art["size"]
 					var horizontal_overlap := absf(along - float(art["along"])) \
 						< 0.625 + art_size.x * 0.5 + 0.10
@@ -172,19 +175,6 @@ func _office_air_conditioners(split: Array) -> void:
 						p = base + Vector3(along, mount_y, chunk.S - chunk.T - wall_off)
 					_:
 						p = base + Vector3(along, mount_y, chunk.T + wall_off)
-				if suspended:
-					# A room with four fully-open edges has no wall at all. Pull
-					# the mount into that open-plan bay and give it a ceiling-
-					# supported backplate below instead of leaving it floating.
-					match dir:
-						0:
-							p.x = base.x + chunk.S - 2.2
-						1:
-							p.x = base.x + 2.2
-						2:
-							p.z = base.z + chunk.S - 2.2
-						_:
-							p.z = base.z + 2.2
 				var decor_busy = WorldGen.r01(chunk.wseed, member.x, member.y,
 					1040 + dir) < chunk._wall_art_chance() \
 					or WorldGen.r01(chunk.wseed, member.x, member.y, 40 + dir) < 0.58
@@ -192,15 +182,9 @@ func _office_air_conditioners(split: Array) -> void:
 					member.y * 7 - dir, 1880), 100000)
 				if decor_busy:
 					score += 100000
-				# A solid wall is preferred. A cased doorway wall is a safe
-				# fallback because the unit sits above the 2.25m header.
-				if not bool(info["wall"]):
-					score += 400000
-				if suspended:
-					score += 400000
 				candidates.append({
 					"member": member, "dir": dir, "slot": slot,
-					"position": p, "score": score, "suspended": suspended,
+					"position": p, "score": score, "suspended": false,
 					"along": along,
 				})
 	if candidates.is_empty():
@@ -242,16 +226,9 @@ func _office_air_conditioners(split: Array) -> void:
 		pivot.set_meta("office_ac_dir", dir)
 		pivot.set_meta("office_ac_slot", int(candidate["slot"]))
 		pivot.set_meta("office_ac_along", float(candidate["along"]))
-		pivot.set_meta("office_ac_expected", desired)
-		pivot.set_meta("office_ac_suspended", bool(candidate["suspended"]))
+		pivot.set_meta("office_ac_expected", selected.size())
+		pivot.set_meta("office_ac_suspended", false)
 		unit.set_meta("authored_model", "office_air_conditioner")
-		if bool(candidate["suspended"]):
-			chunk._mrbox(pivot, Vector3(0, 0, -0.205),
-				Vector3(1.46, 0.52, 0.10), Mats.metal_gray(), 0.025)
-			var bracket_h = 0.08
-			for bx in [-0.56, 0.56]:
-				chunk._mcyl(pivot, Vector3(bx, 0.26 + bracket_h * 0.5, -0.205),
-					0.014, bracket_h, Mats.metal_gray())
 
 
 ## A continuous corporate corridor with real plan depth.  Locked doors seal
@@ -277,7 +254,7 @@ func _office_corridor() -> void:
 	for si in 2:
 		var side = -lane_half if si == 0 else lane_half
 		var sdir = (3 if si == 0 else 2) if along_x else (1 if si == 0 else 0)
-		var info = WorldGen.edge_info(chunk.wseed, chunk.cell, sdir, chunk.theme)
+		var info = chunk._edge_info(chunk.cell, sdir)
 		var bay = []
 		if not info["wall"]:
 			# Edge t runs in world +x/+z. Local corridor x points toward -z after
@@ -643,9 +620,7 @@ func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
 
 ## A desk phone at the worker's elbow.
 ##
-## This is the only place the CC BY-NC office phone enters the game. Delete this
-## function and its one call site in `_office_desk` and the noncommercial
-## obligation goes with it; nothing else references the model.
+## This is the only place the attributed office phone enters the game.
 
 
 func _office_desk_phone(workstation: Node3D, deskc: Vector3, yaw: float,
@@ -653,11 +628,12 @@ func _office_desk_phone(workstation: Node3D, deskc: Vector3, yaw: float,
 	if chunk._r(1260 + qi) >= 0.38:
 		return
 	var side = Vector3(cos(yaw), 0, -sin(yaw)) * -0.52
-	# The model's keypad faces its own -Z, so it needs the desk's yaw directly:
-	# adding PI turned the dial away from whoever sat there.
+	# The replacement keeps the former phone's compact footprint and sits at the
+	# worker's elbow without changing workstation clearance.
 	chunk._attributed_floor_prop(chunk.OFFICE_PHONE_PATH,
 		deskc + side + Vector3(0, 0.7475, 0),
-		yaw + (chunk._r(1270 + qi) - 0.5) * 0.5, 1.0, chunk.OFFICE_PHONE_CENTRE,
+		yaw + (chunk._r(1270 + qi) - 0.5) * 0.5,
+		chunk.OFFICE_PHONE_SCALE, chunk.OFFICE_PHONE_CENTRE,
 		"office_phone", workstation)
 
 

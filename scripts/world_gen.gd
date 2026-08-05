@@ -12,7 +12,7 @@ const OPP := [1, 0, 3, 2]
 ## 3 was the derelict theme park, cut because it never held up beside the
 ## interiors. Ids are NOT renumbered — every other theme keeps the seed salt and
 ## world it always had, so old seeds still reproduce.
-const THEMES: Array[int] = [0, 1, 2, 4, 5, 6, 7, 8, 9]
+const THEMES: Array[int] = [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11]
 
 const STYLE_EMPTY := 0
 const STYLE_PILLARS := 1
@@ -101,6 +101,30 @@ const POOL_STAIRS := 95     # a wide tiled stair descending into the water
 const POOL_GALLERY := 96    # piers and a mezzanine walkway with handrails
 const POOL_CISTERN := 97    # landmark: a vast dim hall of piers and skylights
 
+# The Monolith. A civic megastructure of board-formed concrete, deep beams,
+# black reflecting courts and impossible upper galleries. Theme 10 deliberately
+# sits outside the 1-9 floor strip: Wander reaches it with the 0 key.
+const BRUTAL_PASSAGE := 100
+const BRUTAL_HALL := 101
+const BRUTAL_GALLERY := 102
+const BRUTAL_ATRIUM := 103
+const BRUTAL_WATER_COURT := 104
+const BRUTAL_RAMP := 105
+const BRUTAL_SERVICE := 106
+const BRUTAL_SANCTUM := 107
+
+# The Bloom. A recognizable civic campus invaded by a wet vascular organism.
+# Cold fluorescents remain route language; red marks sealed wounds and hearts.
+const BLOOM_PASSAGE := 110
+const BLOOM_COMMONS := 111
+const BLOOM_CLASSROOM := 112
+const BLOOM_INCUBATOR := 113
+const BLOOM_NEST := 114
+const BLOOM_ATRIUM := 115
+const BLOOM_GYM := 116
+const BLOOM_HEART := 117
+const BLOOM_STORM_APERTURE := 118
+
 # Eight-cell (96m) semantic districts. Room styles still vary within a zone,
 # but the weights now agree over a meaningful walk: a run of gates gives way
 # to baggage handling, patient wards yield to treatment, and so on. The room
@@ -123,6 +147,8 @@ static func level_seed(base: int, theme: int) -> int:
 		7: 463670041,
 		8: 805306457,
 		9: 217645177,
+		10: 1073741827,
+		11: 1227133513,
 	}
 	return ((base ^ int(salts.get(theme, 348039917))) & 0x7FFFFFFF) | 1
 
@@ -391,6 +417,8 @@ static func macro_zone_name(zone: int, theme: int) -> String:
 		7: ["retail galleries", "food and cinema", "service wing"],
 		8: ["cell blocks", "institutional", "custody"],
 		9: ["bathing halls", "channels", "plant"],
+		10: ["civic halls", "water courts", "service megastructure"],
+		11: ["dormant campus", "colonized recreation", "arterial core"],
 	}
 	var labels: Array = names.get(theme, ["zone 0", "zone 1", "zone 2"])
 	return labels[clampi(zone, 0, labels.size() - 1)]
@@ -415,6 +443,8 @@ static func landmark_style(ws: int, cell: Vector2i, theme: int) -> int:
 		7: return MALL_CINEMA
 		8: return PRISON_ROTUNDA
 		9: return POOL_CISTERN
+		10: return BRUTAL_SANCTUM
+		11: return BLOOM_STORM_APERTURE
 	return -1
 
 
@@ -478,6 +508,20 @@ static func room_height(ws: int, root: Vector2i, theme: int) -> float:
 		if pool_tier == POOL_HEIGHT_DOUBLE:
 			return lerpf(8.1, 9.0, height_roll)
 		return 5.2 if n >= 2 else lerpf(4.1, 4.6, r)
+	if theme == 10:
+		# Even its smallest chambers are over-scaled; merged halls become the
+		# multi-storey voids and suspended galleries seen in the references.
+		if root == Vector2i.ZERO: return 11.2
+		if n >= 4: return lerpf(11.5, 13.5, r)
+		if n >= 2: return lerpf(7.4, 9.2, r)
+		return lerpf(5.4, 6.8, r)
+	if theme == 11:
+		# Tight institutional corridors interrupt a hierarchy of classrooms,
+		# laboratories, recreation halls, and rare storm-lit atria.
+		if root == Vector2i.ZERO: return 4.8
+		if n >= 4: return lerpf(7.4, 9.0, r)
+		if n >= 2: return lerpf(4.5, 5.6, r)
+		return lerpf(3.25, 4.15, r)
 	if n >= 4:
 		return 6.4
 	if n >= 2:
@@ -540,6 +584,8 @@ static func room_split(ws: int, root: Vector2i, theme: int) -> Array:
 	# A partition dropped into standing water reads as a mistake, and would cut
 	# the one continuous body of water the floor depends on.
 	if theme == 9:
+		return []
+	if theme == 10 or theme == 11:
 		return []
 	var r := r01(ws, root.x, root.y, 613)
 	# the asylum is mostly small rooms: split single cells aggressively
@@ -838,6 +884,8 @@ static func _fo_p(theme: int) -> float:
 		7: return 0.52   # a mall is one public interior interrupted by shopfronts
 		8: return 0.06   # a prison boundary is always legible
 		9: return 0.12   # compact pool rooms, with occasional broad connections
+		10: return 0.34  # monumental openings, but enough mass to frame the view
+		11: return 0.10  # enclosed campus rooms; openings remain deliberate
 	return 0.45
 
 
@@ -859,19 +907,23 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	var e := _edge(cell, dir)
 	var eh := _edge_hash(ws, e[0], e[1])
 	var wall := is_wall(ws, cell, dir, theme)
+	var ca := corridor(ws, cell)
+	var cb := corridor(ws, cell + DIRV[dir])
 	if corridor_link(ws, cell, dir):
 		# nothing interrupts a running corridor — not even a door frame
 		return {"wall": false, "full_open": true, "t": 6.0, "w": 4.0, "exit_sign": false}
 	# inside one room there is simply nothing there
-	if room_id(ws, cell) == room_id(ws, cell + DIRV[dir]):
+	# Monolith corridors are a real inserted circulation shell. A side that
+	# happens to share a room id still needs a cased connection through that
+	# shell; opening the whole twelve metres exposes the inaccessible flank.
+	if room_id(ws, cell) == room_id(ws, cell + DIRV[dir]) \
+			and not ((theme == 10 or theme == 11) and (ca != 0 or cb != 0)):
 		return {"wall": false, "full_open": true, "t": 6.0, "w": 4.0, "exit_sign": false}
 	var full_open := false
 	# A school corridor is enclosed by definition — you get doors off it, never
 	# a missing wall. Left to the rule below it never stays enclosed: its own
 	# two through-links already count as open edges, so every side edge trips
 	# the "already an open hall" test and the passage dissolves into the rooms.
-	var ca := corridor(ws, cell)
-	var cb := corridor(ws, cell + DIRV[dir])
 	var a_cor := ca != 0
 	var b_cor := cb != 0
 	var is_corr := a_cor or b_cor
@@ -960,6 +1012,16 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 		var m9 := w / 2.0 + 0.9
 		t = lerpf(m9, 12.0 - m9, hr01(eh, 3))
 		has_sign = false
+	elif theme == 10:
+		w = lerpf(3.4, 6.2, hr01(eh, 2))
+		var m10 := w / 2.0 + 0.9
+		t = lerpf(m10, 12.0 - m10, hr01(eh, 3))
+		has_sign = false
+	elif theme == 11:
+		w = lerpf(1.85, 3.15, hr01(eh, 2))
+		var m11 := w * 0.5 + 0.90
+		t = lerpf(m11, 12.0 - m11, hr01(eh, 3))
+		has_sign = false
 	# Narrow circulation spines need an architectural boundary wherever an edge
 	# is not their straight-through link. Letting it become fully open exposes
 	# the service/guest-room
@@ -968,7 +1030,7 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 	# the opening is centred on the lane so it cannot discharge into that hidden
 	# strip.  This is symmetric: both sides see the same corridor axis and edge.
 	if (theme == 0 or theme == 1 or theme == 2 or theme == 4 or theme == 5 \
-			or theme == 7 or theme == 8) and is_corr:
+			or theme == 7 or theme == 8 or theme == 10 or theme == 11) and is_corr:
 		full_open = false
 		var terminal := (ca == 1 and dir <= 1) or (ca == 2 and dir >= 2) \
 			or (cb == 1 and dir <= 1) or (cb == 2 and dir >= 2)
@@ -979,7 +1041,8 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 			if theme == 2:
 				w = minf(w, 4.8)
 			else:
-				w = 10.4 if theme == 4 or theme == 7 else minf(w, 2.4)
+				w = 10.4 if theme == 4 or theme == 7 else \
+					(minf(w, 3.2) if theme == 11 else minf(w, 2.4))
 	return {"wall": wall, "full_open": full_open, "t": t, "w": w, "exit_sign": has_sign}
 
 
@@ -1044,6 +1107,8 @@ static func portal(ws: int, cell: Vector2i, theme := 0) -> int:
 		7: ok = st == MALL_ATRIUM
 		8: ok = st == PRISON_GUARD
 		9: ok = st == POOL_DECK
+		10: ok = st == BRUTAL_HALL
+		11: ok = st == BLOOM_COMMONS
 	if not ok:
 		return -1
 	# Preserve Wander's cross-floor portal contract while keeping the minimalist
@@ -1076,7 +1141,8 @@ static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
 		or st == ANNEX_QUIET or st == AIR_HALL \
 		or st == ASY_DAYROOM or st == SCH_ADMIN \
 		or st == MALL_ATRIUM or st == PRISON_GUARD \
-		or st == POOL_DECK
+		or st == POOL_DECK or st == BRUTAL_HALL
+	eligible = eligible or st == BLOOM_COMMONS
 	if st == POOL_DECK and eligible:
 		# The facade stands on the dry deck at 1.42, which lifts its header
 		# display to 4.37 — only decks with headroom to spare may carry one.
@@ -1127,6 +1193,8 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 			7: return MALL_CORRIDOR
 			8: return PRISON_CORRIDOR
 			9: return POOL_CHANNEL
+			10: return BRUTAL_PASSAGE
+			11: return BLOOM_PASSAGE
 			_: return STYLE_HALLWAY
 	var root := room_id(ws, cell)
 	var n := room_size(ws, root)
@@ -1135,6 +1203,49 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 	var landmark := landmark_style(ws, root, theme)
 	if landmark >= 0:
 		return landmark
+	if theme == 11:
+		if root == Vector2i.ZERO:
+			return BLOOM_COMMONS
+		if n >= 4:
+			if zone == 0: return BLOOM_ATRIUM if r < 0.55 else BLOOM_GYM
+			if zone == 1: return BLOOM_GYM if r < 0.56 else BLOOM_ATRIUM
+			return BLOOM_STORM_APERTURE if r < 0.36 else BLOOM_ATRIUM
+		if n >= 2:
+			if zone == 0:
+				return BLOOM_COMMONS if r < 0.40 else \
+					(BLOOM_CLASSROOM if r < 0.68 else BLOOM_INCUBATOR)
+			if zone == 1:
+				return BLOOM_INCUBATOR if r < 0.40 else \
+					(BLOOM_NEST if r < 0.70 else BLOOM_HEART)
+			return BLOOM_HEART if r < 0.48 else \
+				(BLOOM_NEST if r < 0.78 else BLOOM_INCUBATOR)
+		if zone == 0:
+			if r < 0.34: return BLOOM_CLASSROOM
+			if r < 0.64: return BLOOM_COMMONS
+			if r < 0.86: return BLOOM_INCUBATOR
+			return BLOOM_NEST
+		if zone == 1:
+			if r < 0.30: return BLOOM_CLASSROOM
+			if r < 0.58: return BLOOM_INCUBATOR
+			if r < 0.84: return BLOOM_NEST
+			return BLOOM_HEART
+		if r < 0.34: return BLOOM_NEST
+		if r < 0.67: return BLOOM_HEART
+		return BLOOM_INCUBATOR
+	if theme == 10:
+		if root == Vector2i.ZERO:
+			return BRUTAL_ATRIUM
+		if n >= 4:
+			if zone == 0: return BRUTAL_ATRIUM if r < 0.58 else BRUTAL_GALLERY
+			if zone == 1: return BRUTAL_WATER_COURT if r < 0.62 else BRUTAL_RAMP
+			return BRUTAL_SANCTUM if r < 0.46 else BRUTAL_SERVICE
+		if n >= 2:
+			if zone == 0: return BRUTAL_GALLERY if r < 0.52 else BRUTAL_HALL
+			if zone == 1: return BRUTAL_WATER_COURT if r < 0.46 else BRUTAL_RAMP
+			return BRUTAL_SERVICE if r < 0.58 else BRUTAL_HALL
+		if zone == 0: return BRUTAL_HALL if r < 0.64 else BRUTAL_GALLERY
+		if zone == 1: return BRUTAL_WATER_COURT if r < 0.38 else BRUTAL_RAMP
+		return BRUTAL_SERVICE if r < 0.58 else BRUTAL_HALL
 	if theme == 9:
 		# The floor is water first and rooms second, so the open basin is the
 		# default everywhere and the named grammars are what interrupts it.

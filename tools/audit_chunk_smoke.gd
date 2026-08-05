@@ -13,7 +13,7 @@ extends SceneTree
 ##   godot --headless --path . --script tools/audit_chunk_smoke.gd -- \
 ##     [seed_attempts] [search_radius]
 
-const THEMES := [0, 1, 2, 4, 5, 6, 7, 8, 9]
+const THEMES := [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11]
 
 const EXPECTED_STYLES := {
 	0: [
@@ -103,6 +103,27 @@ const EXPECTED_STYLES := {
 		WorldGen.POOL_GALLERY,
 		WorldGen.POOL_CISTERN,
 	],
+	10: [
+		WorldGen.BRUTAL_PASSAGE,
+		WorldGen.BRUTAL_HALL,
+		WorldGen.BRUTAL_GALLERY,
+		WorldGen.BRUTAL_ATRIUM,
+		WorldGen.BRUTAL_WATER_COURT,
+		WorldGen.BRUTAL_RAMP,
+		WorldGen.BRUTAL_SERVICE,
+		WorldGen.BRUTAL_SANCTUM,
+	],
+	11: [
+		WorldGen.BLOOM_PASSAGE,
+		WorldGen.BLOOM_COMMONS,
+		WorldGen.BLOOM_CLASSROOM,
+		WorldGen.BLOOM_INCUBATOR,
+		WorldGen.BLOOM_NEST,
+		WorldGen.BLOOM_ATRIUM,
+		WorldGen.BLOOM_GYM,
+		WorldGen.BLOOM_HEART,
+		WorldGen.BLOOM_STORM_APERTURE,
+	],
 }
 
 const CORRIDOR_STYLES := {
@@ -115,6 +136,8 @@ const CORRIDOR_STYLES := {
 	7: WorldGen.MALL_CORRIDOR,
 	8: WorldGen.PRISON_CORRIDOR,
 	9: WorldGen.POOL_CHANNEL,
+	10: WorldGen.BRUTAL_PASSAGE,
+	11: WorldGen.BLOOM_PASSAGE,
 }
 
 const THEME_NAMES := {
@@ -127,6 +150,8 @@ const THEME_NAMES := {
 	7: "mall",
 	8: "prison",
 	9: "pool",
+	10: "monolith",
+	11: "bloom",
 }
 
 const STYLE_NAMES := {
@@ -191,6 +216,14 @@ const STYLE_NAMES := {
 	WorldGen.PRISON_INDUSTRY: "industry",
 	WorldGen.PRISON_VISITATION: "visitation",
 	WorldGen.PRISON_ROTUNDA: "rotunda",
+	WorldGen.BRUTAL_PASSAGE: "passage",
+	WorldGen.BRUTAL_HALL: "hall",
+	WorldGen.BRUTAL_GALLERY: "gallery",
+	WorldGen.BRUTAL_ATRIUM: "atrium",
+	WorldGen.BRUTAL_WATER_COURT: "water_court",
+	WorldGen.BRUTAL_RAMP: "ramp",
+	WorldGen.BRUTAL_SERVICE: "service",
+	WorldGen.BRUTAL_SANCTUM: "sanctum",
 	WorldGen.POOL_BASIN: "basin",
 	WorldGen.POOL_CHANNEL: "channel",
 	WorldGen.POOL_DECK: "deck",
@@ -199,6 +232,15 @@ const STYLE_NAMES := {
 	WorldGen.POOL_STAIRS: "stairs",
 	WorldGen.POOL_GALLERY: "gallery",
 	WorldGen.POOL_CISTERN: "cistern",
+	WorldGen.BLOOM_PASSAGE: "passage",
+	WorldGen.BLOOM_COMMONS: "commons",
+	WorldGen.BLOOM_CLASSROOM: "classroom",
+	WorldGen.BLOOM_INCUBATOR: "incubator",
+	WorldGen.BLOOM_NEST: "nest",
+	WorldGen.BLOOM_ATRIUM: "atrium",
+	WorldGen.BLOOM_GYM: "gym",
+	WorldGen.BLOOM_HEART: "heart",
+	WorldGen.BLOOM_STORM_APERTURE: "storm_aperture",
 }
 
 const DEFAULT_SEED_ATTEMPTS := 10

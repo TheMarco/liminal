@@ -1,6 +1,8 @@
 extends SceneTree
 ## Pool Rooms basin-shape contract. Rounded corner decks are occasional
-## Basin-only variants; wet chunks must not contain pier geometry.
+## Basin-only variants. Piers in wet cells are part of the authored look
+## (POOL_BASIN is "open water under a grid of tiled piers" by definition), so
+## this audit checks water/coping/ladder geometry, never pier presence.
 ##
 ## Run: godot --headless --path . \
 ##   --script tools/audit_pool_basins.gd -- [seeds]
@@ -42,7 +44,6 @@ func _init() -> void:
 					connected_non_channel_count += 1
 				_check_ladder_volume(chunk, failures, si, cell, style)
 				_check_coping_flush(chunk, failures, si, cell)
-				_check_wet_space_piers(chunk, failures, si, cell, style)
 				_check_jacuzzis(chunk, failures, si, cell)
 				if style != WorldGen.POOL_BASIN:
 					chunk.free()
@@ -229,19 +230,6 @@ func _collect_nodes_with_meta(node: Node, meta_name: String,
 		_collect_nodes_with_meta(child, meta_name, found)
 
 
-func _check_wet_space_piers(chunk: Chunk, failures: Array[String], si: int,
-		cell: Vector2i, style: int) -> void:
-	if style not in [WorldGen.POOL_BASIN, WorldGen.POOL_CHANNEL,
-			WorldGen.POOL_STAIRS, WorldGen.POOL_CISTERN]:
-		return
-	var piers := _nodes_with_meta(chunk, "pool_pier")
-	var islands := _nodes_with_meta(chunk, "pool_rounded_pier_island")
-	if not piers.is_empty() or not islands.is_empty():
-		failures.append(
-			"seed %d cell %s style %d: wet space contains %d pool piers and %d rounded pier islands" % [
-				si, cell, style, piers.size(), islands.size()])
-
-
 func _check_jacuzzis(chunk: Chunk, failures: Array[String], si: int,
 		cell: Vector2i) -> void:
 	for jacuzzi in _nodes_with_meta(chunk, "pool_jacuzzi"):
@@ -320,12 +308,17 @@ func _check_water_layout(chunk: Chunk, failures: Array[String], si: int,
 			3: reaches = center.y - size.y * 0.5 <= EPS
 		if not reaches:
 			failures.append("seed %d cell %s: water link dir %d does not reach cell edge" % [si, cell, dir])
-	if not connected and (size.x > 7.5 + EPS or size.y > 7.5 + EPS):
+	# The compact-basin shape rules never applied to channels; they used to be
+	# skipped via the unconditional `connected` flag. Now that a sealed lane
+	# honestly reports not-connected, exempt the style explicitly instead.
+	if not connected and style != WorldGen.POOL_CHANNEL \
+			and (size.x > 7.5 + EPS or size.y > 7.5 + EPS):
 		failures.append("seed %d cell %s: basin footprint %.2fx%.2f exceeds compact limit" % [si, cell, size.x, size.y])
 	if style == WorldGen.POOL_CHANNEL \
 			and size.x >= chunk.S - EPS and size.y >= chunk.S - EPS:
 		failures.append("seed %d cell %s: channel spans both axes" % [si, cell])
-	if not connected and _meshes_with_meta(chunk, "pool_basin_deck").is_empty():
+	if not connected and style != WorldGen.POOL_CHANNEL \
+			and _meshes_with_meta(chunk, "pool_basin_deck").is_empty():
 		failures.append("seed %d cell %s: compact basin has no deck pieces" % [si, cell])
 
 

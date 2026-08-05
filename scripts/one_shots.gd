@@ -4,6 +4,7 @@ extends Node3D
 ## random position around the player.
 
 var player: Node3D
+var horror_director: HorrorDirector
 
 var _t := 20.0
 var _p3d: AudioStreamPlayer3D
@@ -21,6 +22,9 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	_t -= dt
 	if _t > 0.0 or player == null or not player.is_inside_tree():
+		return
+	if horror_director != null and not horror_director.try_start_ambient(2.0):
+		_t = randf_range(4.0, 9.0)
 		return
 	_t = randf_range(18.0, 50.0)
 	var ang := randf() * TAU

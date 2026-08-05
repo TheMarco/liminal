@@ -92,11 +92,16 @@ func _run() -> void:
 	root.add_child(descent_title)
 	await process_frame
 	var selected: Array[bool] = []
+	var entries: Array[int] = []
 	descent_title.mode_selected.connect(
 		func(value: bool): selected.append(value))
+	descent_title.descent_requested.connect(
+		func(value: int): entries.append(value))
 	descent_title._select_descent()
 	_expect(selected == [true],
 		"Descent selection did not emit mode_selected(true)")
+	_expect(entries == [TitleScreen.DescentEntry.NEW],
+		"first Descent did not request a new building")
 	_expect(_only_page_visible(descent_title, TitleScreen.Page.DESCENT),
 		"Descent selection did not open its rule briefing")
 	descent_title.set_descent_ready()
@@ -104,6 +109,41 @@ func _run() -> void:
 		"PRESS  SPACE  TO  DESCEND"),
 		"Descent readiness prompt is missing")
 	descent_title.free()
+
+	var continue_title := TitleScreen.new()
+	continue_title.configure_descent_progress(true, 6, "the asylum")
+	root.add_child(continue_title)
+	await process_frame
+	var progress_text := _page_text(continue_title, TitleScreen.Page.MAIN)
+	for required in ["CONTINUE", "FLOOR 07", "ASYLUM", "RESTART DESCENT",
+			"NEW DESCENT"]:
+		_expect(progress_text.contains(required),
+			"saved-run title is missing %s" % required)
+	var continue_entries: Array[int] = []
+	continue_title.descent_requested.connect(
+		func(value: int): continue_entries.append(value))
+	continue_title._input(_key(KEY_ENTER))
+	_expect(continue_entries == [TitleScreen.DescentEntry.CONTINUE],
+		"Enter did not select Continue for a saved run")
+	continue_title.set_descent_ready()
+	_expect(_page_text(continue_title, TitleScreen.Page.DESCENT).contains(
+		"PRESS  SPACE  TO  CONTINUE"),
+		"Continue readiness prompt is missing")
+	continue_title.free()
+
+	for request in [[KEY_R, TitleScreen.DescentEntry.RESTART],
+			[KEY_N, TitleScreen.DescentEntry.NEW]]:
+		var action_title := TitleScreen.new()
+		action_title.configure_descent_progress(true, 6, "the asylum")
+		root.add_child(action_title)
+		await process_frame
+		var action_entries: Array[int] = []
+		action_title.descent_requested.connect(
+			func(value: int): action_entries.append(value))
+		action_title._input(_key(request[0]))
+		_expect(action_entries == [request[1]],
+			"%s did not request the expected saved-run action" % request[0])
+		action_title.free()
 
 	var wander_title := TitleScreen.new()
 	root.add_child(wander_title)

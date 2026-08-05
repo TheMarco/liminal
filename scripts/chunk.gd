@@ -8,7 +8,12 @@ extends Node3D
 ## photo textures and models (ambientCG / Poly Haven) instead of pure math.
 ## Theme 6: a sealed school. Theme 7: an abandoned shopping mall.
 ## Theme 8: a decaying island prison.
+## Theme 9: the flooded Poolrooms. Theme 10: the concrete Monolith.
+## Theme 11: the organic civic nightmare of the Bloom.
 ## All geometry is local; the ChunkManager places the node at the cell origin.
+
+const CHARGING_STATION_SCRIPT := preload("res://scripts/charging_station.gd")
+const VHS_RITUAL_SCRIPT := preload("res://scripts/vhs_ritual.gd")
 
 const VEGAS_LEVEL_BUILDER = preload("res://scripts/levels/vegas_level_builder.gd")
 const OFFICE_LEVEL_BUILDER = preload("res://scripts/levels/office_level_builder.gd")
@@ -19,6 +24,8 @@ const SCHOOL_LEVEL_BUILDER = preload("res://scripts/levels/school_level_builder.
 const MALL_LEVEL_BUILDER = preload("res://scripts/levels/mall_level_builder.gd")
 const PRISON_LEVEL_BUILDER = preload("res://scripts/levels/prison_level_builder.gd")
 const POOL_LEVEL_BUILDER = preload("res://scripts/levels/pool_level_builder.gd")
+const BRUTALIST_LEVEL_BUILDER = preload("res://scripts/levels/brutalist_level_builder.gd")
+const BLOOM_LEVEL_BUILDER = preload("res://scripts/levels/bloom_level_builder.gd")
 const BASE_LEVEL_BUILDER = preload("res://scripts/levels/chunk_level_builder.gd")
 
 ## theme id -> level builder. One place to register a theme's construction,
@@ -35,6 +42,8 @@ const LEVEL_BUILDERS := {
 	7: MALL_LEVEL_BUILDER,
 	8: PRISON_LEVEL_BUILDER,
 	9: POOL_LEVEL_BUILDER,
+	10: BRUTALIST_LEVEL_BUILDER,
+	11: BLOOM_LEVEL_BUILDER,
 }
 
 const S := 12.0
@@ -78,10 +87,14 @@ const HPRISON := 3.5 # prison gallery height
 ## it — becomes a head-height beam across every doorway into the lane. The
 ## office default this used to inherit (3.0) did exactly that.
 const HPOOL := 4.1
+const HBRUTAL := 5.8
+const HBLOOM := 3.2
 const SCH_BAND := 1.42   # height of the red line that runs the whole school
 const T := 0.15
 const DOOR_TOP := 2.25
 const AIR_DOOR := 3.15   # airport portal head height
+const BRUTAL_DOOR_TOP := 3.15 # monumental portal head; casing must match the cut
+const BLOOM_DOOR_TOP := 2.55
 const DOOR_CLEAR_DEPTH := 3.6
 const DOOR_CLEAR_PAD := 0.5
 
@@ -119,7 +132,7 @@ const SLOT_MACHINE_PATH := "res://models/cc_by/slot_machine/slot_machine.glb"
 const SLOT_MACHINE_SCALE := 1.30
 const SLOT_MACHINE_FLOOR_OFFSET := 0.548386
 const PRISON_BUNK_PATH := \
-	"res://models/cc_by_nc/prison_bunk_bed/prison_bunk_bed.glb"
+	"res://models/cc_by/bunk_bed/bunk_bed.glb"
 const PRISON_TOILET_PATH := \
 	"res://models/cc_by/prison_toilet/prison_toilet.glb"
 const PRISON_DOOR_OLD_PATH := \
@@ -363,10 +376,12 @@ const SCH_CHEMISTRY_COUNTER_POINTS := [
 	Vector3(-1.90, 0.864, 1.04),
 ]
 
-## Noncommercial, like the mall fascias. Every use runs through
-## `_office_desk_phone`, so this dependency lifts out in one edit too.
-const OFFICE_PHONE_PATH := "res://models/cc_by_nc/office_phone/office_phone.glb"
-const OFFICE_PHONE_CENTRE := Vector3(-0.0703, 0.0039, 0.0840)
+## CC BY replacement for the former noncommercial desk phone. The downloaded
+## scene is authored in large units; these measured bounds restore a compact
+## 0.31 x 0.16 x 0.39m phone on the desk.
+const OFFICE_PHONE_PATH := "res://models/cc_by/office_phone/office_phone.glb"
+const OFFICE_PHONE_SCALE := 0.025
+const OFFICE_PHONE_CENTRE := Vector3(0.02702, -0.0063, -0.88795)
 
 # --- authored replacements for generated furniture ---------------------------
 #
@@ -470,9 +485,8 @@ const PRISON_WALL_PHONE_PATH := \
 const PRISON_WALL_PHONE_SCALE := 0.01025
 const PRISON_WALL_PHONE_CENTRE := Vector3(13.5224, -18.2725, 0.0)
 
-## Noncommercial, like the mall fascias and the office phone. Reached through
-## exactly one function — `_sch_trolley` — so the dependency lifts out in a
-## single edit.
+## CC BY replacement for the former noncommercial school cart. Its source is
+## 7.75 units high, so a 0.16 scale yields a realistic 1.24m trolley.
 ##
 ## Two authored jetways have been measured for `_air_jetway` and neither
 ## shipped. The apron is a sealed 2.14m diorama strip that the docked aircraft
@@ -482,9 +496,9 @@ const PRISON_WALL_PHONE_CENTRE := Vector3(13.5224, -18.2725, 0.0)
 ## 1m across and tuned to meet a fuselage, which is what this space actually
 ## needs; a replacement has to be authored as a shallow facade, not a bridge.
 const SCH_CLEANING_CART_PATH := \
-	"res://models/cc_by_nc/cleaning_cart/cleaning_cart.glb"
-const SCH_CLEANING_CART_SCALE := 1.0
-const SCH_CLEANING_CART_CENTRE := Vector3(0.0502, -0.0002, -0.0109)
+	"res://models/cc_by/cleaning_cart/cleaning_cart.glb"
+const SCH_CLEANING_CART_SCALE := 0.16
+const SCH_CLEANING_CART_CENTRE := Vector3(0.0, 0.000065, -0.831794)
 
 ## Painted storefront fascias cropped from a CC BY-NC source. Every use of these
 ## runs through `_mall_unit_sign`, so the noncommercial dependency can be lifted
@@ -733,6 +747,11 @@ const POOL_JACUZZI_SCALE := 0.0125
 const POOL_JACUZZI_CENTRE := Vector3(1.8269, -43.2387, 25.0056)
 const POOL_LIGHT_PATH := "res://models/cc_by/pool_light/pool_light.glb"
 const POOL_LIGHT_SCALE := 0.045
+const BRUTAL_LIGHT_PATH := \
+	"res://models/cc_by/fluorescent_light_fixtures/fluorescent_light_fixtures.glb"
+const BLOOM_ROOT_PATH := "res://models/cc0/pine_roots/pine_roots.gltf"
+const BLOOM_VINES_PATH := "res://models/cc_by/modular_vines/modular_vines.glb"
+const BLOOM_FLESH_BLOB_PATH := "res://models/cc_by/flesh_blob/flesh_blob.glb"
 const POOL_LADDER_SCALE := 1.0
 const POOL_BUOY_PATH := "res://models/cc_by/pool_buoy/pool_buoy.glb"
 const POOL_BUOY_TINTS := [
@@ -758,10 +777,18 @@ var room_n := 1                # how many cells the room spans
 var is_room_anchor := false    # only the anchor cell furnishes the room
 var doorway_props_removed := 0 # exposed for the generated-doorway audit
 var descent := false
+var descent_topology: DescentTopology
 var descent_target := false
 var descent_target_wall := -1
 var descent_final := false
 var descent_floor_idx := 0
+## Whether this cell hosts the floor's objective altar. The target itself on
+## most floors; on the remote-ritual floors it is a route cell short of the
+## lift, and the target chunk builds its car without a television.
+var descent_ritual_here := false
+## True everywhere on a floor whose altar is remote — the lift's refusal has
+## to say the tape is not in the room the player is standing in.
+var descent_ritual_remote := false
 ## The arrival room — the car the player rides in on. A separate authored cell
 ## from the objective, and never the same one.
 var descent_arrival := false
@@ -772,6 +799,21 @@ var descent_arrival_used := false
 var descent_lift_called := false
 var descent_lift_wait := 0.0
 var descent_lift_open := false
+## Whether this floor's tape has already been watched, mirrored from the run
+## like the lift state. The lift refuses an unwatched player.
+var descent_tape_watched := false
+## The run's base seed; the session-wide tape deal is keyed on it.
+var descent_base_seed := 1
+var optional_vhs := false
+var optional_vhs_key := ""
+## This cell's lattice station is the run's one dead unit, and whether it has
+## already sprung. The objective room's own station is never the dead one.
+var descent_broken_station := false
+var descent_broken_station_tried := false
+## How far the next floor has crept into this one at the moment this chunk was
+## built, and which theme is doing the creeping.
+var bleed_amount := 0.0
+var bleed_theme := -1
 var anomaly_kind := -1
 ## Only used by the waiting-figure anomaly, which needs a hunt target.
 var anomaly_player: Player
@@ -856,6 +898,10 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(ANNEX_SHELVING_PATH)
 	paths.append(ANNEX_CHAIR_PATH)
 	paths.append(ANNEX_EXIT_DOOR_PATH)
+	paths.append(BRUTAL_LIGHT_PATH)
+	paths.append(BLOOM_ROOT_PATH)
+	paths.append(BLOOM_VINES_PATH)
+	paths.append(BLOOM_FLESH_BLOB_PATH)
 	paths.append(AIRPORT_SEATS_PATH)
 	paths.append(AIRPORT_DEPARTURE_BOARD_PATH)
 	paths.append(AIRPORT_LUGGAGE_PATH)
@@ -908,8 +954,13 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	cell = p_cell
 	theme = p_theme
 	descent = bool(p_config.get("descent", false))
+	descent_topology = p_config.get("topology", null) as DescentTopology
 	descent_target = bool(p_config.get("target", false))
 	descent_target_wall = int(p_config.get("target_wall", -1))
+	# Configs that predate the remote ritual (and the audits that hand-build
+	# target chunks) omit the key; the altar then defaults to the target room.
+	descent_ritual_here = bool(p_config.get("ritual_cell", descent_target))
+	descent_ritual_remote = bool(p_config.get("ritual_remote", false))
 	descent_final = bool(p_config.get("final", false))
 	descent_floor_idx = int(p_config.get("floor_idx", 0))
 	descent_arrival = bool(p_config.get("arrival", false))
@@ -918,6 +969,15 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	descent_lift_called = bool(p_config.get("lift_called", false))
 	descent_lift_wait = float(p_config.get("lift_wait", 0.0))
 	descent_lift_open = bool(p_config.get("lift_open", false))
+	descent_tape_watched = bool(p_config.get("tape_watched", false))
+	descent_base_seed = int(p_config.get("base_seed", 1))
+	optional_vhs = bool(p_config.get("optional_vhs", false))
+	optional_vhs_key = str(p_config.get("optional_vhs_key", ""))
+	descent_broken_station = bool(p_config.get("broken_station", false))
+	descent_broken_station_tried = bool(
+		p_config.get("broken_station_tried", false))
+	bleed_amount = float(p_config.get("bleed", 0.0))
+	bleed_theme = int(p_config.get("bleed_theme", -1))
 	anomaly_kind = int(p_config.get("anomaly", -1))
 	# The waiting-figure anomaly is a live figure, and a live figure is useless
 	# without the player it is hunting. It has to arrive with the config: the
@@ -951,12 +1011,391 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	else:
 		_build_lighting()
 		_build_props()
+	_build_optional_vhs_set()
+	_build_charging_station()
+	_build_bleed_dressing()
 	_build_interactions()
 	if anomaly_kind >= 0:
 		activate_anomaly(anomaly_kind)
 	if requested_blackout:
 		set_blackout(true)
 	_maybe_probe()
+
+
+## One station per 3x3 macro-cell, on a fixed lattice rather than a random
+## roll. A player is therefore normally within roughly 25m as the crow flies
+## and no unlucky seed can produce a charger desert.
+func _build_charging_station() -> void:
+	if descent_arrival:
+		return
+	if descent_target:
+		# The objective room is the ritual room: it always carries its own
+		# station, on the media wall, whatever the macro-cell lattice says.
+		if not descent_final:
+			_build_descent_target_station()
+		return
+	if not _is_charging_station_cell():
+		return
+	var candidates: Array[Vector3] = []
+	# Try the perimeter and then the interior. Twenty-five deterministic sites
+	# keep a dense authored room from silently deleting its macro-cell station.
+	for x in [2.0, 4.0, 6.0, 8.0, 10.0]:
+		for z in [2.0, 4.0, 6.0, 8.0, 10.0]:
+			candidates.append(Vector3(x, _floor_h(), z))
+	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 8801), candidates.size())
+	for i in candidates.size():
+		var at: Vector3 = candidates[(start + i) % candidates.size()]
+		if not _floor_spot_clear(at, 0.52, 1.8):
+			continue
+		var station := CHARGING_STATION_SCRIPT.new() as Node3D
+		station.position = at
+		station.rotation.y = float((start + i) % 4) * PI * 0.5
+		# Config-driven so the tree-less audits and streamed rebuilds agree:
+		# the run's one dead unit is dead from construction, and stays sprung.
+		# set() because the station variable is typed as its Node3D base.
+		station.set("broken", descent_broken_station)
+		station.set("broken_tried", descent_broken_station_tried)
+		station.set_meta("charging_station", true)
+		station.set_meta("station_cell", cell)
+		add_child(station)
+		return
+
+
+## What each theme leaves behind when it starts leaking upward: one signature
+## object, placed with the same authored-centre convention as its home floor.
+## `size` is the approximate collider footprint; zero means walk-through.
+const BLEED_PROPS := {
+	0: [SLOT_ALT_PATH, SLOT_ALT_SCALE, SLOT_ALT_CENTRE, Vector3(0.6, 1.8, 0.6)],
+	1: [OFFICE_WATER_COOLER_PATH, OFFICE_WATER_COOLER_SCALE,
+		OFFICE_WATER_COOLER_CENTRE, Vector3(0.42, 1.3, 0.42)],
+	2: [ANNEX_CHAIR_PATH, ANNEX_CHAIR_SCALE, ANNEX_CHAIR_CENTRE,
+		Vector3(0.55, 0.9, 0.55)],
+	4: [AIRPORT_LUGGAGE_PATH, AIRPORT_LUGGAGE_SCALE, Vector3.ZERO,
+		Vector3.ZERO],
+	5: [ASY_BED_PATH, ASY_BED_SCALE, ASY_BED_CENTRE, Vector3(1.0, 0.9, 2.0)],
+	6: [GYM_LOCKER_PATH, GYM_LOCKER_SCALE, GYM_LOCKER_CENTRE,
+		Vector3(0.5, 1.9, 0.5)],
+	7: [MALL_SHOPPING_CART_PATH, MALL_SHOPPING_CART_SCALE,
+		MALL_SHOPPING_CART_CENTRE, Vector3(0.6, 1.0, 1.0)],
+	9: [POOL_LOUNGE_CHAIR_PATH, POOL_LOUNGE_CHAIR_SCALE,
+		POOL_LOUNGE_CHAIR_CENTRE, Vector3(0.7, 0.8, 1.7)],
+}
+
+
+## Environmental bleed, at build time. As the run's ratchet rises, freshly
+## built or rebuilt cells of this floor carry objects that belong to the next
+## one — quietly wrong furniture first, and near the lift an unmistakable
+## intrusion. Streaming does the propagation for free: cells behind the player
+## rebuild bled, cells ahead were built cleaner.
+func _build_bleed_dressing() -> void:
+	if not descent or descent_target or descent_arrival:
+		return
+	if bleed_amount < 0.05 or bleed_theme < 0:
+		return
+	if WorldGen.r01(wseed, cell.x, cell.y, 6101) > bleed_amount * 0.55:
+		return
+	var count := 1
+	if bleed_amount > 0.7 and WorldGen.r01(wseed, cell.x, cell.y, 6103) < 0.5:
+		count = 2
+	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 6105), 25)
+	var placed := 0
+	for i in 25:
+		if placed >= count:
+			return
+		var lattice := (start + i) % 25
+		var at := Vector3(2.0 + float(lattice % 5) * 2.0, _floor_h(),
+			2.0 + float(lattice / 5) * 2.0)
+		if not _floor_spot_clear(at, 0.55, 1.9):
+			continue
+		var yaw := float(posmod(WorldGen.h(wseed, cell.x, cell.y,
+			6107 + placed), 8)) * PI * 0.25
+		_place_bleed_prop(at, yaw)
+		placed += 1
+
+
+func _place_bleed_prop(at: Vector3, yaw: float) -> void:
+	if BLEED_PROPS.has(bleed_theme):
+		var entry: Array = BLEED_PROPS[bleed_theme]
+		var centre: Vector3 = entry[2]
+		if bleed_theme == 4:
+			centre = AIRPORT_LUGGAGE_CENTRES[0]
+		var prop := _attributed_floor_prop(entry[0], at, yaw,
+			float(entry[1]), centre, "bleed_prop")
+		if prop == null:
+			return
+		prop.set_meta("bleed_prop", true)
+		var footprint: Vector3 = entry[3]
+		if footprint != Vector3.ZERO:
+			_collider_yaw_box(at + Vector3(0, footprint.y * 0.5, 0),
+				footprint, yaw)
+		return
+	# Themes without a portable authored prop intrude as raw matter instead.
+	var intrusion := Node3D.new()
+	intrusion.position = at
+	intrusion.rotation.y = yaw
+	intrusion.set_meta("bleed_prop", true)
+	add_child(intrusion)
+	if bleed_theme == 10:
+		# A concrete pier that belongs to the Monolith, run floor to ceiling.
+		var h := ceil_h - _floor_h()
+		_mbox(intrusion, Vector3(0, h * 0.5, 0), Vector3(0.82, h, 0.82),
+			Mats.brutal_structure())
+		_collider_yaw_box(at + Vector3(0, h * 0.5, 0),
+			Vector3(0.82, h, 0.82), yaw)
+	else:
+		# The Upside Down arrives as flesh: a low dark growth, warm to look
+		# at and wrong in every theme it appears in.
+		var blob := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.5
+		sphere.height = 0.62
+		blob.mesh = sphere
+		var flesh := StandardMaterial3D.new()
+		flesh.albedo_color = Color(0.20, 0.05, 0.06)
+		flesh.roughness = 0.55
+		blob.material_override = flesh
+		blob.position = Vector3(0, 0.18, 0)
+		blob.scale = Vector3(1.4, 0.55, 1.15)
+		intrusion.add_child(blob)
+
+
+## The car is an authored island built AFTER the theme's own dressing, which
+## cannot know about it — so a change machine or a shelf can end up standing
+## inside the shell. Sweep the car's footprint clean first: dressing pivots
+## and their colliders go, structure (the body's wall/floor slabs, lights,
+## the ritual, the station) stays.
+func _descent_clear_car_footprint(dir: int) -> void:
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var plane := (S - T / 2.0) if dir == 0 or dir == 2 else (T / 2.0)
+	var face := plane + n * (T / 2.0)
+	var near_face := face + n * 0.15
+	var far_face := face + n * 3.6
+	var lo: Vector2
+	var hi: Vector2
+	if dir < 2:
+		lo = Vector2(minf(near_face, far_face), S / 2.0 - 2.4)
+		hi = Vector2(maxf(near_face, far_face), S / 2.0 + 2.4)
+	else:
+		lo = Vector2(S / 2.0 - 2.4, minf(near_face, far_face))
+		hi = Vector2(S / 2.0 + 2.4, maxf(near_face, far_face))
+	for child in get_children():
+		var node := child as Node3D
+		if node == null or node == body or node is Light3D \
+				or node is GPUParticles3D \
+				or node.has_meta("descent_ritual") \
+				or node.has_meta("charging_station"):
+			continue
+		if node.position.x >= lo.x and node.position.x <= hi.x \
+				and node.position.z >= lo.y and node.position.z <= hi.y:
+			remove_child(node)
+			node.free()
+	for collider in body.get_children():
+		var shape := collider as Node3D
+		if shape == null or shape.position.y < 0.05 or shape.position.y > 2.5:
+			continue
+		if shape.position.x >= lo.x and shape.position.x <= hi.x \
+				and shape.position.z >= lo.y and shape.position.z <= hi.y:
+			body.remove_child(shape)
+			shape.free()
+
+
+## The ritual wall: the first solid edge that is not the lift's own wall,
+## walked clockwise from it. Deterministic, so the station pass and the
+## interaction pass agree without talking to each other.
+func _descent_ritual_wall() -> int:
+	for step in 3:
+		var dir := (descent_target_wall + 1 + step) % 4
+		if bool(_edge_info(cell, dir)["wall"]):
+			return dir
+	return (descent_target_wall + 2) % 4
+
+
+## Where along the ritual wall a piece stands, in local coordinates, with the
+## same facing convention as the interactive elevator facade.
+func _descent_wall_point(dir: int, along: float, out: float) -> Dictionary:
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var plane := (S - T / 2.0) if dir == 0 or dir == 2 else (T / 2.0)
+	var inner := plane + n * (T / 2.0)
+	if dir < 2:
+		return {
+			"pos": Vector3(inner + n * out, _floor_h(), along),
+			"yaw": -PI / 2.0 if dir == 0 else PI / 2.0,
+		}
+	return {
+		"pos": Vector3(along, _floor_h(), inner + n * out),
+		"yaw": PI if dir == 2 else 0.0,
+	}
+
+
+func _build_descent_target_station() -> void:
+	var dir := _descent_ritual_wall()
+	var spot := _descent_wall_point(dir, S / 2.0 - 2.4, 0.42)
+	var at: Vector3 = spot["pos"]
+	if not _floor_spot_clear(at, 0.52, 1.8):
+		# The authored room got in the way; fall back to the ordinary lattice
+		# scan so the ritual room can never be left without power.
+		for x in [2.0, 4.0, 6.0, 8.0, 10.0]:
+			for z in [2.0, 4.0, 6.0, 8.0, 10.0]:
+				var candidate := Vector3(x, _floor_h(), z)
+				if _floor_spot_clear(candidate, 0.52, 1.8):
+					at = candidate
+					break
+	var station := CHARGING_STATION_SCRIPT.new() as Node3D
+	station.position = at
+	station.rotation.y = float(spot["yaw"])
+	station.set_meta("charging_station", true)
+	station.set_meta("station_cell", cell)
+	add_child(station)
+
+
+## The media altar itself: table, CRT, VCR, on the ritual wall.
+func _descent_ritual_set() -> void:
+	var dir := _descent_ritual_wall()
+	var spot := _descent_wall_point(dir, S / 2.0 + 1.6, 0.34)
+	var ritual := VHS_RITUAL_SCRIPT.new() as Node3D
+	ritual.name = "DescentRitual"
+	ritual.world_seed = descent_base_seed
+	ritual.floor_idx = descent_floor_idx
+	ritual.home_cell = cell
+	ritual.setup_key = "floor:%d:objective" % descent_floor_idx
+	ritual.objective = true
+	ritual.already_watched = descent_tape_watched
+	ritual.position = spot["pos"]
+	ritual.rotation.y = float(spot["yaw"])
+	add_child(ritual)
+
+
+## Rare optional playback altar. Route selection happens in DescentRoute and
+## endless density in ChunkManager; this chunk only finds a physically honest
+## wall site that does not overlap furniture or a doorway approach.
+func _build_optional_vhs_set() -> void:
+	if not descent or not optional_vhs or optional_vhs_key.is_empty() \
+			or descent_target or descent_arrival:
+		return
+	var site := _pick_vhs_site()
+	if site.is_empty():
+		return
+	var set := VHS_RITUAL_SCRIPT.new() as Node3D
+	set.name = "OptionalVhs"
+	set.world_seed = descent_base_seed
+	set.floor_idx = descent_floor_idx
+	set.home_cell = cell
+	set.setup_key = optional_vhs_key
+	set.objective = false
+	set.position = site["at"]
+	set.rotation.y = float(site["yaw"])
+	set.set_meta("optional_vhs", true)
+	set.set_meta("optional_vhs_key", optional_vhs_key)
+	add_child(set)
+
+
+## The objective altar on the remote-ritual floors: the same set, the same
+## setup key and lift gate as when it stands beside the car — only the room is
+## different. Unlike an optional set, this one is not allowed to vanish, so an
+## impossibly dense room degrades to a forced interior placement rather than
+## to an unfinishable floor.
+func _build_remote_ritual_set() -> void:
+	if descent_final:
+		return
+	var site := _pick_vhs_site()
+	if site.is_empty():
+		site = {"at": Vector3(S / 2.0, _floor_h(), S / 2.0), "yaw": 0.0}
+	var ritual := VHS_RITUAL_SCRIPT.new() as Node3D
+	ritual.name = "DescentRitual"
+	ritual.world_seed = descent_base_seed
+	ritual.floor_idx = descent_floor_idx
+	ritual.home_cell = cell
+	ritual.setup_key = "floor:%d:objective" % descent_floor_idx
+	ritual.objective = true
+	ritual.already_watched = descent_tape_watched
+	ritual.position = site["at"]
+	ritual.rotation.y = float(site["yaw"])
+	add_child(ritual)
+
+
+## Deterministic site search shared by the optional sets and the remote
+## objective altar: perimeter wall sites first, then a freestanding interior
+## lattice, plus the Poolrooms' dry-island sampling.
+func _pick_vhs_site() -> Dictionary:
+	var sites: Array[Dictionary] = []
+	var alongs := [2.0, 3.6, 5.2, 6.8, 8.4, 10.0]
+	for dir in 4:
+		if not _edge_info(cell, dir)["wall"]:
+			continue
+		for along in alongs:
+			sites.append({
+				"at": _wall_pt(dir, float(along), 0.34, _floor_h()),
+				"yaw": _wall_facing(dir),
+			})
+	# Dense authored rooms sometimes occupy every perimeter site. A freestanding
+	# set deeper in the room is still legible—the table, screen glow and hiss do
+	# the work—and prevents a selected route encounter from silently vanishing.
+	for z in [2.0, 4.0, 6.0, 8.0, 10.0]:
+		for x in [2.0, 4.0, 6.0, 8.0, 10.0]:
+			var yaw_step := posmod(WorldGen.h(wseed, cell.x + int(x),
+				cell.y + int(z), 7393), 4)
+			sites.append({
+				"at": Vector3(x, _floor_h(), z),
+				"yaw": float(yaw_step) * PI * 0.5,
+			})
+	if theme == 9:
+		# Pool architecture is laid out as irregular dry islands rather than a
+		# conventional empty rectangle. Sample the same continuous interior its
+		# own lounge furniture uses instead of trusting only a square lattice.
+		for i in 64:
+			sites.append({
+				"at": Vector3(
+					1.5 + 9.0 * _r(7411 + i * 2), _floor_h(),
+					1.5 + 9.0 * _r(7412 + i * 2)),
+				"yaw": float(posmod(WorldGen.h(wseed, cell.x, cell.y,
+					7421 + i), 4)) * PI * 0.5,
+			})
+	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 7391),
+		sites.size())
+	for i in sites.size():
+		var site: Dictionary = sites[(start + i) % sites.size()]
+		var yaw := float(site["yaw"])
+		var at: Vector3 = site["at"]
+		var clear := _floor_spot_clear(at, 1.05, 1.2) if theme == 9 \
+			else _floor_box_clear(at, yaw, 1.95, 0.82, 1.2)
+		if not clear:
+			continue
+		if _optional_vhs_hits_doorway(at, yaw):
+			continue
+		return site
+	return {}
+
+
+func _optional_vhs_hits_doorway(at: Vector3, yaw: float) -> bool:
+	var candidate := plan_box(at, yaw, 1.95, 0.82, 1.2)
+	for zone in _doorway_clearance_rects():
+		var centre := zone.position + zone.size * 0.5
+		var doorway := plan_box(Vector3(centre.x, at.y, centre.y), 0.0,
+			zone.size.x, zone.size.y, 1.2)
+		if plan_box_overlap(candidate, doorway) > 0.0:
+			return true
+	return false
+
+
+func _is_charging_station_cell() -> bool:
+	if theme != 9:
+		return posmod(cell.x, 3) == 1 and posmod(cell.y, 3) == 1
+	# Pool stations must be on a raised dry deck, never at the bottom of a
+	# basin. Pick exactly one dry cell in each macro-cell by stable hash.
+	var origin := Vector2i(floori(float(cell.x) / 3.0) * 3,
+		floori(float(cell.y) / 3.0) * 3)
+	var chosen := Vector2i(1 << 20, 1 << 20)
+	var best := 0x7fffffff
+	for x in 3:
+		for y in 3:
+			var candidate := origin + Vector2i(x, y)
+			if not pool_style_dry(WorldGen.cell_style(wseed, candidate, theme)):
+				continue
+			var score := WorldGen.h(wseed, candidate.x, candidate.y, 8802) & 0x7fffffff
+			if score < best:
+				best = score
+				chosen = candidate
+	return cell == chosen
 
 
 ## Real reflections for the rooms with mirror-like surfaces (marble, gold,
@@ -1022,7 +1461,8 @@ static func cell_ceil_h(ws: int, c: Vector2i, p_theme: int) -> float:
 	if WorldGen.corridor(ws, c) != 0:
 		return 3.5 if p_theme == 4 else (HASY if p_theme == 5 else \
 			(HSCH if p_theme == 6 else (HMALL if p_theme == 7 else \
-			(HPRISON if p_theme == 8 else (HPOOL if p_theme == 9 else HOFF)))))
+			(HPRISON if p_theme == 8 else (HPOOL if p_theme == 9 else \
+			(HBRUTAL if p_theme == 10 else (HBLOOM if p_theme == 11 else HOFF)))))))
 	return WorldGen.room_height(ws, WorldGen.room_id(ws, c), p_theme)
 
 
@@ -1483,6 +1923,12 @@ func _mrbox(parent: Node3D, pos: Vector3, size: Vector3, mat: Material, r := 0.0
 # --- structure ---------------------------------------------------------------
 
 func _build_floor_ceiling() -> void:
+	if theme == 11:
+		_level_builder._bloom_floor_ceiling()
+		return
+	if theme == 10:
+		_level_builder._brutalist_floor_ceiling()
+		return
 	if theme == 2:
 		_level_builder._annex_floor_ceiling()
 		return
@@ -1568,7 +2014,7 @@ func _build_floor_ceiling() -> void:
 func _build_walls() -> void:
 	var wall_t := ANNEX_WALL_T if theme == 2 else (POOL_WALL_T if theme == 9 else T)
 	for dir in 4:
-		var info := WorldGen.edge_info(wseed, cell, dir, theme)
+		var info := _edge_info(cell, dir)
 		# Annex and pool shared boundaries have one canonical east/south owner
 		# and sit on the actual boundary plane. Previously both neighbouring
 		# chunks built an inward half, producing a compound double wall — in
@@ -1618,9 +2064,17 @@ func _build_walls() -> void:
 					var head: float = DOOR_TOP
 					if theme == 4 or theme == 7:
 						head = AIR_DOOR
+					elif theme == 10:
+						head = BRUTAL_DOOR_TOP
+					elif theme == 11:
+						head = BLOOM_DOOR_TOP
 					_wall_seg(dir, plane, a, b, head, wtop)
 				_door_casing(dir, plane, a, b)
-				_maybe_swing_door(dir, plane, a, b)
+				# The blackout opening may be decorative or secretly helpful, but
+				# its construction is identical: an impossible raw doorway, never a
+				# conventional hinged door that can spawn shut.
+				if not bool(info.get("runtime_shortcut", false)):
+					_maybe_swing_door(dir, plane, a, b)
 			if (theme == 1 or theme == 2) \
 					and (theme != 2 or owns_annex_wall) \
 					and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
@@ -1639,6 +2093,12 @@ func _build_walls() -> void:
 		# L-turn there, after both incident straight runs have been shortened
 		# to their tangent points by _pool_boundary_rule.
 		_pool_rounded_corner()
+
+
+func _edge_info(at: Vector2i, dir: int) -> Dictionary:
+	if descent_topology != null:
+		return descent_topology.edge_info(at, dir)
+	return WorldGen.edge_info(wseed, at, dir, theme)
 
 
 func _pool_shaped_doorway(dir: int, plane: float,
@@ -1803,7 +2263,9 @@ func _open_edge_fascia(dir: int, plane: float) -> void:
 func _maybe_swing_door(dir: int, plane: float, a: float, b: float) -> void:
 	if dir != 0 and dir != 2:
 		return
-	if theme == 2 or theme == 4 or theme == 7 or theme == 9 or b - a > 2.25:
+	if theme == 2 or theme == 4 or theme == 7 or theme == 9 or theme == 10 \
+			or theme == 11 \
+			or b - a > 2.25:
 		return
 	if WorldGen.h(wseed, cell.x, cell.y, 1760 + dir + theme * 11) % 100 >= 14:
 		return
@@ -2043,7 +2505,7 @@ func _annex_resolved_wall_treatment(dir: int) -> Dictionary:
 ## least 0.55m of wall beside each jamb, so any non-full-open edge has solid
 ## material at both cell corners.
 func _edge_solid(at: Vector2i, dir: int) -> bool:
-	return not bool(WorldGen.edge_info(wseed, at, dir, theme)["full_open"])
+	return not bool(_edge_info(at, dir)["full_open"])
 
 
 ## Resolve one boundary endpoint of a pool wall.  A true L-turn retracts BOTH
@@ -2388,6 +2850,10 @@ func _wall_material() -> Material:
 			else Mats.prison_wall()
 	if theme == 9:
 		return Mats.pool_wall_tile()
+	if theme == 10:
+		return Mats.brutal_wall()
+	if theme == 11:
+		return Mats.bloom_wall()
 	return Mats.wallpaper_variant(_finish_variant())
 
 
@@ -2708,6 +3174,52 @@ func _annex_wrap_local_baseboards(parent: Node3D, width: float,
 func _door_casing(dir: int, plane: float, a: float, b: float) -> void:
 	# Pool openings are cut straight through tile — no frame, no threshold.
 	if theme == 9:
+		return
+	if theme == 10:
+		# The Monolith cuts a 3.15m portal. Its old generic casing stopped at
+		# DOOR_TOP (2.25m), leaving a conspicuous 90cm strip of naked opening
+		# above the lintel. Build one substantial cast-concrete surround to the
+		# exact same datum as the wall cut.
+		var cm := Mats.brutal_structure()
+		var top := BRUTAL_DOOR_TOP
+		var jamb := 0.30
+		var depth := T + 0.28
+		var pieces: Array[MeshInstance3D] = []
+		if dir < 2:
+			pieces.append(_box(Vector3(plane, top * 0.5, a),
+				Vector3(depth, top, jamb), cm, false))
+			pieces.append(_box(Vector3(plane, top * 0.5, b),
+				Vector3(depth, top, jamb), cm, false))
+			pieces.append(_box(Vector3(plane, top + jamb * 0.5, (a + b) * 0.5),
+				Vector3(depth, jamb, b - a + jamb), cm, false))
+		else:
+			pieces.append(_box(Vector3(a, top * 0.5, plane),
+				Vector3(jamb, top, depth), cm, false))
+			pieces.append(_box(Vector3(b, top * 0.5, plane),
+				Vector3(jamb, top, depth), cm, false))
+			pieces.append(_box(Vector3((a + b) * 0.5, top + jamb * 0.5, plane),
+				Vector3(b - a + jamb, jamb, depth), cm, false))
+		for piece in pieces:
+			piece.set_meta("brutal_door_casing", true)
+			piece.set_meta("brutal_door_head", top)
+		return
+	if theme == 11:
+		# A clean black-steel frame remains a reliable route cue beneath the
+		# overgrowth. The cut and surround share the same 2.55m head datum.
+		var cm := Mats.bloom_metal()
+		var top := BLOOM_DOOR_TOP
+		var jamb := 0.12
+		var depth := T + 0.16
+		if dir < 2:
+			_box(Vector3(plane, top * 0.5, a), Vector3(depth, top, jamb), cm, false)
+			_box(Vector3(plane, top * 0.5, b), Vector3(depth, top, jamb), cm, false)
+			_box(Vector3(plane, top + jamb * 0.5, (a + b) * 0.5),
+				Vector3(depth, jamb, b - a + jamb), cm, false)
+		else:
+			_box(Vector3(a, top * 0.5, plane), Vector3(jamb, top, depth), cm, false)
+			_box(Vector3(b, top * 0.5, plane), Vector3(jamb, top, depth), cm, false)
+			_box(Vector3((a + b) * 0.5, top + jamb * 0.5, plane),
+				Vector3(b - a + jamb, jamb, depth), cm, false)
 		return
 	if theme == 7 or theme == 8:
 		var cm: Material = Mats.mall_trim() if theme == 7 else Mats.prison_iron()
@@ -3145,6 +3657,12 @@ func _wall_decor(dir: int, plane: float) -> void:
 	# would immediately make it a building with a purpose.
 	if theme == 9:
 		return
+	if theme == 10:
+		_level_builder._brutalist_wall_detail(dir, plane)
+		return
+	if theme == 11:
+		_level_builder._bloom_wall_growth(dir, plane)
+		return
 	if theme == 6 and dir == _school_chalkboard_wall():
 		return
 	var r := _r(40 + dir)
@@ -3403,6 +3921,12 @@ func _wall_clock(dir: int, plane: float) -> void:
 # --- lighting ----------------------------------------------------------------
 
 func _build_lighting() -> void:
+	if theme == 11:
+		_level_builder._bloom_lighting()
+		return
+	if theme == 10:
+		_level_builder._brutalist_lighting()
+		return
 	if theme == 9:
 		_level_builder._pool_lighting()
 		return
@@ -3530,6 +4054,15 @@ func _build_props() -> void:
 	# as bare box rooms.
 	if not is_room_anchor and style == WorldGen.PRISON_CELLBLOCK and not descent_target:
 		_level_builder._prison_cellblock()
+	# Monolith tunnels are cell-local circulation shells. A corridor cell can
+	# belong to a merged room whose anchor is elsewhere; skipping it here would
+	# widen that one twelve-metre segment back into an empty hall.
+	if not is_room_anchor and style == WorldGen.BRUTAL_PASSAGE and not descent_target:
+		_level_builder._brutal_passage()
+	# The Bloom passage is also a cell-local inserted shell. Every streamed
+	# segment builds even when a merged room's furnishing anchor is elsewhere.
+	if not is_room_anchor and style == WorldGen.BLOOM_PASSAGE and not descent_target:
+		_level_builder._bloom_passage()
 	# one room is furnished once, by its anchor cell, around its true centre
 	if not is_room_anchor:
 		return
@@ -3568,7 +4101,8 @@ func _build_props() -> void:
 			or style == WorldGen.MALL_ATRIUM or style == WorldGen.MALL_CINEMA \
 			or style == WorldGen.PRISON_CELLBLOCK or style == WorldGen.PRISON_CELLS \
 			or style == WorldGen.PRISON_SHOWER or style == WorldGen.PRISON_GUARD \
-			or style == WorldGen.PRISON_VISITATION or style == WorldGen.PRISON_INDUSTRY:
+			or style == WorldGen.PRISON_VISITATION or style == WorldGen.PRISON_INDUSTRY \
+			or style == WorldGen.BRUTAL_PASSAGE or style == WorldGen.BLOOM_PASSAGE:
 		off = Vector3.ZERO
 	var n0 := get_child_count()
 	var b0 := body.get_child_count()
@@ -3775,6 +4309,40 @@ func _build_props() -> void:
 			_level_builder._pool_gallery_room()
 		WorldGen.POOL_CISTERN:
 			_level_builder._pool_cistern_room()
+		WorldGen.BRUTAL_PASSAGE:
+			_level_builder._brutal_passage()
+		WorldGen.BRUTAL_HALL:
+			_level_builder._brutal_hall()
+		WorldGen.BRUTAL_GALLERY:
+			_level_builder._brutal_gallery()
+		WorldGen.BRUTAL_ATRIUM:
+			_level_builder._brutal_atrium()
+		WorldGen.BRUTAL_WATER_COURT:
+			_level_builder._brutal_water_court()
+		WorldGen.BRUTAL_RAMP:
+			_level_builder._brutal_ramp()
+		WorldGen.BRUTAL_SERVICE:
+			_level_builder._brutal_service()
+		WorldGen.BRUTAL_SANCTUM:
+			_level_builder._brutal_sanctum()
+		WorldGen.BLOOM_PASSAGE:
+			_level_builder._bloom_passage()
+		WorldGen.BLOOM_COMMONS:
+			_level_builder._bloom_commons()
+		WorldGen.BLOOM_CLASSROOM:
+			_level_builder._bloom_classroom()
+		WorldGen.BLOOM_INCUBATOR:
+			_level_builder._bloom_incubator()
+		WorldGen.BLOOM_NEST:
+			_level_builder._bloom_nest()
+		WorldGen.BLOOM_ATRIUM:
+			_level_builder._bloom_atrium()
+		WorldGen.BLOOM_GYM:
+			_level_builder._bloom_gym()
+		WorldGen.BLOOM_HEART:
+			_level_builder._bloom_heart()
+		WorldGen.BLOOM_STORM_APERTURE:
+			_level_builder._bloom_storm_aperture()
 	if theme == 2:
 		_level_builder._annex_lived_in_dressing()
 	if theme == 9:
@@ -3813,7 +4381,7 @@ func _doorway_clearance_rects() -> Array[Rect2]:
 		var base := Vector2(float(member.x - cell.x) * S,
 			float(member.y - cell.y) * S)
 		for dir in 4:
-			var info := WorldGen.edge_info(wseed, member, dir, theme)
+			var info := _edge_info(member, dir)
 			if info["wall"] or info["full_open"]:
 				continue
 			var width := float(info["w"]) + DOOR_CLEAR_PAD * 2.0
@@ -3828,6 +4396,37 @@ func _doorway_clearance_rects() -> Array[Rect2]:
 				2:
 					zones.append(Rect2(base.x + along,
 						base.y + S - DOOR_CLEAR_DEPTH, width, DOOR_CLEAR_DEPTH + 0.15))
+				3:
+					zones.append(Rect2(base.x + along, base.y - 0.15,
+						width, DOOR_CLEAR_DEPTH + 0.15))
+	return zones
+
+
+## Pool basin decks are architecture rather than furniture, so the ordinary
+## post-furnishing doorway cull cannot remove them. Expose only supernatural
+## opening lanes for the pool builder to carve out of its raised deck strips.
+func _runtime_shortcut_clearance_rects() -> Array[Rect2]:
+	var zones: Array[Rect2] = []
+	for member in _room_members():
+		var base := Vector2(float(member.x - cell.x) * S,
+			float(member.y - cell.y) * S)
+		for dir in 4:
+			var info := _edge_info(member, dir)
+			if not bool(info.get("runtime_shortcut", false)):
+				continue
+			var width := float(info["w"]) + DOOR_CLEAR_PAD * 2.0
+			var along := float(info["t"]) - width * 0.5
+			match dir:
+				0:
+					zones.append(Rect2(base.x + S - DOOR_CLEAR_DEPTH,
+						base.y + along, DOOR_CLEAR_DEPTH + 0.15, width))
+				1:
+					zones.append(Rect2(base.x - 0.15, base.y + along,
+						DOOR_CLEAR_DEPTH + 0.15, width))
+				2:
+					zones.append(Rect2(base.x + along,
+						base.y + S - DOOR_CLEAR_DEPTH, width,
+						DOOR_CLEAR_DEPTH + 0.15))
 				3:
 					zones.append(Rect2(base.x + along, base.y - 0.15,
 						width, DOOR_CLEAR_DEPTH + 0.15))
@@ -3979,6 +4578,67 @@ func doorway_clearance_violations() -> int:
 	return bad
 
 
+## Focused contract probe for a blackout-created opening. Returns -1 when the
+## edge is not a runtime shortcut; otherwise counts low collision boxes inside
+## the central player-width lane. The lintel is above the player's movement
+## capsule and deliberately does not count.
+func runtime_shortcut_blockers(dir: int) -> int:
+	var edge := _edge_info(cell, dir)
+	if not bool(edge.get("runtime_shortcut", false)):
+		return -1
+	var half_lane := maxf(0.25,
+		float(edge["w"]) * 0.5 - ShadowFigure.MOVE_RADIUS - 0.08)
+	var along := float(edge["t"])
+	var zone := Rect2(S - 0.42, along - half_lane, 0.84, half_lane * 2.0) \
+		if dir == 0 else Rect2(-0.42, along - half_lane, 0.84, half_lane * 2.0) \
+		if dir == 1 else Rect2(along - half_lane, S - 0.42, half_lane * 2.0, 0.84) \
+		if dir == 2 else Rect2(along - half_lane, -0.42, half_lane * 2.0, 0.84)
+	var bad := 0
+	for node in body.get_children():
+		var cs := node as CollisionShape3D
+		if cs == null or cs.shape == null:
+			continue
+		# Purpose-built stair and travelator ramps carry the player through a
+		# threshold. Their thin sloped collider is circulation, not an obstacle.
+		if bool(cs.get_meta("walkable_ramp", false)):
+			continue
+		# Include cylinders and capsules as well as boxes. A bin or column in an
+		# impossible doorway is just as solid as the wall that vanished.
+		var size := Vector3.ZERO
+		if cs.shape is BoxShape3D:
+			size = (cs.shape as BoxShape3D).size
+		elif cs.shape is CylinderShape3D:
+			var cylinder := cs.shape as CylinderShape3D
+			size = Vector3(cylinder.radius * 2.0, cylinder.height,
+				cylinder.radius * 2.0)
+		elif cs.shape is CapsuleShape3D:
+			var capsule := cs.shape as CapsuleShape3D
+			size = Vector3(capsule.radius * 2.0, capsule.height,
+				capsule.radius * 2.0)
+		else:
+			continue
+		var local := AABB(-size * 0.5, size)
+		var mn := Vector3(INF, INF, INF)
+		var mx := Vector3(-INF, -INF, -INF)
+		for ix in 2:
+			for iy in 2:
+				for iz in 2:
+					var p := cs.transform * (local.position + Vector3(
+						local.size.x * ix, local.size.y * iy,
+						local.size.z * iz))
+					mn = mn.min(p)
+					mx = mx.max(p)
+		# Floor below the feet and the doorway lintel above the movement
+		# capsule are legal.
+		var floor_y := _floor_h()
+		if mx.y <= floor_y + 0.03 \
+				or mn.y >= floor_y + ShadowFigure.MOVE_HEIGHT:
+			continue
+		if Rect2(mn.x, mn.z, mx.x - mn.x, mx.z - mn.z).intersects(zone):
+			bad += 1
+	return bad
+
+
 func _mesh_min_y(node: Node, parent_xf: Transform3D) -> float:
 	var xf := parent_xf
 	if node is Node3D:
@@ -4098,6 +4758,12 @@ func _build_interactions() -> void:
 				_descent_exit(descent_target_wall)
 			else:
 				_descent_elevator(descent_target_wall)
+				# On the remote-ritual floors the car stands alone; the
+				# altar is a few route rooms back up the way the player came.
+				if descent_ritual_here:
+					_descent_ritual_set()
+		elif descent_ritual_here:
+			_build_remote_ritual_set()
 		if descent_arrival and descent_arrival_wall >= 0:
 			_descent_arrival_car(descent_arrival_wall)
 		return
@@ -4205,13 +4871,17 @@ func _use_elevator(_actor: Node, dest: int, hit: Interactable,
 ## is genuinely somewhere else, and the wait is the most exposed the player
 ## ever is: rule two forbids standing still, so it has to be walked out.
 func _descent_elevator(dir: int) -> void:
+	_descent_clear_car_footprint(dir)
 	var rig := _descent_car_shell(dir, false)
 	_descent_lift_rig = rig
 	var hit := Interactable.new()
 	hit.name = "DescentLiftCall"
 	hit.prompt_text = "E — call lift"
-	hit.position = Vector3(1.50, 1.28, 2.48)
-	hit.add_box(Vector3(0.52, 0.82, 0.36))
+	# The whole car front is the target. A 0.5m plate on the right jamb was
+	# findable only if you already knew it was there, which reads in play as
+	# "the elevator will not open".
+	hit.position = Vector3(0.0, 1.28, 2.42)
+	hit.add_box(Vector3(3.0, 2.3, 0.9))
 	rig["root"].add_child(hit)
 	rig["hit"] = hit
 	hit.activated.connect(_descent_call.bind(rig, hit))
@@ -4264,6 +4934,7 @@ func open_descent_lift() -> void:
 ## Final objective: the same impossible room-side shell opens onto a short,
 ## overexposed service passage. The player must physically enter the light.
 func _descent_exit(dir: int) -> void:
+	_descent_clear_car_footprint(dir)
 	var rig := _descent_car_shell(dir, true)
 	var left: AnimatableBody3D = rig["left"]
 	var right: AnimatableBody3D = rig["right"]
@@ -4303,17 +4974,17 @@ func _descent_exit(dir: int) -> void:
 ## Local placement of a Descent car against wall `dir` of a cell. Shared with
 ## `car_interior_point()` so main can teleport the player into the arrival car
 ## without duplicating the offsets.
-static func descent_car_basis(dir: int) -> Transform3D:
+static func descent_car_basis(dir: int, floor_y := 0.0) -> Transform3D:
 	var n := -1.0 if dir == 0 or dir == 2 else 1.0
 	var plane := (S - T / 2.0) if dir == 0 or dir == 2 else (T / 2.0)
 	var inner := plane + n * (T / 2.0)
 	var at := Vector3.ZERO
 	var yaw := 0.0
 	if dir < 2:
-		at = Vector3(inner + n * 0.035, 0, S / 2.0)
+		at = Vector3(inner + n * 0.035, floor_y, S / 2.0)
 		yaw = -PI / 2.0 if dir == 0 else PI / 2.0
 	else:
-		at = Vector3(S / 2.0, 0, inner + n * 0.035)
+		at = Vector3(S / 2.0, floor_y, inner + n * 0.035)
 		yaw = PI if dir == 2 else 0.0
 	return Transform3D(Basis(Vector3.UP, yaw), at)
 
@@ -4322,8 +4993,8 @@ static func descent_car_basis(dir: int) -> Transform3D:
 ## and the yaw that faces its doors. The interior is a sealed authored box, so
 ## this point is safe by construction and deliberately bypasses ArrivalSafety —
 ## whose escape-direction test a 2.2m car can never satisfy.
-static func car_interior_point(cell: Vector2i, dir: int) -> Dictionary:
-	var basis_at := descent_car_basis(dir)
+static func car_interior_point(cell: Vector2i, dir: int, floor_y := 0.0) -> Dictionary:
+	var basis_at := descent_car_basis(dir, floor_y)
 	var local := Vector3(0.0, 0.15, 1.12)
 	var world := basis_at * local + Vector3(float(cell.x) * S, 0.0,
 		float(cell.y) * S)
@@ -4335,7 +5006,7 @@ func _descent_car_shell(dir: int, out: bool, arrival := false) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "DescentArrival" if arrival else (
 		"DescentExit" if out else "DescentElevator")
-	root.transform = descent_car_basis(dir)
+	root.transform = descent_car_basis(dir, _floor_h())
 	add_child(root)
 
 	var shell := StaticBody3D.new()
@@ -4505,6 +5176,44 @@ func _descent_lift_wait(rig: Dictionary, seconds: float) -> void:
 	tw.tween_method(
 		func(v: float): _descent_lift_indicator(display, v),
 		elapsed_fraction, 1.0, total)
+	rig["wait_tweens"] = [approach_tw, tw]
+
+
+## The run cancelled the call because the player abandoned the room. Put the
+## plate back exactly as it was before the press.
+func reset_descent_lift() -> void:
+	if _descent_lift_rig.is_empty():
+		return
+	var root: Node3D = _descent_lift_rig["root"]
+	if not is_instance_valid(root) or root.has_meta("opened"):
+		return
+	root.remove_meta("waiting")
+	for tween in _descent_lift_rig.get("wait_tweens", []):
+		if tween != null and tween.is_valid():
+			tween.kill()
+	_descent_lift_rig.erase("wait_tweens")
+	if _descent_lift_rig.has("shaft"):
+		var shaft: Node = _descent_lift_rig["shaft"]
+		if is_instance_valid(shaft):
+			shaft.queue_free()
+		_descent_lift_rig.erase("shaft")
+	var hit: Interactable = _descent_lift_rig.get("hit")
+	if is_instance_valid(hit):
+		hit.enabled = true
+		hit.prompt_text = "E — call lift"
+	_descent_lit_call(_descent_lift_rig, false)
+	var display: Label3D = _descent_lift_rig["display"]
+	if is_instance_valid(display):
+		display.text = "%02d" % (descent_floor_idx + 1)
+		display.modulate = Color(0.55, 0.26, 0.07)
+
+
+## Forwarded from the objective chunk when the player walks out mid-tape;
+## harmless if this chunk has no ritual.
+func reset_descent_tape() -> void:
+	var ritual := get_node_or_null("DescentRitual")
+	if ritual != null:
+		ritual.reset_tape()
 
 
 func _descent_lift_indicator(display: Label3D, progress: float) -> void:
@@ -4562,9 +5271,33 @@ func _open_descent_doors(left: AnimatableBody3D,
 	tw.parallel().tween_property(right, "position:x", 1.02, seconds)
 
 
+## The story tape is the objective. Charge affects survival on the way to the
+## lift and during its summon, but never turns a completed floor into a battery
+## errand at the threshold.
+func descent_lift_ready() -> bool:
+	return descent_tape_watched
+
+
 func _descent_commit(actor: Node, rig: Dictionary, commit: Area3D,
 		hit: Interactable) -> void:
 	if not actor is Player or commit.has_meta("committed"):
+		return
+	# Watching the floor's tape is the sole exit condition. The charging station
+	# remains a useful chance to prepare for the summon and next floor, but it is
+	# never mandatory.
+	if not descent_lift_ready():
+		var now := Time.get_ticks_msec()
+		if now - int(commit.get_meta("refused_ms", 0)) < 1500:
+			return
+		commit.set_meta("refused_ms", now)
+		# On the remote-ritual floors the refusal has to carry the one fact
+		# the room itself cannot: the tape exists, and it is not here.
+		var reason := "THE TAPE HAS NOT BEEN WATCHED"
+		if descent_ritual_remote:
+			reason = "THE TAPE HAS NOT BEEN WATCHED — IT IS NOT IN THIS ROOM"
+		get_tree().call_group("descent_listener",
+			"descent_commit_refused", reason)
+		_descent_sound(rig["root"], SoundBank.thud(), -10.0)
 		return
 	commit.set_meta("committed", true)
 	commit.set_deferred("monitoring", false)
@@ -4592,6 +5325,23 @@ func _descent_ride(rig: Dictionary) -> void:
 	var light: OmniLight3D = rig["light"]
 	var display: Label3D = rig["display"]
 	var base_energy := light.light_energy
+	# A moving car is sealed from the world: an inward-facing matte shell
+	# wraps it so nothing shows through leaf seams or panel cracks while the
+	# floor outside is, as far as the fiction cares, somewhere between floors.
+	var shell := MeshInstance3D.new()
+	var shell_mesh := BoxMesh.new()
+	# Hugs the car skin (x ±1.24, z 0..2.36): the front face sits centimetres
+	# behind the door leaves so a crack can only ever show black.
+	shell_mesh.size = Vector3(2.9, 3.0, 2.64)
+	shell.mesh = shell_mesh
+	var shell_mat := StandardMaterial3D.new()
+	shell_mat.albedo_color = Color.BLACK
+	shell_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shell_mat.cull_mode = BaseMaterial3D.CULL_FRONT
+	shell.material_override = shell_mat
+	shell.position = Vector3(0.0, 1.35, 1.02)
+	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(shell)
 	_descent_sound(root, SoundBank.clang(), -14.0)
 	display.modulate = Color(1.0, 0.56, 0.18)
 	display.text = "%02d" % (descent_floor_idx + 1)
@@ -4791,6 +5541,8 @@ func activate_anomaly(kind: int) -> void:
 		# audit or a headless build lands here. Fall back to the collider-free
 		# dead-light mutation either way.
 		activate_anomaly(0)
+	elif kind == 2:
+		_anomaly_rearrange()
 	elif kind == 1 and not has_node("WaitingFigure"):
 		var f := ShadowFigure.new()
 		f.name = "WaitingFigure"
@@ -4802,12 +5554,76 @@ func activate_anomaly(kind: int) -> void:
 		# holds its corner until the player is in the room, then it hunts.
 		f.mode = ShadowFigure.Mode.WAITING
 		f.player = anomaly_player
+		f.topology = descent_topology
 		var corners := [
 			Vector3(1.45, 0, 1.45), Vector3(10.55, 0, 1.45),
 			Vector3(1.45, 0, 10.55), Vector3(10.55, 0, 10.55),
 		]
 		f.position = corners[WorldGen.h(wseed, cell.x, cell.y, 2441) % 4]
 		add_child(f)
+
+
+## The quiet anomaly: the room is the same room, but the furniture is not
+## quite where it was. Roughly half the free-standing furnishing groups take a
+## small deterministic nudge and turn, colliders included, so a returning
+## player doubts their memory instead of the physics.
+func _anomaly_rearrange() -> void:
+	var group_colliders := {}
+	for child in body.get_children():
+		var gid := int(child.get_meta("furnishing_group", -1))
+		if gid < 0:
+			continue
+		if not group_colliders.has(gid):
+			group_colliders[gid] = []
+		group_colliders[gid].append(child)
+	var idx := 0
+	for child in get_children():
+		var pivot := child as Node3D
+		if pivot == null or not pivot.has_meta("furnishing_group"):
+			continue
+		# Architecture and wall-anchored assemblies stay put: a wall that
+		# moved is a bug report, a chair that moved is a haunting.
+		if pivot.has_meta("annex_architecture") \
+				or pivot.has_meta("wall_utility_dir") \
+				or pivot.has_meta("annex_ac_mount") \
+				or pivot.has_meta("annex_attached_half_wall"):
+			continue
+		# Anything hugging a wall or hanging high is mounted — a blackboard, a
+		# projection screen, a shelf. A mounted thing an inch off its wall
+		# reads as broken, not haunted, so only genuinely free-standing
+		# furniture takes the nudge.
+		if pivot.position.x < 0.9 or pivot.position.x > S - 0.9 \
+				or pivot.position.z < 0.9 or pivot.position.z > S - 0.9:
+			continue
+		var mounted := false
+		for mesh in pivot.find_children("*", "MeshInstance3D", true, false):
+			if (mesh as Node3D).position.y + pivot.position.y > 1.9:
+				mounted = true
+				break
+		if mounted:
+			continue
+		idx += 1
+		var roll := WorldGen.h(wseed, cell.x + idx * 131, cell.y - idx * 71,
+			5501)
+		if posmod(roll, 100) >= 48:
+			continue
+		var turn := deg_to_rad(lerpf(-14.0, 14.0,
+			float(posmod(roll >> 3, 997)) / 996.0))
+		var nudge := Vector3(
+			lerpf(-0.32, 0.32, float(posmod(roll >> 13, 997)) / 996.0),
+			0.0,
+			lerpf(-0.32, 0.32, float(posmod(roll >> 23, 997)) / 996.0))
+		var origin := pivot.position
+		pivot.position += nudge
+		pivot.rotation.y += turn
+		var spin := Basis(Vector3.UP, turn)
+		for collider in group_colliders.get(
+				int(pivot.get_meta("furnishing_group")), []):
+			var c := collider as Node3D
+			if c == null:
+				continue
+			c.position = origin + nudge + spin * (c.position - origin)
+			c.rotation.y += turn
 
 
 func _mesh_is_emissive(mesh: MeshInstance3D) -> bool:
@@ -5574,7 +6390,8 @@ func _collider_yaw_box(pos: Vector3, size: Vector3, yaw: float) -> void:
 	body.add_child(cs)
 
 
-func _collider_rot_box(pos: Vector3, size: Vector3, rot: Vector3) -> void:
+func _collider_rot_box(pos: Vector3, size: Vector3,
+		rot: Vector3) -> CollisionShape3D:
 	var cs := CollisionShape3D.new()
 	var sh := BoxShape3D.new()
 	sh.size = size
@@ -5582,6 +6399,7 @@ func _collider_rot_box(pos: Vector3, size: Vector3, rot: Vector3) -> void:
 	cs.position = pos
 	cs.rotation = rot
 	body.add_child(cs)
+	return cs
 
 
 ## Rotate a local offset into chunk space around an anchor's yaw.
@@ -6235,7 +7053,7 @@ func _school_chalkboard_violations_at(node: Node, board_seen: bool) -> int:
 	if node.has_meta("school_chalkboard"):
 		seen = true
 		var dir := int(node.get_meta("school_chalkboard"))
-		if not WorldGen.edge_info(wseed, cell, dir, theme)["wall"]:
+		if not _edge_info(cell, dir)["wall"]:
 			bad += 1
 	if node.has_meta("school_chalk") and not seen:
 		bad += 1
@@ -6264,7 +7082,7 @@ func school_projector_screen_audit() -> Dictionary:
 				or not bool(node.get_meta(
 					"school_projector_screen_compact", false)) \
 				or WorldGen.elevator_cell(wseed, cell, theme) \
-				or not bool(WorldGen.edge_info(wseed, cell, dir, theme)["wall"]):
+				or not bool(_edge_info(cell, dir)["wall"]):
 			report["violations"] += 1
 	return report
 
@@ -6483,7 +7301,7 @@ func wall_art_audit() -> Dictionary:
 			and absf(along - S * 0.5) < size.x * 0.5 + 2.10
 		if path.is_empty() or absf(shown - source) > 0.002 \
 				or dir < 0 or dir > 3 \
-				or not bool(WorldGen.edge_info(wseed, cell, dir, theme)["wall"]) \
+				or not bool(_edge_info(cell, dir)["wall"]) \
 				or size.x <= 0.0 or size.y <= 0.0 \
 				or p.y - size.y * 0.5 < 0.25 \
 				or p.y + size.y * 0.5 > ceil_h - 0.12 \
@@ -6531,15 +7349,18 @@ func office_wall_mount_audit() -> Dictionary:
 			continue
 		report["air_conditioners"] += 1
 		expected = maxi(expected, int(node.get_meta("office_ac_expected", 0)))
-		if bool(node.get_meta("office_ac_suspended", false)):
-			continue
 		var member: Vector2i = node.get_meta("office_ac_member", cell)
 		var dir := int(node.get_meta("office_ac_dir", -1))
 		var along := float(node.get_meta("office_ac_along", INF))
-		var art := _office_wall_art_layout(member, dir)
 		if dir < 0 or dir > 3 or not is_finite(along):
 			report["violations"] += 1
 			continue
+		var edge := _edge_info(member, dir)
+		if not bool(edge["wall"]) or bool(edge["full_open"]) \
+				or bool(node.get_meta("office_ac_suspended", false)):
+			report["violations"] += 1
+			continue
+		var art := _office_wall_art_layout(member, dir)
 		if art.is_empty():
 			continue
 		var art_size: Vector2 = art["size"]
@@ -6602,7 +7423,7 @@ func filing_bank_audit() -> Dictionary:
 			report["violations"] += 1
 	return report
 func _solid_wall(dir: int) -> bool:
-	return WorldGen.edge_info(wseed, cell, dir, theme)["wall"]
+	return _edge_info(cell, dir)["wall"]
 func _security_camera_wall(dir: int, plane: float) -> void:
 	var n := -1.0 if dir == 0 or dir == 2 else 1.0
 	var wall_t := ANNEX_WALL_T if theme == 2 else T

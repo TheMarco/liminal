@@ -1,7 +1,7 @@
-# Liminal Vegas
+# It wants you to stay
 
 A Godot 4 proof of concept: first-person wandering through **endless,
-procedurally generated liminal spaces** across eight floors:
+procedurally generated liminal spaces** across eleven worlds:
 
 - **Floor 1 — the casino**: seedy Vegas hotel. Garish carpet, flickering
   fluorescents, humming air, slot machine banks glowing in empty rooms,
@@ -57,13 +57,22 @@ procedurally generated liminal spaces** across eight floors:
   from nowhere, submerged LED units glow below the waterline, caustics dance
   on everything the water touches — and occasionally a single white plastic
   chair waits alone in a coved, windowless room.
+- **Key 0 — the Monolith**: monumental board-formed concrete halls, deep
+  structural beams, suspended galleries, cold skylight shafts and black
+  reflecting courts. Structure itself is the set dressing.
+- **Key − — the Bloom**: a dead civic campus colonized by glossy black roots,
+  animated flesh masses, thorn canopies and pulsing heart nodes. Locker tunnels
+  and compressed spore nests open into drowned gyms, root forests and
+  storm-lit atria; cold fluorescents describe the surviving building while red
+  light marks wounds and sealed false exteriors.
 
 It opens on a focused title menu over a world that is already built and
 already running behind it. **Wander** and **Descent** remain immediate choices;
 Instructions, About and Credits each have their own screen. Nothing moves until
 you choose a mode.
 
-Press **1**–**9** to ride the elevator between floors — each floor keeps
+Press **1**–**9** to ride the elevator between the original floors, **0**
+to enter the Monolith, or **−** to enter the Bloom — each world keeps
 its own geography and remembers where you were. Or don't press anything:
 **swirling portals** hang in the roomier chambers of every floor, tinted the
 colour of wherever they lead. Step in and you emerge in the same cell of
@@ -107,6 +116,14 @@ of the room is the one non-violent escape, and it dissolves behind you. Some
 are already there when you arrive, standing in a corner waiting for you to
 walk in; those hold perfectly still until you are in the room with them, and
 are exactly as dangerous as the rest once you are.
+
+The flashlight carries twenty seconds of beam time and does not recover on its
+own. Blue-lit charging stations appear on a guaranteed three-by-three-cell
+lattice; an empty cell takes ten exposed seconds to refill. Charging is fully
+interruptible with **E**, **F**, or by stepping away, and partial progress is
+never lost. The persistent HUD bar shows remaining charge; a second green bar
+appears while connected. A clean figure burn refunds a small quarter-second,
+rewarding accuracy without making the stations optional.
 
 There are seven of them, and every one is animated — hooded wraiths of drifting
 smoke with lit eyes, all but one of them red. Two hang rather than walk and
@@ -216,13 +233,15 @@ godot --path .
 `./build.sh` produces both desktop builds (needs Godot 4.6 on `PATH` with
 export templates installed):
 
-- `build/macos/LiminalVegas.app` — universal (Apple Silicon + Intel), signed
+- `build/macos/It wants you to stay.app` — universal (Apple Silicon + Intel), signed
   with Developer ID under the hardened runtime, **notarized by Apple and
   stapled**, so it opens on any Mac with no Gatekeeper warning. Notarization
   uses the stored `AC_PASSWORD` notarytool profile; `NOTARIZE=0 ./build.sh`
   skips it for a quick local build.
-- `build/windows/LiminalVegas.exe` — single self-contained x86_64 binary,
-  no installer and no DLLs beside it.
+- `build/windows/It wants you to stay.exe` — single self-contained x86_64 binary,
+  no installer and no DLLs beside it. Windows uses Godot's Forward+ renderer
+  through the native Direct3D 12 driver, with Vulkan retained as the automatic
+  fallback on unsupported systems.
 
 ## Controls
 
@@ -234,6 +253,8 @@ export templates installed):
 | E | Use a focused terminal, elevator panel or working door |
 | F | Toggle the handheld flashlight |
 | 1–9 | Switch floor (casino / office / Annex / airport / asylum / school / mall / prison / Poolrooms) |
+| 0 | Enter the Monolith |
+| − | Enter the Bloom |
 | V | Toggle the active video filter |
 | B | Switch between CRT and recovered-tape video modes |
 | Q | Ask to end the current mode and return to the title |
@@ -389,7 +410,7 @@ near-absence of props is enforced as part of its generation contract.
   collider remains inside the protected approach lane of a real doorway. It
   also rejects orphan EXIT lettering and invalid school boards, stationery,
   terminals, or projector screens, and takes a census of every authored
-  furnishing across all eight floors — beds, gurneys, baths, door leaves,
+  furnishing across all ten floors — beds, gurneys, baths, door leaves,
   blackjack and roulette tables, the hotdog cart, the autopsy table, the copier,
   school desks and desk phones. A downloaded model that quietly stops reaching
   its rooms fails the build instead of just disappearing.
@@ -413,11 +434,14 @@ near-absence of props is enforced as part of its generation contract.
   audit that tests *play* rather than construction. Drives `DescentRun` and a
   `ShadowFigure` by hand for fifteen simulated minutes per floor and asserts that
   no enforced rule can kill the player who obeys it: a blackout always suppresses
-  the figures, a blackout never begins while a pursuer is out, a suppressed
-  figure never closes the distance, and the torch's cell still clears a full
-  house. The four rules were written before the figures could advance, kill or be
-  burned, and neither system referenced the other — "stand still" against a 3 m/s
-  pursuer that cannot be burned had no legal play at all.
+  the figures, a suppressed figure never closes the distance, and the torch's
+  cell still clears a full house.
+- `godot --headless --path . --script tools/audit_blackout_shortcuts.gd -- 30`
+  — samples every Descent zone, proves ordinary blackout doors are normally
+  route-neutral while stalled-player doors put their far side meaningfully
+  closer to the lift (preferring a true route shortcut when one exists), and
+  verifies each opening is symmetric, persistent, furnishing-free and clear
+  below the shared ghost/player doorway capsule height.
 - `godot --headless --path . --script tools/audit_prop_overlap.gd` — builds
   furnished rooms *and* corridor cells on every floor and compares floor
   furnishings as oriented boxes, failing on any pair that interpenetrates. It
@@ -464,18 +488,15 @@ shopping mall — only its separately-modelled objects are extracted, re-origine
 and redistributed; the building itself is not. Those extractions are listed
 individually in the asset's `SOURCE.md` with their source node names.
 
-Every CC BY-NC dependency is deliberately confined to a single function, so each
-one lifts out in one edit and leaves a generated or CC0 fallback behind. All four
-now live in their theme's level builder under `scripts/levels/`:
+The sole remaining CC BY-NC dependency is deliberately confined to one function,
+so it lifts out in one edit and leaves generated lettering behind:
 
 | Asset | Entry point | Falls back to |
 | --- | --- | --- |
 | Mall storefront sign faces | `mall_level_builder._mall_painted_sign` | generated `MALL_NAMES` lettering |
-| `office_phone.glb` | `office_level_builder._office_desk_phone` | no phone on the desk |
-| `prison_bunk_bed.glb` | `prison_level_builder._prison_bunk` | generated bunk frame |
-| `cleaning_cart.glb` | `school_level_builder._sch_trolley` | `_sch_trolley_generated` |
 
-A commercial build removes those four and nothing else.
+A commercial build replaces or removes those mall sign faces. The office phone,
+prison bunk and school cleaning cart are now CC BY 4.0 replacements.
 
 Dev tools for adding content:
 
@@ -506,6 +527,11 @@ Dev tools for adding content:
   animated ghost sheet, printing the shader constants and the `BODY` row it
   needs. Godot's only video codec is Theora and it carries no alpha, so an
   animated silhouette has to be a flipbook.
+- `ffmpeg2theora INPUT.mp4 --videoquality 7 --audioquality 3 --max_size
+  512x512 -o videos/tapes/tape_NN.ogv` imports a Descent recording. The runtime
+  discovers every OGV automatically: clips under 30 seconds feed rare optional
+  TV/VCR sets, while clips of 30 seconds or more feed elevator-room rituals.
+  Record the original filename in `videos/tapes/SOURCES.md`.
 - `godot --path . -- --whispers` shortens the whisper timer and prints the
   bearing, distance and level of each one, so the layer can be judged in a
   minute rather than in twenty.
@@ -535,6 +561,7 @@ scripts/*_sounds.gd       per-theme spatial sound emitters
 shaders/*.gdshader        carpet / wallpaper / marble / terrazzo / night apron / ...
 textures/asylum/          CC0 PBR textures for the asylum (ambientCG), 1K JPG
 textures/cc0/             shared CC0 textures for the other floors
+textures/bloom/           CC0 wet ground and cellular flesh PBR sets
 models/asylum/            CC0 glTF props for the asylum (Poly Haven)
 models/cc0/               shared CC0 prop pool (Poly Haven)
 models/cc_by/             attributed models with per-asset source records

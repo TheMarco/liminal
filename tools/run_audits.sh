@@ -32,7 +32,9 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
-JOBS=$(( $(sysctl -n hw.ncpu 2>/dev/null || nproc) - 2 ))
+CPU_COUNT=$(sysctl -n hw.ncpu 2>/dev/null \
+	|| getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+JOBS=$(( CPU_COUNT - 2 ))
 [ "$JOBS" -lt 1 ] && JOBS=1
 FILTER=""
 DO_IMPORT=1
@@ -76,9 +78,22 @@ AUDITS=(
 	"interactions|tools/audit_interactions.gd|"
 	"arrivals|tools/audit_arrivals.gd|"
 	"level_switches|tools/audit_level_switches.gd|--nologo"
-	"descent_routes|tools/audit_descent_routes.gd|200"
+	# Route BFS cost tracks the band radii. Current generation costs roughly
+	# 25s per seed on the reference Mac; eight seeds cover 88 floor routes while
+	# retaining headroom under the 300s cap when audits contend in parallel.
+	"descent_routes|tools/audit_descent_routes.gd|8"
+	# Two route builds per theme-seed: 20 seeds stopped fitting the 300s cap
+	# at current route costs. Six still covers 132 doorway cases; the six
+	# once-failing seeds were verified cured by a direct 20-seed run before
+	# this reduction, so the trim is not hiding them.
+	"blackout_shortcuts|tools/audit_blackout_shortcuts.gd|6"
 	"descent_runtime|tools/audit_descent_runtime.gd|--mode=descent --nologo"
+	"descent_progress|tools/audit_descent_progress.gd|"
+	"descent_ritual|tools/audit_descent_ritual.gd|"
+	"optional_vhs|tools/audit_optional_vhs.gd|"
 	"ghost_room_contract|tools/audit_ghost_room_contract.gd|"
+	"horror_director|tools/audit_horror_director.gd|"
+	"corner_apparitions|tools/audit_corner_apparitions.gd|"
 	"title_screen|tools/audit_title_screen.gd|"
 	"font_check|tools/font_check.gd|"
 	"ceiling_seams|tools/audit_ceiling_seams.gd|"
@@ -100,7 +115,8 @@ NONGATING="pool_basins pool_lighting"
 
 if [ "$DO_IMPORT" = "1" ]; then
 	printf 'import pass ... '
-	if $GODOT --headless --path . --editor --quit >"$LOGDIR/import.log" 2>&1; then
+	if $GODOT --headless --log-file "$LOGDIR/import-godot.log" \
+			--path . --editor --quit >"$LOGDIR/import.log" 2>&1; then
 		echo "ok"
 	else
 		echo "FAILED"; cat "$LOGDIR/import.log"; exit 1
@@ -111,7 +127,8 @@ fi
 # whole Chunk class down and every audit below fails for the same reason. Say so
 # once instead of 29 times.
 printf 'compile check ... '
-$GODOT --headless --path . --script tools/check_compile.gd >"$LOGDIR/compile.log" 2>&1
+$GODOT --headless --log-file "$LOGDIR/compile-godot.log" \
+	--path . --script tools/check_compile.gd >"$LOGDIR/compile.log" 2>&1
 if grep -qE "Parse Error|Compile Error" "$LOGDIR/compile.log"; then
 	echo "FAILED"
 	echo
@@ -131,9 +148,11 @@ run_one() {
 	# quit(), so it idles forever instead of failing. Cap every audit.
 	if [ -n "$extra" ]; then
 		# shellcheck disable=SC2086
-		$GODOT --headless --path . --script "$script" -- $extra >"$log" 2>&1 &
+		$GODOT --headless --log-file "$LOGDIR/$name-godot.log" \
+			--path . --script "$script" -- $extra >"$log" 2>&1 &
 	else
-		$GODOT --headless --path . --script "$script" >"$log" 2>&1 &
+		$GODOT --headless --log-file "$LOGDIR/$name-godot.log" \
+			--path . --script "$script" >"$log" 2>&1 &
 	fi
 	local pid=$!
 	local waited=0
@@ -190,6 +209,7 @@ if [ "$fails" -gt 0 ]; then
 	echo "=== failing audit output ==="
 	for entry in "${AUDITS[@]}"; do
 		IFS='|' read -r name script extra <<<"$entry"
+		[ -n "$FILTER" ] && [[ "$name" != *"$FILTER"* ]] && continue
 		status=$(cat "$LOGDIR/$name.status" 2>/dev/null || echo "?")
 		[ "$status" = "0" ] && continue
 		[ "$status" = "SKIP" ] && continue

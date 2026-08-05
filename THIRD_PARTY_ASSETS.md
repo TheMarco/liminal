@@ -1,6 +1,6 @@
 # Third-party assets and licenses
 
-Liminal Vegas combines original procedural work with openly licensed art. This
+It wants you to stay combines original procedural work with openly licensed art. This
 file is the canonical attribution record; the in-game Credits screen provides
 the compact presentation appropriate to the game.
 
@@ -25,6 +25,85 @@ license. Any future commercial release must first replace every CC BY-NC asset
 and remove it from the distributed build.
 
 ## Attributed work
+
+### `old_school_vcr.glb`
+
+- **Title:** `Old School VCR`
+- **Creator:** [William Burke](https://sketchfab.com/William.Burke)
+- **Source:** <https://sketchfab.com/3d-models/old-school-vcr-c8ff5be11ad94215bec40e3350264023>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Retained unchanged; runtime instances are re-centred,
+  scaled and rotated when placed as the VHS player in Descent elevator rooms.
+- **Local record:** [`models/cc_by/old_school_vcr/SOURCE.md`](models/cc_by/old_school_vcr/SOURCE.md)
+
+### `retro_television.glb`
+
+- **Title:** `Retro Television`
+- **Creator:** [Tom Seddon](https://sketchfab.com/bloodmeat08)
+- **Source:** <https://sketchfab.com/3d-models/retro-television-e938241a182a4229ad48a1fc589e676e>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Retained unchanged; runtime instances are re-centred,
+  scaled and rotated when placed as the CRT television in Descent elevator
+  rooms, and the screen surface is intended to be replaced by the game's VHS
+  playback material.
+- **Local record:** [`models/cc_by/retro_television/SOURCE.md`](models/cc_by/retro_television/SOURCE.md)
+
+### `tv_table.glb`
+
+- **Title:** `Tv Table`
+- **Creator:** [Parth](https://sketchfab.com/khatriparth)
+- **Source:** <https://sketchfab.com/3d-models/tv-table-ffc3c739a0894e20881de2c81be2e59d>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Retained unchanged; runtime instances are re-centred,
+  scaled and rotated when placed as the media table under the CRT television
+  in Descent elevator rooms.
+- **Local record:** [`models/cc_by/tv_table/SOURCE.md`](models/cc_by/tv_table/SOURCE.md)
+
+### `modular_vines.glb`
+
+- **Title:** `Modular Vines`
+- **Creator:** [Somersby](https://sketchfab.com/Somersby)
+- **Source:** <https://sketchfab.com/3d-models/modular-vines-eccf0e6839954dca8eabfb504d572394>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Re-centred, scaled and rotated into selective thorn
+  canopies and wound borders in the Bloom. Its source material is replaced at
+  runtime by the animated black vascular shader; geometry is unchanged and
+  carries no gameplay collision.
+- **Local record:** [`models/cc_by/modular_vines/SOURCE.md`](models/cc_by/modular_vines/SOURCE.md)
+
+### `flesh_blob.glb`
+
+- **Title:** `Flesh Blob`
+- **Creator:** [ChopperManiac](https://sketchfab.com/ChopperManiac)
+- **Source:** <https://sketchfab.com/3d-models/flesh-blob-b3f5bb51f8144a30b6fa6b22f5d44bf7>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Only the organic mesh is shown; the source demonstration
+  floor and wall are hidden. Runtime placement preserves the PBR materials and
+  loops the authored six-second morph animation with an additional subtle
+  asynchronous scale pulse.
+- **Local record:** [`models/cc_by/flesh_blob/SOURCE.md`](models/cc_by/flesh_blob/SOURCE.md)
+
+### `fluorescent_light_fixtures.glb`
+
+- **Title:** `Fluorescent Light Fixtures - 4x 4096px²`
+- **Creator:** [Mark Peters](https://sketchfab.com/mark-peters)
+- **Source:** <https://sketchfab.com/3d-models/fluorescent-light-fixtures-4x-4096px2-2a05034d61dc49bf81b33de44add7aa8>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** The four authored designs are selected individually,
+  centred and ceiling-mounted throughout the Monolith. Their PBR/emissive
+  materials are retained and paired with deterministic room lights; dead and
+  flickering cells isolate emission state per instance.
+- **Local record:** [`models/cc_by/fluorescent_light_fixtures/SOURCE.md`](models/cc_by/fluorescent_light_fixtures/SOURCE.md)
+
+### `hovercar_charging_station.glb`
+
+- **Title:** `Hovercar Charging Station`
+- **Creator:** [Archer Sterling](https://sketchfab.com/archersterling)
+- **Source:** <https://sketchfab.com/3d-models/hovercar-charging-station-125c81972ef94d8da063cf9d7c7ff245>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Uniformly scaled and floor-centred as the interactive
+  flashlight charger, with conservative collision and a runtime status light.
+- **Local record:** [`models/cc_by/hovercar_charging_station/SOURCE.md`](models/cc_by/hovercar_charging_station/SOURCE.md)
 
 ### Extracted exit door from `backrooms_vr.glb`
 
@@ -419,31 +498,27 @@ and remove it from the distributed build.
   student station throughout classroom rows.
 - **Local record:** [`models/cc_by/school_desk/SOURCE.md`](models/cc_by/school_desk/SOURCE.md)
 
-### `office_phone.glb` — noncommercial
+### `office_phone.glb`
 
-- **Title:** `Office phone`
-- **Creator:** [R3indeer](https://sketchfab.com/R3indeer)
-- **Source:** <https://sketchfab.com/3d-models/office-phone-7b12706d32264bca8698a81bdfe5300a>
-- **License:** [Creative Commons Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/)
-- **Commercial-use status:** **Not permitted.** Builds containing this model are
-  noncommercial and must not be sold or monetized.
-- **Modifications:** Placed at authored scale on office desks, opposite the
-  terminal from the loose stationery. Every use goes through
-  `_office_desk_phone` in `scripts/chunk.gd`, so the dependency lifts out in a
-  single edit.
-- **Local record:** [`models/cc_by_nc/office_phone/SOURCE.md`](models/cc_by_nc/office_phone/SOURCE.md)
+- **Title:** `Office Phone`
+- **Creator:** [maxdragonn](https://sketchfab.com/maxdragon)
+- **Source:** <https://sketchfab.com/3d-models/office-phone-4176a01b6d0b4d13ad165c0df278a6b5>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **NoAI notice:** Used only as embedded game content, never as generative-AI
+  training data or input.
+- **Modifications:** Scaled, centred and floor-aligned on office desktops from
+  measured imported bounds. Geometry and embedded texture are unchanged.
+- **Local record:** [`models/cc_by/office_phone/SOURCE.md`](models/cc_by/office_phone/SOURCE.md)
 
-### `prison_bunk_bed.glb` — noncommercial
+### `bunk_bed.glb`
 
-- **Title:** `Prison Bunk Bed`
-- **Creator:** [Mihai / mmike0](https://sketchfab.com/mmike0)
-- **Source:** <https://sketchfab.com/3d-models/prison-bunk-bed-d85baef9dca546f9a5957fd85bdaaed3>
-- **License:** [Creative Commons Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/)
-- **Commercial-use status:** **Not permitted.** Builds containing this model
-  are noncommercial and must not be sold or monetized.
-- **Modifications:** Uniformly scaled, rotated and floor-aligned from measured
-  bounds; supplied with conservative cell-only gameplay collision.
-- **Local record:** [`models/cc_by_nc/prison_bunk_bed/SOURCE.md`](models/cc_by_nc/prison_bunk_bed/SOURCE.md)
+- **Title:** `Bunk Bed`
+- **Creator:** [neverfollow81](https://sketchfab.com/neverfollow81)
+- **Source:** <https://sketchfab.com/3d-models/bunk-bed-3ddab7a93381496eba3c36677e777912>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Scaled to a 1.76 m frame, rotated and floor-aligned from
+  measured bounds; supplied with conservative cell-only gameplay collision.
+- **Local record:** [`models/cc_by/bunk_bed/SOURCE.md`](models/cc_by/bunk_bed/SOURCE.md)
 
 ### `prison_toilet.glb`
 
@@ -479,8 +554,7 @@ and remove it from the distributed build.
 ### Authored replacements for generated furniture
 
 Sixteen models that each took over a function which used to assemble the same
-object out of boxes and cylinders. `cleaning_cart.glb` is noncommercial and is
-reached through a single function; the two Sketchfab Standard assets were
+object out of boxes and cylinders. The two Sketchfab Standard assets were
 supplied by the project owner and are used only as embedded game content.
 
 #### `slot_machine_alt.glb`
@@ -624,19 +698,15 @@ supplied by the project owner and are used only as embedded game content.
   run 0.4 m above it. Textures re-encoded at 512 px.
 - **Local record:** [`models/cc_by/food_court_set/SOURCE.md`](models/cc_by/food_court_set/SOURCE.md)
 
-#### `cleaning_cart.glb` — noncommercial
+#### `cleaning_cart.glb`
 
-- **Title:** `Cleaning Cart`
-- **Creator:** [Kerridge1](https://sketchfab.com/Kerridge1)
-- **Source:** <https://sketchfab.com/3d-models/cleaning-cart-ced9dec64e66451fb2ccedee1fddeaa9>
-- **License:** [Creative Commons Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/)
-- **Commercial-use status:** **Not permitted.** Builds containing this
-  model are noncommercial and must not be sold or monetized.
-- **Modifications:** Placed at authored scale in school corridors, walked
-  in from the wall until it clears the locker banks. Every use goes
-  through `_sch_trolley`, so the noncommercial dependency lifts out in one
-  edit.
-- **Local record:** [`models/cc_by_nc/cleaning_cart/SOURCE.md`](models/cc_by_nc/cleaning_cart/SOURCE.md)
+- **Title:** `cleaning_cart`
+- **Creator:** [ap-school](https://sketchfab.com/ap-school)
+- **Source:** <https://sketchfab.com/3d-models/cleaning-cart-3a494d6aa0bf4f278a90041a41bc46b0>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Scaled to 1.24 m high, centred and floor-aligned in school
+  corridors from measured imported bounds; supplied with conservative collision.
+- **Local record:** [`models/cc_by/cleaning_cart/SOURCE.md`](models/cc_by/cleaning_cart/SOURCE.md)
 
 #### `rope_barrier.glb`
 
@@ -711,11 +781,28 @@ to recognize the artists.
 
 - **Creator/source:** [Poly Haven](https://polyhaven.com)
 - **License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
-- **Use:** Furniture, fixtures and environmental props across the eight levels.
+- **Use:** Furniture, fixtures and environmental props across the game;
+  board-formed, structural and damaged-floor concrete PBR surfaces in the
+  Monolith; and Pine Roots, wet mud, and wrinkled leather-derived tissue in
+  the Bloom.
 - **Per-asset inventory:** [`models/cc0/SOURCES.md`](models/cc0/SOURCES.md) and
-  [`models/asylum/SOURCES.md`](models/asylum/SOURCES.md).
+  [`models/asylum/SOURCES.md`](models/asylum/SOURCES.md), plus
+  [`textures/brutalist/SOURCES.md`](textures/brutalist/SOURCES.md),
+  [`textures/bloom/SOURCES.md`](textures/bloom/SOURCES.md), and
+  [`models/cc0/pine_roots/SOURCE.md`](models/cc0/pine_roots/SOURCE.md).
 - **Modifications:** Imported at game-ready texture resolutions; individual
   props are scaled, rotated and selectively material-adjusted for their rooms.
+
+### TextureCan
+
+- **Creator/source:** [TextureCan](https://www.texturecan.com)
+- **License:** [CC0 1.0](https://www.texturecan.com/terms/)
+- **Use:** `Others 0001`, a seamless 2K organ/flesh PBR set, supplies color,
+  OpenGL normal, roughness and ambient-occlusion detail for the Bloom's
+  membranes, cysts, incubator sacs, vines and root shader.
+- **Per-asset inventory:** [`textures/bloom/SOURCES.md`](textures/bloom/SOURCES.md)
+- **Modifications:** Source maps are unchanged; runtime materials add triplanar
+  projection, bruise tinting, wet clearcoat and animated vascular emission.
 
 ### ambientCG
 

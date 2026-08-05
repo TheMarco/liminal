@@ -467,7 +467,7 @@ func _mall_display_table(p: Vector3, yaw: float, salt: int) -> void:
 
 
 func _solid_wall(dir: int) -> bool:
-	return WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]
+	return chunk._edge_info(chunk.cell, dir)["wall"]
 
 
 ## Wall shelving for a raided retail unit: brackets, mostly-bare boards, the

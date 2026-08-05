@@ -13,13 +13,16 @@ extends RefCounted
 ## last floor, the way out). Distances are measured from `origin`, not from
 ## Vector2i.ZERO, because that is where the player actually starts walking.
 
-## Graph distance from the arrival room to the objective, floor 1 → floor 8.
+## Graph distance from the arrival room to the objective, first → last floor.
 ## The needle degrades with depth (see DescentHUD), so later floors are longer
 ## in searching as well as in metres.
-const MIN_DIST_FIRST := 9
-const MIN_DIST_LAST := 16
-const MAX_DIST_FIRST := 13
-const MAX_DIST_LAST := 22
+## Roughly doubled 2026-08-03: a needle-guided 16-edge walk was a one-minute
+## floor. With the needle gated behind discovery these bands put the lift
+## genuinely out in the building.
+const MIN_DIST_FIRST := 26
+const MIN_DIST_LAST := 40
+const MAX_DIST_FIRST := 34
+const MAX_DIST_LAST := 52
 ## How far from the world origin the arrival room is allowed to sit. Cell (0,0)
 ## is almost never wall-backed — every edge is a guaranteed doorway — so the
 ## arrival car needs a nearby room that owns a solid wall.
@@ -28,6 +31,25 @@ const TARGET_SALT := 1817
 const TARGET_WALL_SALT := 1770
 const ARRIVAL_SALT := 1904
 const ARRIVAL_WALL_SALT := 1911
+## At the route's typical ~500m length this yields two or three optional sets,
+## matching the same roughly one-per-200m density used by the endless world.
+const OPTIONAL_VHS_METRES := 200.0
+const OPTIONAL_VHS_MIN := 2
+const OPTIONAL_VHS_MAX := 3
+const OPTIONAL_VHS_SALT := 7331
+## An assistance doorway must remove a meaningful piece of the maze, not merely turn
+## one corner into another. Two graph edges are 24 nominal metres: enough to
+## break a frustrating loop without teleporting the player through the floor.
+const MERCY_MIN_SAVING := 2
+const MERCY_SEARCH_RADIUS := 4
+## The help cascade's last resort: how far out the assistance search may look
+## once nothing within the normal radius offers any real progress.
+const BLACKOUT_HELP_WIDE_RADIUS := 7
+## Keep assistance inside the same small neighbourhood as decorative changes.
+## A mathematically excellent door twenty rooms away is not a visible blackout
+## change and cannot guide anybody. If this radius has no useful safe wall, the
+## run postpones the blackout and tries again after the player moves.
+const BLACKOUT_HELP_SEARCH_RADIUS := 4
 ## A cell no scan can reach, used where `_base_candidate` must exclude nothing.
 const NO_CELL := Vector2i(1 << 30, 1 << 30)
 
@@ -47,6 +69,12 @@ const ELEV_STYLES := {
 		WorldGen.MALL_STORE, WorldGen.MALL_KIOSKS],
 	8: [WorldGen.PRISON_GUARD, WorldGen.PRISON_CELLS,
 		WorldGen.PRISON_VISITATION, WorldGen.PRISON_INDUSTRY],
+	9: [WorldGen.POOL_DECK, WorldGen.POOL_ALCOVE,
+		WorldGen.POOL_GALLERY, WorldGen.POOL_SOLARIUM],
+	10: [WorldGen.BRUTAL_HALL, WorldGen.BRUTAL_GALLERY,
+		WorldGen.BRUTAL_ATRIUM, WorldGen.BRUTAL_SERVICE],
+	11: [WorldGen.BLOOM_COMMONS, WorldGen.BLOOM_CLASSROOM,
+		WorldGen.BLOOM_ATRIUM, WorldGen.BLOOM_GYM],
 }
 
 var world_seed := 0
@@ -60,10 +88,22 @@ var graph_distance := 0
 var fallback_tier := 0
 var min_dist := MIN_DIST_FIRST
 var max_dist := MAX_DIST_FIRST
+var topology: DescentTopology
 
 var _origin_distance := {}
 var _next := {}
 var _target_distance := {}
+var _optional_vhs_ready := false
+var _optional_vhs: Array[Vector2i] = []
+var _path_cells := {}
+var _ritual_cell := Vector2i(1 << 30, 1 << 30)
+
+## Floors whose objective altar stands a few route rooms short of the lift
+## instead of beside it. The tape stays the sole lift key, so these floors
+## become two-stage: find the recording, then find the car it unlocked.
+## Authored, not seeded — the surprise should land at the same depths for
+## everyone, like the fixed theme order itself.
+const REMOTE_RITUAL_FLOORS := [2, 5, 8]
 
 
 static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
@@ -78,12 +118,53 @@ static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 ## 0.0 on the casino, 1.0 in the Annex. Every depth ramp on the route reads
 ## from this rather than from the raw index.
 static func depth_of(p_floor_idx: int) -> float:
-	return clampf(float(p_floor_idx) / float(maxi(1, DescentRun.ORDER.size() - 1)),
+	return clampf(float(p_floor_idx) / float(DescentRun.FLOOR_COUNT - 1),
 		0.0, 1.0)
 
 
 func next_from(from: Vector2i) -> Vector2i:
 	return _next.get(from, from)
+
+
+## The immediate BFS hop can be an invisible seam inside a merged room. Follow
+## the route until it actually leaves the room and return that boundary, whose
+## `edge_info.t` is the exact opening rendered by Chunk.
+func next_room_exit(from: Vector2i) -> Dictionary:
+	if from == target or not contains(from):
+		return {}
+	var root := WorldGen.annex_room_id(world_seed, from) if theme == 2 \
+		else WorldGen.room_id(world_seed, from)
+	var at := from
+	var guard := _next.size() + 1
+	while guard > 0:
+		var following := next_from(at)
+		if following == at:
+			return {}
+		var dir := WorldGen.DIRV.find(following - at)
+		if dir < 0:
+			return {}
+		var next_root := WorldGen.annex_room_id(world_seed, following) \
+			if theme == 2 else WorldGen.room_id(world_seed, following)
+		if next_root != root:
+			return {"cell": at, "dir": dir, "next": following}
+		at = following
+		guard -= 1
+	return {}
+
+
+## The cell whose room carries the floor's objective altar: the target itself
+## on most floors, a route cell 4-7 doorways short of it on the remote-ritual
+## floors. Lazy because it walks the finished path; deterministic per seed.
+func objective_ritual_cell() -> Vector2i:
+	if _ritual_cell.x != (1 << 30):
+		return _ritual_cell
+	_ritual_cell = target
+	if REMOTE_RITUAL_FLOORS.has(floor_idx):
+		var path := path_from_origin()
+		if path.size() >= 10:
+			var back := 4 + posmod(WorldGen.h(world_seed, floor_idx, 41, 9203), 4)
+			_ritual_cell = path[path.size() - 1 - back]
+	return _ritual_cell
 
 
 func contains(at: Vector2i) -> bool:
@@ -92,6 +173,212 @@ func contains(at: Vector2i) -> bool:
 
 func distance_from_target(at: Vector2i) -> int:
 	return int(_target_distance.get(at, -1))
+
+
+## Runtime topology is attached only after the deterministic target has been
+## selected. Adding a supernatural opening then rebuilds guidance without ever
+## changing the seed-authored base world.
+func set_topology(value: DescentTopology) -> void:
+	topology = value
+	if not _origin_distance.is_empty() and target != origin:
+		_build_reverse_map()
+
+
+func refresh_topology() -> void:
+	if not _origin_distance.is_empty():
+		_build_reverse_map()
+
+
+func edge_info(at: Vector2i, dir: int) -> Dictionary:
+	if topology != null:
+		return topology.edge_info(at, dir)
+	return WorldGen.edge_info(world_seed, at, dir, theme)
+
+
+## Every blackout opens the same kind of impossible, persistent doorway. The
+## selector is deliberately opaque to presentation: normally it prefers a
+## nearby connection that does not materially shorten the route; after genuine
+## navigation stall it searches the explored side much farther for a useful
+## connection. The player sees and hears exactly the same event either way.
+func find_blackout_doorway(from: Vector2i, visited: Dictionary,
+		require_help: bool) -> Dictionary:
+	if not require_help:
+		return _blackout_doorway_pass(from, visited, false,
+			MERCY_SEARCH_RADIUS, MERCY_MIN_SAVING)
+	# The help cascade. Some layouts simply have no wall within easy reach
+	# whose far side saves two full steps; before this existed the search
+	# came back empty there and a proven stall got nothing at all. Prefer the
+	# strong nearby door, then a weaker nearby door (one step closer is still
+	# guidance), then a strong door from farther out — nearness already
+	# dominates the scoring, so the later tiers only ever act where the first
+	# would have failed.
+	for attempt: Array in [
+			[BLACKOUT_HELP_SEARCH_RADIUS, MERCY_MIN_SAVING],
+			[BLACKOUT_HELP_SEARCH_RADIUS, 1],
+			[BLACKOUT_HELP_WIDE_RADIUS, MERCY_MIN_SAVING]]:
+		var found := _blackout_doorway_pass(from, visited, true,
+			int(attempt[0]), int(attempt[1]))
+		if not found.is_empty():
+			return found
+	return {}
+
+
+func _blackout_doorway_pass(from: Vector2i, visited: Dictionary,
+		require_help: bool, radius: int, min_saving: int) -> Dictionary:
+	if topology == null or not contains(from):
+		return {}
+	var old_distance := distance_from_target(from)
+	if old_distance < 0:
+		return {}
+	var nearby := _runtime_distances(from, radius)
+	var optional_cells := optional_vhs_cells()
+	var best_helpful := {}
+	var best_helpful_score := -INF
+	var best_shortcut := {}
+	var best_shortcut_score := -INF
+	var best_decorative := {}
+	var best_decorative_score := -INF
+	var best_any := {}
+	var best_any_score := -INF
+	for key in nearby:
+		var at: Vector2i = key
+		var was_visited := visited.has(at)
+		if (not require_help and not was_visited) \
+				or not _blackout_cell_ok(at, from, optional_cells, true, true):
+			continue
+		var approach := int(nearby[at])
+		for dir in 4:
+			if not WorldGen.is_wall(world_seed, at, dir, theme) \
+					or topology.has_shortcut(at, dir):
+				continue
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if not _blackout_cell_ok(other, from, optional_cells, true):
+				continue
+			if not is_equal_approx(Chunk.cell_floor_h(world_seed, at, theme),
+					Chunk.cell_floor_h(world_seed, other, theme)):
+				continue
+			var other_distance := distance_from_target(other)
+			if other_distance < 0:
+				continue
+			var new_distance := approach + 1 + other_distance
+			# Adding an edge can never make the current shortest route worse. A
+			# proposed path longer than the existing one is therefore a true
+			# decorative connection with zero actual saving.
+			var saving := maxi(0, old_distance - new_distance)
+			var destination_gain := old_distance - other_distance
+			var tie := float(WorldGen.h(world_seed, at.x, at.y,
+				2909 + dir * 17 + topology.shortcut_count() * 131)) \
+				/ 2147483647.0
+			var candidate := {
+				"cell": at,
+				"dir": dir,
+				"other": other,
+				"saving": saving,
+				"old_distance": old_distance,
+				"new_distance": new_distance,
+				"approach": approach,
+				"destination_gain": destination_gain,
+			}
+			# Nearness dominates once a doorway meets the help threshold. It
+			# should be discoverable, not a theoretically excellent opening a
+			# dozen rooms away.
+			var helpful_score := -float(approach) * 100.0 \
+				+ float(saving) * 8.0 - tie
+			if was_visited:
+				helpful_score += 240.0
+			if destination_gain >= min_saving \
+					and helpful_score > best_helpful_score:
+				best_helpful_score = helpful_score
+				best_helpful = candidate
+			# A true current-position shortcut is stronger than guidance alone.
+			# Prefer it whenever available, but do not make it the only form of
+			# help a one-edge topology change is allowed to provide.
+			if saving >= min_saving \
+					and helpful_score > best_shortcut_score:
+				best_shortcut_score = helpful_score
+				best_shortcut = candidate
+			var decorative_score := -float(approach) * 100.0 \
+				- float(saving) * 20.0 - tie
+			if saving < MERCY_MIN_SAVING \
+					and decorative_score > best_decorative_score:
+				best_decorative_score = decorative_score
+				best_decorative = candidate
+			var any_score := -float(approach) * 100.0 \
+				+ float(saving) * 4.0 - tie
+			if any_score > best_any_score:
+				best_any_score = any_score
+				best_any = candidate
+	if require_help and not best_shortcut.is_empty():
+		best_shortcut["assistance"] = true
+		return best_shortcut
+	if require_help and not best_helpful.is_empty():
+		best_helpful["assistance"] = true
+		return best_helpful
+	if require_help:
+		return {}
+	if not require_help and not best_decorative.is_empty():
+		best_decorative["assistance"] = false
+		return best_decorative
+	# Exhaustion should postpone a blackout only when there is literally no
+	# safe wall left. A normal opening may incidentally help a little; that
+	# uncertainty is part of why the player can never identify mercy for sure.
+	if not best_any.is_empty():
+		best_any["assistance"] = false
+	return best_any
+
+
+func _runtime_distances(from: Vector2i, radius: int) -> Dictionary:
+	var distances := {from: 0}
+	var queue: Array[Vector2i] = [from]
+	var head := 0
+	while head < queue.size():
+		var at := queue[head]
+		head += 1
+		var distance := int(distances[at])
+		if distance >= radius:
+			continue
+		for dir in 4:
+			if bool(edge_info(at, dir)["wall"]):
+				continue
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if distances.has(other) or not _origin_distance.has(other):
+				continue
+			distances[other] = distance + 1
+			queue.append(other)
+	return distances
+
+
+func _blackout_cell_ok(at: Vector2i, player_cell: Vector2i,
+		optional_cells: Array[Vector2i], allow_corridor := false,
+		allow_player := false) -> bool:
+	if (at == player_cell and not allow_player) or at == origin or at == target \
+			or optional_cells.has(at) or not _origin_distance.has(at):
+		return false
+	var corridor := WorldGen.annex_corridor_axis(world_seed, at) != 0 \
+		if theme == 2 else WorldGen.corridor(world_seed, at) != 0
+	if corridor:
+		if not allow_corridor:
+			return false
+	else:
+		if theme == 2:
+			var annex_root := WorldGen.annex_room_id(world_seed, at)
+			if not allow_corridor and (annex_root != at \
+					or WorldGen.annex_room_size(world_seed, annex_root) != 1):
+				return false
+		else:
+			var root := WorldGen.room_id(world_seed, at)
+			if not WorldGen.room_split(world_seed, root, theme).is_empty():
+				return false
+			if not allow_corridor and (root != at \
+					or WorldGen.room_size(world_seed, root) != 1):
+				return false
+	if WorldGen.portal(world_seed, at, theme) >= 0 \
+			or WorldGen.elevator_cell(world_seed, at, theme):
+		return false
+	# Ordinary charging stations are placed on this lattice after the furniture
+	# cull. Leave their cells alone until station placement itself becomes
+	# doorway-aware.
+	return not (posmod(at.x, 3) == 1 and posmod(at.y, 3) == 1)
 
 
 func path_from_origin() -> Array[Vector2i]:
@@ -106,6 +393,79 @@ func path_from_origin() -> Array[Vector2i]:
 		at = following
 		guard -= 1
 	return path
+
+
+func optional_vhs_cells() -> Array[Vector2i]:
+	_build_optional_vhs_cells()
+	return _optional_vhs.duplicate()
+
+
+func is_path_cell(at: Vector2i) -> bool:
+	_build_optional_vhs_cells()
+	return _path_cells.has(at)
+
+
+func _build_optional_vhs_cells() -> void:
+	if _optional_vhs_ready:
+		return
+	_optional_vhs_ready = true
+	var path := path_from_origin()
+	for c in path:
+		_path_cells[c] = true
+	if path.size() < 10:
+		return
+	var wanted := clampi(roundi(walk_metres() / OPTIONAL_VHS_METRES),
+		OPTIONAL_VHS_MIN, OPTIONAL_VHS_MAX)
+	var preferred := _optional_vhs_candidates(path, true)
+	var candidates := preferred
+	if candidates.size() < wanted:
+		candidates = _optional_vhs_candidates(path, false)
+	for slot in wanted:
+		if candidates.is_empty():
+			break
+		var desired := float(slot + 1) / float(wanted + 1)
+		var best_idx := 0
+		var best_score := INF
+		for i in candidates.size():
+			var entry: Dictionary = candidates[i]
+			var progress := float(entry["path_idx"]) / float(path.size() - 1)
+			var tie := float(WorldGen.h(world_seed, entry["cell"].x,
+				entry["cell"].y, OPTIONAL_VHS_SALT + slot)) / 2147483647.0
+			var score := absf(progress - desired) + tie * 0.001
+			if score < best_score:
+				best_score = score
+				best_idx = i
+		var chosen: Dictionary = candidates.pop_at(best_idx)
+		_optional_vhs.append(chosen["cell"])
+
+
+func _optional_vhs_candidates(path: Array[Vector2i], dry_pool_only: bool) \
+		-> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var seen_rooms := {}
+	for idx in range(4, path.size() - 4):
+		var c := path[idx]
+		# The remote objective altar owns its cell outright; an optional set
+		# sharing the room would put two televisions in one frame.
+		if c == objective_ritual_cell():
+			continue
+		var room := WorldGen.annex_room_id(world_seed, c) if theme == 2 \
+			else WorldGen.room_id(world_seed, c)
+		if seen_rooms.has(room):
+			continue
+		seen_rooms[room] = true
+		if theme == 9 and dry_pool_only \
+				and not Chunk.pool_style_dry(WorldGen.cell_style(world_seed, c, theme)):
+			continue
+		var has_wall := false
+		for dir in 4:
+			if WorldGen.edge_info(world_seed, c, dir, theme)["wall"]:
+				has_wall = true
+				break
+		if not has_wall:
+			continue
+		out.append({"cell": c, "path_idx": idx})
+	return out
 
 
 ## Straight-line metres along the path. The needle stops naming doorways after
@@ -228,7 +588,7 @@ func _scan(from: Vector2i, radius: int) -> void:
 			# `edge_info(...)["wall"]` is `is_wall` on every return path, but
 			# builds a dictionary and a pile of theme-specific geometry to say
 			# so. These two BFS loops are the hot path of a floor build.
-			if WorldGen.is_wall(world_seed, c, dir, theme):
+			if bool(edge_info(c, dir)["wall"]):
 				continue
 			_origin_distance[nb] = dist + 1
 			queue.append(nb)
@@ -246,6 +606,10 @@ func _base_candidate(c: Vector2i, exclude: Vector2i) -> bool:
 	if local_root != c:
 		return false
 	if local_size != 1:
+		return false
+	# The dry Poolrooms deck is 1.42m above the basin. The car is planted on
+	# that datum, so low single-height rooms need extra absolute headroom.
+	if theme == 9 and WorldGen.room_height(world_seed, c, theme) < 4.45:
 		return false
 	if not WorldGen.room_split(world_seed, c, theme).is_empty():
 		return false
@@ -297,8 +661,10 @@ func _build_reverse_map() -> void:
 			# `edge_info(...)["wall"]` is `is_wall` on every return path, but
 			# builds a dictionary and a pile of theme-specific geometry to say
 			# so. These two BFS loops are the hot path of a floor build.
-			if WorldGen.is_wall(world_seed, c, dir, theme):
+			if bool(edge_info(c, dir)["wall"]):
 				continue
 			_target_distance[nb] = dist + 1
 			_next[nb] = c
 			queue.append(nb)
+	if _target_distance.has(origin):
+		graph_distance = int(_target_distance[origin])

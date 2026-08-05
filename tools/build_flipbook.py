@@ -15,7 +15,7 @@ import numpy as np
 def extract(src, tmp, want):
     """Evenly spaced frames across the whole loop."""
     probe = subprocess.run(
-        ["ffprobe", "-v", "error", "-count_frames",
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames",
          "-show_entries", "stream=nb_read_frames",
          "-of", "default=nokey=1:noprint_wrappers=1", src],
         capture_output=True, text=True).stdout.strip()
@@ -51,11 +51,26 @@ def to_alpha(img, white, floor):
 
 
 def white_point(img):
-    """Darkest the backdrop gets, from the frame border."""
+    """Darkest the backdrop gets, from the frame border.
+
+    A walk-past loop has the figure entering and leaving at the frame edges,
+    so a flat low percentile of the border samples the FIGURE and collapses
+    the white point to zero, which erases the whole sheet. Isolate the
+    backdrop population first (the bright half of the border), then take its
+    dark end.
+    """
     a = np.asarray(img.convert("RGB")).astype(np.float32).min(axis=2)
     edge = np.concatenate([a[:6].ravel(), a[-6:].ravel(),
                            a[:, :6].ravel(), a[:, -6:].ravel()])
-    return float(np.percentile(edge, 2.0))
+    backdrop = edge[edge >= np.percentile(edge, 55.0)]
+    if backdrop.size == 0:
+        backdrop = edge
+    white = float(np.percentile(backdrop, 5.0))
+    if white < 8.0:
+        # Border is entirely figure (or the source is not white-backed):
+        # fall back to the frame's own bright population.
+        white = float(np.percentile(a, 85.0))
+    return max(white, 8.0)
 
 
 def detect_shadow(frames):

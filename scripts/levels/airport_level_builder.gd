@@ -715,8 +715,11 @@ func _travelator(p: Vector3, yaw: float, flow: float, salt: int, L = 8.4) -> voi
 	# deck + end ramps the player can actually walk up
 	chunk._collider_yaw_box(p + Vector3(0, 0.065, 0), Vector3(L - 0.9, 0.13, BW + 0.5), yaw)
 	for e in [-1.0, 1.0]:
-		chunk._collider_rot_box(chunk._wp(p, Vector3(e * (L / 2.0 + 0.22), 0.05, 0), yaw),
-			Vector3(0.95, 0.035, BW + 0.5), Vector3(0, yaw, -e * 0.16))
+		var ramp_collider := chunk._collider_rot_box(
+			chunk._wp(p, Vector3(e * (L / 2.0 + 0.22), 0.05, 0), yaw),
+			Vector3(0.95, 0.035, BW + 0.5),
+			Vector3(0, yaw, -e * 0.16))
+		ramp_collider.set_meta("walkable_ramp", true)
 	var tv = Travelator.new()
 	tv.dirv = Vector3(flow, 0, 0).rotated(Vector3.UP, yaw)
 	tv.speed = 0.75
@@ -797,7 +800,7 @@ func _air_transit() -> void:
 func _air_transit_side_data(si: int, along_x: bool, wall_half: float) -> Dictionary:
 	var side = -wall_half if si == 0 else wall_half
 	var sdir = (3 if si == 0 else 2) if along_x else (1 if si == 0 else 0)
-	var info = WorldGen.edge_info(chunk.wseed, chunk.cell, sdir, chunk.theme)
+	var info = chunk._edge_info(chunk.cell, sdir)
 	var bay = []
 	if not info["wall"]:
 		var bt: float = float(info["t"]) - 6.0 if along_x else 6.0 - float(info["t"])

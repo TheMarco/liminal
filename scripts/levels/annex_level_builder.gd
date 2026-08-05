@@ -339,7 +339,7 @@ func _annex_blocks_doorway(p: Vector3, yaw: float,
 	var lo = Vector2(p.x - hx, p.z - hz)
 	var hi = Vector2(p.x + hx, p.z + hz)
 	for dir in 4:
-		var info = WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)
+		var info = chunk._edge_info(chunk.cell, dir)
 		if bool(info["wall"]):
 			continue
 		var a = float(info["t"]) - float(info["w"]) * 0.5 - ZONE_MARGIN
@@ -827,7 +827,7 @@ func _annex_pick_solid_wall(salt: int, avoid_utilities = false,
 		var dir = (start + step) % 4
 		if dir == avoid_dir:
 			continue
-		if not bool(WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]):
+		if not bool(chunk._edge_info(chunk.cell, dir)["wall"]):
 			continue
 		if avoid_utilities and _annex_wall_has_utility(dir):
 			continue
@@ -1239,7 +1239,7 @@ func _annex_passage() -> void:
 		_annex_corridor_side(true, far_shell, 2, corridor_finish)
 		if chunk._r(560) < 0.11:
 			var camera_dir = 3 if chunk._r(561) < 0.5 else 2
-			if WorldGen.edge_info(chunk.wseed, chunk.cell, camera_dir, chunk.theme)["wall"]:
+			if chunk._edge_info(chunk.cell, camera_dir)["wall"]:
 				chunk._security_camera_wall(camera_dir,
 					near_shell if camera_dir == 3 else far_shell)
 	else:
@@ -1249,7 +1249,7 @@ func _annex_passage() -> void:
 		_annex_corridor_side(false, far_shell, 0, corridor_finish)
 		if chunk._r(560) < 0.11:
 			var camera_dir = 1 if chunk._r(561) < 0.5 else 0
-			if WorldGen.edge_info(chunk.wseed, chunk.cell, camera_dir, chunk.theme)["wall"]:
+			if chunk._edge_info(chunk.cell, camera_dir)["wall"]:
 				chunk._security_camera_wall(camera_dir,
 					near_shell if camera_dir == 1 else far_shell)
 
@@ -1261,7 +1261,7 @@ func _annex_passage() -> void:
 
 func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
 		finish_idx: int) -> void:
-	var info = WorldGen.edge_info(chunk.wseed, chunk.cell, outer_dir, chunk.theme)
+	var info = chunk._edge_info(chunk.cell, outer_dir)
 	var toward = 1.0 if plane < chunk.S * 0.5 else -1.0
 	if info["wall"]:
 		_annex_corridor_segment(along_x, plane, 0.0, chunk.S, 0.0, chunk.ceil_h,

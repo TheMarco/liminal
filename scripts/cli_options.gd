@@ -42,6 +42,11 @@ var caption_preview := false
 var haunt := false
 var haunt_at := Vector3.ZERO
 var haunt_at_given := false
+## Dev: auto-press play on the objective room's tape right after floor start,
+## so screenshot runs can verify the zoom and the footage.
+var play_tape := false
+## Dev: force frequent passing-shadow and corner-apparition attempts.
+var passer := false
 var haunt_variant := -1
 var whispers := false
 var heartbeat := false
@@ -100,6 +105,10 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.caption_preview = true
 		elif arg == "--haunt":
 			o.haunt = true
+		elif arg == "--play-tape":
+			o.play_tape = true
+		elif arg == "--passer":
+			o.passer = true
 		elif arg.begins_with("--haunt-at="):
 			var parts := arg.substr(11).split(",")
 			if parts.size() >= 2:

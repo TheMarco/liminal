@@ -99,13 +99,22 @@ jobs:
         run: godot --headless --path . --script tools/audit_level_switches.gd -- --nologo
 
       - name: Audit Descent objective routes
-        run: godot --headless --path . --script tools/audit_descent_routes.gd -- 200
+        run: godot --headless --path . --script tools/audit_descent_routes.gd -- 8
+
+      - name: Audit blackout rewrites and mercy shortcuts
+        run: godot --headless --path . --script tools/audit_blackout_shortcuts.gd -- 30
 
       - name: Audit Descent runtime contracts
         run: godot --headless --path . --script tools/audit_descent_runtime.gd -- --mode=descent --nologo
 
+      - name: Audit persistent Descent checkpoint
+        run: godot --headless --path . --script tools/audit_descent_progress.gd
+
       - name: Audit hostile figure contract
         run: godot --headless --path . --script tools/audit_ghost_room_contract.gd
+
+      - name: Audit shared horror pacing director
+        run: godot --headless --path . --script tools/audit_horror_director.gd
 
       - name: Audit title navigation and attribution
         run: godot --headless --path . --script tools/audit_title_screen.gd
@@ -132,4 +141,4 @@ jobs:
         run: godot --headless --path . --script tools/audit_pool_scale.gd
 
       - name: Build distributable resource pack
-        run: godot --headless --quiet --path . --export-pack "macOS" "$RUNNER_TEMP/LiminalVegas-ci.pck"
+        run: godot --headless --quiet --path . --export-pack "macOS" "$RUNNER_TEMP/It wants you to stay-ci.pck"

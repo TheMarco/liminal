@@ -13,29 +13,81 @@ signal blackout_changed(on: bool)
 signal passive_changed(on: bool)
 signal run_ended(won: bool)
 signal anomaly_requested(cell: Vector2i, kind: int)
+## Every blackout changes the room the player is in (or the nearest safe room)
+## in a way that survives streaming. This is separate from the subtler
+## backtracking anomalies, which may happen as well.
+## Every actual blackout owns one new persistent doorway. `assistance` is
+## private selection state: presentation must never reveal whether the opening
+## was chosen because the player was lost or merely because the building moved.
+signal blackout_doorway_requested(proposal: Dictionary, assistance: bool)
 ## The called car finished its descent. Whoever owns the objective chunk opens
 ## the doors; the wait itself is run state so it survives the target room
 ## streaming out from under a player who walked off during it.
 signal lift_arrived()
+## The called car gave up because the player left the objective room. The
+## summon is a vigil, not an errand: walking away abandons it.
+signal lift_cancelled()
+## 0..1 — how precisely the thing in the dark has located a player who moved
+## during a blackout. Presentation only; at 1.0 `blackout_ambush` fires.
+signal blackout_locate_changed(value: float)
+## A moving player was found before the power came back.
+signal blackout_ambush()
+## Optional recordings share one no-repeat cycle across deaths and launches.
+## Main mirrors these two events into the persistent Descent checkpoint.
+signal short_tape_claimed(path: String)
+signal short_tape_cycle_restarted()
 
-enum Rule { STARE, STOP, BACKTRACK, BLACKOUT_MOVE }
+enum Rule { BLACKOUT_MOVE }
 
-const ORDER: Array[int] = [0, 7, 1, 4, 6, 8, 5, 2]
-const NAMES := [
-	"the casino", "the mall", "the office", "the airport",
-	"the school", "the prison", "the asylum", "the Annex",
-]
+## Descent is a story, so its macro-order never changes. The world seed still
+## changes the rooms, route, props and events within every floor.
+const FIXED_ORDER: Array[int] = [0, 7, 1, 4, 6, 8, 5, 9, 2, 10, 11]
+const FLOOR_COUNT := 11
+const THEME_NAMES := {
+	0: "the casino", 1: "the office", 2: "the Annex", 4: "the airport",
+	5: "the asylum", 6: "the school", 7: "the mall", 8: "the prison",
+	9: "the Poolrooms", 10: "the Monolith", 11: "the Upside Down",
+}
 const ARRIVAL_GRACE := 8.0
-## How close a figure has to be before standing still stops counting as
-## breaking rule 2. You are allowed to stop for the thing the building sent.
-const STOP_EXCUSE_D := 12.0
-const FLOOR_PRESSURE := [0.0, 0.09, 0.18, 0.27, 0.36, 0.46, 0.56, 0.68]
-## How long the car takes to reach you after the call. This is the only part of
-## a floor that is deliberately dead time, and it is the most dangerous part of
-## it: rule 2 forbids standing still, so the wait has to be paced on foot with
-## whatever the floor's attention level is spawning.
+const FLOOR_PRESSURE := [0.0, 0.07, 0.14, 0.21, 0.28,
+	0.35, 0.42, 0.49, 0.56, 0.63, 0.70]
+## How quickly a moving player is located during a blackout, and how slowly
+## that certainty fades while they hold still. Roughly 3.3 cumulative seconds
+## of movement is fatal; freezing buys time but does not erase the mistake.
+const BLACKOUT_LOCATE_RATE := 0.30
+const BLACKOUT_LOCATE_DECAY := 0.04
+## Moving through a blackout with the torch lit is worse than moving dark.
+## Strictly a multiplier on MOVEMENT: a player standing still with the beam up
+## is never located, because the caption promises the torch still works and a
+## lit torch is the ward that holds a looming figure at arm's length.
+const BLACKOUT_TORCH_LOCATE := 1.5
+## Attention cost of holding sprint. Running is legal and loud — it is not a
+## rule break, it is feeding the building, and every interval that feeds on
+## threat shortens for it.
+const SPRINT_ATTENTION_RATE := 0.012
+const MERCY_STALL_SECONDS := 50.0
+const MERCY_MIN_VISITED := 6
+## How long the car takes to reach you after the call. This is the only part
+## of a floor that is deliberately dead time, and the most dangerous: the
+## wait is scored by figures, and every second of it is spent defending the
+## room the player is not allowed to leave without losing the car.
 const LIFT_WAIT_FIRST := 14.0
 const LIFT_WAIT_LAST := 34.0
+## Two authored breaks in the ramp, because eleven identical vigils teach the
+## rhythm and then bore it: on one floor the car is already there, and on one
+## it comes from much further down than it should.
+const LIFT_WAIT_INSTANT_FLOOR := 4  # the school
+const LIFT_WAIT_LONG_FLOOR := 6     # the asylum
+
+## What a floor's theme does to pacing knobs that already exist. Multipliers
+## on the baseline; a theme missing from the table is 1.0 across the board.
+## This is authoring, not difficulty scaling: the prison's power fails often
+## and briefly, the Monolith is slow, sparse and heavy.
+const THEME_MODS := {
+	8: {"blackout_due": 0.70, "blackout_len": 0.80},              # the prison
+	10: {"blackout_due": 1.15, "blackout_len": 1.10,
+		"grace": 1.35, "figures": 1.35},                          # the Monolith
+}
 
 var floor_idx := 0
 var attention := 0.0
@@ -51,46 +103,87 @@ var lift_wait_left := 0.0
 ## Set once the player has stepped out of the car they arrived in. From then on
 ## that car rebuilds shut and dead.
 var arrival_used := false
+## Set when the floor's tape has played to its end. The lift refuses a player
+## who has not watched it.
+var tape_watched := false
+## True while the ritual television holds the player's view. The rules go
+## passive: a moment the game demands cannot also be a moment it punishes.
+var watching := false
+## The objective cell, mirrored in by whoever built the route. Sentinel means
+## no route yet, so nothing can be cancelled against it.
+var target_cell := Vector2i(1 << 30, 1 << 30)
+## One-way ratchet: how far the next floor has already crept into this one.
+## Raised by the owner as the player nears the lift; never lowered mid-floor.
+var bleed := 0.0
+## Time walked on this floor alone.
+var floor_elapsed := 0.0
+
+## The run's one dead charging station has already sprung its collapse. Never
+## reset by prepare_floor: a trap the player has seen through stays sprung
+## across deaths on the same building.
+var broken_station_tried := false
 
 var visited := {}
-var departed := {}
-var charged_backtracks := {}
 var anomalies := {}
 var player: Player
-## Set by whoever owns both — the stop rule needs to know when something is
-## close enough that stopping is a reaction rather than a violation.
-var figures: ShadowFigures = null
-## True while a pursuer is walking the floor. Blackouts hold their timer rather
-## than firing into one: the pursuer cannot be burned, so "stand still" and
-## "something unkillable is closing at 3 m/s" have no play between them.
-var pursuer_active := false
+var horror_director: HorrorDirector
 var world_seed := 1
 var pinned_attention := -1.0
+var route: DescentRoute
+var mercy_armed := false
+var pending_blackout_doorway := {}
 
 var _cell := Vector2i.ZERO
 var _pending_cell := Vector2i.ZERO
-var _stop_time := 0.0
-var _stop_cost := 0.0
-var _stop_episode := false
 var _blackout_grace := 0.0
 var _blackout_cost := 0.0
 var _blackout_episode := false
 var _blackout_due := 0.0
 var _blackout_left := 0.0
+var _blackout_locate := 0.0
+var _ambushed := false
 var _passive := false
 var _rng := RandomNumberGenerator.new()
+var _order: Array[int] = []
+## One no-replacement recording deal spans the whole Descent session. Keys are
+## stable setup identities, so a streamed-out television rebuilds with the same
+## tape, while a new television cannot repeat it before the library cycles.
+var _tape_assignments := {}
+var _tape_completed := {}
+var _short_tape_deck: Array[String] = []
+var _short_tape_cycle := 0
+var _tape_seed := -1
+var _last_short_tape := ""
+var _short_tape_exclusions: Array[String] = []
+var _best_route_distance := -1
+var _route_stall_time := 0.0
+
+
+## Kept seed-shaped for callers and audits, but intentionally seed-independent.
+static func order_for(_ws: int) -> Array[int]:
+	return FIXED_ORDER.duplicate()
+
+
+func order() -> Array[int]:
+	if _order.is_empty():
+		_order = order_for(world_seed)
+	return _order
 
 
 func theme() -> int:
-	return ORDER[floor_idx]
+	return order()[floor_idx]
+
+
+func floor_name(idx: int = -1) -> String:
+	return THEME_NAMES[order()[idx if idx >= 0 else floor_idx]]
 
 
 func is_last_floor() -> bool:
-	return floor_idx >= ORDER.size() - 1
+	return floor_idx >= FLOOR_COUNT - 1
 
 
 func floor_progress() -> float:
-	return float(floor_idx) / float(maxi(1, ORDER.size() - 1))
+	return float(floor_idx) / float(FLOOR_COUNT - 1)
 
 
 ## Mistakes raise attention; simply going deeper raises pressure. Keeping the
@@ -100,10 +193,20 @@ func threat() -> float:
 	return clampf(attention + float(FLOOR_PRESSURE[floor_idx]), 0.0, 1.0)
 
 
+func _theme_mod(key: String) -> float:
+	var mods: Dictionary = THEME_MODS.get(theme(), {})
+	return float(mods.get(key, 1.0))
+
+
+## Read by main on every floor switch and multiplied into the figure
+## manager's spawn interval, so a theme can be sparse without touching the
+## threat curve.
+func figure_interval_scale() -> float:
+	return _theme_mod("figures")
+
+
 func prepare_floor() -> void:
 	visited.clear()
-	departed.clear()
-	charged_backtracks.clear()
 	anomalies.clear()
 	if blackout:
 		blackout = false
@@ -114,14 +217,23 @@ func prepare_floor() -> void:
 	lift_open = false
 	lift_wait_left = 0.0
 	arrival_used = false
+	tape_watched = false
+	watching = false
+	target_cell = Vector2i(1 << 30, 1 << 30)
+	bleed = 0.0
+	floor_elapsed = 0.0
 	_cell = Vector2i.ZERO
 	_pending_cell = Vector2i.ZERO
-	_stop_time = 0.0
-	_stop_cost = 0.0
-	_stop_episode = false
 	_blackout_grace = 0.0
 	_blackout_cost = 0.0
 	_blackout_episode = false
+	_blackout_locate = 0.0
+	_ambushed = false
+	route = null
+	mercy_armed = false
+	pending_blackout_doorway.clear()
+	_best_route_distance = -1
+	_route_stall_time = 0.0
 	_rng.seed = int(world_seed) ^ (floor_idx * 104729 + 0x5EED)
 	_schedule_blackout()
 
@@ -144,22 +256,19 @@ func finish(won: bool) -> void:
 	run_ended.emit(won)
 
 
-## Only the three-second banish charges. Merely holding one still by keeping it
-## in the centre of frame is free, and always was — but at 0.10 this was the
-## most expensive violation in the game, which made the one torch-free defence
-## the fastest route to more figures and an earlier blackout.
-func add_stare_violation() -> void:
-	if suspended or ended or arrival_grace > 0.0:
-		return
-	_charge(Rule.STARE, 0.05, true)
-
-
 ## Static so the objective chunk can present the wait without holding a
 ## reference to run state it must not be able to mutate.
 static func lift_wait_for(p_floor_idx: int) -> float:
-	var p := clampf(float(p_floor_idx) / float(maxi(1, ORDER.size() - 1)),
-		0.0, 1.0)
-	return lerpf(LIFT_WAIT_FIRST, LIFT_WAIT_LAST, p)
+	# The school's car answers at once — one press, doors almost immediately.
+	# The break in the pattern is the point; by floor five the wait is learned.
+	if p_floor_idx == LIFT_WAIT_INSTANT_FLOOR:
+		return 1.0
+	var p := clampf(float(p_floor_idx) / float(FLOOR_COUNT - 1), 0.0, 1.0)
+	var wait := lerpf(LIFT_WAIT_FIRST, LIFT_WAIT_LAST, p)
+	# The asylum's takes roughly twice what the ramp says it should.
+	if p_floor_idx == LIFT_WAIT_LONG_FLOOR:
+		wait *= 2.0
+	return wait
 
 
 func lift_wait_seconds() -> float:
@@ -173,6 +282,105 @@ func call_lift() -> void:
 		return
 	lift_called = true
 	lift_wait_left = lift_wait_seconds()
+
+
+## Walking out on the wait abandons it. The car is honest, but only to a
+## player who stands their ground for it.
+func cancel_lift() -> void:
+	if ended or not lift_called or lift_open:
+		return
+	lift_called = false
+	lift_wait_left = 0.0
+	lift_cancelled.emit()
+
+
+func mark_tape_watched() -> void:
+	tape_watched = true
+
+
+func tape_for_setup(key: String, long_form := false) -> String:
+	if _tape_assignments.has(key):
+		return str(_tape_assignments[key])
+	var tape := ""
+	if long_form:
+		# The final floor has no ritual set; floors 0..9 map one-to-one to the
+		# ten authored long-form chapters once that library is complete.
+		tape = VhsTapeLibrary.objective_chapter(floor_idx)
+	else:
+		_ensure_tape_deck()
+		if _short_tape_deck.is_empty():
+			_refill_short_tape_deck()
+		if not _short_tape_deck.is_empty():
+			tape = _short_tape_deck.pop_back()
+			_last_short_tape = tape
+	if tape.is_empty():
+		return ""
+	_tape_assignments[key] = tape
+	if not long_form and not _short_tape_exclusions.has(tape):
+		_short_tape_exclusions.append(tape)
+		short_tape_claimed.emit(tape)
+	return tape
+
+
+func mark_setup_tape_completed(key: String) -> void:
+	_tape_completed[key] = true
+
+
+func setup_tape_completed(key: String) -> bool:
+	return bool(_tape_completed.get(key, false))
+
+
+func tape_assignment_count() -> int:
+	return _tape_assignments.size()
+
+
+## Restore the current optional-video cycle before any set claims a tape. Only
+## the already-seen paths are persisted; the remaining deal is regenerated
+## deterministically and filtered, which preserves the no-repeat promise.
+func restore_short_tape_cycle(paths: Array[String]) -> void:
+	_short_tape_exclusions.clear()
+	for path in paths:
+		if not path.is_empty() and not _short_tape_exclusions.has(path):
+			_short_tape_exclusions.append(path)
+	_short_tape_deck.clear()
+	_tape_seed = -1
+
+
+func _ensure_tape_deck() -> void:
+	if _tape_seed == world_seed:
+		return
+	if _tape_seed != -1:
+		_short_tape_exclusions.clear()
+		_tape_assignments.clear()
+		_tape_completed.clear()
+	_tape_seed = world_seed
+	_short_tape_deck.clear()
+	_short_tape_cycle = 0
+	_last_short_tape = ""
+	_refill_short_tape_deck()
+
+
+func _refill_short_tape_deck() -> void:
+	var library := VhsTapeLibrary.paths(false)
+	var deck := VhsTapeLibrary.shuffled(world_seed, _short_tape_cycle, false)
+	for path in _short_tape_exclusions:
+		deck.erase(path)
+	# Every short has now played. Repetition becomes legal only at this point,
+	# and the persistent cycle is cleared at exactly the same boundary.
+	if deck.is_empty() and not library.is_empty() \
+			and not _short_tape_exclusions.is_empty():
+		_short_tape_exclusions.clear()
+		short_tape_cycle_restarted.emit()
+		deck = VhsTapeLibrary.shuffled(world_seed, _short_tape_cycle, false)
+	# The first draw of a new cycle is pop_back(). Do not put the previous
+	# cycle's last recording immediately back in the machine when alternatives
+	# exist, even though repetition is now legal.
+	if deck.size() > 1 and deck[-1] == _last_short_tape:
+		var held: String = deck[-1]
+		deck[-1] = deck[0]
+		deck[0] = held
+	_short_tape_deck = deck
+	_short_tape_cycle += 1
 
 
 func suspend_rules() -> void:
@@ -202,16 +410,27 @@ func _physics_process(dt: float) -> void:
 			lift_open = true
 			lift_arrived.emit()
 	elapsed += dt
+	floor_elapsed += dt
 	if pinned_attention >= 0.0:
 		attention = pinned_attention
 	if arrival_grace > 0.0:
 		arrival_grace = maxf(0.0, arrival_grace - dt)
-		_track_cell(false)
+		_track_cell()
 		return
 
 	var speed := Vector2(player.velocity.x, player.velocity.z).length()
 	var charged := false
-	_track_cell(true)
+	_track_cell()
+	if not blackout and not watching and not lift_called:
+		_track_route_stall(dt, speed)
+	if lift_called and not lift_open \
+			and target_cell.x != (1 << 30) and _cell != target_cell:
+		cancel_lift()
+	# Sprint is legal, and it costs exactly what it sounds like it should.
+	# Not charged during a blackout: movement is already the crime there.
+	if speed > 4.2 and not blackout and pinned_attention < 0.0:
+		_set_attention(attention + dt * SPRINT_ATTENTION_RATE)
+		charged = true
 	if blackout:
 		_blackout_left -= dt
 		_blackout_grace = maxf(0.0, _blackout_grace - dt)
@@ -226,40 +445,33 @@ func _physics_process(dt: float) -> void:
 				_blackout_cost += amount
 				_charge(Rule.BLACKOUT_MOVE, amount, false)
 				charged = true
+			# Moving with the torch up is the worst of both: the beam is a
+			# beacon to whatever is locating you. Kill the light to run.
+			var locate_rate := BLACKOUT_LOCATE_RATE
+			if player.flashlight != null and player.flashlight.visible:
+				locate_rate *= BLACKOUT_TORCH_LOCATE
+			_blackout_locate = minf(1.0,
+				_blackout_locate + dt * locate_rate)
+			blackout_locate_changed.emit(_blackout_locate)
+			if _blackout_locate >= 1.0 and not _ambushed:
+				_ambushed = true
+				blackout_ambush.emit()
 		elif speed <= 0.3:
 			_blackout_episode = false
+			if _blackout_locate > 0.0:
+				_blackout_locate = maxf(0.0,
+					_blackout_locate - dt * BLACKOUT_LOCATE_DECAY)
+				blackout_locate_changed.emit(_blackout_locate)
 		if _blackout_left <= 0.0:
 			_end_blackout()
 	else:
-		# The timer is held, not spent, while a pursuer is out. It resumes where
-		# it left off once the floor is quiet again.
-		if not pursuer_active:
+		# The timer is held while the lift is on its way or a recording owns the
+		# player's view. The summon wait is scored by figures, never by a blackout.
+		if not (lift_called and not lift_open) and not watching:
 			_blackout_due -= dt
 			if _blackout_due <= 0.0:
 				_begin_blackout()
 				charged = true
-		if speed < 0.3:
-			# Standing still because something is bearing down on you is not the
-			# dawdling rule 2 exists to punish. Freeze the clock rather than
-			# resetting it, so the excuse cannot be farmed for free rest.
-			if not _stop_excused():
-				_stop_time += dt
-				var stop_threshold := lerpf(6.0, 3.75, floor_progress())
-				if _stop_time >= stop_threshold:
-					if not _stop_episode:
-						_stop_episode = true
-						_stop_cost = 0.04
-						_charge(Rule.STOP, 0.04, true)
-						charged = true
-					elif _stop_cost < 0.12:
-						var amount := minf(dt * 0.01, 0.12 - _stop_cost)
-						_stop_cost += amount
-						_charge(Rule.STOP, amount, false)
-						charged = true
-		else:
-			_stop_time = 0.0
-			_stop_cost = 0.0
-			_stop_episode = false
 
 	if not charged and pinned_attention < 0.0 and attention > 0.0:
 		var recovery := lerpf(0.0025, 0.0016, floor_progress())
@@ -272,7 +484,7 @@ func _physics_process(dt: float) -> void:
 ## should be closing on them. Recomputed every frame and emitted on change.
 func _update_passive() -> void:
 	var now := not ended and not suspended \
-		and (blackout or arrival_grace > 0.0)
+		and (blackout or arrival_grace > 0.0 or watching)
 	if now == _passive:
 		return
 	_passive = now
@@ -283,25 +495,55 @@ func rules_force_passive() -> bool:
 	return _passive
 
 
-func _stop_excused() -> bool:
-	return figures != null and figures.has_close_figure(STOP_EXCUSE_D)
-
-
-func _track_cell(enforce: bool) -> void:
+func _track_cell() -> void:
 	var now := _player_cell()
 	if now != _pending_cell:
 		var old := _cell
 		_pending_cell = now
 		if old != now:
-			departed[old] = true
 			_maybe_anomaly(old)
 	if now == _cell or not _inside_cell(now, 1.0):
 		return
 	_cell = now
 	visited[now] = true
-	if enforce and departed.has(now) and not charged_backtracks.has(now):
-		charged_backtracks[now] = true
-		_charge(Rule.BACKTRACK, 0.06, true)
+
+
+func set_route(value: DescentRoute) -> void:
+	route = value
+	_best_route_distance = -1
+	_route_stall_time = 0.0
+	mercy_armed = false
+
+
+## Use graph progress, not the straight-line HUD number. A correct dogleg can
+## move away from the lift in metres while still advancing through the maze.
+func _track_route_stall(dt: float, speed: float) -> void:
+	if route == null or not route.contains(_cell):
+		return
+	var distance := route.distance_from_target(_cell)
+	if distance < 0:
+		return
+	if _best_route_distance < 0 or distance < _best_route_distance:
+		_best_route_distance = distance
+		_route_stall_time = 0.0
+		mercy_armed = false
+		return
+	if speed > 0.3:
+		_route_stall_time += dt
+	if not mercy_armed and _route_stall_time >= MERCY_STALL_SECONDS \
+			and visited.size() >= MERCY_MIN_VISITED:
+		mercy_armed = true
+		# Once frustration is proven, do not make the player wait another two
+		# minutes for the architecture to act.
+		if not blackout and _blackout_due > 0.0:
+			_blackout_due = minf(_blackout_due, 7.0)
+
+
+func mark_helpful_doorway_created() -> void:
+	mercy_armed = false
+	_route_stall_time = 0.0
+	_best_route_distance = route.distance_from_target(_cell) \
+		if route != null else -1
 
 
 func _maybe_anomaly(at: Vector2i) -> void:
@@ -357,22 +599,43 @@ func _schedule_blackout() -> void:
 	var pressure := threat()
 	var lo := lerpf(90.0, 25.0, pressure)
 	var hi := lerpf(150.0, 40.0, pressure)
-	_blackout_due = _rng.randf_range(lo, hi)
+	_blackout_due = _rng.randf_range(lo, hi) * _theme_mod("blackout_due")
 
 
 func _begin_blackout() -> void:
 	if blackout:
 		return
+	# A blackout without a new doorway is not allowed to start. If the nearby
+	# safe edges have been exhausted, quietly retry later instead of falling
+	# back to debris, furniture deletion, or an unmotivated light source.
+	if route == null:
+		_blackout_due = 6.0
+		return
+	var proposal := route.find_blackout_doorway(_cell, visited, mercy_armed)
+	if proposal.is_empty():
+		_blackout_due = 6.0
+		return
+	# The doorway is valid, but another authored beat may still own the moment.
+	# Retry shortly without spending or replacing the normal blackout schedule.
+	if horror_director != null and not horror_director.try_start_blackout():
+		_blackout_due = 4.0
+		return
+	pending_blackout_doorway = proposal
+	var assistance := mercy_armed \
+		and bool(proposal.get("assistance", false))
 	blackout = true
 	_blackout_left = _rng.randf_range(
 		lerpf(5.0, 6.5, floor_progress()),
-		lerpf(8.0, 9.5, floor_progress()))
-	_blackout_grace = lerpf(0.75, 0.45, floor_progress())
+		lerpf(8.0, 9.5, floor_progress())) * _theme_mod("blackout_len")
+	# A generous beat to actually stop: charging a player who was mid-stride
+	# when the lights died taught nothing except that the rule is unfair.
+	_blackout_grace = lerpf(2.6, 1.6, floor_progress()) * _theme_mod("grace")
 	_blackout_cost = 0.0
 	_blackout_episode = false
-	_stop_time = 0.0
-	_stop_episode = false
+	_blackout_locate = 0.0
+	_ambushed = false
 	blackout_changed.emit(true)
+	blackout_doorway_requested.emit(proposal, assistance)
 	# Recompute now rather than at the top of the next frame: for that one frame
 	# the lights would be out with the figures still free to close.
 	_update_passive()
@@ -382,9 +645,55 @@ func _end_blackout() -> void:
 	if not blackout:
 		return
 	blackout = false
+	if horror_director != null:
+		horror_director.end_blackout()
 	_blackout_grace = 0.0
 	_blackout_cost = 0.0
 	_blackout_episode = false
+	if _blackout_locate > 0.0:
+		_blackout_locate = 0.0
+		blackout_locate_changed.emit(0.0)
+	# Finalize secondary anomalies while the room is still dark. The doorway
+	# itself was already installed at blackout onset so every route consumer and
+	# any streamed geometry agree before restored light exposes the transition.
+	_post_blackout_changes()
 	blackout_changed.emit(false)
+	pending_blackout_doorway.clear()
 	_update_passive()
 	_schedule_blackout()
+	if mercy_armed:
+		_blackout_due = minf(_blackout_due, 7.0)
+
+
+## The new doorway is the guaranteed visible change. The older backtracking
+## anomalies remain as optional secondary unease in one or two visited cells.
+func _post_blackout_changes() -> void:
+	if player == null or ended:
+		return
+	var candidates: Array[Vector2i] = []
+	for key in visited:
+		var at: Vector2i = key
+		if at == _cell or at == Vector2i.ZERO or at == target_cell \
+				or anomalies.has(at):
+			continue
+		var span := (at - _cell).abs()
+		if maxi(span.x, span.y) <= 3:
+			candidates.append(at)
+	if candidates.is_empty():
+		return
+	var count := mini(candidates.size(), 1 + (1 if _rng.randf() < 0.4 else 0))
+	for i in count:
+		var pick := candidates[_rng.randi_range(0, candidates.size() - 1)]
+		candidates.erase(pick)
+		# Weighted toward the quiet rearrangement; the darker anomalies stay
+		# rare so a blackout is not simply a figure delivery system.
+		var roll := _rng.randf()
+		var kind := 2
+		if roll < 0.18:
+			kind = 1
+		elif roll < 0.34:
+			kind = 0
+		anomalies[pick] = kind
+		anomaly_requested.emit(pick, kind)
+		if candidates.is_empty():
+			break

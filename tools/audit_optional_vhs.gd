@@ -1,0 +1,233 @@
+extends SceneTree
+## Regression audit for Descent's rare optional VHS sets and split no-repeat
+## tape pools.
+## Run: godot --headless --path . --script tools/audit_optional_vhs.gd
+
+const BASE_SEEDS := [405195947, 7, 1234577]
+
+
+class TapeListener extends Node:
+	var run := DescentRun.new()
+	var objective_finishes := 0
+	var optional_finishes := 0
+
+	func _init() -> void:
+		run.world_seed = 918273
+
+	func descent_tape_for(key: String, long_form: bool) -> String:
+		return run.tape_for_setup(key, long_form)
+
+	func descent_setup_tape_completed(key: String) -> bool:
+		return run.setup_tape_completed(key)
+
+	func descent_setup_tape_finished(key: String, objective: bool) -> void:
+		run.mark_setup_tape_completed(key)
+		if objective:
+			objective_finishes += 1
+		else:
+			optional_finishes += 1
+
+	func descent_tape_watch(_on: bool) -> void:
+		pass
+
+
+func _init() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
+	var failures: Array[String] = []
+	var all := VhsTapeLibrary.all_paths()
+	var shorts := VhsTapeLibrary.paths(false)
+	var longs := VhsTapeLibrary.paths(true)
+	if all.size() != longs.size() + shorts.size():
+		failures.append("catalogue split lost recordings: %d != %d + %d" % [
+			all.size(), longs.size(), shorts.size()])
+	if longs.is_empty() or shorts.is_empty():
+		failures.append("both objective and optional tape pools must be non-empty")
+	for path in all:
+		if load(path) as VideoStream == null:
+			failures.append("not a VideoStream: " + path)
+	for path in longs:
+		if shorts.has(path):
+			failures.append("recording appears in both pools: " + path)
+	var shader_source := FileAccess.get_file_as_string(
+		"res://shaders/vhs_tape.gdshader")
+	if shader_source.contains("smoothstep(0.09, 0.0"):
+		failures.append("VHS tracking band still uses undefined reversed smoothstep")
+	if not shader_source.contains("band_shift") \
+			or not shader_source.contains("fuv.x += band"):
+		failures.append("VHS footage has no visible tracking displacement")
+	_audit_deck(shorts, longs, failures)
+	await _audit_playback_modes(shorts, longs, failures)
+
+	var route_setups := 0
+	var placed_setups := 0
+	for base in BASE_SEEDS:
+		var order := DescentRun.order_for(base)
+		for floor_idx in DescentRun.FLOOR_COUNT:
+			var theme: int = order[floor_idx]
+			var ws := WorldGen.level_seed(base, theme)
+			var route := DescentRoute.build(ws, theme, floor_idx)
+			var cells := route.optional_vhs_cells()
+			var expected := clampi(roundi(route.walk_metres() \
+				/ DescentRoute.OPTIONAL_VHS_METRES),
+				DescentRoute.OPTIONAL_VHS_MIN, DescentRoute.OPTIONAL_VHS_MAX)
+			if cells.size() != expected:
+				failures.append("seed %d floor %d expected %d route sets, got %d" % [
+					base, floor_idx + 1, expected, cells.size()])
+			var rebuilt := DescentRoute.build(ws, theme, floor_idx)
+			if cells != rebuilt.optional_vhs_cells():
+				failures.append("seed %d floor %d route selection changed on rebuild" % [
+					base, floor_idx + 1])
+			var path := route.path_from_origin()
+			for cell in cells:
+				route_setups += 1
+				if not path.has(cell) or cell == route.origin or cell == route.target:
+					failures.append("invalid route setup cell %s" % cell)
+				var key := "audit:%d:%d:%d:%d" % [
+					base, floor_idx, cell.x, cell.y]
+				var chunk := Chunk.new(ws, cell, theme, {
+					"descent": true,
+					"floor_idx": floor_idx,
+					"base_seed": base,
+					"optional_vhs": true,
+					"optional_vhs_key": key,
+				})
+				root.add_child(chunk)
+				await process_frame
+				var set := chunk.get_node_or_null("OptionalVhs") as VhsRitual
+				if set == null:
+					failures.append("optional set did not place seed=%d floor=%d theme=%d cell=%s" % [
+						base, floor_idx + 1, theme, cell])
+				elif set.objective or not set.has_meta("optional_vhs") \
+						or set.get_node_or_null("DescentTapePlay") == null:
+					failures.append("optional set contract invalid at %s" % cell)
+				elif chunk._optional_vhs_hits_doorway(set.position, set.rotation.y):
+					failures.append("optional set overlaps a doorway approach at %s" % cell)
+				else:
+					placed_setups += 1
+				root.remove_child(chunk)
+				chunk.free()
+
+	for failure in failures:
+		print("  FAIL " + failure)
+	if failures.is_empty():
+		print("optional VHS audit: PASS — %d tapes (%d long/%d short), %d/%d route sets placed" % [
+			all.size(), longs.size(), shorts.size(), placed_setups, route_setups])
+		quit()
+	else:
+		quit(1)
+
+
+func _audit_deck(shorts: Array[String], longs: Array[String],
+		failures: Array[String]) -> void:
+	var run := DescentRun.new()
+	run.world_seed = 12345
+	var seen := {}
+	for i in shorts.size():
+		var key := "short:%d" % i
+		var tape := run.tape_for_setup(key, false)
+		if not shorts.has(tape):
+			failures.append("%s draw escaped its pool" % key)
+		if seen.has(tape):
+			failures.append("%s repeated before pool exhaustion" % key)
+		seen[tape] = true
+		if run.tape_for_setup(key, false) != tape:
+			failures.append("%s assignment changed on revisit" % key)
+	if seen.size() != shorts.size():
+		failures.append("short pool dealt %d/%d unique recordings" % [
+			seen.size(), shorts.size()])
+	var cycled := run.tape_for_setup("short:cycle", false)
+	if not shorts.has(cycled):
+		failures.append("post-exhaustion draw escaped the short pool")
+
+	# Long recordings are story chapters, fixed by floor rather than dealt.
+	for floor_idx in 10:
+		run.floor_idx = floor_idx
+		var key := "floor:%d:objective" % floor_idx
+		var tape := run.tape_for_setup(key, true)
+		var expected := VhsTapeLibrary.objective_chapter(floor_idx)
+		if tape != expected or not longs.has(tape):
+			failures.append("floor %d objective chapter was %s, expected %s" % [
+				floor_idx + 1, tape, expected])
+		if run.tape_for_setup(key, true) != tape:
+			failures.append("floor %d objective chapter changed on revisit" % [
+				floor_idx + 1])
+
+	# Claiming the first optional after an objective must initialize the short
+	# deck without erasing the already-watched objective state.
+	var mixed := DescentRun.new()
+	mixed.world_seed = 54321
+	var objective_key := "floor:0:objective"
+	mixed.tape_for_setup(objective_key, true)
+	mixed.mark_setup_tape_completed(objective_key)
+	mixed.tape_for_setup("mixed:optional", false)
+	if not mixed.setup_tape_completed(objective_key):
+		failures.append("first optional claim erased objective completion")
+	mixed.free()
+
+	var done_key := "persist-across-floor"
+	run.mark_setup_tape_completed(done_key)
+	run.prepare_floor()
+	if not run.setup_tape_completed(done_key):
+		failures.append("optional completion was lost across prepare_floor")
+	if not shorts.has(VhsTapeLibrary.deterministic_fallback(12345,
+			"optional", false)):
+		failures.append("optional fallback did not use the short pool")
+	if not longs.has(VhsTapeLibrary.deterministic_fallback(12345,
+			"objective", true)):
+		failures.append("objective fallback did not use the long pool")
+
+
+func _audit_playback_modes(shorts: Array[String], longs: Array[String],
+		failures: Array[String]) -> void:
+	var listener := TapeListener.new()
+	root.add_child(listener)
+	listener.add_to_group("descent_listener")
+	var optional := VhsRitual.new()
+	optional.objective = false
+	optional.setup_key = "optional-mode"
+	root.add_child(optional)
+	var objective := VhsRitual.new()
+	objective.objective = true
+	objective.setup_key = "objective-mode"
+	root.add_child(objective)
+	await process_frame
+	optional._claim_tape()
+	objective._claim_tape()
+	if not shorts.has(optional._tape_path):
+		failures.append("optional VCR did not claim a short recording")
+	if not longs.has(objective._tape_path):
+		failures.append("objective VCR did not claim a long recording")
+	optional._on_activated(null)
+	if optional._video == null or optional._video_vp == null:
+		failures.append("optional VCR did not construct its video viewport")
+	else:
+		if optional._video_vp.render_target_update_mode \
+				!= SubViewport.UPDATE_ALWAYS:
+			failures.append("video viewport did not update during playback")
+		if not optional._video.is_playing():
+			failures.append("claimed recording did not start playing")
+	if optional._screen_mat == null \
+			or optional._screen_mat.shader.resource_path \
+				!= "res://shaders/vhs_tape.gdshader":
+		failures.append("CRT screen lost its VHS distortion shader")
+	else:
+		if float(optional._screen_mat.get_shader_parameter("use_footage")) != 1.0:
+			failures.append("CRT shader did not enter distorted-footage mode")
+		if optional._screen_mat.get_shader_parameter("tape_tex") == null:
+			failures.append("decoded recording was not bound to the CRT shader")
+	optional.reset_tape()
+	optional._finish_tape()
+	if listener.optional_finishes != 1 or listener.objective_finishes != 0:
+		failures.append("optional completion mutated the objective channel")
+	objective._finish_tape()
+	if listener.objective_finishes != 1:
+		failures.append("objective completion did not reach its gate channel")
+	root.remove_child(optional)
+	optional.free()
+	root.remove_child(objective)
+	objective.free()
+	root.remove_child(listener)
+	listener.free()

@@ -2,22 +2,15 @@ class_name ShadowFigure
 extends Node3D
 ## One of them. A real human silhouette (CC0/CC-BY photo-traced cutouts in
 ## textures/ghosts/) on a cylindrical billboard, edges eaten by drifting
-## noise. It watches for your attention: look straight at it — after a
-## moment's grace, long enough to be sure you saw something — and it stops
-## existing. Otherwise it keeps closing until one of you is gone.
+## noise. Watching it does not stop it and cannot banish it: it walks at you
+## slowly while you hold it in view, and closes hard the moment you cannot see
+## it. It follows through several rooms before distance can finally shed it;
+## the torch or its touch can end the encounter sooner.
 
-const GAZE_ANG := 0.22      # radians off screen-centre that counts as looking
-## Looking at one used to banish it in half a second, which would make the
-## flashlight pointless. A stare now HOLDS it — it cannot move while you are
-## looking — and wears it down slowly. The torch is the fast way.
-const GAZE_TIME := 3.0
 const FADE_T := 0.95
 
-## It closes the distance unless you are looking straight at it. Freezing it on
-## the whole camera frustum was far too generous: that is a seventy degree cone,
-## and a figure you have noticed is a figure you keep on screen, so nothing ever
-## moved. Holding it now costs you your centre of vision — anything you have
-## merely clocked in the corner of your eye is still coming.
+## The creep. Watching a figure never freezes it — it keeps coming, slowly
+## enough that a player with a plan has time to execute it.
 const ADVANCE_SPD := 1.25
 ## The weeping-angel speed. While it is genuinely off screen — or behind
 ## something — it does not creep, it closes. Turning your back is the expensive
@@ -29,19 +22,61 @@ const UNSEEN_SPD := 4.5
 const REVEAL_GAIN := 2.0
 const REVEAL_SCARE_GAP := 3.0
 const ADVANCE_MIN := 1.05   # it has you at arm's length
-## Half-angle that counts as looking straight at it. Wider than the stare that
-## wears it down, so holding one still is easier than banishing it.
-const HOLD_CONE := 0.42
 ## Coming out from behind cover costs it a beat, which gives the player a fair
 ## window to aim after the figure has walked around an obstruction.
 const REVEAL_HOLD := 0.6
 ## The widest camera-facing cutout is roughly 1.3m across. Movement reserves
 ## that entire silhouette, not just an invisible point at its feet, so no part
 ## of a ghost can protrude through a wall while it approaches.
-const MOVE_RADIUS := 0.68
-const MOVE_HEIGHT := 2.55
+## Slimmer than the visual silhouette on purpose: at 0.68 the capsule could
+## not fit the narrower generated doorways at all, so a pursuing figure hit
+## the frame and stalled there. A little visual overlap at a jamb is a fair
+## price for it actually coming through the door.
+const MOVE_RADIUS := 0.52
+## The visible cutout can loom above an ordinary person, but its movement
+## sweep must fit below the 2.25m lintel used by most generated doorways.
+## At 2.55m the capsule hit the header even when perfectly centred in the
+## opening, so doorway-aware routing alone could never make it cross.
+const MOVE_HEIGHT := 2.08
 const MOVE_LOOKAHEAD := 0.18
+const ROUTE_REPATH_TIME := 0.5
+const ROUTE_SEARCH_RADIUS := 32
+const DOORWAY_CROSS_INSET := 0.28
+## A player has to put real architecture behind them to escape an encounter.
+## The figure follows through this many room boundaries, then may give up only
+## while the player remains in a different room.
+const CHASE_DOOR_LIMIT := 3
 const NO_ROOM := Vector2i(2147483647, 2147483647)
+
+## Per-variant behaviour: [creep m/s, unseen m/s, burn s, unseen park m,
+## chase doors]. The first four variants are the baseline; the last three are
+## archetypes a player learns to recognise, so late floors can introduce a new
+## idea instead of only shortening the spawn interval.
+## HARD CONSTRAINT on every row: (park − ADVANCE_MIN) / creep ≥ burn. That
+## inequality IS the always-a-burn-window guarantee the 3.6m park exists for;
+## the ghost room audit enforces it over this whole table.
+const TUNING := {
+	REVENANT: [1.25, 4.5, 1.5, 3.6, 3],
+	DROWNED:  [1.25, 4.5, 1.5, 3.6, 3],
+	PILGRIM:  [1.25, 4.5, 1.5, 3.6, 3],
+	TRAILING: [1.25, 4.5, 1.5, 3.6, 3],
+	# The one you cannot outwalk: slow, but follows through five doors, so the
+	# usual three-room escape leaves it still coming.
+	GAOLER:   [0.90, 4.5, 1.5, 3.6, 5],
+	# Parks close out of the dark. The window is tight (1.08s of creep against
+	# a 1.0s burn) and the answer is fast — deliberately the game's hardest
+	# margin, and why its burn is the shortest.
+	REACHER:  [1.25, 4.5, 1.0, 2.4, 3],
+	# One speed, seen or not. Watching it buys nothing, so the only answers
+	# are the torch or architecture. 1.59s of creep from its park still
+	# clears the full 1.5s burn.
+	DRIFTER:  [1.60, 1.60, 1.5, 3.6, 3],
+}
+## The unseen lunge parks here, short of the kill. It may only take the last
+## metres while being watched, so however hard it closed in the dark there is
+## always time to raise the torch: 2.55m of creep at 1.25 m/s is a full burn
+## plus margin.
+const UNSEEN_MIN := 3.6
 
 ## Flashlight burn. The beam has to stay on it; look away and the progress
 ## bleeds back. It keeps coming the whole time.
@@ -56,19 +91,20 @@ const BURN_FADE := 1.25     # the spectacular one runs longer than a stare-out
 # silent. Camera3D.is_position_in_frustum is the real test.
 const SCARE_GAP := 6.0      # only stops two figures stacking stingers
 
-signal stared_away
 signal burned_away
 signal reached_player
 ## Fired the first frame this figure is genuinely on screen, alongside its
 ## stinger — the moment the player registers that something is there.
 signal seen_by_player
 
+## Descent may add a real doorway while this figure is alive. Sharing the
+## floor resolver keeps its BFS and exact jamb waypoint on rendered geometry.
+var topology: DescentTopology
+
 ## WAITING is the Descent anomaly that is already standing in the corner when
 ## you walk in. It is a full figure — it burns, it kills, it feeds the
 ## heartbeat — it simply holds its ground until the player is in its room.
-## INERT is the opposite and is only ever a shell: the pursuer's silhouette and
-## nothing else, driven entirely by its parent.
-enum Mode { AMBIENT, INERT, PURSUER, WAITING }
+enum Mode { AMBIENT, WAITING }
 ## Seven of them, and every one is animated. The static photo-traced cutouts
 ## that came before were replaced wholesale: a still silhouette standing
 ## perfectly motionless reads as a decal the moment it shares a frame with one
@@ -98,11 +134,18 @@ const BODY := {
 	"wraith5":     [0.625, 0.000, 1.000],
 	"wraith6":     [0.559, 0.003, 1.000],
 	"wraith7":     [0.448, 0.003, 1.000],
+	# The passing-shadow walk cycles. Measured from the built sheets: the
+	# figure traverses the frame, so the box is roughly as wide as it is tall
+	# and the crossing distance is baked into the animation.
+	"passer1":     [1.007, 0.052, 1.000],
+	"passer2":     [1.135, 0.052, 0.997],
+	"passer3":     [0.899, 0.087, 0.997],
+	"passer4":     [1.167, 0.337, 0.990],
 }
 # Every sheet carries its own soft smoke edge, so the shader must not carve a
 # new one on top.
 const SOFT := ["wraith_anim", "wraith2", "wraith3", "wraith4", "wraith5",
-	"wraith6", "wraith7"]
+	"wraith6", "wraith7", "passer1", "passer2", "passer3", "passer4"]
 
 ## Animated cutouts: [columns, rows, frames, playback fps]. Godot's only video
 ## codec is Theora, which carries no alpha, so an animated apparition is a
@@ -116,6 +159,10 @@ const FLIPBOOKS := {
 	"wraith5":     [6, 4, 24, 12.0],
 	"wraith6":     [6, 4, 24, 12.0],
 	"wraith7":     [6, 4, 24, 12.0],
+	"passer1":     [6, 4, 24, 12.0],
+	"passer2":     [6, 4, 24, 12.0],
+	"passer3":     [6, 4, 24, 12.0],
+	"passer4":     [6, 4, 24, 12.0],
 }
 ## Cutouts whose own colour is worth keeping. All seven have lit eyes — one
 ## pair is green rather than red — and those are the only pixels allowed to
@@ -137,12 +184,19 @@ var variant := REVENANT
 var mode := Mode.AMBIENT
 var grace := 0.9            # can't be stared away until this runs out
 var announce := false       # a soft footstep as it arrives
-## Set by ShadowFigures before the node enters the tree. Crossing into another
-## procedural room is the one non-combat way to leave this encounter behind.
+## Set by ShadowFigures before the node enters the tree. Only the WAITING
+## anomaly still cares: it holds its ground until the player enters its room.
+## An active figure tracks its own crossed-room chase budget separately.
 var origin_room := NO_ROOM
 
+## The variant's row from TUNING, read once in _ready.
+var _creep_spd := ADVANCE_SPD
+var _unseen_spd := UNSEEN_SPD
+var _burn_time := BURN_TIME
+var _unseen_min := UNSEEN_MIN
+var _chase_limit := CHASE_DOOR_LIMIT
+
 var _quad: MeshInstance3D
-var _gaze := 0.0
 var _fade := -1.0
 var _fade_len := FADE_T
 var _bob_t := 0.0
@@ -153,20 +207,26 @@ var _seen := false
 var _shiver: AudioStreamPlayer3D
 var _burn := 0.0
 var _burning := false
-var _held := false          # frozen because you are looking at it
 var _sway := 0.0
-## Set by ShadowFigures while the rules have the player pinned. It still burns,
-## still fades, still expires — it simply does not close the distance.
+## Set by ShadowFigures while the rules have the player pinned. It still burns
+## and still fades — it simply does not close the distance.
 var suppressed := false
 var _was_sighted := true
 var _reveal := 0.0
 ## Whether the player could actually see it last frame — in frustum AND not
-## behind anything. Distinct from `_held`, which is only about the middle of
-## the screen: you can have a figure plainly in view and still not be holding
-## it, and it is the seeing that governs how fast it closes.
+## behind anything. The seeing is what governs how fast it closes: watched,
+## it creeps; unseen, it lunges.
 var _observed := false
 var _lost_dist := INF
 var _avoid_sign := 0.0
+var _avoid_angle := 0.0
+var _route_left := 0.0
+var _route_from := NO_ROOM
+var _route_goal := NO_ROOM
+var _route_waypoint := Vector3.INF
+var _chase_room := NO_ROOM
+var _chase_doors := 0
+var _giving_up := false
 var _move_shape: CapsuleShape3D
 var _move_query: PhysicsShapeQueryParameters3D
 
@@ -201,6 +261,12 @@ static func _mat_for(texname: String) -> ShaderMaterial:
 
 
 func _ready() -> void:
+	var tune: Array = TUNING[variant]
+	_creep_spd = float(tune[0])
+	_unseen_spd = float(tune[1])
+	_burn_time = float(tune[2])
+	_unseen_min = float(tune[3])
+	_chase_limit = int(tune[4])
 	var look: Array = LOOKS[variant]
 	var body: Array = BODY[look[0]]
 	var s := randf_range(0.96, 1.08)
@@ -232,8 +298,6 @@ func _ready() -> void:
 	add_child(_quad)
 	_bob_base = position.y
 	_bob_t = randf() * TAU
-	# INERT figures are visual set pieces owned by chunks or the separate
-	# topology-aware pursuer, and intentionally have no Player reference.
 	if player != null:
 		_move_shape = CapsuleShape3D.new()
 		_move_shape.radius = MOVE_RADIUS
@@ -269,26 +333,20 @@ func _ready() -> void:
 
 
 func _physics_process(dt: float) -> void:
-	if mode == Mode.INERT:
-		return
 	if player == null or not player.is_inside_tree():
 		queue_free()
 		return
 	# A waiting figure is a fixture of its own room until the player walks into
 	# that room. From that moment it is an ordinary encounter in every respect,
-	# including being left behind if the player walks back out.
+	# including its full multi-door chase budget.
 	if mode == Mode.WAITING:
 		var here := room_for(player, player.global_position)
 		if here == room_for(player, global_position):
 			mode = Mode.AMBIENT
 			origin_room = here
 			grace = maxf(grace, 0.6)
-	# Do not age out. A live figure persists for the entire encounter and is
-	# only left behind once the player has genuinely entered another room.
-	if origin_room != NO_ROOM and room_for(player, player.global_position) != origin_room \
-			and _fade < 0.0:
-		_fade = 0.38
-		_fade_len = 0.38
+	if mode == Mode.AMBIENT:
+		_update_chase_lifetime()
 	if grace > 0.0:
 		grace -= dt
 	if _floats:
@@ -308,12 +366,8 @@ func _physics_process(dt: float) -> void:
 	_was_sighted = sighted
 	if _reveal > 0.0:
 		_reveal = maxf(0.0, _reveal - dt)
-	var stared := grace <= 0.0 and aim < GAZE_ANG and sighted
-	# It only ever moves while you cannot see it. In frame, it is a photograph.
-	_held = aim < HOLD_CONE and sighted
-	# Whether the player can see it at all, which is a much weaker condition
-	# than holding it: a figure at the edge of the frame is still being looked
-	# at, and only creeps. Take your eyes off it entirely and it closes hard.
+	# Whether the player can see it at all. Seen, it only creeps — but it
+	# never stops. Take your eyes off it entirely and it closes hard.
 	var observed := sighted and (cam.is_position_in_frustum(eye)
 		or cam.is_position_in_frustum(global_position
 			+ Vector3(0, _eye_h * 0.55, 0)))
@@ -327,25 +381,25 @@ func _physics_process(dt: float) -> void:
 		else:
 			_lost_dist = dist
 		_observed = observed
-	if mode == Mode.AMBIENT and _fade < 0.0 and not _held and not suppressed \
+	if mode == Mode.AMBIENT and _fade < 0.0 and not suppressed \
 			and _reveal <= 0.0 and grace <= 0.0:
-		_advance(dt, ADVANCE_SPD if observed else UNSEEN_SPD)
+		_advance(dt, observed)
 	_sway += dt
 	_quad.set_instance_shader_parameter("sway",
-		sin(_sway * 0.9 + _bob_t) * (0.0 if _held else 1.0))
+		sin(_sway * 0.9 + _bob_t))
 	# The torch burns it away far faster than a stare, and keeps burning only
 	# while the beam stays on it.
 	if _fade < 0.0 and grace <= 0.0 and _in_beam(cam, aim, sighted):
-		_burn = minf(BURN_TIME, _burn + dt)
+		_burn = minf(_burn_time, _burn + dt)
 		if not _burning:
 			_burning = true
-		if _burn >= BURN_TIME:
+		if _burn >= _burn_time:
 			_ignite()
 			return
 	else:
 		_burning = false
 		_burn = maxf(0.0, _burn - dt * BURN_DRAIN)
-	_quad.set_instance_shader_parameter("burn", _burn / BURN_TIME)
+	_quad.set_instance_shader_parameter("burn", _burn / _burn_time)
 	# The stinger belongs to the moment it is ON SCREEN — not the moment it is
 	# placed, which can be behind a wall or outside the frame entirely. Test
 	# the real frustum at three heights, because a tall figure can have its
@@ -360,13 +414,6 @@ func _physics_process(dt: float) -> void:
 				or _clear_line(cam.global_position, base + Vector3(0, _eye_h * 0.55, 0))):
 			_seen = true
 			_maybe_scare()
-	if stared:
-		_gaze += dt
-	if _fade < 0.0 and _gaze > GAZE_TIME:
-		_fade = FADE_T
-		_fade_len = FADE_T
-		stared_away.emit()
-		_shiver.play()  # it noticed you noticing
 	if _fade >= 0.0:
 		_fade -= dt
 		# Normalise against the length this particular exit started with: a burn
@@ -378,6 +425,33 @@ func _physics_process(dt: float) -> void:
 			queue_free()
 
 
+## Count doors the figure itself successfully follows through. Once it has
+## crossed enough, separation into different rooms lets it give up. Returning
+## to its room during that dissolve restores it immediately: natural escape
+## must never make a figure vanish beside the player. Burns and contact keep
+## their own terminal fades and are intentionally unaffected.
+func _update_chase_lifetime() -> void:
+	var ghost_room := room_for(player, global_position)
+	var player_room := room_for(player, player.global_position)
+	if _chase_room == NO_ROOM:
+		_chase_room = ghost_room
+	elif ghost_room != _chase_room:
+		_chase_room = ghost_room
+		_chase_doors += 1
+	if _giving_up:
+		if ghost_room == player_room:
+			_giving_up = false
+			_fade = -1.0
+			_fade_len = FADE_T
+			_quad.set_instance_shader_parameter("fade", 1.0)
+		return
+	if _chase_doors >= _chase_limit and ghost_room != player_room \
+			and _fade < 0.0:
+		_giving_up = true
+		_fade = FADE_T
+		_fade_len = FADE_T
+
+
 ## Something the player has actually laid eyes on and which is still out there.
 ## The stop rule asks this before charging: you are allowed to stop for it.
 func is_pressing() -> bool:
@@ -385,24 +459,63 @@ func is_pressing() -> bool:
 
 
 ## One step closer, never through a wall and never past arm's length. A capsule
-## reserves the complete camera-facing silhouette. When the direct route is
+## reserves the figure's grounded movement body. When the direct route is
 ## blocked, a stable left/right preference makes it skirt the obstruction
 ## instead of vibrating between two equally valid directions.
-func _advance(dt: float, spd := ADVANCE_SPD) -> void:
-	var to := player.global_position - global_position
+func _advance(dt: float, observed := true) -> void:
+	var player_to := player.global_position - global_position
+	player_to.y = 0.0
+	var player_d := player_to.length()
+	if player_d < 0.001:
+		return
+	var step := (_creep_spd if observed else _unseen_spd) * dt
+	# An unseen figure never completes the kill: it closes to its park distance
+	# and waits there. Only the watched creep takes the last metres, so the
+	# player always sees it coming and always has a burn window. Keyed on
+	# observation, not on speed, because the Drifter moves at one speed either
+	# way and must still park in the dark.
+	if not observed:
+		if player_d <= _unseen_min:
+			return
+		step = minf(step, player_d - _unseen_min)
+	elif player_d - step <= ADVANCE_MIN:
+		# The lit torch is a ward. While the beam lives it comes to arm's
+		# length and looms there; the kill waits for the dark — a dead cell,
+		# or a hand that switches off too soon.
+		if player.flashlight != null and player.flashlight.visible:
+			step = maxf(0.0, player_d - ADVANCE_MIN)
+			if step <= 0.0001:
+				return
+		else:
+			_seize()
+			return
+	# Chasing the player's exact position only works while both actors share a
+	# cell. Across a wall it makes local avoidance orbit the wall indefinitely,
+	# even when a real opening is a few metres to one side. Route over generated
+	# open edges and aim beyond the next doorway so the capsule commits through
+	# the opening before resuming its chase.
+	var target := _route_target(dt)
+	var to := target - global_position
 	to.y = 0.0
 	var d := to.length()
 	if d < 0.001:
 		return
-	var step := spd * dt
-	if d - step <= ADVANCE_MIN:
-		_seize()
-		return
+	step = minf(step, d)
 	var direct := to / d
 	if _can_move(direct, step):
 		global_position += direct * step
 		_avoid_sign = 0.0
+		_avoid_angle = 0.0
 		return
+	# Commit to the last detour that worked before re-scanning. Re-choosing
+	# from scratch every frame ping-ponged between mirror-image angles at a
+	# doorway, which read as the figure shivering against the frame.
+	if _avoid_angle != 0.0:
+		var held := direct.rotated(Vector3.UP,
+			deg_to_rad(_avoid_angle) * _avoid_sign)
+		if _can_move(held, step):
+			global_position += held * step
+			return
 	var signs := [_avoid_sign, -_avoid_sign] if _avoid_sign != 0.0 else [-1.0, 1.0]
 	# Shallow angles preserve forward pressure; the final wider choices let it
 	# follow a long partition until a doorway or wall end becomes available.
@@ -412,14 +525,101 @@ func _advance(dt: float, spd := ADVANCE_SPD) -> void:
 			if _can_move(dirv, step):
 				global_position += dirv * step
 				_avoid_sign = side
+				_avoid_angle = angle_deg
 				return
+	# Boxed in: hold the ground rather than shiver against the geometry.
+	_avoid_angle = 0.0
+
+
+func _route_target(dt: float) -> Vector3:
+	var start := _cell_for(global_position)
+	var goal := _cell_for(player.global_position)
+	if start == goal:
+		_clear_route()
+		return player.global_position
+	_route_left -= dt
+	if _route_left <= 0.0 or start != _route_from or goal != _route_goal:
+		_route_left = ROUTE_REPATH_TIME
+		_route_from = start
+		_route_goal = goal
+		var next := _next_route_cell(start, goal)
+		_route_waypoint = _doorway_waypoint(start, next) \
+			if next != start else Vector3.INF
+	return _route_waypoint if _route_waypoint != Vector3.INF \
+		else global_position
+
+
+func _clear_route() -> void:
+	_route_left = 0.0
+	_route_from = NO_ROOM
+	_route_goal = NO_ROOM
+	_route_waypoint = Vector3.INF
+
+
+func _next_route_cell(start: Vector2i, goal: Vector2i) -> Vector2i:
+	var queue: Array[Vector2i] = [start]
+	var parent := {}
+	parent[start] = start
+	var head := 0
+	while head < queue.size():
+		var cell := queue[head]
+		head += 1
+		if cell == goal:
+			break
+		if maxi(absi(cell.x - start.x), absi(cell.y - start.y)) \
+				>= ROUTE_SEARCH_RADIUS:
+			continue
+		for dir in 4:
+			if _edge_info(cell, dir)["wall"]:
+				continue
+			var neighbor: Vector2i = cell + WorldGen.DIRV[dir]
+			if parent.has(neighbor):
+				continue
+			parent[neighbor] = cell
+			queue.append(neighbor)
+	if not parent.has(goal):
+		return start
+	var at := goal
+	while parent[at] != start:
+		at = parent[at]
+	return at
+
+
+func _doorway_waypoint(from: Vector2i, to: Vector2i) -> Vector3:
+	var dir := WorldGen.DIRV.find(to - from)
+	if dir < 0:
+		return global_position
+	var edge: Dictionary = _edge_info(from, dir)
+	var along := float(edge["t"])
+	match dir:
+		0:
+			return Vector3(float(from.x + 1) * Chunk.S + DOORWAY_CROSS_INSET,
+				global_position.y, float(from.y) * Chunk.S + along)
+		1:
+			return Vector3(float(from.x) * Chunk.S - DOORWAY_CROSS_INSET,
+				global_position.y, float(from.y) * Chunk.S + along)
+		2:
+			return Vector3(float(from.x) * Chunk.S + along,
+				global_position.y, float(from.y + 1) * Chunk.S + DOORWAY_CROSS_INSET)
+		_:
+			return Vector3(float(from.x) * Chunk.S + along,
+				global_position.y, float(from.y) * Chunk.S - DOORWAY_CROSS_INSET)
+
+
+func _edge_info(cell: Vector2i, dir: int) -> Dictionary:
+	if topology != null:
+		return topology.edge_info(cell, dir)
+	return WorldGen.edge_info(player.world_seed, cell, dir,
+		player.level_theme)
+
+
+static func _cell_for(at: Vector3) -> Vector2i:
+	return Vector2i(floori(at.x / Chunk.S), floori(at.z / Chunk.S))
 
 
 func _can_move(dirv: Vector3, step: float) -> bool:
 	var probe := maxf(step, MOVE_LOOKAHEAD)
 	var candidate := global_position + dirv * probe
-	if origin_room != NO_ROOM and room_for(player, candidate) != origin_room:
-		return false
 	_move_query.transform = Transform3D(Basis.IDENTITY,
 		candidate + Vector3(0, MOVE_HEIGHT * 0.5 + 0.04, 0))
 	return player.get_world_3d().direct_space_state \
@@ -427,7 +627,7 @@ func _can_move(dirv: Vector3, step: float) -> bool:
 
 
 static func room_for(p: Player, at: Vector3) -> Vector2i:
-	var cell := Vector2i(floori(at.x / Chunk.S), floori(at.z / Chunk.S))
+	var cell := _cell_for(at)
 	return WorldGen.annex_room_id(p.world_seed, cell) \
 		if p.level_theme == 2 else WorldGen.room_id(p.world_seed, cell)
 

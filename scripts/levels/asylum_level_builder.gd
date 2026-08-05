@@ -16,7 +16,7 @@ func _asy_wall_mat() -> Material:
 
 
 func _asy_wall_clear(dir: int, want: float, span: float) -> float:
-	var info = WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)
+	var info = chunk._edge_info(chunk.cell, dir)
 	if info["wall"] or info["full_open"]:
 		return want
 	var t: float = info["t"]
@@ -749,7 +749,7 @@ func _asy_treatment() -> void:
 	# runs down local Z, so turn it a quarter from the facing to lie along.
 	if chunk._r(1213) < 0.55:
 		for dir in 4:
-			if not WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]:
+			if not chunk._edge_info(chunk.cell, dir)["wall"]:
 				continue
 			_asy_scrub_sink(
 				chunk._wall_pt(dir, chunk.S / 2.0 + (chunk._r(1214) - 0.5) * 2.2, 0.62),
@@ -791,7 +791,7 @@ func _asy_hydro() -> void:
 	# The trough the tubs were filled and emptied from, against a solid wall.
 	if chunk._r(1220) < 0.62:
 		for dir in 4:
-			if not WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]:
+			if not chunk._edge_info(chunk.cell, dir)["wall"]:
 				continue
 			_asy_scrub_sink(
 				chunk._wall_pt(dir, chunk.S / 2.0 + (chunk._r(1221) - 0.5) * 3.0, 0.60),
@@ -816,7 +816,7 @@ func _asy_office() -> void:
 	chunk._scattered_papers(c + Vector3(2.5 * (chunk._r(976) - 0.5), 0, 2.5 * (chunk._r(977) - 0.5)), 978, 6)
 	# filing cabinets against the first solid wall
 	for dir in 4:
-		if WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]:
+		if chunk._edge_info(chunk.cell, dir)["wall"]:
 			chunk._filing_bank(dir, (chunk.S - chunk.T / 2.0) if (dir == 0 or dir == 2) else (chunk.T / 2.0))
 			break
 	if chunk._r(979) < 0.4:
@@ -872,7 +872,7 @@ func _asy_corridor() -> void:
 	for si in 2:
 		var side = -lane_half if si == 0 else lane_half
 		var sdir = (3 if si == 0 else 2) if along_x else (1 if si == 0 else 0)
-		var info = WorldGen.edge_info(chunk.wseed, chunk.cell, sdir, chunk.theme)
+		var info = chunk._edge_info(chunk.cell, sdir)
 		var bay = []
 		if not info["wall"]:
 			var bt: float = float(info["t"]) - 6.0 if along_x else 6.0 - float(info["t"])
@@ -1148,4 +1148,3 @@ func _asy_sign(o: Vector3, yw: float) -> void:
 # One building painted over every summer. Cream block above a red line, a floor
 # ground until it mirrors the strip lights, and locker runs down every corridor.
 # The rooms are all the ones you remember and none of them are in use.
-

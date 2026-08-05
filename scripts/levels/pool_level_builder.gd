@@ -79,8 +79,7 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 		var z1 := chunk.S
 		var channel_dirs := [0, 1] if axis_x else [2, 3]
 		for dir in channel_dirs:
-			var info := WorldGen.edge_info(
-				chunk.wseed, c, dir, chunk.theme)
+			var info := chunk._edge_info(c, dir)
 			if bool(info["wall"]):
 				continue
 			if _pool_open_dry_boundary(c, dir):
@@ -99,7 +98,10 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 			else Vector2(POOL_CHANNEL_WIDTH, z1 - z0)
 		center = Vector2((x0 + x1) * 0.5, chunk.S * 0.5) if axis_x \
 			else Vector2(chunk.S * 0.5, (z0 + z1) * 0.5)
-		connected = true
+		# A lane sealed at both ends (walls or dry thresholds) is a compact
+		# body of water, whatever its shape. Claiming `connected` with no
+		# edge links lied to everything that reads the metadata.
+		connected = not edge_links.is_empty()
 	else:
 		match pool_style:
 			WorldGen.POOL_STAIRS:
@@ -126,8 +128,7 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 		# along the channel's own axis, so both water surfaces overlap at the
 		# shared doorway without recursively asking the neighbour for a layout.
 		for dir in 4:
-			var info := WorldGen.edge_info(
-				chunk.wseed, c, dir, chunk.theme)
+			var info := chunk._edge_info(c, dir)
 			if bool(info["wall"]):
 				continue
 			var nb: Vector2i = c + Vector2i(WorldGen.DIRV[dir])
@@ -210,8 +211,7 @@ func _pool_water_span_at_edge(
 
 
 func _pool_open_dry_boundary(c: Vector2i, dir: int) -> bool:
-	var info := WorldGen.edge_info(
-		chunk.wseed, c, dir, chunk.theme)
+	var info := chunk._edge_info(c, dir)
 	if bool(info["wall"]):
 		return false
 	var nb := c + Vector2i(WorldGen.DIRV[dir])
@@ -456,11 +456,38 @@ func _pool_connected_coping_s_bend(
 func _pool_deck_piece(center: Vector2, size: Vector2) -> void:
 	if size.x < 0.04 or size.y < 0.04:
 		return
+	var pieces: Array[Rect2] = [Rect2(center - size * 0.5, size)]
+	for zone in chunk._runtime_shortcut_clearance_rects():
+		var next: Array[Rect2] = []
+		for piece in pieces:
+			var cut := piece.intersection(zone)
+			if cut.size.x <= 0.001 or cut.size.y <= 0.001:
+				next.append(piece)
+				continue
+			var piece_end := piece.end
+			var cut_end := cut.end
+			# Four non-overlapping bands around the removed rectangle.
+			if cut.position.x - piece.position.x > 0.04:
+				next.append(Rect2(piece.position,
+					Vector2(cut.position.x - piece.position.x, piece.size.y)))
+			if piece_end.x - cut_end.x > 0.04:
+				next.append(Rect2(Vector2(cut_end.x, piece.position.y),
+					Vector2(piece_end.x - cut_end.x, piece.size.y)))
+			if cut.position.y - piece.position.y > 0.04:
+				next.append(Rect2(Vector2(cut.position.x, piece.position.y),
+					Vector2(cut.size.x, cut.position.y - piece.position.y)))
+			if piece_end.y - cut_end.y > 0.04:
+				next.append(Rect2(Vector2(cut.position.x, cut_end.y),
+					Vector2(cut.size.x, piece_end.y - cut_end.y)))
+		pieces = next
 	var h: float = chunk.POOL_DECK_Y + 0.3
-	var deck = chunk._box(
-		Vector3(center.x, chunk.POOL_DECK_Y * 0.5 - 0.15, center.y),
-		Vector3(size.x, h, size.y), Mats.pool_tile())
-	deck.set_meta("pool_basin_deck", true)
+	for piece in pieces:
+		var piece_center := piece.position + piece.size * 0.5
+		var deck = chunk._box(
+			Vector3(piece_center.x, chunk.POOL_DECK_Y * 0.5 - 0.15,
+				piece_center.y),
+			Vector3(piece.size.x, h, piece.size.y), Mats.pool_tile())
+		deck.set_meta("pool_basin_deck", true)
 
 
 func _pool_coping_segment(center: Vector2, size: Vector2, axis: int,
@@ -734,7 +761,7 @@ func _pool_edge_steps() -> void:
 	if not _pool_dry():
 		return
 	for dir in 4:
-		var info = WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)
+		var info = chunk._edge_info(chunk.cell, dir)
 		if bool(info["wall"]):
 			continue
 		var nb: Vector2i = chunk.cell + WorldGen.DIRV[dir]
@@ -829,6 +856,15 @@ func _pool_pier(at: Vector3) -> void:
 	p.set_meta("pool_pier", true)
 
 
+func _pool_clear_of_runtime_doorway(at: Vector2, radius: float) -> bool:
+	var footprint := Rect2(at - Vector2.ONE * radius,
+		Vector2.ONE * radius * 2.0)
+	for zone in chunk._runtime_shortcut_clearance_rects():
+		if footprint.intersects(zone):
+			return false
+	return true
+
+
 ## An invisible walking ramp over a run of treads. The player controller has
 ## no step-up logic — every vertical tread face is a wall to it — so a stair
 ## only works when a smooth collider carries the feet across it. The ramp
@@ -845,12 +881,14 @@ func _pool_step_ramp(dir: int, at: float, width: float, edge: float,
 	var outward = 1.0 if (dir == 0 or dir == 2) else -1.0
 	var mid = edge + outward * (start + run * 0.5)
 	var y = drop * 0.5 - 0.06
+	var ramp: CollisionShape3D
 	if dir < 2:
-		chunk._collider_rot_box(Vector3(mid, y, at),
+		ramp = chunk._collider_rot_box(Vector3(mid, y, at),
 			Vector3(ln, 0.12, width), Vector3(0, 0, -outward * ang))
 	else:
-		chunk._collider_rot_box(Vector3(at, y, mid),
+		ramp = chunk._collider_rot_box(Vector3(at, y, mid),
 			Vector3(width, 0.12, ln), Vector3(outward * ang, 0, 0))
+	ramp.set_meta("walkable_ramp", true)
 
 
 ## A dry walkway along one wall, its coping lip proud of the water, plus the
@@ -980,7 +1018,7 @@ func _pool_window(dir: int, along: float, tall = true, drop := 0.0) -> void:
 	# opening, the pane hangs in mid-air in the middle of the doorway — which
 	# is exactly what it was doing. This also keeps them sparse for free:
 	# a room with three ways out can only carry one.
-	if not bool(WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]):
+	if not bool(chunk._edge_info(chunk.cell, dir)["wall"]):
 		return
 	if WorldGen.pool_wall_aperture(chunk.wseed, chunk.cell, dir):
 		return
@@ -1079,8 +1117,7 @@ func _pool_tall_clerestories() -> bool:
 		return false
 	var walls: Array[int] = []
 	for dir in 4:
-		if bool(WorldGen.edge_info(
-				chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]) \
+		if bool(chunk._edge_info(chunk.cell, dir)["wall"]) \
 				and not WorldGen.pool_wall_aperture(
 					chunk.wseed, chunk.cell, dir):
 			walls.append(dir)
@@ -1157,7 +1194,7 @@ func _pool_stairs_exit(c: Vector2i) -> int:
 	var dir = int(WorldGen.r01(chunk.wseed, c.x, c.y, 2350) * 3.99)
 	for d in 4:
 		var pick = (dir + d) % 4
-		if bool(WorldGen.edge_info(chunk.wseed, c, pick, chunk.theme)["wall"]):
+		if bool(chunk._edge_info(c, pick)["wall"]):
 			continue
 		if chunk.pool_style_dry(WorldGen.cell_style(
 				chunk.wseed, c + WorldGen.DIRV[pick], chunk.theme)):
@@ -1279,8 +1316,7 @@ func _pool_round_ceiling_fixture(at: Vector2, index: int) -> void:
 func _pool_wall_orb_fixture(salt: int) -> bool:
 	var walls: Array[int] = []
 	for dir in 4:
-		if bool(WorldGen.edge_info(
-				chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]) \
+		if bool(chunk._edge_info(chunk.cell, dir)["wall"]) \
 				and not WorldGen.pool_wall_aperture(
 					chunk.wseed, chunk.cell, dir):
 			walls.append(dir)
@@ -1374,6 +1410,9 @@ func _pool_piers(salt: int, count: int) -> Array[Vector3]:
 			continue
 		if has_strip and absf(gx - chunk.S / 2.0) < 1.0:
 			continue
+		if not _pool_clear_of_runtime_doorway(
+				Vector2(gx, gz), chunk.POOL_PIER * 0.62):
+			continue
 		if chunk.style == WorldGen.POOL_CISTERN and absf(gz - chunk.S / 2.0) < 2.4:
 			var near_sky = false
 			for sx in [3.0, 6.0, 9.0]:
@@ -1414,6 +1453,9 @@ func _pool_compact_piers(salt: int, count: int) -> Array[Vector3]:
 		if chunk._r(salt + i * 4 + 2) > 0.80:
 			continue
 		var point := Vector2(gx, gz)
+		if not _pool_clear_of_runtime_doorway(
+				point, chunk.POOL_PIER * 0.62):
+			continue
 		if has_portal and point.distance_to(
 				Vector2(chunk.S * 0.5, chunk.S * 0.5)) < 2.25:
 			continue
@@ -1519,7 +1561,9 @@ func _pool_pier_island(salt: int, piers: Array[Vector3]) -> bool:
 	var eligible: Array[Vector3] = []
 	for at in piers:
 		if at.x >= x0 and at.x <= x1 \
-				and at.z >= z0 and at.z <= z1:
+				and at.z >= z0 and at.z <= z1 \
+				and _pool_clear_of_runtime_doorway(
+					Vector2(at.x, at.z), radius):
 			eligible.append(at)
 	if eligible.is_empty():
 		return false
@@ -1803,9 +1847,7 @@ func _pool_compact_ladder(salt: int) -> void:
 		# sides always retain tiled deck, and an open dry terminus already has
 		# the explicit 60cm landing, so both remain valid.
 		if chunk.style == WorldGen.POOL_CHANNEL and candidate < 2 \
-				and bool(WorldGen.edge_info(
-					chunk.wseed, chunk.cell,
-					candidate, chunk.theme)["wall"]):
+				and bool(chunk._edge_info(chunk.cell, candidate)["wall"]):
 			continue
 		available.append(candidate)
 	if available.is_empty():
@@ -2134,7 +2176,7 @@ func _pool_underwater_lights(salt: int) -> void:
 	for dir in 4:
 		if built >= 2:
 			return
-		if not bool(WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)["wall"]):
+		if not bool(chunk._edge_info(chunk.cell, dir)["wall"]):
 			continue
 		if chunk._r(salt + dir) > 0.55:
 			continue

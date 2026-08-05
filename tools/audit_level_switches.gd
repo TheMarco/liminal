@@ -12,6 +12,24 @@ const SAVED_POSITION := Vector3(-6.0, 0.0, 6.0)
 func run() -> void:
 	var game := await boot_game(REGRESSION_SEED)
 
+	# Theme 10 intentionally lives on 0 rather than becoming an awkward tenth
+	# item in the 1-N arithmetic used by the original floors.
+	var zero := InputEventKey.new()
+	zero.pressed = true
+	zero.physical_keycode = KEY_0
+	game._unhandled_input(zero)
+	await await_until(func(): return not game._switching)
+	expect(game.active_level == 10,
+		"0 key did not enter the Monolith")
+	var filter_before: bool = game._crt
+	var video := InputEventKey.new()
+	video.pressed = true
+	video.physical_keycode = KEY_V
+	game._unhandled_input(video)
+	expect(game._crt != filter_before,
+		"V did not toggle the video filter in Wander")
+	game._unhandled_input(video)
+
 	game._jump_to(6, SAVED_POSITION, false)
 	await await_until(func(): return not game._switching)
 

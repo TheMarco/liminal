@@ -48,7 +48,7 @@ func _ready() -> void:
 	col.add_child(heading)
 
 	var warning := Label.new()
-	warning.text = "CURRENT DESCENT WILL END" if descent \
+	warning.text = "YOU CAN CONTINUE FROM YOUR DEEPEST FLOOR" if descent \
 		else "YOU WILL RETURN TO THE CASINO"
 	_style(warning, 18, Color(0.58, 0.54, 0.47))
 	col.add_child(warning)

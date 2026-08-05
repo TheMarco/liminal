@@ -32,6 +32,12 @@ static func build(theme: int) -> Environment:
 	env.sdfgi_min_cell_size = 0.15
 	env.sdfgi_bounce_feedback = 0.4
 
+	if theme == 11:
+		_bloom(env)
+		return env
+	if theme == 10:
+		_brutalist(env)
+		return env
 	if theme == 9:
 		_pool(env)
 		return env
@@ -57,6 +63,61 @@ static func build(theme: int) -> Environment:
 	else:
 		_vegas(env)
 	return env
+
+
+static func _bloom(env: Environment) -> void:
+	# Cold, readable institutional fill against near-black organic silhouettes.
+	# Red is deliberately absent from ambient/fog; only physical wounds own it.
+	env.background_color = Color(0.0015, 0.0020, 0.0030)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.47, 0.55, 0.65)
+	env.ambient_light_energy = 0.52
+	env.tonemap_exposure = 1.48
+	env.sdfgi_energy = 1.16
+	env.glow_enabled = true
+	env.glow_intensity = 0.40
+	env.glow_bloom = 0.040
+	env.glow_hdr_threshold = 1.04
+	env.fog_light_color = Color(0.055, 0.070, 0.095)
+	env.fog_density = 0.0032
+	env.fog_light_energy = 0.62
+	env.volumetric_fog_density = 0.0016
+	env.volumetric_fog_albedo = Color(0.36, 0.43, 0.54)
+	env.volumetric_fog_emission = Color(0.003, 0.005, 0.008)
+	env.volumetric_fog_length = 42.0
+	env.volumetric_fog_gi_inject = 0.62
+	env.ssao_radius = 1.55
+	env.ssao_intensity = 1.12
+	env.ssr_enabled = true
+	env.ssr_max_steps = 56
+	env.ssr_fade_in = 0.30
+
+
+static func _brutalist(env: Environment) -> void:
+	# Cold light falls through tall concrete volumes into a near-black horizon.
+	# Strong contact occlusion gives the deep beams their mass; SSR carries the
+	# black water courts and damp floor without turning the room glossy overall.
+	env.background_color = Color(0.005, 0.007, 0.009)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.43, 0.50, 0.55)
+	env.ambient_light_energy = 0.34
+	env.tonemap_exposure = 1.34
+	env.sdfgi_energy = 1.18
+	env.glow_enabled = true
+	env.glow_intensity = 0.38
+	env.glow_bloom = 0.045
+	env.glow_hdr_threshold = 1.0
+	env.fog_light_color = Color(0.055, 0.072, 0.082)
+	env.fog_density = 0.0042
+	env.volumetric_fog_density = 0.0024
+	env.volumetric_fog_albedo = Color(0.56, 0.65, 0.70)
+	env.volumetric_fog_emission = Color(0.006, 0.010, 0.013)
+	env.volumetric_fog_length = 62.0
+	env.ssao_radius = 2.1
+	env.ssao_intensity = 1.75
+	env.ssr_enabled = true
+	env.ssr_max_steps = 56
+	env.ssr_fade_in = 0.28
 
 
 static func _pool(env: Environment) -> void:

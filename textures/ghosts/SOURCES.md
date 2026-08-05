@@ -1,12 +1,27 @@
 # Ghost sheets — sources
 
-Animated black RGBA figures on cylindrical billboards with noise-eroded edges
-(`shaders/ghost.gdshader`), spawned by `scripts/shadow_figure.gd`.
+Black RGBA figures on cylindrical billboards with noise-eroded edges
+(`shaders/ghost.gdshader`). Hostile figures and distant crossing shadows are
+animated; the five corner apparitions are deliberately motionless for their
+two-second sighting.
 
-Every figure in the game is animated. The photo-traced Wikimedia silhouettes
-and the still painted cutouts that preceded these were retired wholesale: a
-motionless silhouette reads as a decal the moment it shares a floor with one
-that moves, so the roster is animated or it is nothing.
+Every persistent figure in the game is animated. A corner apparition is the
+exception by design: it is a brief impossible shape, never a creature that
+walks, chases, or shares the room long enough to read as a decal.
+
+## User-supplied stationary corner apparitions (2026-08-04)
+
+The white-backed PNGs were converted to 512px transparent black cutouts with
+`tools/mask_silhouette.py --floor 0.04 --crop 0.035`. They are used only by
+`scripts/corner_apparitions.gd`.
+
+| Cutout | Supplied source |
+|---|---|
+| `corner_hooded_robe.png` | `magnific_silhouette-of-a-hooded-ma_6ARftqYiJO.png` |
+| `corner_girl_ragged.png` | `magnific_silhouette-of-a-little-gi_aFEN7ZefSh.png` |
+| `corner_girl_lace.png` | `magnific_silhouette-of-a-little-gi_N23aeSX6D9.png` |
+| `corner_hooded_man.png` | `magnific_silhouette-of-a-man-weari_8amyNlxIrU.png` |
+| `corner_woman_gown.png` | `magnific_silhouette-of-a-woman-whi_MBeLkHCDCm.png` |
 
 ## Generated for this project (Magnific)
 

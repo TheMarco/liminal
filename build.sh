@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Liminal Vegas for macOS (universal, signed + notarized) and Windows.
+# Build It wants you to stay for macOS (universal, signed + notarized) and Windows.
 # Needs Godot 4.6 on PATH with export templates installed.
 #
 # macOS notarization uses a stored notarytool profile (default AC_PASSWORD).
@@ -13,18 +13,22 @@ cd "$(dirname "$0")"
 
 NOTARY_PROFILE="${NOTARY_PROFILE:-AC_PASSWORD}"
 NOTARIZE="${NOTARIZE:-1}"
+PRODUCT_NAME="It wants you to stay"
+WINDOWS_EXE="build/windows/${PRODUCT_NAME}.exe"
+WINDOWS_ZIP="build/windows/${PRODUCT_NAME}-Windows.zip"
+APP="build/macos/${PRODUCT_NAME}.app"
+MACOS_ZIP="build/macos/${PRODUCT_NAME}-macOS.zip"
 
 godot --headless --path . --import
 
 echo "==> Windows"
 mkdir -p build/windows
 godot --headless --path . --export-release "Windows Desktop" >/dev/null
-(cd build/windows && rm -f LiminalVegas-Windows.zip \
-	&& zip -q -j LiminalVegas-Windows.zip LiminalVegas.exe)
+rm -f "$WINDOWS_ZIP"
+zip -q -j "$WINDOWS_ZIP" "$WINDOWS_EXE"
 
 echo "==> macOS"
 mkdir -p build/macos
-APP=build/macos/LiminalVegas.app
 # A previously notarized+stapled .app resists in-place overwrite (macOS App
 # Management protection), which surfaces as a bogus "template binary not
 # found" export error. Always export into a clean path.
@@ -75,9 +79,9 @@ else
 fi
 
 # zip AFTER stapling, so the shipped archive carries the notarization ticket
-(cd build/macos && rm -f LiminalVegas-macOS.zip \
-	&& ditto -c -k --keepParent LiminalVegas.app LiminalVegas-macOS.zip)
+rm -f "$MACOS_ZIP"
+ditto -c -k --keepParent "$APP" "$MACOS_ZIP"
 
 echo
 echo "built:"
-ls -lh build/macos/LiminalVegas-macOS.zip build/windows/LiminalVegas-Windows.zip
+ls -lh "$MACOS_ZIP" "$WINDOWS_ZIP"

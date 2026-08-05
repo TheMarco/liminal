@@ -15,7 +15,6 @@ extends AudioStreamPlayer
 ## Tension added by each kind of event, before clamping.
 const BUMP_SEEN := 0.85       # one of them is on screen and you have seen it
 const BUMP_BURNED := 0.45     # you killed it, but you were close enough to
-const BUMP_STARED := 0.22     # you faced one down without the torch
 
 ## Seconds for a full-tension fright to bleed back to nothing, once whatever
 ## caused it has gone. Long on purpose.

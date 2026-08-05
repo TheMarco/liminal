@@ -124,13 +124,12 @@ func _prison_bunk(p: Vector3, yaw: float, cell_context = false) -> void:
 	var v = chunk._furnishing_pivot(p, yaw, "prison_bunk")
 	v.set_meta("enrichment_prop", "double_bunk")
 	v.set_meta("prison_cell_context", cell_context)
-	# The source bed's long axis is X and its modelling origin sits 0.29716m
-	# below the lowest foot. Turn that axis into the cell's local Z and lift the
-	# complete authored frame onto the floor. This replaces every procedural
-	# rail, mattress, pillow and ladder with one internally coherent model.
-	var model_scale = 0.96
+	# The CC BY replacement's long axis is X. Turn it into the cell's local Z,
+	# scale its two-metre authored length to 1.76m and lift its lowest foot onto
+	# the floor. This replaces the former noncommercial prison-specific model.
+	var model_scale = 0.88
 	var authored = chunk._attributed_prop_local(v, chunk.PRISON_BUNK_PATH,
-		Vector3(0, 0.29716 * model_scale, 0), PI / 2.0,
+		Vector3(0, 0.834936 * model_scale, 0), PI / 2.0,
 		Vector3.ONE * model_scale)
 	if authored == null:
 		# Import failure is intentionally obvious but still structurally safe:
@@ -145,8 +144,8 @@ func _prison_bunk(p: Vector3, yaw: float, cell_context = false) -> void:
 				Vector3(0.96, 0.12, 1.92), Mats.asy_cloth(), 0.025)
 	else:
 		authored.set_meta("prison_cell_model", "bunk_bed")
-	chunk._collider_yaw_box(chunk._wp(p, Vector3(0, 0.73, 0), yaw),
-		Vector3(1.10, 1.46, 2.08), yaw)
+	chunk._collider_yaw_box(chunk._wp(p, Vector3(0, 0.735, 0), yaw),
+		Vector3(1.34, 1.47, 1.80), yaw)
 	chunk._bind_furnishing_colliders(v, b0)
 
 
@@ -249,7 +248,7 @@ func _wall_pt(dir: int, along: float, off: float, y = 0.0) -> Vector3:
 
 func _prison_cell_strip(dir: int, salt: int) -> void:
 	var plane = (chunk.S - chunk.T / 2.0) if (dir == 0 or dir == 2) else (chunk.T / 2.0)
-	var info = WorldGen.edge_info(chunk.wseed, chunk.cell, dir, chunk.theme)
+	var info = chunk._edge_info(chunk.cell, dir)
 	var clear_a = 99.0
 	var clear_b = -99.0
 	if not info["wall"]:

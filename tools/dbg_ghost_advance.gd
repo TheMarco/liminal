@@ -73,6 +73,6 @@ func _phase(player: Player, fig: ShadowFigure, secs: float, yaw: float,
 			report = 0.0
 			var g := _gap(player, fig)
 			print("  %-12s %4.1f  %6.2f   %-5s  %+.2f" % [
-				label, t, g, str(fig.get("_held")), g - last])
+				label, t, g, str(fig.get("_observed")), g - last])
 			last = g
 	return last
