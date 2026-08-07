@@ -1,8 +1,8 @@
 # Game Loop Audit
 
-**Project:** It wants you to stay  
-**Audit revision:** 3  
-**Audit date:** 2026-08-05
+**Project:** It wants you to stay
+**Audit revision:** 4
+**Audit date:** 2026-08-06
 
 ## Executive verdict
 
@@ -17,12 +17,12 @@ through doorways, deaths retain the deepest floor, a genuinely lost player can
 receive hidden architectural assistance, and watching the story tape—not
 filling the flashlight—is now the only elevator admission requirement.
 
-The game is not yet a complete story campaign. Six of the ten long-form Cross
-recordings are still missing, the planned intro does not exist in the runtime,
-and the final exit currently cuts directly to an `OUT` results screen instead
-of the player-centered dread outro in `docs/STORY.md`. The complete run also
-remains long and mechanically repetitive, and late difficulty is driven more
-by frequency and endurance than by new tactical ideas.
+The game is not yet a complete story campaign. All ten long-form Cross
+recordings are now implemented, but the planned intro does not exist in the
+runtime and the final exit currently cuts directly to an `OUT` results screen
+instead of the player-centered dread outro in `docs/STORY.md`. The complete run
+also remains long and mechanically repetitive, and late difficulty is driven
+more by frequency and endurance than by new tactical ideas.
 
 | Area | Current assessment |
 |---|---|
@@ -42,7 +42,7 @@ by frequency and endurance than by new tactical ideas.
 **6/10**.
 
 That distinction matters. The systems are now good enough to support the game,
-but the campaign still needs its missing story content, ending, pacing pass,
+but the campaign still needs its intro and ending, pacing pass,
 late encounter tuning, and shipping UX.
 
 This audit is evidence-based but not a substitute for a human full-run
@@ -281,20 +281,14 @@ The refreshed route audit sampled 55 deterministic routes:
 - Approximately 3.8 minutes of lift waiting.
 - Approximately 1.1 minutes of elevator rides.
 
-The tape catalogue currently contains four long recordings:
-
-- About 41.4 seconds.
-- About 60.2 seconds.
-- About 75.3 seconds.
-- About 75.3 seconds.
-
-Those four chapters cycle across ten objectives, producing about 10.7 minutes
-of mandatory video in a complete run.
+The tape catalogue contains ten distinct long recordings, one per objective,
+at about 60.7–61.3 seconds each. They produce about 10.2 minutes of mandatory
+video in a complete run.
 
 The present perfect-route run is therefore approximately:
 
-> 24.7 min walking + 3.8 min waits + 1.1 min rides + 10.7 min tapes
-> = **about 40.3 minutes**
+> 24.7 min walking + 3.8 min waits + 1.1 min rides + 10.2 min tapes
+> = **about 39.8 minutes**
 
 That excludes:
 
@@ -315,18 +309,12 @@ same long route and objective tape from that floor's arrival.
 
 ## The largest remaining problems
 
-### P0 — Six long Cross recordings are still missing
+### Addressed — Ten long Cross recordings
 
-The tape audit reports 42 recordings: four long and 38 short. All 77 sampled
-optional route television setups placed successfully, and the short pool does
-not repeat before exhaustion.
-
-The ten elevator objectives need ten fixed story chapters. With four long
-tapes, chapters repeat deterministically. Six additional long recordings are
-still required.
-
-This is not merely variety polish. Descent is now explicitly the story mode,
-and the recordings are its narrative spine.
+The tape catalogue now contains 48 recordings: ten long and 38 short. Each of
+the ten elevator objectives receives its own fixed Cross chapter in source
+order. The 38 short recordings and their no-repeat optional-TV pool are
+unchanged.
 
 ### P0 — The intro and actual outro are not implemented
 
@@ -491,7 +479,7 @@ movement captures through Annex and Bloom before shipping.
 - Progress audit: seed, deepest floor, and short-tape cycle persistence.
 - Ghost room audit: walls, offset door traversal, observed/unobserved movement,
   and three-room escape.
-- Optional VHS audit: 42 tapes, four long/38 short, 77/77 route sets placed.
+- Optional VHS audit: 48 tapes, ten long/38 short, 77/77 route sets placed.
 - Flashlight charging audit: capacity, recharge time, reset, station coverage.
 - Wander audit: hostile systems remain disabled.
 - Title audit: main menu and information pages remain distinct.
@@ -521,20 +509,19 @@ should be reconciled after current mechanics stabilize.
 
 ## Recommended development order
 
-1. Create and add the six remaining long Cross recordings.
-2. Implement the Cross intro and the player-centered dread outro.
-3. Conduct one instrumented full completion with the current checkpointed
+1. Implement the Cross intro and the player-centered dread outro.
+2. Conduct one instrumented full completion with the current checkpointed
    build before changing route lengths.
-4. Add three or four objective/lift ritual variations.
-5. Tune late hostile density and director recovery from playtest data; add
+3. Add three or four objective/lift ritual variations.
+4. Tune late hostile density and director recovery from playtest data; add
    behavioral variety before
    adding more raw pressure.
-6. Add pause, settings, remapping, controller, caption, and photosensitivity
+5. Add pause, settings, remapping, controller, caption, and photosensitivity
    options.
-7. Resolve interrupted charging semantics and expand its test.
-8. Repair the survivability audit with real route/topology fixtures.
-9. Reprofile Annex and Bloom streaming under continuous movement.
-10. Reconcile README and `docs/DESCENT.md` with the live rules.
+6. Resolve interrupted charging semantics and expand its test.
+7. Repair the survivability audit with real route/topology fixtures.
+8. Reprofile Annex and Bloom streaming under continuous movement.
+9. Reconcile README and `docs/DESCENT.md` with the live rules.
 
 Instrumented playtests should include:
 
@@ -565,7 +552,7 @@ progress.
 The main problem is no longer unfairness. It is **campaign completion and
 composition**:
 
-- The story is missing six chapters, its intro, and its actual ending.
+- The story still needs its intro and actual ending.
 - Ten objective rooms repeat too much of the same ritual.
 - Late difficulty adds pressure faster than it adds new ideas.
 - The new shared director still needs full-run cadence tuning.

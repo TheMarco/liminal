@@ -119,9 +119,8 @@ with it.
   called lift. Rare optional sets use the same full-screen playback without
   gating the lift: each route gets 2–3 over roughly 500m, and the endless
   off-route world continues at about one per 200m explored. `VhsTapeLibrary`
-  discovers `videos/tapes/*.ogv`; recordings >=30s are fixed, lexically sorted
-  chapters for objective floors 1–10. The current four long assets cycle
-  deterministically until six more are added. Shorter recordings are optional
+  discovers `videos/tapes/*.ogv`; recordings >=30s are ten fixed, lexically
+  sorted chapters for objective floors 1–10. Shorter recordings are optional
   only and use a no-repeat cycle whose seen history persists across death and
   relaunch. Add one with `ffmpeg2theora INPUT.mp4 --videoquality 7
   --audioquality 3 --max_size 512x512 -o videos/tapes/tape_NN.ogv` (Homebrew

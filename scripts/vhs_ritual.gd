@@ -288,6 +288,11 @@ func reset_tape() -> void:
 	if _video != null:
 		_video.stop()
 		_video_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	# Ordered optional chapters are completion-driven. Re-claim on the next
+	# attempt so a chapter completed at another VCR cannot leave this set pinned
+	# to an older interrupted assignment.
+	if not objective:
+		_tape_path = ""
 	_end_watch()
 	_present_idle()
 

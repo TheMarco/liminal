@@ -35,9 +35,13 @@ func run() -> void:
 		"Restart did not keep the building/deepest checkpoint")
 	var old_checkpoint_seed := test_progress.run_seed
 	expect(game._apply_descent_entry(TitleScreen.DescentEntry.NEW) == 0 \
+		and test_progress.run_seed == old_checkpoint_seed,
+		"New Descent replaced its checkpoint before the intro was viewed")
+	game._commit_new_descent_checkpoint()
+	expect(test_progress.run_seed == game.world_seed \
 		and test_progress.run_seed != old_checkpoint_seed \
 		and test_progress.deepest_floor == 0,
-		"New Descent did not create a fresh floor-one checkpoint")
+		"completed New Descent did not create a fresh floor-one checkpoint")
 	test_progress.clear_from_disk()
 	game._progress_enabled = false
 	game.world_seed = SEED

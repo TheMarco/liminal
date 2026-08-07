@@ -89,6 +89,8 @@ AUDITS=(
 	"blackout_shortcuts|tools/audit_blackout_shortcuts.gd|6"
 	"descent_runtime|tools/audit_descent_runtime.gd|--mode=descent --nologo"
 	"descent_progress|tools/audit_descent_progress.gd|"
+	"intro_playback|tools/audit_intro_playback.gd|"
+	"cross_video_review|tools/audit_cross_video_review.gd|"
 	"descent_ritual|tools/audit_descent_ritual.gd|"
 	"optional_vhs|tools/audit_optional_vhs.gd|"
 	"ghost_room_contract|tools/audit_ghost_room_contract.gd|"

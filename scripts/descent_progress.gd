@@ -11,6 +11,7 @@ const VERSION := 1
 var run_seed := 0
 var deepest_floor := -1
 var seen_short_tapes: Array[String] = []
+var completed_beginning_tapes := 0
 var _save_path := SAVE_PATH
 
 
@@ -28,6 +29,7 @@ func start_new(seed: int) -> void:
 	run_seed = maxi(1, seed)
 	deepest_floor = 0
 	seen_short_tapes.clear()
+	completed_beginning_tapes = 0
 	save_to_disk()
 
 
@@ -41,6 +43,7 @@ func reach_floor(seed: int, floor_idx: int) -> void:
 		run_seed = seed
 		deepest_floor = floor
 		seen_short_tapes.clear()
+		completed_beginning_tapes = 0
 	else:
 		deepest_floor = maxi(deepest_floor, floor)
 	save_to_disk()
@@ -60,6 +63,16 @@ func reset_short_tape_cycle() -> void:
 	save_to_disk()
 
 
+func record_beginning_tapes_completed(count: int) -> void:
+	if not has_checkpoint():
+		return
+	var clamped := clampi(count, 0, VhsTapeLibrary.beginning_paths().size())
+	if clamped <= completed_beginning_tapes:
+		return
+	completed_beginning_tapes = clamped
+	save_to_disk()
+
+
 func save_to_disk() -> Error:
 	if not has_checkpoint():
 		return ERR_UNCONFIGURED
@@ -69,6 +82,8 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, "deepest_floor", deepest_floor)
 	config.set_value(SECTION, "seen_short_tapes",
 		PackedStringArray(seen_short_tapes))
+	config.set_value(SECTION, "completed_beginning_tapes",
+		completed_beginning_tapes)
 	return config.save(_save_path)
 
 
@@ -76,6 +91,7 @@ func load_from_disk() -> bool:
 	run_seed = 0
 	deepest_floor = -1
 	seen_short_tapes.clear()
+	completed_beginning_tapes = 0
 	var config := ConfigFile.new()
 	if config.load(_save_path) != OK:
 		return false
@@ -90,11 +106,15 @@ func load_from_disk() -> bool:
 	deepest_floor = saved_floor
 	var paths: Variant = config.get_value(SECTION, "seen_short_tapes",
 		PackedStringArray())
+	var random_library := VhsTapeLibrary.random_paths()
 	if paths is Array or paths is PackedStringArray:
 		for value in paths:
 			var path := str(value)
-			if not path.is_empty() and not seen_short_tapes.has(path):
+			if random_library.has(path) and not seen_short_tapes.has(path):
 				seen_short_tapes.append(path)
+	completed_beginning_tapes = clampi(int(config.get_value(
+		SECTION, "completed_beginning_tapes", 0)), 0,
+		VhsTapeLibrary.beginning_paths().size())
 	return true
 
 
@@ -106,3 +126,4 @@ func clear_from_disk() -> void:
 	run_seed = 0
 	deepest_floor = -1
 	seen_short_tapes.clear()
+	completed_beginning_tapes = 0

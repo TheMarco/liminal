@@ -36,6 +36,8 @@ signal blackout_ambush()
 ## Main mirrors these two events into the persistent Descent checkpoint.
 signal short_tape_claimed(path: String)
 signal short_tape_cycle_restarted()
+## Ordered prologue recordings advance only when playback reaches its end.
+signal beginning_tape_completed(completed_count: int)
 
 enum Rule { BLACKOUT_MOVE }
 
@@ -155,6 +157,7 @@ var _short_tape_cycle := 0
 var _tape_seed := -1
 var _last_short_tape := ""
 var _short_tape_exclusions: Array[String] = []
+var _completed_beginning_tapes := 0
 var _best_route_distance := -1
 var _route_stall_time := 0.0
 
@@ -300,30 +303,53 @@ func mark_tape_watched() -> void:
 
 func tape_for_setup(key: String, long_form := false) -> String:
 	if _tape_assignments.has(key):
-		return str(_tape_assignments[key])
+		var assigned := str(_tape_assignments[key])
+		var beginning_idx := VhsTapeLibrary.beginning_index(assigned)
+		# Another television may have completed this chapter after this setup
+		# claimed it and was interrupted. Retire that stale assignment so the
+		# rebuilt/retried VCR receives the chapter currently owed.
+		if long_form or beginning_idx < 0 \
+				or beginning_idx >= _completed_beginning_tapes \
+				or setup_tape_completed(key):
+			return assigned
+		_tape_assignments.erase(key)
 	var tape := ""
 	if long_form:
 		# The final floor has no ritual set; floors 0..9 map one-to-one to the
 		# ten authored long-form chapters once that library is complete.
 		tape = VhsTapeLibrary.objective_chapter(floor_idx)
 	else:
-		_ensure_tape_deck()
-		if _short_tape_deck.is_empty():
-			_refill_short_tape_deck()
-		if not _short_tape_deck.is_empty():
-			tape = _short_tape_deck.pop_back()
-			_last_short_tape = tape
+		var beginnings := VhsTapeLibrary.beginning_paths()
+		if _completed_beginning_tapes < beginnings.size():
+			tape = beginnings[_completed_beginning_tapes]
+		else:
+			_ensure_tape_deck()
+			if _short_tape_deck.is_empty():
+				_refill_short_tape_deck()
+			if not _short_tape_deck.is_empty():
+				tape = _short_tape_deck.pop_back()
+				_last_short_tape = tape
 	if tape.is_empty():
 		return ""
 	_tape_assignments[key] = tape
-	if not long_form and not _short_tape_exclusions.has(tape):
+	if not long_form and VhsTapeLibrary.random_paths().has(tape) \
+			and not _short_tape_exclusions.has(tape):
 		_short_tape_exclusions.append(tape)
 		short_tape_claimed.emit(tape)
 	return tape
 
 
 func mark_setup_tape_completed(key: String) -> void:
+	if setup_tape_completed(key):
+		return
 	_tape_completed[key] = true
+	var tape := str(_tape_assignments.get(key, ""))
+	var beginning_idx := VhsTapeLibrary.beginning_index(tape)
+	if beginning_idx != _completed_beginning_tapes:
+		return
+	_completed_beginning_tapes += 1
+	_discard_stale_beginning_assignments(key)
+	beginning_tape_completed.emit(_completed_beginning_tapes)
 
 
 func setup_tape_completed(key: String) -> bool:
@@ -334,14 +360,21 @@ func tape_assignment_count() -> int:
 	return _tape_assignments.size()
 
 
+func completed_beginning_count() -> int:
+	return _completed_beginning_tapes
+
+
 ## Restore the current optional-video cycle before any set claims a tape. Only
 ## the already-seen paths are persisted; the remaining deal is regenerated
 ## deterministically and filtered, which preserves the no-repeat promise.
-func restore_short_tape_cycle(paths: Array[String]) -> void:
+func restore_short_tape_cycle(paths: Array[String], completed_beginnings := 0) -> void:
 	_short_tape_exclusions.clear()
+	var random_library := VhsTapeLibrary.random_paths()
 	for path in paths:
-		if not path.is_empty() and not _short_tape_exclusions.has(path):
+		if random_library.has(path) and not _short_tape_exclusions.has(path):
 			_short_tape_exclusions.append(path)
+	_completed_beginning_tapes = clampi(completed_beginnings, 0,
+		VhsTapeLibrary.beginning_paths().size())
 	_short_tape_deck.clear()
 	_tape_seed = -1
 
@@ -361,8 +394,8 @@ func _ensure_tape_deck() -> void:
 
 
 func _refill_short_tape_deck() -> void:
-	var library := VhsTapeLibrary.paths(false)
-	var deck := VhsTapeLibrary.shuffled(world_seed, _short_tape_cycle, false)
+	var library := VhsTapeLibrary.random_paths()
+	var deck := VhsTapeLibrary.shuffled_random(world_seed, _short_tape_cycle)
 	for path in _short_tape_exclusions:
 		deck.erase(path)
 	# Every short has now played. Repetition becomes legal only at this point,
@@ -371,7 +404,7 @@ func _refill_short_tape_deck() -> void:
 			and not _short_tape_exclusions.is_empty():
 		_short_tape_exclusions.clear()
 		short_tape_cycle_restarted.emit()
-		deck = VhsTapeLibrary.shuffled(world_seed, _short_tape_cycle, false)
+		deck = VhsTapeLibrary.shuffled_random(world_seed, _short_tape_cycle)
 	# The first draw of a new cycle is pop_back(). Do not put the previous
 	# cycle's last recording immediately back in the machine when alternatives
 	# exist, even though repetition is now legal.
@@ -381,6 +414,14 @@ func _refill_short_tape_deck() -> void:
 		deck[0] = held
 	_short_tape_deck = deck
 	_short_tape_cycle += 1
+
+
+func _discard_stale_beginning_assignments(completed_key: String) -> void:
+	for key in _tape_assignments.keys():
+		if str(key) == completed_key or setup_tape_completed(str(key)):
+			continue
+		if VhsTapeLibrary.beginning_index(str(_tape_assignments[key])) >= 0:
+			_tape_assignments.erase(key)
 
 
 func suspend_rules() -> void:

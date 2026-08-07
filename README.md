@@ -500,6 +500,11 @@ prison bunk and school cleaning cart are now CC BY 4.0 replacements.
 
 Dev tools for adding content:
 
+- `./tools/review_cross_videos.sh` opens the optional Dr. Cross video reviewer.
+  It excludes the ten long objective/elevator chapters, auto-advances through
+  the short-form pool, and writes non-destructive review choices to
+  `cross_review_prune.txt`. Use Previous/Next or the filename picker to revisit
+  clips; `M` marks or unmarks the current recording for pruning.
 - `godot --path . tools/preview_model.tscn -- --model=res://… --screenshot=/tmp/x.png`
   stages one model on a lit floor. `--scale=`, `--rot-x/y/z=`, `--camera=` and
   `--scale-reference` (a 1m grid plus a slab at the player's 1.62m eye height)
@@ -529,9 +534,12 @@ Dev tools for adding content:
   animated silhouette has to be a flipbook.
 - `ffmpeg2theora INPUT.mp4 --videoquality 7 --audioquality 3 --max_size
   512x512 -o videos/tapes/tape_NN.ogv` imports a Descent recording. The runtime
-  discovers every OGV automatically: clips under 30 seconds feed rare optional
-  TV/VCR sets, while clips of 30 seconds or more feed elevator-room rituals.
-  Record the original filename in `videos/tapes/SOURCES.md`.
+  treats `short_beginning_NN.ogv` as ordered optional chapters and
+  `short_random_NN.ogv` as the random optional pool regardless of duration;
+  other recordings under 30 seconds are optional and longer recordings feed
+  elevator-room rituals. Non-tape footage must be added to
+  `VhsTapeLibrary.RESERVED_GAME_ASSETS`. Record the original filename in
+  `videos/tapes/SOURCES.md`.
 - `godot --path . -- --whispers` shortens the whisper timer and prints the
   bearing, distance and level of each one, so the layer can be judged in a
   minute rather than in twenty.

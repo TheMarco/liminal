@@ -25,13 +25,18 @@ func _run() -> void:
 	progress.start_new(111)
 	progress.reach_floor(111, 6)
 	progress.reach_floor(111, 2)
-	progress.record_short_tape("res://videos/tapes/a.ogv")
-	progress.record_short_tape("res://videos/tapes/a.ogv")
-	progress.record_short_tape("res://videos/tapes/b.ogv")
+	var randoms := VhsTapeLibrary.random_paths()
+	var beginnings := VhsTapeLibrary.beginning_paths()
+	progress.record_short_tape(randoms[0])
+	progress.record_short_tape(randoms[0])
+	progress.record_short_tape(randoms[1])
+	progress.record_beginning_tapes_completed(3)
 	_expect(progress.deepest_floor == 6,
 		"starting an earlier floor lowered the deepest checkpoint")
 	_expect(progress.seen_short_tapes.size() == 2,
 		"optional tape history did not de-duplicate")
+	_expect(progress.completed_beginning_tapes == 3,
+		"ordered beginning progress did not advance")
 
 	var loaded := DescentProgress.new(TEST_PATH)
 	_expect(loaded.has_checkpoint() and loaded.run_seed == 111,
@@ -40,6 +45,8 @@ func _run() -> void:
 		"deepest floor did not survive relaunch")
 	_expect(loaded.seen_short_tapes == progress.seen_short_tapes,
 		"optional tape cycle did not survive relaunch")
+	_expect(loaded.completed_beginning_tapes == 3,
+		"ordered beginning progress did not survive relaunch")
 
 	# A same-seed restart never lowers the checkpoint; a new seed resets it.
 	loaded.reach_floor(111, 0)
@@ -50,17 +57,20 @@ func _run() -> void:
 		"New Descent did not establish a fresh floor-one checkpoint")
 	_expect(loaded.seen_short_tapes.is_empty(),
 		"New Descent inherited the old optional-tape cycle")
+	_expect(loaded.completed_beginning_tapes == 0,
+		"New Descent inherited ordered beginning progress")
 
 	# Restoring exclusions into a recreated run must deal an unseen short.
-	var shorts := VhsTapeLibrary.paths(false)
-	if shorts.size() >= 3:
-		loaded.record_short_tape(shorts[0])
-		loaded.record_short_tape(shorts[1])
+	if randoms.size() >= 3 and not beginnings.is_empty():
+		loaded.record_short_tape(randoms[0])
+		loaded.record_short_tape(randoms[1])
+		loaded.record_beginning_tapes_completed(beginnings.size())
 		var run := DescentRun.new()
 		run.world_seed = loaded.run_seed
-		run.restore_short_tape_cycle(loaded.seen_short_tapes)
+		run.restore_short_tape_cycle(loaded.seen_short_tapes,
+			loaded.completed_beginning_tapes)
 		var draw := run.tape_for_setup("restored:optional", false)
-		_expect(draw != shorts[0] and draw != shorts[1],
+		_expect(draw != randoms[0] and draw != randoms[1] and randoms.has(draw),
 			"restored run replayed a short before pool exhaustion")
 		run.free()
 	else:

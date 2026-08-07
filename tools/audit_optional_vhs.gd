@@ -4,6 +4,18 @@ extends SceneTree
 ## Run: godot --headless --path . --script tools/audit_optional_vhs.gd
 
 const BASE_SEEDS := [405195947, 7, 1234577]
+const OBJECTIVE_CHAPTERS: Array[String] = [
+	"res://videos/tapes/tape_02.ogv",
+	"res://videos/tapes/tape_03.ogv",
+	"res://videos/tapes/tape_04.ogv",
+	"res://videos/tapes/tape_05.ogv",
+	"res://videos/tapes/tape_43.ogv",
+	"res://videos/tapes/tape_44.ogv",
+	"res://videos/tapes/tape_45.ogv",
+	"res://videos/tapes/tape_46.ogv",
+	"res://videos/tapes/tape_47.ogv",
+	"res://videos/tapes/tape_48.ogv",
+]
 
 
 class TapeListener extends Node:
@@ -40,11 +52,34 @@ func _run() -> void:
 	var all := VhsTapeLibrary.all_paths()
 	var shorts := VhsTapeLibrary.paths(false)
 	var longs := VhsTapeLibrary.paths(true)
+	var beginnings := VhsTapeLibrary.beginning_paths()
+	var randoms := VhsTapeLibrary.random_paths()
 	if all.size() != longs.size() + shorts.size():
 		failures.append("catalogue split lost recordings: %d != %d + %d" % [
 			all.size(), longs.size(), shorts.size()])
 	if longs.is_empty() or shorts.is_empty():
 		failures.append("both objective and optional tape pools must be non-empty")
+	if beginnings.size() != 6:
+		failures.append("expected 6 ordered beginning tapes, got %d" % beginnings.size())
+	if randoms.size() != 15:
+		failures.append("expected 15 random optional tapes, got %d" % randoms.size())
+	if shorts != beginnings + randoms:
+		failures.append("optional pool is not ordered beginnings followed by randoms")
+	for i in beginnings.size():
+		if beginnings[i].get_file() != "short_beginning_%02d.ogv" % i:
+			failures.append("beginning chapter %d has wrong identity: %s" % [
+				i, beginnings[i]])
+	var expected_chapters := DescentRun.FLOOR_COUNT - 1
+	if longs.size() != expected_chapters:
+		failures.append("expected %d objective chapters, got %d" % [
+			expected_chapters, longs.size()])
+	if longs != OBJECTIVE_CHAPTERS:
+		failures.append("objective chapter order does not match Cross video1-video10")
+	for path in VhsTapeLibrary.RESERVED_GAME_ASSETS:
+		if all.has(path) or shorts.has(path) or longs.has(path):
+			failures.append("reserved game asset leaked into Cross tape pool: " + path)
+		if load(path) as VideoStream == null:
+			failures.append("reserved game asset is not loadable: " + path)
 	for path in all:
 		if load(path) as VideoStream == null:
 			failures.append("not a VideoStream: " + path)
@@ -124,26 +159,47 @@ func _audit_deck(shorts: Array[String], longs: Array[String],
 		failures: Array[String]) -> void:
 	var run := DescentRun.new()
 	run.world_seed = 12345
-	var seen := {}
-	for i in shorts.size():
-		var key := "short:%d" % i
+	var beginnings := VhsTapeLibrary.beginning_paths()
+	var randoms := VhsTapeLibrary.random_paths()
+	for i in beginnings.size():
+		var key := "beginning:%d" % i
+		var interrupted_key := "beginning:interrupted:%d" % i
 		var tape := run.tape_for_setup(key, false)
-		if not shorts.has(tape):
+		if tape != beginnings[i]:
+			failures.append("beginning %d dealt %s instead of %s" % [
+				i, tape, beginnings[i]])
+		if run.tape_for_setup(interrupted_key, false) != beginnings[i]:
+			failures.append("walking past/interrupted VCR consumed beginning %d" % i)
+		run.mark_setup_tape_completed(key)
+		if run.completed_beginning_count() != i + 1:
+			failures.append("completing beginning %d did not advance exactly once" % i)
+		run.mark_setup_tape_completed(key)
+		if run.completed_beginning_count() != i + 1:
+			failures.append("duplicate completion advanced beginning %d twice" % i)
+		if i + 1 < beginnings.size() \
+				and run.tape_for_setup(interrupted_key, false) != beginnings[i + 1]:
+			failures.append("stale interrupted assignment did not move to beginning %d" % (i + 1))
+
+	var seen := {}
+	for i in randoms.size():
+		var key := "random:%d" % i
+		var tape := run.tape_for_setup(key, false)
+		if not randoms.has(tape):
 			failures.append("%s draw escaped its pool" % key)
 		if seen.has(tape):
 			failures.append("%s repeated before pool exhaustion" % key)
 		seen[tape] = true
 		if run.tape_for_setup(key, false) != tape:
 			failures.append("%s assignment changed on revisit" % key)
-	if seen.size() != shorts.size():
+	if seen.size() != randoms.size():
 		failures.append("short pool dealt %d/%d unique recordings" % [
-			seen.size(), shorts.size()])
+			seen.size(), randoms.size()])
 	var cycled := run.tape_for_setup("short:cycle", false)
-	if not shorts.has(cycled):
+	if not randoms.has(cycled):
 		failures.append("post-exhaustion draw escaped the short pool")
 
 	# Long recordings are story chapters, fixed by floor rather than dealt.
-	for floor_idx in 10:
+	for floor_idx in DescentRun.FLOOR_COUNT - 1:
 		run.floor_idx = floor_idx
 		var key := "floor:%d:objective" % floor_idx
 		var tape := run.tape_for_setup(key, true)
@@ -218,10 +274,18 @@ func _audit_playback_modes(shorts: Array[String], longs: Array[String],
 			failures.append("CRT shader did not enter distorted-footage mode")
 		if optional._screen_mat.get_shader_parameter("tape_tex") == null:
 			failures.append("decoded recording was not bound to the CRT shader")
+	var interrupted_tape := optional._tape_path
 	optional.reset_tape()
+	if not optional._tape_path.is_empty():
+		failures.append("interrupted optional VCR kept a stale local assignment")
+	optional._claim_tape()
+	if optional._tape_path != interrupted_tape:
+		failures.append("interrupted beginning did not remain the next recording")
 	optional._finish_tape()
 	if listener.optional_finishes != 1 or listener.objective_finishes != 0:
 		failures.append("optional completion mutated the objective channel")
+	if listener.run.completed_beginning_count() != 1:
+		failures.append("completed optional beginning did not advance the sequence")
 	objective._finish_tape()
 	if listener.objective_finishes != 1:
 		failures.append("objective completion did not reach its gate channel")

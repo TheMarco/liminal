@@ -120,8 +120,11 @@ var descent := false
 var run: DescentRun
 var descent_route: DescentRoute
 var _descent_progress: DescentProgress
+var _intro_state: IntroPlaybackState
+var _descent_intro: DescentIntro
 var _progress_enabled := false
 var _descent_preparing := false
+var _pending_new_descent_intro := false
 var _attention_override := -1.0
 var _blackout_ambient := -1.0
 var _blackout_locate_cue := 0
@@ -175,6 +178,7 @@ func _ready() -> void:
 	_progress_enabled = not opts.descent and not opts.skips_title() \
 		and not opts.quick_exit()
 	_descent_progress = DescentProgress.new()
+	_intro_state = IntroPlaybackState.new()
 	var spawn := opts.spawn if opts.spawn_given else DEFAULT_SPAWN
 	var pos_given := opts.spawn_given
 	var yaw := opts.yaw
@@ -445,6 +449,8 @@ func _build_level(level: int, around: Vector3) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if is_instance_valid(_descent_intro):
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_Q and _title == null \
 				and not _switching and not is_instance_valid(_return_prompt) \
@@ -774,12 +780,14 @@ func _connect_descent_run() -> void:
 	run.pinned_attention = _attention_override
 	if _progress_enabled and _descent_progress.has_checkpoint() \
 			and _descent_progress.run_seed == world_seed:
-		run.restore_short_tape_cycle(_descent_progress.seen_short_tapes)
+		run.restore_short_tape_cycle(_descent_progress.seen_short_tapes,
+			_descent_progress.completed_beginning_tapes)
 	if player != null:
 		run.player = player
 	run.floor_reached.connect(_on_descent_floor_reached)
 	run.short_tape_claimed.connect(_on_short_tape_claimed)
 	run.short_tape_cycle_restarted.connect(_on_short_tape_cycle_restarted)
+	run.beginning_tape_completed.connect(_on_beginning_tape_completed)
 	run.attention_changed.connect(_on_descent_attention)
 	run.violation.connect(_on_descent_violation)
 	run.blackout_changed.connect(_on_descent_blackout)
@@ -806,6 +814,11 @@ func _on_short_tape_claimed(path: String) -> void:
 func _on_short_tape_cycle_restarted() -> void:
 	if _progress_enabled and _descent_progress.run_seed == world_seed:
 		_descent_progress.reset_short_tape_cycle()
+
+
+func _on_beginning_tape_completed(completed_count: int) -> void:
+	if _progress_enabled and _descent_progress.run_seed == world_seed:
+		_descent_progress.record_beginning_tapes_completed(completed_count)
 
 
 func _begin_descent_floor() -> void:
@@ -1298,8 +1311,12 @@ func _restart_descent() -> void:
 
 func _new_descent() -> void:
 	world_seed = _fresh_descent_seed()
-	if _progress_enabled:
-		_descent_progress.start_new(world_seed)
+	await _play_descent_intro()
+	_commit_new_descent_checkpoint()
+	# This entry comes from the results screen rather than `_on_start`, so it
+	# must release the audio hold that the title path releases there.
+	_music.stream_paused = false
+	_set_world_audio(true)
 	await _resume_descent_at(0)
 
 
@@ -2109,6 +2126,7 @@ func _prepare_descent(entry: int) -> void:
 		return
 	_descent_preparing = true
 	descent = true
+	_pending_new_descent_intro = entry == TitleScreen.DescentEntry.NEW
 	var floor_idx := _apply_descent_entry(entry)
 	player.allow_sprint = false
 	player.set_process_unhandled_input(false)
@@ -2144,7 +2162,6 @@ func _apply_descent_entry(entry: int) -> int:
 		world_seed = _descent_progress.run_seed
 		return 0
 	world_seed = _fresh_descent_seed()
-	_descent_progress.start_new(world_seed)
 	return 0
 
 
@@ -2160,6 +2177,15 @@ func _fresh_descent_seed() -> int:
 func _on_start(selected_descent: bool) -> void:
 	_title = null
 	_title_music = false
+	if selected_descent and _pending_new_descent_intro:
+		_pending_new_descent_intro = false
+		await _play_descent_intro()
+		_commit_new_descent_checkpoint()
+	_finish_mode_start(selected_descent)
+
+
+func _finish_mode_start(selected_descent: bool) -> void:
+	_music.stream_paused = false
 	_set_world_audio(true)
 	_switch_music(active_level)
 	player.grab_look()
@@ -2169,6 +2195,33 @@ func _on_start(selected_descent: bool) -> void:
 	else:
 		_set_presence(Presence.WANDER)
 	_start_hint_fade()
+
+
+func _play_descent_intro() -> void:
+	if is_instance_valid(_descent_intro):
+		await _descent_intro.completed
+		return
+	_set_presence(Presence.SILENT)
+	_set_world_audio(false)
+	# Score lives on Master beside the movie. Pause it explicitly while the
+	# Hall bus and ambience are silent, leaving the intro's own audio untouched.
+	_music.stream_paused = true
+	player.velocity = Vector3.ZERO
+	player.set_process_unhandled_input(false)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_descent_intro = DescentIntro.new(_intro_state.has_viewed())
+	add_child(_descent_intro)
+	var watched_to_end: bool = await _descent_intro.completed
+	_descent_intro = null
+	if watched_to_end:
+		var error := _intro_state.mark_viewed()
+		if error != OK:
+			push_warning("Could not save intro playback state (error %d)" % error)
+
+
+func _commit_new_descent_checkpoint() -> void:
+	if _progress_enabled:
+		_descent_progress.start_new(world_seed)
 
 
 func _set_mode_hint() -> void:
