@@ -93,18 +93,6 @@ static func _scan() -> void:
 			_long.append(path)
 
 
-static func shuffled(base_seed: int, cycle: int, long_form := false) -> Array[String]:
-	var deck := paths(long_form)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(base_seed) ^ (cycle * 104729 + 0x7A9E5)
-	for i in range(deck.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var held: String = deck[i]
-		deck[i] = deck[j]
-		deck[j] = held
-	return deck
-
-
 static func shuffled_random(base_seed: int, cycle: int) -> Array[String]:
 	var deck := random_paths()
 	var rng := RandomNumberGenerator.new()

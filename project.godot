@@ -21,6 +21,10 @@ config/icon="res://icon.png"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 
+[debug]
+
+settings/profiler/max_timestamp_query_elements=2048
+
 [rendering]
 
 rendering_device/driver.windows="d3d12"

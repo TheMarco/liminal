@@ -10,7 +10,7 @@ extends CanvasLayer
 ## the count of rooms actually left between here and the car. Still no
 ## direction, so the maze is untouched; only the instrument stops lying.
 
-const CELL := 12.0
+const CELL := WorldGen.CELL_SIZE
 ## How long the honest count survives after an optional recording ends. Long
 ## enough to reorient with, far too short to navigate by.
 const TRUE_DISTANCE_SECONDS := 15.0
@@ -26,6 +26,10 @@ var _true_left := 0.0
 var _panel: PanelContainer
 var _label: Label
 var _distance: Label
+var _last_label_text := ""
+var _last_distance_text := ""
+var _last_viewport_size := Vector2.ZERO
+var _last_wide := false
 
 
 func _ready() -> void:
@@ -113,22 +117,32 @@ func _process(dt: float) -> void:
 		_true_left = maxf(0.0, _true_left - dt)
 	var rooms := _rooms_left() if _true_left > 0.0 else -1
 	var wide := rooms >= 0
+	var label_text := "ROOMS TO LIFT" if wide else "LIFT"
+	var distance_text := ""
 	if wide:
-		_label.text = "ROOMS TO LIFT"
-		_distance.text = "%d" % rooms
+		distance_text = "%d" % rooms
 	else:
-		_label.text = "LIFT"
 		var target_world := Vector3(
 			float(route.target.x) * CELL + CELL * 0.5, 0.0,
 			float(route.target.y) * CELL + CELL * 0.5)
 		var delta := target_world - player.global_position
-		_distance.text = "%dm" % maxi(1,
+		distance_text = "%dm" % maxi(1,
 			roundi(Vector2(delta.x, delta.z).length()))
+	if label_text != _last_label_text:
+		_last_label_text = label_text
+		_label.text = label_text
+	if distance_text != _last_distance_text:
+		_last_distance_text = distance_text
+		_distance.text = distance_text
 	var viewport_size := Vector2(get_viewport().size)
-	var scale := clampf(viewport_size.y / 720.0, 1.0, 1.55)
-	var width := 224.0 if wide else 150.0
-	_panel.scale = Vector2.ONE * scale
-	_panel.size = Vector2(width, 92)
-	_panel.position = Vector2(viewport_size.x * 0.5 - width * 0.5 * scale,
-		14.0 * scale)
-	_panel.visible = true
+	if viewport_size != _last_viewport_size or wide != _last_wide:
+		_last_viewport_size = viewport_size
+		_last_wide = wide
+		var scale := clampf(viewport_size.y / 720.0, 1.0, 1.55)
+		var width := 224.0 if wide else 150.0
+		_panel.scale = Vector2.ONE * scale
+		_panel.size = Vector2(width, 92)
+		_panel.position = Vector2(
+			viewport_size.x * 0.5 - width * 0.5 * scale, 14.0 * scale)
+	if not _panel.visible:
+		_panel.visible = true

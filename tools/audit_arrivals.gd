@@ -168,10 +168,7 @@ func _run() -> void:
 		print("  PASS — every arrival has capsule clearance, supported floor, and 2+ escape directions")
 	else:
 		print("  FAIL — %d unsafe or missing destinations" % failures)
-	SoundBank._c.clear()
-	Sfx._c.clear()
-	await process_frame
-	await create_timer(0.1).timeout
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures == 0 else 1)
 
 

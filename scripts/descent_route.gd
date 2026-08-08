@@ -37,6 +37,11 @@ const OPTIONAL_VHS_METRES := 200.0
 const OPTIONAL_VHS_MIN := 2
 const OPTIONAL_VHS_MAX := 3
 const OPTIONAL_VHS_SALT := 7331
+## Optional recordings are discoveries, not navigation tests. Put the first
+## one early enough to teach the powered-CRT cue and the second around
+## mid-route, before end-of-floor pressure takes over.
+const OPTIONAL_VHS_PROGRESS_2 := [0.22, 0.55]
+const OPTIONAL_VHS_PROGRESS_3 := [0.18, 0.43, 0.68]
 ## An assistance doorway must remove a meaningful piece of the maze, not merely turn
 ## one corner into another. Two graph edges are 24 nominal metres: enough to
 ## break a frustrating loop without teleporting the player through the floor.
@@ -97,14 +102,7 @@ var _optional_vhs_ready := false
 var _optional_vhs: Array[Vector2i] = []
 var _path_cells := {}
 var _ritual_cell := Vector2i(1 << 30, 1 << 30)
-
-## Floors whose objective altar stands a few route rooms short of the lift
-## instead of beside it. The tape stays the sole lift key, so these floors
-## become two-stage: find the recording, then find the car it unlocked.
-## Authored, not seeded — the surprise should land at the same depths for
-## everyone, like the fixed theme order itself.
-const REMOTE_RITUAL_FLOORS := [2, 5, 8]
-
+var _base_wall_cache := {}
 
 static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 	var route := DescentRoute.new()
@@ -152,18 +150,14 @@ func next_room_exit(from: Vector2i) -> Dictionary:
 	return {}
 
 
-## The cell whose room carries the floor's objective altar: the target itself
-## on most floors, a route cell 4-7 doorways short of it on the remote-ritual
-## floors. Lazy because it walks the finished path; deterministic per seed.
+## The objective altar and lift always share the target room. Separating them
+## taught the player to follow lift guidance past a mandatory tape and then
+## search backward without a marker. Variation belongs in optional recordings;
+## the required end-of-floor interaction must be unmistakable.
 func objective_ritual_cell() -> Vector2i:
 	if _ritual_cell.x != (1 << 30):
 		return _ritual_cell
 	_ritual_cell = target
-	if REMOTE_RITUAL_FLOORS.has(floor_idx):
-		var path := path_from_origin()
-		if path.size() >= 10:
-			var back := 4 + posmod(WorldGen.h(world_seed, floor_idx, 41, 9203), 4)
-			_ritual_cell = path[path.size() - 1 - back]
 	return _ritual_cell
 
 
@@ -193,6 +187,29 @@ func edge_info(at: Vector2i, dir: int) -> Dictionary:
 	if topology != null:
 		return topology.edge_info(at, dir)
 	return WorldGen.edge_info(world_seed, at, dir, theme)
+
+
+func is_wall(at: Vector2i, dir: int) -> bool:
+	return topology.is_wall(at, dir) if topology != null else \
+		base_is_wall(at, dir)
+
+
+func base_is_wall(at: Vector2i, dir: int) -> bool:
+	var key := DescentTopology.edge_key(at, dir)
+	if not _base_wall_cache.has(key):
+		_base_wall_cache[key] = WorldGen.is_wall(world_seed, at, dir, theme)
+	return bool(_base_wall_cache[key])
+
+
+func scanned_contains(at: Vector2i) -> bool:
+	return _origin_distance.has(at)
+
+
+func scanned_cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for value in _origin_distance.keys():
+		out.append(value as Vector2i)
+	return out
 
 
 ## Every blackout opens the same kind of impossible, persistent doorway. The
@@ -423,7 +440,10 @@ func _build_optional_vhs_cells() -> void:
 	for slot in wanted:
 		if candidates.is_empty():
 			break
-		var desired := float(slot + 1) / float(wanted + 1)
+		var authored_progress := OPTIONAL_VHS_PROGRESS_3 \
+			if wanted >= 3 else OPTIONAL_VHS_PROGRESS_2
+		var desired: float = authored_progress[mini(slot,
+			authored_progress.size() - 1)]
 		var best_idx := 0
 		var best_score := INF
 		for i in candidates.size():
@@ -472,7 +492,7 @@ func _optional_vhs_candidates(path: Array[Vector2i], dry_pool_only: bool) \
 ## the first two floors, so this is a floor of the real walk, not the whole of
 ## it — but it is the number worth tuning against.
 func walk_metres() -> float:
-	return float(maxi(0, path_from_origin().size() - 1)) * 12.0
+	return float(maxi(0, path_from_origin().size() - 1)) * WorldGen.CELL_SIZE
 
 
 func _build() -> void:
@@ -585,10 +605,7 @@ func _scan(from: Vector2i, radius: int) -> void:
 			if maxi(absi(nb.x - from.x), absi(nb.y - from.y)) > radius \
 					or _origin_distance.has(nb):
 				continue
-			# `edge_info(...)["wall"]` is `is_wall` on every return path, but
-			# builds a dictionary and a pile of theme-specific geometry to say
-			# so. These two BFS loops are the hot path of a floor build.
-			if bool(edge_info(c, dir)["wall"]):
+			if is_wall(c, dir):
 				continue
 			_origin_distance[nb] = dist + 1
 			queue.append(nb)
@@ -658,10 +675,7 @@ func _build_reverse_map() -> void:
 			var nb: Vector2i = c + WorldGen.DIRV[dir]
 			if not _origin_distance.has(nb) or _target_distance.has(nb):
 				continue
-			# `edge_info(...)["wall"]` is `is_wall` on every return path, but
-			# builds a dictionary and a pile of theme-specific geometry to say
-			# so. These two BFS loops are the hot path of a floor build.
-			if bool(edge_info(c, dir)["wall"]):
+			if is_wall(c, dir):
 				continue
 			_target_distance[nb] = dist + 1
 			_next[nb] = c

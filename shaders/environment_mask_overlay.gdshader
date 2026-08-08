@@ -3,10 +3,10 @@ render_mode blend_mix, depth_draw_never, cull_disabled, diffuse_burley;
 
 uniform sampler2D effect_mask : source_color, filter_linear_mipmap_anisotropic;
 uniform vec3 effect_color : source_color = vec3(0.24, 0.16, 0.08);
-uniform float strength : hint_range(0.0, 1.0) = 0.45;
-uniform vec2 atlas_scale = vec2(1.0);
-uniform vec2 atlas_offset = vec2(0.0);
-uniform float quarter_turns = 0.0;
+instance uniform float strength : hint_range(0.0, 1.0) = 0.45;
+instance uniform vec2 atlas_scale = vec2(1.0);
+instance uniform vec2 atlas_offset = vec2(0.0);
+instance uniform float quarter_turns = 0.0;
 // Damage decals must dissolve before reaching their geometry boundary. This is
 // evaluated in full-mask UV space, so atlas tiles join without internal seams.
 uniform float edge_feather : hint_range(0.01, 0.30) = 0.12;

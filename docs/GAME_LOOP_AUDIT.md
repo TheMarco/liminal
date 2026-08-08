@@ -17,12 +17,13 @@ through doorways, deaths retain the deepest floor, a genuinely lost player can
 receive hidden architectural assistance, and watching the story tape—not
 filling the flashlight—is now the only elevator admission requirement.
 
-The game is not yet a complete story campaign. All ten long-form Cross
-recordings are now implemented, but the planned intro does not exist in the
-runtime and the final exit currently cuts directly to an `OUT` results screen
-instead of the player-centered dread outro in `docs/STORY.md`. The complete run
-also remains long and mechanically repetitive, and late difficulty is driven
-more by frequency and endurance than by new tactical ideas.
+The current runtime includes the Cross intro and the eleven-floor Descent
+campaign. The intro plays only for a brand-new Descent machine state, cannot be
+skipped on its first viewing, becomes skippable after a completed viewing, and
+is never shown in Wander. Ten long-form Cross recordings drive floors 1–10;
+Bloom is the final exit floor. The complete run remains long and mechanically
+repetitive, and late difficulty is driven more by frequency and endurance than
+by new tactical ideas.
 
 | Area | Current assessment |
 |---|---|
@@ -42,7 +43,7 @@ more by frequency and endurance than by new tactical ideas.
 **6/10**.
 
 That distinction matters. The systems are now good enough to support the game,
-but the campaign still needs its intro and ending, pacing pass,
+but the campaign still needs its ending, pacing pass,
 late encounter tuning, and shipping UX.
 
 This audit is evidence-based but not a substitute for a human full-run
@@ -311,23 +312,19 @@ same long route and objective tape from that floor's arrival.
 
 ### Addressed — Ten long Cross recordings
 
-The tape catalogue now contains 48 recordings: ten long and 38 short. Each of
-the ten elevator objectives receives its own fixed Cross chapter in source
-order. The 38 short recordings and their no-repeat optional-TV pool are
-unchanged.
+The tape catalogue contains ten eligible long Cross recordings and 21 optional
+short recordings. Each elevator objective receives its own fixed Cross chapter
+in source order. The six `short_beginning_*` clips are completed in order;
+the fifteen `short_random_*` clips use a persistent no-repeat cycle. Converted
+game assets `tape_06`–`tape_09` are reserved and excluded from the Cross pool.
 
-### P0 — The intro and actual outro are not implemented
+### Resolved — Descent intro playback
 
-`docs/STORY.md` specifies one Cross intro and a player-centered outro in which
-escape reveals only a larger, final form of dread.
-
-The runtime currently has no intro-video path. Reaching the final exit calls
-`run.finish(true)` and presents an `OUT` results screen. There is no exterior
-sequence, recognition beat, search, or dreadful finality.
-
-Until those sequences exist, the game has a beginning implied by documents and
-an ending represented by a status label. This is the largest gap between the
-current build and the intended story experience.
+`DescentIntro` and `IntroPlaybackState` implement the story opening. A new
+Descent plays it once without skip; after it reaches the end, the machine's
+saved playback state exposes skip on future new Descent runs. Wander bypasses
+the intro entirely. The final exit remains represented by the existing `OUT`
+results flow.
 
 ### P1 — The ten objective rituals still need variation
 
@@ -431,16 +428,16 @@ The HUD shows Euclidean distance, not graph distance or direction. A correct
 dogleg can increase the number while moving the player closer along the actual
 route.
 
-The blackout-doorway assistance prevents prolonged hard stalls, so an explicit
-arrow is no longer necessary. A subtle signal-strength cue after repeated route
-improvement or backtracking could make progress legible without solving the
-maze for the player.
+Generated blackout-reality assistance prevents prolonged hard stalls, so an
+explicit arrow is no longer necessary. A subtle signal-strength cue after
+repeated route improvement or backtracking could make progress legible without
+solving the maze for the player.
 
 ### Checkpoints remain floor-granular
 
-Continue restores the deepest floor, not the exact room, tape state, or blackout
-topology at death. This is a clean and deterministic rule, but dying after the
-tape or near a late objective repeats that entire floor.
+Continue restores the deepest floor rather than the exact room, but now also
+restores that floor's generated reality id/history and tape-cycle state. It
+still does not resume a mid-room interaction or the player's exact position.
 
 Do not add room-by-room autosaves. Consider one retry concession only if
 playtests show repeated late-floor abandonment—for example, a post-tape retry
@@ -456,15 +453,37 @@ The authored behavior is correct, but there is no telemetry proving how often
 players actually see one on each eligible floor. Treat it as theme-specific set
 dressing until playtest data demonstrates a reliable campaign cadence.
 
-### Performance needs a fresh capture
+### Fresh rendered performance capture
 
-The previous audit found visible single-chunk stalls on Annex and Bloom. This
-revision did not reprofile frame times, so those old measurements should not be
-presented as current fact.
+The 2026-08-08 pass used Godot 4.6.1's real Metal/Forward+ renderer on an
+Apple M3 Max at a 960×540 window. With CRT enabled, the 3D source was the
+authored 480-line image. Each scenario walked and turned continuously at a
+60 FPS cap; startup/shader compilation was separated from steady windows.
 
-The architectural risk remains: the streamer has a time budget between chunk
-builds but cannot interrupt one heavy chunk constructor. Re-run continuous
-movement captures through Annex and Bloom before shipping.
+- Bloom initially reproduced the performance defect at 39.8–42.3 FPS,
+  6,177–7,534 draw calls, 3.9–4.7 million primitives and 26–33 ms worst steady
+  process time. Four overlapping shadowed omni lights per room were redrawing
+  the same dense organic geometry. Keeping one true shadow source per fixture
+  group while retaining the remaining fixtures as visible fill restored a
+  stable 60 FPS: 2,340–2,788 draws, 1.49–1.73 million primitives and
+  5.78–6.87 ms worst steady process time. A rendered screenshot confirmed that
+  the rooms retain contact shadows and depth.
+- Annex held 60 FPS after warm-up at 130–140 draws, roughly 15–20 thousand
+  primitives and 2.8–3.23 ms worst steady process time. Its former constructor
+  spikes are removed by prototype/material reuse and prewarming.
+- Poolrooms with water and full CRT held 60 FPS at roughly 205 draws and
+  150 thousand primitives once loaded. The apparent late capture spike was a
+  real Wander portal transition into Bloom, not Poolrooms streaming; it occurs
+  under the transition fade and the destination then returns to 60 FPS.
+
+The streamer now renders a fog-bounded 5×5 square and retains only an invisible
+one-cell hysteresis ring for collision/rebuild stability. Godot's Metal backend
+reported `0.0 ms` for `--gpu-profile`, so a trustworthy numeric GPU-frame time
+is not available from this engine/backend combination. The capture therefore
+records rendered FPS, process/physics worst frame, draw calls, primitives,
+collision pairs, object/resource deltas and video memory. The project raises
+the timestamp-query capacity so supported backends can produce a detailed GPU
+profile without overflowing the default 256 entries.
 
 ## Automated-test confidence and gaps
 
@@ -479,7 +498,8 @@ movement captures through Annex and Bloom before shipping.
 - Progress audit: seed, deepest floor, and short-tape cycle persistence.
 - Ghost room audit: walls, offset door traversal, observed/unobserved movement,
   and three-room escape.
-- Optional VHS audit: 48 tapes, ten long/38 short, 77/77 route sets placed.
+- Optional VHS audit: ten long/21 short, with ordered beginning clips and
+  randomized no-repeat shorts; reserved `tape_06`–`tape_09` excluded.
 - Flashlight charging audit: capacity, recharge time, reset, station coverage.
 - Wander audit: hostile systems remain disabled.
 - Title audit: main menu and information pages remain distinct.
@@ -489,28 +509,26 @@ movement captures through Annex and Bloom before shipping.
 
 ### Known failures or blind spots
 
-The survivability audit currently fails its own coverage requirement:
+The survivability audit now plans a real reality graph, places its stationary
+fixture beside a legal delta, and observes blackout/passive ticks across all
+eleven floors. This repairs the former zero-blackout coverage hole.
 
-> 0 blackout ticks in 900 simulated seconds
-
-It constructs `DescentRun` without a route. Live blackouts now require a safe
-doorway proposal, so the run correctly postpones every blackout and the audit
-proves nothing about blackout survivability. Repair the test with a real
-`DescentRoute` and topology before treating it as a fairness gate.
-
-The flashlight audit does not test interrupted-charge rollback. The horror
-systems lack a campaign-level encounter-rate telemetry audit. Headless runtime
-and VHS tests also emit dummy-renderer/resource cleanup warnings despite
-passing, so visual correctness still requires rendered/manual checks.
+The flashlight audit now tests interrupted-charge rollback across Wander floor
+teardown. The horror systems still lack a campaign-level encounter-rate
+telemetry audit. The strict runner allowlists only the known dummy-renderer
+null-material messages and macOS certificate lookup noise; leaked objects,
+resources, script errors, and every other engine `ERROR:` fail the suite.
+Visual correctness still requires rendered/manual checks.
 
 Several documents and comments retain obsolete rules, including claims of a
-topology-aware HUD needle and old multi-rule Descent behavior. Documentation
-should be reconciled after current mechanics stabilize.
+old topology-aware HUD needle and multi-rule Descent behavior. The live HUD is
+distance-only, Descent has one blackout rule, and blackout mutations use the
+complete persistent reality graph; this document now records those resolved
+mechanics.
 
 ## Recommended development order
 
-1. Implement the Cross intro and the player-centered dread outro.
-2. Conduct one instrumented full completion with the current checkpointed
+1. Conduct one instrumented full completion with the current checkpointed
    build before changing route lengths.
 3. Add three or four objective/lift ritual variations.
 4. Tune late hostile density and director recovery from playtest data; add
@@ -518,10 +536,9 @@ should be reconciled after current mechanics stabilize.
    adding more raw pressure.
 5. Add pause, settings, remapping, controller, caption, and photosensitivity
    options.
-6. Resolve interrupted charging semantics and expand its test.
-7. Repair the survivability audit with real route/topology fixtures.
-8. Reprofile Annex and Bloom streaming under continuous movement.
-9. Reconcile README and `docs/DESCENT.md` with the live rules.
+6. Tune rare-event cadence from full-run telemetry.
+7. Revisit renderer budgets when targeting hardware below the current Metal
+   reference machine.
 
 Instrumented playtests should include:
 
@@ -552,7 +569,8 @@ progress.
 The main problem is no longer unfairness. It is **campaign completion and
 composition**:
 
-- The story still needs its intro and actual ending.
+- The final exit presentation remains compact; the Cross intro and campaign
+  opening are implemented.
 - Ten objective rooms repeat too much of the same ritual.
 - Late difficulty adds pressure faster than it adds new ideas.
 - The new shared director still needs full-run cadence tuning.

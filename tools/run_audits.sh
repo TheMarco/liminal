@@ -71,6 +71,8 @@ AUDITS=(
 	"chemistry_props|tools/audit_chemistry_props.gd|"
 	"slots|tools/audit_slots.gd|"
 	"new_levels|tools/audit_new_levels.gd|"
+	"brutalist|tools/audit_brutalist.gd|"
+	"bloom|tools/audit_bloom.gd|"
 	"survivability|tools/audit_survivability.gd|"
 	"prop_overlap|tools/audit_prop_overlap.gd|"
 	"airport_colliders|tools/audit_airport_colliders.gd|"
@@ -78,15 +80,13 @@ AUDITS=(
 	"interactions|tools/audit_interactions.gd|"
 	"arrivals|tools/audit_arrivals.gd|"
 	"level_switches|tools/audit_level_switches.gd|--nologo"
-	# Route BFS cost tracks the band radii. Current generation costs roughly
-	# 25s per seed on the reference Mac; eight seeds cover 88 floor routes while
-	# retaining headroom under the 300s cap when audits contend in parallel.
+	# Eight deterministic seeds cover 88 floor routes. Route planning now uses
+	# compact wall caches and normally completes in a fraction of a second.
 	"descent_routes|tools/audit_descent_routes.gd|8"
-	# Two route builds per theme-seed: 20 seeds stopped fitting the 300s cap
-	# at current route costs. Six still covers 132 doorway cases; the six
-	# once-failing seeds were verified cured by a direct 20-seed run before
-	# this reduction, so the trim is not hiding them.
+	# Two route builds per theme-seed; six seeds cover 132 doorway cases while
+	# keeping the complete suite quick enough for routine local use.
 	"blackout_shortcuts|tools/audit_blackout_shortcuts.gd|6"
+	"descent_mutation_graph|tools/audit_descent_mutation_graph.gd|"
 	"descent_runtime|tools/audit_descent_runtime.gd|--mode=descent --nologo"
 	"descent_progress|tools/audit_descent_progress.gd|"
 	"intro_playback|tools/audit_intro_playback.gd|"
@@ -102,6 +102,13 @@ AUDITS=(
 	"chunk_smoke|tools/audit_chunk_smoke.gd|"
 	"pool_corners|tools/audit_pool_corners.gd|"
 	"pool_scale|tools/audit_pool_scale.gd|"
+	"pool_crossings|tools/audit_pool_crossings.gd|"
+	"pool_environment|tools/audit_pool_environment.gd|"
+	"pool_heights|tools/audit_pool_heights.gd|"
+	"pool_jacuzzi|tools/audit_pool_jacuzzi.gd|"
+	"pool_minerals|tools/audit_pool_minerals.gd|"
+	"pool_openings|tools/audit_pool_openings.gd|"
+	"flashlight_charging|tools/audit_flashlight_charging.gd|"
 	"wander_mode|tools/audit_wander_mode.gd|--nologo"
 	# Not just a generation fingerprint: it builds 423 chunks across every theme
 	# and style, so a method reached through the wrong level builder shows up here
@@ -111,9 +118,9 @@ AUDITS=(
 	"pool_lighting|tools/audit_pool_lighting.gd|"
 )
 
-# Audits owned by in-flight work elsewhere. Reported but not gating, so a
-# collaborator's half-finished audit cannot block a refactor phase.
-NONGATING="pool_basins pool_lighting"
+# Every listed audit gates the result. Keep the variable for the result/report
+# machinery below, but do not exempt failures from the suite.
+NONGATING=""
 
 if [ "$DO_IMPORT" = "1" ]; then
 	printf 'import pass ... '
@@ -140,6 +147,26 @@ if grep -qE "Parse Error|Compile Error" "$LOGDIR/compile.log"; then
 	exit 1
 fi
 echo "ok"
+
+# Timing gates cannot share CPU fairly with the parallel functional suite.
+# Run the controlled heavy-builder smoke test alone, after compile/import and
+# before launching the worker pool.
+if [ -z "$FILTER" ] || [[ "generation_performance" == *"$FILTER"* ]]; then
+	printf 'generation performance ... '
+	if $GODOT --headless --log-file "$LOGDIR/generation-performance-godot.log" \
+			--path . --script tools/audit_generation_performance.gd \
+			>"$LOGDIR/generation-performance.log" 2>&1; then
+		echo "ok"
+	else
+		echo "FAILED"
+		cat "$LOGDIR/generation-performance.log"
+		exit 1
+	fi
+	if [ "$FILTER" = "generation_performance" ]; then
+		echo "logs: $LOGDIR"
+		exit 0
+	fi
+fi
 
 run_one() {
 	local name="$1" script="$2" extra="$3" log="$LOGDIR/$1.log"
@@ -171,8 +198,18 @@ run_one() {
 	wait "$pid"
 	local rc=$?
 	# A Godot script can print an error and still exit 0, so treat a hard
-	# SCRIPT ERROR in the log as a failure too.
+	# script error, resource leak, or non-allowlisted engine error as a failure.
 	if [ $rc -eq 0 ] && grep -q "SCRIPT ERROR" "$log"; then rc=90; fi
+	if [ $rc -eq 0 ] && grep -qE \
+		"ObjectDB instances leaked|resources still in use at exit" "$log"; then
+		rc=91
+	fi
+	if [ $rc -eq 0 ]; then
+		grep '^ERROR:' "$log" | grep -Ev \
+			'^ERROR: (Parameter "(material|t)" is null\.|Condition "ret != noErr" is true\. Returning: ""|Error saving editor settings to |Cannot save file .*/editor_settings-4\.6\.tres)' \
+			>"$LOGDIR/$name.unexpected-errors" || true
+		if [ -s "$LOGDIR/$name.unexpected-errors" ]; then rc=92; fi
+	fi
 	echo "$rc" >"$LOGDIR/$name.status"
 }
 

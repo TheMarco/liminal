@@ -44,8 +44,8 @@ static func find_safe(world: World3D, desired: Vector3, cellv: Vector2i,
 		return standing
 	var candidates: Array[Vector3] = [standing]
 	for off in OFFSETS:
-		candidates.append(Vector3(float(cellv.x) * 12.0 + off.x, standing.y,
-			float(cellv.y) * 12.0 + off.y))
+		candidates.append(Vector3(float(cellv.x) * WorldGen.CELL_SIZE + off.x, standing.y,
+			float(cellv.y) * WorldGen.CELL_SIZE + off.y))
 	var best := Vector3.INF
 	var best_score := -1e9
 	for p in candidates:

@@ -76,9 +76,11 @@ func _init() -> void:
 	chunk.queue_free()
 	await process_frame
 	if not failures.is_empty():
+		await preload("res://tools/lib/audit_cleanup.gd").release(self)
 		quit(1)
 		return
 	print("pool jacuzzi audit: PASS — authored rim only, raised water and four climb-out edges active")
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit()
 
 

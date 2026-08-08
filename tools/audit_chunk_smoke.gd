@@ -280,6 +280,7 @@ func _run() -> void:
 	if failures > 0:
 		print("chunk smoke audit: discovery failed (%d missing representatives)" % failures)
 		print("  attempts=%d radius=%d" % [seed_attempts, search_radius])
+		await preload("res://tools/lib/audit_cleanup.gd").release(self)
 		quit(1)
 		return
 
@@ -360,6 +361,7 @@ func _run() -> void:
 	])
 	if failures == 0:
 		print("  PASS — all styles and corridor variants construct through Chunk.new")
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures == 0 else 1)
 
 

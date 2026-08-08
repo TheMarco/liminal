@@ -8,7 +8,7 @@ extends Node
 
 signal revealed
 
-const CELL := 12.0
+const CELL := WorldGen.CELL_SIZE
 ## Sheets live in ShadowFigure.FLIPBOOKS/BODY like every other apparition;
 ## each spawn mirrors at random, so four sheets are eight walks.
 const SHEETS := ["passer1", "passer2", "passer3", "passer4"]
@@ -40,6 +40,10 @@ var dev_force := false
 
 var _t := 20.0
 var _live: Node3D
+
+
+func active_apparition() -> Node3D:
+	return _live if is_instance_valid(_live) else null
 
 
 func _ready() -> void:

@@ -4,6 +4,7 @@ class_name WorldGen
 ## can be built or rebuilt in isolation and both sides of a shared edge agree.
 
 const WALL_P := 0.45
+const CELL_SIZE := 12.0
 const MAXH := 2147483647.0
 const DIRV := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const OPP := [1, 0, 3, 2]
@@ -13,6 +14,28 @@ const OPP := [1, 0, 3, 2]
 ## interiors. Ids are NOT renumbered — every other theme keeps the seed salt and
 ## world it always had, so old seeds still reproduce.
 const THEMES: Array[int] = [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11]
+
+
+## Every lattice cell whose geometry/furniture is owned by the same generated
+## room as `at`. Corridors own only themselves. This is the single membership
+## contract used by planning, live mutation rebuilds, and Chunk construction.
+static func owning_room_members(seed: int, at: Vector2i,
+		theme: int) -> Array[Vector2i]:
+	var is_corridor := annex_corridor_axis(seed, at) != 0 \
+		if theme == 2 else corridor(seed, at) != 0
+	if is_corridor:
+		return [at]
+	var root := annex_room_id(seed, at) if theme == 2 else room_id(seed, at)
+	var out: Array[Vector2i] = []
+	# Generated room merges extend at most one lattice cell from their root.
+	for x in range(root.x - 1, root.x + 2):
+		for y in range(root.y - 1, root.y + 2):
+			var member := Vector2i(x, y)
+			var member_root := annex_room_id(seed, member) if theme == 2 \
+				else room_id(seed, member)
+			if member_root == root:
+				out.append(member)
+	return out
 
 const STYLE_EMPTY := 0
 const STYLE_PILLARS := 1
@@ -186,29 +209,6 @@ static func _edge_hash(ws: int, ec: Vector2i, axis: int) -> int:
 	return h(ws, ec.x, ec.y, 101 if axis == 0 else 211)
 
 
-static func _base_wall(eh: int) -> bool:
-	return float(eh) / MAXH < WALL_P
-
-
-## If a cell would be sealed on all four sides, force open the edge with the
-## lowest hash. Both neighbours of that edge can compute this locally.
-static func _forced_open(ws: int, cell: Vector2i) -> int:
-	var hs := [
-		_edge_hash(ws, cell, 0),
-		_edge_hash(ws, Vector2i(cell.x - 1, cell.y), 0),
-		_edge_hash(ws, cell, 1),
-		_edge_hash(ws, Vector2i(cell.x, cell.y - 1), 1),
-	]
-	for eh in hs:
-		if not _base_wall(eh):
-			return -1
-	var best := 0
-	for i in range(1, 4):
-		if hs[i] < hs[best]:
-			best = i
-	return best
-
-
 ## First solid edge scanning from a hashed start — anchors airport gate
 ## glass, check-in backs and escalator mezzanines. -1 if the cell has no
 ## walls. Exposed here so spawn logic can know which side a gate's sealed
@@ -315,22 +315,22 @@ static func room_size(ws: int, root: Vector2i) -> int:
 ## Centre of the room in world metres — where its furniture belongs.
 static func room_centre(ws: int, root: Vector2i) -> Vector2:
 	if hall_root(ws, root) == root:
-		return Vector2(root.x * 12.0 + 12.0, root.y * 12.0 + 12.0)
+		return Vector2(root.x * CELL_SIZE + CELL_SIZE, root.y * CELL_SIZE + CELL_SIZE)
 	var mx := merge_dir(ws, Vector2i(root.x - 1, root.y)) == 0
 	var mz := merge_dir(ws, Vector2i(root.x, root.y - 1)) == 2
-	var x0 := float(root.x) * 12.0
-	var z0 := float(root.y) * 12.0
+	var x0 := float(root.x) * CELL_SIZE
+	var z0 := float(root.y) * CELL_SIZE
 	# An L-shaped room's bounding-box centre falls in the quadrant the room
 	# does NOT own — furniture placed there would push through a wall. Use
 	# the root cell, which is always part of the room.
 	if mx and mz:
-		return Vector2(x0 + 6.0, z0 + 6.0)
-	var x1 := x0 + 12.0
-	var z1 := z0 + 12.0
+		return Vector2(x0 + CELL_SIZE * 0.5, z0 + CELL_SIZE * 0.5)
+	var x1 := x0 + CELL_SIZE
+	var z1 := z0 + CELL_SIZE
 	if mx:
-		x0 -= 12.0
+		x0 -= CELL_SIZE
 	if mz:
-		z0 -= 12.0
+		z0 -= CELL_SIZE
 	return Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5)
 
 

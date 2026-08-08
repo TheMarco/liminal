@@ -143,10 +143,6 @@ static func slots() -> Array:
 
 ## How many scares the bank holds. Callers used to hardcode the count, so
 ## adding recordings left them unreachable — the bank tells you now.
-static func scare_count() -> int:
-	return SCARE_MEANS.size()
-
-
 static func scare(idx: int) -> Array:
 	var i := clampi(idx, 0, SCARE_MEANS.size() - 1)
 	return [_stream("sound-jumpscare%d" % (i + 1), false),
@@ -178,10 +174,6 @@ static func random_scare() -> Array:
 	return scare(_last_scare_idx)
 
 
-static func whisper_count() -> int:
-	return WHISPER_MEANS.size()
-
-
 static func whisper(idx: int) -> Array:
 	var i := clampi(idx, 0, WHISPER_MEANS.size() - 1)
 	return [_stream("sound-whisper%d" % (i + 1), false),
@@ -196,10 +188,6 @@ static var _last_whisper_idx := -1
 static func random_whisper() -> Array:
 	_last_whisper_idx = _next_index(WHISPER_MEANS.size(), _last_whisper_idx)
 	return whisper(_last_whisper_idx)
-
-
-static func death_count() -> int:
-	return DEATH_MEANS.size()
 
 
 static func death(idx: int) -> Array:
@@ -230,10 +218,6 @@ static func heartbeat() -> Array:
 static func breathing() -> Array:
 	return [_stream(BREATHING[0], true),
 		BREATHING_TARGET - float(BREATHING[1])]
-
-
-static func player_death_count() -> int:
-	return PLAYER_DEATH_MEANS.size()
 
 
 static func player_death(idx: int) -> Array:

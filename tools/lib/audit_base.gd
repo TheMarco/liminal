@@ -51,10 +51,17 @@ func boot_game(world_seed: int) -> Node:
 ## have to be consumed or they read as leaked resources.
 func teardown_game(game: Node) -> void:
 	stop_audio(game)
+	# Runtime scenarios deliberately tear down mid-animation. Kill every
+	# process-owned tween first so the harness verifies game objects rather than
+	# leaking a ref-counted tween that the next real frame would have finished.
+	for tween in get_processed_tweens():
+		tween.kill()
 	game.free()
-	Chunk.finish_prop_preloads()
+	Chunk.clear_runtime_caches()
 	SoundBank._c.clear()
 	Sfx._c.clear()
+	Mats.clear_runtime_caches()
+	VhsRitual.clear_runtime_cache()
 	await process_frame
 	await physics_frame
 	await create_timer(0.1).timeout

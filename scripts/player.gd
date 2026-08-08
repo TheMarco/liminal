@@ -20,6 +20,10 @@ const SENS := 0.0022
 const CAM_H := 1.377
 const GRAB_SETTLE_MS := 150   # mouse motion to swallow after taking the cursor
 const INTERACT_DIST := 3.2
+## Interaction focus does not need to raycast at render rate. Thirty probes a
+## second keeps the prompt responsive while avoiding duplicate queries on
+## high-refresh displays.
+const INTERACTION_SCAN_SECONDS := 1.0 / 30.0
 
 ## The torch is a resource, not a state you leave switched on. Its cell is
 ## deliberately generous enough for several encounters, but only the charging
@@ -54,6 +58,7 @@ var level_theme := 0  # set by main on level switch
 var _flash_charge := FLASH_MAX
 var _charge_session_start := 0.0
 var _charging_station: Node3D
+var _charge_session_active := false
 ## World height of the water surface on this floor, or far below everything if
 ## the floor has no water. Set by main on every level switch.
 var water_y := -1.0e9
@@ -86,11 +91,12 @@ var _spin_wait := 3.0
 var _spin_left := 0.0
 var _strafe := 0.0
 var _sprinting := false
-## Mode-owned movement gate. Wander leaves this at its default; Descent turns
-## it off without changing the controller's normal key handling.
+## Mode-owned movement gate. Both current modes allow sprint; Descent observes
+## `_sprinting` to turn the extra noise into attention pressure.
 var allow_sprint := true
 var _focused: Interactable
 var _focus_text := ""
+var _interaction_scan_left := 0.0
 
 
 func _init() -> void:
@@ -233,11 +239,12 @@ func reset_descent_resources() -> void:
 
 
 func is_charging() -> bool:
-	return is_instance_valid(_charging_station)
+	return _charge_session_active
 
 
 func is_charging_at(station: Node) -> bool:
-	return is_charging() and _charging_station == station
+	return is_charging() and is_instance_valid(_charging_station) \
+		and _charging_station == station
 
 
 ## Connect to a station without locking the player in place. E toggles the
@@ -250,13 +257,15 @@ func start_charging(station: Node3D) -> bool:
 	set_flashlight(false)
 	_charging_station = station
 	_charge_session_start = _flash_charge
+	_charge_session_active = true
 	return true
 
 
 func stop_charging(completed := false) -> void:
-	if is_charging() and not completed:
+	if _charge_session_active and not completed:
 		_flash_charge = minf(_flash_charge, _charge_session_start)
 	_charging_station = null
+	_charge_session_active = false
 
 
 ## Burn the cell down while it is lit. The last couple of seconds visibly fail,
@@ -272,7 +281,8 @@ func _update_flashlight(dt: float) -> void:
 		return
 	_flash_t += dt
 	if is_charging():
-		if global_position.distance_to(_charging_station.global_position) > 3.1:
+		if not is_instance_valid(_charging_station) \
+				or global_position.distance_to(_charging_station.global_position) > 3.1:
 			stop_charging()
 		else:
 			_flash_charge = minf(FLASH_MAX,
@@ -394,7 +404,10 @@ func _process(dt: float) -> void:
 			cos(_rumble_t * 0.79) * 0.0090) * _rumble
 		tilt = sin(_rumble_t * 0.61) * 0.0045 * _rumble
 	cam.rotation = Vector3(_pitch, rotation.y, _roll + tilt)
-	_scan_interaction()
+	_interaction_scan_left -= dt
+	if _interaction_scan_left <= 0.0:
+		_interaction_scan_left = INTERACTION_SCAN_SECONDS
+		_scan_interaction()
 	var hs := Vector2(velocity.x, velocity.z).length()
 	cam.fov = lerpf(cam.fov, 83.0 if (_sprinting and hs > 4.0) else 77.0, minf(1.0, dt * 5.0))
 
@@ -426,7 +439,7 @@ func _scan_interaction() -> void:
 ## What you are walking on, per floor and per room — terrazzo in a terminal,
 ## carpet in the office and Annex, tile and concrete in institutions.
 func _surface() -> String:
-	var cellv := Vector2i(floori(global_position.x / 12.0), floori(global_position.z / 12.0))
+	var cellv := Vector2i(floori(global_position.x / WorldGen.CELL_SIZE), floori(global_position.z / WorldGen.CELL_SIZE))
 	if world_seed == 0:
 		return "carpet"
 	match level_theme:
@@ -493,14 +506,6 @@ func _ladder_here() -> bool:
 	q.collision_mask = LADDER_LAYER
 	q.exclude = [get_rid()]
 	return not space.intersect_point(q, 1).is_empty()
-
-
-## 0 when dry, 1 when the surface is at chin height. The HUD and the footstep
-## picker both read this rather than recomputing the waterline.
-func submersion() -> float:
-	if water_y < -1.0e8:
-		return 0.0
-	return clampf((water_y - global_position.y) / 1.2, 0.0, 1.0)
 
 
 ## Entering and leaving the water are events; wading through it is a loop that

@@ -364,11 +364,6 @@ func _return_button(parent: VBoxContainer, page_key: String) -> void:
 	parent.add_child(button)
 
 
-func _menu_button(parent: VBoxContainer, text: String,
-		action: Callable) -> void:
-	parent.add_child(_button(text, action, 520, 38))
-
-
 func _footer_button(parent: HBoxContainer, text: String,
 		action: Callable) -> void:
 	var button := Button.new()

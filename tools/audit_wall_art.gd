@@ -119,4 +119,5 @@ func _init() -> void:
 		print("FAIL — fixture corpus did not exercise every regression target")
 	if violations + missing == 0:
 		print("  PASS — art, ACs, filing drawers, and EXIT alarms are clear and visible")
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if violations + missing == 0 else 1)

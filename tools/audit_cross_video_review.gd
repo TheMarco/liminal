@@ -1,9 +1,9 @@
 extends SceneTree
 ## Contract for the optional-video editorial reviewer. The audit report lives
-## in an isolated user:// file and never touches a real prune list.
+## in an isolated temporary file and never touches a real prune list.
 ## Run: godot --headless --path . --script tools/audit_cross_video_review.gd
 
-const TEST_REPORT := "user://audit_cross_video_review.txt"
+const TEST_REPORT := "/tmp/liminal_audit_cross_video_review.txt"
 
 var failures: Array[String] = []
 

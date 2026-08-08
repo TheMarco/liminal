@@ -13,13 +13,11 @@ signal blackout_changed(on: bool)
 signal passive_changed(on: bool)
 signal run_ended(won: bool)
 signal anomaly_requested(cell: Vector2i, kind: int)
-## Every blackout changes the room the player is in (or the nearest safe room)
-## in a way that survives streaming. This is separate from the subtler
-## backtracking anomalies, which may happen as well.
-## Every actual blackout owns one new persistent doorway. `assistance` is
-## private selection state: presentation must never reveal whether the opening
-## was chosen because the player was lost or merely because the building moved.
-signal blackout_doorway_requested(proposal: Dictionary, assistance: bool)
+## Every actual blackout owns one transition to a complete reality generated
+## and proven safe when the floor topology was created. `assistance` is private
+## selection state: presentation must never reveal whether the new reality was
+## chosen because the player was lost or merely because the building moved.
+signal blackout_mutation_requested(proposal: TopologyDelta, assistance: bool)
 ## The called car finished its descent. Whoever owns the objective chunk opens
 ## the doors; the wait itself is run state so it survives the target room
 ## streaming out from under a player who walked off during it.
@@ -133,7 +131,11 @@ var world_seed := 1
 var pinned_attention := -1.0
 var route: DescentRoute
 var mercy_armed := false
-var pending_blackout_doorway := {}
+var pending_blackout_mutation: TopologyDelta
+## Generated states prove structural safety. Main supplies the live half of the
+## preflight because only the scene knows whether an actor or interaction is
+## occupying a room whose geometry would be swapped.
+var blackout_mutation_validator: Callable
 
 var _cell := Vector2i.ZERO
 var _pending_cell := Vector2i.ZERO
@@ -234,7 +236,7 @@ func prepare_floor() -> void:
 	_ambushed = false
 	route = null
 	mercy_armed = false
-	pending_blackout_doorway.clear()
+	pending_blackout_mutation = null
 	_best_route_distance = -1
 	_route_stall_time = 0.0
 	_rng.seed = int(world_seed) ^ (floor_idx * 104729 + 0x5EED)
@@ -354,10 +356,6 @@ func mark_setup_tape_completed(key: String) -> void:
 
 func setup_tape_completed(key: String) -> bool:
 	return bool(_tape_completed.get(key, false))
-
-
-func tape_assignment_count() -> int:
-	return _tape_assignments.size()
 
 
 func completed_beginning_count() -> int:
@@ -580,7 +578,7 @@ func _track_route_stall(dt: float, speed: float) -> void:
 			_blackout_due = minf(_blackout_due, 7.0)
 
 
-func mark_helpful_doorway_created() -> void:
+func mark_helpful_mutation_created() -> void:
 	mercy_armed = false
 	_route_stall_time = 0.0
 	_best_route_distance = route.distance_from_target(_cell) \
@@ -601,15 +599,15 @@ func _maybe_anomaly(at: Vector2i) -> void:
 
 
 func _player_cell() -> Vector2i:
-	return Vector2i(floori(player.global_position.x / 12.0),
-		floori(player.global_position.z / 12.0))
+	return Vector2i(floori(player.global_position.x / WorldGen.CELL_SIZE),
+		floori(player.global_position.z / WorldGen.CELL_SIZE))
 
 
 func _inside_cell(at: Vector2i, margin: float) -> bool:
-	var lx := player.global_position.x - float(at.x) * 12.0
-	var lz := player.global_position.z - float(at.y) * 12.0
-	return lx >= margin and lx <= 12.0 - margin \
-		and lz >= margin and lz <= 12.0 - margin
+	var lx := player.global_position.x - float(at.x) * WorldGen.CELL_SIZE
+	var lz := player.global_position.z - float(at.y) * WorldGen.CELL_SIZE
+	return lx >= margin and lx <= WorldGen.CELL_SIZE - margin \
+		and lz >= margin and lz <= WorldGen.CELL_SIZE - margin
 
 
 func _charge(kind: Rule, amount: float, count_episode: bool) -> void:
@@ -646,24 +644,28 @@ func _schedule_blackout() -> void:
 func _begin_blackout() -> void:
 	if blackout:
 		return
-	# A blackout without a new doorway is not allowed to start. If the nearby
-	# safe edges have been exhausted, quietly retry later instead of falling
-	# back to debris, furniture deletion, or an unmotivated light source.
-	if route == null:
+	# A blackout without a prevalidated reality transition is not allowed to
+	# start. If no generated state's delta is near explored space, quietly retry
+	# after the player moves instead of inventing geometry at runtime.
+	if route == null or route.topology == null:
 		_blackout_due = 6.0
 		return
-	var proposal := route.find_blackout_doorway(_cell, visited, mercy_armed)
-	if proposal.is_empty():
+	var proposal := route.topology.find_transition(
+		route, _cell, visited, mercy_armed)
+	if proposal == null or proposal.is_empty():
 		_blackout_due = 6.0
+		return
+	if blackout_mutation_validator.is_valid() \
+			and not bool(blackout_mutation_validator.call(proposal)):
+		_blackout_due = 3.0
 		return
 	# The doorway is valid, but another authored beat may still own the moment.
 	# Retry shortly without spending or replacing the normal blackout schedule.
 	if horror_director != null and not horror_director.try_start_blackout():
 		_blackout_due = 4.0
 		return
-	pending_blackout_doorway = proposal
-	var assistance := mercy_armed \
-		and bool(proposal.get("assistance", false))
+	pending_blackout_mutation = proposal
+	var assistance := mercy_armed and proposal.assistance
 	blackout = true
 	_blackout_left = _rng.randf_range(
 		lerpf(5.0, 6.5, floor_progress()),
@@ -676,7 +678,7 @@ func _begin_blackout() -> void:
 	_blackout_locate = 0.0
 	_ambushed = false
 	blackout_changed.emit(true)
-	blackout_doorway_requested.emit(proposal, assistance)
+	blackout_mutation_requested.emit(proposal, assistance)
 	# Recompute now rather than at the top of the next frame: for that one frame
 	# the lights would be out with the figures still free to close.
 	_update_passive()
@@ -694,20 +696,20 @@ func _end_blackout() -> void:
 	if _blackout_locate > 0.0:
 		_blackout_locate = 0.0
 		blackout_locate_changed.emit(0.0)
-	# Finalize secondary anomalies while the room is still dark. The doorway
-	# itself was already installed at blackout onset so every route consumer and
-	# any streamed geometry agree before restored light exposes the transition.
+	# Finalize secondary anomalies while the room is still dark. The new reality
+	# was installed at blackout onset so every route consumer and streamed room
+	# agrees before restored light exposes the transition.
 	_post_blackout_changes()
 	blackout_changed.emit(false)
-	pending_blackout_doorway.clear()
+	pending_blackout_mutation = null
 	_update_passive()
 	_schedule_blackout()
 	if mercy_armed:
 		_blackout_due = minf(_blackout_due, 7.0)
 
 
-## The new doorway is the guaranteed visible change. The older backtracking
-## anomalies remain as optional secondary unease in one or two visited cells.
+## The topology/furniture transition is the guaranteed visible change. Older
+## dead-light and waiting-figure anomalies remain optional secondary unease.
 func _post_blackout_changes() -> void:
 	if player == null or ended:
 		return
@@ -726,14 +728,12 @@ func _post_blackout_changes() -> void:
 	for i in count:
 		var pick := candidates[_rng.randi_range(0, candidates.size() - 1)]
 		candidates.erase(pick)
-		# Weighted toward the quiet rearrangement; the darker anomalies stay
-		# rare so a blackout is not simply a figure delivery system.
+		# Furniture now belongs to prevalidated realities. Secondary anomalies
+		# are restricted to dead fixtures and rare waiting figures.
 		var roll := _rng.randf()
-		var kind := 2
+		var kind := 0
 		if roll < 0.18:
 			kind = 1
-		elif roll < 0.34:
-			kind = 0
 		anomalies[pick] = kind
 		anomaly_requested.emit(pick, kind)
 		if candidates.is_empty():

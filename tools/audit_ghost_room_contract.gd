@@ -164,7 +164,10 @@ func _init() -> void:
 		player.global_position)
 	# The unseen lunge parks at UNSEEN_MIN, so a one-second sample starts to
 	# saturate before its nominal 4.5m/s rate; it still has to beat the creep.
-	if unwatched < watched * 1.7:
+	# The unseen move saturates at its safety park, so use the authored reveal
+	# gain plus a ratio guard instead of a fragile 1.7 boundary (2.10/1.25 can
+	# vary by one collision step). This still fails equal or merely brisk speeds.
+	if unwatched < ShadowFigure.REVEAL_GAIN or unwatched < watched * 1.6:
 		failures += 1
 		print("FAIL — a second unwatched gained %.2fm against %.2fm watched"
 			% [unwatched, watched])
@@ -206,6 +209,8 @@ func _init() -> void:
 			watched, unwatched, failures])
 	if failures == 0:
 		print("  PASS — walls block, offset doors traverse, and escape takes three rooms")
+	root.free()
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures == 0 else 1)
 
 

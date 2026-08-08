@@ -1,5 +1,5 @@
 extends Node3D
-## Entry point and level manager. Ten endless floors share one player:
+## Entry point and level manager. Eleven endless floors share one player:
 ##   1 — seedy Vegas hotel-casino            (theme 0)
 ##   2 — sterile Severance-style office      (theme 1)
 ##   3 — the yellow Backrooms corridors of the Annex (theme 2)
@@ -94,6 +94,16 @@ var _bench_worst := 0.0
 var _bench_slow := 0
 var _bench_prev := Vector3.ZERO
 var _bench_steps: Array[float] = []
+var _bench_process_worst := 0.0
+var _bench_physics_worst := 0.0
+var _bench_draws_max := 0
+var _bench_primitives_max := 0
+var _bench_collision_pairs_max := 0
+var _bench_static_start := 0
+var _bench_static_peak := 0
+var _bench_nodes_start := 0
+var _bench_resources_start := 0
+var _bench_vram_max := 0
 var _figures: ShadowFigures
 var _passers: PassingShadows
 var _corner_apparitions: CornerApparitions
@@ -128,7 +138,9 @@ var _pending_new_descent_intro := false
 var _attention_override := -1.0
 var _blackout_ambient := -1.0
 var _blackout_locate_cue := 0
-var _pending_shortcut_reveal := false
+var _pending_mutation_reveal := false
+var _pending_mutation_reveal_at := Vector3.INF
+var _mutation_coordinator: DescentMutationCoordinator
 ## Environmental bleed presentation: captured baselines for this floor's fog
 ## and the next floor's targets, plus the rising next-floor room tone.
 var _bleed_base_fog := Color.BLACK
@@ -272,6 +284,8 @@ func _ready() -> void:
 		player.dev_spin = true
 		player.dev_walk = true
 		_bench = true
+		_bench_prev = player.cam.global_position
+		_bench_reset_monitors()
 	ambience = Ambience.new(active_level)
 	add_child(ambience)
 	_director = HorrorDirector.new()
@@ -393,9 +407,33 @@ func _level_seed(level: int) -> int:
 
 
 func _create_descent_route(level: int, floor_idx: int) -> DescentRoute:
-	_pending_shortcut_reveal = false
+	_pending_mutation_reveal = false
+	_pending_mutation_reveal_at = Vector3.INF
+	var route_started := Time.get_ticks_usec()
 	var route := DescentRoute.build(_level_seed(level), level, floor_idx)
-	route.set_topology(DescentTopology.new(_level_seed(level), level))
+	var route_ready := Time.get_ticks_usec()
+	var topology := DescentTopology.new(_level_seed(level), level)
+	route.set_topology(topology)
+	topology.plan_floor(route)
+	var topology_ready := Time.get_ticks_usec()
+	var total_ms := float(topology_ready - route_started) / 1000.0
+	if total_ms >= 8.0:
+		print("Descent planning: route %.1fms, realities %.1fms, total %.1fms" % [
+			float(route_ready - route_started) / 1000.0,
+			float(topology_ready - route_ready) / 1000.0, total_ms])
+	if _progress_enabled and _descent_progress.has_checkpoint() \
+			and _descent_progress.run_seed == world_seed:
+		var saved := _descent_progress.mutation_state_for_floor(floor_idx)
+		if not saved.is_empty() and int(saved.get("generation", 0)) \
+				== DescentTopology.GENERATION_VERSION:
+			var visited_signatures: Array[String] = []
+			var raw_signatures: Variant = saved.get("visited_signatures", [])
+			if raw_signatures is Array or raw_signatures is PackedStringArray:
+				for value in raw_signatures:
+					visited_signatures.append(str(value))
+			topology.restore_signatures(
+				str(saved.get("signature", "")), visited_signatures)
+	route.refresh_topology()
 	if run != null:
 		run.set_route(route)
 	return route
@@ -423,6 +461,7 @@ func _build_level(level: int, around: Vector3) -> void:
 		cm.descent_lift_called = run.lift_called
 		cm.descent_lift_wait = run.lift_wait_left
 		cm.descent_lift_open = run.lift_open
+		cm.descent_tape_watched = run.tape_watched
 		cm.descent_broken_station_tried = run.broken_station_tried
 	if _passers != null:
 		_passers.configure(_level_seed(level), level)
@@ -444,8 +483,21 @@ func _build_level(level: int, around: Vector3) -> void:
 	if _corner_apparitions != null:
 		_corner_apparitions.configure(_level_seed(level), level)
 		_corner_apparitions.run = run
+		_corner_apparitions.topology = descent_route.topology \
+			if descent_route != null else null
+	Chunk.prewarm_theme_content(_level_seed(level), level)
 	level_root.add_child(cm)
+	if descent:
+		_configure_mutation_coordinator()
 	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
+
+
+func _configure_mutation_coordinator() -> void:
+	_mutation_coordinator = DescentMutationCoordinator.new()
+	_mutation_coordinator.configure(cm, run, descent_route, player,
+		_figures, _passers, _mutation_mode_ready,
+		_persist_committed_mutation)
+	_mutation_coordinator.committed.connect(_on_mutation_committed)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -762,7 +814,12 @@ func _reveal_arrival() -> void:
 	player.set_rumble(0.22)
 	var settle := create_tween()
 	settle.tween_method(func(v: float): player.set_rumble(v), 0.22, 0.0, 1.1)
-	await get_tree().create_timer(0.85).timeout
+	var reveal_delay := create_tween()
+	reveal_delay.tween_interval(0.85)
+	reveal_delay.tween_callback(_finish_reveal_arrival.bind(floor_name))
+
+
+func _finish_reveal_arrival(floor_name: String) -> void:
 	if not descent or run == null or run.ended or cm == null:
 		return
 	var chunk := cm.chunk_at(descent_route.origin)
@@ -778,6 +835,7 @@ func _connect_descent_run() -> void:
 	if _director != null:
 		run.horror_director = _director
 	run.pinned_attention = _attention_override
+	run.blackout_mutation_validator = _can_commit_blackout_mutation
 	if _progress_enabled and _descent_progress.has_checkpoint() \
 			and _descent_progress.run_seed == world_seed:
 		run.restore_short_tape_cycle(_descent_progress.seen_short_tapes,
@@ -793,7 +851,7 @@ func _connect_descent_run() -> void:
 	run.blackout_changed.connect(_on_descent_blackout)
 	run.passive_changed.connect(_on_descent_passive)
 	run.anomaly_requested.connect(_on_descent_anomaly)
-	run.blackout_doorway_requested.connect(_on_blackout_doorway)
+	run.blackout_mutation_requested.connect(_on_blackout_mutation)
 	run.lift_arrived.connect(_on_descent_lift_arrived)
 	run.lift_cancelled.connect(_on_descent_lift_cancelled)
 	run.blackout_locate_changed.connect(_on_blackout_locate)
@@ -830,7 +888,9 @@ func _begin_descent_floor() -> void:
 		_director.set_pressure(run.threat())
 	run.player = player
 	run.start_floor()
-	player.allow_sprint = false
+	# Descent converts sprint time into attention; leaving the controller enabled
+	# makes that existing risk/reward rule reachable.
+	player.allow_sprint = true
 	_set_presence(Presence.DESCENT)
 	_ensure_descent_hud()
 	_descent_hud.set_active(true)
@@ -845,7 +905,12 @@ func _begin_descent_floor() -> void:
 ## Screenshot-run helper for `--play-tape`: walk into the objective room and
 ## press play without a human at the keys.
 func _dev_play_tape() -> void:
-	await get_tree().create_timer(0.4).timeout
+	var delay := create_tween()
+	delay.tween_interval(0.4)
+	delay.tween_callback(_dev_play_tape_now)
+
+
+func _dev_play_tape_now() -> void:
 	if cm == null or descent_route == null:
 		return
 	var chunk: Chunk = cm.chunks.get(descent_route.target)
@@ -892,8 +957,8 @@ func _update_bleed() -> void:
 		return
 	if run.is_last_floor():
 		return
-	var pc := Vector2i(floori(player.position.x / 12.0),
-		floori(player.position.z / 12.0))
+	var pc := Vector2i(floori(player.position.x / WorldGen.CELL_SIZE),
+		floori(player.position.z / WorldGen.CELL_SIZE))
 	var d := maxi(absi(pc.x - descent_route.target.x),
 		absi(pc.y - descent_route.target.y))
 	var closeness := 1.0 - clampf((float(d) - 1.0) / 7.0, 0.0, 1.0)
@@ -935,11 +1000,9 @@ func _on_descent_lift() -> void:
 	run.floor_idx += 1
 	run.prepare_floor()
 	var next_theme := run.theme()
-	descent_route = _create_descent_route(next_theme, run.floor_idx)
-	_print_descent_route()
-	var arrival := _descent_arrival(next_theme)
-	await _jump_to(next_theme, arrival["position"], false,
-		bool(arrival["exact"]), float(arrival["yaw"]))
+	# Route/reality planning happens only after the fade reaches black.
+	descent_route = null
+	await _jump_to(next_theme, Vector3.INF, false, true)
 	_begin_descent_floor()
 
 
@@ -1035,13 +1098,13 @@ func _on_descent_attention(_value: float) -> void:
 func _whisper_route_bias() -> Vector3:
 	if descent_route == null or player == null:
 		return Vector3.ZERO
-	var cell := Vector2i(floori(player.global_position.x / 12.0),
-		floori(player.global_position.z / 12.0))
+	var cell := Vector2i(floori(player.global_position.x / WorldGen.CELL_SIZE),
+		floori(player.global_position.z / WorldGen.CELL_SIZE))
 	var next := descent_route.next_from(cell)
 	if next == cell:
 		return Vector3.ZERO
-	var centre := Vector3((float(next.x) + 0.5) * 12.0, 0.0,
-		(float(next.y) + 0.5) * 12.0)
+	var centre := Vector3((float(next.x) + 0.5) * WorldGen.CELL_SIZE, 0.0,
+		(float(next.y) + 0.5) * WorldGen.CELL_SIZE)
 	var dirv := centre - player.global_position
 	dirv.y = 0.0
 	return dirv.normalized() if dirv.length() > 0.5 else Vector3.ZERO
@@ -1108,11 +1171,16 @@ func _on_descent_blackout(on: bool) -> void:
 			we.environment.ambient_light_energy = _blackout_ambient
 			_blackout_ambient = -1.0
 		_blackout_locate_cue = 0
-		if _pending_shortcut_reveal:
-			_pending_shortcut_reveal = false
-			_play_descent_cue(SoundBank.creak(), -7.0)
+		if _pending_mutation_reveal:
+			_pending_mutation_reveal = false
+			if _pending_mutation_reveal_at != Vector3.INF:
+				_play_descent_cue_at(SoundBank.creak(), -2.0,
+					_pending_mutation_reveal_at)
+			else:
+				_play_descent_cue(SoundBank.creak(), -7.0)
+			_pending_mutation_reveal_at = Vector3.INF
 			_play_descent_cue(SoundBank.thud(), -13.0)
-			_show_event_message("POWER RESTORED — SOMETHING OPENED NEARBY", true)
+			_show_event_message("POWER RESTORED — SOMETHING CHANGED NEARBY", true)
 		else:
 			# A failed preflight postpones the blackout, so this path is only a
 			# defensive fallback for teardown/level-switch races.
@@ -1193,6 +1261,20 @@ func _play_descent_cue(stream: AudioStream, volume: float) -> void:
 	cue.play()
 
 
+func _play_descent_cue_at(stream: AudioStream, volume: float,
+		at: Vector3) -> void:
+	var cue := AudioStreamPlayer3D.new()
+	cue.stream = stream
+	cue.volume_db = volume
+	cue.unit_size = 5.0
+	cue.max_distance = 36.0
+	cue.bus = SoundBank.HALL_BUS
+	add_child(cue)
+	cue.global_position = at
+	cue.finished.connect(cue.queue_free)
+	cue.play()
+
+
 func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 	if not descent or cm == null or descent_route == null \
 			or at == descent_route.target or at == descent_route.origin:
@@ -1200,65 +1282,45 @@ func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 	cm.set_anomaly(at, kind)
 
 
-func _on_blackout_doorway(proposal: Dictionary,
+func _on_blackout_mutation(proposal: TopologyDelta,
 		assistance_requested: bool) -> void:
-	if not descent or cm == null or run == null or descent_route == null \
-			or descent_route.topology == null or proposal.is_empty():
-		return
-	var edge_cell: Vector2i = proposal["cell"]
-	var dir := int(proposal["dir"])
-	var before := descent_route.distance_from_target(run._cell)
-	if not descent_route.topology.add_shortcut(edge_cell, dir):
-		return
-	descent_route.refresh_topology()
-	var after := descent_route.distance_from_target(run._cell)
-	var other: Vector2i = edge_cell + WorldGen.DIRV[dir]
-	cm.descent_topology = descent_route.topology
-	cm.rebuild_cells(_shortcut_rebuild_cells(edge_cell, other))
-	if _figures != null:
-		_figures.topology = descent_route.topology
-	if _passers != null:
-		_passers.topology = descent_route.topology
-	var far_side_distance := descent_route.distance_from_target(other)
-	var verified_help := assistance_requested and before >= 0 \
-		and far_side_distance >= 0 \
-		and before - far_side_distance >= DescentRoute.MERCY_MIN_SAVING
-	if verified_help:
-		run.mark_helpful_doorway_created()
-	_pending_shortcut_reveal = true
-	print("blackout doorway %s dir=%d, route %d -> %d, assistance=%s" % [
-		edge_cell, dir, before, after, verified_help])
+	if _mutation_coordinator != null:
+		_mutation_coordinator.begin(proposal, assistance_requested)
 
 
-## Furniture for a merged room belongs to its root chunk and can extend into
-## every member. Rebuilding the whole owning room makes its ordinary
-## doorway-clearance pass see the supernatural edge as well in every zone.
-func _shortcut_rebuild_cells(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	for endpoint in [a, b]:
-		var is_corridor := WorldGen.annex_corridor_axis(
-			descent_route.world_seed, endpoint) != 0 \
-			if descent_route.theme == 2 else \
-			WorldGen.corridor(descent_route.world_seed, endpoint) != 0
-		if is_corridor:
-			if not out.has(endpoint):
-				out.append(endpoint)
-			continue
-		var root := WorldGen.annex_room_id(
-			descent_route.world_seed, endpoint) \
-			if descent_route.theme == 2 else \
-			WorldGen.room_id(descent_route.world_seed, endpoint)
-		for x in range(root.x - 1, root.x + 2):
-			for y in range(root.y - 1, root.y + 2):
-				var member := Vector2i(x, y)
-				var member_root := WorldGen.annex_room_id(
-					descent_route.world_seed, member) \
-					if descent_route.theme == 2 else \
-					WorldGen.room_id(descent_route.world_seed, member)
-				if member_root == root \
-						and not out.has(member):
-					out.append(member)
-	return out
+func _mutation_mode_ready() -> bool:
+	return descent and not _switching and not _dying
+
+
+func _persist_committed_mutation(topology: DescentTopology) -> void:
+	if not _progress_enabled or _descent_progress.run_seed != world_seed:
+		return
+	var visited_signatures: Array[String] = []
+	for state_id in topology.state_history():
+		visited_signatures.append(topology.state_signature(state_id))
+	_descent_progress.record_mutation_state(run.floor_idx,
+		topology.current_state_id(), topology.state_history(),
+		topology.state_signature(), visited_signatures)
+
+
+func _on_mutation_committed(_transaction: DescentMutationTransaction,
+		reveal_at: Vector3) -> void:
+	_pending_mutation_reveal = true
+	_pending_mutation_reveal_at = reveal_at
+
+
+## Generated topology proves that a state is globally navigable. This final
+## live preflight proves that swapping its rooms now will not materialize a
+## wall around an actor, interrupt a demanded interaction, or detach a charge
+## cable from a station that is about to be rebuilt.
+func _can_commit_blackout_mutation(proposal: TopologyDelta) -> bool:
+	return _mutation_coordinator != null \
+		and _mutation_coordinator.can_commit(proposal)
+
+
+func _mutation_rebuild_cells(proposal: TopologyDelta) -> Array[Vector2i]:
+	return _mutation_coordinator.rebuild_cells(proposal) \
+		if _mutation_coordinator != null else []
 
 
 func _on_descent_ended(won: bool) -> void:
@@ -1339,11 +1401,8 @@ func _resume_descent_at(floor_idx: int) -> void:
 	player.reset_descent_resources()
 	_dying = false
 	_blackout_locate_cue = 0
-	descent_route = _create_descent_route(run.theme(), run.floor_idx)
-	_print_descent_route()
-	var arrival := _descent_arrival(run.theme())
-	await _jump_to(run.theme(), arrival["position"], false,
-		bool(arrival["exact"]), float(arrival["yaw"]))
+	descent_route = null
+	await _jump_to(run.theme(), Vector3.INF, false, true)
 	player.grab_look()
 	player.set_process_unhandled_input(true)
 	_begin_descent_floor()
@@ -1403,8 +1462,8 @@ func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
 	# slab; this used to hardcode 0.15 and discard base.y, which asked to place
 	# the player 1.27m inside that slab.
 	var floor_y := Chunk.cell_floor_h(_level_seed(level), cellv, level)
-	var pos := Vector3(cellv.x * 12.0 + base.x, floor_y + base.y,
-		cellv.y * 12.0 + base.z)
+	var pos := Vector3(cellv.x * WorldGen.CELL_SIZE + base.x, floor_y + base.y,
+		cellv.y * WorldGen.CELL_SIZE + base.z)
 	# The first school room is a classroom. Its desks rotate to face whichever
 	# solid wall owns the board, so a fixed corner can become the back row. Land
 	# in the clear teaching aisle between the first row and the teacher's desk.
@@ -1432,19 +1491,23 @@ func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
 		return pos
 	var wdir := WorldGen.anchor_wall(ws, cellv, 310)
 	if wdir == 3 and base.z < 2.4:
-		pos.z = cellv.y * 12.0 + (12.0 - base.z)
+		pos.z = cellv.y * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE - base.z)
 	elif wdir == 2 and base.z > 9.6:
-		pos.z = cellv.y * 12.0 + (12.0 - base.z)
+		pos.z = cellv.y * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE - base.z)
 	elif wdir == 1 and base.x < 2.4:
-		pos.x = cellv.x * 12.0 + (12.0 - base.x)
+		pos.x = cellv.x * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE - base.x)
 	elif wdir == 0 and base.x > 9.6:
-		pos.x = cellv.x * 12.0 + (12.0 - base.x)
+		pos.x = cellv.x * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE - base.x)
 	return pos
 
 
 func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
 		yaw := NAN) -> void:
 	_switching = true
+	# A charge session belongs to the outgoing physical station. Roll it back
+	# before the fade and teardown so partial charge cannot cross floors.
+	if player != null and player.is_charging():
+		player.stop_charging()
 	if not descent:
 		_saved_pos[active_level] = player.position
 	if via_portal:
@@ -1468,13 +1531,20 @@ func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
 	# Let the physics server unregister every outgoing collider before any
 	# destination body is created.
 	await get_tree().physics_frame
+	if descent and (descent_route == null or descent_route.theme != level):
+		descent_route = _create_descent_route(level, run.floor_idx)
+		_print_descent_route()
+		var arrival := _descent_arrival(level)
+		pos = arrival["position"]
+		exact = bool(arrival["exact"])
+		yaw = float(arrival["yaw"])
 	_build_level(level, pos)
 	_events.set_level(level_root)
 	player.world_seed = _level_seed(level)
 	player.level_theme = level
 	player.water_y = _water_level_for(level)
 	await get_tree().physics_frame
-	var cellv := Vector2i(floori(pos.x / 12.0), floori(pos.z / 12.0))
+	var cellv := Vector2i(floori(pos.x / WorldGen.CELL_SIZE), floori(pos.z / WorldGen.CELL_SIZE))
 	var safe := pos
 	# An authored arrival car interior is clear by construction but sealed, so
 	# the escape-direction half of ArrivalSafety can never pass inside one. Trust
@@ -1531,7 +1601,7 @@ func _settle_initial_arrival() -> void:
 	if descent and descent_route != null and descent_route.origin_wall >= 0:
 		return
 	var pos := player.global_position
-	var cellv := Vector2i(floori(pos.x / 12.0), floori(pos.z / 12.0))
+	var cellv := Vector2i(floori(pos.x / WorldGen.CELL_SIZE), floori(pos.z / WorldGen.CELL_SIZE))
 	var safe := ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
 	if safe != Vector3.INF and safe.distance_to(pos) > 0.02:
 		player.teleport(safe)
@@ -1562,6 +1632,7 @@ func _process(dt: float) -> void:
 	_bench_t += dt
 	_bench_frames += 1
 	_bench_worst = maxf(_bench_worst, dt)
+	_bench_sample_monitors()
 	if dt > 1.0 / 55.0:
 		_bench_slow += 1
 	# per-RENDERED-frame translation: if it only advances on physics ticks the
@@ -1592,10 +1663,51 @@ func _process(dt: float) -> void:
 			float(_bench_frames) / _bench_t, 1000.0 * _bench_t / float(_bench_frames),
 			1000.0 * _bench_worst, _bench_slow, _bench_frames,
 			Engine.physics_ticks_per_second])
+		print("  render stress: CPU process worst %.2fms, physics worst %.2fms | draws %d, primitives %d | collision pairs %d" % [
+			1000.0 * _bench_process_worst, 1000.0 * _bench_physics_worst,
+			_bench_draws_max, _bench_primitives_max, _bench_collision_pairs_max])
+		print("  memory/object deltas: static %+.1f KiB (peak %+.1f), nodes %+d, resources %+d | video %.1f MiB" % [
+			(float(int(Performance.get_monitor(Performance.MEMORY_STATIC))
+				- _bench_static_start) / 1024.0),
+			(float(_bench_static_peak - _bench_static_start) / 1024.0),
+			int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)) - _bench_nodes_start,
+			int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)) - _bench_resources_start,
+			float(_bench_vram_max) / (1024.0 * 1024.0)])
 		_bench_t = 0.0
 		_bench_frames = 0
 		_bench_worst = 0.0
 		_bench_slow = 0
+		_bench_reset_monitors()
+
+
+func _bench_reset_monitors() -> void:
+	_bench_process_worst = 0.0
+	_bench_physics_worst = 0.0
+	_bench_draws_max = 0
+	_bench_primitives_max = 0
+	_bench_collision_pairs_max = 0
+	_bench_static_start = int(Performance.get_monitor(Performance.MEMORY_STATIC))
+	_bench_static_peak = _bench_static_start
+	_bench_nodes_start = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	_bench_resources_start = int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT))
+	_bench_vram_max = int(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED))
+
+
+func _bench_sample_monitors() -> void:
+	_bench_process_worst = maxf(_bench_process_worst,
+		float(Performance.get_monitor(Performance.TIME_PROCESS)))
+	_bench_physics_worst = maxf(_bench_physics_worst,
+		float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)))
+	_bench_draws_max = maxi(_bench_draws_max,
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)))
+	_bench_primitives_max = maxi(_bench_primitives_max,
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)))
+	_bench_collision_pairs_max = maxi(_bench_collision_pairs_max,
+		int(Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)))
+	_bench_static_peak = maxi(_bench_static_peak,
+		int(Performance.get_monitor(Performance.MEMORY_STATIC)))
+	_bench_vram_max = maxi(_bench_vram_max,
+		int(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED)))
 
 
 ## Dev: count partitions that would have ended inside a doorway.
@@ -1620,7 +1732,7 @@ func _audit_partitions() -> void:
 					if absf(want - b.x) < b.y:
 						old_bad += 1
 						if old_bad <= 3:
-							print("   was-broken cell %s  (centre %.0f, %.0f)" % [c, c.x * 12.0 + 6.0, c.y * 12.0 + 6.0])
+							print("   was-broken cell %s  (centre %.0f, %.0f)" % [c, c.x * WorldGen.CELL_SIZE + WorldGen.CELL_SIZE * 0.5, c.y * WorldGen.CELL_SIZE + WorldGen.CELL_SIZE * 0.5])
 						break
 				var got := WorldGen.partition_offset(ws, c, th, ax, want)
 				if got < 0.0:
@@ -2069,7 +2181,12 @@ func _show_event_message(text: String, alert := false) -> void:
 ## Screenshot-only helper for checking both caption styles without waiting for
 ## a random event or finding an interactable prop.
 func _preview_captions() -> void:
-	await get_tree().create_timer(1.0).timeout
+	var delay := create_tween()
+	delay.tween_interval(1.0)
+	delay.tween_callback(_finish_preview_captions)
+
+
+func _finish_preview_captions() -> void:
 	_show_event_message("THE POWER DIPS")
 	_on_interaction_prompt("E — QUERY TERMINAL")
 
@@ -2128,7 +2245,7 @@ func _prepare_descent(entry: int) -> void:
 	descent = true
 	_pending_new_descent_intro = entry == TitleScreen.DescentEntry.NEW
 	var floor_idx := _apply_descent_entry(entry)
-	player.allow_sprint = false
+	player.allow_sprint = true
 	player.set_process_unhandled_input(false)
 	player.reset_descent_resources()
 	_saved_pos.clear()
@@ -2137,14 +2254,11 @@ func _prepare_descent(entry: int) -> void:
 	_connect_descent_run()
 	run.prepare_floor()
 	add_child(run)
-	descent_route = _create_descent_route(run.theme(), run.floor_idx)
-	_print_descent_route()
+	descent_route = null
 	_events.descent_mode = true
 	_set_presence(Presence.SILENT)
 	_set_mode_hint()
-	var arrival := _descent_arrival(run.theme())
-	await _jump_to(run.theme(), arrival["position"], false,
-		bool(arrival["exact"]), float(arrival["yaw"]))
+	await _jump_to(run.theme(), Vector3.INF, false, true)
 	_descent_preparing = false
 	if is_instance_valid(_title):
 		_title.set_descent_ready()
@@ -2239,7 +2353,12 @@ func _maybe_screenshot() -> void:
 	if opts.screenshot.is_empty():
 		return
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	await get_tree().create_timer(2.5).timeout
+	var delay := create_tween()
+	delay.tween_interval(2.5)
+	delay.tween_callback(_capture_screenshot)
+
+
+func _capture_screenshot() -> void:
 	print("player at ", player.global_position)
 	get_viewport().get_texture().get_image().save_png(opts.screenshot)
 	get_tree().quit()

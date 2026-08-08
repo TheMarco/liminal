@@ -80,9 +80,11 @@ func _init() -> void:
 		if chair_pairs > 0:
 			print("  deepest chair interpenetration: %.2fm" % chair_worst)
 		print("  FAIL — floor props are landing inside placed furniture")
+		await preload("res://tools/lib/audit_cleanup.gd").release(self)
 		quit(1)
 		return
 	print("  PASS — no free-standing floor furnishing sits inside another")
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit()
 
 

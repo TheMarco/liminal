@@ -8,6 +8,14 @@ static var _wall_art_textures := {}
 static var _wall_art_preloads_requested := false
 
 
+## Audit/test teardown only. Production keeps these shared materials alive for
+## the process lifetime so streamed chunks never rebuild identical resources.
+static func clear_runtime_caches() -> void:
+	_c.clear()
+	_wall_art_textures.clear()
+	_wall_art_preloads_requested = false
+
+
 static func _shader(key: String, path: String) -> ShaderMaterial:
 	if _c.has(key):
 		return _c[key]
@@ -672,29 +680,29 @@ static func annex_ceiling() -> Material:
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
 
 
-static func annex_moisture_overlay(mask_path: String, atlas_scale: Vector2,
-		atlas_offset: Vector2, strength: float, quarter_turns: int) -> ShaderMaterial:
+static func annex_moisture_overlay(mask_path: String) -> ShaderMaterial:
+	var key := "annex_moisture:" + mask_path
+	if _c.has(key):
+		return _c[key]
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/environment_mask_overlay.gdshader")
 	m.set_shader_parameter("effect_mask", load(mask_path))
 	m.set_shader_parameter("effect_color", Color(0.28, 0.19, 0.095))
 	m.set_shader_parameter("surface_breakup", 0.07)
-	m.set_shader_parameter("atlas_scale", atlas_scale)
-	m.set_shader_parameter("atlas_offset", atlas_offset)
-	m.set_shader_parameter("strength", strength)
-	m.set_shader_parameter("quarter_turns", float(posmod(quarter_turns, 4)))
+	_c[key] = m
 	return m
 
 
-static func annex_carpet_damage_overlay(mask_path: String, strength: float,
-		quarter_turns: int) -> ShaderMaterial:
+static func annex_carpet_damage_overlay(mask_path: String) -> ShaderMaterial:
+	var key := "annex_carpet_damage:" + mask_path
+	if _c.has(key):
+		return _c[key]
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/environment_mask_overlay.gdshader")
 	m.set_shader_parameter("effect_mask", load(mask_path))
 	m.set_shader_parameter("effect_color", Color(0.085, 0.055, 0.025))
 	m.set_shader_parameter("surface_breakup", 0.34)
-	m.set_shader_parameter("strength", strength)
-	m.set_shader_parameter("quarter_turns", float(posmod(quarter_turns, 4)))
+	_c[key] = m
 	return m
 
 

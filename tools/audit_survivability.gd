@@ -59,8 +59,8 @@ func _run() -> void:
 	# The channel that fixes F1, F2 and F5 is one bool. If it ever reads false
 	# while the player is pinned, something is closing on someone who is not
 	# permitted to move.
-	# A blackout is only allowed to start once a safe doorway proposal exists,
-	# and proposals need a real route with topology that contains the player's
+	# A blackout is only allowed to start once a safe reality transition exists,
+	# and transitions need a real planned topology that contains the player's
 	# cell. Without this fixture every blackout postpones forever and the 900
 	# simulated seconds prove nothing — which is exactly how this audit was
 	# broken for a while. One cheap casino route is shared across the floors:
@@ -69,15 +69,51 @@ func _run() -> void:
 	var fixture_seed := 20260725
 	var fixture_route := DescentRoute.build(
 		WorldGen.level_seed(fixture_seed, 0), 0, 0)
-	fixture_route.set_topology(DescentTopology.new(
-		WorldGen.level_seed(fixture_seed, 0), 0))
+	var fixture_topology := DescentTopology.new(
+		WorldGen.level_seed(fixture_seed, 0), 0)
+	fixture_route.set_topology(fixture_topology)
+	# Production generates the complete reality graph with the route. A bare
+	# resolver has no legal transition, so it correctly postpones every
+	# blackout; the audit must exercise the same planned setup as Main.
+	fixture_topology.plan_floor(fixture_route)
+	fixture_route.refresh_topology()
 	var fixture_path := fixture_route.path_from_origin()
-	var stand := fixture_path[fixture_path.size() / 2]
+	var fixture_visited := {}
+	for at in fixture_route.scanned_cells():
+		fixture_visited[at] = true
+	# Stand beside (never inside) a generated delta so the test's motionless
+	# player has a legal blackout transition. The production selector quite
+	# deliberately refuses to mutate under the player's feet or reveal a change
+	# in wholly unexplored space.
+	var stand := Vector2i(1 << 30, 1 << 30)
+	for state_id in range(1, fixture_topology.state_count()):
+		var delta := fixture_topology.state_delta(0, state_id)
+		var affected := delta.cells
+		for changed in affected:
+			for dir in 4:
+				var probe: Vector2i = changed + WorldGen.DIRV[dir]
+				if affected.has(probe) \
+						or not fixture_route.scanned_contains(probe):
+					continue
+				var proposal := fixture_topology.find_transition(
+					fixture_route, probe, fixture_visited, false)
+				if proposal != null and not proposal.is_empty():
+					stand = probe
+					break
+			if stand.x != (1 << 30):
+				break
+		if stand.x != (1 << 30):
+			break
+	if stand.x == (1 << 30):
+		failures += 1
+		stand = fixture_path[fixture_path.size() / 2]
+		print("FAIL survivability fixture found no legal reality transition")
 	for floor_idx in floors:
 		var run := DescentRun.new()
 		var stub := _still_player()
 		stub.global_position = Vector3(
-			float(stand.x) * 12.0 + 6.0, 0.0, float(stand.y) * 12.0 + 6.0)
+			(float(stand.x) + 0.5) * WorldGen.CELL_SIZE, 0.0,
+			(float(stand.y) + 0.5) * WorldGen.CELL_SIZE)
 		run.player = stub
 		run.world_seed = 20260725 + floor_idx * 7919
 		run.floor_idx = floor_idx
@@ -86,11 +122,10 @@ func _run() -> void:
 		# prepare_floor clears the route, so the fixture goes in after it.
 		run.set_route(fixture_route)
 		run.start_floor()
-		# A real player arrives with a trail of visited rooms, and ordinary
-		# blackout doorways only open off that trail (never the very cell the
-		# player is standing in). A perfectly still player has no trail, so
-		# hand the run the walked route as one.
-		for walked in fixture_path:
+		# A real player arrives with a trail of visited rooms, and reality deltas
+		# are revealed only beside that trail (never under the player). A perfectly
+		# still fixture has no trail, so supply the explored test graph explicitly.
+		for walked in fixture_visited:
 			run.visited[walked] = true
 		var t := 0.0
 		while t < SIM_SECONDS:

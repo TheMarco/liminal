@@ -8,7 +8,7 @@ extends Node
 
 signal revealed(texture_key: String)
 
-const CELL := 12.0
+const CELL := WorldGen.CELL_SIZE
 const MIN_REVEAL_D := 4.5
 const MAX_REVEAL_D := 16.0
 const REVEAL_DOT := 0.78
@@ -40,6 +40,7 @@ const LOOKS := {
 
 var player: Player
 var run: DescentRun
+var topology: DescentTopology
 var horror_director: HorrorDirector
 var world_seed := 1
 var theme := 0
@@ -56,6 +57,9 @@ var _hidden_since := {}
 var _exposed_until := {}
 var _live: Node3D
 var _last_look := ""
+var _standing_shape: CapsuleShape3D
+var _standing_query: PhysicsShapeQueryParameters3D
+var _standing_player_rid := RID()
 
 static var _smoke_material: ShaderMaterial
 
@@ -104,18 +108,18 @@ func _unsafe() -> bool:
 ## authoritative `WorldGen.edge_info` openings. A second target step is offered
 ## where the corridor continues, which puts some figures much farther away.
 static func topology_candidates(p_world_seed: int, p_theme: int,
-		origin: Vector2i) -> Array[Dictionary]:
+		origin: Vector2i, p_topology: DescentTopology = null) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for first_dir in 4:
-		if bool(WorldGen.edge_info(
-				p_world_seed, origin, first_dir, p_theme)["wall"]):
+		if bool(_resolved_edge_info(p_world_seed, p_theme, p_topology,
+				origin, first_dir)["wall"]):
 			continue
 		var bend: Vector2i = origin + WorldGen.DIRV[first_dir]
 		for turn_dir in 4:
 			if turn_dir == first_dir or turn_dir == WorldGen.OPP[first_dir]:
 				continue
-			if bool(WorldGen.edge_info(
-					p_world_seed, bend, turn_dir, p_theme)["wall"]):
+			if bool(_resolved_edge_info(p_world_seed, p_theme, p_topology,
+					bend, turn_dir)["wall"]):
 				continue
 			var target: Vector2i = bend + WorldGen.DIRV[turn_dir]
 			out.append({
@@ -126,8 +130,8 @@ static func topology_candidates(p_world_seed: int, p_theme: int,
 				"turn_dir": turn_dir,
 				"turn_steps": 1,
 			})
-			if not bool(WorldGen.edge_info(
-					p_world_seed, target, turn_dir, p_theme)["wall"]):
+			if not bool(_resolved_edge_info(p_world_seed, p_theme, p_topology,
+					target, turn_dir)["wall"]):
 				out.append({
 					"origin": origin,
 					"bend": bend,
@@ -137,6 +141,12 @@ static func topology_candidates(p_world_seed: int, p_theme: int,
 					"turn_steps": 2,
 				})
 	return out
+
+
+static func _resolved_edge_info(p_world_seed: int, p_theme: int,
+		p_topology: DescentTopology, at: Vector2i, dir: int) -> Dictionary:
+	return p_topology.edge_info(at, dir) if p_topology != null else \
+		WorldGen.edge_info(p_world_seed, at, dir, p_theme)
 
 
 func _scan_visibility() -> void:
@@ -195,6 +205,14 @@ func _scan_visibility() -> void:
 
 
 func _connected_cells(origin: Vector2i) -> Array[Vector2i]:
+	return connected_cells_for(world_seed, theme, origin, topology,
+		CONNECTED_DEPTH)
+
+
+## Pure resolver hook used by mutation audits and the live scanner alike.
+static func connected_cells_for(p_world_seed: int, p_theme: int,
+		origin: Vector2i, p_topology: DescentTopology = null,
+		max_depth := CONNECTED_DEPTH) -> Array[Vector2i]:
 	var queue: Array[Vector2i] = [origin]
 	var depth := {origin: 0}
 	var cursor := 0
@@ -202,10 +220,11 @@ func _connected_cells(origin: Vector2i) -> Array[Vector2i]:
 		var cell := queue[cursor]
 		cursor += 1
 		var cell_depth: int = depth[cell]
-		if cell_depth >= CONNECTED_DEPTH:
+		if cell_depth >= max_depth:
 			continue
 		for dir in 4:
-			if bool(WorldGen.edge_info(world_seed, cell, dir, theme)["wall"]):
+			if bool(_resolved_edge_info(
+					p_world_seed, p_theme, p_topology, cell, dir)["wall"]):
 				continue
 			var neighbour: Vector2i = cell + WorldGen.DIRV[dir]
 			if depth.has(neighbour):
@@ -421,17 +440,22 @@ func _cell_point(cell: Vector2i) -> Vector3:
 
 
 func _standing_room(at: Vector3) -> bool:
-	var shape := CapsuleShape3D.new()
-	shape.radius = 0.38
-	shape.height = 1.8
-	var query := PhysicsShapeQueryParameters3D.new()
-	query.shape = shape
-	query.transform = Transform3D(Basis.IDENTITY, at + Vector3(0, 0.96, 0))
-	query.exclude = [player.get_rid()]
-	query.collide_with_areas = false
-	query.collision_mask = 1
+	if _standing_query == null:
+		_standing_shape = CapsuleShape3D.new()
+		_standing_shape.radius = 0.38
+		_standing_shape.height = 1.8
+		_standing_query = PhysicsShapeQueryParameters3D.new()
+		_standing_query.shape = _standing_shape
+		_standing_query.collide_with_areas = false
+		_standing_query.collision_mask = 1
+	var player_rid := player.get_rid()
+	if player_rid != _standing_player_rid:
+		_standing_player_rid = player_rid
+		_standing_query.exclude = [player_rid]
+	_standing_query.transform = Transform3D(
+		Basis.IDENTITY, at + Vector3(0, 0.96, 0))
 	return player.get_world_3d().direct_space_state.intersect_shape(
-		query, 1).is_empty()
+		_standing_query, 1).is_empty()
 
 
 func _clear_line(a: Vector3, b: Vector3) -> bool:
@@ -439,11 +463,3 @@ func _clear_line(a: Vector3, b: Vector3) -> bool:
 	query.exclude = [player.get_rid()]
 	query.collide_with_areas = false
 	return player.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
-
-
-func _shuffle(values: Array) -> void:
-	for i in range(values.size() - 1, 0, -1):
-		var j := _rng.randi_range(0, i)
-		var held = values[i]
-		values[i] = values[j]
-		values[j] = held

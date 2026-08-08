@@ -895,118 +895,6 @@ func _pool_step_ramp(dir: int, at: float, width: float, edge: float,
 ## ladder that is the only way back up onto it. `dir` picks the wall.
 
 
-func _pool_deck(dir: int, width: float) -> void:
-	var half = width * 0.5
-	var centre = half
-	var deck_pos: Vector3
-	var deck_size: Vector3
-	match dir:
-		0:
-			deck_pos = Vector3(chunk.S - centre, chunk.POOL_DECK_Y * 0.5, chunk.S / 2.0)
-			deck_size = Vector3(width, chunk.POOL_DECK_Y, chunk.S)
-		1:
-			deck_pos = Vector3(centre, chunk.POOL_DECK_Y * 0.5, chunk.S / 2.0)
-			deck_size = Vector3(width, chunk.POOL_DECK_Y, chunk.S)
-		2:
-			deck_pos = Vector3(chunk.S / 2.0, chunk.POOL_DECK_Y * 0.5, chunk.S - centre)
-			deck_size = Vector3(chunk.S, chunk.POOL_DECK_Y, width)
-		_:
-			deck_pos = Vector3(chunk.S / 2.0, chunk.POOL_DECK_Y * 0.5, centre)
-			deck_size = Vector3(chunk.S, chunk.POOL_DECK_Y, width)
-	var deck = chunk._box(deck_pos, deck_size, Mats.pool_tile())
-	deck.set_meta("pool_deck", true)
-	# Cap the water-facing edge with the same modular bullnose used by compact
-	# basins, so legacy side decks cannot reintroduce the old square tile lip.
-	match dir:
-		0:
-			_pool_vertical_coping(
-				chunk.S - width, 0.0, chunk.S, Vector2(-1.0, 0.0))
-		1:
-			_pool_vertical_coping(
-				width, 0.0, chunk.S, Vector2(1.0, 0.0))
-		2:
-			_pool_horizontal_coping(
-				chunk.S - width, 0.0, chunk.S, Vector2(0.0, -1.0))
-		_:
-			_pool_horizontal_coping(
-				width, 0.0, chunk.S, Vector2(0.0, 1.0))
-	var along = lerpf(3.0, chunk.S - 3.0, chunk._r(2210 + dir))
-	_pool_ladder(dir, half, along)
-
-
-## Stainless grab rails hooping out of the deck edge down into the water. The
-## rails are the climbable volume: the player script looks for the area, not
-## for the geometry, so the ladder works no matter how it is dressed.
-
-
-func _pool_ladder(dir: int, deck_half: float, along: float) -> void:
-	var inward = -1.0 if dir == 0 or dir == 2 else 1.0
-	var edge: float = (chunk.S - deck_half) if dir == 0 \
-		else (deck_half if dir == 1 else 0.0)
-	var pivot = Node3D.new()
-	if dir < 2:
-		pivot.position = Vector3(edge + inward * 0.16, 0.0, along)
-	else:
-		edge = (chunk.S - deck_half) if dir == 2 else deck_half
-		pivot.position = Vector3(along, 0.0, edge + inward * 0.16)
-	pivot.rotation.y = 0.0 if dir < 2 else PI / 2.0
-	pivot.set_meta("pool_ladder", true)
-	chunk.add_child(pivot)
-	var rail = Mats.pool_rail()
-	# two uprights curving over the coping, and three rungs between them
-	for side in [-1.0, 1.0]:
-		chunk._mcyl(pivot, Vector3(0, chunk.POOL_DECK_Y * 0.5 + 0.25, side * 0.24),
-			0.028, chunk.POOL_DECK_Y + 0.5, rail)
-	for i in 3:
-		var y = 0.30 + float(i) * 0.34
-		chunk._mbox(pivot, Vector3(0, y, 0), Vector3(0.06, 0.035, chunk.POOL_LADDER_W),
-			rail)
-	var area = Area3D.new()
-	area.position = Vector3(0, chunk.POOL_DECK_Y * 0.5, 0)
-	area.set_meta("pool_ladder_volume", true)
-	# The player finds this with a point query on its own layer; it must never
-	# collide with anything, only be findable.
-	area.collision_layer = Player.LADDER_LAYER
-	area.collision_mask = 0
-	area.monitorable = true
-	area.monitoring = false
-	var cs = CollisionShape3D.new()
-	var box = BoxShape3D.new()
-	box.size = Vector3(0.95, chunk.POOL_DECK_Y + 1.2, chunk.POOL_LADDER_W + 0.5)
-	cs.shape = box
-	area.add_child(cs)
-	pivot.add_child(area)
-
-
-## A wide tiled stair walking down into the water, the calmest way in.
-## `at` centres it across the wall — aligned with a doorway when there is one.
-
-
-func _pool_stairs(dir: int, at = chunk.S / 2.0) -> void:
-	var steps = 4
-	for i in steps:
-		var h = chunk.POOL_DECK_Y * (1.0 - float(i) / float(steps))
-		var depth = 0.55
-		var run = 1.3 + float(i) * depth
-		var pos: Vector3
-		var size: Vector3
-		if dir < 2:
-			var x: float = (chunk.S - run * 0.5) if dir == 0 else run * 0.5
-			pos = Vector3(x, h * 0.5, at)
-			size = Vector3(run, maxf(h, 0.08), 4.6)
-		else:
-			var z: float = (chunk.S - run * 0.5) if dir == 2 else run * 0.5
-			pos = Vector3(at, h * 0.5, z)
-			size = Vector3(4.6, maxf(h, 0.08), run)
-		var st = chunk._box(pos, size, Mats.pool_tile())
-		st.set_meta("pool_step", true)
-	# The stair descends INWARD from its wall, so the ramp runs in the
-	# opposite sense to an edge-step ramp on the same wall, starting on the
-	# top step's outer edge (1.3 out) to graze every corner below it.
-	_pool_step_ramp(WorldGen.OPP[dir], at, 4.6,
-		chunk.S if (dir == 0 or dir == 2) else 0.0, chunk.POOL_DECK_Y, 2.2, 1.3)
-
-
 ## Every window on this floor is the same rounded pill. The old flat variant
 ## built a stacked-box "arch" that read as a lumpy white rectangle pasted on
 ## the tile rather than an opening — it had no reveal, so nothing about it
@@ -1581,59 +1469,6 @@ func _pool_pier_island(salt: int, piers: Array[Vector3]) -> bool:
 	return true
 
 
-func _pool_island_clear_of_layout(at: Vector3, radius: float,
-		side_dir: int, side_width: float, bridge_axis: int) -> bool:
-	var gap := 0.32
-	match side_dir:
-		0:
-			if at.x + radius + gap > chunk.S - side_width:
-				return false
-		1:
-			if at.x - radius - gap < side_width:
-				return false
-		2:
-			if at.z + radius + gap > chunk.S - side_width:
-				return false
-		3:
-			if at.z - radius - gap < side_width:
-				return false
-	if bridge_axis == 1 and absf(at.z - chunk.S * 0.5) \
-			< 1.05 + radius + gap:
-		return false
-	if bridge_axis == 0 and absf(at.x - chunk.S * 0.5) \
-			< 1.05 + radius + gap:
-		return false
-	return true
-
-
-func _pool_sector_colliders(center: Vector2, radial_start: Vector2,
-		sweep: float, radius: float, height: float, meta_name: String) -> void:
-	var start := radial_start.normalized()
-	var center_bottom := Vector3(center.x, 0.0, center.y)
-	var center_top := Vector3(center.x, height, center.y)
-	for i in chunk.POOL_CORNER_SEGMENTS:
-		var u0 := start.rotated(
-			sweep * float(i) / float(chunk.POOL_CORNER_SEGMENTS))
-		var u1 := start.rotated(
-			sweep * float(i + 1) / float(chunk.POOL_CORNER_SEGMENTS))
-		var arc0 := Vector3(
-			center.x + u0.x * radius, 0.0,
-			center.y + u0.y * radius)
-		var arc1 := Vector3(
-			center.x + u1.x * radius, 0.0,
-			center.y + u1.y * radius)
-		var shape := ConvexPolygonShape3D.new()
-		shape.points = PackedVector3Array([
-			center_bottom, arc0, arc1,
-			center_top, arc0 + Vector3.UP * height, arc1 + Vector3.UP * height,
-		])
-		var cs := CollisionShape3D.new()
-		cs.shape = shape
-		cs.set_meta(meta_name, true)
-		cs.set_meta("pool_rounded_basin_corner_sector", i)
-		chunk.body.add_child(cs)
-
-
 func _pool_cove_colliders(center: Vector2, radial_start: Vector2,
 		sweep: float, radius: float, corner: Vector2,
 		height: float, meta_name: String) -> void:
@@ -1718,56 +1553,6 @@ func _pool_handrail(dir: int, inset: float) -> void:
 	for i in 4:
 		var z = -span * 0.5 + span * (float(i) / 3.0)
 		chunk._mcyl(pivot, Vector3(0, 0.46, z), 0.024, 0.92, rail)
-
-
-## A dry walkway along one wall of a flooded room, standing at the same height
-## as the dry halls, with a ladder down into the water. This is what stops the
-## floor being all-or-nothing: most pools should have an edge you can walk.
-
-
-func _pool_side_walk(dir: int, width: float) -> void:
-	var pos: Vector3
-	var size: Vector3
-	var half = width * 0.5
-	match dir:
-		0:
-			pos = Vector3(chunk.S - half, chunk.POOL_DRY_Y * 0.5, chunk.S / 2.0)
-			size = Vector3(width, chunk.POOL_DRY_Y, chunk.S)
-		1:
-			pos = Vector3(half, chunk.POOL_DRY_Y * 0.5, chunk.S / 2.0)
-			size = Vector3(width, chunk.POOL_DRY_Y, chunk.S)
-		2:
-			pos = Vector3(chunk.S / 2.0, chunk.POOL_DRY_Y * 0.5, chunk.S - half)
-			size = Vector3(chunk.S, chunk.POOL_DRY_Y, width)
-		_:
-			pos = Vector3(chunk.S / 2.0, chunk.POOL_DRY_Y * 0.5, half)
-			size = Vector3(chunk.S, chunk.POOL_DRY_Y, width)
-	var walk = chunk._box(pos, size, Mats.pool_tile())
-	walk.set_meta("pool_side_walk", true)
-	# The ladder hangs off its inner edge, over the water it serves.
-	var inner: float = (chunk.S - width) if dir == 0 else (width if dir == 1 else 0.0)
-	if dir >= 2:
-		inner = (chunk.S - width) if dir == 2 else width
-	_pool_ledge_ladder(dir, inner, chunk.S * 0.28 + (chunk._r(2500 + dir) - 0.5) * 1.6)
-	_pool_ledge_ladder(dir, inner, chunk.S * 0.72 + (chunk._r(2504 + dir) - 0.5) * 1.6)
-
-
-## A narrow raised causeway straight across a flooded room.
-
-
-func _pool_bridge(along_x: bool) -> void:
-	var w = 2.1
-	var pos = Vector3(chunk.S / 2.0, chunk.POOL_DRY_Y * 0.5, chunk.S / 2.0)
-	var size = Vector3(chunk.S, chunk.POOL_DRY_Y, w) if along_x \
-		else Vector3(w, chunk.POOL_DRY_Y, chunk.S)
-	var deck = chunk._box(pos, size, Mats.pool_tile())
-	deck.set_meta("pool_bridge", true)
-	if along_x:
-		_pool_ledge_ladder(3, (chunk.S + w) * 0.5, lerpf(3.0, chunk.S - 3.0, chunk._r(2510)))
-		_pool_ledge_ladder(2, (chunk.S - w) * 0.5, lerpf(3.0, chunk.S - 3.0, chunk._r(2511)))
-	else:
-		_pool_ledge_ladder(1, (chunk.S + w) * 0.5, lerpf(3.0, chunk.S - 3.0, chunk._r(2510)))
-		_pool_ledge_ladder(0, (chunk.S - w) * 0.5, lerpf(3.0, chunk.S - 3.0, chunk._r(2511)))
 
 
 ## A real pool ladder: two uprights from the basin floor, rungs at and below
@@ -1904,41 +1689,6 @@ func _pool_channel_room() -> void:
 	if chunk._r(2314) < 0.34:
 		_pool_piers(2315, 1)
 	_pool_float(2312)
-
-
-## One flank of the lane, solid from just inside the cell boundary to the
-## lane edge, with `cuts` carving full-height passages through the mass where
-## a doorway or window alcove needs to reach the water.
-
-
-func _pool_channel_fill(dir: int, cuts: Array, a0 = 0.0, a1 = chunk.S) -> void:
-	var near = dir == 1 or dir == 3
-	var d0 = chunk.T if near else chunk.S - chunk.POOL_LANE
-	var d1 = chunk.POOL_LANE if near else chunk.S - chunk.T
-	var spans: Array = []
-	var at = a0
-	for cut in cuts:
-		spans.append([at, clampf(float(cut[0]), a0, a1)])
-		at = clampf(float(cut[1]), a0, a1)
-	spans.append([at, a1])
-	var dc = (d0 + d1) * 0.5
-	# Plain square masses: every span is one box with 90-degree ends, at the
-	# boundary or at a doorway cut alike. End fillets were tried and
-	# reverted with the rest of the corner rounding.
-	var mat = Mats.pool_wall_tile()
-	for span in spans:
-		var a = float(span[0])
-		var b = float(span[1])
-		if b - a < 0.05:
-			continue
-		var c = (a + b) * 0.5
-		var f = chunk._box(
-			Vector3(dc, chunk.ceil_h * 0.5, c) if dir < 2 \
-				else Vector3(c, chunk.ceil_h * 0.5, dc),
-			Vector3(d1 - d0, chunk.ceil_h, b - a) if dir < 2 \
-				else Vector3(b - a, chunk.ceil_h, d1 - d0),
-			mat)
-		f.set_meta("pool_channel_side", true)
 
 
 func _pool_dry_prop_spot(salt: int, radius: float,
@@ -2154,6 +1904,7 @@ func _pool_lone_chair(salt: int) -> void:
 	# alone in open floor, and it is rare enough to simply not appear here.
 	if not chunk._floor_spot_clear(Vector3(at.x, chunk.POOL_DRY_Y, at.z), 0.55, 0.9):
 		return
+	var b0 := chunk.body.get_child_count()
 	var pivot = chunk._furnishing_pivot(at, chunk._r(salt + 3) * TAU, "pool_chair")
 	var inst = chunk._attributed_prop_local(pivot, chunk.POOL_CHAIR_PATH,
 		-chunk.POOL_CHAIR_CENTRE, 0.0)
@@ -2164,69 +1915,8 @@ func _pool_lone_chair(salt: int) -> void:
 			(mi as MeshInstance3D).visible = false
 	chunk._collider_yaw_box(at + Vector3(0, 0.44, 0),
 		Vector3(0.66, 0.88, 0.66), pivot.rotation.y)
-
-
-## Submerged wall units. Each is a real LED disc half-proud of the tile below
-## the waterline, with an actual light pushed out into the water in front of
-## it, so a flooded hall gets the up-glow the reference pools all have.
-
-
-func _pool_underwater_lights(salt: int) -> void:
-	var built = 0
-	for dir in 4:
-		if built >= 2:
-			return
-		if not bool(chunk._edge_info(chunk.cell, dir)["wall"]):
-			continue
-		if chunk._r(salt + dir) > 0.55:
-			continue
-		var along = lerpf(2.5, chunk.S - 2.5, chunk._r(salt + 10 + dir))
-		var face = (chunk.S - chunk.T) if (dir == 0 or dir == 2) else chunk.T
-		var pivot = Node3D.new()
-		var room_dir = Vector3.ZERO
-		match dir:
-			0:
-				pivot.position = Vector3(face, 0.55, along)
-				pivot.rotation.y = -PI / 2.0
-				room_dir = Vector3(-1, 0, 0)
-			1:
-				pivot.position = Vector3(face, 0.55, along)
-				pivot.rotation.y = PI / 2.0
-				room_dir = Vector3(1, 0, 0)
-			2:
-				pivot.position = Vector3(along, 0.55, face)
-				pivot.rotation.y = PI
-				room_dir = Vector3(0, 0, -1)
-			_:
-				pivot.position = Vector3(along, 0.55, face)
-				room_dir = Vector3(0, 0, 1)
-		pivot.set_meta("pool_underwater_light", true)
-		chunk.add_child(pivot)
-		var inst = chunk._attributed_prop_local(pivot, chunk.POOL_LIGHT_PATH,
-			Vector3.ZERO, 0.0, Vector3.ONE * chunk.POOL_LIGHT_SCALE)
-		if inst == null:
-			pivot.queue_free()
-			return
-		# The glb is authored OBLIQUE: in model space the disc's outward
-		# normal is (0.648, 0.297, 0.701) and its back plate centre sits at
-		# (1.329, 0.610, 1.437) — nowhere near the origin. Mounted raw it
-		# floated off the wall at a skew angle. Counter-rotate the normal
-		# onto pivot +Z (the room direction) and pull the rotated back
-		# plate onto the pivot origin, 3mm embedded so it cannot show a gap.
-		var q = Quaternion(
-			Vector3(0.648259, 0.297395, 0.70094).normalized(), Vector3(0, 0, 1))
-		inst.quaternion = q
-		inst.position = -(q * Vector3(1.328672, 0.60954, 1.436646)) \
-			* chunk.POOL_LIGHT_SCALE
-		inst.position.z -= 0.003
-		var lamp = OmniLight3D.new()
-		lamp.light_color = Color(0.72, 0.90, 0.98)
-		lamp.light_energy = 1.5
-		lamp.omni_range = 4.2
-		lamp.shadow_enabled = false
-		lamp.position = pivot.position + room_dir * 0.45
-		chunk.add_child(lamp)
-		built += 1
+	if chunk.descent:
+		chunk._bind_furnishing_colliders(pivot, b0)
 
 
 func _pool_alcove_room() -> void:

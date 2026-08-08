@@ -96,7 +96,17 @@ func _run() -> void:
 		print("  node detail written to %s (%d lines)" % [
 			dump_path, _dump_lines.size()])
 
-	Chunk.finish_prop_preloads()
+	Chunk.clear_runtime_caches()
+	SoundBank._c.clear()
+	Sfx._c.clear()
+	Mats.clear_runtime_caches()
+	VhsRitual.clear_runtime_cache()
+	# Threaded imports and rendering-server RIDs are retired on frame boundaries.
+	# Without these frames the fingerprint is correct but the strict suite sees
+	# the audit's process-lifetime caches as leaked test objects.
+	await process_frame
+	await physics_frame
+	await create_timer(0.1).timeout
 
 	if check_path.is_empty():
 		_write(out_path, lines)

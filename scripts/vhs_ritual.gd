@@ -18,6 +18,9 @@ const TV_SCALE := 0.105
 const VCR_SCALE := 0.01
 ## Fallback running time for a tape with no footage file.
 const TAPE_SECONDS := 24.0
+const OPTIONAL_HISS_DB := -21.0
+const OPTIONAL_HISS_RANGE := 18.0
+const OPTIONAL_CUE_RANGE := 8.5
 var world_seed := 1
 var floor_idx := 0
 var home_cell := Vector2i.ZERO
@@ -36,6 +39,7 @@ var _video_vp: SubViewport
 var _cam: Camera3D
 var _prev_cam: Camera3D
 var _viewer: Player
+var _discovery_light: OmniLight3D
 var _tape_path := ""
 var _playing := false
 var _watching := false
@@ -43,6 +47,11 @@ var _tape_time := 0.0
 var _done := false
 
 static var _scenes := {}
+
+
+## Audit/test teardown for the shared imported-prop cache.
+static func clear_runtime_cache() -> void:
+	_scenes.clear()
 
 
 func _ready() -> void:
@@ -62,6 +71,7 @@ func _ready() -> void:
 	_build_furniture()
 	_build_screen()
 	_build_audio()
+	_build_discovery_cue()
 	_build_interactable()
 	set_process_unhandled_input(false)
 	_present_idle()
@@ -121,8 +131,9 @@ func _build_screen() -> void:
 func _build_audio() -> void:
 	_hiss = AudioStreamPlayer3D.new()
 	_hiss.stream = SoundBank.buzz()
-	_hiss.unit_size = 2.2
-	_hiss.volume_db = -34.0
+	_hiss.unit_size = 4.0 if not objective else 2.2
+	_hiss.max_distance = OPTIONAL_HISS_RANGE if not objective else 10.0
+	_hiss.volume_db = OPTIONAL_HISS_DB if not objective else -34.0
 	_hiss.bus = SoundBank.HALL_BUS
 	_hiss.position = Vector3(-0.35, 0.68, 0.25)
 	_hiss.autoplay = true
@@ -133,6 +144,27 @@ func _build_audio() -> void:
 	_voice.position = Vector3(-0.35, 0.68, 0.25)
 	_voice.finished.connect(_next_voice)
 	add_child(_voice)
+
+
+## Optional recordings must read as intentional discoveries while the player
+## is still moving through the route. The CRT already shows snow; this cold,
+## shadowless wall wash and its stronger localized hiss make the set legible
+## from the doorway without adding a HUD marker or an expensive shadow pass.
+func _build_discovery_cue() -> void:
+	if objective:
+		return
+	_discovery_light = OmniLight3D.new()
+	_discovery_light.name = "RecoveredTapeCue"
+	_discovery_light.position = Vector3(-0.35, 1.05, 0.45)
+	_discovery_light.light_color = Color(0.56, 0.72, 0.92)
+	_discovery_light.light_energy = 1.15
+	_discovery_light.omni_range = OPTIONAL_CUE_RANGE
+	_discovery_light.shadow_enabled = false
+	_discovery_light.light_volumetric_fog_energy = 0.0
+	_discovery_light.distance_fade_enabled = true
+	_discovery_light.distance_fade_begin = 10.0
+	_discovery_light.distance_fade_length = 5.0
+	add_child(_discovery_light)
 
 
 ## The video decodes into an off-screen viewport whose texture the tube
@@ -231,7 +263,6 @@ func _end_watch() -> void:
 		return
 	_watching = false
 	set_process_unhandled_input(false)
-	get_tree().call_group("descent_listener", "descent_tape_watch", false)
 	if _cam != null and is_instance_valid(_prev_cam):
 		var tw := create_tween().set_trans(Tween.TRANS_CUBIC) \
 			.set_ease(Tween.EASE_IN_OUT)
@@ -249,6 +280,10 @@ func _restore_viewer() -> void:
 	if _viewer != null and is_instance_valid(_viewer):
 		_viewer.set_physics_process(true)
 		_viewer.set_process_unhandled_input(true)
+	# Release passive protection only after the player can move again. Doing it
+	# before the return tween left a frozen, vulnerable 0.7-second window.
+	if get_tree() != null:
+		get_tree().call_group("descent_listener", "descent_tape_watch", false)
 	_viewer = null
 
 
@@ -354,7 +389,9 @@ func _present_idle() -> void:
 	_screen_mat.set_shader_parameter("progress", 0.0)
 	_screen_mat.set_shader_parameter("use_footage", 0.0)
 	_screen_mat.set_shader_parameter("watched", 1.0 if _done else 0.0)
-	_hiss.volume_db = -34.0
+	_hiss.volume_db = OPTIONAL_HISS_DB if not objective and not _done else -34.0
+	if is_instance_valid(_discovery_light):
+		_discovery_light.visible = not _done
 	if is_instance_valid(_voice) and _voice.playing:
 		_voice.stop()
 	if _done:
@@ -366,6 +403,9 @@ func _present_idle() -> void:
 
 
 func _process(dt: float) -> void:
+	if is_instance_valid(_discovery_light) and _discovery_light.visible:
+		var pulse := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.0028)
+		_discovery_light.light_energy = lerpf(0.88, 1.28, pulse)
 	if not _playing:
 		return
 	if _watching and (_viewer == null or not is_instance_valid(_viewer) \
@@ -389,4 +429,4 @@ func _player_cell() -> Vector2i:
 	if cam == null:
 		return home_cell
 	var p := cam.global_position
-	return Vector2i(floori(p.x / 12.0), floori(p.z / 12.0))
+	return Vector2i(floori(p.x / WorldGen.CELL_SIZE), floori(p.z / WorldGen.CELL_SIZE))

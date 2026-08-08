@@ -45,15 +45,22 @@ func run() -> void:
 	test_progress.clear_from_disk()
 	game._progress_enabled = false
 	game.world_seed = SEED
-	expect(not game.player.allow_sprint, "sprint remains enabled")
+	expect(game.player.allow_sprint,
+		"sprint is disabled despite the Descent attention contract")
 	expect(game.cm.descent and game.cm.descent_route == game.descent_route,
 		"explicit route config did not reach ChunkManager")
+	expect(ChunkManager.BUDGET == 1 \
+		and ChunkManager.UNLOAD_R == ChunkManager.LOAD_R + 1,
+		"streaming can stack chunk builds or retain an oversized end-zone ring")
 	expect(game.descent_route.topology != null \
 		and game.cm.descent_topology == game.descent_route.topology \
 		and game.run.route == game.descent_route,
 		"shared Descent topology did not reach run, route and ChunkManager")
-	expect(not game.run.blackout_doorway_requested.get_connections().is_empty(),
-		"blackout doorway signal is not wired to the live game")
+	expect(not game.run.blackout_mutation_requested.get_connections().is_empty(),
+		"blackout mutation signal is not wired to the live game")
+	expect(game.descent_route.topology.is_planned() \
+		and game.descent_route.topology.state_count() >= 3,
+		"live floor did not generate alternate realities up front")
 	expect(game._saved_pos.is_empty(),
 		"Descent unexpectedly owns Wander saved positions")
 	expect(not game.player.flashlight.visible,
@@ -96,23 +103,87 @@ func run() -> void:
 			"HUD route marker is hidden during an active floor")
 
 	var route: DescentRoute = game.descent_route
+	var player_before_assistance: Vector3 = game.player.global_position
+	test_progress.start_new(SEED)
+	game._descent_progress = test_progress
+	game._progress_enabled = true
 	var assistance := _find_assistance_probe(route)
 	expect(not assistance.is_empty(),
-		"live route offered no representative assistance doorway")
+		"live route offered no representative assistance reality")
 	if not assistance.is_empty():
 		var assistance_from: Vector2i = assistance["from"]
 		game.run.visited = assistance["visited"]
 		game.run._cell = assistance_from
+		game.cm.warm_up(assistance_from)
+		var affected_cells: Array[Vector2i] = game._mutation_rebuild_cells(
+			assistance["proposal"])
+		# A real player has streamed the radius-three neighbourhood before a
+		# blackout. This focused probe teleports there, so explicitly resident
+		# the affected rooms that ordinary movement would already have loaded.
+		for at in affected_cells:
+			if game.cm.chunk_at(at) == null:
+				game.cm._build(at)
+		var occupied: Vector2i = affected_cells[0]
+		game.player.global_position = Vector3(
+			(float(occupied.x) + 0.5) * ChunkManager.CELL,
+			Chunk.cell_floor_h(route.world_seed, occupied, route.theme),
+			(float(occupied.y) + 0.5) * ChunkManager.CELL)
+		expect(not game._can_commit_blackout_mutation(assistance["proposal"]),
+			"mutation preflight allowed geometry around the player")
+		game.player.global_position = Vector3(
+			(float(assistance_from.x) + 0.5) * ChunkManager.CELL,
+			Chunk.cell_floor_h(route.world_seed, assistance_from, route.theme),
+			(float(assistance_from.y) + 0.5) * ChunkManager.CELL)
+		expect(game._can_commit_blackout_mutation(assistance["proposal"]),
+			"safe unoccupied mutation was rejected")
 		var assistance_before := route.distance_from_target(assistance_from)
+		var old_state := route.topology.current_state_id()
+		var old_history := route.topology.state_history()
+		# Exercise the explicit failure contract before the live staged commit:
+		# once topology has moved, rollback must restore both identity and history.
+		var rollback_probe := DescentMutationTransaction.new(
+			assistance["proposal"], true, route, assistance_from,
+			affected_cells)
+		expect(route.topology.transition_to(
+				(assistance["proposal"] as TopologyDelta).to_state),
+			"transaction rollback fixture could not enter proposed state")
+		route.refresh_topology()
+		rollback_probe.rollback(route.topology, route, "audit rollback")
+		expect(rollback_probe.phase \
+				== DescentMutationTransaction.Phase.ROLLED_BACK \
+			and route.topology.current_state_id() == old_state \
+			and route.topology.state_history() == old_history,
+			"mutation rollback did not restore exact topology state/history")
+		game.run.suspended = true
+		game.run.blackout = true
 		game.cm.set_blackout(true)
-		game._on_blackout_doorway(assistance["proposal"], true)
+		game._on_blackout_mutation(assistance["proposal"], true)
+		expect(route.topology.current_state_id() == old_state \
+			and not game.cm._staged_cells.is_empty(),
+			"blackout rebuilt every changed room synchronously")
+		await await_until(func():
+			return route.topology.current_state_id() != old_state, 5000)
 		game.cm.set_blackout(false)
-		expect(route.topology.shortcut_count() == 1,
-			"live assistance handler did not create and persist one doorway")
-		var far_side: Vector2i = assistance["proposal"]["other"]
-		expect(assistance_before - route.distance_from_target(far_side) \
-			>= DescentRoute.MERCY_MIN_SAVING,
-			"live assistance doorway did not put its far side closer to the lift")
+		game.run.blackout = false
+		game.run.suspended = false
+		expect(route.topology.current_state_id() != old_state,
+			"live assistance handler did not commit its generated reality")
+		expect(game.cm._staged_cells.is_empty(),
+			"committed mutation left an off-tree rebuild transaction pending")
+		for at in affected_cells:
+			var rebuilt: Chunk = game.cm.chunk_at(at)
+			if rebuilt != null:
+				expect(rebuilt.descent_topology_state_override < 0,
+					"installed mutation chunk stayed pinned to one reality")
+		expect(route.distance_from_target(assistance_from) < assistance_before,
+			"live assistance reality did not shorten the route to the lift")
+		expect(int(test_progress.mutation_state_for_floor(
+			game.run.floor_idx).get("state", -1)) \
+			== route.topology.current_state_id(),
+			"committed reality was not mirrored into the checkpoint")
+	game.player.global_position = player_before_assistance
+	test_progress.clear_from_disk()
+	game._progress_enabled = false
 	var target_config := {
 		"descent": true,
 		"target": true,
@@ -403,17 +474,18 @@ func _find_assistance_probe(route: DescentRoute) -> Dictionary:
 	for cell in route.path_from_origin():
 		path_cells[cell] = true
 	var all_visited := {}
-	for key in route._origin_distance:
+	for key in route.scanned_cells():
 		all_visited[key] = true
-	for key in route._origin_distance:
+	for key in route.scanned_cells():
 		var from: Vector2i = key
 		if path_cells.has(from):
 			continue
 		if route.distance_from_target(from) < \
 				DescentRoute.MERCY_MIN_SAVING + 2:
 			continue
-		var proposal := route.find_blackout_doorway(from, all_visited, true)
-		if bool(proposal.get("assistance", false)):
+		var proposal := route.topology.find_transition(
+			route, from, all_visited, true)
+		if proposal != null and proposal.assistance:
 			return {"from": from, "visited": all_visited,
 				"proposal": proposal}
 	return {}

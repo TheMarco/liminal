@@ -1,6 +1,6 @@
 # Descent — revised implementation plan
 
-> **Status update (2026-08-03).** The implementation has moved past this plan.
+> **Status update (2026-08-08).** The implementation has moved past this plan.
 > Current live structure: 11 floors in fixed order — Casino, Mall, Office,
 > Airport, School, Prison, Asylum, Poolrooms, Annex, Monolith, then
 > Bloom/Upside Down (theme 11) with
@@ -15,18 +15,20 @@
 > the tape is watched. Calling the lift and leaving the room cancels
 > the call; the summon wait suppresses blackouts and raises figure pressure
 > instead. Moving during a blackout is now lethal past roughly three seconds
-> of accumulated movement (`blackout_ambush`). Every actual blackout opens one
-> impossible new doorway through a wall near the player's reachable side. The
-> opening persists through streaming and is shared by geometry, collision, HUD
-> route state and ghost navigation. Under ordinary navigation the selector
-> prefers a route-neutral connection; after 50 seconds of walking without
-> beating the player's best graph distance it secretly selects a doorway that
-> puts its far side at least 24m closer to the lift, preferring one that also
-> shortens the current route when available. Sound and messaging are identical,
-> so the player cannot know whether the building helped. If no safe unopened
-> wall remains, the blackout is postponed rather than faked with debris, a
-> colour wash or an unexplained light. Subtler backtracking anomalies still
-> occur.
+> of accumulated movement (`blackout_ambush`). At floor creation, Descent
+> generates a graph of complete alternate realities over the seed-authored
+> world. Each reality prevalidates reciprocal wall/doorway changes, hard
+> doorway closures, appearing swing doors and deterministic furniture layouts
+> while preserving reachability from every scanned cell to the objective.
+> Blackouts transition between those realities; transitions may later return
+> to an earlier topology without rewinding tapes, lifts or other gameplay
+> state. The active state survives chunk streaming, death and Continue through
+> the Descent checkpoint. A final live preflight refuses occupied rooms, active
+> VCRs, charge sessions and moving doors before the staged room swap. Geometry,
+> collision, HUD guidance and ghost navigation share the same resolver. Proven
+> navigation stalls secretly prefer a generated state that shortens the route;
+> presentation never reveals whether the building helped. If no nearby safe
+> transition is currently available, the blackout is postponed.
 > As the player nears the lift, the floor bleeds one-way into the next theme:
 > fog and room tone shift, and rebuilt cells carry next-theme objects
 > (`Chunk.BLEED_PROPS`). Authoritative details: `scripts/descent_run.gd`,
@@ -36,7 +38,7 @@
 Descent is a second play mode for Liminal. The existing endless-wander
 experience remains the default and keeps its current portals, usable elevators,
 floor keys, saved positions, figures, lighting, CRT controls and generation.
-Descent reuses the same worlds but gives them a route, four rules, escalating
+Descent reuses the same worlds but gives them a route, one rule, escalating
 consequences and an ending.
 
 This revision is based on the current codebase. In particular:
@@ -91,13 +93,10 @@ The sequence reads as a physical and psychological descent:
 It places the more physically hostile and less-human spaces late, while
 reserving the Monolith and Bloom for the ending.
 
-### The four rules
+### The rule
 
 The title presents one card:
 
-> - do not stare at them
-> - do not stop walking
-> - do not go back
 > - if the lights fail, stand still
 
 “Do not stare” is intentional wording. Figures may appear inside the field of
@@ -131,8 +130,9 @@ behind them. If they return, its lights may be dead or a motionless figure may
 be waiting. The mutation is activated after departure, never by rebuilding the
 floor underneath the player.
 
-Do not close generated doorways as an anomaly. Presentation mutations carry
-the idea without risking world connectivity.
+Backtracking anomalies remain presentation-only. Structural blackout changes
+use the separately generated reality graph: a doorway may close only in a
+complete state whose edge-cut proof preserves every originally reachable cell.
 
 ### Target length
 
@@ -151,7 +151,7 @@ three things together:
 3. reaching the lift is not the end of the floor — calling it starts a wait
    that has to be paced on foot (§6.5).
 
-The audited walking floor is about 7 minutes across eight floors, plus about
+The audited walking floor is about 7 minutes across eleven floors, plus about
 2.5 minutes of lift waits. The rest of the target is searching, riding,
 figures and mistakes.
 
@@ -205,7 +205,7 @@ Instead:
 |---|---|---|
 | `scripts/descent_run.gd` | `DescentRun extends Node` | Floor order, rules, attention, blackout schedule, violations, run state and summary data. |
 | `scripts/descent_route.gd` | `DescentRoute extends RefCounted` | BFS over real open edges, deterministic objective selection and next-hop guidance. |
-| `scripts/descent_hud.gd` | `DescentHUD extends CanvasLayer` | A single compass needle aimed at the next real doorway. |
+| `scripts/descent_hud.gd` | `DescentHUD extends CanvasLayer` | Distance-only lift counter. |
 | `scripts/descent_summary.gd` | `DescentSummary extends CanvasLayer` | Win/caught state, time, rule-break count and Continue/Restart/New/leave input. |
 
 ### Modified files
@@ -214,7 +214,7 @@ Instead:
 |---|---|
 | `scripts/main.gd` | Mode preparation, Descent manager, input gates, explicit level transitions, blackout application, attention presentation, run end/restart. |
 | `scripts/title.gd` | Wander/Descent selection and two-stage Descent rule card. |
-| `scripts/player.gd` | `allow_sprint`; disabled only in Descent. |
+| `scripts/player.gd` | `allow_sprint`; enabled in Descent and Wander. |
 | `scripts/chunk_manager.gd` | Explicit route, objective, blackout and anomaly state; `chunk_built` signal; safe mutation activation. |
 | `scripts/chunk.gd` | Build Descent car/exit and usable call button; anomaly activation and blackout fixture hook. |
 | `scripts/environment_events.gd` | Explicit mode gate: suppress misleading random power sags and “elevator elsewhere” events during Descent. |
@@ -375,7 +375,7 @@ _title.started.connect(_on_start)
 `_on_mode_selected(true)`:
 
 1. set `descent = true`;
-2. disable player input and sprint;
+2. disable player input during preparation (sprint is enabled when the floor starts);
 3. clear `_saved_pos`;
 4. construct `DescentRun`;
 5. prepare `DescentRun.ORDER[0]`;
@@ -407,7 +407,7 @@ CLI support:
 - `--mode=descent` sets the mode before the first world build;
 - `--mode=descent --nologo` starts directly for audits;
 - `--attention=0.7` pins attention for visual/debug runs;
-- `--descent-floor=N` starts at human floor number `1..8` for testing only.
+- `--descent-floor=N` starts at human floor number `1..11` for testing only.
 
 ### Input policy
 
@@ -418,7 +418,8 @@ In Descent:
 - `V` does nothing and is omitted from the Descent controls;
 - the CRT remains on because it carries a primary attention consequence;
 - the existing `--nocrt` command-line flag remains a visual-debug override;
-- Shift sprint is disabled via `player.allow_sprint = false`;
+- Shift sprint is enabled via `player.allow_sprint = true`; holding it feeds
+  attention through `SPRINT_ATTENTION_RATE`;
 - `F` toggles the same narrow handheld flashlight used in Wander;
 - `Q` suspends rule detection and opens a Y/N return-to-title confirmation;
 - `E` remains available for selected doors and terminals, although terminals
@@ -435,7 +436,7 @@ Wander retains every current input.
 - Wander floor keys, CRT toggle, flashlight, sprint, portals and current lifts
   work.
 - `ENTER` shows the rule card; second `SPACE` starts a fresh Descent casino.
-- Descent floor keys, CRT toggle and sprint are disabled.
+- Descent floor keys and CRT toggle are disabled; sprint remains enabled.
 - both modes can cancel or confirm the Q return prompt without stray movement
   or a false Descent stop-rule charge.
 - direct `--mode=descent --nologo` startup works.
@@ -707,30 +708,23 @@ unrecoverable. `tools/audit_descent_runtime.gd` therefore asserts that it
 completes inside its authored window, that it drives and then releases the
 rumble, and that its indicator lands on the floor below.
 
-### 6.6 HUD route needle
+### 6.6 HUD distance guidance
 
 Do not place route markings in the world. They flatten the level art and turn
 the building into a marked course.
 
-`DescentHUD` renders one small top-centre compass needle, and it is
-**deliberately a worse instrument the deeper you go**. This, more than route
-length, is what makes the objective take a while to find: the player stops
-following and starts searching.
+`DescentHUD` renders a distance-only `LIFT NNNm` counter. There is no compass
+needle or bearing guidance; finding the lift is the level's navigation task.
 
-| Floors | Mode | Behaviour |
+| Floors | Guidance | Behaviour |
 |---|---|---|
-| 1–2 casino, mall | `EXACT` | aims at the exact generated doorway from `next_from(cell)`, including its seeded offset along the wall |
-| 3–5 office, airport, school | `BEARING` | aims at the objective room in a straight line, through walls; translating that into a route is the player's job |
-| 6–7 prison, asylum | `PING` | takes a bearing every 8s and holds it; the needle fades as the reading goes stale and brightens at the next one |
-| 8 the last floor | `NONE` | nothing |
+| 1–11 | distance | reports straight-line distance to the objective lift |
 
 In the objective room every mode falls back to `EXACT` and points at the
 facade — by then the set piece is in front of you and coyness is only annoying.
 
-The needle is the building's instrument, not the player's: it dies for the
-length of a blackout along with everything else. It also hides during the
-title, transitions, summary, and whenever the player is outside the audited
-reverse route map.
+The counter hides during the title, transitions, summary, tape playback and
+arrival safety presentation.
 
 ### 6.7 Final Annex exit
 
@@ -838,13 +832,10 @@ Suspend rules during:
 
 | Rule | Detection | Initial tuning |
 |---|---|---:|
-| do not stare at them | `ShadowFigure.stared_away` after gaze dissolution | `+0.05` |
-| do not stop walking | speed `< 0.3` for 6s outside blackout, **no figure within 12m** | `+0.04`, then `+0.01/s`, max `+0.12` per stop episode |
-| do not go back | enter a previously departed cell, once per cell | `+0.06` |
 | lights failed, stand still | speed `> 0.3` after 0.75s blackout grace | `+0.06`, then `+0.02/s`, max `+0.20` per blackout |
 
-Count one summary violation per stare, stop episode, re-entered cell or blackout
-movement episode—not once per physics frame.
+Count one summary violation per blackout movement episode—not once per physics
+frame.
 
 Attention decay starts at `-0.0025/s` while obeying. One `+0.05` stare therefore
 takes about 20 seconds of clean play to undo. The previous `-0.01/s` proposal
@@ -933,9 +924,9 @@ Blackouts are unmistakable run events, not inferred from ambient light:
 - 0.75-second movement grace after onset;
 - rule two is suspended while blackout is active;
 - **the figures are suppressed for the duration** (see 7.7).
-- one safe, persistent doorway is selected before onset and built while the
-  darkness hides the transition; assistance and decorative selection use the
-  same sound and message.
+- one nearby prevalidated reality transition is selected before onset and
+  staged while darkness hides the swap; ordinary and assistance selection use
+  the same sound and message.
 
 ### 7.7 Passivity and the figures
 
@@ -1001,13 +992,13 @@ Snapshot and restore ambient energy separately on `main.we.environment`.
 - Blackout movement grace works at both onset and restoration.
 - New chunks arrive dark during blackout.
 - Restore returns intentionally dead/flickering fixtures to exact prior state.
-- Every actual blackout reveals one new doorway after restoration; a blackout
-  with no safe unopened edge is postponed before it begins.
-- A blackout doorway is a shared runtime edge, not a decal or teleport: both
-  neighbouring chunks and every route consumer resolve the same opening.
-- Decorative and assistance doorways have identical presentation; ordinary
-  choices are normally route-neutral, while a proven stall gets a far side at
-  least two graph steps closer to the lift (with true shortcuts preferred).
+- Every actual blackout reveals one generated topology/furniture state; a
+  blackout with no nearby unoccupied transition is postponed before it begins.
+- Openings, closures and appearing doors are shared runtime edges, not decals:
+  both neighbouring chunks and every route consumer resolve the same state.
+- Every complete state retains critical reachability and exact mutation-back.
+  Assistance and ordinary transitions have identical presentation; a proven
+  stall selects a state with a shorter current route when one is available.
 - Wander has no rule feedback, attention, blackout or cadence change.
 - Descent never emits a fake power sag or misleading remote-elevator event.
 - `--attention=N` allows deterministic consequence screenshots.
@@ -1145,8 +1136,7 @@ All values require playtesting.
 | Constant | Initial value | Intent |
 |---|---:|---|
 | objective graph distance | `9–13 → 16–22` edges | the walk lengthens with depth |
-| route needle | exact → bearing → ping → none | searching, not following, is the real cost |
-| ping interval | `8s` | a held reading goes stale as you walk off it |
+| route guidance | distance-only | searching, not following, is the real cost |
 | lift call wait | `14s → 34s` | reaching the lift is not the end of the floor |
 | lift ride | `~6.4s` | the one thing that happens to the player |
 | route scan fallback radius | `16` cells | guarantee a valid objective |
@@ -1203,7 +1193,8 @@ Commit only when Wander is unchanged and direct Descent startup works.
 - interaction/runtime CI coverage;
 - per-theme visual verification.
 
-At the end of Phase B, a player can complete eight floors with no rule system.
+At the end of Phase B, a player can complete eleven floors with the blackout
+rule system.
 
 ### Phase C — rules and attention
 
@@ -1248,12 +1239,12 @@ Each phase gets:
 The first playable is Phase B plus the simplest Phase C rule loop:
 
 - title selection and rule card;
-- eight floors in the revised order;
+- eleven floors in the revised order;
 - one guaranteed graph-routed objective per floor;
-- a HUD needle that always points through a real doorway;
+- a distance-only HUD counter for the objective lift;
 - reused physical lifts;
 - unique Annex exit;
-- four detected rules;
+- one detected rule: stand still when the lights fail;
 - hidden attention with violation feedback;
 - blackouts with exact restoration;
 - no anomalies.

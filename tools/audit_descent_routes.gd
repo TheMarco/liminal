@@ -113,6 +113,8 @@ func _validate(ws: int, theme: int, route: DescentRoute,
 		return "objective is the arrival room"
 	if route.target == Vector2i.ZERO or route.target_wall < 0:
 		return "invalid objective room"
+	if route.objective_ritual_cell() != route.target:
+		return "mandatory tape is separated from the guided lift target"
 	var target_root := WorldGen.annex_room_id(ws, route.target) \
 			if theme == 2 else WorldGen.room_id(ws, route.target)
 	var target_size := WorldGen.annex_room_size(ws, route.target) \

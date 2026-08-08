@@ -410,7 +410,7 @@ func _physics_process(dt: float) -> void:
 		var visible := cam.is_position_in_frustum(base + Vector3(0, _eye_h, 0)) \
 			or cam.is_position_in_frustum(base + Vector3(0, _eye_h * 0.55, 0)) \
 			or cam.is_position_in_frustum(base + Vector3(0, 0.2, 0))
-		if visible and (_clear_line(cam.global_position, eye)
+		if visible and (sighted
 				or _clear_line(cam.global_position, base + Vector3(0, _eye_h * 0.55, 0))):
 			_seen = true
 			_maybe_scare()

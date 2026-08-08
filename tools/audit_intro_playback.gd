@@ -1,9 +1,9 @@
 extends SceneTree
 ## Persistence and first-view Skip contract for the Descent intro. Uses an
-## isolated user:// file and never reads or alters the player's real state.
+## isolated temporary file and never reads or alters the player's real state.
 ## Run: godot --headless --path . --script tools/audit_intro_playback.gd
 
-const TEST_PATH := "user://audit_intro_playback.cfg"
+const TEST_PATH := "/tmp/liminal_audit_intro_playback.cfg"
 
 var failures: Array[String] = []
 

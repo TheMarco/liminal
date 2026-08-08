@@ -105,7 +105,7 @@ func _run() -> void:
 		print("  PASS — every blackout door is persistent and hidden help remains indistinguishable")
 	else:
 		print("  FAIL — %d blackout doorway contract violation(s)" % failures)
-	Chunk.finish_prop_preloads()
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures == 0 else 1)
 
 
@@ -288,7 +288,10 @@ func _print_blocker_shapes(chunk: Chunk, dir: int, side: String) -> void:
 func _check_run_preflight() -> int:
 	var ws := WorldGen.level_seed(918273, 0)
 	var route := DescentRoute.build(ws, 0, 0)
-	route.set_topology(DescentTopology.new(ws, 0))
+	var topology := DescentTopology.new(ws, 0)
+	route.set_topology(topology)
+	topology.plan_floor(route)
+	route.refresh_topology()
 	var from := _representative_cell(route)
 	var run := DescentRun.new()
 	run.world_seed = 918273
@@ -297,16 +300,17 @@ func _check_run_preflight() -> int:
 	run._cell = from
 	run.visited = _explored_neighbourhood(route, from, 5)
 	var events: Array = []
-	run.blackout_doorway_requested.connect(
-		func(proposal: Dictionary, assistance: bool):
+	run.blackout_mutation_requested.connect(
+		func(proposal: TopologyDelta, assistance: bool):
 			events.append([proposal, assistance]))
 	run._begin_blackout()
 	var failed := not run.blackout or events.size() != 1 \
-		or (events[0][0] as Dictionary).is_empty() \
-		or run.pending_blackout_doorway.is_empty()
+		or (events[0][0] as TopologyDelta).is_empty() \
+		or run.pending_blackout_mutation == null \
+		or run.pending_blackout_mutation.is_empty()
 	run.player.free()
 	run.free()
 	if failed:
-		print("FAIL a started blackout did not own exactly one doorway proposal")
+		print("FAIL a started blackout did not own exactly one reality proposal")
 		return 1
 	return 0

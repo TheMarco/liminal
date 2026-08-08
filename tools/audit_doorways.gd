@@ -200,4 +200,5 @@ func _init() -> void:
 		print("  PASS — approaches clear; chalk, stationery and terminals retain their supports")
 	else:
 		print("  FAIL — %d doorway approach overlaps remain" % failures)
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures == 0 else 1)

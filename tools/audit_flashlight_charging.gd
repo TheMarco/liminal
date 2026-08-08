@@ -38,6 +38,18 @@ func _run() -> void:
 	player._update_flashlight(5.0)
 	if absf(player.flashlight_charge() - 0.5) > 0.001:
 		_fail("five seconds did not produce half charge")
+	# Floor teardown invalidates the old station before the next physics tick.
+	# The session must still know its starting value and roll the gain back.
+	station.free()
+	player._update_flashlight(0.01)
+	if player.flashlight_charge() > 0.001 or player.is_charging():
+		_fail("destroyed station banked an interrupted partial charge")
+	station = Node3D.new()
+	root.add_child(station)
+	station.global_position = player.global_position
+	if not player.start_charging(station):
+		_fail("empty flashlight refused a replacement station")
+	player._update_flashlight(5.0)
 	player._update_flashlight(5.0)
 	if absf(player.flashlight_charge() - 1.0) > 0.001:
 		_fail("ten seconds did not produce full charge")
@@ -68,4 +80,5 @@ func _run() -> void:
 
 	if failures == 0:
 		print("flashlight charging audit pass")
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(1 if failures > 0 else 0)

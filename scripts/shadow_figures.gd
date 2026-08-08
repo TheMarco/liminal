@@ -83,6 +83,14 @@ var dev_haunt_at_given := false
 var dev_haunt_variant := -1
 
 
+func active_figures() -> Array[ShadowFigure]:
+	var out: Array[ShadowFigure] = []
+	for figure in _figs:
+		if is_instance_valid(figure):
+			out.append(figure)
+	return out
+
+
 func _ready() -> void:
 	# Figures the world places rather than the haunt timer find us through this.
 	add_to_group("figure_manager")
@@ -369,26 +377,10 @@ func nearest_distance() -> float:
 
 ## Is something the player has already seen close enough that stopping is a
 ## reaction rather than dawdling? The stop rule asks before it charges.
-func has_close_figure(within: float) -> bool:
-	if player == null or not player.is_inside_tree():
-		return false
-	for f in _figs:
-		if not is_instance_valid(f) or not f.is_pressing():
-			continue
-		if f.global_position.distance_to(player.global_position) <= within:
-			return true
-	return false
-
-
 func _flat_fwd() -> Vector3:
 	var fwd := -player.cam.global_transform.basis.z
 	fwd.y = 0.0
 	return fwd.normalized() if fwd.length() > 0.01 else Vector3.ZERO
-
-
-func _same_room_as_player(at: Vector3) -> bool:
-	return ShadowFigure.room_for(player, at) \
-		== ShadowFigure.room_for(player, player.global_position)
 
 
 func _clear_line(a: Vector3, b: Vector3) -> bool:

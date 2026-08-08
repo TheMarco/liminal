@@ -22,6 +22,7 @@ class TapeListener extends Node:
 	var run := DescentRun.new()
 	var objective_finishes := 0
 	var optional_finishes := 0
+	var watching := false
 
 	func _init() -> void:
 		run.world_seed = 918273
@@ -39,8 +40,8 @@ class TapeListener extends Node:
 		else:
 			optional_finishes += 1
 
-	func descent_tape_watch(_on: bool) -> void:
-		pass
+	func descent_tape_watch(on: bool) -> void:
+		watching = on
 
 
 func _init() -> void:
@@ -116,10 +117,15 @@ func _run() -> void:
 				failures.append("seed %d floor %d route selection changed on rebuild" % [
 					base, floor_idx + 1])
 			var path := route.path_from_origin()
-			for cell in cells:
+			var earliest_progress := 1.0
+			for slot in cells.size():
+				var cell: Vector2i = cells[slot]
 				route_setups += 1
-				if not path.has(cell) or cell == route.origin or cell == route.target:
+				if not path.has(cell) or cell == route.origin or cell == route.target \
+						or cell == route.objective_ritual_cell():
 					failures.append("invalid route setup cell %s" % cell)
+				var progress := float(path.find(cell)) / float(path.size() - 1)
+				earliest_progress = minf(earliest_progress, progress)
 				var key := "audit:%d:%d:%d:%d" % [
 					base, floor_idx, cell.x, cell.y]
 				var chunk := Chunk.new(ws, cell, theme, {
@@ -138,15 +144,24 @@ func _run() -> void:
 				elif set.objective or not set.has_meta("optional_vhs") \
 						or set.get_node_or_null("DescentTapePlay") == null:
 					failures.append("optional set contract invalid at %s" % cell)
+				elif set._discovery_light == null \
+						or set._discovery_light.shadow_enabled \
+						or set._discovery_light.omni_range < 8.0 \
+						or set._hiss.volume_db > VhsRitual.OPTIONAL_HISS_DB + 0.01:
+					failures.append("optional set has no strong low-cost discovery cue at %s" % cell)
 				elif chunk._optional_vhs_hits_doorway(set.position, set.rotation.y):
 					failures.append("optional set overlaps a doorway approach at %s" % cell)
 				else:
 					placed_setups += 1
 				root.remove_child(chunk)
 				chunk.free()
+			if not cells.is_empty() and earliest_progress > 0.5:
+				failures.append("seed %d floor %d has no optional tape in the first half" % [
+					base, floor_idx + 1])
 
 	for failure in failures:
 		print("  FAIL " + failure)
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	if failures.is_empty():
 		print("optional VHS audit: PASS — %d tapes (%d long/%d short), %d/%d route sets placed" % [
 			all.size(), longs.size(), shorts.size(), placed_setups, route_setups])
@@ -234,6 +249,7 @@ func _audit_deck(shorts: Array[String], longs: Array[String],
 	if not longs.has(VhsTapeLibrary.deterministic_fallback(12345,
 			"objective", true)):
 		failures.append("objective fallback did not use the long pool")
+	run.free()
 
 
 func _audit_playback_modes(shorts: Array[String], longs: Array[String],
@@ -286,6 +302,23 @@ func _audit_playback_modes(shorts: Array[String], longs: Array[String],
 		failures.append("optional completion mutated the objective channel")
 	if listener.run.completed_beginning_count() != 1:
 		failures.append("completed optional beginning did not advance the sequence")
+	# Threat/passive protection must cover the whole camera-return tween. The
+	# previous ordering released it while player physics and input were frozen.
+	var viewer := Player.new()
+	root.add_child(viewer)
+	await process_frame
+	optional._begin_watch(viewer)
+	optional._end_watch()
+	if not listener.watching or viewer.is_physics_processing():
+		failures.append("VCR released protection before restoring player control")
+	await create_timer(0.75).timeout
+	# A long construction audit can advance timer and tween clocks across the
+	# same oversized frame. Let the tween callback queue drain before sampling.
+	await process_frame
+	if listener.watching or not viewer.is_physics_processing():
+		failures.append("VCR did not release protection after restoring control")
+	root.remove_child(viewer)
+	viewer.free()
 	objective._finish_tape()
 	if listener.objective_finishes != 1:
 		failures.append("objective completion did not reach its gate channel")
@@ -294,4 +327,5 @@ func _audit_playback_modes(shorts: Array[String], longs: Array[String],
 	root.remove_child(objective)
 	objective.free()
 	root.remove_child(listener)
+	listener.run.free()
 	listener.free()

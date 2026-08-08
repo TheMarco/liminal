@@ -99,11 +99,9 @@ with it.
   encounters (recovery window after burns/escapes) and holds them during
   tapes and blackouts.
 - **The ritual** (every non-final objective room): CRT+VCR altar
-  (`vhs_ritual.gd`), charging station, lift. On floors 3, 6 and 9 (indices
-  `DescentRoute.REMOTE_RITUAL_FLOORS` = [2, 5, 8]) the altar instead stands
-  in a route cell 4-7 doorways short of the lift; the car's refusal then says
-  the tape "IS NOT IN THIS ROOM". The lift refuses entry until the floor's
-  tape has been watched — the tape is the sole gate; charging is optional.
+  (`vhs_ritual.gd`), charging station and lift are always co-located at the
+  guided route target. The lift refuses entry until the floor's tape has been
+  watched — the tape is the sole gate; charging is optional.
   Lift waits ramp 14s→34s with two authored breaks
   (`LIFT_WAIT_INSTANT_FLOOR` school ≈ instant, `LIFT_WAIT_LONG_FLOOR` asylum
   ≈ double). One lattice charging station per run is dead
@@ -120,9 +118,10 @@ with it.
   gating the lift: each route gets 2–3 over roughly 500m, and the endless
   off-route world continues at about one per 200m explored. `VhsTapeLibrary`
   discovers `videos/tapes/*.ogv`; recordings >=30s are ten fixed, lexically
-  sorted chapters for objective floors 1–10. Shorter recordings are optional
-  only and use a no-repeat cycle whose seen history persists across death and
-  relaunch. Add one with `ffmpeg2theora INPUT.mp4 --videoquality 7
+  sorted chapters for objective floors 1–10. The optional pool is 21 authored
+  shorts: six `short_beginning_*` clips completed in order, plus fifteen
+  `short_random_*` clips in a persistent no-repeat cycle. `tape_06`–`tape_09`
+  are reserved converted game assets and excluded from the Cross pool. Add one with `ffmpeg2theora INPUT.mp4 --videoquality 7
   --audioquality 3 --max_size 512x512 -o videos/tapes/tape_NN.ogv` (Homebrew
   ffmpeg cannot encode Theora or Vorbis), then document its source.
 - **Phone**: 20s of light, drains only while on, refills only at stations
@@ -133,9 +132,10 @@ with it.
 - **Bleed**: one-way ratchet toward the next theme as the player nears the
   lift (fog/room-tone lerp in main, next-theme props via `Chunk.BLEED_PROPS`
   in rebuilt cells).
-- **Post-blackout changes**: 1-2 visited nearby cells get anomaly kind 2
-  (subtle furniture nudges, colliders included; wall-hugging or mounted
-  pieces are exempt).
+- **Post-blackout changes**: blackouts may transition between complete,
+  precomputed topology realities, including safe doorway and furniture
+  mutations. The active reality persists and may later mutate back; the legacy
+  kind-2 furniture rearrange is retired.
 - **Passing shadows** (`passing_shadows.gd`): rare non-threat silhouettes
   crossing a distant opening with a shock sting. DORMANT until
   `textures/ghosts/passer1-3.webp` exist — build them with

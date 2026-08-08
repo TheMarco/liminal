@@ -67,6 +67,48 @@ func _run() -> void:
 		failures.append("too few topology-valid corner candidates: %d" \
 			% topology_rows)
 
+	# The live reachability scan must follow the mutable resolver. Exercise one
+	# base opening sealed by a reality and one base wall opened by a reality at
+	# depth one so alternate paths cannot conceal a stale-graph result.
+	var fixture_seed := WorldGen.level_seed(SEEDS[0], 0)
+	var fixture_origin := Vector2i(1 << 20, 1 << 20)
+	var fixture_topology := DescentTopology.new(fixture_seed, 0)
+	var open_dir := -1
+	var wall_dir := -1
+	for y in range(-6, 7):
+		if open_dir >= 0 and wall_dir >= 0:
+			break
+		for x in range(-6, 7):
+			var candidate := Vector2i(x, y)
+			var candidate_open := -1
+			var candidate_wall := -1
+			for dir in 4:
+				if WorldGen.is_wall(fixture_seed, candidate, dir, 0):
+					candidate_wall = dir
+				else:
+					candidate_open = dir
+			if candidate_open >= 0 and candidate_wall >= 0:
+				fixture_origin = candidate
+				open_dir = candidate_open
+				wall_dir = candidate_wall
+				break
+	if open_dir < 0 or wall_dir < 0:
+		failures.append("mutable-topology fixture lacks both a wall and opening")
+	else:
+		var closed_edge := DescentTopology.canonical_edge(fixture_origin, open_dir)
+		var opened_edge := DescentTopology.canonical_edge(fixture_origin, wall_dir)
+		var edges: Dictionary = fixture_topology._states[0].edges
+		edges[DescentTopology.edge_key(fixture_origin, open_dir)] = \
+			fixture_topology._closure_record(closed_edge)
+		edges[DescentTopology.edge_key(fixture_origin, wall_dir)] = \
+			fixture_topology._opening_record(opened_edge, false)
+		var reachable := CornerApparitions.connected_cells_for(
+			fixture_seed, 0, fixture_origin, fixture_topology, 1)
+		if reachable.has(fixture_origin + WorldGen.DIRV[open_dir]):
+			failures.append("corner reachability crossed a mutation-sealed edge")
+		if not reachable.has(fixture_origin + WorldGen.DIRV[wall_dir]):
+			failures.append("corner reachability ignored a mutation-opened edge")
+
 	# Render/lifetime contract. Disable scheduling while its manually revealed
 	# node and tween are inspected.
 	var manager := CornerApparitions.new()

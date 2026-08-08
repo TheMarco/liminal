@@ -49,8 +49,10 @@ func _annex_carpet_damage() -> void:
 		chunk.wseed, chunk.cell.x, chunk.cell.y, 19393), 1000)
 	var strength := 0.52 + float(strength_roll) / 1000.0 * 0.20
 	overlay.material_override = Mats.annex_carpet_damage_overlay(
-		CARPET_DAMAGE_MASKS[asset_idx], strength,
-		posmod(WorldGen.h(chunk.wseed, chunk.cell.x, chunk.cell.y, 19394), 4))
+		CARPET_DAMAGE_MASKS[asset_idx])
+	overlay.set_instance_shader_parameter("strength", strength)
+	overlay.set_instance_shader_parameter("quarter_turns", float(posmod(
+		WorldGen.h(chunk.wseed, chunk.cell.x, chunk.cell.y, 19394), 4)))
 	# Edge candidates touch a closed wall/baseboard without crossing the chunk.
 	# The doorway test rejects the same footprint beside an open connection.
 	var candidates := [
@@ -94,8 +96,12 @@ func _annex_moisture_tile(center: Vector2, mask_path: String,
 	quad.orientation = PlaneMesh.FACE_Y
 	var overlay := MeshInstance3D.new()
 	overlay.mesh = quad
-	overlay.material_override = Mats.annex_moisture_overlay(
-		mask_path, atlas_scale, atlas_offset, strength, quarter_turns)
+	overlay.material_override = Mats.annex_moisture_overlay(mask_path)
+	overlay.set_instance_shader_parameter("atlas_scale", atlas_scale)
+	overlay.set_instance_shader_parameter("atlas_offset", atlas_offset)
+	overlay.set_instance_shader_parameter("strength", strength)
+	overlay.set_instance_shader_parameter("quarter_turns",
+		float(posmod(quarter_turns, 4)))
 	overlay.position = Vector3(center.x, chunk.ceil_h - 0.012, center.y)
 	overlay.set_meta("annex_moisture_tile", true)
 	overlay.set_meta("annex_moisture_asset", mask_path)

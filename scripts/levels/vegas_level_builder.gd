@@ -867,6 +867,8 @@ func _hall_door(o: Vector3, yw: float, t: float, side: float, salt: int) -> void
 
 
 func _lounge() -> void:
+	var n0 := chunk.get_child_count()
+	var b0 := chunk.body.get_child_count()
 	# a pair of real Victorian sofas facing off over a real coffee table
 	chunk._cc0_prop("sofa_03", Vector3(6, 0, 4.6), 0.0)
 	chunk._collider_box(Vector3(6, 0.55, 4.6), Vector3(2.75, 1.1, 0.95))
@@ -888,6 +890,21 @@ func _lounge() -> void:
 	chunk._collider_cyl(lp + Vector3(0, 0.9, 0), 0.24, 1.8)
 	if chunk._r(25) < 0.5:
 		chunk._planter(Vector3(9.2, 0, 9.2))
+	if chunk.descent:
+		# The lounge predates atomic furnishing groups. In Descent, treat its
+		# complete seating arrangement as one floor-supported unit so a generated
+		# reality moves its meshes and every paired collider together. Wander
+		# retains its original generated hierarchy and physics byte-for-byte.
+		var members: Array[Node3D] = []
+		for i in range(n0, chunk.get_child_count()):
+			var member := chunk.get_child(i) as Node3D
+			if member != null:
+				members.append(member)
+		var lounge := chunk._furnishing_pivot(
+			Vector3(6.0, 0.0, 6.0), 0.0, "casino_lounge")
+		for member in members:
+			chunk._adopt_local(lounge, member)
+		chunk._bind_furnishing_colliders(lounge, b0)
 	# muffled PA muzak drifting from the lounge ceiling
 	var mz = AudioStreamPlayer3D.new()
 	mz.stream = SoundBank.muzak()

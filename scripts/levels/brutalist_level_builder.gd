@@ -522,8 +522,20 @@ func _brutal_service() -> void:
 			pipe.rotation.z = PI * 0.5 if axis_x else 0.0
 			pipe.rotation.x = 0.0 if axis_x else PI * 0.5
 	for p2 in [Vector3(2.0, 0, 2.0), Vector3(10.0, 0, 10.0)]:
-		chunk._box(p2 + Vector3(0, 1.25, 0), Vector3(1.25, 2.5, 1.25),
-			Mats.brutal_structure())
+		if chunk.descent:
+			# These service plinths are equipment, not structure. In Descent keep
+			# each visual and solid body atomic so a reality may move it safely.
+			var b0 := chunk.body.get_child_count()
+			var plinth := chunk._furnishing_pivot(
+				p2, 0.0, "monolith_service_plinth")
+			chunk._mbox(plinth, Vector3(0, 1.25, 0),
+				Vector3(1.25, 2.5, 1.25), Mats.brutal_structure())
+			chunk._collider_box(p2 + Vector3(0, 1.25, 0),
+				Vector3(1.25, 2.5, 1.25))
+			chunk._bind_furnishing_colliders(plinth, b0)
+		else:
+			chunk._box(p2 + Vector3(0, 1.25, 0),
+				Vector3(1.25, 2.5, 1.25), Mats.brutal_structure())
 	_maybe_brutal_annex_door(2220, 0.58)
 
 

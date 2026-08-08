@@ -3,12 +3,20 @@ extends Node3D
 ## Streams chunks in a square around the player. Generation is deterministic,
 ## so chunks can be freed aggressively and rebuilt identical later.
 
-const CELL := 12.0
-const LOAD_R := 3
-const UNLOAD_R := 5
-const BUDGET := 3  # chunks built per frame, closest first
+const CELL := WorldGen.CELL_SIZE
+## Five-by-five is the largest resident square that stays comfortably inside
+## the authored 30–62m fog horizons. The former seven-by-seven square more than
+## doubled draw calls in dense Bloom rooms while its outer ring was already
+## dissolved by fog.
+const LOAD_R := 2
+## One cell of hysteresis prevents boundary churn without retaining the former
+## 9x9 worst-case neighbourhood near long-route objectives.
+const UNLOAD_R := 3
+## A complete authored chunk can already consume the frame's build allowance.
+## Building only one per frame prevents three individually legal rooms from
+## stacking into a visible hitch; the 3x3 warm-up keeps collision ahead safe.
+const BUDGET := 1  # chunks built per frame; selection below assumes one
 const WARM_R := 1  # 3x3 is enough collision coverage for a safe arrival
-const BUILD_SLICE_USEC := 6000  # stop streaming after roughly 6ms this frame
 ## 12m cells at a 6% hit rate produce one optional set per ~200m of newly
 ## explored off-route space. The authored objective route gets an exact 2–3
 ## instead; this roll only keeps the endless world going beyond it.
@@ -53,6 +61,13 @@ var bleed_theme := -1
 var descent_broken_station_tried := false
 var chunks := {}
 var queued := {}
+var _staged_cells: Array[Vector2i] = []
+var _staged_index := 0
+var _staged_state := -1
+var _staged_replacements := {}
+var _staged_snapshots := {}
+var _staged_ready := Callable()
+var _staged_failed := Callable()
 var _broken_cell := NO_BROKEN_STATION
 var _broken_cell_ready := false
 static var _dev_timing := false
@@ -61,7 +76,7 @@ static var _dev_timing := false
 func warm_up(center: Vector2i) -> void:
 	# Level changes happen behind a fade, but synchronously constructing 25
 	# dense chunks still held the main thread for too long. Build the safe 3x3
-	# neighbourhood now; the normal distance-sorted queue fills the 7x7 view.
+	# neighbourhood now; the normal distance-sorted queue fills the 5x5 view.
 	for dz in range(-WARM_R, WARM_R + 1):
 		for dx in range(-WARM_R, WARM_R + 1):
 			var c := center + Vector2i(dx, dz)
@@ -71,6 +86,11 @@ func warm_up(center: Vector2i) -> void:
 
 func _process(_dt: float) -> void:
 	if player == null or not player.is_inside_tree():
+		return
+	# A blackout gives us several fully obscured seconds. Spend at most one room
+	# per frame preparing the next reality, and do not stack ordinary streaming
+	# work on the same frame.
+	if _process_staged_rebuild():
 		return
 	var pc := Vector2i(
 		floori(player.global_position.x / CELL),
@@ -83,21 +103,35 @@ func _process(_dt: float) -> void:
 				queued[c] = true
 
 	if not queued.is_empty():
-		var keys: Array = queued.keys()
-		keys.sort_custom(func(a, b): return _cheb(a, pc) < _cheb(b, pc))
-		var built := 0
-		var slice_start := Time.get_ticks_usec()
-		for c in keys:
-			queued.erase(c)
-			if _cheb(c, pc) > LOAD_R or chunks.has(c):
+		# The budget is one: selecting the closest candidate in-place avoids copying
+		# and sorting the whole pending-key set on every rendered frame.
+		var closest := NO_BROKEN_STATION
+		var closest_distance := 1 << 20
+		var stale: Array[Vector2i] = []
+		for key in queued:
+			var c: Vector2i = key
+			var distance := _cheb(c, pc)
+			if distance > LOAD_R or chunks.has(c):
+				stale.append(c)
 				continue
-			_build(c)
-			built += 1
-			if built >= BUDGET or Time.get_ticks_usec() - slice_start >= BUILD_SLICE_USEC:
-				break
+			if distance < closest_distance or (distance == closest_distance \
+					and (c.x < closest.x or (c.x == closest.x and c.y < closest.y))):
+				closest = c
+				closest_distance = distance
+		for c in stale:
+			queued.erase(c)
+		if closest != NO_BROKEN_STATION:
+			queued.erase(closest)
+			_build(closest)
 
 	for c in chunks.keys():
-		if _cheb(c, pc) > UNLOAD_R:
+		var distance := _cheb(c, pc)
+		# The retained hysteresis ring prevents rebuild churn at cell boundaries,
+		# but it must not remain a rendered seventh row/column. Node3D visibility
+		# culls the complete chunk subtree while its collision stays ready.
+		var ch := chunks[c] as Chunk
+		ch.visible = distance <= LOAD_R
+		if distance > UNLOAD_R:
 			chunks[c].queue_free()
 			chunks.erase(c)
 
@@ -106,62 +140,146 @@ func _cheb(a: Vector2i, b: Vector2i) -> int:
 	return maxi(absi(a.x - b.x), absi(a.y - b.y))
 
 
-func _build(c: Vector2i) -> void:
+func _build(c: Vector2i, install := true,
+		topology_state_override := -1) -> Chunk:
 	var t0 := Time.get_ticks_usec()
-	var config := {}
+	var spec := ChunkBuildSpec.new()
+	spec.player = player as Player
 	if descent and descent_route != null:
 		var optional_vhs := _is_optional_vhs_cell(c)
-		var ritual_cell := descent_route.objective_ritual_cell()
-		config = {
-			"descent": true,
-			"target": c == descent_route.target,
-			"target_wall": descent_route.target_wall,
-			# Which cell hosts the objective altar (the target itself on most
-			# floors), and whether this floor is one where they differ — the
-			# target chunk words its refusal differently when the tape is not
-			# in the room the player is standing in.
-			"ritual_cell": c == ritual_cell,
-			"ritual_remote": ritual_cell != descent_route.target,
-			"final": descent_floor_idx >= DescentRun.FLOOR_COUNT - 1,
-			"floor_idx": descent_floor_idx,
-			"anomaly": int(anomalies.get(c, -1)),
-			"topology": descent_topology,
-			"blackout": blackout,
-			"arrival": descent_route.origin_wall >= 0 \
-				and c == descent_route.origin,
-			"arrival_wall": descent_route.origin_wall,
-			"arrival_used": descent_arrival_used,
-			"lift_called": descent_lift_called,
-			"lift_wait": descent_lift_wait,
-			"lift_open": descent_lift_open,
-			"tape_watched": descent_tape_watched,
-			"base_seed": descent_base_seed,
-			"bleed": bleed,
-			"bleed_theme": bleed_theme,
-			"optional_vhs": optional_vhs,
-			"optional_vhs_key": "floor:%d:cell:%d:%d" % [
-				descent_floor_idx, c.x, c.y] if optional_vhs else "",
-			"broken_station": c == _broken_station_cell(),
-			"broken_station_tried": descent_broken_station_tried,
-		}
-	# The waiting-figure anomaly builds a live figure during construction, so
-	# its target has to be in the config rather than assigned afterwards.
-	config["player"] = player
-	var ch := Chunk.new(world_seed, c, theme, config)
+		spec.descent = true
+		spec.target = c == descent_route.target
+		spec.target_wall = descent_route.target_wall
+		spec.final = descent_floor_idx >= DescentRun.FLOOR_COUNT - 1
+		spec.floor_idx = descent_floor_idx
+		spec.anomaly = int(anomalies.get(c, -1))
+		spec.topology = descent_topology
+		spec.topology_state_override = topology_state_override
+		spec.blackout = blackout
+		spec.arrival = descent_route.origin_wall >= 0 and c == descent_route.origin
+		spec.arrival_wall = descent_route.origin_wall
+		spec.arrival_used = descent_arrival_used
+		spec.lift_called = descent_lift_called
+		spec.lift_wait = descent_lift_wait
+		spec.lift_open = descent_lift_open
+		spec.tape_watched = descent_tape_watched
+		spec.base_seed = descent_base_seed
+		spec.bleed = bleed
+		spec.bleed_theme = bleed_theme
+		spec.optional_vhs = optional_vhs
+		spec.optional_vhs_key = "floor:%d:cell:%d:%d" % [
+			descent_floor_idx, c.x, c.y] if optional_vhs else ""
+		spec.broken_station = c == _broken_station_cell()
+		spec.broken_station_tried = descent_broken_station_tried
+		spec.player = player as Player
+	var ch := Chunk.new(world_seed, c, theme, spec)
 	if _dev_timing:
 		var ms := float(Time.get_ticks_usec() - t0) / 1000.0
 		if ms > 4.0:
 			print("chunk %s built in %.1f ms (theme %d, style %d)" % [c, ms, theme, ch.style])
 	ch.position = Vector3(c.x * CELL, 0.0, c.y * CELL)
-	add_child(ch)
-	chunks[c] = ch
-	chunk_built.emit(ch)
+	if install:
+		add_child(ch)
+		chunks[c] = ch
+		chunk_built.emit(ch)
+	return ch
+
+
+## Prepare only rooms that are currently resident. Unloaded changed rooms have
+## no scene or collision to replace and will naturally build from the committed
+## topology later. The ready callback atomically accepts or rejects the staged
+## set after the final room has constructed.
+func stage_rebuild_cells(cells: Array[Vector2i], state_override: int,
+		when_staged: Callable, when_failed := Callable()) -> bool:
+	if not _staged_cells.is_empty() or state_override < 0 \
+			or not when_staged.is_valid():
+		return false
+	var unique := {}
+	for at in cells:
+		if chunks.has(at) and is_instance_valid(chunks[at]):
+			unique[at] = true
+	if unique.is_empty():
+		return false
+	for key in unique:
+		var at: Vector2i = key
+		_staged_cells.append(at)
+		queued.erase(at)
+		_staged_snapshots[at] = (chunks[at] as Chunk).capture_rebuild_state()
+	_staged_cells.sort_custom(func(a: Vector2i, b: Vector2i):
+		return a.x < b.x or (a.x == b.x and a.y < b.y))
+	_staged_index = 0
+	_staged_state = state_override
+	_staged_ready = when_staged
+	_staged_failed = when_failed
+	return true
+
+
+func _process_staged_rebuild() -> bool:
+	if _staged_cells.is_empty():
+		return false
+	var at := _staged_cells[_staged_index]
+	var replacement := _build(at, false, _staged_state)
+	_staged_replacements[at] = replacement
+	if not replacement.mutation_rebuild_valid():
+		if _staged_failed.is_valid():
+			_staged_failed.call("replacement failed furniture/doorway validation")
+		_discard_staged_rebuild()
+		return true
+	_staged_index += 1
+	if _staged_index < _staged_cells.size():
+		return true
+	var accepted := bool(_staged_ready.call())
+	if accepted:
+		_commit_staged_rebuild()
+	else:
+		_discard_staged_rebuild()
+	return true
+
+
+func _commit_staged_rebuild() -> void:
+	for at in _staged_cells:
+		if chunks.has(at):
+			var old := chunks[at] as Chunk
+			chunks.erase(at)
+			if is_instance_valid(old):
+				remove_child(old)
+				old.queue_free()
+	for at in _staged_cells:
+		var replacement := _staged_replacements[at] as Chunk
+		replacement.descent_topology_state_override = -1
+		add_child(replacement)
+		chunks[at] = replacement
+		replacement.restore_rebuild_state(_staged_snapshots.get(at, {}))
+		chunk_built.emit(replacement)
+	_clear_staged_rebuild(false)
+
+
+func _discard_staged_rebuild() -> void:
+	_clear_staged_rebuild(true)
+
+
+func _clear_staged_rebuild(free_replacements: bool) -> void:
+	if free_replacements:
+		for replacement in _staged_replacements.values():
+			if is_instance_valid(replacement):
+				(replacement as Chunk).free()
+	_staged_cells.clear()
+	_staged_index = 0
+	_staged_state = -1
+	_staged_replacements.clear()
+	_staged_snapshots.clear()
+	_staged_ready = Callable()
+	_staged_failed = Callable()
+
+
+func _exit_tree() -> void:
+	if not _staged_cells.is_empty():
+		_discard_staged_rebuild()
 
 
 func _is_optional_vhs_cell(c: Vector2i) -> bool:
 	if not descent or descent_route == null \
-			or c == descent_route.origin or c == descent_route.target \
-			or c == descent_route.objective_ritual_cell():
+			or c == descent_route.origin or c == descent_route.target:
 		return false
 	if descent_route.optional_vhs_cells().has(c):
 		return true
@@ -210,9 +328,8 @@ func _broken_station_cell() -> Vector2i:
 	# Snap to the station lattice (both axes ≡ 1 mod 3).
 	var c := Vector2i(roundi(float(p.x - 1) / 3.0) * 3 + 1,
 		roundi(float(p.y - 1) / 3.0) * 3 + 1)
-	# The objective, arrival and remote-ritual rooms keep their honest power.
-	if c == descent_route.target or c == descent_route.origin \
-			or c == descent_route.objective_ritual_cell():
+	# The objective and arrival rooms keep their honest power.
+	if c == descent_route.target or c == descent_route.origin:
 		c.x += 3
 	_broken_cell = c
 	return _broken_cell
@@ -237,16 +354,25 @@ func set_anomaly(at: Vector2i, kind: int) -> void:
 		(chunks[at] as Chunk).activate_anomaly(kind)
 
 
-## A runtime edge belongs to both neighbouring chunks. Remove both old scene
-## trees immediately (so their collision leaves the world), then regenerate
-## them from the shared topology while the blackout hides the operation.
+## Stage every replacement off-tree first, then swap the complete set in one
+## frame. Old collision therefore remains authoritative until every new room
+## has successfully constructed; there is never a half-rebuilt topology.
 func rebuild_cells(cells: Array[Vector2i]) -> void:
 	var unique := {}
 	for at in cells:
 		unique[at] = true
+	var replacements := {}
+	var snapshots := {}
 	for key in unique:
 		var at: Vector2i = key
 		queued.erase(at)
+		if chunks.has(at):
+			var old := chunks[at] as Chunk
+			if is_instance_valid(old):
+				snapshots[at] = old.capture_rebuild_state()
+		replacements[at] = _build(at, false)
+	for key in unique:
+		var at: Vector2i = key
 		if chunks.has(at):
 			var old := chunks[at] as Chunk
 			chunks.erase(at)
@@ -255,4 +381,8 @@ func rebuild_cells(cells: Array[Vector2i]) -> void:
 				old.queue_free()
 	for key in unique:
 		var at: Vector2i = key
-		_build(at)
+		var replacement := replacements[at] as Chunk
+		add_child(replacement)
+		chunks[at] = replacement
+		replacement.restore_rebuild_state(snapshots.get(at, {}))
+		chunk_built.emit(replacement)

@@ -198,4 +198,5 @@ func _run() -> void:
 		print("FAIL ", failure)
 	if failures.is_empty():
 		print("PASS — every Bloom grammar constructs with enclosed tunnels and sourced organic art")
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures.is_empty() else 1)

@@ -359,7 +359,7 @@ near-absence of props is enforced as part of its generation contract.
 - `WorldGen.WALL_P` — wall density (default 0.45).
 - `ChunkManager.LOAD_R` / `BUDGET` — stream radius and per-frame build budget.
 - Level changes synchronously build only a safe 3x3 neighbourhood; the rest of
-  the 7x7 view streams closest-first inside a 6ms frame slice. glTF props begin
+  the fog-bounded 5x5 view streams closest-first, one chunk per frame. glTF props begin
   loading on worker threads behind the title card, and multi-cell rooms share a
   single reflection probe.
 - Performance: the biggest costs are SDFGI, TAA, volumetric fog and omni
@@ -437,11 +437,12 @@ near-absence of props is enforced as part of its generation contract.
   the figures, a suppressed figure never closes the distance, and the torch's
   cell still clears a full house.
 - `godot --headless --path . --script tools/audit_blackout_shortcuts.gd -- 30`
-  — samples every Descent zone, proves ordinary blackout doors are normally
-  route-neutral while stalled-player doors put their far side meaningfully
-  closer to the lift (preferring a true route shortcut when one exists), and
-  verifies each opening is symmetric, persistent, furnishing-free and clear
-  below the shared ghost/player doorway capsule height.
+  — retains the low-level additive-door contract used by the topology kernel.
+- `godot --headless --path . --script tools/audit_descent_mutation_graph.gd`
+  — builds the generated reality graph across all eleven Descent themes and
+  proves hard closures, openings, appearing swing doors and furniture variants
+  remain connected, reciprocal, collision-clear, reconstructable and exactly
+  reversible back to the seed-authored route.
 - `godot --headless --path . --script tools/audit_prop_overlap.gd` — builds
   furnished rooms *and* corridor cells on every floor and compares floor
   furnishings as oriented boxes, failing on any pair that interpenetrates. It
@@ -501,8 +502,9 @@ prison bunk and school cleaning cart are now CC BY 4.0 replacements.
 Dev tools for adding content:
 
 - `./tools/review_cross_videos.sh` opens the optional Dr. Cross video reviewer.
-  It excludes the ten long objective/elevator chapters, auto-advances through
-  the short-form pool, and writes non-destructive review choices to
+  It excludes the ten long objective/elevator chapters and reserved converted
+  assets `tape_06`–`tape_09`, auto-advances through the 21-clip short-form pool,
+  and writes non-destructive review choices to
   `cross_review_prune.txt`. Use Previous/Next or the filename picker to revisit
   clips; `M` marks or unmarks the current recording for pruning.
 - `godot --path . tools/preview_model.tscn -- --model=res://… --screenshot=/tmp/x.png`
@@ -534,8 +536,9 @@ Dev tools for adding content:
   animated silhouette has to be a flipbook.
 - `ffmpeg2theora INPUT.mp4 --videoquality 7 --audioquality 3 --max_size
   512x512 -o videos/tapes/tape_NN.ogv` imports a Descent recording. The runtime
-  treats `short_beginning_NN.ogv` as ordered optional chapters and
-  `short_random_NN.ogv` as the random optional pool regardless of duration;
+  treats the six `short_beginning_NN.ogv` files as ordered optional chapters
+  and the fifteen `short_random_NN.ogv` files as the random optional pool
+  regardless of duration;
   other recordings under 30 seconds are optional and longer recordings feed
   elevator-room rituals. Non-tape footage must be added to
   `VhsTapeLibrary.RESERVED_GAME_ASSETS`. Record the original filename in

@@ -46,7 +46,7 @@ const LEVEL_BUILDERS := {
 	11: BLOOM_LEVEL_BUILDER,
 }
 
-const S := 12.0
+const S := WorldGen.CELL_SIZE
 const H := 3.2       # vegas wall/ceiling height
 const HOFF := 3.0    # office ceiling height
 const HANNEX := 2.78 # the Annex's deliberately low drop ceiling
@@ -97,9 +97,6 @@ const BRUTAL_DOOR_TOP := 3.15 # monumental portal head; casing must match the cu
 const BLOOM_DOOR_TOP := 2.55
 const DOOR_CLEAR_DEPTH := 3.6
 const DOOR_CLEAR_PAD := 0.5
-
-const CH_HW := 0.85      # half width of the channel invert
-const BANK := 0.62       # horizontal run of each sloped bank (walkable angle)
 
 static var BOX := BoxMesh.new()
 static var CYL := CylinderMesh.new()
@@ -600,54 +597,9 @@ const POSTER_PRISON := [
 	"res://paintings/runtime/posters/poster-prison-08.webp",
 	"res://paintings/runtime/posters/poster-prison-09.webp",
 ]
-const ART_OFFICE := [
-	"res://paintings/runtime/painting1-office.webp",
-	"res://paintings/runtime/painting2-office.webp",
-	"res://paintings/runtime/posters/poster-office-01.webp",
-	"res://paintings/runtime/posters/poster-office-02.webp",
-	"res://paintings/runtime/posters/poster-office-03.webp",
-]
-const ART_ANNEX := [
-	"res://paintings/runtime/posters/poster-annex-01.webp",
-	"res://paintings/runtime/posters/poster-annex-02.webp",
-	"res://paintings/runtime/posters/poster-annex-03.webp",
-]
 const ART_SEWER := [
 	"res://paintings/runtime/painting1-sewer.webp",
 	"res://paintings/runtime/painting2-sewer.webp",
-]
-const ART_AIRPORT := [
-	"res://paintings/runtime/painting1-airport.webp",
-	"res://paintings/runtime/painting2-airport.webp",
-	"res://paintings/runtime/posters/poster-airport-01.webp",
-	"res://paintings/runtime/posters/poster-airport-02.webp",
-	"res://paintings/runtime/posters/poster-airport-03.webp",
-]
-const ART_ASYLUM := [
-	"res://paintings/runtime/posters/poster-asylum-01.webp",
-	"res://paintings/runtime/posters/poster-asylum-02.webp",
-	"res://paintings/runtime/posters/poster-asylum-03.webp",
-]
-const ART_SCHOOL := [
-	"res://paintings/runtime/painting1-school.webp",
-	"res://paintings/runtime/posters/poster-school-01.webp",
-	"res://paintings/runtime/posters/poster-school-02.webp",
-	"res://paintings/runtime/posters/poster-school-03.webp",
-]
-const ART_MALL := [
-	"res://paintings/runtime/painting2-mall.webp",
-	"res://paintings/runtime/painting3-mall.webp",
-	"res://paintings/runtime/painting4-mall.webp",
-	"res://paintings/runtime/painting5-mall.webp",
-	"res://paintings/runtime/posters/poster-mall-01.webp",
-	"res://paintings/runtime/posters/poster-mall-02.webp",
-	"res://paintings/runtime/posters/poster-mall-03.webp",
-]
-const ART_PRISON := [
-	"res://paintings/runtime/painting1-prison.webp",
-	"res://paintings/runtime/posters/poster-prison-01.webp",
-	"res://paintings/runtime/posters/poster-prison-02.webp",
-	"res://paintings/runtime/posters/poster-prison-03.webp",
 ]
 const ART_RANDOM := [
 	"res://paintings/runtime/painting1-random.webp",
@@ -764,6 +716,9 @@ static var _prop_preloads_requested := false
 static var _slot_scene: PackedScene
 static var _attributed_scenes := {}
 static var _scrawl_fonts := {}
+static var profile_build_stages := false
+static var profile_stage_threshold_ms := 4.0
+static var _prewarmed_themes := {}
 
 var wseed: int
 var cell: Vector2i
@@ -778,17 +733,14 @@ var is_room_anchor := false    # only the anchor cell furnishes the room
 var doorway_props_removed := 0 # exposed for the generated-doorway audit
 var descent := false
 var descent_topology: DescentTopology
+## Off-tree blackout replacements may be prepared for the next complete state
+## while the live resolver still owns the old one. Installed chunks always use
+## -1 and follow the resolver normally.
+var descent_topology_state_override := -1
 var descent_target := false
 var descent_target_wall := -1
 var descent_final := false
 var descent_floor_idx := 0
-## Whether this cell hosts the floor's objective altar. The target itself on
-## most floors; on the remote-ritual floors it is a route cell short of the
-## lift, and the target chunk builds its car without a television.
-var descent_ritual_here := false
-## True everywhere on a floor whose altar is remote — the lift's refusal has
-## to say the tape is not in the room the player is standing in.
-var descent_ritual_remote := false
 ## The arrival room — the car the player rides in on. A separate authored cell
 ## from the objective, and never the same one.
 var descent_arrival := false
@@ -815,6 +767,11 @@ var descent_broken_station_tried := false
 var bleed_amount := 0.0
 var bleed_theme := -1
 var anomaly_kind := -1
+## Complete furniture recipe selected by the floor's generated reality graph.
+## Zero is the seed-authored layout; later values are deterministic validated
+## alternatives and therefore survive streaming/rebuilds exactly.
+var mutation_furniture_variant := 0
+var mutation_furniture_changed_groups := 0
 ## Only used by the waiting-figure anomaly, which needs a hunt target.
 var anomaly_player: Player
 var _descent_lift_rig := {}
@@ -943,8 +900,69 @@ static func finish_prop_preloads() -> void:
 			ResourceLoader.load_threaded_get(path)
 
 
+## Compile/instantiate each heavy theme's construction families once while the
+## transition is already fully black. Streaming then only duplicates cached
+## resources and never discovers a new imported prop or shader in view.
+static func prewarm_theme_content(ws: int, p_theme: int) -> void:
+	if _prewarmed_themes.has(p_theme) or p_theme not in [2, 11]:
+		return
+	_prewarmed_themes[p_theme] = true
+	var wanted: Array[int] = []
+	if p_theme == 2:
+		wanted.assign([
+			WorldGen.ANNEX_OPEN, WorldGen.ANNEX_MAZE, WorldGen.ANNEX_LONG,
+			WorldGen.ANNEX_QUIET, WorldGen.ANNEX_PASSAGE, WorldGen.ANNEX_LOBBY,
+		])
+	else:
+		wanted.assign([
+			WorldGen.BLOOM_PASSAGE, WorldGen.BLOOM_COMMONS,
+			WorldGen.BLOOM_CLASSROOM, WorldGen.BLOOM_INCUBATOR,
+			WorldGen.BLOOM_NEST, WorldGen.BLOOM_ATRIUM, WorldGen.BLOOM_GYM,
+		])
+	var found := {}
+	for ring in range(0, 25):
+		if found.size() >= wanted.size():
+			break
+		for y in range(-ring, ring + 1):
+			for x in range(-ring, ring + 1):
+				if ring > 0 and absi(x) != ring and absi(y) != ring:
+					continue
+				var at := Vector2i(x, y)
+				var candidate_style := WorldGen.cell_style(ws, at, p_theme)
+				if not wanted.has(candidate_style) or found.has(candidate_style):
+					continue
+				var root := WorldGen.annex_room_id(ws, at) if p_theme == 2 \
+					else WorldGen.room_id(ws, at)
+				if root != at and candidate_style not in [
+						WorldGen.ANNEX_PASSAGE, WorldGen.BLOOM_PASSAGE]:
+					continue
+				var warm := Chunk.new(ws, at, p_theme)
+				warm.free()
+				found[candidate_style] = true
+
+
+## Audit/test teardown for process-lifetime scene/prototype caches.
+static func clear_runtime_caches() -> void:
+	finish_prop_preloads()
+	_prop_preloads_requested = false
+	_slot_scene = null
+	_attributed_scenes.clear()
+	_scrawl_fonts.clear()
+	_asy_scenes.clear()
+	_cc0_scenes.clear()
+	_prewarmed_themes.clear()
+	BLOOM_LEVEL_BUILDER.clear_runtime_cache()
+
+
 func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
-		p_config: Dictionary = {}) -> void:
+		p_config: Variant = null) -> void:
+	var build_started := Time.get_ticks_usec()
+	var spec: ChunkBuildSpec
+	if p_config is ChunkBuildSpec:
+		spec = p_config
+	else:
+		spec = ChunkBuildSpec.from_dictionary(
+			p_config as Dictionary if p_config is Dictionary else {})
 	if not _cone_ready:
 		_cone_ready = true
 		CONE.top_radius = 0.0
@@ -953,38 +971,34 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	wseed = p_seed
 	cell = p_cell
 	theme = p_theme
-	descent = bool(p_config.get("descent", false))
-	descent_topology = p_config.get("topology", null) as DescentTopology
-	descent_target = bool(p_config.get("target", false))
-	descent_target_wall = int(p_config.get("target_wall", -1))
-	# Configs that predate the remote ritual (and the audits that hand-build
-	# target chunks) omit the key; the altar then defaults to the target room.
-	descent_ritual_here = bool(p_config.get("ritual_cell", descent_target))
-	descent_ritual_remote = bool(p_config.get("ritual_remote", false))
-	descent_final = bool(p_config.get("final", false))
-	descent_floor_idx = int(p_config.get("floor_idx", 0))
-	descent_arrival = bool(p_config.get("arrival", false))
-	descent_arrival_wall = int(p_config.get("arrival_wall", -1))
-	descent_arrival_used = bool(p_config.get("arrival_used", false))
-	descent_lift_called = bool(p_config.get("lift_called", false))
-	descent_lift_wait = float(p_config.get("lift_wait", 0.0))
-	descent_lift_open = bool(p_config.get("lift_open", false))
-	descent_tape_watched = bool(p_config.get("tape_watched", false))
-	descent_base_seed = int(p_config.get("base_seed", 1))
-	optional_vhs = bool(p_config.get("optional_vhs", false))
-	optional_vhs_key = str(p_config.get("optional_vhs_key", ""))
-	descent_broken_station = bool(p_config.get("broken_station", false))
-	descent_broken_station_tried = bool(
-		p_config.get("broken_station_tried", false))
-	bleed_amount = float(p_config.get("bleed", 0.0))
-	bleed_theme = int(p_config.get("bleed_theme", -1))
-	anomaly_kind = int(p_config.get("anomaly", -1))
+	descent = spec.descent
+	descent_topology = spec.topology
+	descent_topology_state_override = spec.topology_state_override
+	descent_target = spec.target
+	descent_target_wall = spec.target_wall
+	descent_final = spec.final
+	descent_floor_idx = spec.floor_idx
+	descent_arrival = spec.arrival
+	descent_arrival_wall = spec.arrival_wall
+	descent_arrival_used = spec.arrival_used
+	descent_lift_called = spec.lift_called
+	descent_lift_wait = spec.lift_wait
+	descent_lift_open = spec.lift_open
+	descent_tape_watched = spec.tape_watched
+	descent_base_seed = spec.base_seed
+	optional_vhs = spec.optional_vhs
+	optional_vhs_key = spec.optional_vhs_key
+	descent_broken_station = spec.broken_station
+	descent_broken_station_tried = spec.broken_station_tried
+	bleed_amount = spec.bleed
+	bleed_theme = spec.bleed_theme
+	anomaly_kind = spec.anomaly
 	# The waiting-figure anomaly is a live figure, and a live figure is useless
 	# without the player it is hunting. It has to arrive with the config: the
 	# figure is built during construction, and its own _ready — which sizes the
 	# capsule it moves with — runs before anything outside could set this.
-	anomaly_player = p_config.get("player", null) as Player
-	var requested_blackout := bool(p_config.get("blackout", false))
+	anomaly_player = spec.player
+	var requested_blackout := spec.blackout
 	body = StaticBody3D.new()
 	add_child(body)
 	style = WorldGen.cell_style(wseed, cell, theme)
@@ -996,30 +1010,70 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	room_n = WorldGen.annex_room_size(wseed, room_root) if theme == 2 \
 		else WorldGen.room_size(wseed, room_root)
 	is_room_anchor = room_root == cell
-	# ceiling follows the room, so a small room feels small and a hall soars
+	# Off-tree blackout replacements may request a future complete state while
+	# the installed resolver still owns the current one.
+	if spec.furniture_variant_override >= 0:
+		mutation_furniture_variant = spec.furniture_variant_override
+	elif descent_topology != null:
+		mutation_furniture_variant = descent_topology.furniture_variant_for_state(
+			room_root, descent_topology_state_override) \
+			if descent_topology_state_override >= 0 else \
+			descent_topology.furniture_variant(room_root)
+	# Props use the ceiling datum for tall-room layouts and mounted-vs-floor
+	# decisions.
 	ceil_h = cell_ceil_h(wseed, cell, theme)
+	# ceiling follows the room, so a small room feels small and a hall soars
+	var stage_started := Time.get_ticks_usec()
 	_build_floor_ceiling()
+	_profile_stage("floor_ceiling", stage_started)
+	stage_started = Time.get_ticks_usec()
 	_build_walls()
+	_profile_stage("walls", stage_started)
 	if theme == 2:
 		# Annex columns and internal partitions must exist before its ceiling
 		# grid is populated, otherwise a valid tile-centred fixture can still
 		# be cut in half by later architecture.
+		stage_started = Time.get_ticks_usec()
 		_build_props()
+		_profile_stage("props", stage_started)
 		if not is_room_anchor:
 			_level_builder._annex_room_member_architecture()
+		stage_started = Time.get_ticks_usec()
 		_build_lighting()
+		_profile_stage("lighting", stage_started)
 	else:
+		stage_started = Time.get_ticks_usec()
 		_build_lighting()
+		_profile_stage("lighting", stage_started)
+		stage_started = Time.get_ticks_usec()
 		_build_props()
+		_profile_stage("props", stage_started)
+	stage_started = Time.get_ticks_usec()
 	_build_optional_vhs_set()
 	_build_charging_station()
 	_build_bleed_dressing()
 	_build_interactions()
+	_profile_stage("gameplay", stage_started)
+	if mutation_furniture_variant > 0:
+		stage_started = Time.get_ticks_usec()
+		_apply_furniture_variant(mutation_furniture_variant)
+		_profile_stage("furniture_mutation", stage_started)
 	if anomaly_kind >= 0:
 		activate_anomaly(anomaly_kind)
 	if requested_blackout:
 		set_blackout(true)
 	_maybe_probe()
+	_profile_stage("TOTAL", build_started)
+
+
+func _profile_stage(label: String, started_usec: int) -> void:
+	if not profile_build_stages:
+		return
+	var elapsed_ms := float(Time.get_ticks_usec() - started_usec) / 1000.0
+	if label != "TOTAL" and elapsed_ms < profile_stage_threshold_ms:
+		return
+	print("CHUNK_STAGE theme=%d style=%d cell=%s %s=%.3fms" % [
+		theme, style, cell, label, elapsed_ms])
 
 
 ## One station per 3x3 macro-cell, on a fixed lattice rather than a random
@@ -1094,9 +1148,10 @@ func _build_bleed_dressing() -> void:
 		return
 	if WorldGen.r01(wseed, cell.x, cell.y, 6101) > bleed_amount * 0.55:
 		return
+	# One unmistakable foreign object is enough to sell the transition. Two per
+	# streamed cell multiplied geometry and SDFGI invalidation precisely where
+	# the objective room, lift and tape set enter the retained neighbourhood.
 	var count := 1
-	if bleed_amount > 0.7 and WorldGen.r01(wseed, cell.x, cell.y, 6103) < 0.5:
-		count = 2
 	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 6105), 25)
 	var placed := 0
 	for i in 25:
@@ -1128,6 +1183,7 @@ func _place_bleed_prop(at: Vector3, yaw: float) -> void:
 		if footprint != Vector3.ZERO:
 			_collider_yaw_box(at + Vector3(0, footprint.y * 0.5, 0),
 				footprint, yaw)
+		_disable_streamed_gi(prop)
 		return
 	# Themes without a portable authored prop intrude as raw matter instead.
 	var intrusion := Node3D.new()
@@ -1157,6 +1213,19 @@ func _place_bleed_prop(at: Vector3, yaw: float) -> void:
 		blob.position = Vector3(0, 0.18, 0)
 		blob.scale = Vector3(1.4, 0.55, 1.15)
 		intrusion.add_child(blob)
+	_disable_streamed_gi(intrusion)
+
+
+## Bleed dressing is late, transient set decoration. Excluding it from SDFGI
+## prevents every newly streamed prop from invalidating the four-cascade GI
+## field near the objective; the floor's authored structure still supplies all
+## bounced light and occlusion.
+func _disable_streamed_gi(node: Node) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).gi_mode = \
+			GeometryInstance3D.GI_MODE_DISABLED
+	for child in node.get_children():
+		_disable_streamed_gi(child)
 
 
 ## The car is an authored island built AFTER the theme's own dressing, which
@@ -1289,36 +1358,15 @@ func _build_optional_vhs_set() -> void:
 	add_child(set)
 
 
-## The objective altar on the remote-ritual floors: the same set, the same
-## setup key and lift gate as when it stands beside the car — only the room is
-## different. Unlike an optional set, this one is not allowed to vanish, so an
-## impossibly dense room degrades to a forced interior placement rather than
-## to an unfinishable floor.
-func _build_remote_ritual_set() -> void:
-	if descent_final:
-		return
-	var site := _pick_vhs_site()
-	if site.is_empty():
-		site = {"at": Vector3(S / 2.0, _floor_h(), S / 2.0), "yaw": 0.0}
-	var ritual := VHS_RITUAL_SCRIPT.new() as Node3D
-	ritual.name = "DescentRitual"
-	ritual.world_seed = descent_base_seed
-	ritual.floor_idx = descent_floor_idx
-	ritual.home_cell = cell
-	ritual.setup_key = "floor:%d:objective" % descent_floor_idx
-	ritual.objective = true
-	ritual.already_watched = descent_tape_watched
-	ritual.position = site["at"]
-	ritual.rotation.y = float(site["yaw"])
-	add_child(ritual)
-
-
-## Deterministic site search shared by the optional sets and the remote
-## objective altar: perimeter wall sites first, then a freestanding interior
-## lattice, plus the Poolrooms' dry-island sampling.
+## Deterministic optional-set search: perimeter wall sites first, then a
+## freestanding interior lattice, plus the Poolrooms' dry-island sampling.
 func _pick_vhs_site() -> Dictionary:
 	var sites: Array[Dictionary] = []
-	var alongs := [2.0, 3.6, 5.2, 6.8, 8.4, 10.0]
+	# Dense authored rooms can occupy the old six sample points even while a
+	# perfectly sound wall site exists between them. Sample each metre so a
+	# route-selected recording cannot silently disappear.
+	var alongs := [1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
+		7.0, 8.0, 9.0, 10.0, 11.0]
 	for dir in 4:
 		if not _edge_info(cell, dir)["wall"]:
 			continue
@@ -1330,8 +1378,8 @@ func _pick_vhs_site() -> Dictionary:
 	# Dense authored rooms sometimes occupy every perimeter site. A freestanding
 	# set deeper in the room is still legible—the table, screen glow and hiss do
 	# the work—and prevents a selected route encounter from silently vanishing.
-	for z in [2.0, 4.0, 6.0, 8.0, 10.0]:
-		for x in [2.0, 4.0, 6.0, 8.0, 10.0]:
+	for z in [1.25, 2.5, 3.75, 5.0, 6.25, 7.5, 8.75, 10.0, 10.75]:
+		for x in [1.25, 2.5, 3.75, 5.0, 6.25, 7.5, 8.75, 10.0, 10.75]:
 			var yaw_step := posmod(WorldGen.h(wseed, cell.x + int(x),
 				cell.y + int(z), 7393), 4)
 			sites.append({
@@ -2040,7 +2088,8 @@ func _build_walls() -> void:
 		if info["wall"]:
 			if owns_annex_wall:
 				if theme == 9 \
-						and WorldGen.pool_wall_aperture(wseed, cell, dir):
+						and WorldGen.pool_wall_aperture(wseed, cell, dir) \
+						and not bool(info.get("runtime_seal", false)):
 					_pool_wall_with_circular_aperture(
 						dir, plane, wtop)
 				else:
@@ -2070,11 +2119,12 @@ func _build_walls() -> void:
 						head = BLOOM_DOOR_TOP
 					_wall_seg(dir, plane, a, b, head, wtop)
 				_door_casing(dir, plane, a, b)
-				# The blackout opening may be decorative or secretly helpful, but
-				# its construction is identical: an impossible raw doorway, never a
-				# conventional hinged door that can spawn shut.
-				if not bool(info.get("runtime_shortcut", false)):
-					_maybe_swing_door(dir, plane, a, b)
+				# Generated realities explicitly decide whether a new opening is an
+				# impossible raw cut or a conventional door that was never there.
+				if not bool(info.get("runtime_shortcut", false)) \
+						or bool(info.get("runtime_door", false)):
+					_maybe_swing_door(dir, plane, a, b,
+						bool(info.get("runtime_door", false)))
 			if (theme == 1 or theme == 2) \
 					and (theme != 2 or owns_annex_wall) \
 					and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
@@ -2097,7 +2147,10 @@ func _build_walls() -> void:
 
 func _edge_info(at: Vector2i, dir: int) -> Dictionary:
 	if descent_topology != null:
-		return descent_topology.edge_info(at, dir)
+		return descent_topology.edge_info_for_state(
+			at, dir, descent_topology_state_override) \
+			if descent_topology_state_override >= 0 else \
+			descent_topology.edge_info(at, dir)
 	return WorldGen.edge_info(wseed, at, dir, theme)
 
 
@@ -2260,14 +2313,16 @@ func _open_edge_fascia(dir: int, plane: float) -> void:
 
 ## Some genuine room-to-room openings get a working leaf. Canonical east and
 ## south ownership prevents the neighbour chunk from building a duplicate.
-func _maybe_swing_door(dir: int, plane: float, a: float, b: float) -> void:
+func _maybe_swing_door(dir: int, plane: float, a: float, b: float,
+		force := false) -> void:
 	if dir != 0 and dir != 2:
 		return
-	if theme == 2 or theme == 4 or theme == 7 or theme == 9 or theme == 10 \
+	if not force and (theme == 2 or theme == 4 or theme == 7 or theme == 9 or theme == 10 \
 			or theme == 11 \
-			or b - a > 2.25:
+			or b - a > 2.25):
 		return
-	if WorldGen.h(wseed, cell.x, cell.y, 1760 + dir + theme * 11) % 100 >= 14:
+	if not force and WorldGen.h(
+			wseed, cell.x, cell.y, 1760 + dir + theme * 11) % 100 >= 14:
 		return
 	var width := b - a - 0.12
 	if width < 0.82:
@@ -2278,6 +2333,8 @@ func _maybe_swing_door(dir: int, plane: float, a: float, b: float) -> void:
 	else:
 		pivot.position = Vector3(a + 0.06, 0, plane - 0.015)
 	pivot.set_meta("door_dir", dir)
+	if force:
+		pivot.set_meta("runtime_mutation_door", true)
 	add_child(pivot)
 	var panel_mat: Material = Mats.wood_door()
 	if theme == 5:
@@ -2394,6 +2451,54 @@ func _toggle_swing_door(actor: Node, pivot: Node3D, cs: CollisionShape3D,
 	pivot.set_meta("moving", false)
 	if not opening:
 		cs.disabled = false
+
+
+## Transient room state that a topology rebuild must not accidentally rewind.
+## Stable identity comes from deterministic local placement, not node instance
+## ids, so the snapshot applies to the freshly generated copy of the room.
+func capture_rebuild_state() -> Dictionary:
+	var doors := {}
+	for node in find_children("*", "Node3D", true, false):
+		var pivot := node as Node3D
+		if pivot == null or not pivot.has_meta("door_dir"):
+			continue
+		doors[_door_rebuild_key(pivot)] = {
+			"open": bool(pivot.get_meta("open", false)),
+			"angle": float(pivot.get_meta("last_open_angle", pivot.rotation.y)),
+		}
+	return {"doors": doors}
+
+
+func restore_rebuild_state(snapshot: Dictionary) -> void:
+	var doors: Dictionary = snapshot.get("doors", {})
+	if doors.is_empty():
+		return
+	for node in find_children("*", "Node3D", true, false):
+		var pivot := node as Node3D
+		if pivot == null or not pivot.has_meta("door_dir"):
+			continue
+		var key := _door_rebuild_key(pivot)
+		if not doors.has(key):
+			continue
+		var state: Dictionary = doors[key]
+		var opened := bool(state.get("open", false))
+		var angle := float(state.get("angle", 0.0)) if opened else 0.0
+		pivot.rotation.y = angle
+		pivot.set_meta("open", opened)
+		pivot.set_meta("moving", false)
+		pivot.set_meta("last_open_angle", angle)
+		for body_node in pivot.find_children("*", "StaticBody3D", true, false):
+			for shape_node in body_node.find_children(
+					"*", "CollisionShape3D", true, false):
+				(shape_node as CollisionShape3D).disabled = opened
+		for hit_node in pivot.find_children("*", "Interactable", true, false):
+			(hit_node as Interactable).prompt_text = \
+				"E — close door" if opened else "E — open door"
+
+
+func _door_rebuild_key(pivot: Node3D) -> String:
+	return "%d:%.3f:%.3f" % [int(pivot.get_meta("door_dir", -1)),
+		pivot.position.x, pivot.position.z]
 
 
 ## Resolve one endpoint of an Annex boundary wall.
@@ -4639,6 +4744,27 @@ func runtime_shortcut_blockers(dir: int) -> int:
 	return bad
 
 
+## Focused contract probe for a doorway that a generated reality sealed. A
+## positive count proves the visual wall is backed by low solid collision.
+func runtime_seal_solids(dir: int) -> int:
+	var edge := _edge_info(cell, dir)
+	if not bool(edge.get("runtime_seal", false)):
+		return -1
+	var zone := Rect2(S - 0.45, 0.0, 0.9, S) if dir == 0 else \
+		Rect2(-0.45, 0.0, 0.9, S) if dir == 1 else \
+		Rect2(0.0, S - 0.45, S, 0.9) if dir == 2 else \
+		Rect2(0.0, -0.45, S, 0.9)
+	var solids := 0
+	for node in body.get_children():
+		var cs := node as CollisionShape3D
+		if cs == null:
+			continue
+		var rect := _collision_floor_rect(cs)
+		if rect.size != Vector2.ZERO and rect.intersects(zone):
+			solids += 1
+	return solids
+
+
 func _mesh_min_y(node: Node, parent_xf: Transform3D) -> float:
 	var xf := parent_xf
 	if node is Node3D:
@@ -4758,12 +4884,7 @@ func _build_interactions() -> void:
 				_descent_exit(descent_target_wall)
 			else:
 				_descent_elevator(descent_target_wall)
-				# On the remote-ritual floors the car stands alone; the
-				# altar is a few route rooms back up the way the player came.
-				if descent_ritual_here:
-					_descent_ritual_set()
-		elif descent_ritual_here:
-			_build_remote_ritual_set()
+				_descent_ritual_set()
 		if descent_arrival and descent_arrival_wall >= 0:
 			_descent_arrival_car(descent_arrival_wall)
 		return
@@ -5208,14 +5329,6 @@ func reset_descent_lift() -> void:
 		display.modulate = Color(0.55, 0.26, 0.07)
 
 
-## Forwarded from the objective chunk when the player walks out mid-tape;
-## harmless if this chunk has no ritual.
-func reset_descent_tape() -> void:
-	var ritual := get_node_or_null("DescentRitual")
-	if ritual != null:
-		ritual.reset_tape()
-
-
 func _descent_lift_indicator(display: Label3D, progress: float) -> void:
 	if not is_instance_valid(display):
 		return
@@ -5290,11 +5403,7 @@ func _descent_commit(actor: Node, rig: Dictionary, commit: Area3D,
 		if now - int(commit.get_meta("refused_ms", 0)) < 1500:
 			return
 		commit.set_meta("refused_ms", now)
-		# On the remote-ritual floors the refusal has to carry the one fact
-		# the room itself cannot: the tape exists, and it is not here.
 		var reason := "THE TAPE HAS NOT BEEN WATCHED"
-		if descent_ritual_remote:
-			reason = "THE TAPE HAS NOT BEEN WATCHED — IT IS NOT IN THIS ROOM"
 		get_tree().call_group("descent_listener",
 			"descent_commit_refused", reason)
 		_descent_sound(rig["root"], SoundBank.thud(), -10.0)
@@ -5438,8 +5547,19 @@ func _descent_arrival_left(actor: Node, rig: Dictionary, inside: Area3D) -> void
 	if not actor is Player or inside.has_meta("spent"):
 		return
 	inside.set_meta("spent", true)
+	# Area exits also fire while a streamed floor is being dismantled. Defer one
+	# frame and require both actors to survive before spending the arrival car.
+	await get_tree().process_frame
+	if not is_inside_tree() or not is_instance_valid(actor) \
+			or not actor.is_inside_tree() or not is_instance_valid(inside):
+		return
 	get_tree().call_group("descent_listener", "descent_arrival_spent")
-	await get_tree().create_timer(1.7).timeout
+	var delay := create_tween()
+	delay.tween_interval(1.7)
+	delay.tween_callback(_finish_descent_arrival_left.bind(rig, inside))
+
+
+func _finish_descent_arrival_left(rig: Dictionary, inside: Area3D) -> void:
 	if not is_inside_tree() or not is_instance_valid(inside):
 		return
 	# Never seal a player who stepped back in — the car has no inside control,
@@ -5541,8 +5661,6 @@ func activate_anomaly(kind: int) -> void:
 		# audit or a headless build lands here. Fall back to the collider-free
 		# dead-light mutation either way.
 		activate_anomaly(0)
-	elif kind == 2:
-		_anomaly_rearrange()
 	elif kind == 1 and not has_node("WaitingFigure"):
 		var f := ShadowFigure.new()
 		f.name = "WaitingFigure"
@@ -5563,11 +5681,13 @@ func activate_anomaly(kind: int) -> void:
 		add_child(f)
 
 
-## The quiet anomaly: the room is the same room, but the furniture is not
-## quite where it was. Roughly half the free-standing furnishing groups take a
-## small deterministic nudge and turn, colliders included, so a returning
-## player doubts their memory instead of the physics.
-func _anomaly_rearrange() -> void:
+## Apply one of the floor's predeclared room arrangements. Every candidate is
+## tried with its real meshes and colliders, then rejected unless it remains
+## inside its owning room, clear of every doorway lane and disjoint from other
+## furnishing groups. Nothing here moves architecture or an interactable.
+func _apply_furniture_variant(variant: int) -> void:
+	if variant <= 0 or not is_room_anchor:
+		return
 	var group_colliders := {}
 	for child in body.get_children():
 		var gid := int(child.get_meta("furnishing_group", -1))
@@ -5576,6 +5696,18 @@ func _anomaly_rearrange() -> void:
 		if not group_colliders.has(gid):
 			group_colliders[gid] = []
 		group_colliders[gid].append(child)
+	var occupied := {}
+	for child in get_children():
+		var original := child as Node3D
+		if original == null or not original.has_meta("furnishing_group"):
+			continue
+		var original_gid := int(original.get_meta("furnishing_group"))
+		occupied[original_gid] = _furnishing_group_rect(
+			original, group_colliders.get(original_gid, []))
+	var remove_pivots: Array[Node3D] = []
+	var remove_colliders: Array[Node] = []
+	var fallback_pivot: Node3D
+	var fallback_colliders: Array[Node] = []
 	var idx := 0
 	for child in get_children():
 		var pivot := child as Node3D
@@ -5588,42 +5720,254 @@ func _anomaly_rearrange() -> void:
 				or pivot.has_meta("annex_ac_mount") \
 				or pivot.has_meta("annex_attached_half_wall"):
 			continue
-		# Anything hugging a wall or hanging high is mounted — a blackboard, a
-		# projection screen, a shelf. A mounted thing an inch off its wall
-		# reads as broken, not haunted, so only genuinely free-standing
-		# furniture takes the nudge.
+		# Anything hugging a wall is mounted — a blackboard, projection screen
+		# or shelf. A mounted thing an inch off its wall reads as broken, not
+		# haunted. Floor support is explicit on every atomic furnishing; do not
+		# infer mounting from mesh height because wardrobes, slot machines and
+		# tall cabinets are legitimate floor furniture.
 		if pivot.position.x < 0.9 or pivot.position.x > S - 0.9 \
 				or pivot.position.z < 0.9 or pivot.position.z > S - 0.9:
 			continue
-		var mounted := false
-		for mesh in pivot.find_children("*", "MeshInstance3D", true, false):
-			if (mesh as Node3D).position.y + pivot.position.y > 1.9:
-				mounted = true
-				break
-		if mounted:
+		if not bool(pivot.get_meta("floor_supported", false)):
 			continue
+		if not pivot.find_children("*", "Interactable", true, false).is_empty() \
+				or not pivot.find_children("*", "VhsRitual", true, false).is_empty() \
+				or not pivot.find_children(
+					"*", "ChargingStation", true, false).is_empty():
+			continue
+		if fallback_pivot == null:
+			fallback_pivot = pivot
+			for collider in group_colliders.get(
+					int(pivot.get_meta("furnishing_group")), []):
+				fallback_colliders.append(collider)
 		idx += 1
-		var roll := WorldGen.h(wseed, cell.x + idx * 131, cell.y - idx * 71,
-			5501)
-		if posmod(roll, 100) >= 48:
+		var gid := int(pivot.get_meta("furnishing_group"))
+		var roll := WorldGen.h(wseed, cell.x + idx * 131,
+			cell.y - idx * 71, 5501 + variant * 409)
+		if posmod(roll, 100) >= 72:
 			continue
-		var turn := deg_to_rad(lerpf(-14.0, 14.0,
-			float(posmod(roll >> 3, 997)) / 996.0))
-		var nudge := Vector3(
-			lerpf(-0.32, 0.32, float(posmod(roll >> 13, 997)) / 996.0),
-			0.0,
-			lerpf(-0.32, 0.32, float(posmod(roll >> 23, 997)) / 996.0))
+		# The third reality can make one in four eligible groups simply cease to
+		# exist. Removal cannot obstruct circulation and rebuilding an earlier
+		# state restores it exactly.
+		if variant == 3 and posmod(roll >> 7, 4) == 0:
+			remove_pivots.append(pivot)
+			for collider in group_colliders.get(gid, []):
+				remove_colliders.append(collider)
+			occupied.erase(gid)
+			mutation_furniture_changed_groups += 1
+			continue
 		var origin := pivot.position
-		pivot.position += nudge
-		pivot.rotation.y += turn
-		var spin := Basis(Vector3.UP, turn)
-		for collider in group_colliders.get(
-				int(pivot.get_meta("furnishing_group")), []):
-			var c := collider as Node3D
-			if c == null:
-				continue
-			c.position = origin + nudge + spin * (c.position - origin)
-			c.rotation.y += turn
+		var original_pivot_xf := pivot.transform
+		var collider_xfs := {}
+		for collider in group_colliders.get(gid, []):
+			if collider is Node3D:
+				collider_xfs[collider] = (collider as Node3D).transform
+		var accepted := false
+		for attempt in 7:
+			pivot.transform = original_pivot_xf
+			for collider in collider_xfs:
+				(collider as Node3D).transform = collider_xfs[collider]
+			var attempt_roll := WorldGen.h(wseed, roll + attempt * 719,
+				variant * 193, 5623 + idx * 37)
+			var turn_options := [
+				deg_to_rad(-38.0), deg_to_rad(38.0),
+				PI * 0.5, -PI * 0.5, PI,
+			]
+			var turn: float = turn_options[posmod(
+				attempt_roll, turn_options.size())]
+			if variant == 1:
+				turn *= 0.72
+			var reach := 0.62 if variant == 1 else (0.82 if variant == 2 else 1.05)
+			var nudge := Vector3(
+				lerpf(-reach, reach,
+					float(posmod(attempt_roll >> 5, 997)) / 996.0),
+				0.0,
+				lerpf(-reach, reach,
+					float(posmod(attempt_roll >> 17, 997)) / 996.0))
+			pivot.position = origin + nudge
+			pivot.rotation.y = original_pivot_xf.basis.get_euler().y + turn
+			var spin := Basis(Vector3.UP, turn)
+			for collider in collider_xfs:
+				var c := collider as Node3D
+				var base: Transform3D = collider_xfs[collider]
+				c.position = origin + nudge + spin * (base.origin - origin)
+				c.rotation.y = base.basis.get_euler().y + turn
+			var candidate := _furnishing_group_rect(
+				pivot, group_colliders.get(gid, []))
+			if _furnishing_variant_rect_valid(candidate, gid, occupied):
+				occupied[gid] = candidate
+				pivot.set_meta("mutation_furniture_moved", true)
+				mutation_furniture_changed_groups += 1
+				accepted = true
+				break
+		if not accepted:
+			pivot.transform = original_pivot_xf
+			for collider in collider_xfs:
+				(collider as Node3D).transform = collider_xfs[collider]
+	# Every planned room is chosen from a style with movable floor furniture.
+	# If seeded rotations all fail or skip, make the reality visibly different
+	# by removing one safe, non-interactive furnishing group. Removal cannot
+	# obstruct circulation and rebuilding another complete state restores it.
+	if mutation_furniture_changed_groups == 0 \
+			and fallback_pivot != null and is_instance_valid(fallback_pivot):
+		remove_pivots.append(fallback_pivot)
+		for collider in fallback_colliders:
+			remove_colliders.append(collider)
+		mutation_furniture_changed_groups = 1
+	# Some otherwise valid sparse rooms contain no opted-in furnishing at all.
+	# Their generated alternate reality gains one plain chair at a fully tested
+	# floor site. Appearance is as legible a mutation as movement, and rebuilding
+	# the base state removes it exactly. The same clearance contract below audits
+	# this chair like every moved furnishing group.
+	if mutation_furniture_changed_groups == 0:
+		_add_reality_chair(variant)
+	for pivot in remove_pivots:
+		if is_instance_valid(pivot) and pivot.get_parent() == self:
+			remove_child(pivot)
+			pivot.free()
+	for collider in remove_colliders:
+		if is_instance_valid(collider) and collider.get_parent() == body:
+			body.remove_child(collider)
+			collider.free()
+
+
+func _add_reality_chair(variant: int) -> bool:
+	var candidates: Array[Vector3] = []
+	for x in range(2, 11):
+		for z in range(2, 11):
+			candidates.append(Vector3(float(x), _floor_h(), float(z)))
+	var start := posmod(WorldGen.h(
+		wseed, cell.x, cell.y, 5939 + variant * 211), candidates.size())
+	var doorway_zones := _doorway_clearance_rects()
+	for i in candidates.size():
+		var p := candidates[(start + i) % candidates.size()]
+		var footprint := Rect2(p.x - 0.42, p.z - 0.42, 0.84, 0.84)
+		var blocked := false
+		for zone in doorway_zones:
+			if footprint.grow(0.12).intersects(zone):
+				blocked = true
+				break
+		if blocked or not _floor_spot_clear(p, 0.46, 1.2):
+			continue
+		var yaw := float(posmod(start + i + variant, 4)) * PI * 0.5
+		var first_collider := body.get_child_count()
+		var pivot := _furnishing_pivot(p, yaw, "reality_chair")
+		pivot.set_meta("descent_reality_furniture", true)
+		pivot.set_meta("mutation_furniture_moved", true)
+		var parts: Array[Array] = [
+			[Vector3(0, 0.48, 0), Vector3(0.66, 0.11, 0.62)],
+			[Vector3(0, 0.78, 0.26), Vector3(0.66, 0.64, 0.09)],
+			[Vector3(-0.25, 0.23, -0.22), Vector3(0.08, 0.46, 0.08)],
+			[Vector3(0.25, 0.23, -0.22), Vector3(0.08, 0.46, 0.08)],
+			[Vector3(-0.25, 0.23, 0.22), Vector3(0.08, 0.46, 0.08)],
+			[Vector3(0.25, 0.23, 0.22), Vector3(0.08, 0.46, 0.08)],
+		]
+		for part in parts:
+			var local_pos: Vector3 = part[0]
+			var size: Vector3 = part[1]
+			var world_pos := _wp(p, local_pos, yaw)
+			var mesh := _box(world_pos, size, Mats.darkwood(), false)
+			mesh.rotation.y = yaw
+			_adopt_local(pivot, mesh)
+			_collider_yaw_box(world_pos, size, yaw)
+		_bind_furnishing_colliders(pivot, first_collider)
+		mutation_furniture_changed_groups = 1
+		return true
+	return false
+
+
+func _furnishing_group_rect(pivot: Node3D, colliders: Array) -> Rect2:
+	var rects: Array[Rect2] = []
+	_collect_low_mesh_rects(pivot, Transform3D.IDENTITY, rects)
+	for value in colliders:
+		var collider := value as CollisionShape3D
+		if collider == null:
+			continue
+		var rect := _collision_floor_rect(collider)
+		if rect.size != Vector2.ZERO:
+			rects.append(rect)
+	if rects.is_empty():
+		return Rect2(pivot.position.x - 0.1, pivot.position.z - 0.1, 0.2, 0.2)
+	var merged := rects[0]
+	for i in range(1, rects.size()):
+		merged = merged.merge(rects[i])
+	return merged
+
+
+func _furnishing_variant_rect_valid(candidate: Rect2, gid: int,
+		occupied: Dictionary) -> bool:
+	if candidate.size == Vector2.ZERO:
+		return false
+	var bounds := _mutation_room_bounds().grow(-0.45)
+	if not bounds.encloses(candidate):
+		return false
+	for zone in _doorway_clearance_rects():
+		if candidate.grow(0.12).intersects(zone):
+			return false
+	for other_gid in occupied:
+		if int(other_gid) == gid:
+			continue
+		var other: Rect2 = occupied[other_gid]
+		if candidate.grow(0.12).intersects(other.grow(0.12)):
+			return false
+	return true
+
+
+func _mutation_room_bounds() -> Rect2:
+	var members := _room_members()
+	if members.is_empty():
+		return Rect2(0.0, 0.0, S, S)
+	var minp := Vector2(INF, INF)
+	var maxp := Vector2(-INF, -INF)
+	for member in members:
+		var local := Vector2(float(member.x - cell.x) * S,
+			float(member.y - cell.y) * S)
+		minp = minp.min(local)
+		maxp = maxp.max(local + Vector2.ONE * S)
+	return Rect2(minp, maxp - minp)
+
+
+## Focused audit hook for generated furniture realities.
+func mutation_furniture_clearance_violations() -> int:
+	if mutation_furniture_variant <= 0:
+		return 0
+	var group_colliders := {}
+	for child in body.get_children():
+		var gid := int(child.get_meta("furnishing_group", -1))
+		if gid < 0:
+			continue
+		if not group_colliders.has(gid):
+			group_colliders[gid] = []
+		group_colliders[gid].append(child)
+	var occupied := {}
+	var moved: Array[Node3D] = []
+	for child in get_children():
+		var pivot := child as Node3D
+		if pivot == null or not pivot.has_meta("furnishing_group"):
+			continue
+		var gid := int(pivot.get_meta("furnishing_group"))
+		occupied[gid] = _furnishing_group_rect(
+			pivot, group_colliders.get(gid, []))
+		if bool(pivot.get_meta("mutation_furniture_moved", false)):
+			moved.append(pivot)
+	var bad := 0
+	for pivot in moved:
+		var gid := int(pivot.get_meta("furnishing_group"))
+		if not _furnishing_variant_rect_valid(
+				occupied[gid], gid, occupied):
+			bad += 1
+	return bad
+
+
+## Runtime staging gate. A planned furniture reality is accepted only when its
+## owning Chunk demonstrably changed a group and the completed replacement is
+## clear of both furniture and doorway contracts.
+func mutation_rebuild_valid() -> bool:
+	if mutation_furniture_variant <= 0 or not is_room_anchor:
+		return true
+	return mutation_furniture_changed_groups > 0 \
+		and mutation_furniture_clearance_violations() == 0 \
+		and doorway_clearance_violations() == 0
 
 
 func _mesh_is_emissive(mesh: MeshInstance3D) -> bool:
@@ -5888,26 +6232,6 @@ func _reset_terminal(hit: Interactable, readout: Label3D,
 	readout.text = TERMINAL_PAGES[page]
 	readout.visible = false
 	screen.set_instance_shader_parameter("queried", 0.0)
-
-
-func terminal_readout_violations() -> int:
-	var bad := 0
-	for node in find_children("*", "Label3D", true, false):
-		var readout := node as Label3D
-		if not readout.has_meta("terminal_readout"):
-			continue
-		var lines := readout.text.split("\n")
-		var text_width_px := 0.0
-		for line in lines:
-			text_width_px = maxf(text_width_px, readout.font.get_string_size(
-				line, HORIZONTAL_ALIGNMENT_LEFT, -1, readout.font_size).x)
-		var text_height_px := readout.font.get_height(readout.font_size) * float(lines.size())
-		if text_width_px * readout.pixel_size > TERMINAL_SCREEN_SIZE.x * 0.92 \
-				or text_height_px * readout.pixel_size > TERMINAL_SCREEN_SIZE.y * 0.90 \
-				or readout.width * readout.pixel_size > TERMINAL_SCREEN_SIZE.x * 0.94 \
-				or readout.double_sided:
-			bad += 1
-	return bad
 
 
 ## Every CRT belongs beneath a workstation pivot. Doorway clearance operates
@@ -6415,16 +6739,8 @@ func _yaw_for(dir: int) -> float:
 	return PI
 
 
-func _room_members() -> Array:
-	var out := []
-	# Merges only reach one cell toward -x/-z, while a 2x2 hall reaches one
-	# toward +x/+z. This small scan covers every legal generated room shape.
-	for mx in range(room_root.x - 1, room_root.x + 2):
-		for mz in range(room_root.y - 1, room_root.y + 2):
-			var candidate := Vector2i(mx, mz)
-			if WorldGen.room_id(wseed, candidate) == room_root:
-				out.append(candidate)
-	return out
+func _room_members() -> Array[Vector2i]:
+	return WorldGen.owning_room_members(wseed, room_root, theme)
 
 
 func _room_span() -> Vector2:

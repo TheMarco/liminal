@@ -34,6 +34,7 @@ const VINES_CENTRE := Vector3(0.593594, 2.021460, -0.205125)
 const FLESH_FLOOR_OFFSET := Vector3(0.204127, 0.295808, -0.004298)
 
 static var _vine_cylinder: CylinderMesh
+static var _pine_roots_prototype: Node3D
 
 
 func _vine_mesh() -> CylinderMesh:
@@ -406,6 +407,14 @@ func _bloom_lighting() -> void:
 			PI * 0.5 if axis_x else 0.0,
 			posmod(i + int(chunk._r(3305 + i) * 4.0), 4),
 			dead, flicker, emission_mats, fixture_lights))
+	# Four overlapping shadowed omni lights multiply this room's geometry into
+	# thousands of shadow draws. One real shadow source preserves contact and
+	# silhouette depth; the remaining visible fixtures still provide fill.
+	if fixture_lights.size() > 1:
+		var shadow_index := 1 if passage else int(chunk._r(3317) \
+			* float(fixture_lights.size())) % fixture_lights.size()
+		for i in fixture_lights.size():
+			fixture_lights[i].shadow_enabled = i == shadow_index
 	if flicker and not emission_mats.is_empty():
 		var controller = BLOOM_FIXTURE_FLICKER_SCRIPT.new()
 		controller.mats = emission_mats
@@ -499,10 +508,18 @@ func _bloom_annex_door_at(pos: Vector3, yaw: float) -> bool:
 
 
 func _pine_roots(pos: Vector3, yaw: float, scale: float) -> Node3D:
-	var ps := chunk._prop_scene(chunk.BLOOM_ROOT_PATH)
-	if ps == null:
-		return null
-	var inst := ps.instantiate() as Node3D
+	var started := Time.get_ticks_usec()
+	if _pine_roots_prototype == null:
+		var ps := chunk._prop_scene(chunk.BLOOM_ROOT_PATH)
+		if ps == null:
+			return null
+		_pine_roots_prototype = ps.instantiate() as Node3D
+		if _pine_roots_prototype == null:
+			return null
+		for found in _pine_roots_prototype.find_children(
+				"*", "MeshInstance3D", true, false):
+			(found as MeshInstance3D).material_override = Mats.bloom_growth()
+	var inst := _pine_roots_prototype.duplicate() as Node3D
 	if inst == null:
 		return null
 	inst.position = pos
@@ -510,14 +527,20 @@ func _pine_roots(pos: Vector3, yaw: float, scale: float) -> Node3D:
 	inst.scale = Vector3.ONE * scale
 	inst.set_meta("cc0_asset", "pine_roots")
 	inst.set_meta("bloom_hero_roots", true)
-	for found in inst.find_children("*", "MeshInstance3D", true, false):
-		(found as MeshInstance3D).material_override = Mats.bloom_growth()
 	chunk.add_child(inst)
+	chunk._profile_stage("bloom_pine_roots", started)
 	return inst
+
+
+static func clear_runtime_cache() -> void:
+	if _pine_roots_prototype != null:
+		_pine_roots_prototype.free()
+	_pine_roots_prototype = null
 
 
 func _authored_vines(pos: Vector3, rotation: Vector3, scale: float,
 		tag: String) -> Node3D:
+	var started := Time.get_ticks_usec()
 	var pivot := Node3D.new()
 	pivot.name = "AuthoredThornMass"
 	pivot.position = pos
@@ -535,6 +558,7 @@ func _authored_vines(pos: Vector3, rotation: Vector3, scale: float,
 		var mesh_node := found as MeshInstance3D
 		mesh_node.material_override = Mats.bloom_growth()
 		mesh_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	chunk._profile_stage("bloom_authored_vines:" + tag, started)
 	return pivot
 
 
@@ -610,11 +634,16 @@ func _bloom_classroom() -> void:
 		[Vector3(2.2, 0, 9.8), PI + 0.22], [Vector3(9.7, 0, 9.6), PI - 0.28],
 	]:
 		var p: Vector3 = data[0]
+		var b0 := chunk.body.get_child_count()
 		var pivot := chunk._attributed_floor_prop(chunk.SCH_DESK_PATH, p,
 			float(data[1]) + chunk.SCH_DESK_YAW_FIX, chunk.SCH_DESK_SCALE,
-			chunk.SCH_DESK_CENTRE, "bloom_school_desk")
+			chunk.SCH_DESK_CENTRE, "bloom_school_desk", null, chunk.descent)
 		if pivot != null:
 			pivot.set_meta("bloom_displaced_furniture", true)
+			if chunk.descent:
+				chunk._collider_yaw_box(p + Vector3(0, 0.42, 0),
+					Vector3(0.80, 0.84, 0.96), float(data[1]))
+				chunk._bind_furnishing_colliders(pivot, b0)
 	var board := chunk._box(Vector3(6.0, 1.62, 11.72),
 		Vector3(5.4, 1.50, 0.09), Mats.bloom_metal(), false)
 	board.set_meta("bloom_infected_board", true)

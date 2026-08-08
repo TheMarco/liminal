@@ -14,20 +14,33 @@ func _init() -> void:
 
 
 func _run() -> void:
+	var selected_theme := -1
+	var stages := false
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--theme="):
+			selected_theme = int(arg.trim_prefix("--theme="))
+		elif arg == "--stages":
+			stages = true
 	print("GENERATION PROFILE | seed %d | %dx%d background-preloaded cells per floor" %
 		[SEED, RADIUS * 2 + 1, RADIUS * 2 + 1])
 	# Match the game: workers start decoding glTF resources while the title is
 	# visible. A short grace period here keeps the profile focused on streaming.
 	Chunk.request_prop_preloads()
 	await create_timer(2.0).timeout
+	Chunk.profile_build_stages = stages
 	# Prime each theme's common construction path and scene instantiation.
 	for theme in WorldGen.THEMES:
+		if selected_theme >= 0 and theme != selected_theme:
+			continue
 		var warm := Chunk.new(_theme_seed(theme), Vector2i.ZERO, theme)
 		warm.free()
 	for theme in WorldGen.THEMES:
+		if selected_theme >= 0 and theme != selected_theme:
+			continue
 		_profile_theme(theme, "first", true)
 		_profile_theme(theme, "steady", false)
-	Chunk.finish_prop_preloads()
+	Chunk.clear_runtime_caches()
+	Chunk.profile_build_stages = false
 	await process_frame
 	print("PROFILE COMPLETE")
 	quit()

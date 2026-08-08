@@ -21,6 +21,16 @@ func _has_meta_node(node: Node, meta: String) -> bool:
 	return false
 
 
+func _has_enabled_gi(node: Node) -> bool:
+	if node is GeometryInstance3D and (node as GeometryInstance3D).gi_mode \
+			!= GeometryInstance3D.GI_MODE_DISABLED:
+		return true
+	for child in node.get_children():
+		if _has_enabled_gi(child):
+			return true
+	return false
+
+
 func _run() -> void:
 	var failures: Array[String] = []
 	for base in SEEDS:
@@ -34,11 +44,15 @@ func _run() -> void:
 			var theme: int = order[floor_idx]
 			var ws := WorldGen.level_seed(base, theme)
 			var route := DescentRoute.build(ws, theme, floor_idx)
+			if route.objective_ritual_cell() != route.target:
+				failures.append("seed %d floor %d: mandatory altar is not at lift" % [
+					base, floor_idx + 1])
 			var target := Chunk.new(ws, route.target, theme, {
 				"descent": true,
 				"target": true,
 				"target_wall": route.target_wall,
 				"floor_idx": floor_idx,
+				"base_seed": base,
 			})
 			var label := "seed %d floor %d theme %d" % [base, floor_idx + 1, theme]
 			# The altar assembles its interactable in _ready, so it needs a
@@ -75,6 +89,9 @@ func _run() -> void:
 				for child in bled.get_children():
 					if child.has_meta("bleed_prop"):
 						found = true
+						if _has_enabled_gi(child):
+							failures.append(label \
+								+ ": streamed bleed prop still participates in SDFGI")
 						break
 				bled.free()
 				if found:
