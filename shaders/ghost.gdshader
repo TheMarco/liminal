@@ -26,6 +26,22 @@ uniform float absorb_dark = 0.020;
 // pre-tonemap.
 uniform float body_floor = 0.010;
 uniform float unlit_luma = 0.012;
+// The artwork's interior luminance as a density map. `form_scale` is where the
+// art's brightest fold sits (measured across the sheets: ~0.30), `form_gain`
+// how much more light a fully lit fold passes than a black cavity.
+uniform float form_scale = 0.30;
+uniform float form_gain = 2.6;
+uniform float edge_transmit = 1.9;
+uniform float chroma = 0.06;
+// Relief and refraction, both derived from the same height field.
+uniform float relief_scale = 2.4;
+uniform float refract_amt = 0.006;
+uniform float scatter = 0.055;
+uniform float torch_gain = 0.16;
+// Two of the sheets have a ground shadow painted into the artwork, below a
+// clean gap under the hem. The figures are not supposed to cast one, so the
+// cell is cut off above it. Zero for sheets that were drawn without one.
+uniform float base_cut = 0.0;
 uniform float erode_amt = 0.22;
 uniform float edge0 = 0.08;
 uniform float edge1 = 0.72;
@@ -68,6 +84,10 @@ instance uniform float ignite = 0.0;
 // that holds perfectly still under your gaze and shifts its weight the moment
 // you look away is worse than one that never moves at all.
 instance uniform float sway = 0.0;
+// How hard the beam is on it, fed from script. Distinct from `burn`, which is
+// the charge toward a kill: the torch reveals the surface long before it has
+// built enough heat to consume it.
+instance uniform float torch = 0.0;
 
 
 void vertex() {
@@ -85,7 +105,14 @@ void vertex() {
 	// the soles stay planted. A whole-quad slide would look like it was on ice.
 	float foot = clamp(VERTEX.y + 0.5, 0.0, 1.0);
 	float lean = sway * 0.035 * foot * foot;
-	vec3 wpos = obj + right * (VERTEX.x + lean) * sx + up * VERTEX.y * sy;
+	// The kill eats upward from the hem, so the mass above loses its footing
+	// as it goes. Settling the card toward the floor — top most, feet not at
+	// all — reads as a body going down rather than a picture fading out.
+	float slump = ignite > 0.5
+		? (1.0 - clamp(fade, 0.0, 1.0)) * foot * 0.16
+		: 0.0;
+	vec3 wpos = obj + right * (VERTEX.x + lean) * sx
+		+ up * (VERTEX.y - slump) * sy;
 	POSITION = PROJECTION_MATRIX * (VIEW_MATRIX * vec4(wpos, 1.0));
 }
 
@@ -181,6 +208,7 @@ void fragment() {
 		float next_a = soft_alpha(smoke_uv, next_cell_org, cell_size);
 		a = mix(a, next_a, frame_mix);
 	}
+	a *= smoothstep(base_cut, base_cut + 0.018, smoke_uv.y);
 	float n1 = texture(noise_tex,
 		smoke_uv * vec2(2.15, 1.15) + vec2(seed + TIME * 0.012, -TIME * 0.075 * (1.0 - dissolve_smoke))).r;
 	float n2 = texture(noise_tex,
@@ -213,10 +241,59 @@ void fragment() {
 	// absence in a photograph actually looks like. Structure still lives in
 	// alpha; this only decides what the covered pixels become. No blue-grey rim:
 	// the tint is the scene's, never the shader's.
-	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
+	// The artwork is not a flat stencil: inside the silhouette it carries a
+	// fully modelled figure — robe folds, a shadowed face cavity, hands, a
+	// rippling hem — painted as luminance from 0 to about 0.3. Treating every
+	// covered pixel to one uniform multiply throws all of that away and is
+	// exactly why a pure absence reads as a flat layer at some opacity.
+	//
+	// So the source luminance becomes a density map. Where the art is bright
+	// the material is lit and thin, and more of the room survives through it;
+	// where it is black — the hollow of the hood, the gaps between folds —
+	// almost nothing does. The form was always in the sheet; this only stops
+	// discarding it.
+	vec3 src = texture(tex, cell_org
+		+ clamp(smoke_uv, vec2(0.0), vec2(1.0)) * cell_size).rgb;
+	if (frame_mix > 0.001) {
+		vec3 next_src = texture(tex, next_cell_org
+			+ clamp(smoke_uv, vec2(0.0), vec2(1.0)) * cell_size).rgb;
+		src = mix(src, next_src, frame_mix);
+	}
+	float form = clamp(dot(src, vec3(0.2126, 0.7152, 0.0722)) / form_scale,
+		0.0, 1.0);
+
+	// That same luminance doubles as a height field, so the folds have a
+	// gradient and therefore a surface normal. Four taps: enough for relief,
+	// and the alpha blur above already costs thirteen.
+	vec2 step_uv = cell_size / vec2(textureSize(tex, 0)) * 2.0;
+	float hx0 = dot(texture(tex, cell_org + clamp(smoke_uv - vec2(step_uv.x, 0.0),
+		vec2(0.0), vec2(1.0)) * cell_size).rgb, vec3(0.333));
+	float hx1 = dot(texture(tex, cell_org + clamp(smoke_uv + vec2(step_uv.x, 0.0),
+		vec2(0.0), vec2(1.0)) * cell_size).rgb, vec3(0.333));
+	float hy0 = dot(texture(tex, cell_org + clamp(smoke_uv - vec2(0.0, step_uv.y),
+		vec2(0.0), vec2(1.0)) * cell_size).rgb, vec3(0.333));
+	float hy1 = dot(texture(tex, cell_org + clamp(smoke_uv + vec2(0.0, step_uv.y),
+		vec2(0.0), vec2(1.0)) * cell_size).rgb, vec3(0.333));
+	vec3 nrm = normalize(vec3((hx0 - hx1) * relief_scale,
+		(hy0 - hy1) * relief_scale, 1.0));
+
+	// A body of a different density to air bends what is behind it. Offsetting
+	// the screen sample along the surface normal — hardest at the silhouette,
+	// where the surface turns away fastest — makes the room visibly swim as it
+	// passes behind the figure. Nothing else in the frame says as clearly that
+	// the thing occupies space rather than being pasted at that depth.
+	vec2 warp = nrm.xy * refract_amt * (0.35 + 0.65 * (1.0 - shape));
+	vec3 behind = texture(screen_tex, SCREEN_UV + warp).rgb;
 	float bg_luma = dot(behind, vec3(0.2126, 0.7152, 0.0722));
 	float absorb = mix(absorb_dark, absorb_lit, smoothstep(0.0, 0.22, bg_luma));
-	vec3 albedo = behind * absorb;
+	// Thin at the rim as well as at the lit folds. A body of finite depth has
+	// less of itself to see through where its silhouette turns away, and the
+	// coverage the blur already computed is a serviceable stand-in for that.
+	absorb *= (1.0 + form * form_gain) * mix(edge_transmit, 1.0, shape);
+	// Absorption is never perfectly neutral. Letting a little more blue through
+	// than red leaves the thin material faintly cold without the shader ever
+	// choosing a colour of its own — the tint is still the room's.
+	vec3 albedo = behind * absorb * vec3(1.0 - chroma, 1.0, 1.0 + chroma);
 	// The lift is gated on the background being genuinely unlit, or it would
 	// undo the black the dim case just bought. Broken up by the same drifting
 	// noise that eats the edge, so where it does come in the body is veiled
@@ -225,6 +302,24 @@ void fragment() {
 	float unlit = 1.0 - smoothstep(0.0, unlit_luma, bg_luma);
 	float veil = body_floor * unlit * mix(0.35, 1.30, n1 * 0.6 + n2 * 0.4);
 	albedo += vec3(max(veil - dot(albedo, vec3(0.2126, 0.7152, 0.0722)), 0.0));
+
+	// Not all the light that enters thin material is absorbed; some of it
+	// scatters forward and leaves on this side. Where the room behind is bright
+	// and the fold is thin, a little of it bleeds through as diffuse glow rather
+	// than clean transmission — the difference between a filter and a body.
+	albedo += behind * scatter * form * form * (0.30 + 0.70 * (1.0 - shape));
+
+	// Relief, revealed by the torch. The beam is mounted on the camera, so its
+	// light always arrives from the viewer; a fixed key just off that axis is
+	// what gives the folds a readable direction. This is the one moment the
+	// figure is a surface rather than an absence, and it is bought with the
+	// same gesture that kills it: aim, and you see what you are aiming at.
+	if (torch > 0.001) {
+		vec3 key = normalize(vec3(-0.34, 0.52, 0.78));
+		float lambert = max(dot(nrm, key), 0.0);
+		float relief = pow(lambert, 1.6) * form;
+		albedo += vec3(1.0, 0.92, 0.80) * relief * torch * torch_gain;
+	}
 	float emit = 0.0;
 
 	// Artwork that carries its own colour keeps it — the animated wraith has
@@ -232,13 +327,6 @@ void fragment() {
 	// silhouette treatment cannot reproduce. Only saturated pixels survive, so
 	// the body stays a true black cutout instead of turning into grey photo.
 	if (keep_colour > 0.5) {
-		vec3 src = texture(tex, cell_org
-			+ clamp(smoke_uv, vec2(0.0), vec2(1.0)) * cell_size).rgb;
-		if (frame_mix > 0.001) {
-			vec3 next_src = texture(tex, next_cell_org
-				+ clamp(smoke_uv, vec2(0.0), vec2(1.0)) * cell_size).rgb;
-			src = mix(src, next_src, frame_mix);
-		}
 		float peak = max(src.r, max(src.g, src.b));
 		float sat = peak - min(src.r, min(src.g, src.b));
 		float lit = smoothstep(0.045, 0.18, sat);
@@ -265,7 +353,13 @@ void fragment() {
 	// visibly come apart.
 	if (burn > 0.0) {
 		float heat = burn * burn;
-		float speckle = smoothstep(0.62 - heat * 0.50, 0.99 - heat * 0.34, ember);
+		// Thin material catches first. The hem and the outer folds are where the
+		// artwork is brightest, so `form` puts the first embers exactly where a
+		// real thing would start to go, instead of scattering them at random
+		// across the mass.
+		float catches = ember * (0.55 + form * 0.75);
+		float speckle = smoothstep(0.62 - heat * 0.50, 0.99 - heat * 0.34,
+			catches);
 		float glow = clamp(speckle * heat, 0.0, 1.0);
 		emit = glow * 1.25;
 		// Only the pixels actually alight take the ember colour. Handing it to
@@ -274,19 +368,56 @@ void fragment() {
 		albedo = mix(albedo, vec3(1.0, 0.80, 0.52), glow);
 	}
 
-	// The kill, and only the kill, consumes. A ragged front runs up the body
-	// and everything behind it is gone; the material just ahead of it glows
-	// white-hot on the way through. Driven by `dissolve`, which only advances.
+	// The kill, and only the kill, consumes. Driven by `dissolve`, which only
+	// advances.
+	//
+	// A front that is only a function of height is a wipe: a horizontal bar
+	// travelling up a shape. Real material goes in the order its own structure
+	// dictates, so the front is pulled forward by `form` — the thin, lit hem
+	// and the outer folds are alight while the mass of the robe has not caught
+	// yet — and broken up by two noise fields at different scales so its edge
+	// is ragged rather than a line.
 	if (ignite > 0.5) {
-		float front = dissolve * 1.45 - (1.0 - smoke_uv.y) * 0.40 - ember * 0.28;
-		float consumed = smoothstep(0.0, 0.20, front);
-		float rim = smoothstep(0.0, 0.14, front)
-			* (1.0 - smoothstep(0.14, 0.42, front));
-		opacity *= 1.0 - consumed * 0.96;
-		opacity = max(opacity, rim * 0.90 * shape);
-		emit = max(emit, rim * (0.70 + ember * 0.95));
-		// The front is hot; what it has not reached yet is still an absence.
-		albedo = mix(albedo, vec3(1.0, 0.86, 0.62), clamp(rim * 1.6, 0.0, 1.0));
+		float front = dissolve * 1.58
+			- (1.0 - smoke_uv.y) * 0.78
+			+ form * 0.22
+			- ember * 0.18
+			- n2 * 0.10;
+		float consumed = smoothstep(0.0, 0.13, front);
+
+		// Three zones instead of one flat tan. Immediately behind the front the
+		// material is charring; at the front itself it runs orange; and the
+		// leading millimetre is white-hot. A single rim colour is what made the
+		// old kill read as a coloured wipe rather than something burning.
+		float core = smoothstep(-0.015, 0.005, front)
+			* (1.0 - smoothstep(0.005, 0.045, front));
+		float flame = smoothstep(-0.055, 0.0, front)
+			* (1.0 - smoothstep(0.02, 0.15, front));
+		float char_ = smoothstep(0.02, 0.11, front)
+			* (1.0 - smoothstep(0.15, 0.42, front));
+
+		// Sparks: a sparse set of the hottest noise peaks keep burning for a
+		// while after the front has gone past them, so the wake is not simply
+		// empty. They rise, because the noise fields already drift upward.
+		float spark = smoothstep(0.90, 0.995, ember)
+			* smoothstep(0.01, 0.10, front)
+			* (1.0 - smoothstep(0.18, 0.60, front));
+
+		opacity *= 1.0 - consumed * 0.97;
+		opacity = max(opacity, (flame * 0.80 + spark * 0.85) * shape);
+		opacity = max(opacity, char_ * 0.55 * shape);
+
+		vec3 hot = mix(vec3(1.0, 0.42, 0.10), vec3(1.0, 0.78, 0.42),
+			clamp(flame * 1.3, 0.0, 1.0));
+		hot = mix(hot, vec3(1.0, 0.97, 0.90), clamp(core * 1.5, 0.0, 1.0));
+		float lit_amt = clamp(flame * 1.5 + core + spark, 0.0, 1.0);
+		// What the front has already passed is charred, not gone: a dark, dead
+		// band that trails the flame and then dissolves with the rest.
+		albedo = mix(albedo, vec3(0.05, 0.03, 0.03),
+			clamp(char_ * 0.9, 0.0, 1.0));
+		albedo = mix(albedo, hot, lit_amt);
+		emit = max(emit, flame * (0.26 + ember * 0.34) + core * 0.80
+			+ spark * 1.05);
 	}
 
 	// This shader is unshaded, so EMISSION is never read: the hot front has to

@@ -127,11 +127,11 @@ const LOOKS := {
 # numbers describe a single cell and the shader does the addressing.
 # Produced by tools/build_flipbook.py, which prints them.
 const BODY := {
-	"wraith_anim": [0.615, 0.014, 1.000],
+	"wraith_anim": [0.615, 0.049, 1.000],
 	"wraith2":     [0.535, 0.000, 1.000],
 	"wraith3":     [0.642, 0.000, 1.000],
 	"wraith4":     [0.441, 0.010, 1.000],
-	"wraith5":     [0.625, 0.000, 1.000],
+	"wraith5":     [0.625, 0.056, 1.000],
 	"wraith6":     [0.559, 0.003, 1.000],
 	"wraith7":     [0.448, 0.003, 1.000],
 	# The passing-shadow walk cycles. Measured from the built sheets: the
@@ -164,6 +164,16 @@ const FLIPBOOKS := {
 	"passer3":     [6, 4, 24, 12.0],
 	"passer4":     [6, 4, 24, 12.0],
 }
+## Sheets drawn with a ground shadow under the figure, as the fraction of the
+## frame it occupies measured up from the bottom. The apparitions do not cast
+## one, so the shader discards everything below this line — and the feet entry
+## in BODY above starts at the same place, so the body still lands on the floor
+## rather than hovering the height of the discarded band.
+const BASE_CUT := {
+	"wraith_anim": 0.049,
+	"wraith5": 0.056,
+}
+
 ## Cutouts whose own colour is worth keeping. All seven have lit eyes — one
 ## pair is green rather than red — and those are the only pixels allowed to
 ## survive the black-absence treatment.
@@ -231,6 +241,11 @@ var _seen := false
 var _shiver: AudioStreamPlayer3D
 var _burn := 0.0
 var _burning := false
+## Eased beam-on-it strength, for the shader's relief. Not the burn charge.
+var _torch := 0.0
+## The light the kill throws on the room, driven per frame rather than tweened
+## so it can flicker.
+var _flash: OmniLight3D
 var _sway := 0.0
 ## Set by ShadowFigures while the rules have the player pinned. It still burns
 ## and still fades — it simply does not close the distance.
@@ -277,6 +292,8 @@ static func _mat_for(texname: String) -> ShaderMaterial:
 		m.set_shader_parameter("flip_rows", float(fb[1]))
 		m.set_shader_parameter("flip_count", float(fb[2]))
 		m.set_shader_parameter("flip_fps", float(fb[3]))
+	if BASE_CUT.has(texname):
+		m.set_shader_parameter("base_cut", float(BASE_CUT[texname]))
 	if COLOURED.has(texname):
 		m.set_shader_parameter("keep_colour", 1.0)
 		m.set_shader_parameter("colour_gain", 1.0)
@@ -452,9 +469,21 @@ func _physics_process(dt: float) -> void:
 	_sway += dt
 	_quad.set_instance_shader_parameter("sway",
 		sin(_sway * 0.9 + _bob_t))
+	# What the beam REVEALS, as distinct from what it burns. The two share a
+	# gesture but not a timescale: the surface lights the instant the light
+	# lands on it, while the heat needs a second and a half to build. Eased so
+	# a wavering aim breathes across the folds instead of strobing them.
+	var beam := _in_beam(cam, aim, sighted)
+	var want := 0.0
+	if beam and _fade < 0.0:
+		want = clampf(1.0 - dist / maxf(player.flashlight.spot_range, 0.001),
+			0.0, 1.0)
+		want = 0.35 + 0.65 * want
+	_torch = move_toward(_torch, want, dt * (6.0 if want > _torch else 3.0))
+	_quad.set_instance_shader_parameter("torch", _torch)
 	# The torch burns it away far faster than a stare, and keeps burning only
 	# while the beam stays on it.
-	if _fade < 0.0 and grace <= 0.0 and _in_beam(cam, aim, sighted):
+	if _fade < 0.0 and grace <= 0.0 and beam:
 		_burn = minf(_burn_time, _burn + dt)
 		if not _burning:
 			_burning = true
@@ -484,8 +513,16 @@ func _physics_process(dt: float) -> void:
 		# Normalise against the length this particular exit started with: a burn
 		# runs longer than a stare-out and a seize is shorter, and dividing all
 		# three by FADE_T would make two of them jump.
-		_quad.set_instance_shader_parameter("fade",
-			clampf(_fade / maxf(_fade_len, 0.001), 0.0, 1.0))
+		var left := clampf(_fade / maxf(_fade_len, 0.001), 0.0, 1.0)
+		_quad.set_instance_shader_parameter("fade", left)
+		if _flash != null:
+			# Envelope follows the front up the body; the flicker on top of it is
+			# what separates a fire from a lamp on a dimmer.
+			var t := 1.0 - left
+			var env := smoothstep(0.0, 0.30, t) * (1.0 - smoothstep(0.45, 1.0, t))
+			var flick := 0.78 + 0.22 * sin(t * 71.0) * sin(t * 23.0 + _bob_t)
+			_flash.light_energy = 6.4 * env * flick
+			_flash.position.y = _eye_h * (0.35 + 0.60 * t)
 		if _fade <= 0.0:
 			queue_free()
 
@@ -720,15 +757,18 @@ func _ignite() -> void:
 	_quad.set_instance_shader_parameter("burn", 0.0)
 	_quad.set_instance_shader_parameter("ignite", 1.0)
 	burned_away.emit()
-	var flash := OmniLight3D.new()
-	flash.light_color = Color(0.86, 0.94, 1.0)
-	flash.light_energy = 7.5
-	flash.omni_range = 7.0
-	flash.shadow_enabled = false
-	flash.position = Vector3(0, _eye_h, 0)
-	add_child(flash)
-	var tw := create_tween()
-	tw.tween_property(flash, "light_energy", 0.0, BURN_FADE * 0.8)
+	# The room should be lit by the thing burning, which means the light has to
+	# follow the front rather than announce the kill: it comes up as the flame
+	# crosses the body and falls away with it. A cold flash at full energy on
+	# frame one lit the walls blue while the figure itself was going orange.
+	_flash = OmniLight3D.new()
+	_flash.light_color = Color(1.0, 0.70, 0.38)
+	_flash.light_energy = 0.0
+	_flash.omni_range = 8.0
+	_flash.shadow_enabled = false
+	# Rides up the body with the front instead of sitting at the eyes.
+	_flash.position = Vector3(0, _eye_h * 0.35, 0)
+	add_child(_flash)
 	# Its own recording rather than a jump-scare pitched up: a stinger is the
 	# sound of something arriving, and this is the sound of something ending.
 	var sc := Sfx.random_death()
