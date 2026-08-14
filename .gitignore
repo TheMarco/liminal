@@ -5,3 +5,8 @@
 build/
 *.zip
 __pycache__/
+
+# Raw video sources. Only the Theora conversions under videos/ are versioned;
+# provenance lives in videos/tapes/SOURCES.md.
+newshorts/
+cross/
