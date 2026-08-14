@@ -237,7 +237,11 @@ Wander terminal/elevator/door assertions are part of the regression contract.
 | File | Class | Responsibility |
 |---|---|---|
 | `scripts/levels/*_level_builder.gd` | — | One builder per theme, holding that floor's room styles, lighting and props. `Chunk.LEVEL_BUILDERS` maps a theme id to one. |
-| `scripts/levels/chunk_level_builder.gd` | `ChunkLevelBuilder` | Base class: the typed `chunk` host and the documented contract for what a builder may use on it. |
+| `scripts/levels/chunk_level_builder.gd` | `ChunkLevelBuilder` | Base class receiving immutable `ChunkBuildContext` facts and the typed `ChunkSceneWriter`; builders cannot access a live Chunk. |
+| `scripts/world_mutation.gd` | `WorldMutation` | Durable topology, runtime-state and object-presence transaction record. |
+| `scripts/chunk_runtime_state.gd` | `ChunkRuntimeState` | Versioned allowlisted floor runtime-object registry. |
+| `scripts/level_transition_controller.gd` | `LevelTransitionController` | Saved Wander positions, arrival policy, and atomic fade/teardown/build sequence. |
+| `scripts/post_process_controller.gd` | `PostProcessController` | CRT/found-footage state, glitches, corruption and damage presentation. |
 | `scripts/cli_options.gd` | `CliOptions` | Every `--flag`, parsed once. Replaces sixteen `OS.get_cmdline_user_args()` sites in main plus three scripts that re-parsed it. |
 | `scripts/env_builder.gd` | `EnvBuilder` | Per-floor `WorldEnvironment` settings, one named function each. |
 | `scripts/theme_sounds.gd` | `ThemeSounds` | Base for the per-theme spatial emitters: shared player setup, not shared timing. |
@@ -248,12 +252,10 @@ Wander terminal/elevator/door assertions are part of the regression contract.
 
 Two rules the pass established, both learned from breaking them:
 
-- **A method a second theme starts calling belongs on `Chunk` under a neutral
-  name, never on one builder.** Reaching a builder method through
-  `_level_builder` only works when the call site is theme-gated. A *shared*
-  helper that does it fails on every other theme — which is how school admin
-  rooms lost their terminal and prison guard desks lost theirs from the desk
-  pivot, the second one silently, with no crash and a merely wrong scene tree.
+- **A method a theme builder needs belongs on `ChunkSceneWriter` as a named,
+  typed capability or in `ChunkBuildContext` as an immutable fact.** Builders
+  never receive the live Chunk node. Do not add a generic dispatch or root-node
+  escape hatch to bypass this boundary.
 - **The audit facade is theme-agnostic.** The `*_audit()` / `*_violations()`
   methods are called on chunks of every theme, so they live on `Chunk`. Filing
   them by name prefix into one builder is what broke four CI audits.
@@ -917,7 +919,8 @@ hunting in it. Descent is the only mode that releases the manager.
 
 Blackouts are unmistakable run events, not inferred from ambient light:
 
-- interval: roughly 90–150 seconds at attention zero, 25–40 at one;
+- interval: 35–55 seconds for the first blackout on a floor, then 25–45;
+  prison/Monolith theme modifiers and high-attention caps still apply;
 - duration: 5–8 seconds;
 - breaker thud at onset;
 - clear power-return sound at the end;
@@ -994,6 +997,11 @@ Snapshot and restore ambient energy separately on `main.we.environment`.
 - Restore returns intentionally dead/flickering fixtures to exact prior state.
 - Every actual blackout reveals one generated topology/furniture state; a
   blackout with no nearby unoccupied transition is postponed before it begins.
+- A transition must also have a change in the gameplay camera's unobstructed
+  view. Visible doors/walls win; otherwise a designated prevalidated set piece
+  must be visible and is guaranteed to move, disappear, or appear before power
+  returns. Looking at unrelated architecture postpones the blackout rather
+  than spending the mutation off-screen.
 - Openings, closures and appearing doors are shared runtime edges, not decals:
   both neighbouring chunks and every route consumer resolve the same state.
 - Every complete state retains critical reachability and exact mutation-back.
@@ -1122,7 +1130,8 @@ Boundary jitter must not count:
 
 - leaving a cell never drops or collides with the player;
 - returning reveals the already-applied anomaly;
-- dead-light anomalies restore correctly after a global blackout;
+- global blackout restoration never silently creates a dead-light hallway;
+- unsuitable waiting-figure rooms decline the optional beat without changing fixtures;
 - waiting figure anomalies become ordinary burnable encounters when activated;
 - anomaly choices reproduce from seed/cell;
 - graph connectivity and every existing procedural audit remain unchanged.
@@ -1154,7 +1163,7 @@ All values require playtesting.
 | backtrack cell | `+0.06` once | dead ends survivable |
 | blackout movement | `+0.06`, then `+0.02/s`, cap `+0.20` | clear but not run-ending |
 | attention decay | `-0.0025/s → -0.0016/s` | recovery slows with depth |
-| blackout interval | `90–150s → 25–40s` | total threat-scaled |
+| blackout interval | first `35–55s`, repeats `25–45s` | theme-modified; visibility failures retry without consuming it |
 | blackout duration | `5–8s → 6.5–9.5s` | longer decisions with depth |
 | CRT noise | `1.0 → 2.6` | shader range remains valid |
 | figure interval scale | `1.0 → 0.35` | ~11s → ~4s |

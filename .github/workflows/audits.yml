@@ -68,6 +68,9 @@ jobs:
       - name: Audit authored mall shopping carts
         run: godot --headless --path . --script tools/audit_mall_shopping_carts.gd
 
+      - name: Audit mall directory orientation
+        run: godot --headless --path . --script tools/audit_mall_directory.gd
+
       - name: Audit authored chemistry rooms and glassware
         run: godot --headless --path . --script tools/audit_chemistry_props.gd
 
@@ -106,6 +109,15 @@ jobs:
 
       - name: Audit Descent runtime contracts
         run: godot --headless --path . --script tools/audit_descent_runtime.gd -- --mode=descent --nologo
+
+      - name: Audit blackout mutation reveal
+        run: godot --headless --path . --script tools/audit_mutation_reveal.gd
+
+      - name: Audit blackout light restoration
+        run: godot --headless --path . --script tools/audit_blackout_lighting.gd
+
+      - name: Audit reported airport runtime path
+        run: godot --headless --path . --script tools/audit_airport_runtime.gd -- --mode=descent --descent-floor=4 --nologo
 
       - name: Audit persistent Descent checkpoint
         run: godot --headless --path . --script tools/audit_descent_progress.gd

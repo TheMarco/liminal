@@ -218,6 +218,13 @@ through on their transients.
 
 ## Run it
 
+The construction and mutation boundaries are documented in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). In short: theme builders receive
+immutable generation facts plus a typed scene writer; mutable doors and
+furniture have stable identities; blackout reality changes are staged,
+transactional, persistent, reversible, and roll back exactly if construction
+cannot complete safely.
+
 1. Install [Godot 4.6+](https://godotengine.org/download) (Forward+ / desktop).
 2. Open this folder in the Godot project manager (Import → select `project.godot`).
 3. Press **F5** (Run Project).
@@ -551,12 +558,19 @@ Dev tools for adding content:
 
 ```
 scenes/main.tscn          minimal root scene (everything else is code-built)
-scripts/main.gd           environment, player, streamer, UI bootstrap
+scripts/main.gd           mode/session orchestration and UI bootstrap
 scripts/world_gen.gd      deterministic hash queries (walls, styles, doors)
 scripts/chunk_manager.gd  chunk streaming
 scripts/chunk.gd          shared geometry kernel, wall topology, per-cell dispatch
-scripts/levels/           one builder per theme; chunk.gd's LEVEL_BUILDERS picks one
-scripts/levels/chunk_level_builder.gd  base class: the typed host and its contract
+scripts/chunk_build_context.gd  immutable per-chunk generation facts
+scripts/chunk_scene_writer.gd   typed construction capability boundary
+scripts/chunk_runtime_state.gd  persistent stable-ID runtime object state
+scripts/world_mutation.gd       typed reversible mutation record
+scripts/level_transition_controller.gd  atomic floor-transition sequence
+scripts/post_process_controller.gd      recording-filter state and presentation
+scripts/benchmark_dev_controller.gd     isolated CLI development tooling
+scripts/levels/           one builder per theme; no live Chunk access
+scripts/levels/chunk_level_builder.gd  context + writer base contract
 scripts/mats.gd           shared material cache
 scripts/player.gd         FPS controller
 scripts/flicker_light.gd  fluorescent flicker behaviour

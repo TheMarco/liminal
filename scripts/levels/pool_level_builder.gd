@@ -52,7 +52,7 @@ func _pool_style_dry_local(pool_style: int) -> bool:
 	# Keep the level builder in lockstep with world generation. Reclassifying
 	# a style here makes its visuals disagree with floor height, portals,
 	# spawning, and cross-cell traversal calculated elsewhere.
-	return chunk.pool_style_dry(pool_style)
+	return Chunk.pool_style_dry(pool_style)
 
 
 func _pool_channel_axis_x(_c: Vector2i) -> bool:
@@ -65,7 +65,7 @@ func _pool_channel_axis_x(_c: Vector2i) -> bool:
 
 func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 	var size := Vector2(6.0, 6.0)
-	var center := Vector2(chunk.S * 0.5, chunk.S * 0.5)
+	var center := Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.5)
 	var connected := false
 	var axis_x := true
 	var edge_links: Array[int] = []
@@ -74,12 +74,12 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 	if pool_style == WorldGen.POOL_CHANNEL:
 		axis_x = _pool_channel_axis_x(c)
 		var x0 := 0.0
-		var x1 := chunk.S
+		var x1 := WorldGen.CELL_SIZE
 		var z0 := 0.0
-		var z1 := chunk.S
+		var z1 := WorldGen.CELL_SIZE
 		var channel_dirs := [0, 1] if axis_x else [2, 3]
 		for dir in channel_dirs:
-			var info := chunk._edge_info(c, dir)
+			var info := scene.edge_info(c, dir)
 			if bool(info["wall"]):
 				continue
 			if _pool_open_dry_boundary(c, dir):
@@ -96,8 +96,8 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 			edge_links.append(dir)
 		size = Vector2(x1 - x0, POOL_CHANNEL_WIDTH) if axis_x \
 			else Vector2(POOL_CHANNEL_WIDTH, z1 - z0)
-		center = Vector2((x0 + x1) * 0.5, chunk.S * 0.5) if axis_x \
-			else Vector2(chunk.S * 0.5, (z0 + z1) * 0.5)
+		center = Vector2((x0 + x1) * 0.5, WorldGen.CELL_SIZE * 0.5) if axis_x \
+			else Vector2(WorldGen.CELL_SIZE * 0.5, (z0 + z1) * 0.5)
 		# A lane sealed at both ends (walls or dry thresholds) is a compact
 		# body of water, whatever its shape. Claiming `connected` with no
 		# edge links lied to everything that reads the metadata.
@@ -106,34 +106,34 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 		match pool_style:
 			WorldGen.POOL_STAIRS:
 				size = Vector2(
-					lerpf(5.6, 6.8, WorldGen.r01(chunk.wseed, c.x, c.y, 2212)),
-					lerpf(5.2, 6.5, WorldGen.r01(chunk.wseed, c.x, c.y, 2213)))
+					lerpf(5.6, 6.8, WorldGen.r01(ctx.world_seed, c.x, c.y, 2212)),
+					lerpf(5.2, 6.5, WorldGen.r01(ctx.world_seed, c.x, c.y, 2213)))
 			WorldGen.POOL_CISTERN:
 				size = Vector2(
-					lerpf(6.2, 7.4, WorldGen.r01(chunk.wseed, c.x, c.y, 2214)),
-					lerpf(6.2, 7.4, WorldGen.r01(chunk.wseed, c.x, c.y, 2215)))
+					lerpf(6.2, 7.4, WorldGen.r01(ctx.world_seed, c.x, c.y, 2214)),
+					lerpf(6.2, 7.4, WorldGen.r01(ctx.world_seed, c.x, c.y, 2215)))
 			_:
 				size = Vector2(
-					lerpf(5.0, 6.5, WorldGen.r01(chunk.wseed, c.x, c.y, 2216)),
-					lerpf(5.0, 6.5, WorldGen.r01(chunk.wseed, c.x, c.y, 2217)))
+					lerpf(5.0, 6.5, WorldGen.r01(ctx.world_seed, c.x, c.y, 2216)),
+					lerpf(5.0, 6.5, WorldGen.r01(ctx.world_seed, c.x, c.y, 2217)))
 		center += Vector2(
-			(WorldGen.r01(chunk.wseed, c.x, c.y, 2218) - 0.5) * 1.25,
-			(WorldGen.r01(chunk.wseed, c.x, c.y, 2219) - 0.5) * 1.25)
+			(WorldGen.r01(ctx.world_seed, c.x, c.y, 2218) - 0.5) * 1.25,
+			(WorldGen.r01(ctx.world_seed, c.x, c.y, 2219) - 0.5) * 1.25)
 		var margin := 1.55
 		center.x = clampf(center.x, size.x * 0.5 + margin,
-			chunk.S - size.x * 0.5 - margin)
+			WorldGen.CELL_SIZE - size.x * 0.5 - margin)
 		center.y = clampf(center.y, size.y * 0.5 + margin,
-			chunk.S - size.y * 0.5 - margin)
+			WorldGen.CELL_SIZE - size.y * 0.5 - margin)
 		# A compact basin bordering a channel can open into it. We only link
 		# along the channel's own axis, so both water surfaces overlap at the
 		# shared doorway without recursively asking the neighbour for a layout.
 		for dir in 4:
-			var info := chunk._edge_info(c, dir)
+			var info := scene.edge_info(c, dir)
 			if bool(info["wall"]):
 				continue
 			var nb: Vector2i = c + Vector2i(WorldGen.DIRV[dir])
 			var nb_style := WorldGen.cell_style(
-				chunk.wseed, nb, chunk.theme)
+				ctx.world_seed, nb, ctx.theme)
 			if nb_style != WorldGen.POOL_CHANNEL:
 				continue
 			var nb_axis_x := _pool_channel_axis_x(nb)
@@ -153,11 +153,11 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 			for dir in edge_links:
 				match dir:
 					0:
-						x1 = chunk.S
+						x1 = WorldGen.CELL_SIZE
 					1:
 						x0 = 0.0
 					2:
-						z1 = chunk.S
+						z1 = WorldGen.CELL_SIZE
 					3:
 						z0 = 0.0
 			center = Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5)
@@ -171,11 +171,11 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 		elif pool_style == WorldGen.POOL_STAIRS:
 			round_chance = 0.48
 		if not connected \
-				and WorldGen.r01(chunk.wseed, c.x, c.y, 2220) < round_chance:
+				and WorldGen.r01(ctx.world_seed, c.x, c.y, 2220) < round_chance:
 			rounded_corner = int(
-				WorldGen.r01(chunk.wseed, c.x, c.y, 2221) * 4.0) % 4
+				WorldGen.r01(ctx.world_seed, c.x, c.y, 2221) * 4.0) % 4
 			corner_radius = lerpf(
-				1.05, 1.45, WorldGen.r01(chunk.wseed, c.x, c.y, 2222))
+				1.05, 1.45, WorldGen.r01(ctx.world_seed, c.x, c.y, 2222))
 	return {
 		"center": center,
 		"size": size,
@@ -188,7 +188,7 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 
 
 func _pool_water_layout() -> Dictionary:
-	return _pool_water_layout_for(chunk.cell, chunk.style)
+	return _pool_water_layout_for(ctx.cell, ctx.style)
 
 
 func _pool_water_reaches_edge(c: Vector2i, pool_style: int, dir: int) -> bool:
@@ -211,16 +211,16 @@ func _pool_water_span_at_edge(
 
 
 func _pool_open_dry_boundary(c: Vector2i, dir: int) -> bool:
-	var info := chunk._edge_info(c, dir)
+	var info := scene.edge_info(c, dir)
 	if bool(info["wall"]):
 		return false
 	var nb := c + Vector2i(WorldGen.DIRV[dir])
 	return _pool_style_dry_local(
-		WorldGen.cell_style(chunk.wseed, nb, chunk.theme))
+		WorldGen.cell_style(ctx.world_seed, nb, ctx.theme))
 
 
 func _pool_boundary_needs_coping(dir: int) -> bool:
-	return _pool_open_dry_boundary(chunk.cell, dir)
+	return _pool_open_dry_boundary(ctx.cell, dir)
 
 
 func _pool_connection_runs(
@@ -228,7 +228,7 @@ func _pool_connection_runs(
 	if dir >= 2:
 		return Vector2.ZERO
 	var nb := c + Vector2i(WorldGen.DIRV[dir])
-	var nb_style := WorldGen.cell_style(chunk.wseed, nb, chunk.theme)
+	var nb_style := WorldGen.cell_style(ctx.world_seed, nb, ctx.theme)
 	if _pool_style_dry_local(nb_style) \
 			or (pool_style == WorldGen.POOL_CHANNEL) \
 				== (nb_style == WorldGen.POOL_CHANNEL):
@@ -250,7 +250,7 @@ func _pool_connection_runs(
 
 
 func _pool_floor_ceiling() -> void:
-	chunk._box(Vector3(chunk.S / 2.0, chunk.ceil_h + 0.15, chunk.S / 2.0), Vector3(chunk.S, 0.3, chunk.S),
+	scene.box(Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height + 0.15, WorldGen.CELL_SIZE / 2.0), Vector3(WorldGen.CELL_SIZE, 0.3, WorldGen.CELL_SIZE),
 		Mats.pool_wall_tile())
 	if _pool_dry():
 		# A dry hall. Its floor is a solid slab standing just clear of the
@@ -259,7 +259,7 @@ func _pool_floor_ceiling() -> void:
 		_pool_dry_slab()
 		_pool_edge_steps()
 		return
-	chunk._box(Vector3(chunk.S / 2.0, -0.15, chunk.S / 2.0), Vector3(chunk.S, 0.3, chunk.S), Mats.pool_tile())
+	scene.box(Vector3(WorldGen.CELL_SIZE / 2.0, -0.15, WorldGen.CELL_SIZE / 2.0), Vector3(WorldGen.CELL_SIZE, 0.3, WorldGen.CELL_SIZE), Mats.pool_tile())
 	var layout := _pool_water_layout()
 	var center: Vector2 = layout["center"]
 	var size: Vector2 = layout["size"]
@@ -280,15 +280,15 @@ func _pool_floor_ceiling() -> void:
 	var water = MeshInstance3D.new()
 	water.mesh = surf
 	water.material_override = Mats.pool_water()
-	water.position = Vector3(center.x, chunk.POOL_WATER_Y, center.y)
+	water.position = Vector3(center.x, Chunk.POOL_WATER_Y, center.y)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	water.set_meta("pool_water_surface", true)
 	water.set_meta("pool_water_size", size)
 	water.set_meta("pool_water_center", center)
 	water.set_meta("pool_water_connected", bool(layout["connected"]))
 	water.set_meta("pool_water_edge_links", layout.get("edge_links", []))
-	water.set_meta("pool_water_style", chunk.style)
-	chunk.add_child(water)
+	water.set_meta("pool_water_style", ctx.style)
+	scene.add_node(water)
 	# Every generated basin gets exactly one usable exit. Room decoration no
 	# longer decides whether the player is allowed to climb out.
 	_pool_compact_ladder(2240)
@@ -302,23 +302,23 @@ func _pool_basin_deck_and_coping(layout: Dictionary) -> void:
 	var x1 := center.x + size.x * 0.5
 	var z0 := center.y - size.y * 0.5
 	var z1 := center.y + size.y * 0.5
-	_pool_deck_piece(Vector2(x0 * 0.5, chunk.S * 0.5),
-		Vector2(x0, chunk.S))
-	_pool_deck_piece(Vector2((x1 + chunk.S) * 0.5, chunk.S * 0.5),
-		Vector2(chunk.S - x1, chunk.S))
+	_pool_deck_piece(Vector2(x0 * 0.5, WorldGen.CELL_SIZE * 0.5),
+		Vector2(x0, WorldGen.CELL_SIZE))
+	_pool_deck_piece(Vector2((x1 + WorldGen.CELL_SIZE) * 0.5, WorldGen.CELL_SIZE * 0.5),
+		Vector2(WorldGen.CELL_SIZE - x1, WorldGen.CELL_SIZE))
 	_pool_deck_piece(Vector2(center.x, z0 * 0.5),
 		Vector2(size.x, z0))
-	_pool_deck_piece(Vector2(center.x, (z1 + chunk.S) * 0.5),
-		Vector2(size.x, chunk.S - z1))
+	_pool_deck_piece(Vector2(center.x, (z1 + WorldGen.CELL_SIZE) * 0.5),
+		Vector2(size.x, WorldGen.CELL_SIZE - z1))
 	var rounded_corner := int(layout.get("rounded_corner", -1))
 	var radius := float(layout.get("corner_radius", 0.0))
 	# A water edge on a chunk boundary is open only when the next chunk is wet.
 	# Against a dry room it is still a real pool lip and needs coping under its
 	# ladder/steps. This distinction was previously lost at every cell edge.
 	var has_left := x0 > 0.05 or _pool_boundary_needs_coping(1)
-	var has_right := x1 < chunk.S - 0.05 or _pool_boundary_needs_coping(0)
+	var has_right := x1 < WorldGen.CELL_SIZE - 0.05 or _pool_boundary_needs_coping(0)
 	var has_north := z0 > 0.05 or _pool_boundary_needs_coping(3)
-	var has_south := z1 < chunk.S - 0.05 or _pool_boundary_needs_coping(2)
+	var has_south := z1 < WorldGen.CELL_SIZE - 0.05 or _pool_boundary_needs_coping(2)
 	var left_z0 := z0 + (
 		radius if rounded_corner == 0 else (
 			POOL_SQUARE_COPING_CORNER_RADIUS if has_north else 0.0))
@@ -344,9 +344,9 @@ func _pool_basin_deck_and_coping(layout: Dictionary) -> void:
 		radius if rounded_corner == 2 else (
 			POOL_SQUARE_COPING_CORNER_RADIUS if has_right else 0.0))
 	var left_connection := _pool_connection_runs(
-		chunk.cell, chunk.style, 1)
+		ctx.cell, ctx.style, 1)
 	var right_connection := _pool_connection_runs(
-		chunk.cell, chunk.style, 0)
+		ctx.cell, ctx.style, 0)
 	north_x0 += left_connection.x
 	south_x0 += left_connection.y
 	north_x1 -= right_connection.x
@@ -373,7 +373,7 @@ func _pool_basin_deck_and_coping(layout: Dictionary) -> void:
 		_pool_square_coping_corner_arc(Vector2(x0, z1), 3)
 	if rounded_corner >= 0:
 		_pool_compact_rounded_basin_corner(layout)
-	if chunk.style != WorldGen.POOL_CHANNEL:
+	if ctx.style != WorldGen.POOL_CHANNEL:
 		for dir_value in layout.get("edge_links", []):
 			var dir := int(dir_value)
 			if dir < 2:
@@ -382,12 +382,12 @@ func _pool_basin_deck_and_coping(layout: Dictionary) -> void:
 
 func _pool_connected_coping_transition(
 		layout: Dictionary, dir: int) -> void:
-	var nb := chunk.cell + Vector2i(WorldGen.DIRV[dir])
+	var nb := ctx.cell + Vector2i(WorldGen.DIRV[dir])
 	if WorldGen.cell_style(
-			chunk.wseed, nb, chunk.theme) != WorldGen.POOL_CHANNEL:
+			ctx.world_seed, nb, ctx.theme) != WorldGen.POOL_CHANNEL:
 		return
 	var runs := _pool_connection_runs(
-		chunk.cell, chunk.style, dir)
+		ctx.cell, ctx.style, dir)
 	if runs == Vector2.ZERO:
 		return
 	var center: Vector2 = layout["center"]
@@ -396,7 +396,7 @@ func _pool_connected_coping_transition(
 	var own_high := center.y + size.y * 0.5
 	var channel_span := _pool_water_span_at_edge(
 		nb, WorldGen.POOL_CHANNEL, WorldGen.OPP[dir])
-	var edge := chunk.S if dir == 0 else 0.0
+	var edge := WorldGen.CELL_SIZE if dir == 0 else 0.0
 	if runs.x > 0.0:
 		var run := runs.x
 		var start := Vector2(
@@ -437,7 +437,7 @@ func _pool_connected_coping_s_bend(
 		path, water_side,
 		POOL_COPING_WIDTH - POOL_COPING_WATER_OVERHANG,
 		POOL_COPING_WATER_OVERHANG,
-		chunk.POOL_DECK_Y + POOL_COPING_TOP_OFFSET
+		Chunk.POOL_DECK_Y + POOL_COPING_TOP_OFFSET
 			- POOL_COPING_HEIGHT * 0.5,
 		POOL_COPING_HEIGHT, POOL_COPING_NOSE_SEGMENTS)
 	coping.material_override = Mats.pool_coping()
@@ -450,14 +450,14 @@ func _pool_connected_coping_s_bend(
 	coping.set_meta("pool_connected_coping_side", side)
 	coping.set_meta("pool_connected_coping_run", run)
 	coping.set_meta("pool_coping_bullnose", true)
-	chunk.add_child(coping)
+	scene.add_node(coping)
 
 
 func _pool_deck_piece(center: Vector2, size: Vector2) -> void:
 	if size.x < 0.04 or size.y < 0.04:
 		return
 	var pieces: Array[Rect2] = [Rect2(center - size * 0.5, size)]
-	for zone in chunk._runtime_shortcut_clearance_rects():
+	for zone in scene.runtime_shortcut_clearance_rects():
 		var next: Array[Rect2] = []
 		for piece in pieces:
 			var cut := piece.intersection(zone)
@@ -480,11 +480,11 @@ func _pool_deck_piece(center: Vector2, size: Vector2) -> void:
 				next.append(Rect2(Vector2(cut.position.x, cut_end.y),
 					Vector2(cut.size.x, piece_end.y - cut_end.y)))
 		pieces = next
-	var h: float = chunk.POOL_DECK_Y + 0.3
+	var h: float = Chunk.POOL_DECK_Y + 0.3
 	for piece in pieces:
 		var piece_center := piece.position + piece.size * 0.5
-		var deck = chunk._box(
-			Vector3(piece_center.x, chunk.POOL_DECK_Y * 0.5 - 0.15,
+		var deck = scene.box(
+			Vector3(piece_center.x, Chunk.POOL_DECK_Y * 0.5 - 0.15,
 				piece_center.y),
 			Vector3(piece.size.x, h, piece.size.y), Mats.pool_tile())
 		deck.set_meta("pool_basin_deck", true)
@@ -503,7 +503,7 @@ func _pool_coping_segment(center: Vector2, size: Vector2, axis: int,
 	var pitch := length / float(slab_count)
 	var slab_length := maxf(0.04, pitch - POOL_COPING_JOINT_GAP)
 	var yaw := atan2(water_dir.x, water_dir.y)
-	var y_mid := chunk.POOL_DECK_Y + POOL_COPING_TOP_OFFSET \
+	var y_mid := Chunk.POOL_DECK_Y + POOL_COPING_TOP_OFFSET \
 		- POOL_COPING_HEIGHT * 0.5
 	for i in slab_count:
 		var offset := -length * 0.5 + pitch * (float(i) + 0.5)
@@ -523,7 +523,7 @@ func _pool_coping_segment(center: Vector2, size: Vector2, axis: int,
 		coping.set_meta("pool_coping_slab_index", i)
 		coping.set_meta("pool_coping_slab_count", slab_count)
 		coping.set_meta("pool_coping_water_direction", water_dir)
-		chunk.add_child(coping)
+		scene.add_node(coping)
 
 
 func _pool_vertical_coping(x: float, z0: float, z1: float,
@@ -584,7 +584,7 @@ func _pool_arc_coping(center: Vector2, radial_start: Vector2,
 		POOL_COPING_JOINT_GAP / maxf(middle_radius, 0.05),
 		part_angle * 0.22)
 	var direction := signf(sweep)
-	var y_mid := chunk.POOL_DECK_Y + POOL_COPING_TOP_OFFSET \
+	var y_mid := Chunk.POOL_DECK_Y + POOL_COPING_TOP_OFFSET \
 		- POOL_COPING_HEIGHT * 0.5
 	for i in slab_count:
 		var angle_offset := direction * (
@@ -604,7 +604,7 @@ func _pool_arc_coping(center: Vector2, radial_start: Vector2,
 		coping.set_meta("pool_coping_slab_index", i)
 		coping.set_meta("pool_coping_slab_count", slab_count)
 		coping.set_meta("pool_coping_water_inside", water_inside)
-		chunk.add_child(coping)
+		scene.add_node(coping)
 
 
 ## The dry hall's raised floor: one square slab wall to wall. Per-corner
@@ -616,29 +616,29 @@ func _pool_arc_coping(center: Vector2, radial_start: Vector2,
 func _pool_dry_slab_piece(center: Vector2, size: Vector2) -> void:
 	if size.x <= 0.02 or size.y <= 0.02:
 		return
-	var yc = chunk.POOL_DRY_Y * 0.5 - 0.15
-	var h = chunk.POOL_DRY_Y + 0.3
-	var slab := chunk._box(
+	var yc = Chunk.POOL_DRY_Y * 0.5 - 0.15
+	var h = Chunk.POOL_DRY_Y + 0.3
+	var slab := scene.box(
 		Vector3(center.x, yc, center.y),
 		Vector3(size.x, h, size.y), Mats.pool_tile())
 	slab.set_meta("pool_dry_slab_piece", true)
 
 
 func _pool_planned_jacuzzi_site() -> Vector3:
-	if chunk.style == WorldGen.POOL_DECK:
-		if chunk.cell == Vector2i.ZERO:
-			return Vector3(8.4, chunk.POOL_DRY_Y, 8.2)
-		var roll := chunk._r(2410)
+	if ctx.style == WorldGen.POOL_DECK:
+		if ctx.cell == Vector2i.ZERO:
+			return Vector3(8.4, Chunk.POOL_DRY_Y, 8.2)
+		var roll := ctx.random01(2410)
 		if roll < 0.48 or roll >= 0.70:
 			return Vector3.INF
-	elif chunk.style == WorldGen.POOL_ALCOVE:
-		if chunk._r(2344) >= 0.52:
+	elif ctx.style == WorldGen.POOL_ALCOVE:
+		if ctx.random01(2344) >= 0.52:
 			return Vector3.INF
 	else:
 		return Vector3.INF
-	var x := 3.15 if chunk._r(2440) < 0.5 else 8.85
-	var z := 3.15 if chunk._r(2441) < 0.5 else 8.85
-	return Vector3(x, chunk.POOL_DRY_Y, z)
+	var x := 3.15 if ctx.random01(2440) < 0.5 else 8.85
+	var z := 3.15 if ctx.random01(2441) < 0.5 else 8.85
+	return Vector3(x, Chunk.POOL_DRY_Y, z)
 
 
 func _pool_jacuzzi_center(site: Vector3) -> Vector3:
@@ -651,8 +651,8 @@ func _pool_dry_slab() -> void:
 	var jacuzzi := _pool_planned_jacuzzi_site()
 	if jacuzzi == Vector3.INF:
 		_pool_dry_slab_piece(
-			Vector2(chunk.S * 0.5, chunk.S * 0.5),
-			Vector2(chunk.S, chunk.S))
+			Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.5),
+			Vector2(WorldGen.CELL_SIZE, WorldGen.CELL_SIZE))
 		return
 	var hole_center := _pool_jacuzzi_center(jacuzzi)
 	var x0 := hole_center.x \
@@ -664,21 +664,21 @@ func _pool_dry_slab() -> void:
 	var z1 := hole_center.z \
 		+ POOL_JACUZZI_DECK_CUTOUT_SIZE.y * 0.5
 	_pool_dry_slab_piece(
-		Vector2(x0 * 0.5, chunk.S * 0.5), Vector2(x0, chunk.S))
+		Vector2(x0 * 0.5, WorldGen.CELL_SIZE * 0.5), Vector2(x0, WorldGen.CELL_SIZE))
 	_pool_dry_slab_piece(
-		Vector2((x1 + chunk.S) * 0.5, chunk.S * 0.5),
-		Vector2(chunk.S - x1, chunk.S))
+		Vector2((x1 + WorldGen.CELL_SIZE) * 0.5, WorldGen.CELL_SIZE * 0.5),
+		Vector2(WorldGen.CELL_SIZE - x1, WorldGen.CELL_SIZE))
 	_pool_dry_slab_piece(
 		Vector2((x0 + x1) * 0.5, z0 * 0.5),
 		Vector2(x1 - x0, z0))
 	_pool_dry_slab_piece(
-		Vector2((x0 + x1) * 0.5, (z1 + chunk.S) * 0.5),
-		Vector2(x1 - x0, chunk.S - z1))
+		Vector2((x0 + x1) * 0.5, (z1 + WorldGen.CELL_SIZE) * 0.5),
+		Vector2(x1 - x0, WorldGen.CELL_SIZE - z1))
 	_pool_jacuzzi_cutout_corners(
 		hole_center, x0, x1, z0, z1)
 	# The well shares the same zero-datum basin floor as the surrounding wet
 	# Poolrooms, so entering it behaves like entering any other pool.
-	var bottom := chunk._box(
+	var bottom := scene.box(
 		Vector3(hole_center.x, -0.15, hole_center.z),
 		Vector3(
 			POOL_JACUZZI_DECK_CUTOUT_SIZE.x, 0.30,
@@ -720,16 +720,16 @@ func _pool_jacuzzi_cutout_corners(
 		var fill := MeshInstance3D.new()
 		fill.mesh = PoolCornerMesh.quarter_cove(
 			center, radial_start, sweep, r, corner,
-			-0.30, chunk.POOL_DRY_Y,
-			chunk.POOL_CORNER_SEGMENTS)
+			-0.30, Chunk.POOL_DRY_Y,
+			Chunk.POOL_CORNER_SEGMENTS)
 		fill.material_override = Mats.pool_tile()
 		fill.set_meta("pool_jacuzzi_cutout_corner", true)
 		fill.set_meta("pool_jacuzzi_cutout_corner_index", i)
 		fill.set_meta("pool_jacuzzi_cutout_radius", r)
-		chunk.add_child(fill)
+		scene.add_node(fill)
 		_pool_cove_colliders(
 			center, radial_start, sweep, r, corner,
-			chunk.POOL_DRY_Y,
+			Chunk.POOL_DRY_Y,
 			"pool_jacuzzi_cutout_corner_collider")
 
 
@@ -739,7 +739,7 @@ func _pool_jacuzzi_cutout_corners(
 
 
 func _pool_dry() -> bool:
-	return _pool_style_dry_local(chunk.style)
+	return _pool_style_dry_local(ctx.style)
 
 
 ## The walkable floor height of this cell: zero everywhere except the pool
@@ -749,7 +749,7 @@ func _pool_dry() -> bool:
 
 
 func _floor_h() -> float:
-	return chunk.POOL_DRY_Y if chunk.theme == 9 and _pool_dry() else 0.0
+	return Chunk.POOL_DRY_Y if ctx.theme == 9 and _pool_dry() else 0.0
 
 
 ## Where a dry hall meets a flooded one, the floor has to step. Three broad
@@ -761,14 +761,14 @@ func _pool_edge_steps() -> void:
 	if not _pool_dry():
 		return
 	for dir in 4:
-		var info = chunk._edge_info(chunk.cell, dir)
+		var info = scene.edge_info(ctx.cell, dir)
 		if bool(info["wall"]):
 			continue
-		var nb: Vector2i = chunk.cell + WorldGen.DIRV[dir]
+		var nb: Vector2i = ctx.cell + WorldGen.DIRV[dir]
 		if _pool_style_dry_local(
-				WorldGen.cell_style(chunk.wseed, nb, chunk.theme)):
+				WorldGen.cell_style(ctx.world_seed, nb, ctx.theme)):
 			continue
-		var nb_style = WorldGen.cell_style(chunk.wseed, nb, chunk.theme)
+		var nb_style = WorldGen.cell_style(ctx.world_seed, nb, ctx.theme)
 		if not _pool_water_reaches_edge(nb, nb_style, WorldGen.OPP[dir]):
 			# A compact basin leaves a full-height deck at this doorway. The
 			# dry room and flooded room therefore meet flush, with no stair or
@@ -802,7 +802,7 @@ func _pool_edge_steps() -> void:
 			continue
 		# Steps or a ladder — one way out per opening, never both fused
 		# together in the same doorway.
-		if chunk._r(2601 + dir) >= 0.55:
+		if ctx.random01(2601 + dir) >= 0.55:
 			if w > 5.0:
 				var pair_offset := minf(w * 0.27, w * 0.5 - 0.75)
 				_pool_wall_ladder(dir, t - pair_offset)
@@ -813,7 +813,7 @@ func _pool_edge_steps() -> void:
 		var steps = 3
 		for i in steps:
 			# Each tread is lower and reaches further out into the water.
-			var top = chunk.POOL_DRY_Y * (1.0 - float(i) / float(steps))
+			var top = Chunk.POOL_DRY_Y * (1.0 - float(i) / float(steps))
 			var out = 0.55 + float(i) * 0.55
 			var pos: Vector3
 			var size: Vector3
@@ -823,24 +823,24 @@ func _pool_edge_steps() -> void:
 			# the only actual way out of the water.
 			match dir:
 				0:
-					pos = Vector3(chunk.S + out * 0.5, top * 0.5, t)
+					pos = Vector3(WorldGen.CELL_SIZE + out * 0.5, top * 0.5, t)
 					size = Vector3(out, maxf(top, 0.10), w)
 				1:
 					pos = Vector3(-out * 0.5, top * 0.5, t)
 					size = Vector3(out, maxf(top, 0.10), w)
 				2:
-					pos = Vector3(t, top * 0.5, chunk.S + out * 0.5)
+					pos = Vector3(t, top * 0.5, WorldGen.CELL_SIZE + out * 0.5)
 					size = Vector3(w, maxf(top, 0.10), out)
 				_:
 					pos = Vector3(t, top * 0.5, -out * 0.5)
 					size = Vector3(w, maxf(top, 0.10), out)
-			var tread = chunk._box(pos, size, Mats.pool_tile())
+			var tread = scene.box(pos, size, Mats.pool_tile())
 			tread.set_meta("pool_step", true)
 		# The walking ramp must run along the treads' OUTER top corners: laid
 		# from the dry lip itself it passes under them, and every riser face
 		# is a wall again. From the top tread's edge it grazes each corner.
 		_pool_step_ramp(dir, t, w,
-			chunk.S if (dir == 0 or dir == 2) else 0.0, chunk.POOL_DRY_Y, 1.65, 0.55)
+			WorldGen.CELL_SIZE if (dir == 0 or dir == 2) else 0.0, Chunk.POOL_DRY_Y, 1.65, 0.55)
 
 
 ## A round tiled pier from the basin floor to the ceiling. These are the
@@ -851,15 +851,15 @@ func _pool_edge_steps() -> void:
 
 
 func _pool_pier(at: Vector3) -> void:
-	var p = chunk._cyl(Vector3(at.x, chunk.ceil_h * 0.5, at.z), chunk.POOL_PIER * 0.62,
-		chunk.ceil_h, Mats.pool_tile())
+	var p = scene.cylinder(Vector3(at.x, ctx.ceiling_height * 0.5, at.z), Chunk.POOL_PIER * 0.62,
+		ctx.ceiling_height, Mats.pool_tile())
 	p.set_meta("pool_pier", true)
 
 
 func _pool_clear_of_runtime_doorway(at: Vector2, radius: float) -> bool:
 	var footprint := Rect2(at - Vector2.ONE * radius,
 		Vector2.ONE * radius * 2.0)
-	for zone in chunk._runtime_shortcut_clearance_rects():
+	for zone in scene.runtime_shortcut_clearance_rects():
 		if footprint.intersects(zone):
 			return false
 	return true
@@ -883,10 +883,10 @@ func _pool_step_ramp(dir: int, at: float, width: float, edge: float,
 	var y = drop * 0.5 - 0.06
 	var ramp: CollisionShape3D
 	if dir < 2:
-		ramp = chunk._collider_rot_box(Vector3(mid, y, at),
+		ramp = scene.collider_rotated_box(Vector3(mid, y, at),
 			Vector3(ln, 0.12, width), Vector3(0, 0, -outward * ang))
 	else:
-		ramp = chunk._collider_rot_box(Vector3(at, y, mid),
+		ramp = scene.collider_rotated_box(Vector3(at, y, mid),
 			Vector3(width, 0.12, ln), Vector3(outward * ang, 0, 0))
 	ramp.set_meta("walkable_ramp", true)
 
@@ -906,9 +906,9 @@ func _pool_window(dir: int, along: float, tall = true, drop := 0.0) -> void:
 	# opening, the pane hangs in mid-air in the middle of the doorway — which
 	# is exactly what it was doing. This also keeps them sparse for free:
 	# a room with three ways out can only carry one.
-	if not bool(chunk._edge_info(chunk.cell, dir)["wall"]):
+	if not bool(scene.edge_info(ctx.cell, dir)["wall"]):
 		return
-	if WorldGen.pool_wall_aperture(chunk.wseed, chunk.cell, dir):
+	if WorldGen.pool_wall_aperture(ctx.world_seed, ctx.cell, dir):
 		return
 	# Daylight is only credible where you cannot walk around the wall and
 	# disprove it. An eye-level pane on an interior wall claims an outside
@@ -917,7 +917,7 @@ func _pool_window(dir: int, along: float, tall = true, drop := 0.0) -> void:
 	# from somewhere genuinely beyond the building. 5.0 admits the 5.2m
 	# multi-cell halls and the new multi-storey volumes; the ordinary
 	# 4.1-4.6 rooms never qualify.
-	if chunk.ceil_h < 5.0:
+	if ctx.ceiling_height < 5.0:
 		return
 	_pool_round_window(dir, along, tall, drop)
 
@@ -927,25 +927,25 @@ func _pool_round_window(
 	# A CylinderMesh's axis is +Y. The caps therefore have to be turned onto the
 	# wall normal individually — rotating the parent instead sent them spinning
 	# off axis and left huge unshaded discs hanging in the room.
-	var plane = (chunk.S - 0.12) if (dir == 0 or dir == 2) else 0.12
+	var plane = (WorldGen.CELL_SIZE - 0.12) if (dir == 0 or dir == 2) else 0.12
 	var inward = -1.0 if (dir == 0 or dir == 2) else 1.0
 	var r = 0.55
 	var body = 1.45 if tall else 0.0
 	# High under the ceiling, well above anything walkable, so the glow has
 	# room to fall through the hall the way a clerestory would let it.
-	var mid = chunk.ceil_h - 1.15 - body * 0.5 - drop
+	var mid = ctx.ceiling_height - 1.15 - body * 0.5 - drop
 	var pivot = Node3D.new()
 	pivot.position = Vector3(plane, mid, along) if dir < 2 \
 		else Vector3(along, mid, plane)
 	pivot.set_meta("pool_window", true)
 	pivot.set_meta("pool_window_round", true)
 	var pair_id := "pool_window_%d_%d_%d_%d_%d" % [
-		chunk.cell.x, chunk.cell.y, dir,
+		ctx.cell.x, ctx.cell.y, dir,
 		roundi(along * 100.0), roundi(drop * 100.0)]
 	pivot.set_meta("pool_light_emitter", true)
 	pivot.set_meta("pool_light_pair_id", pair_id)
 	pivot.set_meta("pool_light_type", "window")
-	chunk.add_child(pivot)
+	scene.add_node(pivot)
 	# A reveal in front of the light. Without this the pane sits flush on the
 	# tile and reads as a decal; recessed, the jamb catches a highlight and the
 	# wall finally has thickness.
@@ -953,13 +953,13 @@ func _pool_round_window(
 	var rw = r + 0.16
 	var rsize = Vector3(0.20, body + rw * 2.0, rw * 2.0) if dir < 2 \
 		else Vector3(rw * 2.0, body + rw * 2.0, 0.20)
-	var frame = chunk._mbox(pivot, Vector3(inward * -0.11, 0.0, 0.0) if dir < 2 \
+	var frame = scene.model_box(pivot, Vector3(inward * -0.11, 0.0, 0.0) if dir < 2 \
 		else Vector3(0.0, 0.0, inward * -0.11), rsize, reveal)
 	frame.set_meta("pool_window_reveal", true)
 	var glow = Mats.pool_daylight()
 	var caps: Array = [-1.0, 1.0] if body > 0.01 else [0.0]
 	for sgn: float in caps:
-		var c = chunk._mcyl(pivot, Vector3(0, sgn * body * 0.5, 0), r, 0.09, glow)
+		var c = scene.model_cylinder(pivot, Vector3(0, sgn * body * 0.5, 0), r, 0.09, glow)
 		if dir < 2:
 			c.rotation.z = PI / 2.0
 		else:
@@ -967,16 +967,16 @@ func _pool_round_window(
 	if body > 0.01:
 		var size = Vector3(0.09, body, r * 2.0) if dir < 2 \
 			else Vector3(r * 2.0, body, 0.09)
-		chunk._mbox(pivot, Vector3.ZERO, size, glow)
+		scene.model_box(pivot, Vector3.ZERO, size, glow)
 	# A normal hall needs one daylight shaft. The stacked window rows in a
 	# triple-height hall receive two, so both the upper and middle wall bands
 	# read as real sources instead of emissive decals.
-	var light_count := int(chunk.get_meta("pool_window_light_count", 0))
-	var max_lights := 2 if chunk.ceil_h >= 10.5 else 1
+	var light_count := int(scene.chunk_meta("pool_window_light_count", 0))
+	var max_lights := 2 if ctx.ceiling_height >= 10.5 else 1
 	if light_count >= max_lights:
 		return
-	chunk.set_meta("pool_window_lit", true)
-	chunk.set_meta("pool_window_light_count", light_count + 1)
+	scene.set_chunk_meta("pool_window_lit", true)
+	scene.set_chunk_meta("pool_window_light_count", light_count + 1)
 	var lamp = SpotLight3D.new()
 	lamp.light_color = Color(1.0, 0.98, 0.90)
 	lamp.light_energy = 3.8
@@ -993,7 +993,7 @@ func _pool_round_window(
 	lamp.set_meta("pool_direct_light", true)
 	lamp.set_meta("pool_light_pair_id", pair_id)
 	lamp.set_meta("pool_light_type", "window")
-	chunk.add_child(lamp)
+	scene.add_node(lamp)
 
 
 ## Multi-storey Poolrooms always expose their scale with bright clerestories.
@@ -1001,19 +1001,19 @@ func _pool_round_window(
 ## without wallpapering every surface. Triple-height halls get an offset
 ## second row: the empty wall now has a visible middle and upper level.
 func _pool_tall_clerestories() -> bool:
-	if chunk.ceil_h < 7.8:
+	if ctx.ceiling_height < 7.8:
 		return false
 	var walls: Array[int] = []
 	for dir in 4:
-		if bool(chunk._edge_info(chunk.cell, dir)["wall"]) \
+		if bool(scene.edge_info(ctx.cell, dir)["wall"]) \
 				and not WorldGen.pool_wall_aperture(
-					chunk.wseed, chunk.cell, dir):
+					ctx.world_seed, ctx.cell, dir):
 			walls.append(dir)
 	if walls.is_empty():
 		return false
 	var dir: int = walls[
-		int(chunk._r(2448) * float(walls.size())) % walls.size()]
-	if chunk.ceil_h >= 10.5:
+		int(ctx.random01(2448) * float(walls.size())) % walls.size()]
+	if ctx.ceiling_height >= 10.5:
 		for along in [2.55, 6.0, 9.45]:
 			_pool_window(dir, along, true)
 		for along in [4.0, 8.0]:
@@ -1021,8 +1021,8 @@ func _pool_tall_clerestories() -> bool:
 	else:
 		for along in [3.25, 8.75]:
 			_pool_window(dir, along, true)
-	chunk.set_meta("pool_tall_clerestory", true)
-	chunk.set_meta("pool_tall_clerestory_wall", dir)
+	scene.set_chunk_meta("pool_tall_clerestory", true)
+	scene.set_chunk_meta("pool_tall_clerestory_wall", dir)
 	return true
 
 
@@ -1037,11 +1037,11 @@ func _pool_crown_trims(dir: int, plane: float, from: float, to: float) -> void:
 		return
 	for side: float in [-1.0, 1.0]:
 		var room_cell := _pool_face_cell(dir, side)
-		var side_ceil = chunk.cell_ceil_h(chunk.wseed, room_cell, chunk.theme)
-		var face = plane + side * chunk.POOL_WALL_T * 0.5
+		var side_ceil = Chunk.cell_ceil_h(ctx.world_seed, room_cell, ctx.theme)
+		var face = plane + side * Chunk.POOL_WALL_T * 0.5
 		var off = face + side * 0.05
 		var mid = (from + to) * 0.5
-		var strip = chunk._box(
+		var strip = scene.box(
 			Vector3(off, side_ceil - 0.05, mid) if dir < 2 \
 				else Vector3(mid, side_ceil - 0.05, off),
 			Vector3(0.1, 0.1, to - from) if dir < 2 \
@@ -1062,13 +1062,13 @@ func _pool_crown_trims(dir: int, plane: float, from: float, to: float) -> void:
 func _pool_face_cell(dir: int, side: float) -> Vector2i:
 	match dir:
 		0:
-			return chunk.cell if side < 0.0 else chunk.cell + Vector2i(1, 0)
+			return ctx.cell if side < 0.0 else ctx.cell + Vector2i(1, 0)
 		1:
-			return chunk.cell if side > 0.0 else chunk.cell + Vector2i(-1, 0)
+			return ctx.cell if side > 0.0 else ctx.cell + Vector2i(-1, 0)
 		2:
-			return chunk.cell if side < 0.0 else chunk.cell + Vector2i(0, 1)
+			return ctx.cell if side < 0.0 else ctx.cell + Vector2i(0, 1)
 		_:
-			return chunk.cell if side > 0.0 else chunk.cell + Vector2i(0, -1)
+			return ctx.cell if side > 0.0 else ctx.cell + Vector2i(0, -1)
 
 
 ## The wall a stairs room sends its wide stair to: the first edge, scanning
@@ -1079,13 +1079,13 @@ func _pool_face_cell(dir: int, side: float) -> Vector2i:
 
 
 func _pool_stairs_exit(c: Vector2i) -> int:
-	var dir = int(WorldGen.r01(chunk.wseed, c.x, c.y, 2350) * 3.99)
+	var dir = int(WorldGen.r01(ctx.world_seed, c.x, c.y, 2350) * 3.99)
 	for d in 4:
 		var pick = (dir + d) % 4
-		if bool(chunk._edge_info(c, pick)["wall"]):
+		if bool(scene.edge_info(c, pick)["wall"]):
 			continue
-		if chunk.pool_style_dry(WorldGen.cell_style(
-				chunk.wseed, c + WorldGen.DIRV[pick], chunk.theme)):
+		if Chunk.pool_style_dry(WorldGen.cell_style(
+				ctx.world_seed, c + WorldGen.DIRV[pick], ctx.theme)):
 			return pick
 	return -1
 
@@ -1115,7 +1115,7 @@ func _pool_nb_deck_blocks(
 
 func _pool_wall_ladder(dir: int, along: float) -> void:
 	# Hung off the dry cell's edge, out over the water it serves.
-	var edge: float = chunk.S if dir == 0 else (0.0 if dir == 1 else (chunk.S if dir == 2 else 0.0))
+	var edge: float = WorldGen.CELL_SIZE if dir == 0 else (0.0 if dir == 1 else (WorldGen.CELL_SIZE if dir == 2 else 0.0))
 	_pool_ladder_at(dir, edge, along, -1.0 if (dir == 0 or dir == 2) else 1.0)
 
 
@@ -1131,55 +1131,55 @@ func _pool_lighting() -> void:
 	# Keep a few genuinely dim pockets, but wet rooms should usually reveal the
 	# visible fixture responsible for their illumination.
 	var dark_chance := 0.08
-	if chunk.style == WorldGen.POOL_ALCOVE:
+	if ctx.style == WorldGen.POOL_ALCOVE:
 		dark_chance = 0.22
-	elif chunk.style == WorldGen.POOL_CISTERN:
+	elif ctx.style == WorldGen.POOL_CISTERN:
 		dark_chance = 0.12
-	if chunk._r(2420) < dark_chance and not has_clerestory:
-		chunk.set_meta("pool_intentionally_dim", true)
+	if ctx.random01(2420) < dark_chance and not has_clerestory:
+		scene.set_chunk_meta("pool_intentionally_dim", true)
 		return
 	# A sconce is useful in lower, narrower rooms and gives the occasional
 	# human-scale pool corridor a different rhythm from the ceiling grid.
-	var has_orb := chunk._r(2421) < 0.18 and _pool_wall_orb_fixture(2422)
+	var has_orb := ctx.random01(2421) < 0.18 and _pool_wall_orb_fixture(2422)
 	if has_orb and _pool_dry():
 		return
 	var count := 1
 	if not _pool_dry() \
-			or chunk.style == WorldGen.POOL_GALLERY \
-				or chunk.style == WorldGen.POOL_CISTERN \
-				or chunk.style == WorldGen.POOL_SOLARIUM:
+			or ctx.style == WorldGen.POOL_GALLERY \
+				or ctx.style == WorldGen.POOL_CISTERN \
+				or ctx.style == WorldGen.POOL_SOLARIUM:
 		count = 2
 	var points: Array[Vector2] = []
 	if count == 1:
-		var at := Vector2(chunk.S * 0.5, chunk.S * 0.5)
-		if WorldGen.portal(chunk.wseed, chunk.cell, chunk.theme) >= 0:
-			at = Vector2(chunk.S * 0.5, chunk.S * 0.34)
+		var at := Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.5)
+		if WorldGen.portal(ctx.world_seed, ctx.cell, ctx.theme) >= 0:
+			at = Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.34)
 		points.append(at)
-	elif chunk.style == WorldGen.POOL_CHANNEL \
+	elif ctx.style == WorldGen.POOL_CHANNEL \
 			and not bool(_pool_water_layout().get("axis_x", true)):
-		points.append(Vector2(chunk.S * 0.5, chunk.S * 0.31))
-		points.append(Vector2(chunk.S * 0.5, chunk.S * 0.69))
+		points.append(Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.31))
+		points.append(Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.69))
 	else:
-		points.append(Vector2(chunk.S * 0.31, chunk.S * 0.5))
-		points.append(Vector2(chunk.S * 0.69, chunk.S * 0.5))
+		points.append(Vector2(WorldGen.CELL_SIZE * 0.31, WorldGen.CELL_SIZE * 0.5))
+		points.append(Vector2(WorldGen.CELL_SIZE * 0.69, WorldGen.CELL_SIZE * 0.5))
 	for i in points.size():
 		_pool_round_ceiling_fixture(points[i], i)
-	chunk.set_meta("pool_ceiling_fixture_points", points)
+	scene.set_chunk_meta("pool_ceiling_fixture_points", points)
 
 
 func _pool_round_ceiling_fixture(at: Vector2, index: int) -> void:
 	var pair_id := "pool_ceiling_%d_%d_%d" % [
-		chunk.cell.x, chunk.cell.y, index]
-	var housing: MeshInstance3D = chunk._cyl(
-		Vector3(at.x, chunk.ceil_h - 0.055, at.y),
+		ctx.cell.x, ctx.cell.y, index]
+	var housing: MeshInstance3D = scene.cylinder(
+		Vector3(at.x, ctx.ceiling_height - 0.055, at.y),
 		0.52, 0.11, Mats.pool_coping(), false)
 	housing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	housing.set_meta("pool_ceiling_fixture", true)
 	housing.set_meta("pool_light_emitter", true)
 	housing.set_meta("pool_light_pair_id", pair_id)
 	housing.set_meta("pool_light_type", "ceiling_disc")
-	var disc: MeshInstance3D = chunk._cyl(
-		Vector3(at.x, chunk.ceil_h - 0.116, at.y),
+	var disc: MeshInstance3D = scene.cylinder(
+		Vector3(at.x, ctx.ceiling_height - 0.116, at.y),
 		0.43, 0.025, Mats.pool_daylight(), false)
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	disc.set_meta("pool_ceiling_fixture_glow", true)
@@ -1189,44 +1189,44 @@ func _pool_round_ceiling_fixture(at: Vector2, index: int) -> void:
 	var lamp = OmniLight3D.new()
 	lamp.light_color = Color(1.0, 0.975, 0.90)
 	var height_scale := clampf(
-		(chunk.ceil_h - 5.0) / 7.5, 0.0, 1.0)
+		(ctx.ceiling_height - 5.0) / 7.5, 0.0, 1.0)
 	lamp.light_energy = lerpf(1.58, 2.35, height_scale)
 	lamp.omni_range = maxf(
-		8.2, chunk.ceil_h - chunk.POOL_DRY_Y + 1.8)
+		8.2, ctx.ceiling_height - Chunk.POOL_DRY_Y + 1.8)
 	lamp.shadow_enabled = false
-	lamp.position = Vector3(at.x, chunk.ceil_h - 0.42, at.y)
+	lamp.position = Vector3(at.x, ctx.ceiling_height - 0.42, at.y)
 	lamp.set_meta("pool_direct_light", true)
 	lamp.set_meta("pool_light_pair_id", pair_id)
 	lamp.set_meta("pool_light_type", "ceiling_disc")
-	chunk.add_child(lamp)
+	scene.add_node(lamp)
 
 
 func _pool_wall_orb_fixture(salt: int) -> bool:
 	var walls: Array[int] = []
 	for dir in 4:
-		if bool(chunk._edge_info(chunk.cell, dir)["wall"]) \
+		if bool(scene.edge_info(ctx.cell, dir)["wall"]) \
 				and not WorldGen.pool_wall_aperture(
-					chunk.wseed, chunk.cell, dir):
+					ctx.world_seed, ctx.cell, dir):
 			walls.append(dir)
 	if walls.is_empty():
 		return false
 	var dir: int = walls[
-		int(chunk._r(salt) * float(walls.size())) % walls.size()]
-	var along := lerpf(2.2, chunk.S - 2.2, chunk._r(salt + 1))
-	var plane: float = (chunk.S - chunk.T - 0.01) \
-		if (dir == 0 or dir == 2) else (chunk.T + 0.01)
+		int(ctx.random01(salt) * float(walls.size())) % walls.size()]
+	var along := lerpf(2.2, WorldGen.CELL_SIZE - 2.2, ctx.random01(salt + 1))
+	var plane: float = (WorldGen.CELL_SIZE - Chunk.T - 0.01) \
+		if (dir == 0 or dir == 2) else (Chunk.T + 0.01)
 	var inward := -1.0 if (dir == 0 or dir == 2) else 1.0
 	# Keep the globe in the upper wall band, consistently tucked beneath the
 	# ceiling trim. The old 1.75-2.25m clamp put it at face/waist height in
 	# tall rooms, where it read like a misplaced illuminated button.
-	var height := maxf(2.65, chunk.ceil_h - 0.72)
+	var height := maxf(2.65, ctx.ceiling_height - 0.72)
 	var wall_pos := Vector3(plane, height, along) if dir < 2 \
 		else Vector3(along, height, plane)
 	var room_dir := Vector3(inward, 0, 0) if dir < 2 \
 		else Vector3(0, 0, inward)
 	var pair_id := "pool_orb_%d_%d_%d" % [
-		chunk.cell.x, chunk.cell.y, dir]
-	var plate: MeshInstance3D = chunk._cyl(
+		ctx.cell.x, ctx.cell.y, dir]
+	var plate: MeshInstance3D = scene.cylinder(
 		wall_pos, 0.23, 0.08, Mats.pool_coping(), false)
 	if dir < 2:
 		plate.rotation.z = PI * 0.5
@@ -1235,14 +1235,14 @@ func _pool_wall_orb_fixture(salt: int) -> bool:
 	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	plate.set_meta("pool_wall_orb_plate", true)
 	var stem_pos := wall_pos + room_dir * 0.12
-	var stem: MeshInstance3D = chunk._cyl(
+	var stem: MeshInstance3D = scene.cylinder(
 		stem_pos, 0.065, 0.22, Mats.pool_coping(), false)
 	if dir < 2:
 		stem.rotation.z = PI * 0.5
 	else:
 		stem.rotation.x = PI * 0.5
 	stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var orb: MeshInstance3D = chunk._sphere(
+	var orb: MeshInstance3D = scene.sphere(
 		wall_pos + room_dir * 0.27, 0.21, Mats.pool_daylight())
 	orb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	orb.set_meta("pool_wall_orb", true)
@@ -1252,16 +1252,16 @@ func _pool_wall_orb_fixture(salt: int) -> bool:
 	var lamp := OmniLight3D.new()
 	lamp.light_color = Color(1.0, 0.96, 0.86)
 	var height_scale := clampf(
-		(chunk.ceil_h - 5.0) / 7.5, 0.0, 1.0)
+		(ctx.ceiling_height - 5.0) / 7.5, 0.0, 1.0)
 	lamp.light_energy = lerpf(1.36, 2.05, height_scale)
 	lamp.omni_range = maxf(
-		6.3, chunk.ceil_h - chunk.POOL_DRY_Y + 1.5)
+		6.3, ctx.ceiling_height - Chunk.POOL_DRY_Y + 1.5)
 	lamp.shadow_enabled = false
 	lamp.position = wall_pos + room_dir * 0.42
 	lamp.set_meta("pool_direct_light", true)
 	lamp.set_meta("pool_light_pair_id", pair_id)
 	lamp.set_meta("pool_light_type", "porcelain_orb")
-	chunk.add_child(lamp)
+	scene.add_node(lamp)
 	return true
 
 
@@ -1277,31 +1277,31 @@ func _pool_piers(salt: int, count: int) -> Array[Vector3]:
 		return _pool_compact_piers(salt, count)
 	var placed = 0
 	var positions: Array[Vector3] = []
-	var has_portal = WorldGen.portal(chunk.wseed, chunk.cell, chunk.theme) >= 0
-	var has_strip = chunk.style == WorldGen.POOL_DECK \
-		or chunk.style == WorldGen.POOL_GALLERY or chunk.style == WorldGen.POOL_CHANNEL
+	var has_portal = WorldGen.portal(ctx.world_seed, ctx.cell, ctx.theme) >= 0
+	var has_strip = ctx.style == WorldGen.POOL_DECK \
+		or ctx.style == WorldGen.POOL_GALLERY or ctx.style == WorldGen.POOL_CHANNEL
 	for i in 9:
 		if placed >= count:
 			return positions
 		var gx = 2.4 + float(i % 3) * 3.6
 		var gz = 2.4 + float(i / 3) * 3.6
-		gx += (chunk._r(salt + i * 3) - 0.5) * 1.1
-		gz += (chunk._r(salt + i * 3 + 1) - 0.5) * 1.1
-		if chunk._r(salt + i * 3 + 2) > 0.72:
+		gx += (ctx.random01(salt + i * 3) - 0.5) * 1.1
+		gz += (ctx.random01(salt + i * 3 + 1) - 0.5) * 1.1
+		if ctx.random01(salt + i * 3 + 2) > 0.72:
 			continue
 		# Nothing may grow through a pier: not the portal swirling at the
 		# room centre, not the recessed ceiling light strip, not a cistern
 		# skylight. Reject the grid slot rather than shuffle it, so the
 		# survivors stay on the same irregular grid as everywhere else.
 		if has_portal and Vector2(gx, gz).distance_to(
-				Vector2(chunk.S / 2.0, chunk.S / 2.0)) < 2.4:
+				Vector2(WorldGen.CELL_SIZE / 2.0, WorldGen.CELL_SIZE / 2.0)) < 2.4:
 			continue
-		if has_strip and absf(gx - chunk.S / 2.0) < 1.0:
+		if has_strip and absf(gx - WorldGen.CELL_SIZE / 2.0) < 1.0:
 			continue
 		if not _pool_clear_of_runtime_doorway(
-				Vector2(gx, gz), chunk.POOL_PIER * 0.62):
+				Vector2(gx, gz), Chunk.POOL_PIER * 0.62):
 			continue
-		if chunk.style == WorldGen.POOL_CISTERN and absf(gz - chunk.S / 2.0) < 2.4:
+		if ctx.style == WorldGen.POOL_CISTERN and absf(gz - WorldGen.CELL_SIZE / 2.0) < 2.4:
 			var near_sky = false
 			for sx in [3.0, 6.0, 9.0]:
 				if absf(gx - sx) < 1.5:
@@ -1328,24 +1328,24 @@ func _pool_compact_piers(salt: int, count: int) -> Array[Vector3]:
 	if x1 <= x0 or z1 <= z0:
 		return positions
 	var target := mini(
-		count, 3 if chunk.style == WorldGen.POOL_CISTERN else 2)
+		count, 3 if ctx.style == WorldGen.POOL_CISTERN else 2)
 	var has_portal := WorldGen.portal(
-		chunk.wseed, chunk.cell, chunk.theme) >= 0
-	var fixture_points: Array = chunk.get_meta(
+		ctx.world_seed, ctx.cell, ctx.theme) >= 0
+	var fixture_points: Array = scene.chunk_meta(
 		"pool_ceiling_fixture_points", [])
 	for i in 18:
 		if positions.size() >= target:
 			break
-		var gx := lerpf(x0, x1, chunk._r(salt + i * 4))
-		var gz := lerpf(z0, z1, chunk._r(salt + i * 4 + 1))
-		if chunk._r(salt + i * 4 + 2) > 0.80:
+		var gx := lerpf(x0, x1, ctx.random01(salt + i * 4))
+		var gz := lerpf(z0, z1, ctx.random01(salt + i * 4 + 1))
+		if ctx.random01(salt + i * 4 + 2) > 0.80:
 			continue
 		var point := Vector2(gx, gz)
 		if not _pool_clear_of_runtime_doorway(
-				point, chunk.POOL_PIER * 0.62):
+				point, Chunk.POOL_PIER * 0.62):
 			continue
 		if has_portal and point.distance_to(
-				Vector2(chunk.S * 0.5, chunk.S * 0.5)) < 2.25:
+				Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.5)) < 2.25:
 			continue
 		var blocked := false
 		for fixture in fixture_points:
@@ -1411,7 +1411,7 @@ func _pool_compact_rounded_basin_corner(layout: Dictionary) -> bool:
 	var deck := MeshInstance3D.new()
 	deck.mesh = PoolCornerMesh.quarter_cove(
 		center, radial_start, sweep, radius, corner,
-		0.0, chunk.POOL_DECK_Y, chunk.POOL_CORNER_SEGMENTS)
+		0.0, Chunk.POOL_DECK_Y, Chunk.POOL_CORNER_SEGMENTS)
 	deck.material_override = Mats.pool_tile()
 	deck.set_meta("pool_rounded_basin_corner", true)
 	deck.set_meta("pool_rounded_basin_corner_id", id)
@@ -1421,10 +1421,10 @@ func _pool_compact_rounded_basin_corner(layout: Dictionary) -> bool:
 		"pool_rounded_basin_corner_orientation", "concave_water_opening")
 	deck.set_meta("pool_rounded_basin_corner_square_corner", corner)
 	deck.set_meta("pool_rounded_basin_corner_arc_center", center)
-	chunk.add_child(deck)
+	scene.add_node(deck)
 	_pool_cove_colliders(
 		center, radial_start, sweep, radius, corner,
-		chunk.POOL_DECK_Y, "pool_rounded_basin_corner_collider")
+		Chunk.POOL_DECK_Y, "pool_rounded_basin_corner_collider")
 	_pool_arc_coping(
 		center, radial_start, sweep, radius, true,
 		"pool_rounded_basin_corner_coping")
@@ -1436,11 +1436,11 @@ func _pool_compact_rounded_basin_corner(layout: Dictionary) -> bool:
 func _pool_pier_island(salt: int, piers: Array[Vector3]) -> bool:
 	var layout := _pool_water_layout()
 	if piers.is_empty() or int(layout.get("rounded_corner", -1)) >= 0 \
-			or chunk._r(salt) >= 0.56:
+			or ctx.random01(salt) >= 0.56:
 		return false
 	var center: Vector2 = layout["center"]
 	var size: Vector2 = layout["size"]
-	var radius := lerpf(0.78, 1.12, chunk._r(salt + 2))
+	var radius := lerpf(0.78, 1.12, ctx.random01(salt + 2))
 	var clearance := radius + 0.12
 	var x0 := center.x - size.x * 0.5 + clearance
 	var x1 := center.x + size.x * 0.5 - clearance
@@ -1456,10 +1456,10 @@ func _pool_pier_island(salt: int, piers: Array[Vector3]) -> bool:
 	if eligible.is_empty():
 		return false
 	var at: Vector3 = eligible[
-		int(chunk._r(salt + 1) * float(eligible.size())) % eligible.size()]
-	var island: MeshInstance3D = chunk._cyl(
-		Vector3(at.x, chunk.POOL_DECK_Y * 0.5, at.z),
-		radius, chunk.POOL_DECK_Y, Mats.pool_tile())
+		int(ctx.random01(salt + 1) * float(eligible.size())) % eligible.size()]
+	var island: MeshInstance3D = scene.cylinder(
+		Vector3(at.x, Chunk.POOL_DECK_Y * 0.5, at.z),
+		radius, Chunk.POOL_DECK_Y, Mats.pool_tile())
 	island.set_meta("pool_rounded_pier_island", true)
 	island.set_meta("pool_rounded_pier_island_radius", radius)
 	island.set_meta("pool_rounded_pier_island_center", Vector2(at.x, at.z))
@@ -1475,11 +1475,11 @@ func _pool_cove_colliders(center: Vector2, radial_start: Vector2,
 	var start := radial_start.normalized()
 	var corner_bottom := Vector3(corner.x, 0.0, corner.y)
 	var corner_top := Vector3(corner.x, height, corner.y)
-	for i in chunk.POOL_CORNER_SEGMENTS:
+	for i in Chunk.POOL_CORNER_SEGMENTS:
 		var u0 := start.rotated(
-			sweep * float(i) / float(chunk.POOL_CORNER_SEGMENTS))
+			sweep * float(i) / float(Chunk.POOL_CORNER_SEGMENTS))
 		var u1 := start.rotated(
-			sweep * float(i + 1) / float(chunk.POOL_CORNER_SEGMENTS))
+			sweep * float(i + 1) / float(Chunk.POOL_CORNER_SEGMENTS))
 		var arc0 := Vector3(
 			center.x + u0.x * radius, 0.0,
 			center.y + u0.y * radius)
@@ -1495,11 +1495,11 @@ func _pool_cove_colliders(center: Vector2, radial_start: Vector2,
 		cs.shape = shape
 		cs.set_meta(meta_name, true)
 		cs.set_meta("pool_rounded_basin_corner_sector", i)
-		chunk.body.add_child(cs)
+		scene.add_collision_shape(cs)
 
 
 func _pool_float(salt: int) -> void:
-	if _pool_dry() or chunk._r(salt) > 0.16:
+	if _pool_dry() or ctx.random01(salt) > 0.16:
 		return
 	var layout := _pool_water_layout()
 	var center: Vector2 = layout["center"]
@@ -1512,18 +1512,18 @@ func _pool_float(salt: int) -> void:
 	if x1 <= x0 or z1 <= z0:
 		return
 	var at := Vector3(
-		lerpf(x0, x1, chunk._r(salt + 1)),
-		chunk.POOL_WATER_Y - 0.05,
-		lerpf(z0, z1, chunk._r(salt + 2)))
-	if not chunk._floor_spot_clear(Vector3(at.x, 0.0, at.z), 0.6, 0.4):
+		lerpf(x0, x1, ctx.random01(salt + 1)),
+		Chunk.POOL_WATER_Y - 0.05,
+		lerpf(z0, z1, ctx.random01(salt + 2)))
+	if not scene.floor_spot_clear(Vector3(at.x, 0.0, at.z), 0.6, 0.4):
 		return
-	var pivot = chunk._furnishing_pivot(at, chunk._r(salt + 3) * TAU, "pool_float", false)
-	var inst = chunk._attributed_prop_local(pivot, chunk.POOL_BUOY_PATH, Vector3.ZERO, 0.0,
+	var pivot = scene.furnishing_pivot(at, ctx.random01(salt + 3) * TAU, "pool_float", false)
+	var inst = scene.attributed_prop_local(pivot, Chunk.POOL_BUOY_PATH, Vector3.ZERO, 0.0,
 		Vector3.ONE * 0.55)
 	if inst == null:
 		return
-	var tint: Color = chunk.POOL_BUOY_TINTS[
-		WorldGen.h(chunk.wseed, chunk.cell.x, chunk.cell.y, salt + 7) % chunk.POOL_BUOY_TINTS.size()]
+	var tint: Color = Chunk.POOL_BUOY_TINTS[
+		WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + 7) % Chunk.POOL_BUOY_TINTS.size()]
 	for node in inst.find_children("*", "MeshInstance3D", true, false):
 		var mi = node as MeshInstance3D
 		var m = StandardMaterial3D.new()
@@ -1539,20 +1539,20 @@ func _pool_float(salt: int) -> void:
 func _pool_handrail(dir: int, inset: float) -> void:
 	var rail = Mats.pool_rail()
 	var pivot = Node3D.new()
-	var base = chunk.POOL_DRY_Y if _pool_dry() else 0.0
+	var base = Chunk.POOL_DRY_Y if _pool_dry() else 0.0
 	if dir < 2:
-		pivot.position = Vector3((chunk.S - inset) if dir == 0 else inset, base, chunk.S / 2.0)
+		pivot.position = Vector3((WorldGen.CELL_SIZE - inset) if dir == 0 else inset, base, WorldGen.CELL_SIZE / 2.0)
 	else:
-		pivot.position = Vector3(chunk.S / 2.0, base, (chunk.S - inset) if dir == 2 else inset)
+		pivot.position = Vector3(WorldGen.CELL_SIZE / 2.0, base, (WorldGen.CELL_SIZE - inset) if dir == 2 else inset)
 	pivot.rotation.y = 0.0 if dir < 2 else PI / 2.0
 	pivot.set_meta("pool_handrail", true)
-	chunk.add_child(pivot)
-	var span = chunk.S - 1.6
-	var top = chunk._mcyl(pivot, Vector3(0, 0.92, 0), 0.026, span, rail)
+	scene.add_node(pivot)
+	var span = WorldGen.CELL_SIZE - 1.6
+	var top = scene.model_cylinder(pivot, Vector3(0, 0.92, 0), 0.026, span, rail)
 	top.rotation.x = PI / 2.0
 	for i in 4:
 		var z = -span * 0.5 + span * (float(i) / 3.0)
-		chunk._mcyl(pivot, Vector3(0, 0.46, z), 0.024, 0.92, rail)
+		scene.model_cylinder(pivot, Vector3(0, 0.46, z), 0.024, 0.92, rail)
 
 
 ## A real pool ladder: two uprights from the basin floor, rungs at and below
@@ -1563,7 +1563,7 @@ func _pool_handrail(dir: int, inset: float) -> void:
 
 func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
 		site = "wall") -> void:
-	along = clampf(along, 1.1, chunk.S - 1.1)
+	along = clampf(along, 1.1, WorldGen.CELL_SIZE - 1.1)
 	# Placement computed from the model's measured anatomy, not guessed. In its
 	# own space: the deck flanges sit at y ≈ 0 and z ≈ 0, the grab rails arch
 	# to +0.79 ABOVE that plane, and the treads hang to −0.46 BELOW it at
@@ -1586,13 +1586,13 @@ func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
 	pivot.set_meta("pool_ladder_dir", dir)
 	pivot.set_meta("pool_ladder_edge", edge)
 	pivot.set_meta("pool_ladder_along", along)
-	chunk.add_child(pivot)
+	scene.add_node(pivot)
 	# Water direction along the working axis is -inward; the pivot's own PI/2
 	# for dir >= 2 flips the sense, hence the sign split.
 	var model_yaw = (-inward if dir < 2 else inward) * PI / 2.0
-	var inst = chunk._attributed_prop_local(pivot, chunk.POOL_LADDER_PATH,
-		Vector3(0.0, chunk.POOL_DRY_Y, 0.0), model_yaw,
-		Vector3.ONE * chunk.POOL_LADDER_SCALE)
+	var inst = scene.attributed_prop_local(pivot, Chunk.POOL_LADDER_PATH,
+		Vector3(0.0, Chunk.POOL_DRY_Y, 0.0), model_yaw,
+		Vector3.ONE * Chunk.POOL_LADDER_SCALE)
 	if inst != null:
 		inst.set_meta("pool_ladder_model", true)
 	var area = Area3D.new()
@@ -1604,7 +1604,7 @@ func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
 	area.monitoring = false
 	var cs = CollisionShape3D.new()
 	var box = BoxShape3D.new()
-	box.size = Vector3(1.6, 3.0, chunk.POOL_LADDER_W + 1.1)
+	box.size = Vector3(1.6, 3.0, Chunk.POOL_LADDER_W + 1.1)
 	cs.shape = box
 	area.add_child(cs)
 	pivot.add_child(area)
@@ -1631,28 +1631,28 @@ func _pool_compact_ladder(salt: int) -> void:
 		# return there drives the ladder into/behind the wall. The transverse
 		# sides always retain tiled deck, and an open dry terminus already has
 		# the explicit 60cm landing, so both remain valid.
-		if chunk.style == WorldGen.POOL_CHANNEL and candidate < 2 \
-				and bool(chunk._edge_info(chunk.cell, candidate)["wall"]):
+		if ctx.style == WorldGen.POOL_CHANNEL and candidate < 2 \
+				and bool(scene.edge_info(ctx.cell, candidate)["wall"]):
 			continue
 		available.append(candidate)
 	if available.is_empty():
-		available = [2, 3] if chunk.style == WorldGen.POOL_CHANNEL \
+		available = [2, 3] if ctx.style == WorldGen.POOL_CHANNEL \
 			else [0, 1, 2, 3]
 	# Prefer a channel's recessed dry-room terminus. It keeps the guaranteed
 	# exit on the new tiled landing and prevents a ladder from being stranded
 	# on the old room seam, beside the doorway wall return.
-	if chunk.style == WorldGen.POOL_CHANNEL:
+	if ctx.style == WorldGen.POOL_CHANNEL:
 		var dry_termini: Array[int] = []
 		for candidate in available:
-			if _pool_open_dry_boundary(chunk.cell, candidate):
+			if _pool_open_dry_boundary(ctx.cell, candidate):
 				dry_termini.append(candidate)
 		if not dry_termini.is_empty():
 			available = dry_termini
 	var dir: int = available[
-		int(chunk._r(salt) * float(available.size())) % available.size()]
+		int(ctx.random01(salt) * float(available.size())) % available.size()]
 	var span: float = size.y if dir < 2 else size.x
 	var jitter: float = (
-		chunk._r(salt + 1) - 0.5) * minf(1.1, span * 0.22)
+		ctx.random01(salt + 1) - 0.5) * minf(1.1, span * 0.22)
 	match dir:
 		0:
 			_pool_ledge_ladder(
@@ -1670,65 +1670,65 @@ func _pool_compact_ladder(salt: int) -> void:
 
 func _pool_basin_room() -> void:
 	var piers := _pool_piers(
-		2300, 1 + int(chunk._r(2301) * 1.99))
+		2300, 1 + int(ctx.random01(2301) * 1.99))
 	_pool_pier_island(2388, piers)
-	if chunk._r(2302) < 0.42:
+	if ctx.random01(2302) < 0.42:
 		_pool_window(
-			0 if chunk._r(2303) < 0.5 else 1,
-			lerpf(3.0, chunk.S - 3.0, chunk._r(2304)))
+			0 if ctx.random01(2303) < 0.5 else 1,
+			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2304)))
 	_pool_float(2305)
 
 
 func _pool_channel_room() -> void:
 	var layout := _pool_water_layout()
 	var along_x: bool = layout["axis_x"]
-	if chunk._r(2310) < 0.34 and chunk.ceil_h >= 5.0:
+	if ctx.random01(2310) < 0.34 and ctx.ceiling_height >= 5.0:
 		_pool_window(
 			2 if along_x else 0,
-			lerpf(3.0, chunk.S - 3.0, chunk._r(2311)))
-	if chunk._r(2314) < 0.34:
+			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2311)))
+	if ctx.random01(2314) < 0.34:
 		_pool_piers(2315, 1)
 	_pool_float(2312)
 
 
 func _pool_dry_prop_spot(salt: int, radius: float,
 		inset := 2.0, tries := 12) -> Vector3:
-	var span := chunk.S - inset * 2.0
+	var span := WorldGen.CELL_SIZE - inset * 2.0
 	for i in tries:
 		var at := Vector3(
-			inset + span * chunk._r(salt + i * 2),
-			chunk.POOL_DRY_Y,
-			inset + span * chunk._r(salt + i * 2 + 1))
-		if chunk._floor_spot_clear(at, radius, 2.2):
+			inset + span * ctx.random01(salt + i * 2),
+			Chunk.POOL_DRY_Y,
+			inset + span * ctx.random01(salt + i * 2 + 1))
+		if scene.floor_spot_clear(at, radius, 2.2):
 			return at
 	return Vector3.INF
 
 
 func _pool_lounge_chair(at: Vector3, yaw: float) -> bool:
-	if not chunk._floor_spot_clear(at, 1.05, 1.05):
+	if not scene.floor_spot_clear(at, 1.05, 1.05):
 		return false
-	var b0 := chunk.body.get_child_count()
-	var pivot := chunk._attributed_floor_prop(
-		chunk.POOL_LOUNGE_CHAIR_PATH, at, yaw,
-		chunk.POOL_LOUNGE_CHAIR_SCALE, chunk.POOL_LOUNGE_CHAIR_CENTRE,
+	var b0 := scene.collider_mark()
+	var pivot := scene.attributed_floor_prop(
+		Chunk.POOL_LOUNGE_CHAIR_PATH, at, yaw,
+		Chunk.POOL_LOUNGE_CHAIR_SCALE, Chunk.POOL_LOUNGE_CHAIR_CENTRE,
 		"pool_lounge_chair", null, true)
 	if pivot == null:
 		return false
 	pivot.set_meta("pool_lounge_chair", true)
-	chunk._collider_yaw_box(
+	scene.collider_yaw_box(
 		at + Vector3.UP * 0.46, Vector3(1.90, 0.92, 1.18), yaw)
-	chunk._bind_furnishing_colliders(pivot, b0)
+	scene.bind_furnishing_colliders(pivot, b0)
 	return true
 
 
 func _pool_jacuzzi(at: Vector3, yaw: float) -> bool:
 	var planned := _pool_planned_jacuzzi_site()
 	if (planned == Vector3.INF or at.distance_to(planned) > 0.01) \
-			and not chunk._floor_spot_clear(at, 1.65, 1.25):
+			and not scene.floor_spot_clear(at, 1.65, 1.25):
 		return false
-	var pivot := chunk._attributed_floor_prop(
-		chunk.POOL_JACUZZI_PATH, at, yaw,
-		chunk.POOL_JACUZZI_SCALE, chunk.POOL_JACUZZI_CENTRE,
+	var pivot := scene.attributed_floor_prop(
+		Chunk.POOL_JACUZZI_PATH, at, yaw,
+		Chunk.POOL_JACUZZI_SCALE, Chunk.POOL_JACUZZI_CENTRE,
 		"pool_jacuzzi", null, true)
 	if pivot == null:
 		return false
@@ -1763,7 +1763,7 @@ func _pool_jacuzzi(at: Vector3, yaw: float) -> bool:
 	water.material_override = Mats.pool_water()
 	water.position = Vector3(
 		POOL_JACUZZI_CENTRE_OFFSET.x,
-		chunk.POOL_DRY_Y - POOL_JACUZZI_WATER_INSET - pivot.position.y,
+		Chunk.POOL_DRY_Y - POOL_JACUZZI_WATER_INSET - pivot.position.y,
 		POOL_JACUZZI_CENTRE_OFFSET.y)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	water.set_meta("pool_jacuzzi_water", true)
@@ -1821,22 +1821,22 @@ func _pool_jacuzzi_exit_volume(at: Vector3) -> void:
 		box.size = shape_data[1]
 		cs.shape = box
 		area.add_child(cs)
-	chunk.add_child(area)
+	scene.add_node(area)
 
 
 func _pool_lounge_group(salt: int) -> void:
 	var first := _pool_dry_prop_spot(salt, 1.05)
 	if first == Vector3.INF:
 		return
-	var yaw := chunk._r(salt + 30) * TAU
+	var yaw := ctx.random01(salt + 30) * TAU
 	if not _pool_lounge_chair(first, yaw):
 		return
 	# A second lounger makes a recognisable poolside group, but remains optional
 	# when the room's piers or doorway clearances leave only one safe footprint.
 	var side := Vector3(cos(yaw), 0.0, -sin(yaw)) * 1.45
 	var second := first + side
-	if second.x > 1.6 and second.x < chunk.S - 1.6 \
-			and second.z > 1.6 and second.z < chunk.S - 1.6:
+	if second.x > 1.6 and second.x < WorldGen.CELL_SIZE - 1.6 \
+			and second.z > 1.6 and second.z < WorldGen.CELL_SIZE - 1.6:
 		_pool_lounge_chair(second, yaw)
 
 
@@ -1852,27 +1852,27 @@ func _pool_start_room_props() -> void:
 	# Cell zero is always the arrival deck. Give visual QA a stable, immediate
 	# example of both new assets instead of hiding them behind procedural odds.
 	_pool_lounge_chair(
-		Vector3(3.0, chunk.POOL_DRY_Y, 7.1), 0.0)
+		Vector3(3.0, Chunk.POOL_DRY_Y, 7.1), 0.0)
 	_pool_lounge_chair(
-		Vector3(3.0, chunk.POOL_DRY_Y, 9.5), 0.0)
+		Vector3(3.0, Chunk.POOL_DRY_Y, 9.5), 0.0)
 	_pool_jacuzzi(_pool_planned_jacuzzi_site(), 0.0)
 
 
 func _pool_deck_room() -> void:
 	# Dry. The arrival deck stays clear enough to introduce the authored props;
 	# later decks retain the irregular structural-pier rhythm.
-	var dir = int(chunk._r(2320) * 3.99)
-	if chunk.cell == Vector2i.ZERO:
-		if chunk._r(2324) < 0.6:
-			_pool_window(dir, lerpf(3.0, chunk.S - 3.0, chunk._r(2325)))
+	var dir = int(ctx.random01(2320) * 3.99)
+	if ctx.cell == Vector2i.ZERO:
+		if ctx.random01(2324) < 0.6:
+			_pool_window(dir, lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2325)))
 		_pool_start_room_props()
 		return
 	var planned_jacuzzi := _pool_planned_jacuzzi_site()
 	if planned_jacuzzi == Vector3.INF:
-		_pool_piers(2322, 2 + int(chunk._r(2323) * 1.99))
-	if chunk._r(2324) < 0.6:
-		_pool_window(dir, lerpf(3.0, chunk.S - 3.0, chunk._r(2325)))
-	var furnishing_roll := chunk._r(2410)
+		_pool_piers(2322, 2 + int(ctx.random01(2323) * 1.99))
+	if ctx.random01(2324) < 0.6:
+		_pool_window(dir, lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2325)))
+	var furnishing_roll := ctx.random01(2410)
 	if furnishing_roll < 0.48:
 		_pool_lounge_group(2411)
 	elif furnishing_roll < 0.70:
@@ -1884,11 +1884,11 @@ func _pool_deck_room() -> void:
 func _pool_solarium_room() -> void:
 	# The room the light comes into: a wall of tall windows and almost nothing
 	# else, so the shafts have the whole space to fall through.
-	var dir = int(chunk._r(2330) * 3.99)
+	var dir = int(ctx.random01(2330) * 3.99)
 	for i in 3:
 		_pool_window(dir, 2.6 + float(i) * 3.4)
 	_pool_piers(2331, 2)
-	if chunk._r(2332) < 0.82:
+	if ctx.random01(2332) < 0.82:
 		_pool_lounge_group(2333)
 
 
@@ -1896,27 +1896,27 @@ func _pool_solarium_room() -> void:
 
 
 func _pool_lone_chair(salt: int) -> void:
-	if chunk._r(salt) > 0.6:
+	if ctx.random01(salt) > 0.6:
 		return
-	var at = Vector3(chunk.S / 2.0 + (chunk._r(salt + 1) - 0.5) * 3.0, chunk.POOL_DRY_Y,
-		chunk.S / 2.0 + (chunk._r(salt + 2) - 0.5) * 3.0)
+	var at = Vector3(WorldGen.CELL_SIZE / 2.0 + (ctx.random01(salt + 1) - 0.5) * 3.0, Chunk.POOL_DRY_Y,
+		WorldGen.CELL_SIZE / 2.0 + (ctx.random01(salt + 2) - 0.5) * 3.0)
 	# The chair must not stand inside a pier or any other solid; alone means
 	# alone in open floor, and it is rare enough to simply not appear here.
-	if not chunk._floor_spot_clear(Vector3(at.x, chunk.POOL_DRY_Y, at.z), 0.55, 0.9):
+	if not scene.floor_spot_clear(Vector3(at.x, Chunk.POOL_DRY_Y, at.z), 0.55, 0.9):
 		return
-	var b0 := chunk.body.get_child_count()
-	var pivot = chunk._furnishing_pivot(at, chunk._r(salt + 3) * TAU, "pool_chair")
-	var inst = chunk._attributed_prop_local(pivot, chunk.POOL_CHAIR_PATH,
-		-chunk.POOL_CHAIR_CENTRE, 0.0)
+	var b0 := scene.collider_mark()
+	var pivot = scene.furnishing_pivot(at, ctx.random01(salt + 3) * TAU, "pool_chair")
+	var inst = scene.attributed_prop_local(pivot, Chunk.POOL_CHAIR_PATH,
+		-Chunk.POOL_CHAIR_CENTRE, 0.0)
 	if inst == null:
 		return
 	for mi in inst.find_children("*", "MeshInstance3D", true, false):
-		if mi.name != chunk.POOL_CHAIR_MESH:
+		if mi.name != Chunk.POOL_CHAIR_MESH:
 			(mi as MeshInstance3D).visible = false
-	chunk._collider_yaw_box(at + Vector3(0, 0.44, 0),
+	scene.collider_yaw_box(at + Vector3(0, 0.44, 0),
 		Vector3(0.66, 0.88, 0.66), pivot.rotation.y)
-	if chunk.descent:
-		chunk._bind_furnishing_colliders(pivot, b0)
+	if ctx.descent:
+		scene.bind_furnishing_colliders(pivot, b0)
 
 
 func _pool_alcove_room() -> void:
@@ -1924,7 +1924,7 @@ func _pool_alcove_room() -> void:
 	# furnished with one implausibly preserved spa or a lone plastic chair.
 	var planned_jacuzzi := _pool_planned_jacuzzi_site()
 	if planned_jacuzzi == Vector3.INF:
-		_pool_piers(2340, 1 + int(chunk._r(2341) * 1.99))
+		_pool_piers(2340, 1 + int(ctx.random01(2341) * 1.99))
 	if planned_jacuzzi != Vector3.INF:
 		_pool_jacuzzi_landmark(2345)
 	else:
@@ -1932,27 +1932,27 @@ func _pool_alcove_room() -> void:
 
 
 func _pool_stairs_room() -> void:
-	if chunk._r(2354) < 0.42:
+	if ctx.random01(2354) < 0.42:
 		_pool_piers(2355, 1)
-	if chunk._r(2356) < 0.40:
+	if ctx.random01(2356) < 0.40:
 		_pool_window(
-			int(chunk._r(2357) * 4.0) % 4,
-			lerpf(3.0, chunk.S - 3.0, chunk._r(2358)))
+			int(ctx.random01(2357) * 4.0) % 4,
+			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2358)))
 	_pool_float(2353)
 
 
 func _pool_gallery_room() -> void:
-	var dir = int(chunk._r(2360) * 3.99)
+	var dir = int(ctx.random01(2360) * 3.99)
 	_pool_handrail(dir, 1.5)
-	_pool_piers(2361, 3 + int(chunk._r(2362) * 2.99))
-	if chunk._r(2363) < 0.5:
-		_pool_window((dir + 2) % 4, lerpf(3.0, chunk.S - 3.0, chunk._r(2364)))
+	_pool_piers(2361, 3 + int(ctx.random01(2362) * 2.99))
+	if ctx.random01(2363) < 0.5:
+		_pool_window((dir + 2) % 4, lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2364)))
 
 
 func _pool_cistern_room() -> void:
-	_pool_piers(2370, 2 + int(chunk._r(2372) * 1.99))
-	if chunk._r(2373) < 0.55:
+	_pool_piers(2370, 2 + int(ctx.random01(2372) * 1.99))
+	if ctx.random01(2373) < 0.55:
 		_pool_window(
-			int(chunk._r(2374) * 4.0) % 4,
-			lerpf(3.0, chunk.S - 3.0, chunk._r(2375)))
+			int(ctx.random01(2374) * 4.0) % 4,
+			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2375)))
 	_pool_float(2371)

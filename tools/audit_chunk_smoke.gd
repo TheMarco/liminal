@@ -347,6 +347,10 @@ func _run() -> void:
 			if chunk.get_child_count() == 0:
 				failures += 1
 				print("FAIL empty Chunk tree for theme=%d %s" % [theme, key])
+			if chunk.runtime_identity_violations() != 0:
+				failures += 1
+				print("FAIL duplicate stable runtime object identity for theme=%d %s" % [
+					theme, key])
 			chunk.free()
 
 	host.free()
@@ -360,7 +364,7 @@ func _run() -> void:
 		failures,
 	])
 	if failures == 0:
-		print("  PASS — all styles and corridor variants construct through Chunk.new")
+		print("  PASS — all styles construct with unique runtime object identities")
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures == 0 else 1)
 

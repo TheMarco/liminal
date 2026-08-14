@@ -2,9 +2,8 @@ class_name ChargingStation
 extends Node3D
 ## A deterministic safe harbour that is not actually safe: connecting turns
 ## the flashlight off, keeps the player close, and takes ten exposed seconds
-## from empty. An interrupted session rolls the cell back to what it held when
-## the cable went in — the Player owns that rule; a charge is defended, not
-## banked.
+## from empty. Power enters the cell continuously; disconnecting, fleeing, or
+## raising the flashlight keeps every bit accumulated so far.
 ##
 ## One station per run is `broken`: dead in a way a player who has used the
 ## honest ones can notice (no emissive glow, the idle hum a shade flat), and

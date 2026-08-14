@@ -47,6 +47,16 @@ describes the resulting implementation and verification state.
   rollback. Owning-room membership and cell size are centralized, production
   code no longer reaches into route/actor private collections, and topology
   planning no longer depends on scene construction.
+- Theme builders now receive only immutable `ChunkBuildContext` facts and the
+  typed `ChunkSceneWriter`; all direct builder-to-Chunk instance access has
+  been removed. Mutable generated objects have deterministic semantic IDs and
+  a versioned floor-scoped `ChunkRuntimeState`.
+- A typed `WorldMutation` owns topology, before/after runtime state and object
+  presence. Persistence happens only after the complete staged scene swap;
+  forced commit failure restores topology history and runtime state exactly.
+- `main.gd` no longer owns developer benchmark/screenshot state, post-process
+  shader state, or the level-transition transaction. Those responsibilities
+  live in focused controllers with narrow ports.
 - Every strong dead-code candidate was removed, including the legacy kind-2
   anomaly path, its orphaned helpers/constants, the final uncalled pool stair
   builder, and the three unreferenced shaders. The archived previous short-tape
@@ -57,8 +67,7 @@ describes the resulting implementation and verification state.
   reversible mutations, and CLI ranges.
 - The runner now gates ordinary engine errors through a narrow explicit
   allowlist and fails script errors, leaked objects/resources, and every other
-  `ERROR:`. All 48 `audit_*.gd` scripts are registered (47 functional audits
-  plus the serial generation-performance gate); no pool or in-flight audit is
+  `ERROR:`. All 49 registered audits run through the same gate; no pool or in-flight audit is
   exempt. Construction-heavy audits share explicit cache/RID teardown.
 - The 522-chunk, three-seed, eleven-theme world fingerprint was intentionally
   regenerated only for Annex material sharing and Bloom shadow flags; affected
@@ -127,7 +136,7 @@ Recommended order of work:
 
 Severity: High
 
-`ChunkManager._process()` has a nominal three-chunk / 6,000 μs budget, but it checks elapsed time only after a complete `_build()` (`scripts/chunk_manager.gd:85-100`). A single expensive build therefore stalls the frame. `warm_up()` synchronously creates a 3×3 area (`scripts/chunk_manager.gd:61-69`), and `rebuild_cells()` synchronously stages every replacement before its atomic swap (`scripts/chunk_manager.gd:242-273`).
+`ChunkManager._process()` had a nominal three-chunk / 6,000 μs budget, but checked elapsed time only after a complete `_build()`. A single expensive build therefore stalled the frame. `warm_up()` synchronously created a 3×3 area, and the original mutation rebuild synchronously constructed every replacement before its swap. The remediation replaced that path with budgeted `stage_rebuild_cells()` and removed the obsolete synchronous method.
 
 Measured steady-state generation results:
 
@@ -231,7 +240,8 @@ Recommended rendered capture scenarios are: Bloom streaming, Annex streaming, a 
 
 - `WorldGen` remains seed-pure, while `DescentTopology` centralizes the mutable overlay.
 - Topology states are complete snapshots, which naturally supports exact mutation-back behavior.
-- `ChunkManager.rebuild_cells()` stages replacements off-tree, transfers door state, then swaps atomically (`scripts/chunk_manager.gd:242-273`; `scripts/chunk.gd:2438-2475`).
+- `ChunkManager.stage_rebuild_cells()` builds replacements off-tree across the
+  frame budget, retains typed runtime state, and swaps only a complete set.
 - Live mutation preflight checks player, figures, passers, charging, VCR state, and moving doors before committing (`scripts/main.gd:1261-1310`).
 - World-hash and route audits provide meaningful deterministic-regression protection.
 - Eleven theme builders are separated behind a documented base contract.

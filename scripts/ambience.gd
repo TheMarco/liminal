@@ -21,6 +21,7 @@ var _lp2 := 0.0
 
 func _init(p_theme := 0) -> void:
 	theme = p_theme
+	bus = SoundBank.GAME_BUS
 	# Recorded room tone exists for most floors. Levels are set in Sfx and
 	# normalized from a measured per-file mean.
 	if Sfx.has_bed(theme):

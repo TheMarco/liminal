@@ -780,10 +780,19 @@ var _blackout := false
 var _blackout_lights := {}
 var _blackout_meshes := {}
 var _furnishing_group_serial := 0
+## Stable semantic identities for objects whose generated node instances may
+## disappear during streaming or a reality rebuild. Kept outside scene metadata
+## so adding runtime ownership cannot alter the generated scene fingerprint.
+var _runtime_objects: Dictionary = {}
+var _runtime_identity_errors := 0
 ## Theme-owned construction lives in a small composition object. Chunk keeps
 ## the stable public API and shared geometry kernel while its compatibility
 ## methods forward to this active builder.
 var _level_builder: RefCounted
+## Typed, deliberately narrow construction boundary. The compatibility `chunk`
+## host remains available while theme builders migrate one at a time.
+var _build_context: ChunkBuildContext
+var _scene_writer: ChunkSceneWriter
 ## Local XZ footprints of walls and columns that reach the drop ceiling.
 ## Annex fixtures are built after its architecture and reject these rectangles.
 var _annex_ceiling_obstructions: Array[Rect2] = []
@@ -954,6 +963,26 @@ static func clear_runtime_caches() -> void:
 	BLOOM_LEVEL_BUILDER.clear_runtime_cache()
 
 
+## Named process-lifetime asset cache APIs used by the construction façade.
+## Builders never receive the mutable dictionaries or PackedScene slots.
+static func cached_slot_machine_scene() -> PackedScene:
+	if _slot_scene == null:
+		_slot_scene = _prop_scene(SLOT_MACHINE_PATH)
+	return _slot_scene
+
+
+static func cached_asylum_scene(key: String, path: String) -> PackedScene:
+	var cached: PackedScene = _asy_scenes.get(key)
+	if cached == null:
+		cached = _prop_scene(path)
+		_asy_scenes[key] = cached
+	return cached
+
+
+static func cached_scrawl_font(which: int) -> FontFile:
+	return _scrawl_font(which)
+
+
 func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 		p_config: Variant = null) -> void:
 	var build_started := Time.get_ticks_usec()
@@ -1002,7 +1031,6 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	body = StaticBody3D.new()
 	add_child(body)
 	style = WorldGen.cell_style(wseed, cell, theme)
-	_level_builder = LEVEL_BUILDERS.get(theme, BASE_LEVEL_BUILDER).new(self)
 	# The Annex has its own room/corridor graph rather than inheriting the
 	# Vegas-era graph shared by the older floors.
 	room_root = WorldGen.annex_room_id(wseed, cell) if theme == 2 \
@@ -1022,6 +1050,11 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	# Props use the ceiling datum for tall-room layouts and mounted-vs-floor
 	# decisions.
 	ceil_h = cell_ceil_h(wseed, cell, theme)
+	_build_context = ChunkBuildContext.new(wseed, cell, theme, style, ceil_h,
+		room_root, room_n, is_room_anchor, mutation_furniture_variant, spec)
+	_scene_writer = ChunkSceneWriter.new(self, body)
+	_level_builder = LEVEL_BUILDERS.get(theme, BASE_LEVEL_BUILDER).new(
+		_build_context, _scene_writer)
 	# ceiling follows the room, so a small room feels small and a hall soars
 	var stage_started := Time.get_ticks_usec()
 	_build_floor_ceiling()
@@ -1880,12 +1913,28 @@ func _furnishing_pivot(pos: Vector3, yaw: float, kind: String,
 	var pivot := Node3D.new()
 	pivot.position = pos
 	pivot.rotation.y = yaw
-	pivot.set_meta("atomic_furnishing", kind)
-	pivot.set_meta("floor_supported", floor_supported)
-	_furnishing_group_serial += 1
-	pivot.set_meta("furnishing_group", _furnishing_group_serial)
+	_claim_furnishing_group(pivot, kind, floor_supported)
+	if not floor_supported:
+		# Historical _furnishing_pivot callers expose the explicit false value;
+		# specialized wall-mounted pivots registered through _claim omit it.
+		pivot.set_meta("floor_supported", false)
 	add_child(pivot)
 	return pivot
+
+
+## Register a builder-created pivot with the same deterministic group/identity
+## contract as _furnishing_pivot. Specialized imported assemblies can create
+## their node first without reaching into the serial counter.
+func _claim_furnishing_group(pivot: Node3D, kind: String,
+		floor_supported := true) -> int:
+	pivot.set_meta("atomic_furnishing", kind)
+	if floor_supported:
+		pivot.set_meta("floor_supported", true)
+	_furnishing_group_serial += 1
+	pivot.set_meta("furnishing_group", _furnishing_group_serial)
+	_register_runtime_object("furniture",
+		"%04d:%s" % [_furnishing_group_serial, kind], pivot)
+	return _furnishing_group_serial
 
 
 ## Colliders live under the chunk's StaticBody3D rather than the visible
@@ -2062,6 +2111,7 @@ func _build_floor_ceiling() -> void:
 func _build_walls() -> void:
 	var wall_t := ANNEX_WALL_T if theme == 2 else (POOL_WALL_T if theme == 9 else T)
 	for dir in 4:
+		var edge_visual_start := get_child_count()
 		var info := _edge_info(cell, dir)
 		# Annex and pool shared boundaries have one canonical east/south owner
 		# and sit on the actual boundary plane. Previously both neighbouring
@@ -2137,6 +2187,12 @@ func _build_walls() -> void:
 					_exit_sign(dir, info["t"])
 		else:
 			_open_edge_fascia(dir, plane)
+		# Keep the exact scene roots created by a supernatural edge record
+		# discoverable. The blackout reveal can then outline the actual new wall,
+		# casing, or door leaf instead of drawing only a marker near it.
+		if bool(info.get("runtime_shortcut", false)) \
+				or bool(info.get("runtime_seal", false)):
+			_tag_mutation_edge_visuals(edge_visual_start, dir)
 	if theme == 9:
 		# Each grid vertex has one deterministic southwest owner.  This chunk
 		# therefore owns its north-east vertex and builds at most one curved
@@ -2152,6 +2208,28 @@ func _edge_info(at: Vector2i, dir: int) -> Dictionary:
 			if descent_topology_state_override >= 0 else \
 			descent_topology.edge_info(at, dir)
 	return WorldGen.edge_info(wseed, at, dir, theme)
+
+
+func _tag_mutation_edge_visuals(first_child: int, dir: int) -> void:
+	for index in range(first_child, get_child_count()):
+		var visual := get_child(index) as Node3D
+		if visual != null and visual != body:
+			visual.set_meta("mutation_edge_visual", true)
+			visual.set_meta("mutation_edge_dir", dir)
+
+
+## Exact installed geometry produced for one supernatural boundary record.
+## Returning top-level roots keeps imported door assemblies atomic while the
+## presentation effect recursively outlines every mesh beneath them.
+func mutation_edge_visuals(dir: int) -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	for child in get_children():
+		var visual := child as Node3D
+		if visual != null \
+				and bool(visual.get_meta("mutation_edge_visual", false)) \
+				and int(visual.get_meta("mutation_edge_dir", -1)) == dir:
+			out.append(visual)
+	return out
 
 
 func _pool_shaped_doorway(dir: int, plane: float,
@@ -2336,6 +2414,7 @@ func _maybe_swing_door(dir: int, plane: float, a: float, b: float,
 	if force:
 		pivot.set_meta("runtime_mutation_door", true)
 	add_child(pivot)
+	_register_runtime_object("swing_door", _door_rebuild_key(pivot), pivot)
 	var panel_mat: Material = Mats.wood_door()
 	if theme == 5:
 		panel_mat = Mats.asy_metal_green()
@@ -2453,47 +2532,241 @@ func _toggle_swing_door(actor: Node, pivot: Node3D, cs: CollisionShape3D,
 		cs.disabled = false
 
 
-## Transient room state that a topology rebuild must not accidentally rewind.
-## Stable identity comes from deterministic local placement, not node instance
-## ids, so the snapshot applies to the freshly generated copy of the room.
-func capture_rebuild_state() -> Dictionary:
-	var doors := {}
-	for node in find_children("*", "Node3D", true, false):
-		var pivot := node as Node3D
-		if pivot == null or not pivot.has_meta("door_dir"):
+## Allowlisted transient room state that generation must not rewind. The
+## semantic key survives node destruction, streaming and topology mutation.
+func capture_runtime_state() -> ChunkRuntimeState:
+	var out := ChunkRuntimeState.new()
+	for key in _runtime_objects:
+		var record: Dictionary = _runtime_objects[key]
+		var node_value: Variant = record.get("node", null)
+		if not is_instance_valid(node_value):
 			continue
-		doors[_door_rebuild_key(pivot)] = {
-			"open": bool(pivot.get_meta("open", false)),
-			"angle": float(pivot.get_meta("last_open_angle", pivot.rotation.y)),
-		}
-	return {"doors": doors}
+		var node := node_value as Node3D
+		if node == null:
+			continue
+		match str(record.get("kind", "")):
+			"swing_door":
+				out.put(str(key), "swing_door", {
+					"open": bool(node.get_meta("open", false)),
+					"angle": float(node.get_meta(
+						"last_open_angle", node.rotation.y)),
+				})
+	return out
 
 
-func restore_rebuild_state(snapshot: Dictionary) -> void:
-	var doors: Dictionary = snapshot.get("doors", {})
-	if doors.is_empty():
+func restore_runtime_state(state: ChunkRuntimeState) -> void:
+	if state == null or state.is_empty():
 		return
-	for node in find_children("*", "Node3D", true, false):
-		var pivot := node as Node3D
-		if pivot == null or not pivot.has_meta("door_dir"):
+	for key in state.keys():
+		if not _runtime_objects.has(key):
 			continue
-		var key := _door_rebuild_key(pivot)
-		if not doors.has(key):
+		var record: Dictionary = _runtime_objects[key]
+		var node_value: Variant = record.get("node", null)
+		if not is_instance_valid(node_value):
 			continue
-		var state: Dictionary = doors[key]
-		var opened := bool(state.get("open", false))
-		var angle := float(state.get("angle", 0.0)) if opened else 0.0
-		pivot.rotation.y = angle
-		pivot.set_meta("open", opened)
-		pivot.set_meta("moving", false)
-		pivot.set_meta("last_open_angle", angle)
-		for body_node in pivot.find_children("*", "StaticBody3D", true, false):
-			for shape_node in body_node.find_children(
-					"*", "CollisionShape3D", true, false):
-				(shape_node as CollisionShape3D).disabled = opened
-		for hit_node in pivot.find_children("*", "Interactable", true, false):
-			(hit_node as Interactable).prompt_text = \
-				"E — close door" if opened else "E — open door"
+		var node := node_value as Node3D
+		if node == null:
+			continue
+		if str(record.get("kind", "")) == "swing_door" \
+				and state.kind_for(key) == "swing_door":
+			_apply_swing_door_state(node, state.payload_for(key))
+
+
+func runtime_object_descriptors() -> Dictionary:
+	var out := {}
+	for key in _runtime_objects:
+		var record: Dictionary = _runtime_objects[key]
+		var node_value: Variant = record.get("node", null)
+		if not is_instance_valid(node_value):
+			continue
+		var node := node_value as Node3D
+		if node != null and node.get_parent() != null:
+			out[str(key)] = str(record.get("kind", ""))
+	return out
+
+
+func runtime_object_transforms(kind_filter := "") -> Dictionary:
+	var out := {}
+	for key in _runtime_objects:
+		var record: Dictionary = _runtime_objects[key]
+		var kind := str(record.get("kind", ""))
+		if not kind_filter.is_empty() and kind != kind_filter:
+			continue
+		var node_value: Variant = record.get("node", null)
+		if not is_instance_valid(node_value):
+			continue
+		var node := node_value as Node3D
+		if node != null and node.get_parent() != null:
+			out[str(key)] = node.transform
+	return out
+
+
+## World-space samples for floor-supported, non-interactive set pieces. The
+## blackout selector uses the real resident furniture rather than a room-centre
+## guess, so a "visible" mutation has an actual object in the camera frustum.
+## Three heights cover low chairs, tables and tall cabinets without requiring
+## every imported mesh to expose a custom bounding box contract.
+func furniture_witness_points(changed_only := false) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for key in _runtime_objects:
+		var record: Dictionary = _runtime_objects[key]
+		if str(record.get("kind", "")) != "furniture":
+			continue
+		var node_value: Variant = record.get("node", null)
+		if not is_instance_valid(node_value) or not node_value is Node3D:
+			continue
+		var pivot := node_value as Node3D
+		if pivot.get_parent() == null \
+				or not bool(pivot.get_meta("floor_supported", false)):
+			continue
+		if changed_only \
+				and not bool(pivot.get_meta("mutation_furniture_moved", false)) \
+				and not bool(pivot.get_meta("descent_reality_furniture", false)):
+			continue
+		if not pivot.find_children("*", "Interactable", true, false).is_empty() \
+				or not pivot.find_children("*", "VhsRitual", true, false).is_empty() \
+				or not pivot.find_children(
+					"*", "ChargingStation", true, false).is_empty():
+			continue
+		for height in [0.35, 0.85, 1.35]:
+			out.append(_furniture_sample_point(pivot, height))
+	return out
+
+
+## Target-aware witness samples. Sparse supported rooms may have no movable
+## base furnishing; their alternate reality introduces one chair at the exact
+## prevalidated site returned here, so that appearance can still satisfy the
+## same camera/occlusion contract before the replacement chunk is constructed.
+func furniture_witness_points_for_variant(target_variant: int,
+		changed_only := false) -> Array[Vector3]:
+	if changed_only:
+		return furniture_witness_points(true)
+	var out: Array[Vector3] = []
+	if target_variant <= 0:
+		# Mutation-back can witness a currently displaced object. If the
+		# designated object is absent, this room simply cannot qualify and a
+		# visible architectural edge or another changed room must carry the beat.
+		return furniture_witness_points(true)
+	var witness := _first_mutation_furniture()
+	if witness != null:
+		for height in [0.35, 0.85, 1.35]:
+			out.append(_furniture_sample_point(witness, height))
+		return out
+	var plan := _reality_chair_plan(target_variant)
+	if plan.is_empty():
+		return out
+	var local: Vector3 = plan["position"]
+	for height in [0.35, 0.85, 1.35]:
+		var sample := local + Vector3(0.0, height, 0.0)
+		out.append(to_global(sample) if is_inside_tree() else sample)
+	return out
+
+
+## Resolve a sampled furniture witness back to the actual atomic furnishing
+## pivot. This is presentation-only and never alters the deterministic recipe.
+func furniture_witness_node_near(point: Vector3,
+		changed_only := false) -> Node3D:
+	var best: Node3D
+	var best_distance := INF
+	for key in _runtime_objects:
+		var record: Dictionary = _runtime_objects[key]
+		if str(record.get("kind", "")) != "furniture":
+			continue
+		var value: Variant = record.get("node", null)
+		if not is_instance_valid(value) or not value is Node3D:
+			continue
+		var pivot := value as Node3D
+		if pivot.get_parent() == null \
+				or not bool(pivot.get_meta("floor_supported", false)):
+			continue
+		if changed_only \
+				and not bool(pivot.get_meta("mutation_furniture_moved", false)) \
+				and not bool(pivot.get_meta("descent_reality_furniture", false)):
+			continue
+		var distance := pivot.global_position.distance_squared_to(point)
+		if distance < best_distance:
+			best_distance = distance
+			best = pivot
+	return best
+
+
+func _furniture_sample_point(pivot: Node3D, height: float) -> Vector3:
+	var offset := Vector3(0.0, height, 0.0)
+	return pivot.global_position + offset \
+		if pivot.is_inside_tree() else pivot.position + offset
+
+
+## Stable identity of the designated base-state witness. Empty means the
+## alternate reality uses the deterministic appearing-chair fallback instead.
+func furniture_witness_key_for_variant(target_variant: int) -> String:
+	if target_variant <= 0:
+		return ""
+	var witness := _first_mutation_furniture()
+	if witness == null:
+		return ""
+	for key in _runtime_objects:
+		if (_runtime_objects[key] as Dictionary).get("node", null) == witness:
+			return str(key)
+	return ""
+
+
+func _first_mutation_furniture() -> Node3D:
+	for child in get_children():
+		var pivot := child as Node3D
+		if _furniture_mutation_eligible(pivot):
+			return pivot
+	return null
+
+
+func _furniture_mutation_eligible(pivot: Node3D) -> bool:
+	if pivot == null or not pivot.has_meta("furnishing_group"):
+		return false
+	if pivot.has_meta("annex_architecture") \
+			or pivot.has_meta("wall_utility_dir") \
+			or pivot.has_meta("annex_ac_mount") \
+			or pivot.has_meta("annex_attached_half_wall"):
+		return false
+	if pivot.position.x < 0.9 or pivot.position.x > S - 0.9 \
+			or pivot.position.z < 0.9 or pivot.position.z > S - 0.9 \
+			or not bool(pivot.get_meta("floor_supported", false)):
+		return false
+	return pivot.find_children("*", "Interactable", true, false).is_empty() \
+		and pivot.find_children("*", "VhsRitual", true, false).is_empty() \
+		and pivot.find_children(
+			"*", "ChargingStation", true, false).is_empty()
+
+
+func runtime_identity_violations() -> int:
+	return _runtime_identity_errors
+
+
+func _register_runtime_object(kind: String, local_id: String,
+		node: Node3D) -> String:
+	var key := ChunkRuntimeState.object_key(cell, kind, local_id)
+	if _runtime_objects.has(key):
+		var existing: Dictionary = _runtime_objects[key]
+		var existing_value: Variant = existing.get("node", null)
+		if is_instance_valid(existing_value) \
+				and existing_value is Node3D:
+			_runtime_identity_errors += 1
+	_runtime_objects[key] = {"kind": kind, "node": node}
+	return key
+
+
+func _apply_swing_door_state(pivot: Node3D, state: Dictionary) -> void:
+	var opened := bool(state.get("open", false))
+	var angle := float(state.get("angle", 0.0)) if opened else 0.0
+	pivot.rotation.y = angle
+	pivot.set_meta("open", opened)
+	pivot.set_meta("moving", false)
+	pivot.set_meta("last_open_angle", angle)
+	for body_node in pivot.find_children("*", "StaticBody3D", true, false):
+		for shape_node in body_node.find_children(
+				"*", "CollisionShape3D", true, false):
+			(shape_node as CollisionShape3D).disabled = opened
+	for hit_node in pivot.find_children("*", "Interactable", true, false):
+		(hit_node as Interactable).prompt_text = \
+			"E — close door" if opened else "E — open door"
 
 
 func _door_rebuild_key(pivot: Node3D) -> String:
@@ -5279,6 +5552,7 @@ func _descent_lift_wait(rig: Dictionary, seconds: float) -> void:
 	root.set_meta("waiting", true)
 	var total := maxf(0.5, seconds)
 	var shaft := AudioStreamPlayer3D.new()
+	shaft.bus = SoundBank.HALL_BUS
 	shaft.stream = SoundBank.lift_shaft()
 	shaft.volume_db = -30.0
 	shaft.max_distance = 34.0
@@ -5358,6 +5632,7 @@ func _set_descent_leaves(rig: Dictionary, x: float) -> void:
 func _descent_sound(parent: Node, stream: AudioStream, volume: float,
 		max_distance := 24.0) -> AudioStreamPlayer3D:
 	var sound := AudioStreamPlayer3D.new()
+	sound.bus = SoundBank.HALL_BUS
 	sound.stream = stream
 	sound.volume_db = volume
 	sound.max_distance = max_distance
@@ -5374,6 +5649,7 @@ func _open_descent_doors(left: AnimatableBody3D,
 		return
 	owner.set_meta("opened", true)
 	var sound := AudioStreamPlayer3D.new()
+	sound.bus = SoundBank.HALL_BUS
 	sound.stream = SoundBank.elev()
 	sound.volume_db = -8.0
 	sound.max_distance = 24.0
@@ -5461,6 +5737,7 @@ func _descent_ride(rig: Dictionary) -> void:
 	# Brake release, then the hoist takes the weight.
 	_descent_sound(root, SoundBank.thud(), -8.0)
 	var motor := AudioStreamPlayer3D.new()
+	motor.bus = SoundBank.HALL_BUS
 	motor.stream = SoundBank.lift_motor()
 	motor.volume_db = -36.0
 	motor.max_distance = 20.0
@@ -5657,10 +5934,10 @@ func activate_anomaly(kind: int) -> void:
 			or not WorldGen.room_split(wseed, room_root, theme).is_empty() \
 			or anomaly_player == null):
 		# A narrow or partitioned cell has no universally safe standing corner,
-		# and without a player there is nothing for a figure to hunt — an
-		# audit or a headless build lands here. Fall back to the collider-free
-		# dead-light mutation either way.
-		activate_anomaly(0)
+		# and without a player there is nothing for a figure to hunt. Decline the
+		# optional beat; killing the fixtures here made a successful global power
+		# restore look broken.
+		anomaly_kind = -1
 	elif kind == 1 and not has_node("WaitingFigure"):
 		var f := ShadowFigure.new()
 		f.name = "WaitingFigure"
@@ -5708,32 +5985,12 @@ func _apply_furniture_variant(variant: int) -> void:
 	var remove_colliders: Array[Node] = []
 	var fallback_pivot: Node3D
 	var fallback_colliders: Array[Node] = []
+	var witness_changed := false
 	var idx := 0
 	for child in get_children():
 		var pivot := child as Node3D
-		if pivot == null or not pivot.has_meta("furnishing_group"):
-			continue
-		# Architecture and wall-anchored assemblies stay put: a wall that
-		# moved is a bug report, a chair that moved is a haunting.
-		if pivot.has_meta("annex_architecture") \
-				or pivot.has_meta("wall_utility_dir") \
-				or pivot.has_meta("annex_ac_mount") \
-				or pivot.has_meta("annex_attached_half_wall"):
-			continue
-		# Anything hugging a wall is mounted — a blackboard, projection screen
-		# or shelf. A mounted thing an inch off its wall reads as broken, not
-		# haunted. Floor support is explicit on every atomic furnishing; do not
-		# infer mounting from mesh height because wardrobes, slot machines and
-		# tall cabinets are legitimate floor furniture.
-		if pivot.position.x < 0.9 or pivot.position.x > S - 0.9 \
-				or pivot.position.z < 0.9 or pivot.position.z > S - 0.9:
-			continue
-		if not bool(pivot.get_meta("floor_supported", false)):
-			continue
-		if not pivot.find_children("*", "Interactable", true, false).is_empty() \
-				or not pivot.find_children("*", "VhsRitual", true, false).is_empty() \
-				or not pivot.find_children(
-					"*", "ChargingStation", true, false).is_empty():
+		# Architecture, wall-mounted assemblies and interactions never qualify.
+		if not _furniture_mutation_eligible(pivot):
 			continue
 		if fallback_pivot == null:
 			fallback_pivot = pivot
@@ -5744,7 +6001,7 @@ func _apply_furniture_variant(variant: int) -> void:
 		var gid := int(pivot.get_meta("furnishing_group"))
 		var roll := WorldGen.h(wseed, cell.x + idx * 131,
 			cell.y - idx * 71, 5501 + variant * 409)
-		if posmod(roll, 100) >= 72:
+		if posmod(roll, 100) >= 72 and pivot != fallback_pivot:
 			continue
 		# The third reality can make one in four eligible groups simply cease to
 		# exist. Removal cannot obstruct circulation and rebuilding an earlier
@@ -5755,6 +6012,8 @@ func _apply_furniture_variant(variant: int) -> void:
 				remove_colliders.append(collider)
 			occupied.erase(gid)
 			mutation_furniture_changed_groups += 1
+			if pivot == fallback_pivot:
+				witness_changed = true
 			continue
 		var origin := pivot.position
 		var original_pivot_xf := pivot.transform
@@ -5798,22 +6057,24 @@ func _apply_furniture_variant(variant: int) -> void:
 				occupied[gid] = candidate
 				pivot.set_meta("mutation_furniture_moved", true)
 				mutation_furniture_changed_groups += 1
+				if pivot == fallback_pivot:
+					witness_changed = true
 				accepted = true
 				break
 		if not accepted:
 			pivot.transform = original_pivot_xf
 			for collider in collider_xfs:
 				(collider as Node3D).transform = collider_xfs[collider]
-	# Every planned room is chosen from a style with movable floor furniture.
-	# If seeded rotations all fail or skip, make the reality visibly different
-	# by removing one safe, non-interactive furnishing group. Removal cannot
-	# obstruct circulation and rebuilding another complete state restores it.
-	if mutation_furniture_changed_groups == 0 \
-			and fallback_pivot != null and is_instance_valid(fallback_pivot):
+	# The first eligible group is the room's designated witness. It must change
+	# even when another, off-camera group already moved. If all seven safe pose
+	# attempts fail, removal is collision-safe and mutation-back restores it.
+	if not witness_changed and fallback_pivot != null \
+			and is_instance_valid(fallback_pivot):
 		remove_pivots.append(fallback_pivot)
 		for collider in fallback_colliders:
 			remove_colliders.append(collider)
-		mutation_furniture_changed_groups = 1
+		mutation_furniture_changed_groups += 1
+		witness_changed = true
 	# Some otherwise valid sparse rooms contain no opted-in furnishing at all.
 	# Their generated alternate reality gains one plain chair at a fully tested
 	# floor site. Appearance is as legible a mutation as movement, and rebuilding
@@ -5832,6 +6093,37 @@ func _apply_furniture_variant(variant: int) -> void:
 
 
 func _add_reality_chair(variant: int) -> bool:
+	var plan := _reality_chair_plan(variant)
+	if plan.is_empty():
+		return false
+	var p: Vector3 = plan["position"]
+	var yaw := float(plan["yaw"])
+	var first_collider := body.get_child_count()
+	var pivot := _furnishing_pivot(p, yaw, "reality_chair")
+	pivot.set_meta("descent_reality_furniture", true)
+	pivot.set_meta("mutation_furniture_moved", true)
+	var parts: Array[Array] = [
+		[Vector3(0, 0.48, 0), Vector3(0.66, 0.11, 0.62)],
+		[Vector3(0, 0.78, 0.26), Vector3(0.66, 0.64, 0.09)],
+		[Vector3(-0.25, 0.23, -0.22), Vector3(0.08, 0.46, 0.08)],
+		[Vector3(0.25, 0.23, -0.22), Vector3(0.08, 0.46, 0.08)],
+		[Vector3(-0.25, 0.23, 0.22), Vector3(0.08, 0.46, 0.08)],
+		[Vector3(0.25, 0.23, 0.22), Vector3(0.08, 0.46, 0.08)],
+	]
+	for part in parts:
+		var local_pos: Vector3 = part[0]
+		var size: Vector3 = part[1]
+		var world_pos := _wp(p, local_pos, yaw)
+		var mesh := _box(world_pos, size, Mats.darkwood(), false)
+		mesh.rotation.y = yaw
+		_adopt_local(pivot, mesh)
+		_collider_yaw_box(world_pos, size, yaw)
+	_bind_furnishing_colliders(pivot, first_collider)
+	mutation_furniture_changed_groups = 1
+	return true
+
+
+func _reality_chair_plan(variant: int) -> Dictionary:
 	var candidates: Array[Vector3] = []
 	for x in range(2, 11):
 		for z in range(2, 11):
@@ -5850,30 +6142,8 @@ func _add_reality_chair(variant: int) -> bool:
 		if blocked or not _floor_spot_clear(p, 0.46, 1.2):
 			continue
 		var yaw := float(posmod(start + i + variant, 4)) * PI * 0.5
-		var first_collider := body.get_child_count()
-		var pivot := _furnishing_pivot(p, yaw, "reality_chair")
-		pivot.set_meta("descent_reality_furniture", true)
-		pivot.set_meta("mutation_furniture_moved", true)
-		var parts: Array[Array] = [
-			[Vector3(0, 0.48, 0), Vector3(0.66, 0.11, 0.62)],
-			[Vector3(0, 0.78, 0.26), Vector3(0.66, 0.64, 0.09)],
-			[Vector3(-0.25, 0.23, -0.22), Vector3(0.08, 0.46, 0.08)],
-			[Vector3(0.25, 0.23, -0.22), Vector3(0.08, 0.46, 0.08)],
-			[Vector3(-0.25, 0.23, 0.22), Vector3(0.08, 0.46, 0.08)],
-			[Vector3(0.25, 0.23, 0.22), Vector3(0.08, 0.46, 0.08)],
-		]
-		for part in parts:
-			var local_pos: Vector3 = part[0]
-			var size: Vector3 = part[1]
-			var world_pos := _wp(p, local_pos, yaw)
-			var mesh := _box(world_pos, size, Mats.darkwood(), false)
-			mesh.rotation.y = yaw
-			_adopt_local(pivot, mesh)
-			_collider_yaw_box(world_pos, size, yaw)
-		_bind_furnishing_colliders(pivot, first_collider)
-		mutation_furniture_changed_groups = 1
-		return true
-	return false
+		return {"position": p, "yaw": yaw}
+	return {}
 
 
 func _furnishing_group_rect(pivot: Node3D, colliders: Array) -> Rect2:
@@ -7193,10 +7463,7 @@ func _attributed_floor_prop(path: String, p: Vector3, yaw: float, scl: float,
 		# Same contract as `_furnishing_pivot`: one pivot, one group, removed
 		# as a unit. The support audit requires the tag, or the prop's grouped
 		# colliders read as physics left behind by a culled assembly.
-		pivot.set_meta("atomic_furnishing", kind)
-		pivot.set_meta("floor_supported", true)
-		_furnishing_group_serial += 1
-		pivot.set_meta("furnishing_group", _furnishing_group_serial)
+		_claim_furnishing_group(pivot, kind, true)
 	if parent != null:
 		parent.add_child(pivot)
 	else:
@@ -7554,6 +7821,17 @@ func mall_fixture_audit() -> Dictionary:
 				or fit.y > MALL_SIGN_MAX_H + 0.001:
 			report["violations"] += 1
 	for node in find_children("*", "Node3D", true, false):
+		if node.has_meta("mall_directory_label") and node is Label3D:
+			var directory_label := node as Label3D
+			if directory_label.double_sided \
+					or absf(absf(directory_label.rotation.y) - PI) > 0.001:
+				report["violations"] += 1
+		if node.has_meta("mall_directory_listing") and node is Label3D:
+			var directory_listing := node as Label3D
+			if directory_listing.double_sided \
+					or absf(absf(directory_listing.rotation.y) - PI) > 0.001 \
+					or directory_listing.text.strip_edges().is_empty():
+				report["violations"] += 1
 		if node.has_meta("mall_store_sign") and node is Label3D:
 			report["store_signs"] += 1
 			var lab := node as Label3D

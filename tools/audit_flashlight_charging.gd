@@ -38,25 +38,37 @@ func _run() -> void:
 	player._update_flashlight(5.0)
 	if absf(player.flashlight_charge() - 0.5) > 0.001:
 		_fail("five seconds did not produce half charge")
-	# Floor teardown invalidates the old station before the next physics tick.
-	# The session must still know its starting value and roll the gain back.
+	# Floor teardown, fleeing a ghost, and a manual disconnect all terminate the
+	# cable without undoing energy that has already entered the cell.
 	station.free()
 	player._update_flashlight(0.01)
-	if player.flashlight_charge() > 0.001 or player.is_charging():
-		_fail("destroyed station banked an interrupted partial charge")
+	if absf(player.flashlight_charge() - 0.5) > 0.001 \
+			or player.is_charging():
+		_fail("destroyed station discarded an interrupted partial charge")
 	station = Node3D.new()
 	root.add_child(station)
 	station.global_position = player.global_position
 	if not player.start_charging(station):
-		_fail("empty flashlight refused a replacement station")
-	player._update_flashlight(5.0)
+		_fail("half-charged flashlight refused a replacement station")
 	player._update_flashlight(5.0)
 	if absf(player.flashlight_charge() - 1.0) > 0.001:
-		_fail("ten seconds did not produce full charge")
+		_fail("retained half charge did not complete in five more seconds")
 	if player.is_charging():
 		_fail("connection remained active at full charge")
+	# Raising the torch is the actual danger-abort path. It must stop charging
+	# while preserving whatever the station delivered before F was pressed.
 	player.set_flashlight(true)
-	player._update_flashlight(7.0)
+	player._update_flashlight(12.0)
+	if player.flashlight_charge() > 0.401:
+		_fail("flashlight danger-abort fixture did not drain to forty percent")
+	player.set_flashlight(false)
+	if not player.start_charging(station):
+		_fail("partially drained flashlight refused a danger-abort session")
+	player._update_flashlight(2.0)
+	var before_abort := player.flashlight_charge()
+	player.set_flashlight(true)
+	if player.is_charging() or absf(player.flashlight_charge() - before_abort) > 0.001:
+		_fail("raising the flashlight discarded partial charge")
 	player.velocity = Vector3(1.0, 0.0, 1.0)
 	player.reset_descent_resources()
 	if player.flashlight.visible or player.flashlight_charge() < 0.999:

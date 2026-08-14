@@ -117,6 +117,14 @@ func _audit_theme(theme: int) -> void:
 		for room in delta.rooms:
 			saw_furniture = true
 			furniture_total += 1
+			var target_variant := topology.furniture_variant(room)
+			var base_chunk := Chunk.new(ws, room, theme, {
+				"descent": true,
+				"topology": topology,
+				"furniture_variant_override": 0,
+			})
+			var witness_key := base_chunk \
+				.furniture_witness_key_for_variant(target_variant)
 			var chunk := Chunk.new(ws, room, theme, {
 				"descent": true,
 				"topology": topology,
@@ -134,6 +142,22 @@ func _audit_theme(theme: int) -> void:
 			_expect(chunk.doorway_clearance_violations() == 0,
 				"theme %d state %d room %s blocks a doorway" % [
 					theme, state_id, room])
+			if witness_key.is_empty():
+				_expect(not chunk.furniture_witness_points(true).is_empty(),
+					"theme %d state %d sparse room %s lost appearing witness" % [
+						theme, state_id, room])
+			else:
+				var before_xf: Variant = base_chunk.runtime_object_transforms(
+					"furniture").get(witness_key)
+				var after_xf: Variant = chunk.runtime_object_transforms(
+					"furniture").get(witness_key)
+				_expect(after_xf == null or (before_xf is Transform3D \
+						and after_xf is Transform3D \
+						and not (before_xf as Transform3D).is_equal_approx(
+							after_xf as Transform3D)),
+					"theme %d state %d room %s left its witness unchanged" % [
+						theme, state_id, room])
+			base_chunk.free()
 			chunk.free()
 	# At least one hard edge and one furniture reality per generated floor; an
 	# opening is expected too because it is the mercy system's escape valve.
@@ -159,6 +183,29 @@ func _audit_theme(theme: int) -> void:
 					probes.append(probe)
 	var ordinary: TopologyDelta = topology.find_transition(
 		route, probes[0], all_visited, false) if not probes.is_empty() else null
+	# Production supplies a live camera/occlusion ranker. Prove that the pure
+	# selector treats it as a hard witness gate and retains its score on the
+	# typed proposal rather than silently falling back to an unseen reality.
+	if ordinary != null and not ordinary.is_empty():
+		var accepted_state := ordinary.to_state
+		var witnessed := topology.find_transition(route, probes[0], all_visited,
+			false, func(delta: TopologyDelta) -> float:
+				return 321.0 if delta.to_state == accepted_state else -1.0)
+		_expect(witnessed != null and witnessed.to_state == accepted_state \
+				and is_equal_approx(witnessed.witness_score, 321.0),
+			"theme %d selector ignored its visible-witness rank" % theme)
+		var live_rejected := topology.find_transition(route, probes[0],
+			all_visited, false,
+			func(delta: TopologyDelta) -> float:
+				return 321.0 if delta.to_state == accepted_state else -1.0,
+			func(delta: TopologyDelta) -> bool:
+				return delta.to_state != accepted_state)
+		_expect(live_rejected == null,
+			"theme %d selector returned a live-unsafe camera favourite" % theme)
+		var hidden := topology.find_transition(route, probes[0], all_visited,
+			false, func(_delta: TopologyDelta) -> float: return -1.0)
+		_expect(hidden == null,
+			"theme %d selector admitted a transition with no visible witness" % theme)
 	var helpful: TopologyDelta
 	var helpful_from := Vector2i.ZERO
 	# At most one BFS per generated state/probe cluster; route construction is
@@ -243,7 +290,7 @@ func _audit_door_rebuild_state(theme: int, at: Vector2i,
 	source.rotation.y = 1.11
 	source.set_meta("open", true)
 	source.set_meta("last_open_angle", 1.11)
-	rebuilt.restore_rebuild_state(first.capture_rebuild_state())
+	rebuilt.restore_runtime_state(first.capture_runtime_state())
 	_expect(bool(restored.get_meta("open", false)) \
 			and is_equal_approx(restored.rotation.y, 1.11),
 		"theme %d rebuilt door lost open angle at %s" % [theme, at])

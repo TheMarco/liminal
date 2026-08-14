@@ -94,6 +94,14 @@ func _run() -> void:
 	if not shader_source.contains("band_shift") \
 			or not shader_source.contains("fuv.x += band"):
 		failures.append("VHS footage has no visible tracking displacement")
+	if not is_equal_approx(VhsRitual.display_aspect_for_size(
+			Vector2i(512, 410)), 4.0 / 3.0) \
+			or not is_equal_approx(VhsRitual.display_aspect_for_size(
+				Vector2i(512, 382)), 4.0 / 3.0):
+		failures.append("converted 4:3 tapes are not normalized to 4:3")
+	if not is_equal_approx(VhsRitual.display_aspect_for_size(
+			Vector2i(512, 288)), 16.0 / 9.0):
+		failures.append("widescreen optional footage lost its native aspect")
 	_audit_deck(shorts, longs, failures)
 	await _audit_playback_modes(shorts, longs, failures)
 
@@ -276,6 +284,14 @@ func _audit_playback_modes(shorts: Array[String], longs: Array[String],
 	if optional._video == null or optional._video_vp == null:
 		failures.append("optional VCR did not construct its video viewport")
 	else:
+		if optional._video_aspect == null:
+			failures.append("video is not owned by an aspect-fit container")
+		var viewport_aspect := float(optional._video_vp.size.x) \
+			/ float(optional._video_vp.size.y)
+		var tube_aspect := VhsRitual.CRT_SCREEN_SIZE.x \
+			/ VhsRitual.CRT_SCREEN_SIZE.y
+		if absf(viewport_aspect - tube_aspect) > 0.003:
+			failures.append("video viewport does not match the physical CRT aspect")
 		if optional._video_vp.render_target_update_mode \
 				!= SubViewport.UPDATE_ALWAYS:
 			failures.append("video viewport did not update during playback")

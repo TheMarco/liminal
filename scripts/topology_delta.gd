@@ -18,6 +18,9 @@ var saving := 0
 var assistance := false
 var nearest := 1 << 20
 var score := -INF
+## Live presentation rank supplied by the scene. Negative means that neither a
+## changed doorway nor a changed set-piece room can currently be witnessed.
+var witness_score := 0.0
 
 
 func _init(p_from_state := -1, p_to_state := -1,
@@ -46,4 +49,5 @@ func copy() -> TopologyDelta:
 	out.assistance = assistance
 	out.nearest = nearest
 	out.score = score
+	out.witness_score = witness_score
 	return out

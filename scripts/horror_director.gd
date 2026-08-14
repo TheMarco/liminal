@@ -78,13 +78,23 @@ func set_hostile_count(value: int, start_recovery := true) -> void:
 			HOSTILE_RECOVERY_EARLY, HOSTILE_RECOVERY_LATE, pressure))
 
 
-func try_start_blackout() -> bool:
+func try_start_blackout(priority := false) -> bool:
 	if not enabled:
 		return true
-	if scripted_hold or _blackout_active or _hostile_count > 0 \
-			or _visual_left > 0.0 or _whisper_left > 0.0 \
-			or _ambient_left > 0.0 or _recovery_left > 0.0:
+	if scripted_hold or _blackout_active:
 		return false
+	if not priority and (_hostile_count > 0 or _visual_left > 0.0 \
+			or _whisper_left > 0.0 or _ambient_left > 0.0 \
+			or _recovery_left > 0.0):
+		return false
+	if priority:
+		# A scheduled power failure is the floor's architectural beat, not a
+		# disposable ambience attempt. Figures are made passive by DescentRun for
+		# its duration; clear lesser channels so they cannot starve it for minutes.
+		_visual_left = 0.0
+		_whisper_left = 0.0
+		_ambient_left = 0.0
+		_recovery_left = 0.0
 	_blackout_active = true
 	return true
 

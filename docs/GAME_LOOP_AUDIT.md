@@ -409,18 +409,12 @@ flow even with floor checkpoints.
 
 ## Important secondary issues
 
-### Interrupted charging has contradictory contracts
+### Interrupted charging retains partial progress
 
-`ChargingStation` says disconnecting never loses partial progress. `Player`
-deliberately rolls an interrupted charge back to its session-start value, and
-its own comment describes charging as an all-or-nothing defended action.
-
-The focused charging audit passes empty-to-full timing and checkpoint reset,
-but does not test interruption semantics.
-
-Choose one behavior and align code, station copy, README, and tests. Now that
-charging is optional, either choice can work, but hidden rollback is likely to
-feel punitive.
+Power enters the flashlight continuously. Disconnecting manually, stepping
+away, losing the station during a transition, or raising the torch because a
+ghost arrives all preserve the energy accumulated so far. The focused charging
+audit exercises both station loss and the danger-abort path.
 
 ### The distance instrument can still mislead
 
@@ -513,8 +507,8 @@ The survivability audit now plans a real reality graph, places its stationary
 fixture beside a legal delta, and observes blackout/passive ticks across all
 eleven floors. This repairs the former zero-blackout coverage hole.
 
-The flashlight audit now tests interrupted-charge rollback across Wander floor
-teardown. The horror systems still lack a campaign-level encounter-rate
+The flashlight audit now tests retained partial charge across station teardown
+and danger-abort. The horror systems still lack a campaign-level encounter-rate
 telemetry audit. The strict runner allowlists only the known dummy-renderer
 null-material messages and macOS certificate lookup noise; leaked objects,
 resources, script errors, and every other engine `ERROR:` fail the suite.

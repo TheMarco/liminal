@@ -19,6 +19,10 @@ const MUTATION_SEARCH_RADIUS := 3
 ## Match the resident streaming radius: a blackout may not spend work on a
 ## change outside the rooms currently present around the player.
 const MUTATION_REVEAL_RADIUS := 3
+## Entering the adjoining cell establishes a room/doorway as seen. Requiring an
+## exact grid-cell visit starved mutations beside a perfectly valid guided path,
+## especially in the airport's wide merged baggage halls.
+const EXPLORED_WITNESS_RADIUS := 1
 const OPPOSITE := [1, 0, 3, 2]
 
 var world_seed := 1
@@ -369,7 +373,9 @@ func state_delta(from_state: int, to_state: int) -> TopologyDelta:
 ## ping-pong, but previously visited states remain eligible so architecture can
 ## eventually mutate back exactly.
 func find_transition(route: DescentRoute, from: Vector2i,
-		visited: Dictionary, require_help: bool) -> TopologyDelta:
+		visited: Dictionary, require_help: bool,
+		witness_ranker := Callable(),
+		candidate_validator := Callable()) -> TopologyDelta:
 	if not _planned or _states.size() <= 1 or route == null \
 			or not route.contains(from):
 		return null
@@ -389,13 +395,28 @@ func find_transition(route: DescentRoute, from: Vector2i,
 				touches_player = true
 			var span := (at - from).abs()
 			nearest = mini(nearest, maxi(span.x, span.y))
-			if visited.has(at):
+			if visited.has(at) or _near_visited(
+					at, visited, EXPLORED_WITNESS_RADIUS):
 				visible = true
 		if touches_player or nearest > MUTATION_REVEAL_RADIUS or not visible:
 			continue
 		var after := distance_to_target_for_state(route, from, state_id)
 		if after < 0 or (require_help and after >= before):
 			continue
+		# Live safety belongs in selection, not only after it. A camera-preferred
+		# delta can rebuild the player's owning room even when its changed cell is
+		# adjacent; repeatedly selecting and then rejecting that same state starves
+		# every other safe precomputed reality.
+		if candidate_validator.is_valid() \
+				and not bool(candidate_validator.call(delta)):
+			continue
+		var witness_score := 0.0
+		if witness_ranker.is_valid():
+			witness_score = float(witness_ranker.call(delta))
+			# A real blackout must reveal one of its precomputed changes. Quietly
+			# postpone when the player is looking at unrelated architecture.
+			if witness_score < 0.0:
+				continue
 		var saving := before - after
 		var unvisited_bonus := 300.0 if not _visited_states.has(state_id) else 0.0
 		var previous_penalty := 180.0 if state_id == _previous_state else 0.0
@@ -403,19 +424,30 @@ func find_transition(route: DescentRoute, from: Vector2i,
 			from.y + theme * 101)) / 2147483647.0
 		var score := unvisited_bonus - float(nearest) * 100.0 \
 			- previous_penalty + float(saving) * (30.0 if require_help else 3.0) \
-			- tie
+			+ witness_score - tie
 		delta.distance_before = before
 		delta.distance_after = after
 		delta.saving = saving
 		delta.assistance = require_help
 		delta.nearest = nearest
 		delta.score = score
+		delta.witness_score = witness_score
 		candidates.append(delta)
 	if candidates.is_empty():
 		return null
 	candidates.sort_custom(func(a: TopologyDelta, b: TopologyDelta):
 		return a.score > b.score)
 	return candidates[0]
+
+
+func _near_visited(at: Vector2i, visited: Dictionary,
+		radius: int) -> bool:
+	for key in visited:
+		var seen := key as Vector2i
+		var span := (seen - at).abs()
+		if maxi(span.x, span.y) <= radius:
+			return true
+	return false
 
 
 func distance_to_target_for_state(route: DescentRoute, from: Vector2i,

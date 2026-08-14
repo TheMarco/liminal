@@ -451,7 +451,7 @@ static func airport_glass() -> StandardMaterial3D:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		# This is collision glass, not decorative glass. At 0.24 it could vanish
 		# against the black apron and feel like an invisible wall head-on.
-		m.albedo_color = Color(0.48, 0.64, 0.72, 0.38)
+		m.albedo_color = Color(0.48, 0.64, 0.72, 0.62)
 		m.roughness = 0.16
 		m.metallic_specular = 0.88
 		m.clearcoat_enabled = true

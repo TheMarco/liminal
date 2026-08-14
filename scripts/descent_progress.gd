@@ -6,8 +6,8 @@ extends RefCounted
 
 const SAVE_PATH := "user://descent_progress.cfg"
 const SECTION := "descent"
-const VERSION := 2
-const LEGACY_VERSION := 1
+const VERSION := 3
+const LEGACY_VERSIONS := [1, 2]
 
 var run_seed := 0
 var deepest_floor := -1
@@ -17,6 +17,9 @@ var completed_beginning_tapes := 0
 ## seed/theme/floor; visited ids keep mutation-back pacing coherent after a
 ## Continue without serializing geometry or compromising WorldGen purity.
 var mutation_states := {}
+## Allowlisted player-driven mutable-object state per floor. Generated
+## topology/furniture remains in mutation_states and is never serialized here.
+var runtime_states := {}
 var _save_path := SAVE_PATH
 
 
@@ -36,6 +39,7 @@ func start_new(seed: int) -> void:
 	seen_short_tapes.clear()
 	completed_beginning_tapes = 0
 	mutation_states.clear()
+	runtime_states.clear()
 	save_to_disk()
 
 
@@ -51,6 +55,7 @@ func reach_floor(seed: int, floor_idx: int) -> void:
 		seen_short_tapes.clear()
 		completed_beginning_tapes = 0
 		mutation_states.clear()
+		runtime_states.clear()
 	else:
 		deepest_floor = maxi(deepest_floor, floor)
 	save_to_disk()
@@ -108,6 +113,21 @@ func mutation_state_for_floor(floor_idx: int) -> Dictionary:
 	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 
+func record_runtime_state(floor_idx: int, state: ChunkRuntimeState) -> void:
+	if not has_checkpoint() or state == null:
+		return
+	var floor := clampi(floor_idx, 0, DescentRun.FLOOR_COUNT - 1)
+	runtime_states[str(floor)] = state.to_dictionary()
+	save_to_disk()
+
+
+func runtime_state_for_floor(floor_idx: int) -> ChunkRuntimeState:
+	var value: Variant = runtime_states.get(str(clampi(
+		floor_idx, 0, DescentRun.FLOOR_COUNT - 1)), {})
+	return ChunkRuntimeState.from_dictionary(value as Dictionary) \
+		if value is Dictionary else ChunkRuntimeState.new()
+
+
 func save_to_disk() -> Error:
 	if not has_checkpoint():
 		return ERR_UNCONFIGURED
@@ -120,6 +140,7 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, "completed_beginning_tapes",
 		completed_beginning_tapes)
 	config.set_value(SECTION, "mutation_states", mutation_states)
+	config.set_value(SECTION, "runtime_states", runtime_states)
 	return config.save(_save_path)
 
 
@@ -129,11 +150,12 @@ func load_from_disk() -> bool:
 	seen_short_tapes.clear()
 	completed_beginning_tapes = 0
 	mutation_states.clear()
+	runtime_states.clear()
 	var config := ConfigFile.new()
 	if config.load(_save_path) != OK:
 		return false
 	var saved_version := int(config.get_value(SECTION, "version", 0))
-	if saved_version != VERSION and saved_version != LEGACY_VERSION:
+	if saved_version != VERSION and not LEGACY_VERSIONS.has(saved_version):
 		return false
 	var saved_seed := int(config.get_value(SECTION, "run_seed", 0))
 	var saved_floor := int(config.get_value(SECTION, "deepest_floor", -1))
@@ -182,12 +204,27 @@ func load_from_disk() -> bool:
 				"state": maxi(0, int(entry.get("state", 0))),
 				"visited": visited,
 				"generation": int(entry.get("generation", 0)) \
-					if saved_version == VERSION else 0,
+					if saved_version >= 2 else 0,
 				"signature": str(entry.get("signature", "")) \
-					if saved_version == VERSION else "",
+					if saved_version >= 2 else "",
 				"visited_signatures": visited_signatures \
-					if saved_version == VERSION else [],
+					if saved_version >= 2 else [],
 			}
+	if saved_version == VERSION:
+		var saved_runtime: Variant = config.get_value(
+			SECTION, "runtime_states", {})
+		if saved_runtime is Dictionary:
+			for raw_key in saved_runtime:
+				var floor := int(str(raw_key))
+				var raw_state: Variant = saved_runtime[raw_key]
+				if floor < 0 or floor >= DescentRun.FLOOR_COUNT \
+						or not raw_state is Dictionary:
+					continue
+				var parsed := ChunkRuntimeState.from_dictionary(
+					raw_state as Dictionary)
+				# Store the sanitized representation; malformed records never
+				# survive a load/save cycle.
+				runtime_states[str(floor)] = parsed.to_dictionary()
 	return true
 
 
@@ -201,3 +238,4 @@ func clear_from_disk() -> void:
 	seen_short_tapes.clear()
 	completed_beginning_tapes = 0
 	mutation_states.clear()
+	runtime_states.clear()

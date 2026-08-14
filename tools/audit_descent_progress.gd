@@ -33,6 +33,11 @@ func _run() -> void:
 	progress.record_beginning_tapes_completed(3)
 	progress.record_mutation_state(6, 4, [0, 1, 4], "state-four",
 		["base", "state-one", "state-four"])
+	var runtime := ChunkRuntimeState.new()
+	var door_key := ChunkRuntimeState.object_key(
+		Vector2i(-3, 8), "swing_door", "0:2.000:4.000")
+	runtime.put(door_key, "swing_door", {"open": true, "angle": 1.11})
+	progress.record_runtime_state(6, runtime)
 	_expect(progress.deepest_floor == 6,
 		"starting an earlier floor lowered the deepest checkpoint")
 	_expect(progress.seen_short_tapes.size() == 2,
@@ -58,6 +63,16 @@ func _run() -> void:
 			== DescentTopology.GENERATION_VERSION \
 		and str(restored_mutation.get("signature", "")) == "state-four",
 		"floor reality state did not survive relaunch")
+	var restored_runtime := loaded.runtime_state_for_floor(6)
+	var restored_door := restored_runtime.payload_for(door_key)
+	_expect(restored_runtime.kind_for(door_key) == "swing_door" \
+		and bool(restored_door.get("open", false)) \
+		and is_equal_approx(float(restored_door.get("angle", 0.0)), 1.11),
+		"stable runtime object state did not survive relaunch")
+	_expect(ChunkRuntimeState.from_dictionary({
+		"schema": 999,
+		"objects": {door_key: {"kind": "swing_door", "payload": {}}},
+	}).is_empty(), "unknown runtime-state schema was accepted")
 
 	# A signature is the authority, not an old numeric slot. Reordering or
 	# changing planned states must resolve the identity or fall back to base.
@@ -85,6 +100,8 @@ func _run() -> void:
 		"New Descent inherited ordered beginning progress")
 	_expect(loaded.mutation_states.is_empty(),
 		"New Descent inherited the old building realities")
+	_expect(loaded.runtime_states.is_empty(),
+		"New Descent inherited the old runtime object state")
 
 	# Restoring exclusions into a recreated run must deal an unseen short.
 	if randoms.size() >= 3 and not beginnings.is_empty():
@@ -106,7 +123,7 @@ func _run() -> void:
 	for failure in failures:
 		print("  FAIL " + failure)
 	if failures.is_empty():
-		print("descent progress audit: PASS — seed, deepest floor and tape cycle persist")
+		print("descent progress audit: PASS — seed, tapes, topology and runtime objects persist")
 		quit()
 	else:
 		quit(1)

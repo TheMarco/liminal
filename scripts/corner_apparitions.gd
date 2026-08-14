@@ -299,6 +299,7 @@ func _show(at: Vector3) -> void:
 	pivot.add_child(quad)
 
 	var sting := AudioStreamPlayer3D.new()
+	sting.bus = SoundBank.HALL_BUS
 	sting.name = "RevealSting"
 	var scare := Sfx.random_scare()
 	sting.stream = scare[0]

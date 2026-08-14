@@ -30,6 +30,11 @@ var nocrt := false
 var notaa := false
 var nologo := false
 var screenshot := ""
+## Seconds to run before the frame is captured. The default is enough for the
+## world to stream in, but not for anything the director gates behind the
+## arrival presentation: a figure cannot spawn at all until that hold lifts, so
+## photographing one needs a longer run.
+var shot_delay := 2.5
 
 # --- dev ---
 var audit := false
@@ -89,6 +94,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.nologo = true
 		elif arg.begins_with("--screenshot="):
 			o.screenshot = arg.substr(13)
+		elif arg.begins_with("--shot-delay="):
+			o.shot_delay = maxf(0.1, float(arg.substr(13)))
 		elif arg == "--audit":
 			o.audit = true
 		elif arg == "--bench":

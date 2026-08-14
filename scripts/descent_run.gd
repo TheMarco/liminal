@@ -67,6 +67,19 @@ const BLACKOUT_TORCH_LOCATE := 1.5
 const SPRINT_ATTENTION_RATE := 0.012
 const MERCY_STALL_SECONDS := 50.0
 const MERCY_MIN_VISITED := 6
+## A floor should establish its changing-architecture language before a quick
+## player reaches the lift. Later failures remain frequent enough to recur on a
+## long exploration without becoming a constant strobe.
+const FIRST_BLACKOUT_MIN := 22.0
+const FIRST_BLACKOUT_MAX := 34.0
+const REPEAT_BLACKOUT_MIN := 24.0
+const REPEAT_BLACKOUT_MAX := 38.0
+## A quick player must not be able to outrun the floor's first architectural
+## change. Once five distinct rooms have been entered, route progress clamps
+## the remaining wait even if the opening random roll was near its maximum.
+const FIRST_BLACKOUT_PROGRESS_CELLS := 5
+const FIRST_BLACKOUT_PROGRESS_SECONDS := 16.0
+const FIRST_BLACKOUT_PROGRESS_DUE := 2.0
 ## How long the car takes to reach you after the call. This is the only part
 ## of a floor that is deliberately dead time, and the most dangerous: the
 ## wait is scored by figures, and every second of it is spent defending the
@@ -136,6 +149,13 @@ var pending_blackout_mutation: TopologyDelta
 ## preflight because only the scene knows whether an actor or interaction is
 ## occupying a room whose geometry would be swapped.
 var blackout_mutation_validator: Callable
+## Live scene-owned presentation rank. The topology remains pure; Main supplies
+## camera/frustum/occlusion evidence for each already-generated transition.
+var blackout_mutation_ranker: Callable
+## Transparent airport barriers can be physically hit by an occlusion ray even
+## though the player sees through them. This second ranker keeps the mutation in
+## the camera frustum when the strict line-of-sight pass cannot find one.
+var blackout_mutation_fallback_ranker: Callable
 
 var _cell := Vector2i.ZERO
 var _pending_cell := Vector2i.ZERO
@@ -144,6 +164,8 @@ var _blackout_cost := 0.0
 var _blackout_episode := false
 var _blackout_due := 0.0
 var _blackout_left := 0.0
+var _blackouts_this_floor := 0
+var _blackout_visibility_retries := 0
 var _blackout_locate := 0.0
 var _ambushed := false
 var _passive := false
@@ -234,6 +256,8 @@ func prepare_floor() -> void:
 	_blackout_episode = false
 	_blackout_locate = 0.0
 	_ambushed = false
+	_blackouts_this_floor = 0
+	_blackout_visibility_retries = 0
 	route = null
 	mercy_armed = false
 	pending_blackout_mutation = null
@@ -455,11 +479,13 @@ func _physics_process(dt: float) -> void:
 	if arrival_grace > 0.0:
 		arrival_grace = maxf(0.0, arrival_grace - dt)
 		_track_cell()
+		_accelerate_first_blackout_for_progress()
 		return
 
 	var speed := Vector2(player.velocity.x, player.velocity.z).length()
 	var charged := false
 	_track_cell()
+	_accelerate_first_blackout_for_progress()
 	if not blackout and not watching and not lift_called:
 		_track_route_stall(dt, speed)
 	if lift_called and not lift_open \
@@ -545,6 +571,16 @@ func _track_cell() -> void:
 		return
 	_cell = now
 	visited[now] = true
+
+
+func _accelerate_first_blackout_for_progress() -> void:
+	# Time alone is not a reliable pacing measure: players who know the route
+	# clear floors much faster than explorers. Route progress makes the first
+	# blackout a floor event instead of something only slow runs get to see.
+	if not blackout and _blackouts_this_floor == 0 \
+			and floor_elapsed >= FIRST_BLACKOUT_PROGRESS_SECONDS \
+			and visited.size() >= FIRST_BLACKOUT_PROGRESS_CELLS:
+		_blackout_due = minf(_blackout_due, FIRST_BLACKOUT_PROGRESS_DUE)
 
 
 func set_route(value: DescentRoute) -> void:
@@ -635,9 +671,10 @@ func _set_attention(value: float) -> void:
 
 
 func _schedule_blackout() -> void:
-	var pressure := threat()
-	var lo := lerpf(90.0, 25.0, pressure)
-	var hi := lerpf(150.0, 40.0, pressure)
+	var lo := FIRST_BLACKOUT_MIN if _blackouts_this_floor == 0 \
+		else REPEAT_BLACKOUT_MIN
+	var hi := FIRST_BLACKOUT_MAX if _blackouts_this_floor == 0 \
+		else REPEAT_BLACKOUT_MAX
 	_blackout_due = _rng.randf_range(lo, hi) * _theme_mod("blackout_due")
 
 
@@ -650,10 +687,22 @@ func _begin_blackout() -> void:
 	if route == null or route.topology == null:
 		_blackout_due = 6.0
 		return
+	# Prefer an actually unobstructed witness. If transparent airport glass (or
+	# another transient occluder) starves that pass, relax to the camera frustum,
+	# then finally accept any nearby prevalidated transition. Presentation must
+	# never be allowed to suppress the floor mechanic indefinitely.
+	var ranker := blackout_mutation_ranker
+	if _blackout_visibility_retries == 1 \
+			and blackout_mutation_fallback_ranker.is_valid():
+		ranker = blackout_mutation_fallback_ranker
+	elif _blackout_visibility_retries >= 2:
+		ranker = Callable()
 	var proposal := route.topology.find_transition(
-		route, _cell, visited, mercy_armed)
+		route, _cell, visited, mercy_armed, ranker,
+		blackout_mutation_validator)
 	if proposal == null or proposal.is_empty():
-		_blackout_due = 6.0
+		_blackout_visibility_retries += 1
+		_blackout_due = 3.0
 		return
 	if blackout_mutation_validator.is_valid() \
 			and not bool(blackout_mutation_validator.call(proposal)):
@@ -661,12 +710,14 @@ func _begin_blackout() -> void:
 		return
 	# The doorway is valid, but another authored beat may still own the moment.
 	# Retry shortly without spending or replacing the normal blackout schedule.
-	if horror_director != null and not horror_director.try_start_blackout():
+	if horror_director != null and not horror_director.try_start_blackout(true):
 		_blackout_due = 4.0
 		return
 	pending_blackout_mutation = proposal
+	_blackout_visibility_retries = 0
 	var assistance := mercy_armed and proposal.assistance
 	blackout = true
+	_blackouts_this_floor += 1
 	_blackout_left = _rng.randf_range(
 		lerpf(5.0, 6.5, floor_progress()),
 		lerpf(8.0, 9.5, floor_progress())) * _theme_mod("blackout_len")
@@ -708,10 +759,14 @@ func _end_blackout() -> void:
 		_blackout_due = minf(_blackout_due, 7.0)
 
 
-## The topology/furniture transition is the guaranteed visible change. Older
-## dead-light and waiting-figure anomalies remain optional secondary unease.
+## The topology/furniture transition is the guaranteed visible change. A rare
+## waiting figure may still occupy a suitable nearby room, but fixtures always
+## return with global power: an uncaptioned dead-light room was visually
+## indistinguishable from a failed blackout restoration.
 func _post_blackout_changes() -> void:
 	if player == null or ended:
+		return
+	if _rng.randf() >= 0.18:
 		return
 	var candidates: Array[Vector2i] = []
 	for key in visited:
@@ -724,17 +779,8 @@ func _post_blackout_changes() -> void:
 			candidates.append(at)
 	if candidates.is_empty():
 		return
-	var count := mini(candidates.size(), 1 + (1 if _rng.randf() < 0.4 else 0))
-	for i in count:
-		var pick := candidates[_rng.randi_range(0, candidates.size() - 1)]
-		candidates.erase(pick)
-		# Furniture now belongs to prevalidated realities. Secondary anomalies
-		# are restricted to dead fixtures and rare waiting figures.
-		var roll := _rng.randf()
-		var kind := 0
-		if roll < 0.18:
-			kind = 1
-		anomalies[pick] = kind
-		anomaly_requested.emit(pick, kind)
-		if candidates.is_empty():
-			break
+	var pick := candidates[_rng.randi_range(0, candidates.size() - 1)]
+	# Kind 1 is the waiting figure. Unsuitable corridors decline it in Chunk;
+	# they no longer fall back to silently killing the hallway lights.
+	anomalies[pick] = 1
+	anomaly_requested.emit(pick, 1)

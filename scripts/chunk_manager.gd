@@ -68,8 +68,15 @@ var _staged_replacements := {}
 var _staged_snapshots := {}
 var _staged_ready := Callable()
 var _staged_failed := Callable()
+var _staged_committed := Callable()
 var _broken_cell := NO_BROKEN_STATION
 var _broken_cell_ready := false
+## Floor-scoped durable state for runtime objects. Unlike resident chunks this
+## registry survives streaming, including a reality where an object is absent
+## and later mutates back into existence.
+var _runtime_state := ChunkRuntimeState.new()
+## Focused audit seam: fail before either old collision or staged nodes change.
+var fail_next_staged_commit := false
 static var _dev_timing := false
 
 
@@ -132,6 +139,7 @@ func _process(_dt: float) -> void:
 		var ch := chunks[c] as Chunk
 		ch.visible = distance <= LOAD_R
 		if distance > UNLOAD_R:
+			_capture_chunk_runtime(ch)
 			chunks[c].queue_free()
 			chunks.erase(c)
 
@@ -173,6 +181,7 @@ func _build(c: Vector2i, install := true,
 		spec.broken_station_tried = descent_broken_station_tried
 		spec.player = player as Player
 	var ch := Chunk.new(world_seed, c, theme, spec)
+	ch.restore_runtime_state(_runtime_state.subset_for_cells([c]))
 	if _dev_timing:
 		var ms := float(Time.get_ticks_usec() - t0) / 1000.0
 		if ms > 4.0:
@@ -190,7 +199,8 @@ func _build(c: Vector2i, install := true,
 ## topology later. The ready callback atomically accepts or rejects the staged
 ## set after the final room has constructed.
 func stage_rebuild_cells(cells: Array[Vector2i], state_override: int,
-		when_staged: Callable, when_failed := Callable()) -> bool:
+		when_staged: Callable, when_failed := Callable(),
+		when_committed := Callable()) -> bool:
 	if not _staged_cells.is_empty() or state_override < 0 \
 			or not when_staged.is_valid():
 		return false
@@ -204,13 +214,16 @@ func stage_rebuild_cells(cells: Array[Vector2i], state_override: int,
 		var at: Vector2i = key
 		_staged_cells.append(at)
 		queued.erase(at)
-		_staged_snapshots[at] = (chunks[at] as Chunk).capture_rebuild_state()
+		var captured := (chunks[at] as Chunk).capture_runtime_state()
+		_runtime_state.merge(captured)
+		_staged_snapshots[at] = captured
 	_staged_cells.sort_custom(func(a: Vector2i, b: Vector2i):
 		return a.x < b.x or (a.x == b.x and a.y < b.y))
 	_staged_index = 0
 	_staged_state = state_override
 	_staged_ready = when_staged
 	_staged_failed = when_failed
+	_staged_committed = when_committed
 	return true
 
 
@@ -230,13 +243,29 @@ func _process_staged_rebuild() -> bool:
 		return true
 	var accepted := bool(_staged_ready.call())
 	if accepted:
-		_commit_staged_rebuild()
+		var committed_callback := _staged_committed
+		if _commit_staged_rebuild():
+			if committed_callback.is_valid():
+				committed_callback.call()
+		else:
+			if _staged_failed.is_valid():
+				_staged_failed.call("atomic scene commit rejected")
+			_discard_staged_rebuild()
 	else:
 		_discard_staged_rebuild()
 	return true
 
 
-func _commit_staged_rebuild() -> void:
+func _commit_staged_rebuild() -> bool:
+	if fail_next_staged_commit:
+		fail_next_staged_commit = false
+		return false
+	# This is the last fallible gate. Do not remove a single old collider until
+	# every replacement still exists and is ready to enter the tree.
+	for at in _staged_cells:
+		if not _staged_replacements.has(at) \
+				or not is_instance_valid(_staged_replacements[at]):
+			return false
 	for at in _staged_cells:
 		if chunks.has(at):
 			var old := chunks[at] as Chunk
@@ -249,9 +278,14 @@ func _commit_staged_rebuild() -> void:
 		replacement.descent_topology_state_override = -1
 		add_child(replacement)
 		chunks[at] = replacement
-		replacement.restore_rebuild_state(_staged_snapshots.get(at, {}))
+		var snapshot := _staged_snapshots.get(at, null) as ChunkRuntimeState
+		if snapshot != null:
+			replacement.restore_runtime_state(snapshot)
+		replacement.restore_runtime_state(
+			_runtime_state.subset_for_cells([at]))
 		chunk_built.emit(replacement)
 	_clear_staged_rebuild(false)
+	return true
 
 
 func _discard_staged_rebuild() -> void:
@@ -270,6 +304,7 @@ func _clear_staged_rebuild(free_replacements: bool) -> void:
 	_staged_snapshots.clear()
 	_staged_ready = Callable()
 	_staged_failed = Callable()
+	_staged_committed = Callable()
 
 
 func _exit_tree() -> void:
@@ -348,41 +383,73 @@ func chunk_at(c: Vector2i) -> Chunk:
 	return chunks[c] as Chunk
 
 
+func runtime_state_snapshot() -> ChunkRuntimeState:
+	for chunk in chunks.values():
+		if is_instance_valid(chunk):
+			_capture_chunk_runtime(chunk as Chunk)
+	return _runtime_state.copy()
+
+
+func runtime_state_for_cells(cells: Array[Vector2i]) -> ChunkRuntimeState:
+	for at in cells:
+		var chunk := chunk_at(at)
+		if chunk != null:
+			_capture_chunk_runtime(chunk)
+	return _runtime_state.subset_for_cells(cells)
+
+
+func restore_runtime_state(state: ChunkRuntimeState) -> void:
+	_runtime_state = state.copy() if state != null else ChunkRuntimeState.new()
+	for key in chunks:
+		var at: Vector2i = key
+		var chunk := chunks[key] as Chunk
+		if is_instance_valid(chunk):
+			chunk.restore_runtime_state(
+				_runtime_state.subset_for_cells([at]))
+
+
+func restore_runtime_state_for_cells(state: ChunkRuntimeState,
+		cells: Array[Vector2i]) -> void:
+	if state != null:
+		_runtime_state.merge(state)
+	for at in cells:
+		var chunk := chunk_at(at)
+		if chunk != null:
+			chunk.restore_runtime_state(
+				_runtime_state.subset_for_cells([at]))
+
+
+func runtime_object_descriptors(cells: Array[Vector2i]) -> Dictionary:
+	var out := {}
+	for at in cells:
+		var chunk := chunk_at(at)
+		if chunk != null:
+			out.merge(chunk.runtime_object_descriptors(), true)
+	return out
+
+
+func staged_runtime_state() -> ChunkRuntimeState:
+	var out := _runtime_state.subset_for_cells(_staged_cells)
+	for replacement in _staged_replacements.values():
+		if is_instance_valid(replacement):
+			out.merge((replacement as Chunk).capture_runtime_state())
+	return out
+
+
+func staged_object_descriptors() -> Dictionary:
+	var out := {}
+	for replacement in _staged_replacements.values():
+		if is_instance_valid(replacement):
+			out.merge((replacement as Chunk).runtime_object_descriptors(), true)
+	return out
+
+
+func _capture_chunk_runtime(chunk: Chunk) -> void:
+	if chunk != null and is_instance_valid(chunk):
+		_runtime_state.merge(chunk.capture_runtime_state())
+
+
 func set_anomaly(at: Vector2i, kind: int) -> void:
 	anomalies[at] = kind
 	if chunks.has(at) and is_instance_valid(chunks[at]):
 		(chunks[at] as Chunk).activate_anomaly(kind)
-
-
-## Stage every replacement off-tree first, then swap the complete set in one
-## frame. Old collision therefore remains authoritative until every new room
-## has successfully constructed; there is never a half-rebuilt topology.
-func rebuild_cells(cells: Array[Vector2i]) -> void:
-	var unique := {}
-	for at in cells:
-		unique[at] = true
-	var replacements := {}
-	var snapshots := {}
-	for key in unique:
-		var at: Vector2i = key
-		queued.erase(at)
-		if chunks.has(at):
-			var old := chunks[at] as Chunk
-			if is_instance_valid(old):
-				snapshots[at] = old.capture_rebuild_state()
-		replacements[at] = _build(at, false)
-	for key in unique:
-		var at: Vector2i = key
-		if chunks.has(at):
-			var old := chunks[at] as Chunk
-			chunks.erase(at)
-			if is_instance_valid(old):
-				remove_child(old)
-				old.queue_free()
-	for key in unique:
-		var at: Vector2i = key
-		var replacement := replacements[at] as Chunk
-		add_child(replacement)
-		chunks[at] = replacement
-		replacement.restore_rebuild_state(snapshots.get(at, {}))
-		chunk_built.emit(replacement)

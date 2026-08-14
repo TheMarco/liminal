@@ -10,6 +10,7 @@ const RATE := 22050.0
 ## a bare "Hall" string literal at 28 sites across twelve files, which is a
 ## rename waiting to go wrong and gave no clue that muting it is what silences
 ## the building.
+const GAME_BUS := "Game"
 const HALL_BUS := "Hall"
 
 static var _c := {}

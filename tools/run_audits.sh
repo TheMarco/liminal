@@ -68,6 +68,7 @@ AUDITS=(
 	"doorways|tools/audit_doorways.gd|"
 	"airport_luggage|tools/audit_airport_luggage.gd|"
 	"mall_shopping_carts|tools/audit_mall_shopping_carts.gd|"
+	"mall_directory|tools/audit_mall_directory.gd|"
 	"chemistry_props|tools/audit_chemistry_props.gd|"
 	"slots|tools/audit_slots.gd|"
 	"new_levels|tools/audit_new_levels.gd|"
@@ -87,7 +88,9 @@ AUDITS=(
 	# keeping the complete suite quick enough for routine local use.
 	"blackout_shortcuts|tools/audit_blackout_shortcuts.gd|6"
 	"descent_mutation_graph|tools/audit_descent_mutation_graph.gd|"
+	"world_mutation_contract|tools/audit_world_mutation_contract.gd|"
 	"descent_runtime|tools/audit_descent_runtime.gd|--mode=descent --nologo"
+	"airport_runtime|tools/audit_airport_runtime.gd|--mode=descent --descent-floor=4 --nologo"
 	"descent_progress|tools/audit_descent_progress.gd|"
 	"intro_playback|tools/audit_intro_playback.gd|"
 	"cross_video_review|tools/audit_cross_video_review.gd|"
@@ -109,6 +112,8 @@ AUDITS=(
 	"pool_minerals|tools/audit_pool_minerals.gd|"
 	"pool_openings|tools/audit_pool_openings.gd|"
 	"flashlight_charging|tools/audit_flashlight_charging.gd|"
+	"blackout_lighting|tools/audit_blackout_lighting.gd|"
+	"mutation_reveal|tools/audit_mutation_reveal.gd|"
 	"wander_mode|tools/audit_wander_mode.gd|--nologo"
 	# Not just a generation fingerprint: it builds 423 chunks across every theme
 	# and style, so a method reached through the wrong level builder shows up here

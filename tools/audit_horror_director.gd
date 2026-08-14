@@ -34,6 +34,13 @@ func _init() -> void:
 		"blackout started while hostile figures were active")
 	_expect(not director.try_start_ambient(2.0),
 		"ambient knock competed with a hostile encounter")
+	_expect(director.try_start_blackout(true),
+		"due blackout could be starved indefinitely by a hostile encounter")
+	_expect(not director.try_start_whisper(1.0),
+		"priority blackout did not clear/exclude lesser pacing channels")
+	director.end_blackout()
+	director.reset_floor()
+	director.set_hostile_count(3)
 	director.set_pressure(0.0)
 	director.set_hostile_count(0)
 	_expect(not director.try_start_visual(2.0),

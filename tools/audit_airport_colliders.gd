@@ -21,7 +21,7 @@ func _barrier_glass(node: Node, report: Dictionary) -> void:
 		report["panes"] = int(report["panes"]) + 1
 		# Anything subtler still disappears against the black apron at a shallow
 		# angle and functions as an invisible wall even when a mesh exists.
-		if float(node.get_meta("barrier_alpha", 0.0)) < 0.32:
+		if float(node.get_meta("barrier_alpha", 0.0)) < 0.55:
 			report["violations"] = int(report["violations"]) + 1
 	for child in node.get_children():
 		_barrier_glass(child, report)

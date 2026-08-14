@@ -170,6 +170,20 @@ const FLIPBOOKS := {
 const COLOURED := ["wraith_anim", "wraith2", "wraith3", "wraith4", "wraith5",
 	"wraith6", "wraith7"]
 
+## The loop must never be legible as a loop. A sprite sheet running at a fixed
+## rate is read as an animated cutout within about two seconds of being looked
+## at, no matter how good the frames are. So the script drives the frame rather
+## than the shader's clock: under the player's gaze it plays slow and stalls at
+## random intervals, and while it is unwatched it runs fast. Turning back finds
+## it in a pose it was never seen reaching, which is the same trick the movement
+## already plays with distance.
+const ANIM_OBSERVED_RATE := 0.55
+const ANIM_UNSEEN_RATE := 1.30
+const ANIM_HOLD_MIN := 0.16
+const ANIM_HOLD_MAX := 0.42
+const ANIM_HOLD_GAP_MIN := 1.4
+const ANIM_HOLD_GAP_MAX := 4.2
+
 static var _mats := {}
 ## Shared across every figure: a scare that fires twice in a minute is a
 ## sound effect, not a scare. Wall-clock so it survives level switches.
@@ -197,6 +211,16 @@ var _unseen_min := UNSEEN_MIN
 var _chase_limit := CHASE_DOOR_LIMIT
 
 var _quad: MeshInstance3D
+## Private stream. World dressing draws from the global generator while chunks
+## build, and a figure is built inside that: every extra global randf() here
+## shifts every prop authored after it and moves the world hash. Anything added
+## to this script from now on must draw from here.
+var _rng := RandomNumberGenerator.new()
+var _anim_frame := 0.0
+var _anim_fps := 0.0
+var _anim_count := 0.0
+var _anim_hold := 0.0
+var _anim_next_hold := 0.0
 var _fade := -1.0
 var _fade_len := FADE_T
 var _bob_t := 0.0
@@ -260,6 +284,7 @@ static func _mat_for(texname: String) -> ShaderMaterial:
 	return m
 
 
+
 func _ready() -> void:
 	var tune: Array = TUNING[variant]
 	_creep_spd = float(tune[0])
@@ -296,6 +321,17 @@ func _ready() -> void:
 	# Two of them on screen must not be marching in lockstep.
 	_quad.set_instance_shader_parameter("flip_phase", randf())
 	add_child(_quad)
+	# The script owns the frame from here (see _animate), so the sheet's own
+	# clock is overridden immediately rather than for one frame showing pose 0.
+	if FLIPBOOKS.has(look[0]):
+		var fb: Array = FLIPBOOKS[look[0]]
+		_anim_count = float(fb[2])
+		# No two figures share a playback rate, so even two of the same sheet
+		# never fall into step.
+		_anim_fps = float(fb[3]) * _rng.randf_range(0.86, 1.14)
+		_anim_frame = _rng.randf() * _anim_count
+		_anim_next_hold = _rng.randf_range(ANIM_HOLD_GAP_MIN, ANIM_HOLD_GAP_MAX)
+		_quad.set_instance_shader_parameter("flip_frame", _anim_frame)
 	_bob_base = position.y
 	_bob_t = randf() * TAU
 	if player != null:
@@ -330,6 +366,34 @@ func _ready() -> void:
 		sh.bus = SoundBank.HALL_BUS
 		add_child(sh)
 		sh.play()
+
+
+## Drives the sprite sheet's frame instead of letting the shader run it on a
+## fixed clock. Under the gaze it plays slow and stalls; unwatched it runs on.
+func _animate(dt: float, observed: bool) -> void:
+	if _anim_count <= 0.0:
+		return
+	var rate := ANIM_UNSEEN_RATE
+	if observed:
+		rate = ANIM_OBSERVED_RATE
+		# The stalls only ever happen while it is being looked at. Motion that
+		# hitches under direct observation reads as something whose movement is
+		# not coming from a body, and it costs no art to do.
+		if _anim_hold > 0.0:
+			_anim_hold -= dt
+			rate = 0.0
+		else:
+			_anim_next_hold -= dt
+			if _anim_next_hold <= 0.0:
+				_anim_hold = _rng.randf_range(ANIM_HOLD_MIN, ANIM_HOLD_MAX)
+				_anim_next_hold = _rng.randf_range(ANIM_HOLD_GAP_MIN, ANIM_HOLD_GAP_MAX)
+				rate = 0.0
+	else:
+		_anim_hold = 0.0
+	if rate <= 0.0:
+		return
+	_anim_frame = fmod(_anim_frame + _anim_fps * rate * dt, _anim_count)
+	_quad.set_instance_shader_parameter("flip_frame", _anim_frame)
 
 
 func _physics_process(dt: float) -> void:
@@ -384,6 +448,7 @@ func _physics_process(dt: float) -> void:
 	if mode == Mode.AMBIENT and _fade < 0.0 and not suppressed \
 			and _reveal <= 0.0 and grace <= 0.0:
 		_advance(dt, observed)
+	_animate(dt, observed)
 	_sway += dt
 	_quad.set_instance_shader_parameter("sway",
 		sin(_sway * 0.9 + _bob_t))

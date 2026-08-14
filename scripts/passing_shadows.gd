@@ -204,6 +204,7 @@ func _cross(at: Vector3) -> void:
 
 	# The shock is the sound arriving with the sight.
 	var sting := AudioStreamPlayer3D.new()
+	sting.bus = SoundBank.HALL_BUS
 	var pick := Sfx.random_scare()
 	sting.stream = pick[0]
 	sting.volume_db = pick[1]

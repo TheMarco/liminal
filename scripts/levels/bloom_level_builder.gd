@@ -77,32 +77,32 @@ func _growth_root(tag: String) -> Node3D:
 	var root := Node3D.new()
 	root.name = tag
 	root.set_meta("bloom_growth_root", true)
-	chunk.add_child(root)
+	scene.add_node(root)
 	return root
 
 
 func _bloom_floor_ceiling() -> void:
-	chunk._box(Vector3(6.0, -0.16, 6.0), Vector3(12.0, 0.32, 12.0),
+	scene.box(Vector3(6.0, -0.16, 6.0), Vector3(12.0, 0.32, 12.0),
 		Mats.bloom_floor())
-	chunk._box(Vector3(6.0, chunk.ceil_h + 0.18, 6.0),
+	scene.box(Vector3(6.0, ctx.ceiling_height + 0.18, 6.0),
 		Vector3(12.0, 0.36, 12.0), Mats.bloom_ceiling())
 	# Patchy standing water keeps the references' wet reflections without
 	# changing locomotion or turning every room into a perfect mirror.
-	if chunk.style != WorldGen.BLOOM_PASSAGE:
-		var puddle_x := 2.3 + chunk._r(3100) * 5.4
-		var puddle_z := 2.0 + chunk._r(3101) * 5.8
-		var puddle := chunk._box(
-			Vector3(6.0 + (chunk._r(3102) - 0.5) * 2.4, 0.012,
-				6.0 + (chunk._r(3103) - 0.5) * 2.4),
+	if ctx.style != WorldGen.BLOOM_PASSAGE:
+		var puddle_x := 2.3 + ctx.random01(3100) * 5.4
+		var puddle_z := 2.0 + ctx.random01(3101) * 5.8
+		var puddle := scene.box(
+			Vector3(6.0 + (ctx.random01(3102) - 0.5) * 2.4, 0.012,
+				6.0 + (ctx.random01(3103) - 0.5) * 2.4),
 			Vector3(puddle_x, 0.018, puddle_z), Mats.bloom_wet(), false)
 		puddle.set_meta("bloom_puddle", true)
 	# A biased canopy: one strong ceiling silhouette, then only a few secondary
 	# strands. All reachable clearances remain above 2.25m.
 	var root := _growth_root("BloomCanopy")
-	var side := -1.0 if chunk._r(3110) < 0.5 else 1.0
+	var side := -1.0 if ctx.random01(3110) < 0.5 else 1.0
 	var corner_x := 1.0 if side < 0.0 else 11.0
-	var corner_z := 1.0 if chunk._r(3111) < 0.5 else 11.0
-	var y := maxf(2.30, chunk.ceil_h - 0.34)
+	var corner_z := 1.0 if ctx.random01(3111) < 0.5 else 11.0
+	var y := maxf(2.30, ctx.ceiling_height - 0.34)
 	_vine_path(root, [
 		Vector3(corner_x, y - 0.35, corner_z),
 		Vector3(lerpf(corner_x, 6.0, 0.36), y + 0.04,
@@ -110,74 +110,74 @@ func _bloom_floor_ceiling() -> void:
 		Vector3(lerpf(corner_x, 6.0, 0.70), y - 0.07,
 			lerpf(corner_z, 6.0, 0.42)),
 		Vector3(6.0 + side * 1.35, y + 0.08,
-			6.0 + (chunk._r(3112) - 0.5) * 2.0),
-	], 0.19 + chunk._r(3113) * 0.11)
+			6.0 + (ctx.random01(3112) - 0.5) * 2.0),
+	], 0.19 + ctx.random01(3113) * 0.11)
 	for i in 3:
 		var start := Vector3(corner_x, y - 0.10,
 			clampf(corner_z + (float(i) - 1.0) * 0.55, 0.7, 11.3))
 		var end := Vector3(clampf(corner_x + side * -1.0 * (1.6 + i * 0.75),
 			0.7, 11.3), y - 0.12 - i * 0.05,
-			clampf(corner_z + (chunk._r(3120 + i) - 0.5) * 2.8, 0.7, 11.3))
+			clampf(corner_z + (ctx.random01(3120 + i) - 0.5) * 2.8, 0.7, 11.3))
 		_vine_path(root, [start, (start + end) * 0.5 + Vector3(0, 0.13, 0), end],
 			0.055 + i * 0.012, 0.56)
 	# A single real thorn canopy is the visual anchor; the small generated
 	# strands above merely stitch it into the room. Large merged rooms instance
 	# it only on their furnishing anchor so it never repeats per quadrant.
-	if chunk.style != WorldGen.BLOOM_PASSAGE and chunk.is_room_anchor \
-			and chunk._r(3136) < 0.72:
-		_authored_vines(Vector3(6.0, chunk.ceil_h - 0.42, 6.0),
-			Vector3(PI, chunk._r(3137) * TAU, 0.0),
-			0.24 + chunk._r(3138) * 0.06, "ceiling_canopy")
+	if ctx.style != WorldGen.BLOOM_PASSAGE and ctx.is_room_anchor \
+			and ctx.random01(3136) < 0.72:
+		_authored_vines(Vector3(6.0, ctx.ceiling_height - 0.42, 6.0),
+			Vector3(PI, ctx.random01(3137) * TAU, 0.0),
+			0.24 + ctx.random01(3138) * 0.06, "ceiling_canopy")
 
 
 func _bloom_wall_growth(dir: int, plane: float) -> void:
 	var root := _growth_root("BloomWallGrowth%d" % dir)
 	var inward := -1.0 if dir == 0 or dir == 2 else 1.0
-	var face := plane + inward * (chunk.T * 0.5 + 0.045)
-	var along0 := 1.3 + chunk._r(3160 + dir * 17) * 9.4
-	var along1 := clampf(along0 + (chunk._r(3161 + dir * 17) - 0.5) * 4.0,
+	var face := plane + inward * (Chunk.T * 0.5 + 0.045)
+	var along0 := 1.3 + ctx.random01(3160 + dir * 17) * 9.4
+	var along1 := clampf(along0 + (ctx.random01(3161 + dir * 17) - 0.5) * 4.0,
 		0.75, 11.25)
 	var p0 := Vector3(face, 0.08, along0) if dir < 2 \
 		else Vector3(along0, 0.08, face)
-	var p1 := Vector3(face, minf(chunk.ceil_h - 0.24, 2.15), along1) if dir < 2 \
-		else Vector3(along1, minf(chunk.ceil_h - 0.24, 2.15), face)
-	var p2 := Vector3(face, chunk.ceil_h - 0.18,
-		clampf(along1 + (chunk._r(3162 + dir * 17) - 0.5) * 2.2, 0.6, 11.4)) \
+	var p1 := Vector3(face, minf(ctx.ceiling_height - 0.24, 2.15), along1) if dir < 2 \
+		else Vector3(along1, minf(ctx.ceiling_height - 0.24, 2.15), face)
+	var p2 := Vector3(face, ctx.ceiling_height - 0.18,
+		clampf(along1 + (ctx.random01(3162 + dir * 17) - 0.5) * 2.2, 0.6, 11.4)) \
 		if dir < 2 else Vector3(
-			clampf(along1 + (chunk._r(3162 + dir * 17) - 0.5) * 2.2, 0.6, 11.4),
-			chunk.ceil_h - 0.18, face)
+			clampf(along1 + (ctx.random01(3162 + dir * 17) - 0.5) * 2.2, 0.6, 11.4),
+			ctx.ceiling_height - 0.18, face)
 	var bend := (p0 + p1) * 0.5
 	if dir < 2:
 		bend.x += inward * 0.10
 	else:
 		bend.z += inward * 0.10
-	_vine_path(root, [p0, bend, p1, p2], 0.105 + chunk._r(3163 + dir) * 0.10)
+	_vine_path(root, [p0, bend, p1, p2], 0.105 + ctx.random01(3163 + dir) * 0.10)
 	for branch in 2:
 		var by := 0.72 + branch * 0.72
 		var bp := Vector3(face, by, along1) if dir < 2 else Vector3(along1, by, face)
 		var bend_along := clampf(along1 + (-1.0 if branch == 0 else 1.0) \
-			* (1.15 + chunk._r(3170 + dir * 7 + branch) * 1.8), 0.55, 11.45)
+			* (1.15 + ctx.random01(3170 + dir * 7 + branch) * 1.8), 0.55, 11.45)
 		var ep := Vector3(face, by + 0.24, bend_along) if dir < 2 \
 			else Vector3(bend_along, by + 0.24, face)
 		_vine_path(root, [bp, (bp + ep) * 0.5 + Vector3(0, 0.14, 0), ep],
 			0.045, 0.54)
 	# Familiar architecture swallowed by the organism. This is a sealed facade
 	# on a wall, never a navigation cue.
-	if chunk._r(3190 + dir) < 0.11:
+	if ctx.random01(3190 + dir) < 0.11:
 		var door_p := Vector3(face + inward * 0.04, 0.0, 6.0) if dir < 2 \
 			else Vector3(6.0, 0.0, face + inward * 0.04)
-		_bloom_annex_door_at(door_p, chunk._wall_facing(dir))
+		_bloom_annex_door_at(door_p, scene.wall_facing(dir))
 
 
 func _passage_box(pos: Vector3, size: Vector3, part: String,
 		collide := true) -> MeshInstance3D:
-	var mesh := chunk._box(pos, size, Mats.bloom_wall(), collide)
+	var mesh := scene.box(pos, size, Mats.bloom_wall(), collide)
 	mesh.set_meta("bloom_passage_part", part)
 	return mesh
 
 
 func _bloom_passage() -> void:
-	var along_x := WorldGen.corridor(chunk.wseed, chunk.cell) != 2
+	var along_x := WorldGen.corridor(ctx.world_seed, ctx.cell) != 2
 	var lid_size := Vector3(12.0, 0.22, PASSAGE_HALF_WIDTH * 2.0) if along_x \
 		else Vector3(PASSAGE_HALF_WIDTH * 2.0, 0.22, 12.0)
 	_passage_box(Vector3(6.0, PASSAGE_HEIGHT + 0.11, 6.0), lid_size,
@@ -186,35 +186,35 @@ func _bloom_passage() -> void:
 	for side in [-1.0, 1.0]:
 		var dir := (3 if side < 0.0 else 2) if along_x \
 			else (1 if side < 0.0 else 0)
-		var info := chunk._edge_info(chunk.cell, dir)
+		var info := scene.edge_info(ctx.cell, dir)
 		_passage_side(along_x, side, dir, info)
 		side_data.append({"side": side, "wall": bool(info["wall"])})
-	var preferred := 0 if chunk._r(3204) < 0.5 else 1
+	var preferred := 0 if ctx.random01(3204) < 0.5 else 1
 	for attempt in 2:
 		var entry: Dictionary = side_data[(preferred + attempt) % 2]
 		if bool(entry["wall"]):
 			_passage_lockers(along_x, float(entry["side"]))
 			break
-	if chunk._r(3207) < 0.42:
+	if ctx.random01(3207) < 0.42:
 		var roots := _pine_roots(
 			Vector3(6.0, PASSAGE_HEIGHT - 0.02, 6.0 + \
-				(-1.0 if chunk._r(3208) < 0.5 else 1.0) * 0.72) if along_x \
-			else Vector3(6.0 + (-1.0 if chunk._r(3208) < 0.5 else 1.0) * 0.72,
+				(-1.0 if ctx.random01(3208) < 0.5 else 1.0) * 0.72) if along_x \
+			else Vector3(6.0 + (-1.0 if ctx.random01(3208) < 0.5 else 1.0) * 0.72,
 				PASSAGE_HEIGHT - 0.02, 6.0),
-			chunk._r(3209) * TAU, 2.45)
+			ctx.random01(3209) * TAU, 2.45)
 		if roots != null:
 			roots.rotation.x = PI
 			roots.set_meta("bloom_passage_authored_roots", true)
 	# The real thorn cluster breaks the old tube-spline silhouette. It is
 	# centred high enough to preserve a 2.25m traversal envelope.
-	if chunk._r(3206) < 0.78:
+	if ctx.random01(3206) < 0.78:
 		var thorn_pos := Vector3(6.0, PASSAGE_HEIGHT - 0.30,
-			6.0 + (-1.0 if chunk._r(3205) < 0.5 else 1.0) * 0.52) \
+			6.0 + (-1.0 if ctx.random01(3205) < 0.5 else 1.0) * 0.52) \
 			if along_x else Vector3(
-				6.0 + (-1.0 if chunk._r(3205) < 0.5 else 1.0) * 0.52,
+				6.0 + (-1.0 if ctx.random01(3205) < 0.5 else 1.0) * 0.52,
 				PASSAGE_HEIGHT - 0.30, 6.0)
 		_authored_vines(thorn_pos,
-			Vector3(PI, chunk._r(3203) * TAU, 0.0), 0.17,
+			Vector3(PI, ctx.random01(3203) * TAU, 0.0), 0.17,
 			"passage_thorns")
 	# Dense ribs produce a real tunnel rhythm. Tendrils stay above eye line.
 	for i in 6:
@@ -225,11 +225,11 @@ func _bloom_passage() -> void:
 			else Vector3(PASSAGE_HALF_WIDTH * 2.0, 0.18, 0.12)
 		_passage_box(p, s, "ceiling_rib", false)
 	var growth := _growth_root("BloomPassageVeins")
-	var wall_side := -1.0 if chunk._r(3210) < 0.5 else 1.0
+	var wall_side := -1.0 if ctx.random01(3210) < 0.5 else 1.0
 	var points: Array[Vector3] = []
 	for i in 7:
 		var t := float(i) * 2.0
-		var sway := (chunk._r(3214 + i) - 0.5) * 0.44
+		var sway := (ctx.random01(3214 + i) - 0.5) * 0.44
 		points.append(Vector3(t, 2.55 + sin(float(i) * 1.4) * 0.20,
 			6.0 + wall_side * (1.58 + sway)) if along_x else
 			Vector3(6.0 + wall_side * (1.58 + sway),
@@ -237,15 +237,15 @@ func _bloom_passage() -> void:
 	_vine_path(growth, points, 0.095, 0.52)
 	for i in 6:
 		var start: Vector3 = points[i]
-		var across := -wall_side * (0.65 + chunk._r(3230 + i) * 1.25)
-		var end := start + (Vector3(0.45 + chunk._r(3240 + i) * 0.8,
-			0.46 + chunk._r(3250 + i) * 0.24, across) if along_x else
-			Vector3(across, 0.46 + chunk._r(3250 + i) * 0.24,
-				0.45 + chunk._r(3240 + i) * 0.8))
+		var across := -wall_side * (0.65 + ctx.random01(3230 + i) * 1.25)
+		var end := start + (Vector3(0.45 + ctx.random01(3240 + i) * 0.8,
+			0.46 + ctx.random01(3250 + i) * 0.24, across) if along_x else
+			Vector3(across, 0.46 + ctx.random01(3250 + i) * 0.24,
+				0.45 + ctx.random01(3240 + i) * 0.8))
 		end.y = minf(PASSAGE_HEIGHT - 0.10, end.y)
 		_vine_path(growth, [start,
 			(start + end) * 0.5 + Vector3(0, 0.12, 0), end],
-			0.030 + chunk._r(3260 + i) * 0.028, 0.44)
+			0.030 + ctx.random01(3260 + i) * 0.028, 0.44)
 
 
 func _passage_lockers(along_x: bool, side: float) -> void:
@@ -257,20 +257,20 @@ func _passage_lockers(along_x: bool, side: float) -> void:
 	var yaw := (0.0 if facing > 0.0 else PI) if along_x else \
 		(PI * 0.5 if facing > 0.0 else -PI * 0.5)
 	for i in 5:
-		var t := 1.06 + float(i) * chunk.LOCKERS_RUN_W
+		var t := 1.06 + float(i) * Chunk.LOCKERS_RUN_W
 		var p := Vector3(t, 0, centre_across) if along_x \
 			else Vector3(centre_across, 0, t)
-		var b0 := chunk.body.get_child_count()
-		var bank := chunk._attributed_floor_prop(chunk.LOCKERS_PATH, p, yaw,
-			chunk.LOCKERS_SCALE, chunk.LOCKERS_CENTRE,
+		var b0 := scene.collider_mark()
+		var bank := scene.attributed_floor_prop(Chunk.LOCKERS_PATH, p, yaw,
+			Chunk.LOCKERS_SCALE, Chunk.LOCKERS_CENTRE,
 			"bloom_locker_bank", null, true)
 		if bank == null:
 			continue
 		bank.set_meta("bloom_corrupted_lockers", true)
-		var size := Vector3(chunk.LOCKERS_RUN_W, 1.85, 0.48) if along_x \
-			else Vector3(0.48, 1.85, chunk.LOCKERS_RUN_W)
-		chunk._collider_box(p + Vector3(0, 0.925, 0), size)
-		chunk._bind_furnishing_colliders(bank, b0)
+		var size := Vector3(Chunk.LOCKERS_RUN_W, 1.85, 0.48) if along_x \
+			else Vector3(0.48, 1.85, Chunk.LOCKERS_RUN_W)
+		scene.collider_box(p + Vector3(0, 0.925, 0), size)
+		scene.bind_furnishing_colliders(bank, b0)
 
 
 func _passage_side(along_x: bool, side: float, _dir: int,
@@ -304,7 +304,7 @@ func _passage_side(along_x: bool, side: float, _dir: int,
 			else Vector3(plane, OPENING_HEAD + hh * 0.5, centre),
 		Vector3(width, hh, PASSAGE_WALL_T) if along_x \
 			else Vector3(PASSAGE_WALL_T, hh, width), "opening_header")
-	var outer := 12.0 - chunk.T if side > 0.0 else chunk.T
+	var outer := 12.0 - Chunk.T if side > 0.0 else Chunk.T
 	var depth := absf(outer - plane)
 	var mid := (outer + plane) * 0.5
 	for edge in [a, b]:
@@ -329,13 +329,13 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 	pivot.position = at
 	pivot.rotation.y = yaw
 	pivot.set_meta("bloom_fluorescent_fixture", true)
-	chunk.add_child(pivot)
+	scene.add_node(pivot)
 	var centre: Vector3 = FIXTURE_CENTRES[variant]
-	var inst := chunk._attributed_prop_local(pivot, chunk.BRUTAL_LIGHT_PATH,
+	var inst := scene.attributed_prop_local(pivot, Chunk.BRUTAL_LIGHT_PATH,
 		Vector3(-centre.x * FIXTURE_SCALE, 0.0, -centre.z * FIXTURE_SCALE),
 		0.0, Vector3.ONE * FIXTURE_SCALE)
 	if inst == null:
-		chunk._mbox(pivot, Vector3.ZERO, Vector3(2.35, 0.06, 0.22),
+		scene.model_box(pivot, Vector3.ZERO, Vector3(2.35, 0.06, 0.22),
 			Mats.panel_dead() if dead else Mats.bloom_panel())
 	else:
 		var selected: Node3D
@@ -381,14 +381,14 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 
 
 func _bloom_lighting() -> void:
-	var dead := chunk.cell != Vector2i.ZERO and chunk._r(3300) < 0.08
-	var flicker := not dead and chunk.cell != Vector2i.ZERO \
-		and chunk._r(3301) < 0.14
+	var dead := ctx.cell != Vector2i.ZERO and ctx.random01(3300) < 0.08
+	var flicker := not dead and ctx.cell != Vector2i.ZERO \
+		and ctx.random01(3301) < 0.14
 	var emission_mats: Array[StandardMaterial3D] = []
 	var fixture_lights: Array[Light3D] = []
-	var passage := chunk.style == WorldGen.BLOOM_PASSAGE
-	var axis_x := WorldGen.corridor(chunk.wseed, chunk.cell) != 2
-	var y := PASSAGE_HEIGHT - 0.02 if passage else chunk.ceil_h - 0.025
+	var passage := ctx.style == WorldGen.BLOOM_PASSAGE
+	var axis_x := WorldGen.corridor(ctx.world_seed, ctx.cell) != 2
+	var y := PASSAGE_HEIGHT - 0.02 if passage else ctx.ceiling_height - 0.025
 	var fixture_positions: Array[Vector3] = []
 	if passage:
 		for t in [2.0, 6.0, 10.0]:
@@ -405,13 +405,13 @@ func _bloom_lighting() -> void:
 		var p: Vector3 = fixture_positions[i]
 		fixture_pivots.append(_bloom_fixture(p,
 			PI * 0.5 if axis_x else 0.0,
-			posmod(i + int(chunk._r(3305 + i) * 4.0), 4),
+			posmod(i + int(ctx.random01(3305 + i) * 4.0), 4),
 			dead, flicker, emission_mats, fixture_lights))
 	# Four overlapping shadowed omni lights multiply this room's geometry into
 	# thousands of shadow draws. One real shadow source preserves contact and
 	# silhouette depth; the remaining visible fixtures still provide fill.
 	if fixture_lights.size() > 1:
-		var shadow_index := 1 if passage else int(chunk._r(3317) \
+		var shadow_index := 1 if passage else int(ctx.random01(3317) \
 			* float(fixture_lights.size())) % fixture_lights.size()
 		for i in fixture_lights.size():
 			fixture_lights[i].shadow_enabled = i == shadow_index
@@ -419,8 +419,8 @@ func _bloom_lighting() -> void:
 		var controller = BLOOM_FIXTURE_FLICKER_SCRIPT.new()
 		controller.mats = emission_mats
 		controller.lights = fixture_lights
-		controller.rng_seed = WorldGen.h(chunk.wseed,
-			chunk.cell.x, chunk.cell.y, 3318)
+		controller.rng_seed = WorldGen.h(ctx.world_seed,
+			ctx.cell.x, ctx.cell.y, 3318)
 		var buzz := AudioStreamPlayer3D.new()
 		buzz.stream = SoundBank.buzz()
 		buzz.unit_size = 3.0
@@ -430,9 +430,9 @@ func _bloom_lighting() -> void:
 		buzz.autoplay = true
 		buzz.position = fixture_pivots[0].position if not fixture_pivots.is_empty() \
 			else Vector3(6.0, y, 6.0)
-		chunk.add_child(buzz)
+		scene.add_node(buzz)
 		controller.buzz = buzz
-		chunk.add_child(controller)
+		scene.add_node(controller)
 	# There are no free-standing Bloom lights. Each routine light is parented to
 	# a visible fluorescent fixture so the illumination can never lose its source.
 	_bloom_spores()
@@ -440,16 +440,16 @@ func _bloom_lighting() -> void:
 
 func _bloom_spores() -> void:
 	_bloom_particle_layer("bloom_micro_flakes",
-		96 if chunk.style == WorldGen.BLOOM_PASSAGE else \
-			(190 if chunk.room_n >= 4 else 156),
+		96 if ctx.style == WorldGen.BLOOM_PASSAGE else \
+			(190 if ctx.room_size >= 4 else 156),
 		0.032, 0.08, 0.55, 0.025, 0.095, 58.0)
 	_bloom_particle_layer("bloom_spores",
-		42 if chunk.style == WorldGen.BLOOM_PASSAGE else \
-			(86 if chunk.room_n >= 4 else 68),
+		42 if ctx.style == WorldGen.BLOOM_PASSAGE else \
+			(86 if ctx.room_size >= 4 else 68),
 		0.060, 0.12, 1.05, 0.030, 0.105, 42.0)
 	_bloom_particle_layer("bloom_flakes",
-		12 if chunk.style == WorldGen.BLOOM_PASSAGE else \
-			(26 if chunk.room_n >= 4 else 19),
+		12 if ctx.style == WorldGen.BLOOM_PASSAGE else \
+			(26 if ctx.room_size >= 4 else 19),
 		0.205, 0.18, 2.55, 0.018, 0.075, 18.0)
 
 
@@ -461,10 +461,10 @@ func _bloom_particle_layer(tag: String, amount: int, quad_size: float,
 	particles.lifetime = 14.0
 	particles.randomness = 0.88
 	particles.visibility_aabb = AABB(Vector3(-6, -3, -6),
-		Vector3(12, chunk.ceil_h + 6.0, 12))
+		Vector3(12, ctx.ceiling_height + 6.0, 12))
 	var process := ParticleProcessMaterial.new()
 	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	process.emission_box_extents = Vector3(5.4, maxf(1.0, chunk.ceil_h * 0.42), 5.4)
+	process.emission_box_extents = Vector3(5.4, maxf(1.0, ctx.ceiling_height * 0.42), 5.4)
 	process.direction = Vector3(0.12, -0.32, 0.08)
 	process.spread = 180.0
 	process.initial_velocity_min = speed_min
@@ -487,18 +487,18 @@ func _bloom_particle_layer(tag: String, amount: int, quad_size: float,
 	quad.size = Vector2.ONE * quad_size
 	quad.material = Mats.bloom_spore()
 	particles.draw_pass_1 = quad
-	particles.position = Vector3(6.0, chunk.ceil_h * 0.48, 6.0)
+	particles.position = Vector3(6.0, ctx.ceiling_height * 0.48, 6.0)
 	particles.set_meta(tag, true)
-	chunk.add_child(particles)
+	scene.add_node(particles)
 
 
 func _bloom_annex_door_at(pos: Vector3, yaw: float) -> bool:
-	var pivot := chunk._furnishing_pivot(pos, yaw,
+	var pivot := scene.furnishing_pivot(pos, yaw,
 		"bloom_annex_exit_door", true)
 	pivot.set_meta("bloom_swallowed_door", true)
 	pivot.set_meta("locked_facade", true)
-	var authored := chunk._attributed_prop_local(pivot,
-		chunk.ANNEX_EXIT_DOOR_PATH, Vector3.ZERO, 0.0)
+	var authored := scene.attributed_prop_local(pivot,
+		Chunk.ANNEX_EXIT_DOOR_PATH, Vector3.ZERO, 0.0)
 	if authored == null:
 		pivot.get_parent().remove_child(pivot)
 		pivot.free()
@@ -510,7 +510,7 @@ func _bloom_annex_door_at(pos: Vector3, yaw: float) -> bool:
 func _pine_roots(pos: Vector3, yaw: float, scale: float) -> Node3D:
 	var started := Time.get_ticks_usec()
 	if _pine_roots_prototype == null:
-		var ps := chunk._prop_scene(chunk.BLOOM_ROOT_PATH)
+		var ps := scene.prop_scene(Chunk.BLOOM_ROOT_PATH)
 		if ps == null:
 			return null
 		_pine_roots_prototype = ps.instantiate() as Node3D
@@ -527,8 +527,8 @@ func _pine_roots(pos: Vector3, yaw: float, scale: float) -> Node3D:
 	inst.scale = Vector3.ONE * scale
 	inst.set_meta("cc0_asset", "pine_roots")
 	inst.set_meta("bloom_hero_roots", true)
-	chunk.add_child(inst)
-	chunk._profile_stage("bloom_pine_roots", started)
+	scene.add_node(inst)
+	scene.profile_stage("bloom_pine_roots", started)
 	return inst
 
 
@@ -546,8 +546,8 @@ func _authored_vines(pos: Vector3, rotation: Vector3, scale: float,
 	pivot.position = pos
 	pivot.rotation = rotation
 	pivot.set_meta("bloom_authored_vines", tag)
-	chunk.add_child(pivot)
-	var inst := chunk._attributed_prop_local(pivot, chunk.BLOOM_VINES_PATH,
+	scene.add_node(pivot)
+	var inst := scene.attributed_prop_local(pivot, Chunk.BLOOM_VINES_PATH,
 		-VINES_CENTRE * scale, 0.0, Vector3.ONE * scale)
 	if inst == null:
 		pivot.get_parent().remove_child(pivot)
@@ -558,7 +558,7 @@ func _authored_vines(pos: Vector3, rotation: Vector3, scale: float,
 		var mesh_node := found as MeshInstance3D
 		mesh_node.material_override = Mats.bloom_growth()
 		mesh_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	chunk._profile_stage("bloom_authored_vines:" + tag, started)
+	scene.profile_stage("bloom_authored_vines:" + tag, started)
 	return pivot
 
 
@@ -577,9 +577,9 @@ func _authored_flesh_blob(pos: Vector3, yaw: float, scale: float,
 	pulse.amplitude = 0.018
 	pulse.phase = phase
 	pulse.set_meta("bloom_authored_flesh", tag)
-	chunk.add_child(pulse)
-	var inst := chunk._attributed_prop_local(pulse,
-		chunk.BLOOM_FLESH_BLOB_PATH, FLESH_FLOOR_OFFSET, 0.0)
+	scene.add_node(pulse)
+	var inst := scene.attributed_prop_local(pulse,
+		Chunk.BLOOM_FLESH_BLOB_PATH, FLESH_FLOOR_OFFSET, 0.0)
 	if inst == null:
 		pulse.get_parent().remove_child(pulse)
 		pulse.free()
@@ -600,11 +600,11 @@ func _authored_flesh_blob(pos: Vector3, yaw: float, scale: float,
 
 
 func _root_column(pos: Vector3, height: float, radius := 0.34) -> void:
-	chunk._box(pos + Vector3(0, height * 0.5, 0),
+	scene.box(pos + Vector3(0, height * 0.5, 0),
 		Vector3(0.55, height, 0.55), Mats.bloom_wall())
 	var growth := _growth_root("BloomRootColumn")
 	for i in 5:
-		var ang := float(i) * TAU / 5.0 + chunk._r(3400 + i) * 0.4
+		var ang := float(i) * TAU / 5.0 + ctx.random01(3400 + i) * 0.4
 		var foot := pos + Vector3(cos(ang), 0.04, sin(ang)) * (0.48 + i * 0.04)
 		var top := pos + Vector3(cos(ang + 0.7), height - 0.08,
 			sin(ang + 0.7)) * (0.30 + i * 0.025)
@@ -617,12 +617,12 @@ func _bloom_commons() -> void:
 	# Arrival and portal style: a 4x4m centre stays absolutely clear.
 	for p in [Vector3(1.35, 0, 1.35), Vector3(10.65, 0, 1.35),
 			Vector3(1.35, 0, 10.65), Vector3(10.65, 0, 10.65)]:
-		_root_column(p, chunk.ceil_h, 0.22)
+		_root_column(p, ctx.ceiling_height, 0.22)
 	for z in [1.05, 10.95]:
-		chunk._box(Vector3(6.0, 0.32, z), Vector3(3.2, 0.18, 0.58),
+		scene.box(Vector3(6.0, 0.32, z), Vector3(3.2, 0.18, 0.58),
 			Mats.bloom_metal())
 		for x in [4.65, 7.35]:
-			chunk._box(Vector3(x, 0.16, z), Vector3(0.12, 0.32, 0.48),
+			scene.box(Vector3(x, 0.16, z), Vector3(0.12, 0.32, 0.48),
 				Mats.bloom_metal())
 
 
@@ -634,20 +634,20 @@ func _bloom_classroom() -> void:
 		[Vector3(2.2, 0, 9.8), PI + 0.22], [Vector3(9.7, 0, 9.6), PI - 0.28],
 	]:
 		var p: Vector3 = data[0]
-		var b0 := chunk.body.get_child_count()
-		var pivot := chunk._attributed_floor_prop(chunk.SCH_DESK_PATH, p,
-			float(data[1]) + chunk.SCH_DESK_YAW_FIX, chunk.SCH_DESK_SCALE,
-			chunk.SCH_DESK_CENTRE, "bloom_school_desk", null, chunk.descent)
+		var b0 := scene.collider_mark()
+		var pivot := scene.attributed_floor_prop(Chunk.SCH_DESK_PATH, p,
+			float(data[1]) + Chunk.SCH_DESK_YAW_FIX, Chunk.SCH_DESK_SCALE,
+			Chunk.SCH_DESK_CENTRE, "bloom_school_desk", null, ctx.descent)
 		if pivot != null:
 			pivot.set_meta("bloom_displaced_furniture", true)
-			if chunk.descent:
-				chunk._collider_yaw_box(p + Vector3(0, 0.42, 0),
+			if ctx.descent:
+				scene.collider_yaw_box(p + Vector3(0, 0.42, 0),
 					Vector3(0.80, 0.84, 0.96), float(data[1]))
-				chunk._bind_furnishing_colliders(pivot, b0)
-	var board := chunk._box(Vector3(6.0, 1.62, 11.72),
+				scene.bind_furnishing_colliders(pivot, b0)
+	var board := scene.box(Vector3(6.0, 1.62, 11.72),
 		Vector3(5.4, 1.50, 0.09), Mats.bloom_metal(), false)
 	board.set_meta("bloom_infected_board", true)
-	var seam := chunk._box(Vector3(6.0, 1.60, 11.65),
+	var seam := scene.box(Vector3(6.0, 1.60, 11.65),
 		Vector3(3.8, 0.045, 0.025), Mats.bloom_red(), false)
 	seam.set_meta("bloom_red_seam", true)
 
@@ -660,77 +660,77 @@ func _incubator_pod(pos: Vector3, scale: Vector3, phase: float) -> void:
 	pulse.amplitude = 0.035
 	pulse.phase = phase
 	pulse.set_meta("bloom_incubator", true)
-	chunk.add_child(pulse)
-	chunk._mellipsoid(pulse, Vector3(0, 0.88, 0), Vector3(0.52, 0.88, 0.52),
+	scene.add_node(pulse)
+	scene.model_ellipsoid(pulse, Vector3(0, 0.88, 0), Vector3(0.52, 0.88, 0.52),
 		Mats.bloom_flesh())
-	chunk._mellipsoid(pulse, Vector3(0, 0.93, 0), Vector3(0.34, 0.61, 0.34),
+	scene.model_ellipsoid(pulse, Vector3(0, 0.93, 0), Vector3(0.34, 0.61, 0.34),
 		Mats.bloom_red())
 	for i in 5:
 		var a := float(i) * TAU / 5.0
-		chunk._mbeam(pulse,
+		scene.model_beam(pulse,
 			Vector3(cos(a) * 0.56, 0.05, sin(a) * 0.56),
 			Vector3(cos(a) * 0.44, 1.72, sin(a) * 0.44), 0.026,
 			Mats.bloom_metal())
 
 
 func _bloom_incubator() -> void:
-	var table := chunk._attributed_floor_prop(chunk.SCH_CHEMISTRY_TABLE_PATH,
-		Vector3(2.2, 0, 6.0), PI * 0.5, chunk.SCH_CHEMISTRY_TABLE_SCALE,
-		chunk.SCH_CHEMISTRY_TABLE_CENTRE, "bloom_lab_table")
+	var table := scene.attributed_floor_prop(Chunk.SCH_CHEMISTRY_TABLE_PATH,
+		Vector3(2.2, 0, 6.0), PI * 0.5, Chunk.SCH_CHEMISTRY_TABLE_SCALE,
+		Chunk.SCH_CHEMISTRY_TABLE_CENTRE, "bloom_lab_table")
 	if table != null:
 		table.set_meta("bloom_abandoned_lab", true)
 	_incubator_pod(Vector3(9.6, 0, 2.1), Vector3.ONE * 1.05, 0.3)
 	_incubator_pod(Vector3(9.3, 0, 9.5), Vector3.ONE * 0.86, 1.9)
-	if chunk.room_n >= 2:
+	if ctx.room_size >= 2:
 		_incubator_pod(Vector3(6.0, 0, 10.2), Vector3.ONE * 0.74, 3.2)
 	_authored_flesh_blob(Vector3(11.05, 0.02, 6.2), -PI * 0.5, 0.27,
-		"lab_wall_lesion", chunk._r(3492) * TAU)
+		"lab_wall_lesion", ctx.random01(3492) * TAU)
 
 
 func _bloom_nest() -> void:
 	var root := _growth_root("BloomSporeNest")
 	for i in 9:
-		var ang := float(i) * TAU / 9.0 + chunk._r(3500 + i) * 0.34
-		var rad := 2.7 + chunk._r(3520 + i) * 1.45
-		var top := Vector3(6.0 + cos(ang) * rad, chunk.ceil_h - 0.12,
+		var ang := float(i) * TAU / 9.0 + ctx.random01(3500 + i) * 0.34
+		var rad := 2.7 + ctx.random01(3520 + i) * 1.45
+		var top := Vector3(6.0 + cos(ang) * rad, ctx.ceiling_height - 0.12,
 			6.0 + sin(ang) * rad)
-		var hang := 0.34 + chunk._r(3540 + i) * minf(1.45, chunk.ceil_h - 2.20)
+		var hang := 0.34 + ctx.random01(3540 + i) * minf(1.45, ctx.ceiling_height - 2.20)
 		var end := top - Vector3(0, hang, 0)
-		_vine_path(root, [top, end], 0.035 + chunk._r(3560 + i) * 0.045, 0.62)
+		_vine_path(root, [top, end], 0.035 + ctx.random01(3560 + i) * 0.045, 0.62)
 		var pulse := BLOOM_PULSE_SCRIPT.new() as Node3D
 		pulse.position = end
-		pulse.scale = Vector3.ONE * (0.55 + chunk._r(3580 + i) * 0.45)
-		pulse.rate = 0.8 + chunk._r(3590 + i) * 0.8
-		pulse.phase = chunk._r(3600 + i) * TAU
+		pulse.scale = Vector3.ONE * (0.55 + ctx.random01(3580 + i) * 0.45)
+		pulse.rate = 0.8 + ctx.random01(3590 + i) * 0.8
+		pulse.phase = ctx.random01(3600 + i) * TAU
 		pulse.amplitude = 0.045
-		chunk.add_child(pulse)
-		chunk._mellipsoid(pulse, Vector3.ZERO, Vector3(0.28, 0.42, 0.28),
+		scene.add_node(pulse)
+		scene.model_ellipsoid(pulse, Vector3.ZERO, Vector3(0.28, 0.42, 0.28),
 			Mats.bloom_flesh())
 		if i % 3 == 0:
-			chunk._mellipsoid(pulse, Vector3(0, -0.04, 0), Vector3(0.13, 0.22, 0.13),
+			scene.model_ellipsoid(pulse, Vector3(0, -0.04, 0), Vector3(0.13, 0.22, 0.13),
 				Mats.bloom_red())
-	_authored_vines(Vector3(6.0, chunk.ceil_h - 0.46, 6.0),
-		Vector3(PI, chunk._r(3610) * TAU, 0.0), 0.31, "spore_nest_crown")
+	_authored_vines(Vector3(6.0, ctx.ceiling_height - 0.46, 6.0),
+		Vector3(PI, ctx.random01(3610) * TAU, 0.0), 0.31, "spore_nest_crown")
 
 
 func _bloom_atrium() -> void:
 	# A black flooded basin with a readable dry causeway and a root forest at
 	# the corners. In a 2x2 room the anchor pass is shifted to the true centre.
-	chunk._box(Vector3(6.0, 0.025, 6.0), Vector3(9.3, 0.035, 7.4),
+	scene.box(Vector3(6.0, 0.025, 6.0), Vector3(9.3, 0.035, 7.4),
 		Mats.bloom_wet(), false)
-	chunk._box(Vector3(6.0, 0.09, 6.0), Vector3(2.15, 0.15, 10.2),
+	scene.box(Vector3(6.0, 0.09, 6.0), Vector3(2.15, 0.15, 10.2),
 		Mats.bloom_wall())
 	for edge_x in [4.94, 7.06]:
-		chunk._box(Vector3(edge_x, 0.175, 6.0), Vector3(0.035, 0.022, 9.8),
+		scene.box(Vector3(edge_x, 0.175, 6.0), Vector3(0.035, 0.022, 9.8),
 			Mats.bloom_panel(), false)
 	for p in [Vector3(1.65, 0, 1.65), Vector3(10.35, 0, 1.65),
 			Vector3(1.65, 0, 10.35), Vector3(10.35, 0, 10.35)]:
-		_root_column(p, chunk.ceil_h, 0.42)
-	_pine_roots(Vector3(6.0, 0.02, 6.0), chunk._r(3650) * TAU, 2.35)
+		_root_column(p, ctx.ceiling_height, 0.42)
+	_pine_roots(Vector3(6.0, 0.02, 6.0), ctx.random01(3650) * TAU, 2.35)
 	_authored_flesh_blob(Vector3(6.0, 0.02, 10.72), PI, 0.56,
-		"atrium_wall_mass", chunk._r(3651) * TAU)
-	_authored_vines(Vector3(6.0, chunk.ceil_h - 0.65, 7.4),
-		Vector3(PI, chunk._r(3652) * TAU, 0.0), 0.36, "atrium_crown")
+		"atrium_wall_mass", ctx.random01(3651) * TAU)
+	_authored_vines(Vector3(6.0, ctx.ceiling_height - 0.65, 7.4),
+		Vector3(PI, ctx.random01(3652) * TAU, 0.0), 0.36, "atrium_crown")
 
 
 func _bleachers(base: Vector3, yaw: float, swallowed: bool) -> void:
@@ -738,9 +738,9 @@ func _bleachers(base: Vector3, yaw: float, swallowed: bool) -> void:
 	root.position = base
 	root.rotation.y = yaw
 	root.set_meta("bloom_bleachers", true)
-	chunk.add_child(root)
+	scene.add_node(root)
 	for i in 5:
-		chunk._mbox(root, Vector3(0, 0.16 + i * 0.24, i * 0.42),
+		scene.model_box(root, Vector3(0, 0.16 + i * 0.24, i * 0.42),
 			Vector3(6.8, 0.14, 0.52), Mats.bloom_metal())
 	if swallowed:
 		for i in 5:
@@ -755,10 +755,10 @@ func _basketball_hoop(pos: Vector3, yaw: float) -> void:
 	root.position = pos
 	root.rotation.y = yaw
 	root.set_meta("bloom_hoop", true)
-	chunk.add_child(root)
-	chunk._mbox(root, Vector3(0, 2.3, 0), Vector3(0.10, 4.6, 0.10),
+	scene.add_node(root)
+	scene.model_box(root, Vector3(0, 2.3, 0), Vector3(0.10, 4.6, 0.10),
 		Mats.bloom_metal())
-	chunk._mbox(root, Vector3(0, 4.05, 0.42), Vector3(1.55, 0.95, 0.08),
+	scene.model_box(root, Vector3(0, 4.05, 0.42), Vector3(1.55, 0.95, 0.08),
 		Mats.bloom_wall())
 	var rim := TorusMesh.new()
 	rim.inner_radius = 0.28
@@ -771,42 +771,42 @@ func _basketball_hoop(pos: Vector3, yaw: float) -> void:
 
 
 func _bloom_gym() -> void:
-	var court := chunk._box(Vector3(6.0, 0.018, 6.0), Vector3(10.4, 0.026, 10.4),
+	var court := scene.box(Vector3(6.0, 0.018, 6.0), Vector3(10.4, 0.026, 10.4),
 		Mats.bloom_wet(), false)
 	court.set_meta("bloom_drowned_court", true)
 	# Dim court markings still read through the water.
 	for z in [1.15, 6.0, 10.85]:
-		chunk._box(Vector3(6.0, 0.042, z), Vector3(10.0, 0.012, 0.045),
+		scene.box(Vector3(6.0, 0.042, z), Vector3(10.0, 0.012, 0.045),
 			Mats.bloom_panel(), false)
 	_bleachers(Vector3(6.0, 0, 1.05), 0.0, true)
 	_bleachers(Vector3(6.0, 0, 10.95), PI, false)
 	_basketball_hoop(Vector3(6.0, 0, 2.15), 0.0)
 	_basketball_hoop(Vector3(6.0, 0, 9.85), PI)
 	_authored_flesh_blob(Vector3(2.05, 0.02, 1.62), 0.26, 0.38,
-		"bleacher_overgrowth", chunk._r(3690) * TAU)
+		"bleacher_overgrowth", ctx.random01(3690) * TAU)
 	_authored_vines(Vector3(7.4, 1.15, 1.82), Vector3(0.0, -0.18, 0.0),
 		0.23, "swallowed_bleachers")
 
 
 func _bloom_heart() -> void:
 	var heart_body := _authored_flesh_blob(Vector3(6.0, 0.03, 6.0),
-		chunk._r(3699) * TAU, 0.62, "heart_body", chunk._r(3700) * TAU)
+		ctx.random01(3699) * TAU, 0.62, "heart_body", ctx.random01(3700) * TAU)
 	if heart_body != null:
 		heart_body.set_meta("bloom_heart", true)
-	var heart_core := Vector3(6.0, minf(1.82, chunk.ceil_h * 0.34), 5.72)
+	var heart_core := Vector3(6.0, minf(1.82, ctx.ceiling_height * 0.34), 5.72)
 	var roots := _growth_root("BloomHeartCage")
 	for i in 8:
 		var ang := float(i) * TAU / 8.0
 		var floor_p := Vector3(6.0 + cos(ang) * 3.35, 0.05,
 			6.0 + sin(ang) * 3.35)
 		var shoulder := Vector3(6.0 + cos(ang + 0.32) * 1.75,
-			minf(2.2, chunk.ceil_h * 0.42), 6.0 + sin(ang + 0.32) * 1.75)
+			minf(2.2, ctx.ceiling_height * 0.42), 6.0 + sin(ang + 0.32) * 1.75)
 		var heart_p := heart_core + Vector3(cos(ang) * 0.82,
-			(chunk._r(3710 + i) - 0.5) * 0.85, sin(ang) * 0.70)
+			(ctx.random01(3710 + i) - 0.5) * 0.85, sin(ang) * 0.70)
 		_vine_path(roots, [floor_p, shoulder, heart_p], 0.20, 0.56)
-	_pine_roots(Vector3(6.0, 0.02, 6.0), chunk._r(3740) * TAU, 1.85)
-	_authored_vines(Vector3(7.7, chunk.ceil_h - 0.62, 6.7),
-		Vector3(PI, chunk._r(3741) * TAU, 0.0), 0.30, "heart_canopy")
+	_pine_roots(Vector3(6.0, 0.02, 6.0), ctx.random01(3740) * TAU, 1.85)
+	_authored_vines(Vector3(7.7, ctx.ceiling_height - 0.62, 6.7),
+		Vector3(PI, ctx.random01(3741) * TAU, 0.0), 0.30, "heart_canopy")
 
 
 func _bloom_storm_aperture() -> void:
@@ -816,23 +816,23 @@ func _bloom_storm_aperture() -> void:
 	var frame := Node3D.new()
 	frame.position = Vector3(6.0, 0.0, 9.75)
 	frame.set_meta("bloom_storm_aperture", true)
-	chunk.add_child(frame)
+	scene.add_node(frame)
 	# Four deep growth masses make a true aperture; the first pass used one
 	# solid slab here and hid the storm surface it was supposed to frame.
-	chunk._mbox(frame, Vector3(-3.72, 3.25, 0), Vector3(0.76, 6.5, 0.52),
+	scene.model_box(frame, Vector3(-3.72, 3.25, 0), Vector3(0.76, 6.5, 0.52),
 		Mats.bloom_growth())
-	chunk._mbox(frame, Vector3(3.72, 3.25, 0), Vector3(0.76, 6.5, 0.52),
+	scene.model_box(frame, Vector3(3.72, 3.25, 0), Vector3(0.76, 6.5, 0.52),
 		Mats.bloom_growth())
-	chunk._mbox(frame, Vector3(0, 6.12, 0), Vector3(6.8, 0.76, 0.52),
+	scene.model_box(frame, Vector3(0, 6.12, 0), Vector3(6.8, 0.76, 0.52),
 		Mats.bloom_growth())
-	chunk._mbox(frame, Vector3(0, 0.38, 0), Vector3(6.8, 0.76, 0.52),
+	scene.model_box(frame, Vector3(0, 0.38, 0), Vector3(6.8, 0.76, 0.52),
 		Mats.bloom_growth())
-	chunk._mbox(frame, Vector3(0, 3.25, 0.12), Vector3(6.8, 4.7, 0.035),
+	scene.model_box(frame, Vector3(0, 3.25, 0.12), Vector3(6.8, 4.7, 0.035),
 		Mats.bloom_storm())
 	for i in 7:
 		var y := 0.72 + float(i) * 0.84
 		for side in [-1.0, 1.0]:
-			chunk._mellipsoid(frame,
+			scene.model_ellipsoid(frame,
 				Vector3(side * (3.43 + sin(float(i) * 1.7) * 0.18), y,
 					-0.18 + cos(float(i)) * 0.08),
 				Vector3(0.44 + (i % 2) * 0.15, 0.55, 0.42),
@@ -840,7 +840,7 @@ func _bloom_storm_aperture() -> void:
 	for i in 6:
 		var x := -2.75 + float(i) * 1.10
 		for top_side in [0.0, 1.0]:
-			chunk._mellipsoid(frame,
+			scene.model_ellipsoid(frame,
 				Vector3(x + sin(float(i) * 2.1) * 0.16,
 					0.58 if top_side < 0.5 else 5.92, -0.16),
 				Vector3(0.72, 0.44 + (i % 3) * 0.08, 0.43),
@@ -859,13 +859,13 @@ func _bloom_storm_aperture() -> void:
 	# Real animated tissue forms the sill, while paired thorn clusters break the
 	# rectangular frame into a deep irregular wound rather than a flat screen.
 	_authored_flesh_blob(Vector3(2.55, 0.02, 9.30), 0.34, 0.30,
-		"storm_sill_left", chunk._r(3830) * TAU)
+		"storm_sill_left", ctx.random01(3830) * TAU)
 	_authored_flesh_blob(Vector3(9.55, 0.02, 9.31), PI - 0.28, 0.25,
-		"storm_sill_right", chunk._r(3831) * TAU)
+		"storm_sill_right", ctx.random01(3831) * TAU)
 	_authored_vines(Vector3(2.40, 3.35, 9.25),
 		Vector3(0.0, 0.18, PI * 0.5), 0.29, "storm_frame_left")
 	_authored_vines(Vector3(9.60, 3.45, 9.25),
 		Vector3(0.0, -0.18, -PI * 0.5), 0.29, "storm_frame_right")
-	chunk._collider_box(Vector3(6.0, 3.25, 9.40), Vector3(8.4, 6.5, 0.42))
-	chunk._box(Vector3(6.0, 0.05, 5.8), Vector3(2.25, 0.08, 7.0),
+	scene.collider_box(Vector3(6.0, 3.25, 9.40), Vector3(8.4, 6.5, 0.42))
+	scene.box(Vector3(6.0, 0.05, 5.8), Vector3(2.25, 0.08, 7.0),
 		Mats.bloom_wall())

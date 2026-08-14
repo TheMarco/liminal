@@ -8,6 +8,16 @@ extends "res://tools/lib/audit_base.gd"
 const SEED := 405195947
 
 
+func _first_mesh(node: Node) -> MeshInstance3D:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		return node as MeshInstance3D
+	for child in node.get_children():
+		var found := _first_mesh(child)
+		if found != null:
+			return found
+	return null
+
+
 func run() -> void:
 	var game := await boot_game(SEED)
 
@@ -18,6 +28,60 @@ func run() -> void:
 	expect(DescentRun.order_for(SEED) == DescentRun.FIXED_ORDER \
 		and DescentRun.order_for(SEED + 1) == DescentRun.FIXED_ORDER,
 		"Descent story order still varies with the seed")
+	var cadence := DescentRun.new()
+	cadence.world_seed = SEED
+	cadence.floor_idx = 0
+	get_root().add_child(cadence)
+	cadence.prepare_floor()
+	expect(cadence._blackout_due >= DescentRun.FIRST_BLACKOUT_MIN \
+			and cadence._blackout_due <= DescentRun.FIRST_BLACKOUT_MAX,
+		"first blackout is outside its 22–34 second floor-opening window")
+	expect(DescentRun.FIRST_BLACKOUT_PROGRESS_CELLS <= 5 \
+			and DescentRun.FIRST_BLACKOUT_PROGRESS_SECONDS <= 16.0 \
+			and DescentRun.FIRST_BLACKOUT_PROGRESS_DUE <= 2.0,
+		"fast route progress no longer forces an early first blackout")
+	cadence.floor_elapsed = DescentRun.FIRST_BLACKOUT_PROGRESS_SECONDS
+	cadence._blackout_due = DescentRun.FIRST_BLACKOUT_MAX
+	for i in DescentRun.FIRST_BLACKOUT_PROGRESS_CELLS:
+		cadence.visited[Vector2i(i, 0)] = true
+	cadence._accelerate_first_blackout_for_progress()
+	expect(cadence._blackout_due <= DescentRun.FIRST_BLACKOUT_PROGRESS_DUE,
+		"five-room route progress did not clamp the live first-blackout timer")
+	cadence._blackouts_this_floor = 1
+	cadence._schedule_blackout()
+	expect(cadence._blackout_due >= DescentRun.REPEAT_BLACKOUT_MIN \
+			and cadence._blackout_due <= DescentRun.REPEAT_BLACKOUT_MAX,
+		"repeat blackout is outside its 24–38 second window")
+	cadence.queue_free()
+	expect(game.run.blackout_mutation_ranker.is_valid() \
+			and game.run.blackout_mutation_fallback_ranker.is_valid(),
+		"production run lacks strict/frustum blackout mutation rankers")
+	var game_bus := AudioServer.get_bus_index(SoundBank.GAME_BUS)
+	var hall_bus := AudioServer.get_bus_index(SoundBank.HALL_BUS)
+	expect(game_bus >= 0 and hall_bus >= 0,
+		"Game/Hall audio bus boundary was not constructed")
+	if game_bus >= 0 and hall_bus >= 0:
+		expect(AudioServer.get_bus_send(hall_bus) == SoundBank.GAME_BUS,
+			"Hall no longer feeds the VCR-mutable Game bus")
+		var was_muted := AudioServer.is_bus_mute(game_bus)
+		AudioServer.set_bus_mute(game_bus, false)
+		game._set_tape_audio_hold(true)
+		expect(AudioServer.is_bus_mute(game_bus),
+			"VCR watch did not mute the complete game mix")
+		game._set_tape_audio_hold(false)
+		expect(not AudioServer.is_bus_mute(game_bus),
+			"VCR watch did not restore an initially audible game mix")
+		AudioServer.set_bus_mute(game_bus, true)
+		game._set_tape_audio_hold(true)
+		game._set_tape_audio_hold(false)
+		expect(AudioServer.is_bus_mute(game_bus),
+			"VCR release overrode a pre-existing game mute")
+		AudioServer.set_bus_mute(game_bus, was_muted)
+	expect(game.player._walk_p.bus == SoundBank.GAME_BUS \
+			and game.player._wade_p.bus == SoundBank.GAME_BUS \
+			and game.ambience.bus == SoundBank.GAME_BUS \
+			and game._music.bus == SoundBank.GAME_BUS,
+		"a persistent background/movement source bypasses the Game bus")
 	# Exercise entry selection against an isolated checkpoint file. The CLI run
 	# itself keeps persistence disabled and never touches the player's save.
 	var test_progress := DescentProgress.new(
@@ -61,19 +125,19 @@ func run() -> void:
 	expect(game.descent_route.topology.is_planned() \
 		and game.descent_route.topology.state_count() >= 3,
 		"live floor did not generate alternate realities up front")
-	expect(game._saved_pos.is_empty(),
+	expect(game._transitions.saved_position_count() == 0,
 		"Descent unexpectedly owns Wander saved positions")
 	expect(not game.player.flashlight.visible,
 		"flashlight did not start switched off")
 	expect(game._music_track_for(game.active_level) \
 			== game.MUSIC_TRACKS[game.active_level],
 		"early Descent did not preserve the floor soundtrack")
-	var filter_before: bool = game._crt
+	var filter_before: bool = game._post_process.is_enabled()
 	var video := InputEventKey.new()
 	video.pressed = true
 	video.physical_keycode = KEY_V
 	game._unhandled_input(video)
-	expect(game._crt != filter_before,
+	expect(game._post_process.is_enabled() != filter_before,
 		"V did not toggle the video filter in Descent")
 	game._unhandled_input(video)
 	var starting_floor_idx: int = game.run.floor_idx
@@ -115,7 +179,7 @@ func run() -> void:
 		game.run.visited = assistance["visited"]
 		game.run._cell = assistance_from
 		game.cm.warm_up(assistance_from)
-		var affected_cells: Array[Vector2i] = game._mutation_rebuild_cells(
+		var affected_cells: Array[Vector2i] = game._mutation_coordinator.rebuild_cells(
 			assistance["proposal"])
 		# A real player has streamed the radius-three neighbourhood before a
 		# blackout. This focused probe teleports there, so explicitly resident
@@ -123,6 +187,7 @@ func run() -> void:
 		for at in affected_cells:
 			if game.cm.chunk_at(at) == null:
 				game.cm._build(at)
+		_audit_visible_mutation_witness(game, assistance["proposal"])
 		var occupied: Vector2i = affected_cells[0]
 		game.player.global_position = Vector3(
 			(float(occupied.x) + 0.5) * ChunkManager.CELL,
@@ -157,12 +222,33 @@ func run() -> void:
 		game.run.suspended = true
 		game.run.blackout = true
 		game.cm.set_blackout(true)
+		# Force the last fallible scene gate to reject after topology preparation.
+		# Old nodes must remain installed and the transaction must compensate both
+		# resolver history and runtime-object state before a real retry.
+		var runtime_before_failure: Dictionary = \
+			game.cm.runtime_state_snapshot().to_dictionary()
+		game.cm.fail_next_staged_commit = true
+		game._on_blackout_mutation(assistance["proposal"], true)
+		expect(not game.cm._staged_cells.is_empty(),
+			"forced-failure mutation never entered staging")
+		await await_until(func():
+			return game.cm._staged_cells.is_empty(), 5000)
+		var failed_transaction: DescentMutationTransaction = \
+			game._mutation_coordinator.last_transaction
+		expect(failed_transaction != null and failed_transaction.phase \
+				== DescentMutationTransaction.Phase.ROLLED_BACK \
+			and route.topology.current_state_id() == old_state \
+			and route.topology.state_history() == old_history \
+			and game.cm.runtime_state_snapshot().to_dictionary() \
+				== runtime_before_failure,
+			"failed atomic scene commit did not restore exact world state")
+		# The same proposal remains valid after compensation and may commit.
 		game._on_blackout_mutation(assistance["proposal"], true)
 		expect(route.topology.current_state_id() == old_state \
 			and not game.cm._staged_cells.is_empty(),
 			"blackout rebuilt every changed room synchronously")
 		await await_until(func():
-			return route.topology.current_state_id() != old_state, 5000)
+			return game.cm._staged_cells.is_empty(), 5000)
 		game.cm.set_blackout(false)
 		game.run.blackout = false
 		game.run.suspended = false
@@ -170,6 +256,13 @@ func run() -> void:
 			"live assistance handler did not commit its generated reality")
 		expect(game.cm._staged_cells.is_empty(),
 			"committed mutation left an off-tree rebuild transaction pending")
+		var committed_transaction: DescentMutationTransaction = \
+			game._mutation_coordinator.last_transaction
+		expect(committed_transaction != null \
+			and committed_transaction.committed() \
+			and committed_transaction.mutation != null \
+			and not committed_transaction.mutation.id.is_empty(),
+			"live commit did not produce a durable typed WorldMutation")
 		for at in affected_cells:
 			var rebuilt: Chunk = game.cm.chunk_at(at)
 			if rebuilt != null:
@@ -181,6 +274,42 @@ func run() -> void:
 			game.run.floor_idx).get("state", -1)) \
 			== route.topology.current_state_id(),
 			"committed reality was not mirrored into the checkpoint")
+		expect(test_progress.runtime_state_for_floor(
+			game.run.floor_idx).to_dictionary() \
+			== game.cm.runtime_state_snapshot().to_dictionary(),
+			"committed runtime-object state was not mirrored into the checkpoint")
+		expect(game._pending_mutation_reveal \
+			and game._pending_mutation_reveal_at != Vector3.INF,
+			"committed mutation did not preserve its exact reveal witness")
+		var reveal_at: Vector3 = game._pending_mutation_reveal_at
+		var reveal_descriptor: Dictionary = \
+			game._pending_mutation_reveal_descriptor
+		var installed_mesh: MeshInstance3D
+		var reveal_nodes: Variant = reveal_descriptor.get("nodes", [])
+		if reveal_nodes is Array:
+			for value in reveal_nodes as Array:
+				if is_instance_valid(value) and value is Node:
+					installed_mesh = _first_mesh(value as Node)
+					if installed_mesh != null:
+						break
+		var ghost: Variant = reveal_descriptor.get("ghost", null)
+		var exact_edge := str(reveal_descriptor.get("kind", "")) == "door" \
+			and reveal_descriptor.get("edge", {}) is Dictionary
+		expect(installed_mesh != null \
+			or (is_instance_valid(ghost) and ghost is Node3D) or exact_edge,
+			"mutation reveal retained only a point, not exact altered geometry")
+		game._on_descent_blackout(false)
+		await process_frame
+		var reveal_effects := get_nodes_in_group("mutation_reveal_effect")
+		expect(reveal_effects.size() == 1,
+			"power restoration did not create one mutation glow")
+		if reveal_effects.size() == 1:
+			var reveal_effect := reveal_effects[0] as Node3D
+			expect(reveal_effect.global_position.distance_to(reveal_at) < 0.01,
+				"mutation glow was not placed at the committed witness")
+			if installed_mesh != null:
+				expect(installed_mesh.material_overlay != null,
+					"installed mutation geometry did not receive its outline")
 	game.player.global_position = player_before_assistance
 	test_progress.clear_from_disk()
 	game._progress_enabled = false
@@ -489,3 +618,49 @@ func _find_assistance_probe(route: DescentRoute) -> Dictionary:
 			return {"from": from, "visited": all_visited,
 				"proposal": proposal}
 	return {}
+
+
+## Live camera contract: a changed set-piece room can satisfy the witness gate
+## without an architectural edge, the same point fails when it is behind the
+## camera, and a ranker that rejects every proposal postpones the transition.
+func _audit_visible_mutation_witness(game: Node,
+		proposal: TopologyDelta) -> void:
+	var room_probe: TopologyDelta
+	var target := Vector3.INF
+	for room in proposal.rooms:
+		var chunk: Chunk = game.cm.chunk_at(room)
+		if chunk == null:
+			continue
+		var target_variant: int = game.descent_route.topology \
+			.furniture_variant_for_state(room, proposal.to_state)
+		var points := chunk.furniture_witness_points_for_variant(target_variant)
+		if points.is_empty():
+			continue
+		target = points[mini(1, points.size() - 1)]
+		room_probe = TopologyDelta.new(proposal.from_state,
+			proposal.to_state, [], [room], [room])
+		break
+	expect(room_probe != null and target != Vector3.INF,
+		"generated mutation exposed no resident set-piece witness")
+	if room_probe == null or target == Vector3.INF:
+		return
+	var cam: Camera3D = game.player.cam
+	var saved := cam.global_transform
+	var witnessed := {}
+	for offset in [Vector3(2.2, 0.0, 0.0), Vector3(-2.2, 0.0, 0.0),
+			Vector3(0.0, 0.0, 2.2), Vector3(0.0, 0.0, -2.2)]:
+		cam.global_position = target + offset
+		cam.look_at(target, Vector3.UP)
+		witnessed = game._mutation_coordinator.visible_witness(room_probe)
+		if not witnessed.is_empty():
+			break
+	expect(not witnessed.is_empty() \
+			and str(witnessed.get("kind", "")) == "furniture" \
+			and game._mutation_coordinator.visibility_rank(room_probe) >= 0.0,
+		"visible changed room did not provide a set-piece fallback witness")
+	if not witnessed.is_empty():
+		var away := cam.global_position * 2.0 - target
+		cam.look_at(away, Vector3.UP)
+		expect(game._mutation_coordinator.visible_witness(room_probe).is_empty(),
+			"set-piece behind the camera still satisfied the witness gate")
+	cam.global_transform = saved

@@ -21,6 +21,13 @@ const TAPE_SECONDS := 24.0
 const OPTIONAL_HISS_DB := -21.0
 const OPTIONAL_HISS_RANGE := 18.0
 const OPTIONAL_CUE_RANGE := 8.5
+const CRT_SCREEN_SIZE := Vector2(0.578, 0.404)
+const VIDEO_VIEWPORT_SIZE := Vector2i(550, 384)
+const WATCH_SCREEN_HEIGHT := 0.93
+## The cabinet is wider on its control side. Aim slightly right of the glass so
+## the complete set shifts left in-frame and covers the last strip of room.
+const WATCH_CAMERA_RIGHT_OFFSET := 0.065
+const FOUR_BY_THREE := 4.0 / 3.0
 var world_seed := 1
 var floor_idx := 0
 var home_cell := Vector2i.ZERO
@@ -36,6 +43,7 @@ var _voice: AudioStreamPlayer3D
 var _hiss: AudioStreamPlayer3D
 var _video: VideoStreamPlayer
 var _video_vp: SubViewport
+var _video_aspect: AspectRatioContainer
 var _cam: Camera3D
 var _prev_cam: Camera3D
 var _viewer: Player
@@ -115,7 +123,7 @@ func _build_furniture() -> void:
 ## footage at off-axis angles.
 func _build_screen() -> void:
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.578, 0.404)
+	quad.size = CRT_SCREEN_SIZE
 	_screen = MeshInstance3D.new()
 	_screen.mesh = quad
 	_screen_mat = ShaderMaterial.new()
@@ -179,19 +187,32 @@ func _ensure_video() -> bool:
 	if stream == null:
 		return false
 	_video_vp = SubViewport.new()
-	_video_vp.size = Vector2i(512, 384)
+	# Match the render target to the physical tube rather than stretching a 4:3
+	# canvas across its wider glass. Footage is fitted inside this black canvas.
+	_video_vp.size = VIDEO_VIEWPORT_SIZE
 	_video_vp.disable_3d = true
 	_video_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(_video_vp)
+	var back := ColorRect.new()
+	back.color = Color.BLACK
+	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_video_vp.add_child(back)
+	_video_aspect = AspectRatioContainer.new()
+	_video_aspect.ratio = FOUR_BY_THREE
+	_video_aspect.stretch_mode = AspectRatioContainer.STRETCH_FIT
+	_video_aspect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_video_vp.add_child(_video_aspect)
 	_video = VideoStreamPlayer.new()
 	_video.stream = stream
+	_video.bus = "Master"
 	_video.expand = true
-	_video.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_video.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Straight to the master bus: the hall reverb send swallowed the voice,
 	# and while the camera holds the tube the tape IS the scene's audio.
 	_video.volume_db = 2.0
 	_video.finished.connect(_on_video_finished)
-	_video_vp.add_child(_video)
+	_video_aspect.add_child(_video)
 	_screen_mat.set_shader_parameter("tape_tex", _video_vp.get_texture())
 	return true
 
@@ -221,6 +242,7 @@ func _on_activated(actor: Node) -> void:
 		_screen_mat.set_shader_parameter("use_footage", 1.0)
 		_video_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		_video.play()
+		_refresh_video_aspect.call_deferred(_tape_path)
 	else:
 		_screen_mat.set_shader_parameter("use_footage", 0.0)
 		_next_voice()
@@ -237,6 +259,7 @@ func _begin_watch(viewer: Player) -> void:
 	get_tree().call_group("descent_listener", "descent_tape_watch", true)
 	if _viewer != null:
 		_viewer.velocity = Vector3.ZERO
+		_viewer.stop_motion_audio()
 		_viewer.set_physics_process(false)
 		_viewer.set_process_unhandled_input(false)
 	var vp := get_viewport()
@@ -249,13 +272,42 @@ func _begin_watch(viewer: Player) -> void:
 		add_child(_cam)
 	_cam.global_transform = _prev_cam.global_transform
 	_cam.make_current()
-	# 34cm from the glass: the tube's width spans the full horizontal field
-	# of view at fov 50, so the recording IS the screen for its running time.
+	# Fit the full tube vertically instead of zooming until its 4:3 content is
+	# cropped into the widescreen viewport. The bezel remains visible and the
+	# footage keeps its authored pillar/letterboxing.
+	var distance := (CRT_SCREEN_SIZE.y * 0.5) \
+		/ (tan(deg_to_rad(_cam.fov * 0.5)) * WATCH_SCREEN_HEIGHT)
 	var target := global_transform \
-		* Transform3D(Basis.IDENTITY, Vector3(-0.4146, 0.6603, 0.607))
+		* Transform3D(Basis.IDENTITY, Vector3(
+			_screen.position.x + WATCH_CAMERA_RIGHT_OFFSET, _screen.position.y,
+			_screen.position.z + distance))
 	var tw := create_tween().set_trans(Tween.TRANS_CUBIC) \
 		.set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(_cam, "global_transform", target, 1.2)
+
+
+## Converted archival 4:3 sources have small stored-height differences, so
+## normalize near-4:3 material while preserving genuinely widescreen clips.
+static func display_aspect_for_size(size: Vector2i) -> float:
+	if size.y <= 0:
+		return FOUR_BY_THREE
+	var decoded := float(size.x) / float(size.y)
+	return FOUR_BY_THREE if decoded >= 1.20 and decoded <= 1.40 else decoded
+
+
+func _refresh_video_aspect(expected_path: String) -> void:
+	for _attempt in 4:
+		await get_tree().process_frame
+		if _video == null or _video_aspect == null \
+				or _tape_path != expected_path:
+			return
+		var texture := _video.get_video_texture()
+		if texture == null:
+			continue
+		var size := Vector2i(texture.get_size())
+		if size.y > 0:
+			_video_aspect.ratio = display_aspect_for_size(size)
+			return
 
 
 func _end_watch() -> void:

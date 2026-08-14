@@ -21,12 +21,12 @@ func run() -> void:
 	await await_until(func(): return not game._switching)
 	expect(game.active_level == 10,
 		"0 key did not enter the Monolith")
-	var filter_before: bool = game._crt
+	var filter_before: bool = game._post_process.is_enabled()
 	var video := InputEventKey.new()
 	video.pressed = true
 	video.physical_keycode = KEY_V
 	game._unhandled_input(video)
-	expect(game._crt != filter_before,
+	expect(game._post_process.is_enabled() != filter_before,
 		"V did not toggle the video filter in Wander")
 	game._unhandled_input(video)
 

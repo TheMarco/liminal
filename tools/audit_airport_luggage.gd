@@ -111,6 +111,33 @@ func _inspect_carousel(chunk: Chunk, pivot: Node3D,
 		print("FAIL baggage carousel room retains a doorway overlap")
 
 
+func _inspect_number_totem(pivot: Node3D, report: Dictionary) -> void:
+	report["totems"] += 1
+	var labels := pivot.find_children(
+		"BaggageCarouselNumber", "Label3D", true, false)
+	var meshes := pivot.find_children("*", "MeshInstance3D", true, false)
+	if labels.size() != 1 or meshes.size() < 2:
+		report["violations"] += 1
+		print("FAIL incomplete baggage number totem: labels=%d meshes=%d" % [
+			labels.size(), meshes.size()])
+
+
+func _inspect_chute(chunk: Chunk, pivot: Node3D,
+		report: Dictionary) -> void:
+	report["chutes"] += 1
+	var meshes := pivot.find_children("*", "MeshInstance3D", true, false)
+	var group := int(pivot.get_meta("furnishing_group", -1))
+	var colliders := 0
+	for child in chunk.body.get_children():
+		if child is CollisionShape3D \
+				and int(child.get_meta("furnishing_group", -2)) == group:
+			colliders += 1
+	if meshes.size() < 3 or colliders != 1:
+		report["violations"] += 1
+		print("FAIL incomplete baggage chute: meshes=%d colliders=%d" % [
+			meshes.size(), colliders])
+
+
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	var seed_count := clampi(int(args[0]) if args.size() > 0 else 5, 1, 16)
@@ -121,6 +148,8 @@ func _init() -> void:
 		"colors": {},
 		"procedural": 0,
 		"carousels": 0,
+		"totems": 0,
+		"chutes": 0,
 		"violations": 0,
 	}
 	for si in seed_count:
@@ -134,11 +163,14 @@ func _init() -> void:
 				var carousel_count := 0
 				for found in chunk.find_children("*", "Node3D", true, false):
 					var pivot := found as Node3D
-					if pivot.get_meta("atomic_furnishing", "") != \
-							"airport_baggage_carousel":
-						continue
-					carousel_count += 1
-					_inspect_carousel(chunk, pivot, report)
+					match str(pivot.get_meta("atomic_furnishing", "")):
+						"airport_baggage_carousel":
+							carousel_count += 1
+							_inspect_carousel(chunk, pivot, report)
+						"airport_baggage_number_totem":
+							_inspect_number_totem(pivot, report)
+						"airport_baggage_chute":
+							_inspect_chute(chunk, pivot, report)
 				# Chunk generation resolves room splits and portals before
 				# deciding whether baggage props are furnished. The marker is
 				# the exact intent signal and survives doorway cleanup.
@@ -163,9 +195,15 @@ func _init() -> void:
 		report["violations"] += int(report["procedural"])
 		print("FAIL found %d legacy procedural suitcase furnishings" \
 			% report["procedural"])
+	if int(report["totems"]) == 0 or int(report["chutes"]) == 0:
+		report["violations"] += 1
+		print("FAIL baggage support fixtures were not exercised: totems=%d chutes=%d" % [
+			report["totems"], report["chutes"]])
 	print("airport luggage audit: %d authored pieces, variants=%s, colors=%d, complete carousels=%d" % [
 		report["count"], report["pieces"], report["colors"].size(),
 		report["carousels"]])
+	print("  supported number totems: %d | atomic feed chutes: %d" % [
+		report["totems"], report["chutes"]])
 	if int(report["violations"]) == 0:
 		print("  PASS — luggage is isolated and every baggage carousel is complete")
 	else:

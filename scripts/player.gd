@@ -56,7 +56,6 @@ var flashlight: SpotLight3D
 var world_seed := 0   # set by main; used to pick footstep surface per cell
 var level_theme := 0  # set by main on level switch
 var _flash_charge := FLASH_MAX
-var _charge_session_start := 0.0
 var _charging_station: Node3D
 var _charge_session_active := false
 ## World height of the water surface on this floor, or far below everything if
@@ -136,18 +135,22 @@ func _ready() -> void:
 	# whole strides at about two a second, so triggering them per step would
 	# stack twenty overlapping feet.
 	_walk_p = AudioStreamPlayer.new()
+	_walk_p.bus = SoundBank.GAME_BUS
 	_walk_p.volume_db = -60.0
 	add_child(_walk_p)
 	_flash_click = AudioStreamPlayer.new()
+	_flash_click.bus = SoundBank.GAME_BUS
 	_flash_click.stream = SoundBank.key_click()
 	_flash_click.volume_db = -10.0
 	add_child(_flash_click)
 	# Water. Silent and idle on every floor that has none.
 	_wade_p = AudioStreamPlayer.new()
+	_wade_p.bus = SoundBank.GAME_BUS
 	_wade_p.stream = Sfx.water_wade()
 	_wade_p.volume_db = -60.0
 	add_child(_wade_p)
 	_splash_p = AudioStreamPlayer.new()
+	_splash_p.bus = SoundBank.GAME_BUS
 	_splash_p.volume_db = -6.0
 	add_child(_splash_p)
 
@@ -233,7 +236,6 @@ func reset_descent_resources() -> void:
 		flashlight.visible = false
 		flashlight.light_energy = FLASH_ENERGY
 	_flash_charge = FLASH_MAX
-	_charge_session_start = FLASH_MAX
 	_flash_t = 0.0
 	velocity = Vector3.ZERO
 
@@ -249,21 +251,18 @@ func is_charging_at(station: Node) -> bool:
 
 ## Connect to a station without locking the player in place. E toggles the
 ## connection, F breaks it and raises the torch, and simply stepping away also
-## breaks it. An interrupted session is lost: the cell only keeps what it had
-## when the cable went in, so a charge is something defended, not banked.
+## breaks it. Charge enters the cell continuously, so every partial second is
+## retained when danger forces the player to disconnect.
 func start_charging(station: Node3D) -> bool:
 	if station == null or _flash_charge >= FLASH_MAX - 0.001:
 		return false
 	set_flashlight(false)
 	_charging_station = station
-	_charge_session_start = _flash_charge
 	_charge_session_active = true
 	return true
 
 
-func stop_charging(completed := false) -> void:
-	if _charge_session_active and not completed:
-		_flash_charge = minf(_flash_charge, _charge_session_start)
+func stop_charging(_completed := false) -> void:
 	_charging_station = null
 	_charge_session_active = false
 
@@ -492,6 +491,19 @@ func _update_walk(dt: float) -> void:
 		_walk_p.pitch_scale = clampf(hs / 3.4, 0.85, 1.7)
 		if _walk_vol < -38.0 and not moving and _walk_p.playing:
 			_walk_p.stop()
+
+
+## Physics is disabled while a recording owns the camera, so the normal fade
+## loop cannot observe the zeroed velocity. Cut movement loops explicitly at
+## that boundary; normal physics restarts them only if movement resumes.
+func stop_motion_audio() -> void:
+	_walk_vol = -60.0
+	if _walk_p != null:
+		_walk_p.volume_db = -60.0
+		_walk_p.stop()
+	if _wade_p != null:
+		_wade_p.volume_db = -60.0
+		_wade_p.stop()
 
 
 ## Is the player standing in a pool ladder's climbable volume?

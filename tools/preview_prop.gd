@@ -179,6 +179,11 @@ func _build(c: Chunk, n: String) -> bool:
 		"_mall_gondola": _recipe(c, "_mall_gondola").call("_mall_gondola", mid, 0.0, 4.0, 7)
 		"_mall_food_table": _recipe(c, "_mall_food_table").call("_mall_food_table", mid, 7)
 		"_mall_kiosk": _recipe(c, "_mall_kiosk").call("_mall_kiosk", mid, 0.0, 7)
+		"_mall_directory_pylon":
+			# Its readable authored face is local -Z; turn it toward the preview
+			# camera on +Z so mirrored/back-face regressions are immediately visible.
+			_recipe(c, "_mall_directory_pylon").call(
+				"_mall_directory_pylon", mid, PI)
 		"_prison_mess_table": _recipe(c, "_prison_mess_table").call("_prison_mess_table", mid, 0.0)
 		"_prison_shower_station": _recipe(c, "_prison_shower_station").call("_prison_shower_station", 3, 6.0)
 		"_prison_visitation_booth": _recipe(c, "_prison_visitation_booth").call("_prison_visitation_booth", mid)

@@ -18,7 +18,7 @@ godot --path . -- --mode=descent --seed=7 --nologo --pos=X,Z --yaw=DEG \
 
 # The full audit suite (ALWAYS via the runner — a failed SceneTree audit
 # hangs forever without its timeout):
-tools/run_audits.sh                 # import pass + compile + ~30 audits
+tools/run_audits.sh                 # import pass + compile + 49 audits
 tools/run_audits.sh -f descent      # filtered
 
 # After adding assets or a new class_name script, ALWAYS:
@@ -38,7 +38,7 @@ godot --headless --path . --import
   geometry (including Descent target rooms) requires regenerating
   `tools/golden/world_hash.txt` with `-- --out=...` and eyeballing that the
   diff is only what you intended.
-- The suite passes 36/36 as of 2026-08-05; there are no known tolerated
+- The suite has 49 registered audits; there are no known tolerated
   failures. Do not edit .gd or .sh files while a sweep is running — audits
   torn-read mid-edit files and fail spuriously.
 
@@ -46,10 +46,14 @@ godot --headless --path . --import
 
 World gen is stateless: every cell/edge property is a pure hash of
 (seed, coords) in `scripts/world_gen.gd`; cells are 12m; walls live on
-canonical edges; cells cluster into rooms. `ChunkManager` streams `Chunk`s
-(scripts/chunk.gd, ~6k lines — geometry, props, colliders, interactions);
-per-theme dressing lives in `scripts/levels/*_level_builder.gd`. `main.gd`
-owns modes, levels, post effects, HUD, and all Descent wiring. Eleven live
+canonical edges; cells cluster into rooms. `ChunkManager` streams `Chunk`s;
+per-theme builders receive an immutable `ChunkBuildContext` plus the typed
+`ChunkSceneWriter` construction boundary, never a live Chunk. Runtime objects
+have stable semantic IDs and floor-scoped `ChunkRuntimeState`. Blackout changes
+commit as typed `WorldMutation` transactions with staged scene swap and exact
+rollback. `main.gd` orchestrates modes while transition, post-process, developer
+tooling, and mutation state live in focused controllers. See
+`docs/ARCHITECTURE.md`. Eleven live
 themes: 0 casino, 1 office, 2 Annex, 4 airport, 5 asylum, 6 school, 7 mall,
 8 prison, 9 Poolrooms, 10 Monolith, 11 Bloom/"the Upside Down" (theme id 3
 was deleted; ids are never renumbered).
@@ -134,8 +138,10 @@ with it.
   in rebuilt cells).
 - **Post-blackout changes**: blackouts may transition between complete,
   precomputed topology realities, including safe doorway and furniture
-  mutations. The active reality persists and may later mutate back; the legacy
-  kind-2 furniture rearrange is retired.
+  mutations. Live frustum plus occlusion gating requires a visible architectural
+  change or a designated set-piece witness before a blackout may start. The
+  active reality persists and may later mutate back; the legacy kind-2
+  furniture rearrange is retired.
 - **Passing shadows** (`passing_shadows.gd`): rare non-threat silhouettes
   crossing a distant opening with a shock sting. DORMANT until
   `textures/ghosts/passer1-3.webp` exist — build them with

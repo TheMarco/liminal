@@ -15,6 +15,10 @@ uniform float watched : hint_range(0.0, 1.0) = 0.0;
 // procedural corridor is only the fallback for tapes with no file.
 uniform sampler2D tape_tex : source_color, filter_linear;
 uniform float use_footage = 0.0;
+// Fade the luminous raster into the tube's dark glass. Keeping this as a
+// colour/emission mask (rather than material transparency) preserves correct
+// depth against the model's separate curved-glass mesh.
+uniform float edge_feather : hint_range(0.0, 0.08) = 0.036;
 
 float hash21(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -85,7 +89,12 @@ void fragment() {
 	// Slight barrel curvature so the flat quad reads as a tube.
 	vec2 c = uv - 0.5;
 	uv = c * (1.0 + dot(c, c) * 0.18) + 0.5;
-	float inside = step(abs(uv.x - 0.5), 0.5) * step(abs(uv.y - 0.5), 0.5);
+	// The barrel warp naturally rounds the corners. Distance from its warped
+	// edge gives the raster a soft falloff instead of exposing a sharp quad.
+	float edge_distance = min(min(uv.x, 1.0 - uv.x),
+		min(uv.y, 1.0 - uv.y));
+	float tube_aperture = smoothstep(-edge_feather * 0.18,
+		edge_feather, edge_distance);
 	float t = TIME;
 	vec3 idle = snow(uv, t) * mix(0.5, 0.12, watched);
 	vec3 recording;
@@ -132,7 +141,7 @@ void fragment() {
 	vec3 col = mix(idle, recording, playing);
 	// 240 visible lines — the vertical resolution a VHS tape actually carried.
 	float scan = 0.76 + 0.24 * sin(uv.y * 240.0 * TAU);
-	col *= scan * inside;
+	col *= scan * tube_aperture;
 	ALBEDO = col * 0.9;
 	EMISSION = col * mix(0.55, 1.1, playing);
 }

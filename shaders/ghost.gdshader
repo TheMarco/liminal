@@ -9,6 +9,23 @@ render_mode unshaded, blend_mix, depth_draw_opaque, cull_disabled, shadows_disab
 
 uniform sampler2D tex : source_color, filter_linear, repeat_disable;
 uniform sampler2D noise_tex : repeat_enable, filter_linear_mipmap;
+// The scene behind the figure. It is not painted black over the image; it takes
+// light OUT of the image. See the absorb block in fragment().
+uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linear;
+// Fraction of the light behind it that survives, and it runs with the light.
+// Against a bright wall there is contrast to spare, so it spends it on being
+// visibly see-through — the room reads through the body and it stops being a
+// sticker. Against a dim one the only contrast available IS its darkness, and
+// translucency is exactly what would throw that away, so it closes down to a
+// hole. Per pixel, so a figure straddling a lit wall and a dark wainscot is
+// both at once, the way a real one photographs.
+uniform float absorb_lit = 0.165;
+uniform float absorb_dark = 0.020;
+// Past the bottom of that range there is no light left to remove and black on
+// black is nothing at all. Only there, a noise-broken trace of value. Linear,
+// pre-tonemap.
+uniform float body_floor = 0.010;
+uniform float unlit_luma = 0.012;
 uniform float erode_amt = 0.22;
 uniform float edge0 = 0.08;
 uniform float edge1 = 0.72;
@@ -187,10 +204,27 @@ void fragment() {
 	float opacity = max(shape * survive, haze * survive);
 	opacity *= smoothstep(0.0, 0.10, remaining);
 
-	// The apparition absorbs light. All structure lives in alpha: the core is
-	// absolute black and only the soft photographic edge/smoke dissolve reveals
-	// the scene through partial coverage. No blue-grey rim survives grading.
-	vec3 albedo = vec3(0.0);
+	// The apparition absorbs light rather than being painted over it. Flat black
+	// is a sticker: it holds the same value whether it stands in a lit atrium or
+	// an unlit corridor, so in one it is a bold cutout and in the other it is
+	// nothing at all. Multiplying the light behind it instead makes it carry the
+	// room's own gradients, grain and falloff — the wall's texture survives
+	// inside the silhouette at a fraction of its brightness, which is what an
+	// absence in a photograph actually looks like. Structure still lives in
+	// alpha; this only decides what the covered pixels become. No blue-grey rim:
+	// the tint is the scene's, never the shader's.
+	vec3 behind = texture(screen_tex, SCREEN_UV).rgb;
+	float bg_luma = dot(behind, vec3(0.2126, 0.7152, 0.0722));
+	float absorb = mix(absorb_dark, absorb_lit, smoothstep(0.0, 0.22, bg_luma));
+	vec3 albedo = behind * absorb;
+	// The lift is gated on the background being genuinely unlit, or it would
+	// undo the black the dim case just bought. Broken up by the same drifting
+	// noise that eats the edge, so where it does come in the body is veiled
+	// rather than filled — a flat grey fill would be a worse sticker than the
+	// flat black one this replaced.
+	float unlit = 1.0 - smoothstep(0.0, unlit_luma, bg_luma);
+	float veil = body_floor * unlit * mix(0.35, 1.30, n1 * 0.6 + n2 * 0.4);
+	albedo += vec3(max(veil - dot(albedo, vec3(0.2126, 0.7152, 0.0722)), 0.0));
 	float emit = 0.0;
 
 	// Artwork that carries its own colour keeps it — the animated wraith has
@@ -219,7 +253,7 @@ void fragment() {
 		// black body and read as no eyes at all. Hue is the artwork's business;
 		// how brightly a lit eye burns is this shader's.
 		vec3 tint = src / max(peak, 0.001);
-		albedo = mix(vec3(0.0), tint, lit);
+		albedo = mix(albedo, tint, lit);
 		emit = lit * colour_gain;
 	}
 
@@ -232,8 +266,12 @@ void fragment() {
 	if (burn > 0.0) {
 		float heat = burn * burn;
 		float speckle = smoothstep(0.62 - heat * 0.50, 0.99 - heat * 0.34, ember);
-		emit = speckle * heat * 1.25;
-		albedo = vec3(1.0, 0.80, 0.52);
+		float glow = clamp(speckle * heat, 0.0, 1.0);
+		emit = glow * 1.25;
+		// Only the pixels actually alight take the ember colour. Handing it to
+		// the whole card turned the body pale the instant the beam touched it,
+		// which spent the reveal before the charge had built.
+		albedo = mix(albedo, vec3(1.0, 0.80, 0.52), glow);
 	}
 
 	// The kill, and only the kill, consumes. A ragged front runs up the body
@@ -247,7 +285,8 @@ void fragment() {
 		opacity *= 1.0 - consumed * 0.96;
 		opacity = max(opacity, rim * 0.90 * shape);
 		emit = max(emit, rim * (0.70 + ember * 0.95));
-		albedo = vec3(1.0, 0.86, 0.62);
+		// The front is hot; what it has not reached yet is still an absence.
+		albedo = mix(albedo, vec3(1.0, 0.86, 0.62), clamp(rim * 1.6, 0.0, 1.0));
 	}
 
 	// This shader is unshaded, so EMISSION is never read: the hot front has to

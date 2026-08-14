@@ -21,6 +21,8 @@ extends Node3D
 @export var world_seed: int = 0
 
 const DEFAULT_SPAWN := Vector3(6.0, 0.15, 2.0)
+const MUTATION_REVEAL_EFFECT := preload(
+	"res://scripts/mutation_reveal_effect.gd")
 # Safe arrival offsets within a cell, per theme, for portal jumps. Only a hint:
 # _safe_arrival() sweeps outward from here for somewhere the player actually
 # fits. WorldGen.portal() can return any live theme, so every entry in
@@ -65,45 +67,19 @@ var cm: ChunkManager
 var we: WorldEnvironment
 var ambience: Ambience
 var active_level := 0
-var _saved_pos := {}
-var _switching := false
+var _transitions: LevelTransitionController
+var _switching: bool:
+	get:
+		return _transitions != null and _transitions.is_switching()
+	set(value):
+		if _transitions != null:
+			_transitions.set_switching(value)
 var _fade: ColorRect
 var _warp: AudioStreamPlayer
-var _post: ColorRect
-var _crt := true
-enum PostMode { CRT, FOUND_FOOTAGE }
-var _post_mode := PostMode.CRT
-var _crt_material: ShaderMaterial
-var _found_footage_material: ShaderMaterial
-var _post_signal_corruption := 0.0
-var _post_minor_at := 0.0
-var _post_major_at := 0.0
-var _post_glitch_until := 0.0
-var _post_damage_until := 0.0
-var _post_glitch_active := false
-var _post_glitch_major := false
-var _post_glitch_jitter := 0.006
-var _post_glitch_tracking := 0.18
-var _post_glitch_aberration := 0.0035
-var _post_glitch_noise := 0.10
-var _post_damage_intensity := 0.0
-var _bench := false
-var _bench_t := 0.0
-var _bench_frames := 0
-var _bench_worst := 0.0
-var _bench_slow := 0
-var _bench_prev := Vector3.ZERO
-var _bench_steps: Array[float] = []
-var _bench_process_worst := 0.0
-var _bench_physics_worst := 0.0
-var _bench_draws_max := 0
-var _bench_primitives_max := 0
-var _bench_collision_pairs_max := 0
-var _bench_static_start := 0
-var _bench_static_peak := 0
-var _bench_nodes_start := 0
-var _bench_resources_start := 0
-var _bench_vram_max := 0
+var _post_process: PostProcessController
+var _post_enabled := true
+var _found_footage_requested := false
+var _dev_tools: BenchmarkDevController
 var _figures: ShadowFigures
 var _passers: PassingShadows
 var _corner_apparitions: CornerApparitions
@@ -140,6 +116,7 @@ var _blackout_ambient := -1.0
 var _blackout_locate_cue := 0
 var _pending_mutation_reveal := false
 var _pending_mutation_reveal_at := Vector3.INF
+var _pending_mutation_reveal_descriptor := {}
 var _mutation_coordinator: DescentMutationCoordinator
 ## Environmental bleed presentation: captured baselines for this floor's fog
 ## and the next floor's targets, plus the rising next-floor room tone.
@@ -149,6 +126,10 @@ var _bleed_next_fog := Color.BLACK
 var _bleed_next_density := 0.0
 var _bleed_captured := false
 var _bleed_bed: AudioStreamPlayer
+## VCR playback temporarily owns the mix. Preserve the pre-existing game-bus
+## state so leaving a tape cannot accidentally unmute a title/transition hold.
+var _tape_audio_held := false
+var _tape_game_bus_was_muted := false
 ## Seconds of torch handed back per burned figure, and how close one has to get
 ## before the game says out loud, once, what the torch is for.
 const BURN_REFUND := 0.25
@@ -202,7 +183,7 @@ func _ready() -> void:
 		active_level = opts.active_level
 	descent = descent or opts.descent
 	if opts.found_footage:
-		_post_mode = PostMode.FOUND_FOOTAGE
+		_found_footage_requested = true
 	if opts.attention >= 0.0:
 		_attention_override = opts.attention
 	if world_seed == 0:
@@ -242,7 +223,7 @@ func _ready() -> void:
 		get_viewport().use_taa = false
 	# dev: start with the tube off, so screenshots show the raw full-res render
 	if opts.nocrt:
-		_crt = false
+		_post_enabled = false
 	_apply_scaling()
 	get_viewport().size_changed.connect(_apply_scaling)
 	_setup_audio_bus()
@@ -265,6 +246,8 @@ func _ready() -> void:
 	player.position = spawn
 	player.rotation.y = yaw
 	add_child(player)
+	_dev_tools = BenchmarkDevController.new()
+	add_child(_dev_tools)
 	# Live tuning panel for the Poolrooms. Dragging a slider beats editing a
 	# constant, rebuilding and guessing from a screenshot.
 	if opts.tune:
@@ -275,17 +258,13 @@ func _ready() -> void:
 	if opts.spin:
 		player.dev_spin = true
 	if opts.audit:
-		_audit_partitions()
+		_dev_tools.audit_partitions(world_seed)
+		get_tree().quit()
 		return
 	if opts.chunktime:
 		ChunkManager._dev_timing = true
 	if opts.bench:
-		# walk forward while turning — the exact motion that looks choppy
-		player.dev_spin = true
-		player.dev_walk = true
-		_bench = true
-		_bench_prev = player.cam.global_position
-		_bench_reset_monitors()
+		_dev_tools.start_benchmark(player)
 	ambience = Ambience.new(active_level)
 	add_child(ambience)
 	_director = HorrorDirector.new()
@@ -338,7 +317,7 @@ func _ready() -> void:
 	_corner_apparitions.revealed.connect(
 		func(_texture_key: String):
 			_heart.bump(Heartbeat.BUMP_SEEN)
-			_camera_damage_hit(0.32)
+			_post_process.damage_hit(0.32)
 			if _passers != null:
 				_passers.defer_for(CornerApparitions.SHARED_QUIET_SECONDS))
 	# Nothing mutters, haunts or races behind a title or a rule card. The
@@ -357,6 +336,7 @@ func _ready() -> void:
 	_events.set_level(level_root)
 	add_child(_events)
 	_music = AudioStreamPlayer.new()
+	_music.bus = SoundBank.GAME_BUS
 	_music.volume_db = -50.0
 	add_child(_music)
 	# Decide before the first note: `_build_title` runs several lines later, and
@@ -366,6 +346,7 @@ func _ready() -> void:
 		_set_world_audio(false)
 	_switch_music(active_level)
 	_build_ui()
+	_configure_level_transitions()
 	player.interaction_prompt_changed.connect(_on_interaction_prompt)
 	_events.message.connect(_show_event_message)
 	if opts.caption_preview:
@@ -378,7 +359,8 @@ func _ready() -> void:
 			# Wander is the pressure-free level browser: keep hostile figures
 			# disabled while leaving the ambient soundscape active.
 			_set_presence(Presence.WANDER)
-	_maybe_screenshot()
+	_dev_tools.schedule_screenshot(player, get_viewport(), opts.screenshot,
+		opts.shot_delay)
 	call_deferred("_settle_initial_arrival")
 
 
@@ -407,8 +389,7 @@ func _level_seed(level: int) -> int:
 
 
 func _create_descent_route(level: int, floor_idx: int) -> DescentRoute:
-	_pending_mutation_reveal = false
-	_pending_mutation_reveal_at = Vector3.INF
+	_discard_pending_mutation_reveal()
 	var route_started := Time.get_ticks_usec()
 	var route := DescentRoute.build(_level_seed(level), level, floor_idx)
 	var route_ready := Time.get_ticks_usec()
@@ -463,6 +444,10 @@ func _build_level(level: int, around: Vector3) -> void:
 		cm.descent_lift_open = run.lift_open
 		cm.descent_tape_watched = run.tape_watched
 		cm.descent_broken_station_tried = run.broken_station_tried
+		if _progress_enabled and _descent_progress.has_checkpoint() \
+				and _descent_progress.run_seed == world_seed:
+			cm.restore_runtime_state(
+				_descent_progress.runtime_state_for_floor(run.floor_idx))
 	if _passers != null:
 		_passers.configure(_level_seed(level), level)
 		_passers.run = run
@@ -500,6 +485,58 @@ func _configure_mutation_coordinator() -> void:
 	_mutation_coordinator.committed.connect(_on_mutation_committed)
 
 
+func _configure_level_transitions() -> void:
+	_transitions = LevelTransitionController.new()
+	add_child(_transitions)
+	var port := LevelTransitionPort.new()
+	port.active_level = func() -> int: return active_level
+	port.set_active_level = func(value: int) -> void: active_level = value
+	port.descent_mode = func() -> bool: return descent
+	port.player = func() -> Player: return player
+	port.world_3d = func() -> World3D: return get_world_3d()
+	port.level_seed = _level_seed
+	port.level_root = func() -> Node3D: return level_root
+	port.detach_level = func(outgoing: Node3D) -> void: remove_child(outgoing)
+	port.reset_floor_presence = _reset_transition_presence
+	port.switch_music = _switch_music
+	port.prepare_destination = _prepare_transition_destination
+	port.build_level = _build_level
+	port.post_build = _finish_transition_build
+	port.sealed_descent_arrival = func() -> bool:
+		return descent and descent_route != null \
+			and descent_route.origin_wall >= 0
+	_transitions.configure(port, _fade, _warp, DEFAULT_SPAWN,
+		PORTAL_ARRIVE, PORTAL_ARRIVE_DEFAULT)
+
+
+func _reset_transition_presence() -> void:
+	_figures.despawn()
+	_whispers.stop()
+	_heart.reset()
+
+
+func _prepare_transition_destination(level: int, pos: Vector3,
+		exact: bool, yaw: float) -> Dictionary:
+	if descent and (descent_route == null or descent_route.theme != level):
+		descent_route = _create_descent_route(level, run.floor_idx)
+		_print_descent_route()
+		return _descent_arrival(level)
+	return {"position": pos, "exact": exact, "yaw": yaw}
+
+
+func _finish_transition_build(level: int) -> void:
+	_events.set_level(level_root)
+	player.world_seed = _level_seed(level)
+	player.level_theme = level
+	player.water_y = _water_level_for(level)
+	we.environment = _build_env(level)
+	ambience.queue_free()
+	ambience = Ambience.new(level)
+	add_child(ambience)
+	if _title_music:
+		ambience.stop()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if is_instance_valid(_descent_intro):
 		return
@@ -520,8 +557,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif not descent and idx >= 0 and idx < mini(9, WorldGen.THEMES.size()):
 			_switch_level(WorldGen.THEMES[idx])
 		elif event.physical_keycode == KEY_V:
-			_crt = not _crt
-			_post.visible = _crt
+			_post_enabled = _post_process.toggle_enabled()
 			_apply_scaling()
 		elif event.physical_keycode == KEY_B:
 			_toggle_post_mode()
@@ -567,29 +603,21 @@ func _confirm_return_to_title() -> void:
 		await _leave_descent()
 		return
 	_set_presence(Presence.SILENT)
-	_saved_pos.clear()
+	_transitions.clear_saved_positions()
 	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
 	await _jump_to(0, spawn, false)
-	_saved_pos.clear()
+	_transitions.clear_saved_positions()
 	_set_mode_hint()
 	_build_title()
 
 
 func _switch_level(level: int) -> void:
-	if descent or _switching or level == active_level:
-		return
-	var pos: Vector3 = _saved_pos.get(level, Vector3.INF)
-	if pos == Vector3.INF:
-		pos = _safe_arrival(level, Vector2i.ZERO, DEFAULT_SPAWN)
-	_jump_to(level, pos, false)
+	_transitions.switch_wander(level)
 
 
 ## Stepping into a swirling portal: emerge in the same cell of another world.
 func _on_portal(dest: int, cellv: Vector2i) -> void:
-	if descent or _switching or dest == active_level:
-		return
-	_jump_to(dest, _safe_arrival(dest, cellv,
-		PORTAL_ARRIVE.get(dest, PORTAL_ARRIVE_DEFAULT)), true)
+	_transitions.enter_portal(dest, cellv)
 
 
 ## Called by physical lift panels built into selected generated rooms.
@@ -651,6 +679,7 @@ func descent_tape_watch(on: bool) -> void:
 		_director.set_scripted_hold(on)
 	if on and _whispers != null:
 		_whispers.stop()
+	_set_tape_audio_hold(on)
 	# The recording owns the screen: no needle over the footage, and nothing
 	# in the building moves until it lets go — the ambient figures are held by
 	# the run's passive state.
@@ -745,7 +774,7 @@ func descent_commit_refused(reason: String) -> void:
 	if not descent:
 		return
 	_show_event_message(reason, true)
-	_camera_damage_hit(0.25)
+	_post_process.damage_hit(0.25)
 
 
 func _on_descent_lift_cancelled() -> void:
@@ -836,6 +865,8 @@ func _connect_descent_run() -> void:
 		run.horror_director = _director
 	run.pinned_attention = _attention_override
 	run.blackout_mutation_validator = _can_commit_blackout_mutation
+	run.blackout_mutation_ranker = _rank_blackout_mutation_visibility
+	run.blackout_mutation_fallback_ranker = _rank_blackout_mutation_frustum
 	if _progress_enabled and _descent_progress.has_checkpoint() \
 			and _descent_progress.run_seed == world_seed:
 		run.restore_short_tape_cycle(_descent_progress.seen_short_tapes,
@@ -945,6 +976,7 @@ func _prepare_bleed() -> void:
 	if Sfx.has_bed(next_theme):
 		var bed: Array = Sfx.bed(next_theme)
 		_bleed_bed = AudioStreamPlayer.new()
+		_bleed_bed.bus = SoundBank.GAME_BUS
 		_bleed_bed.stream = bed[0]
 		_bleed_bed.volume_db = -60.0
 		add_child(_bleed_bed)
@@ -996,6 +1028,7 @@ func _on_descent_lift() -> void:
 		return
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_active(false)
+	_persist_current_runtime_state()
 	run.suspend_rules()
 	run.floor_idx += 1
 	run.prepare_floor()
@@ -1070,10 +1103,10 @@ func _die_to_title() -> void:
 	_figures.despawn()
 	_whispers.stop()
 	_heart.reset()
-	_saved_pos.clear()
+	_transitions.clear_saved_positions()
 	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
 	await _jump_to(0, spawn, false)
-	_saved_pos.clear()
+	_transitions.clear_saved_positions()
 	_switching = false
 	_dying = false
 	_set_mode_hint()
@@ -1086,7 +1119,7 @@ func _on_descent_attention(_value: float) -> void:
 	var threat := run.threat() if run != null else 0.0
 	if _director != null:
 		_director.set_pressure(threat)
-	_set_post_corruption(threat)
+	_post_process.set_corruption(threat)
 	if _figures != null:
 		_figures.interval_scale = lerpf(1.0, 0.35, threat) \
 			* (run.figure_interval_scale() if run != null else 1.0)
@@ -1119,6 +1152,7 @@ func _on_descent_violation(kind: int) -> void:
 			message = "RULE BROKEN — STAND STILL"
 	_show_event_message(message, true)
 	var groan := AudioStreamPlayer3D.new()
+	groan.bus = SoundBank.HALL_BUS
 	groan.stream = SoundBank.creak()
 	groan.volume_db = -11.0
 	groan.max_distance = 28.0
@@ -1127,33 +1161,9 @@ func _on_descent_violation(kind: int) -> void:
 	groan.global_position = player.global_position + Vector3(0, 1.0, 0)
 	groan.finished.connect(groan.queue_free)
 	groan.play()
-	if _crt_material != null:
-		var base := 1.0 + run.threat() * 1.6
-		_crt_material.set_shader_parameter(
-			"noise_amount", minf(3.0, base + 0.7))
-		var tw := create_tween()
-		tw.tween_method(_set_post_noise,
-			minf(3.0, base + 0.7), base, 0.32)
-	_camera_damage_hit(0.78)
-
-
-func _set_post_noise(value: float) -> void:
-	if _crt_material != null:
-		_crt_material.set_shader_parameter("noise_amount", value)
-
-
-## Drive both recording treatments from the same supernatural pressure. The
-## CRT gets stronger snow; the found-footage mode loses color and tracking.
-func _set_post_corruption(amount: float) -> void:
-	_post_signal_corruption = clampf(amount, 0.0, 1.0)
-	_set_post_noise(1.0 + _post_signal_corruption * 1.6)
-	_apply_found_footage_state()
-
-
-func _camera_damage_hit(intensity := 1.0) -> void:
-	_post_damage_intensity = clampf(intensity, 0.0, 1.0)
-	_post_damage_until = Time.get_ticks_msec() * 0.001 + 0.15
-	_apply_found_footage_state()
+	var base := 1.0 + run.threat() * 1.6
+	_post_process.pulse_noise(minf(3.0, base + 0.7), base, 0.32)
+	_post_process.damage_hit(0.78)
 
 
 func _on_descent_blackout(on: bool) -> void:
@@ -1176,16 +1186,34 @@ func _on_descent_blackout(on: bool) -> void:
 			if _pending_mutation_reveal_at != Vector3.INF:
 				_play_descent_cue_at(SoundBank.creak(), -2.0,
 					_pending_mutation_reveal_at)
+				_spawn_mutation_reveal(_pending_mutation_reveal_at,
+					_pending_mutation_reveal_descriptor)
 			else:
 				_play_descent_cue(SoundBank.creak(), -7.0)
 			_pending_mutation_reveal_at = Vector3.INF
+			_pending_mutation_reveal_descriptor = {}
 			_play_descent_cue(SoundBank.thud(), -13.0)
-			_show_event_message("POWER RESTORED — SOMETHING CHANGED NEARBY", true)
+			_show_event_message("POWER RESTORED — FOLLOW THE GLOW", true)
 		else:
 			# A failed preflight postpones the blackout, so this path is only a
 			# defensive fallback for teardown/level-switch races.
 			_play_descent_cue(SoundBank.ding(), -10.0)
 			_show_event_message("POWER RESTORED")
+
+
+func _spawn_mutation_reveal(at: Vector3,
+		descriptor: Dictionary = {}) -> Node3D:
+	# Blackouts cannot overlap, but clearing a surviving effect makes this safe
+	# under dev forcing and level-transition races as well.
+	for old in get_tree().get_nodes_in_group("mutation_reveal_effect"):
+		if is_instance_valid(old):
+			old.queue_free()
+	var reveal := MUTATION_REVEAL_EFFECT.new() as Node3D
+	add_child(reveal)
+	reveal.global_position = at
+	if reveal.has_method("configure"):
+		reveal.call("configure", descriptor)
+	return reveal
 
 
 ## Something in the dark heard the player move. It closes in three audible
@@ -1209,7 +1237,7 @@ func _on_blackout_locate(value: float) -> void:
 	if step >= 2:
 		_play_descent_cue(SoundBank.thud(), -20.0 + 5.0 * step)
 	if step == 3:
-		_camera_damage_hit(0.35)
+		_post_process.damage_hit(0.35)
 
 
 ## It found them. The player never sees what it was — one frame of something
@@ -1221,7 +1249,7 @@ func _on_blackout_ambush() -> void:
 	_blackout_locate_cue = 0
 	var pick := Sfx.random_scare()
 	_play_descent_cue(pick[0], -2.0)
-	_camera_damage_hit(1.0)
+	_post_process.damage_hit(1.0)
 	_play_player_death()
 	run.finish(false)
 
@@ -1254,6 +1282,7 @@ func _on_descent_passive(on: bool) -> void:
 
 func _play_descent_cue(stream: AudioStream, volume: float) -> void:
 	var cue := AudioStreamPlayer.new()
+	cue.bus = SoundBank.GAME_BUS
 	cue.stream = stream
 	cue.volume_db = volume
 	add_child(cue)
@@ -1301,12 +1330,33 @@ func _persist_committed_mutation(topology: DescentTopology) -> void:
 	_descent_progress.record_mutation_state(run.floor_idx,
 		topology.current_state_id(), topology.state_history(),
 		topology.state_signature(), visited_signatures)
+	_persist_current_runtime_state()
+
+
+func _persist_current_runtime_state() -> void:
+	if not _progress_enabled or _descent_progress == null \
+			or _descent_progress.run_seed != world_seed \
+			or run == null or cm == null:
+		return
+	_descent_progress.record_runtime_state(
+		run.floor_idx, cm.runtime_state_snapshot())
 
 
 func _on_mutation_committed(_transaction: DescentMutationTransaction,
-		reveal_at: Vector3) -> void:
+		reveal_at: Vector3, reveal: Dictionary) -> void:
+	_discard_pending_mutation_reveal()
 	_pending_mutation_reveal = true
 	_pending_mutation_reveal_at = reveal_at
+	_pending_mutation_reveal_descriptor = reveal.duplicate()
+
+
+func _discard_pending_mutation_reveal() -> void:
+	var ghost: Variant = _pending_mutation_reveal_descriptor.get("ghost", null)
+	if is_instance_valid(ghost) and ghost is Node:
+		(ghost as Node).free()
+	_pending_mutation_reveal = false
+	_pending_mutation_reveal_at = Vector3.INF
+	_pending_mutation_reveal_descriptor = {}
 
 
 ## Generated topology proves that a state is globally navigable. This final
@@ -1318,12 +1368,20 @@ func _can_commit_blackout_mutation(proposal: TopologyDelta) -> bool:
 		and _mutation_coordinator.can_commit(proposal)
 
 
-func _mutation_rebuild_cells(proposal: TopologyDelta) -> Array[Vector2i]:
-	return _mutation_coordinator.rebuild_cells(proposal) \
-		if _mutation_coordinator != null else []
+func _rank_blackout_mutation_visibility(proposal: TopologyDelta) -> float:
+	return _mutation_coordinator.visibility_rank(proposal) \
+		if _mutation_coordinator != null \
+		else DescentMutationCoordinator.NO_VISIBLE_WITNESS
+
+
+func _rank_blackout_mutation_frustum(proposal: TopologyDelta) -> float:
+	return _mutation_coordinator.visibility_rank(proposal, false) \
+		if _mutation_coordinator != null \
+		else DescentMutationCoordinator.NO_VISIBLE_WITNESS
 
 
 func _on_descent_ended(won: bool) -> void:
+	_persist_current_runtime_state()
 	_set_presence(Presence.SILENT)
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_active(false)
@@ -1429,17 +1487,17 @@ func _leave_descent() -> void:
 	if is_instance_valid(_descent_hud):
 		_descent_hud.queue_free()
 	_descent_hud = null
-	_saved_pos.clear()
+	_transitions.clear_saved_positions()
 	player.allow_sprint = true
 	player.set_rumble(0.0)
 	_events.descent_mode = false
 	_set_presence(Presence.SILENT)
 	_figures.interval_scale = 1.0
 	_set_mode_hint()
-	_set_post_noise(1.0)
+	_post_process.set_noise(1.0)
 	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
 	await _jump_to(0, spawn, false)
-	_saved_pos.clear()
+	_transitions.clear_saved_positions()
 	_build_title()
 
 
@@ -1453,163 +1511,26 @@ func door_activity() -> void:
 		_events.door_response()
 
 
-## Airport gate cells seal a 2.2m apron strip behind curtain glass along
-## their anchor wall. If a fixed arrival offset would land inside that strip
-## — an inescapable pocket — mirror it across the cell.
+## Compatibility seam for audits and older callers; policy is controller-owned.
 func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
-	# base.y is clearance ABOVE this cell's floor, not an absolute height. Every
-	# floor is flat at zero except the Poolrooms' dry styles, which are a raised
-	# slab; this used to hardcode 0.15 and discard base.y, which asked to place
-	# the player 1.27m inside that slab.
-	var floor_y := Chunk.cell_floor_h(_level_seed(level), cellv, level)
-	var pos := Vector3(cellv.x * WorldGen.CELL_SIZE + base.x, floor_y + base.y,
-		cellv.y * WorldGen.CELL_SIZE + base.z)
-	# The first school room is a classroom. Its desks rotate to face whichever
-	# solid wall owns the board, so a fixed corner can become the back row. Land
-	# in the clear teaching aisle between the first row and the teacher's desk.
-	if level == 6 and cellv == Vector2i.ZERO:
-		var ws6 := _level_seed(6)
-		var root := WorldGen.room_id(ws6, cellv)
-		var centre := WorldGen.room_centre(ws6, root)
-		var front := WorldGen.anchor_wall(ws6, root, 72)
-		var facing := Vector2.ZERO
-		match front:
-			0: facing = Vector2(1.0, 0.0)
-			1: facing = Vector2(-1.0, 0.0)
-			2: facing = Vector2(0.0, 1.0)
-			_: facing = Vector2(0.0, -1.0)
-		# Bias into the wide perimeter aisle as well. At the centreline, walking
-		# away from the teacher immediately meets the first student desk; here
-		# every initial heading has room to resolve before reaching furniture.
-		var side := Vector2(facing.y, -facing.x)
-		return Vector3(centre.x + facing.x * 2.2 + side.x * 3.0, floor_y + base.y,
-			centre.y + facing.y * 2.2 + side.y * 3.0)
-	if level != 4:
-		return pos
-	var ws := _level_seed(4)
-	if WorldGen.cell_style(ws, cellv, 4) != WorldGen.AIR_GATE:
-		return pos
-	var wdir := WorldGen.anchor_wall(ws, cellv, 310)
-	if wdir == 3 and base.z < 2.4:
-		pos.z = cellv.y * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE - base.z)
-	elif wdir == 2 and base.z > 9.6:
-		pos.z = cellv.y * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE - base.z)
-	elif wdir == 1 and base.x < 2.4:
-		pos.x = cellv.x * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE - base.x)
-	elif wdir == 0 and base.x > 9.6:
-		pos.x = cellv.x * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE - base.x)
-	return pos
+	if _transitions != null:
+		return _transitions.safe_arrival(level, cellv, base)
+	return LevelTransitionController.safe_arrival_for_seed(
+		level, cellv, base, _level_seed(level))
 
 
 func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
 		yaw := NAN) -> void:
-	_switching = true
-	# A charge session belongs to the outgoing physical station. Roll it back
-	# before the fade and teardown so partial charge cannot cross floors.
-	if player != null and player.is_charging():
-		player.stop_charging()
-	if not descent:
-		_saved_pos[active_level] = player.position
-	if via_portal:
-		_warp.play()
-	var tw := create_tween()
-	tw.tween_property(_fade, "color:a", 1.0, 0.16 if via_portal else 0.3)
-	await tw.finished
-	# Detach the outgoing floor immediately. queue_free() alone can leave its
-	# collision bodies registered until the end of a busy frame; if the landing
-	# probe runs during that overlap, geometry from two floors can make every
-	# otherwise-safe candidate appear blocked (seen returning to the school at
-	# seed 1760336105, cell -1,0).
-	var old_level := level_root
-	remove_child(old_level)
-	old_level.queue_free()
-	_figures.despawn()
-	_whispers.stop()
-	_heart.reset()
-	_switch_music(level)
-	active_level = level
-	# Let the physics server unregister every outgoing collider before any
-	# destination body is created.
-	await get_tree().physics_frame
-	if descent and (descent_route == null or descent_route.theme != level):
-		descent_route = _create_descent_route(level, run.floor_idx)
-		_print_descent_route()
-		var arrival := _descent_arrival(level)
-		pos = arrival["position"]
-		exact = bool(arrival["exact"])
-		yaw = float(arrival["yaw"])
-	_build_level(level, pos)
-	_events.set_level(level_root)
-	player.world_seed = _level_seed(level)
-	player.level_theme = level
-	player.water_y = _water_level_for(level)
-	await get_tree().physics_frame
-	var cellv := Vector2i(floori(pos.x / WorldGen.CELL_SIZE), floori(pos.z / WorldGen.CELL_SIZE))
-	var safe := pos
-	# An authored arrival car interior is clear by construction but sealed, so
-	# the escape-direction half of ArrivalSafety can never pass inside one. Trust
-	# the point, but still refuse to drop the player into solid geometry.
-	var trusted := exact and ArrivalSafety.is_clear(get_world_3d(), pos,
-		[player.get_rid()]) \
-		and ArrivalSafety.has_floor(get_world_3d(), pos, [player.get_rid()])
-	if not trusted:
-		if exact:
-			push_warning("Descent arrival car interior was not clear in theme %d cell %s; falling back" % [level, cellv])
-		safe = ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
-		if safe == Vector3.INF:
-			# Last resort. Standing the player on whatever is under the requested
-			# point beats teleporting into it: the old behaviour used `pos`
-			# unchanged, which buried them and left Godot's depenetration to pick a
-			# direction. Report the style and the floor datum, because the useful
-			# distinction is "furniture in the way" versus "this floor is not where
-			# the caller thinks it is".
-			var support := ArrivalSafety.support_top(get_world_3d(), pos.x, pos.z,
-				pos.y, [player.get_rid()])
-			safe = pos if support == -INF \
-				else Vector3(pos.x, support + ArrivalSafety.STANDING_CLEARANCE, pos.z)
-			push_error(("No audited arrival candidate in theme %d cell %s " +
-				"(style %d, floor y %.2f, requested y %.2f); using %s") % [
-					level, cellv, WorldGen.cell_style(_level_seed(level), cellv, level),
-					Chunk.cell_floor_h(_level_seed(level), cellv, level), pos.y,
-					"supported point" if support != -INF else "requested position"])
-	player.teleport(safe)
-	if is_finite(yaw):
-		player.rotation.y = yaw
-	we.environment = _build_env(level)
-	ambience.queue_free()
-	ambience = Ambience.new(level)
-	add_child(ambience)
-	# Descent prepares its first floor while the card is still up, and a death
-	# returns through here on its way back to one. A fresh room tone must not
-	# undo the silence either of those is holding — and `Ambience` starts itself
-	# in `_ready`, so this has to come after it is in the tree.
-	if _title_music:
-		ambience.stop()
-	await get_tree().process_frame
-	var tw2 := create_tween()
-	tw2.tween_property(_fade, "color:a", 0.0, 0.45 if via_portal else 0.5)
-	await tw2.finished
-	_switching = false
+	await _transitions.jump_to(level, pos, via_portal, exact, yaw)
 
 
 func _settle_initial_arrival() -> void:
-	await get_tree().physics_frame
-	if player == null or not is_instance_valid(player):
-		return
-	# A Descent run starts inside its sealed arrival car. Re-probing that point
-	# would "rescue" the player straight back out through the shut doors.
-	if descent and descent_route != null and descent_route.origin_wall >= 0:
-		return
-	var pos := player.global_position
-	var cellv := Vector2i(floori(pos.x / WorldGen.CELL_SIZE), floori(pos.z / WorldGen.CELL_SIZE))
-	var safe := ArrivalSafety.find_safe(get_world_3d(), pos, cellv, [player.get_rid()])
-	if safe != Vector3.INF and safe.distance_to(pos) > 0.02:
-		player.teleport(safe)
+	await _transitions.settle_initial_arrival()
 
 
 func _process(dt: float) -> void:
 	_check_torch_hint()
-	_update_post_effects()
+	_post_process.update()
 	_update_flashlight_hud()
 	_update_bleed()
 	# Once the mercy system has proven a stall, the whispers stop being
@@ -1627,128 +1548,8 @@ func _process(dt: float) -> void:
 		if _figures != null:
 			_figures.interval_scale = minf(_figures.interval_scale,
 				lerpf(0.6, 0.3, run.floor_progress()))
-	if not _bench:
-		return
-	_bench_t += dt
-	_bench_frames += 1
-	_bench_worst = maxf(_bench_worst, dt)
-	_bench_sample_monitors()
-	if dt > 1.0 / 55.0:
-		_bench_slow += 1
-	# per-RENDERED-frame translation: if it only advances on physics ticks the
-	# steps come out uneven (some frames 0, some double) — that is the judder
-	var pp := player.cam.global_position
-	var step := pp.distance_to(_bench_prev)
-	_bench_prev = pp
-	if _bench_frames > 2:
-		_bench_steps.append(step)
-	if _bench_t >= 3.0:
-		if _bench_steps.size() > 10:
-			var mn := 1e9
-			var mx := 0.0
-			var sum := 0.0
-			for v in _bench_steps:
-				mn = minf(mn, v)
-				mx = maxf(mx, v)
-				sum += v
-			var avg := sum / float(_bench_steps.size())
-			var zero := 0
-			for v in _bench_steps:
-				if v < avg * 0.25:
-					zero += 1
-			print("  per-frame CAMERA move: avg %.4fm  min %.4f  max %.4f  (max/avg %.2fx)  stalled frames %d/%d" % [
-				avg, mn, mx, mx / maxf(avg, 0.0001), zero, _bench_steps.size()])
-			_bench_steps.clear()
-		print("fps %.1f | frame avg %.2fms worst %.2fms | frames over 18ms: %d/%d | physics %d Hz" % [
-			float(_bench_frames) / _bench_t, 1000.0 * _bench_t / float(_bench_frames),
-			1000.0 * _bench_worst, _bench_slow, _bench_frames,
-			Engine.physics_ticks_per_second])
-		print("  render stress: CPU process worst %.2fms, physics worst %.2fms | draws %d, primitives %d | collision pairs %d" % [
-			1000.0 * _bench_process_worst, 1000.0 * _bench_physics_worst,
-			_bench_draws_max, _bench_primitives_max, _bench_collision_pairs_max])
-		print("  memory/object deltas: static %+.1f KiB (peak %+.1f), nodes %+d, resources %+d | video %.1f MiB" % [
-			(float(int(Performance.get_monitor(Performance.MEMORY_STATIC))
-				- _bench_static_start) / 1024.0),
-			(float(_bench_static_peak - _bench_static_start) / 1024.0),
-			int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)) - _bench_nodes_start,
-			int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)) - _bench_resources_start,
-			float(_bench_vram_max) / (1024.0 * 1024.0)])
-		_bench_t = 0.0
-		_bench_frames = 0
-		_bench_worst = 0.0
-		_bench_slow = 0
-		_bench_reset_monitors()
-
-
-func _bench_reset_monitors() -> void:
-	_bench_process_worst = 0.0
-	_bench_physics_worst = 0.0
-	_bench_draws_max = 0
-	_bench_primitives_max = 0
-	_bench_collision_pairs_max = 0
-	_bench_static_start = int(Performance.get_monitor(Performance.MEMORY_STATIC))
-	_bench_static_peak = _bench_static_start
-	_bench_nodes_start = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
-	_bench_resources_start = int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT))
-	_bench_vram_max = int(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED))
-
-
-func _bench_sample_monitors() -> void:
-	_bench_process_worst = maxf(_bench_process_worst,
-		float(Performance.get_monitor(Performance.TIME_PROCESS)))
-	_bench_physics_worst = maxf(_bench_physics_worst,
-		float(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)))
-	_bench_draws_max = maxi(_bench_draws_max,
-		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)))
-	_bench_primitives_max = maxi(_bench_primitives_max,
-		int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)))
-	_bench_collision_pairs_max = maxi(_bench_collision_pairs_max,
-		int(Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)))
-	_bench_static_peak = maxi(_bench_static_peak,
-		int(Performance.get_monitor(Performance.MEMORY_STATIC)))
-	_bench_vram_max = maxi(_bench_vram_max,
-		int(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED)))
-
-
-## Dev: count partitions that would have ended inside a doorway.
-func _audit_partitions() -> void:
-	for th in WorldGen.THEMES:
-		var ws := _level_seed(th)
-		var splits := 0
-		var old_bad := 0
-		var new_bad := 0
-		var dropped := 0
-		for cx in range(-30, 31):
-			for cz in range(-30, 31):
-				var c := Vector2i(cx, cz)
-				var sp := WorldGen.room_split(ws, WorldGen.room_id(ws, c), th)
-				if sp.is_empty() or WorldGen.room_id(ws, c) != c:
-					continue
-				splits += 1
-				var ax: bool = sp[0]
-				var want: float = sp[1]
-				var blocked := WorldGen.crossing_openings(ws, c, th, ax)
-				for b in blocked:
-					if absf(want - b.x) < b.y:
-						old_bad += 1
-						if old_bad <= 3:
-							print("   was-broken cell %s  (centre %.0f, %.0f)" % [c, c.x * WorldGen.CELL_SIZE + WorldGen.CELL_SIZE * 0.5, c.y * WorldGen.CELL_SIZE + WorldGen.CELL_SIZE * 0.5])
-						break
-				var got := WorldGen.partition_offset(ws, c, th, ax, want)
-				if got < 0.0:
-					ax = not ax
-					got = WorldGen.partition_offset(ws, c, th, ax, want)
-					blocked = WorldGen.crossing_openings(ws, c, th, ax)
-				if got < 0.0:
-					dropped += 1
-					continue
-				for b in blocked:
-					if absf(got - b.x) < b.y:
-						new_bad += 1
-						break
-		print("theme %d: %d partitions | split a doorway BEFORE: %d | NOW: %d | skipped: %d" % [
-			th, splits, old_bad, new_bad, dropped])
-	get_tree().quit()
+	if _dev_tools != null:
+		_dev_tools.update(dt)
 
 
 ## Crossfade the floor's mood track in; unknown floors fade to silence.
@@ -1797,7 +1598,7 @@ func _switch_music(level: int) -> void:
 func _apply_scaling() -> void:
 	var vp := get_viewport()
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-	if _crt:
+	if _post_enabled:
 		vp.scaling_3d_scale = clampf(480.0 / float(vp.size.y), 0.05, 1.0)
 	else:
 		vp.scaling_3d_scale = 1.0
@@ -1848,116 +1649,19 @@ func _apply_hud_scaling() -> void:
 
 
 func _toggle_post_mode() -> void:
-	if _post == null or _crt_material == null \
-			or _found_footage_material == null:
+	if _post_process == null:
 		return
-	_post_mode = PostMode.FOUND_FOOTAGE \
-		if _post_mode == PostMode.CRT else PostMode.CRT
-	_post.material = _found_footage_material \
-		if _post_mode == PostMode.FOUND_FOOTAGE else _crt_material
-	if _post_mode == PostMode.FOUND_FOOTAGE:
-		_schedule_post_glitches(Time.get_ticks_msec() * 0.001)
-		_apply_found_footage_state()
+	var label := _post_process.toggle_mode()
 	if _title == null:
-		_show_event_message(
-			"VIDEO MODE — RECOVERED TAPE"
-			if _post_mode == PostMode.FOUND_FOOTAGE
-			else "VIDEO MODE — 480i CRT"
-		)
+		_show_event_message("VIDEO MODE — " + label)
 	_set_mode_hint()
 
 
-func _schedule_post_glitches(now: float) -> void:
-	_post_minor_at = now + randf_range(1.5, 5.0)
-	_post_major_at = now + randf_range(10.0, 28.0)
-	_post_glitch_active = false
-
-
-func _start_post_glitch(major: bool, now: float) -> void:
-	_post_glitch_active = true
-	_post_glitch_major = major
-	if major:
-		_post_glitch_until = now + randf_range(0.12, 0.42)
-		_post_glitch_jitter = randf_range(0.025, 0.05)
-		_post_glitch_tracking = randf_range(0.55, 1.0)
-		_post_glitch_noise = randf_range(0.22, 0.48)
-		_post_glitch_aberration = randf_range(0.012, 0.02)
-		_post_major_at = now + randf_range(10.0, 28.0)
-	else:
-		_post_glitch_until = now + randf_range(0.04, 0.16)
-		_post_glitch_jitter = randf_range(0.012, 0.028)
-		_post_glitch_aberration = randf_range(0.006, 0.013)
-		_post_minor_at = now + randf_range(1.5, 5.0)
-	_apply_found_footage_state()
-
-
-func _update_post_effects() -> void:
-	if _found_footage_material == null:
-		return
-	var now := Time.get_ticks_msec() * 0.001
-	var changed := false
-	if _post_damage_intensity > 0.0 and now >= _post_damage_until:
-		_post_damage_intensity = 0.0
-		changed = true
-	if _post_glitch_active and now >= _post_glitch_until:
-		_post_glitch_active = false
-		changed = true
-	if _post_mode == PostMode.FOUND_FOOTAGE and _crt:
-		if _post_minor_at <= 0.0 or _post_major_at <= 0.0:
-			_schedule_post_glitches(now)
-		if not _post_glitch_active:
-			if now >= _post_major_at:
-				_start_post_glitch(true, now)
-				return
-			if now >= _post_minor_at:
-				_start_post_glitch(false, now)
-				return
-	if changed:
-		_apply_found_footage_state()
-
-
-func _apply_found_footage_state() -> void:
-	if _found_footage_material == null:
-		return
-	var corruption := _post_signal_corruption
-	var jitter := lerpf(0.006, 0.032, corruption)
-	var tracking := lerpf(0.18, 0.85, corruption)
-	var noise := lerpf(0.10, 0.42, corruption)
-	var aberration := 0.0035
-	var saturation_value := lerpf(0.72, 0.30, corruption)
-	var shake := 0.0015
-	var exposure := 0.06
-	if _post_glitch_active:
-		jitter = maxf(jitter, _post_glitch_jitter)
-		aberration = maxf(aberration, _post_glitch_aberration)
-		if _post_glitch_major:
-			tracking = maxf(tracking, _post_glitch_tracking)
-			noise = maxf(noise, _post_glitch_noise)
-	if _post_damage_intensity > 0.0:
-		shake = lerpf(0.003, 0.012, _post_damage_intensity)
-		aberration = maxf(aberration,
-			lerpf(0.006, 0.018, _post_damage_intensity))
-		exposure = lerpf(0.10, 0.30, _post_damage_intensity)
-	_found_footage_material.set_shader_parameter(
-		"horizontal_jitter", jitter)
-	_found_footage_material.set_shader_parameter(
-		"tracking_damage", tracking)
-	_found_footage_material.set_shader_parameter("static_noise", noise)
-	_found_footage_material.set_shader_parameter(
-		"chromatic_aberration", aberration)
-	_found_footage_material.set_shader_parameter(
-		"saturation", saturation_value)
-	_found_footage_material.set_shader_parameter("camera_shake", shake)
-	_found_footage_material.set_shader_parameter(
-		"exposure_pumping", exposure)
-
-
-## Everything the building makes — all twenty-four spatial emitters, the
-## whispers, the heartbeat, the slot banks — routes through "Hall", so one bus
-## mute covers the lot. `Ambience` is the exception: it is a plain
-## AudioStreamPlayer on Master, so it is stopped by hand.
+## Everything the game makes routes through Game. Spatial sounds first pass
+## through Hall for reverb; Hall then sends into Game. Master is deliberately
+## reserved for the VCR recording while it owns the screen.
 func _set_world_audio(on: bool) -> void:
-	var idx := AudioServer.get_bus_index(SoundBank.HALL_BUS)
+	var idx := AudioServer.get_bus_index(SoundBank.GAME_BUS)
 	if idx >= 0:
 		AudioServer.set_bus_mute(idx, not on)
 	if is_instance_valid(ambience):
@@ -1968,19 +1672,43 @@ func _set_world_audio(on: bool) -> void:
 			ambience.stop()
 
 
-## Shared "Hall" bus: every spatial emitter routes through a soft reverb so
-## sounds feel like they happen inside the building.
+## Shared buses: Game owns the mute boundary; Hall adds reverb to spatial
+## emitters and then feeds Game.
 func _setup_audio_bus() -> void:
-	if AudioServer.get_bus_index(SoundBank.HALL_BUS) >= 0:
+	var game_idx := AudioServer.get_bus_index(SoundBank.GAME_BUS)
+	if game_idx < 0:
+		game_idx = AudioServer.bus_count
+		AudioServer.add_bus(game_idx)
+		AudioServer.set_bus_name(game_idx, SoundBank.GAME_BUS)
+	AudioServer.set_bus_send(game_idx, "Master")
+	var idx := AudioServer.get_bus_index(SoundBank.HALL_BUS)
+	if idx >= 0:
+		AudioServer.set_bus_send(idx, SoundBank.GAME_BUS)
 		return
-	var idx := AudioServer.bus_count
+	idx = AudioServer.bus_count
 	AudioServer.add_bus(idx)
 	AudioServer.set_bus_name(idx, SoundBank.HALL_BUS)
+	AudioServer.set_bus_send(idx, SoundBank.GAME_BUS)
 	var rev := AudioEffectReverb.new()
 	rev.room_size = 0.8
 	rev.damping = 0.5
 	rev.wet = 0.25
 	AudioServer.add_bus_effect(idx, rev)
+
+
+func _set_tape_audio_hold(on: bool) -> void:
+	var idx := AudioServer.get_bus_index(SoundBank.GAME_BUS)
+	if idx < 0:
+		return
+	if on:
+		if _tape_audio_held:
+			return
+		_tape_audio_held = true
+		_tape_game_bus_was_muted = AudioServer.is_bus_mute(idx)
+		AudioServer.set_bus_mute(idx, true)
+	elif _tape_audio_held:
+		AudioServer.set_bus_mute(idx, _tape_game_bus_was_muted)
+		_tape_audio_held = false
 
 
 ## The floor's WorldEnvironment. Kept as a method because _switch_level and the
@@ -1992,25 +1720,9 @@ func _build_env(theme: int) -> Environment:
 func _build_ui() -> void:
 	# Screen treatment over the 3D view, under UI. V enables/disables it and B
 	# changes recording media between the established CRT and recovered tape.
-	var post_layer := CanvasLayer.new()
-	post_layer.layer = 1
-	_post = ColorRect.new()
-	_post.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_post.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_crt_material = ShaderMaterial.new()
-	_crt_material.shader = load("res://shaders/post.gdshader")
-	# these floors run far darker than an arcade cabinet — push the tube
-	_crt_material.set_shader_parameter("bright_boost", 1.4)
-	_found_footage_material = ShaderMaterial.new()
-	_found_footage_material.shader = load(
-		"res://shaders/found_footage.gdshader")
-	_post.material = _found_footage_material \
-		if _post_mode == PostMode.FOUND_FOOTAGE else _crt_material
-	_post.visible = _crt
-	post_layer.add_child(_post)
-	add_child(post_layer)
-	_schedule_post_glitches(Time.get_ticks_msec() * 0.001)
-	_apply_found_footage_state()
+	_post_process = PostProcessController.new()
+	add_child(_post_process)
+	_post_process.setup(self, _found_footage_requested, _post_enabled)
 
 	var cl := CanvasLayer.new()
 	cl.layer = 2
@@ -2134,6 +1846,7 @@ func _build_ui() -> void:
 	cl.add_child(_fade)
 	add_child(cl)
 	_warp = AudioStreamPlayer.new()
+	_warp.bus = SoundBank.GAME_BUS
 	_warp.stream = SoundBank.warp()
 	_warp.volume_db = -6.0
 	add_child(_warp)
@@ -2248,7 +1961,7 @@ func _prepare_descent(entry: int) -> void:
 	player.allow_sprint = true
 	player.set_process_unhandled_input(false)
 	player.reset_descent_resources()
-	_saved_pos.clear()
+	_transitions.clear_saved_positions()
 	run = DescentRun.new()
 	run.floor_idx = floor_idx
 	_connect_descent_run()
@@ -2345,23 +2058,6 @@ func _set_mode_hint() -> void:
 		_hint.text = "WASD / arrows move   ·   E interact   ·   F flashlight   ·   B video mode   ·   the counter knows how far   ·   Q title   ·   Esc release mouse"
 	else:
 		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-9 floors / 0 Monolith / − Bloom   ·   V filter   ·   B video mode   ·   Q title   ·   Esc release mouse"
-
-
-## Dev helper: `godot --path . -- --screenshot=/tmp/shot.png` renders a couple
-## of seconds and saves a frame, for checking visuals from the command line.
-func _maybe_screenshot() -> void:
-	if opts.screenshot.is_empty():
-		return
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	var delay := create_tween()
-	delay.tween_interval(2.5)
-	delay.tween_callback(_capture_screenshot)
-
-
-func _capture_screenshot() -> void:
-	print("player at ", player.global_position)
-	get_viewport().get_texture().get_image().save_png(opts.screenshot)
-	get_tree().quit()
 
 
 ## The Poolrooms are the only floor with standing water. Everywhere else the
