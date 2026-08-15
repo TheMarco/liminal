@@ -201,8 +201,8 @@ func _build_instructions() -> void:
 	page.add_child(wander)
 	var descent := _paragraph(
 		"DESCENT  /  Cross all eleven floors in order. Follow the distance counter. "
-		+ "There is no sprinting or floor selection. The rules are shown after "
-		+ "you choose the mode.", 17, BODY, 820)
+		+ "Sprinting drains a short reserve; there is no floor selection. The "
+		+ "rules are shown after you choose the mode.", 17, BODY, 820)
 	page.add_child(descent)
 	page.add_child(_rule(820))
 

@@ -11,6 +11,14 @@ extends CharacterBody3D
 
 const WALK_SPEED := 3.4
 const SPRINT_SPEED := 6.2
+## Sprint is a reserve, not a state: five seconds flat out, ten to fill back
+## up. Partial recovery is spendable — the only lockout is after running the
+## tank completely dry, and it lifts as soon as REARM seconds have returned.
+## Without that floor an empty tank plus a held shift key oscillates between
+## sprint and walk every physics tick.
+const STAMINA_MAX := 5.0
+const STAMINA_REGEN_RATE := STAMINA_MAX / 10.0
+const STAMINA_REARM := 0.75
 const ACCEL := 12.0
 const GRAVITY := 16.0
 const SENS := 0.0022
@@ -93,6 +101,8 @@ var _sprinting := false
 ## Mode-owned movement gate. Both current modes allow sprint; Descent observes
 ## `_sprinting` to turn the extra noise into attention pressure.
 var allow_sprint := true
+var _stamina := STAMINA_MAX
+var _sprint_spent := false
 var _focused: Interactable
 var _focus_text := ""
 var _interaction_scan_left := 0.0
@@ -227,6 +237,17 @@ func flashlight_charge() -> float:
 	return _flash_charge / FLASH_MAX
 
 
+## Sprint reserve left, 0..1, for the HUD meter.
+func stamina() -> float:
+	return _stamina / STAMINA_MAX
+
+
+## True during the post-depletion lockout, so the meter can flash a refusal
+## rather than leave a held shift key looking ignored.
+func sprint_spent() -> bool:
+	return _sprint_spent
+
+
 ## A checkpoint restores the player at an arrival elevator, not in the exact
 ## state of the death. Resource and motion state therefore reset together.
 func reset_descent_resources() -> void:
@@ -237,6 +258,8 @@ func reset_descent_resources() -> void:
 		flashlight.light_energy = FLASH_ENERGY
 	_flash_charge = FLASH_MAX
 	_flash_t = 0.0
+	_stamina = STAMINA_MAX
+	_sprint_spent = false
 	velocity = Vector3.ZERO
 
 
@@ -325,7 +348,17 @@ func _physics_process(dt: float) -> void:
 		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN): input.y += 1.0
 		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT): input.x -= 1.0
 		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT): input.x += 1.0
-	var sprinting := allow_sprint and Input.is_physical_key_pressed(KEY_SHIFT)
+	if _sprint_spent and _stamina >= STAMINA_REARM:
+		_sprint_spent = false
+	var sprinting := allow_sprint and not _sprint_spent and _stamina > 0.0 \
+		and Input.is_physical_key_pressed(KEY_SHIFT) and input != Vector2.ZERO
+	if sprinting:
+		_stamina = maxf(0.0, _stamina - dt)
+		if _stamina <= 0.0:
+			_sprint_spent = true
+			sprinting = false
+	else:
+		_stamina = minf(STAMINA_MAX, _stamina + STAMINA_REGEN_RATE * dt)
 	var speed := SPRINT_SPEED if sprinting else WALK_SPEED
 
 	# Chest deep in water you do not stride, and you certainly do not sprint.

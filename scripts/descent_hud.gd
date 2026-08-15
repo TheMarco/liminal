@@ -34,34 +34,22 @@ var _last_wide := false
 
 func _ready() -> void:
 	layer = 2
+	# Viewfinder OSD: bare shadowed text, no plate. The panel node survives
+	# only as the centring container.
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.018, 0.014, 0.010, 0.72)
-	panel_style.border_color = Color(0.88, 0.55, 0.16, 0.48)
-	panel_style.set_border_width_all(1)
-	panel_style.set_corner_radius_all(9)
-	panel_style.set_content_margin_all(10.0)
-	_panel.add_theme_stylebox_override("panel", panel_style)
+	_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	add_child(_panel)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 0)
 	_panel.add_child(box)
-	_label = Label.new()
+	_label = VhsOsd.make_label(26, VhsOsd.INK_DIM)
 	_label.text = "LIFT"
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_label.add_theme_font_size_override("font_size", 24)
-	_label.add_theme_color_override("font_color", Color(1.0, 0.75, 0.36))
-	_label.add_theme_color_override("font_outline_color", Color(0.02, 0.01, 0.0))
-	_label.add_theme_constant_override("outline_size", 4)
 	box.add_child(_label)
-	_distance = Label.new()
+	_distance = VhsOsd.make_label(46)
 	_distance.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_distance.add_theme_font_size_override("font_size", 30)
-	_distance.add_theme_color_override("font_color", Color(0.90, 0.85, 0.73))
-	_distance.add_theme_color_override("font_outline_color", Color(0.02, 0.01, 0.0))
-	_distance.add_theme_constant_override("outline_size", 4)
 	box.add_child(_distance)
 	_panel.visible = false
 
@@ -143,6 +131,6 @@ func _process(dt: float) -> void:
 		_panel.scale = Vector2.ONE * scale
 		_panel.size = Vector2(width, 92)
 		_panel.position = Vector2(
-			viewport_size.x * 0.5 - width * 0.5 * scale, 14.0 * scale)
+			viewport_size.x * 0.5 - width * 0.5 * scale, 26.0 * scale)
 	if not _panel.visible:
 		_panel.visible = true

@@ -95,12 +95,12 @@ var _interact_hint: Label
 var _event_panel: PanelContainer
 var _event_hint: Label
 var _event_tween: Tween
-var _interact_style: StyleBoxFlat
-var _event_style: StyleBoxFlat
-var _battery_panel: PanelContainer
-var _battery_bar: ProgressBar
-var _charging_panel: PanelContainer
-var _charging_bar: ProgressBar
+var _vf_frame: VhsOsd.Frame
+var _battery_meter: VhsOsd.Meter
+var _stamina_meter: VhsOsd.Meter
+var _charging_panel: VBoxContainer
+var _charging_label: Label
+var _charging_meter: VhsOsd.Meter
 var _events: EnvironmentEvents
 var descent := false
 var run: DescentRun
@@ -1612,40 +1612,47 @@ func _apply_hud_scaling() -> void:
 		return
 	var viewport_size := Vector2(get_viewport().size)
 	var scale := clampf(viewport_size.y / 720.0, 1.0, 1.8)
-	_hint.position = Vector2(18.0, 14.0) * scale
-	_hint.add_theme_font_size_override("font_size", roundi(15.0 * minf(scale, 1.5)))
-	_hint.add_theme_constant_override("outline_size", roundi(2.0 * scale))
+	var inset := 26.0 * scale
+	if _vf_frame != null:
+		_vf_frame.inset = inset
+		_vf_frame.arm = 30.0 * scale
+		_vf_frame.line = 2.0 * scale
+		_vf_frame.rec_font_size = roundi(24.0 * scale)
+	# The controls strip is a centred menu line low in the frame, clear of the
+	# REC lamp, the counters and the meters; it fades out on its own timer.
+	_hint.size = Vector2(viewport_size.x, 26.0 * scale)
+	_hint.position = Vector2(0.0, viewport_size.y - 152.0 * scale)
+	_hint.add_theme_font_size_override("font_size", roundi(16.0 * minf(scale, 1.5)))
 
 	_interact_panel.custom_minimum_size = Vector2(520.0, 54.0) * scale
 	_interact_panel.position = Vector2(
 		(viewport_size.x - _interact_panel.custom_minimum_size.x) * 0.5,
-		viewport_size.y - 100.0 * scale)
-	_interact_hint.add_theme_font_size_override("font_size", roundi(24.0 * scale))
-	_interact_hint.add_theme_constant_override("outline_size", roundi(2.0 * scale))
+		viewport_size.y - 108.0 * scale)
+	_interact_hint.add_theme_font_size_override("font_size", roundi(30.0 * scale))
 
 	_event_panel.custom_minimum_size = Vector2(640.0, 60.0) * scale
 	_event_panel.position = Vector2(
 		(viewport_size.x - _event_panel.custom_minimum_size.x) * 0.5,
 		viewport_size.y * 0.5 + 150.0 * scale)
-	_event_hint.add_theme_font_size_override("font_size", roundi(28.0 * scale))
-	_event_hint.add_theme_constant_override("outline_size", roundi(2.0 * scale))
+	_event_hint.add_theme_font_size_override("font_size", roundi(32.0 * scale))
 
-	_battery_panel.custom_minimum_size = Vector2(238.0, 52.0) * scale
-	_battery_panel.position = Vector2(18.0, viewport_size.y - 78.0 * scale)
-	_charging_panel.custom_minimum_size = Vector2(360.0, 66.0) * scale
+	_battery_meter.font_size = roundi(22.0 * scale)
+	_battery_meter.size = Vector2(196.0, 58.0) * scale
+	_battery_meter.position = Vector2(
+		viewport_size.x - inset - 14.0 * scale - _battery_meter.size.x,
+		inset + 8.0 * scale)
+
+	_stamina_meter.font_size = roundi(22.0 * scale)
+	_stamina_meter.size = Vector2(196.0, 52.0) * scale
+	_stamina_meter.position = Vector2(inset + 14.0 * scale,
+		viewport_size.y - inset - 14.0 * scale - _stamina_meter.size.y)
+
+	_charging_label.add_theme_font_size_override("font_size", roundi(26.0 * scale))
+	_charging_meter.custom_minimum_size = Vector2(420.0, 26.0) * scale
+	_charging_panel.custom_minimum_size = Vector2(420.0 * scale, 0.0)
 	_charging_panel.position = Vector2(
-		(viewport_size.x - _charging_panel.custom_minimum_size.x) * 0.5,
-		viewport_size.y - 174.0 * scale)
-
-	for style in [_interact_style, _event_style]:
-		style.content_margin_left = 18.0 * scale
-		style.content_margin_right = 18.0 * scale
-		style.content_margin_top = 9.0 * scale
-		style.content_margin_bottom = 9.0 * scale
-		style.corner_radius_top_left = roundi(7.0 * scale)
-		style.corner_radius_top_right = roundi(7.0 * scale)
-		style.corner_radius_bottom_left = roundi(7.0 * scale)
-		style.corner_radius_bottom_right = roundi(7.0 * scale)
+		(viewport_size.x - 420.0 * scale) * 0.5,
+		viewport_size.y - 200.0 * scale)
 
 
 func _toggle_post_mode() -> void:
@@ -1726,118 +1733,64 @@ func _build_ui() -> void:
 
 	var cl := CanvasLayer.new()
 	cl.layer = 2
-	var lb := Label.new()
+	var lb := VhsOsd.make_label(16, Color(0.92, 0.96, 0.90, 0.80))
 	_hint = lb
 	_set_mode_hint()
-	lb.position = Vector2(18, 14)
-	lb.add_theme_font_size_override("font_size", 15)
-	lb.add_theme_color_override("font_color", Color(1.0, 0.9, 0.8, 0.9))
-	lb.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
-	lb.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
-	lb.add_theme_constant_override("shadow_offset_x", 1)
-	lb.add_theme_constant_override("shadow_offset_y", 1)
+	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cl.add_child(lb)
+	# Viewfinder chrome first so every other readout draws over it.
+	_vf_frame = VhsOsd.Frame.new()
+	cl.add_child(_vf_frame)
+
 	_interact_panel = PanelContainer.new()
 	_interact_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_interact_panel.visible = false
-	_interact_style = StyleBoxFlat.new()
-	_interact_style.bg_color = Color(0.025, 0.022, 0.018, 0.78)
-	_interact_style.border_color = Color(0.72, 0.53, 0.28, 0.42)
-	_interact_style.set_border_width_all(1)
-	_interact_panel.add_theme_stylebox_override("panel", _interact_style)
+	_interact_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	cl.add_child(_interact_panel)
-	_interact_hint = Label.new()
+	_interact_hint = VhsOsd.make_label(28)
 	_interact_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_interact_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_interact_hint.add_theme_font_size_override("font_size", 19)
-	_interact_hint.add_theme_color_override("font_color", Color(1.0, 0.88, 0.62))
-	_interact_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-	_interact_hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	_interact_hint.add_theme_constant_override("shadow_offset_x", 2)
-	_interact_hint.add_theme_constant_override("shadow_offset_y", 2)
 	_interact_panel.add_child(_interact_hint)
+
 	_event_panel = PanelContainer.new()
 	_event_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_event_panel.modulate.a = 0.0
-	_event_style = StyleBoxFlat.new()
-	_event_style.bg_color = Color(0.018, 0.017, 0.015, 0.76)
-	_event_style.border_color = Color(0.65, 0.62, 0.54, 0.30)
-	_event_style.set_border_width_all(1)
-	_event_panel.add_theme_stylebox_override("panel", _event_style)
+	_event_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	cl.add_child(_event_panel)
-	_event_hint = Label.new()
+	_event_hint = VhsOsd.make_label(30)
 	_event_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_event_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_event_hint.add_theme_font_size_override("font_size", 15)
-	_event_hint.add_theme_color_override("font_color", Color(0.96, 0.93, 0.84))
-	_event_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-	_event_hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	_event_hint.add_theme_constant_override("shadow_offset_x", 2)
-	_event_hint.add_theme_constant_override("shadow_offset_y", 2)
 	_event_panel.add_child(_event_hint)
 
-	_battery_panel = PanelContainer.new()
-	_battery_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var battery_style := StyleBoxFlat.new()
-	battery_style.bg_color = Color(0.018, 0.025, 0.028, 0.84)
-	battery_style.border_color = Color(0.25, 0.70, 0.82, 0.55)
-	battery_style.set_border_width_all(1)
-	battery_style.set_corner_radius_all(5)
-	battery_style.set_content_margin_all(9.0)
-	_battery_panel.add_theme_stylebox_override("panel", battery_style)
-	cl.add_child(_battery_panel)
-	var battery_box := VBoxContainer.new()
-	battery_box.add_theme_constant_override("separation", 4)
-	_battery_panel.add_child(battery_box)
-	var battery_label := Label.new()
-	battery_label.text = "FLASHLIGHT"
-	battery_label.add_theme_font_size_override("font_size", 13)
-	battery_label.add_theme_color_override("font_color", Color(0.66, 0.88, 0.94))
-	battery_box.add_child(battery_label)
-	_battery_bar = ProgressBar.new()
-	_battery_bar.show_percentage = false
-	_battery_bar.max_value = 1.0
-	_battery_bar.value = 1.0
-	_battery_bar.custom_minimum_size = Vector2(220, 11)
-	var battery_bg := StyleBoxFlat.new()
-	battery_bg.bg_color = Color(0.035, 0.055, 0.06, 0.95)
-	var battery_fill := StyleBoxFlat.new()
-	battery_fill.bg_color = Color(0.25, 0.82, 0.92)
-	_battery_bar.add_theme_stylebox_override("background", battery_bg)
-	_battery_bar.add_theme_stylebox_override("fill", battery_fill)
-	battery_box.add_child(_battery_bar)
+	_battery_meter = VhsOsd.Meter.new()
+	_battery_meter.text = "BATT"
+	_battery_meter.battery_glyph = true
+	_battery_meter.segments = 5
+	_battery_meter.right_align = true
+	cl.add_child(_battery_meter)
 
-	_charging_panel = PanelContainer.new()
+	_stamina_meter = VhsOsd.Meter.new()
+	_stamina_meter.text = "SPRINT"
+	_stamina_meter.segments = 10
+	_stamina_meter.low_threshold = Player.STAMINA_REARM / Player.STAMINA_MAX
+	_stamina_meter.warn_threshold = 0.35
+	cl.add_child(_stamina_meter)
+
+	_charging_panel = VBoxContainer.new()
 	_charging_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_charging_panel.visible = false
-	var charge_style := StyleBoxFlat.new()
-	charge_style.bg_color = Color(0.012, 0.038, 0.028, 0.90)
-	charge_style.border_color = Color(0.30, 1.0, 0.52, 0.72)
-	charge_style.set_border_width_all(1)
-	charge_style.set_corner_radius_all(6)
-	charge_style.set_content_margin_all(11.0)
-	_charging_panel.add_theme_stylebox_override("panel", charge_style)
+	_charging_panel.add_theme_constant_override("separation", 6)
 	cl.add_child(_charging_panel)
-	var charge_box := VBoxContainer.new()
-	charge_box.add_theme_constant_override("separation", 6)
-	_charging_panel.add_child(charge_box)
-	var charge_label := Label.new()
-	charge_label.text = "CHARGING — E OR F TO DISCONNECT"
-	charge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	charge_label.add_theme_font_size_override("font_size", 15)
-	charge_label.add_theme_color_override("font_color", Color(0.58, 1.0, 0.72))
-	charge_box.add_child(charge_label)
-	_charging_bar = ProgressBar.new()
-	_charging_bar.show_percentage = false
-	_charging_bar.max_value = 1.0
-	_charging_bar.custom_minimum_size = Vector2(338, 14)
-	var charge_bg := StyleBoxFlat.new()
-	charge_bg.bg_color = Color(0.025, 0.09, 0.06, 1.0)
-	var charge_fill := StyleBoxFlat.new()
-	charge_fill.bg_color = Color(0.30, 1.0, 0.52)
-	_charging_bar.add_theme_stylebox_override("background", charge_bg)
-	_charging_bar.add_theme_stylebox_override("fill", charge_fill)
-	charge_box.add_child(_charging_bar)
+	_charging_label = VhsOsd.make_label(26)
+	_charging_label.text = "CHARGING · E OR F TO DISCONNECT"
+	_charging_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_charging_panel.add_child(_charging_label)
+	_charging_meter = VhsOsd.Meter.new()
+	_charging_meter.blink_when_low = false
+	_charging_meter.segments = 12
+	_charging_meter.low_threshold = -1.0
+	_charging_meter.warn_threshold = -1.0
+	_charging_panel.add_child(_charging_meter)
 	# fullscreen fade for level transitions
 	_fade = ColorRect.new()
 	_fade.color = Color(0, 0, 0, 0)
@@ -1854,16 +1807,13 @@ func _build_ui() -> void:
 
 
 func _update_flashlight_hud() -> void:
-	if player == null or _battery_bar == null:
+	if player == null or _battery_meter == null:
 		return
 	var level := player.flashlight_charge()
-	_battery_bar.value = level
-	_charging_bar.value = level
+	_battery_meter.value = level
+	_charging_meter.value = level
 	_charging_panel.visible = player.is_charging()
-	var fill := _battery_bar.get_theme_stylebox("fill") as StyleBoxFlat
-	if fill != null:
-		fill.bg_color = Color(0.95, 0.28, 0.18) if level < 0.15 else (
-			Color(1.0, 0.66, 0.20) if level < 0.35 else Color(0.25, 0.82, 0.92))
+	_stamina_meter.value = player.stamina()
 
 
 func _on_interaction_prompt(text: String) -> void:
@@ -1875,12 +1825,8 @@ func _on_interaction_prompt(text: String) -> void:
 func _show_event_message(text: String, alert := false) -> void:
 	if _event_hint == null or _event_panel == null:
 		return
-	_event_style.bg_color = Color(0.035, 0.012, 0.008, 0.84) if alert \
-		else Color(0.018, 0.017, 0.015, 0.76)
-	_event_style.border_color = Color(0.96, 0.37, 0.18, 0.72) if alert \
-		else Color(0.65, 0.62, 0.54, 0.30)
 	_event_hint.add_theme_color_override("font_color",
-		Color(1.0, 0.72, 0.43) if alert else Color(0.96, 0.93, 0.84))
+		VhsOsd.RED if alert else VhsOsd.INK)
 	_event_hint.text = text
 	if _event_tween != null and _event_tween.is_valid():
 		_event_tween.kill()
@@ -2055,7 +2001,7 @@ func _set_mode_hint() -> void:
 	if _hint == null:
 		return
 	if descent:
-		_hint.text = "WASD / arrows move   ·   E interact   ·   F flashlight   ·   B video mode   ·   the counter knows how far   ·   Q title   ·   Esc release mouse"
+		_hint.text = "WASD / arrows move   ·   Shift sprint   ·   E interact   ·   F flashlight   ·   B video mode   ·   the counter knows how far   ·   Q title   ·   Esc release mouse"
 	else:
 		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-9 floors / 0 Monolith / − Bloom   ·   V filter   ·   B video mode   ·   Q title   ·   Esc release mouse"
 
