@@ -52,6 +52,7 @@ var haunt_at_given := false
 var play_tape := false
 ## Dev: force frequent passing-shadow and corner-apparition attempts.
 var passer := false
+var photo_debug := false
 var haunt_variant := -1
 var whispers := false
 var heartbeat := false
@@ -116,6 +117,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.play_tape = true
 		elif arg == "--passer":
 			o.passer = true
+		elif arg == "--photo-debug":
+			o.photo_debug = true
 		elif arg.begins_with("--haunt-at="):
 			var parts := arg.substr(11).split(",")
 			if parts.size() >= 2:

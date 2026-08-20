@@ -20,6 +20,10 @@ var mutation_states := {}
 ## Allowlisted player-driven mutable-object state per floor. Generated
 ## topology/furniture remains in mutation_states and is never serialized here.
 var runtime_states := {}
+## Documented photo-anomaly ids per floor (str(floor) -> PackedStringArray).
+## A photograph taken is a photograph kept: the set survives death on the
+## floor, and dies with the checkpoint like everything else.
+var photo_states := {}
 var _save_path := SAVE_PATH
 
 
@@ -40,6 +44,7 @@ func start_new(seed: int) -> void:
 	completed_beginning_tapes = 0
 	mutation_states.clear()
 	runtime_states.clear()
+	photo_states.clear()
 	save_to_disk()
 
 
@@ -56,6 +61,7 @@ func reach_floor(seed: int, floor_idx: int) -> void:
 		completed_beginning_tapes = 0
 		mutation_states.clear()
 		runtime_states.clear()
+		photo_states.clear()
 	else:
 		deepest_floor = maxi(deepest_floor, floor)
 	save_to_disk()
@@ -128,6 +134,29 @@ func runtime_state_for_floor(floor_idx: int) -> ChunkRuntimeState:
 		if value is Dictionary else ChunkRuntimeState.new()
 
 
+func record_photo_ids(floor_idx: int, ids: Array) -> void:
+	if not has_checkpoint():
+		return
+	var floor := clampi(floor_idx, 0, DescentRun.FLOOR_COUNT - 1)
+	var clean := PackedStringArray()
+	for value in ids:
+		var id := str(value)
+		if not id.is_empty() and not clean.has(id):
+			clean.append(id)
+	photo_states[str(floor)] = clean
+	save_to_disk()
+
+
+func photo_ids_for_floor(floor_idx: int) -> Array[String]:
+	var out: Array[String] = []
+	var value: Variant = photo_states.get(str(clampi(
+		floor_idx, 0, DescentRun.FLOOR_COUNT - 1)), PackedStringArray())
+	if value is Array or value is PackedStringArray:
+		for raw in value:
+			out.append(str(raw))
+	return out
+
+
 func save_to_disk() -> Error:
 	if not has_checkpoint():
 		return ERR_UNCONFIGURED
@@ -141,6 +170,7 @@ func save_to_disk() -> Error:
 		completed_beginning_tapes)
 	config.set_value(SECTION, "mutation_states", mutation_states)
 	config.set_value(SECTION, "runtime_states", runtime_states)
+	config.set_value(SECTION, "photo_states", photo_states)
 	return config.save(_save_path)
 
 
@@ -151,6 +181,7 @@ func load_from_disk() -> bool:
 	completed_beginning_tapes = 0
 	mutation_states.clear()
 	runtime_states.clear()
+	photo_states.clear()
 	var config := ConfigFile.new()
 	if config.load(_save_path) != OK:
 		return false
@@ -225,6 +256,21 @@ func load_from_disk() -> bool:
 				# Store the sanitized representation; malformed records never
 				# survive a load/save cycle.
 				runtime_states[str(floor)] = parsed.to_dictionary()
+	var saved_photos: Variant = config.get_value(SECTION, "photo_states", {})
+	if saved_photos is Dictionary:
+		for raw_key in saved_photos:
+			var floor := int(str(raw_key))
+			var raw_ids: Variant = saved_photos[raw_key]
+			if floor < 0 or floor >= DescentRun.FLOOR_COUNT \
+					or not (raw_ids is Array or raw_ids is PackedStringArray):
+				continue
+			var clean := PackedStringArray()
+			for raw_id in raw_ids:
+				var id := str(raw_id)
+				if not id.is_empty() and not clean.has(id):
+					clean.append(id)
+			if not clean.is_empty():
+				photo_states[str(floor)] = clean
 	return true
 
 
@@ -239,3 +285,4 @@ func clear_from_disk() -> void:
 	completed_beginning_tapes = 0
 	mutation_states.clear()
 	runtime_states.clear()
+	photo_states.clear()

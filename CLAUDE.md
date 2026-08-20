@@ -38,7 +38,7 @@ godot --headless --path . --import
   geometry (including Descent target rooms) requires regenerating
   `tools/golden/world_hash.txt` with `-- --out=...` and eyeballing that the
   diff is only what you intended.
-- The suite has 49 registered audits; there are no known tolerated
+- The suite has 55 registered audits; there are no known tolerated
   failures. Do not edit .gd or .sh files while a sweep is running — audits
   torn-read mid-edit files and fail spuriously.
 
@@ -85,6 +85,9 @@ with it.
   under working lights is free (the stop rule and the stare rule are both
   retired — do not reintroduce them). Sprint is enabled and legal: holding it
   feeds attention (`SPRINT_ATTENTION_RATE`), never the violation channel.
+  Sprint spends a stamina reserve (`Player.STAMINA_MAX` 5s, refills over 10s,
+  0.75s re-arm floor after full depletion so a held shift key cannot
+  stutter); partial recharge is spendable.
 - **Ghosts** (`shadow_figure.gd` / `shadow_figures.gd`): per-variant
   `TUNING` rows over a shared contract. Baseline: creep 1.25 m/s seen, close
   4.5 m/s unseen, 1.5s burn, unseen approach parks at 3.6m, three doorways of
@@ -114,7 +117,12 @@ with it.
   collapses to a permanent OUT OF ORDER, captions "THE STATION IS DEAD" and
   forces an encounter behind the player. It never drains charge. Per-theme
   pacing lives in `DescentRun.THEME_MODS` (prison: frequent short blackouts;
-  Monolith: sparse figures, long grace). Playing a tape
+  Monolith: sparse figures, long grace). Floors 1-3 ease both cadences
+  (2026-08-19, because the photo hunt lengthened floors 2-3x): blackout
+  intervals x1.9/1.5/1.2 and figure intervals x1.7/1.35/1.15
+  (`DescentRun._schedule_blackout`/`figure_interval_scale`), flat authored
+  cadence from floor 4; the runtime audit checks both ends. Post-photo
+  danger is 70/22/8 (nothing/environment/encounter). Playing a tape
   dollies the camera onto the tube (footage fills the screen through
   `shaders/vhs_tape.gdshader`), freezes the player, holds all threats and
   pauses music/ambience; E/Esc cancels = rewind. Leaving the room cancels a
@@ -130,9 +138,78 @@ with it.
   ffmpeg cannot encode Theora or Vorbis), then document its source.
 - **Phone**: 20s of light, drains only while on, refills only at stations
   (10s); interrupting a charge reverts to the session-start level.
-- **HUD**: distance-only "LIFT NNNm" counter. There is no directional
-  needle — finding the lift IS the level. Route bands 26-34 edges (floor 1)
-  to 40-52 (floor 11).
+- **HUD**: VHS camcorder viewfinder OSD (`VhsOsd`, bare shadowed VT323, no
+  panels): corner brackets + blinking REC, battery glyph top-right, sprint
+  meter bottom-left, distance-only "LIFT NNNm" counter top-centre with
+  "PHOTOS n/3" under it. TV-safe since 2026-08-18: every element sits inside
+  `VhsOsd.SAFE_FRACTION` (6% of each viewport dimension, marked by the
+  brackets), the HUD scale is `VhsOsd.hud_scale` (viewport_h/720,
+  unclamped), all text carries a same-ink `STROKE` outline plus hard shadow
+  (`style_label` / `draw_osd_string`) so VT323 hairlines survive the tube,
+  and no in-game text drops under ~32px at 720p. Verify OSD changes with a
+  CRT-on screenshot, not `--nocrt`. There is no directional needle — finding the lift IS
+  the level. Route bands: authored 26-34 edges (floor
+  1) to 40-52 (floor 11), with floors 1-3 shortened by
+  `DescentRoute.EARLY_SHORTEN` (x0.62/0.78/0.9 → floor 1 ≈ 16-21 edges;
+  2026-08-19 teaching-floor pass; floor 4+ untouched — the airport audit
+  depends on floor 4 crossing baggage claim).
+- **Photography** (`photo_camera.gd` / `photo_director.gd` /
+  `photo_anomaly.gd`): the phone is also the camera — C toggles it up and
+  down, Space is the shutter (hold-RMB / LMB still work for mouse users);
+  the torch state is untouched, so a lit
+  torch keeps warding while shooting, and photos cost no charge. The
+  camcorder is the detector: within 14m of an undocumented anomaly the OSD
+  picks up interference (tracking bars, stuttering REC lamp, tape static
+  from `SoundBank.static_hiss`, detector clicks that rattle faster as you
+  close in) and the HUD blinks an amber "SOMETHING HERE IS WRONG" under
+  the PHOTOS counter (`DescentHUD.set_photo_proximity`; the interference
+  alone was invisible inside the tape look), camera raised or not, at 0.45
+  weight through walls (`PhotoCamera.PROXIMITY_*`). Raising
+  the camera and framing it snaps the brackets with a tick — the last metre
+  stays a search, and it is what makes invisible writing findable. Each
+  floor plans 3 required anomalies on the route spine plus 9 extras off it
+  (dense on purpose: the spine is one path through an open maze and nothing
+  forces the player across it), pure from (seed, theme, floor). Every bleed
+  prop is also photographable evidence (`PhotoDirector._register_bleed_props`,
+  id `bleed:x:y` per cell) worth ONE credit per floor
+  (`bleed_credit_used`) — guaranteed ops near the lift. If the tape refuses
+  on photos, the HUD gains a persistent "EVIDENCE NNNm" distance counter to
+  the nearest undocumented planned anomaly
+  (`DescentHUD.evidence_target`, granted in `descent_commit_refused`), so
+  0/3 at the altar is never a dead end. Props are ALWAYS the floor's own
+  signature `Chunk.BLEED_PROPS` object (owner rule 2026-08-19: foreign
+  objects appear only as the bleed near the elevator, never as scattered
+  anomalies — the 2026-08-18 foreign-prop experiment is reverted; prop-less
+  themes plan WRITING only via `PhotoAnomaly.PROP_THEMES`): five types, and the required
+  trio on a floor is always three DIFFERENT ones where the theme allows
+  (`PhotoDirector._eligible_types`/`_spec_for`, enforced by the plan
+  audit): PLACEMENT (own prop inverted, hovering at head height under a
+  faint cold underlight, slowly turning), DUPLICATE (two identical,
+  shoulder to shoulder — LENS-ONLY like the writing: eye-visible
+  duplicates of a theme's own prop read as furniture, a playtest proved
+  it), GIANT (the prop scaled to nearly touch the ceiling, eye-visible,
+  real collider), RING (five copies in a circle facing the centre,
+  LENS-ONLY), WRITING
+  (a phrase on a wall that exists only on render layer 20 — the RAISED
+  viewfinder and the snapshot camera see it, the bare eye never does
+  (`PhotoCamera._raise` adds the layer to the player cam cull mask; without
+  this the sweep was aiming at literally nothing visible — do not revert);
+  it registers only from the side it faces (`PhotoAnomaly.facing_normal`,
+  the occlusion tolerance alone cannot tell front from behind-the-wall);
+  room cells only, corridors line their walls). While raised the reticle
+  runs hot/cold: brackets close and a tick accelerates as aim nears any
+  findable anomaly (`PhotoCamera._aim_warmth`), full two-tone bite on true
+  framing. The arrival card is followed 3.3s later by the brief ("THE TAPE WANTS PROOF —
+  PHOTOGRAPH 3 THINGS THAT ARE WRONG" on floor 1, "PHOTOGRAPH WHAT IS WRONG
+  — n/3" after), and "PHOTOS n/3" sits under the LIFT distance in
+  `DescentHUD` so the two objectives read as one instrument. The objective
+  tape refuses to play until 3 are documented (the tape stays the lift's
+  sole gate; the photo count gates the tape, never the lift). After a counted photograph: 60% nothing, 25% environmental
+  response, 15% `ShadowFigures.force_encounter` — the same rear-arc,
+  LOS-checked spawn the tape ending uses. Documented ids persist per floor
+  through death (`DescentProgress.photo_states`). Blackouts, tape playback,
+  suspension and charging all lower the camera. Dev flag `--photo-debug`
+  prints the plan and renders hidden writing on the main camera.
 - **Bleed**: one-way ratchet toward the next theme as the player nears the
   lift (fog/room-tone lerp in main, next-theme props via `Chunk.BLEED_PROPS`
   in rebuilt cells).
@@ -160,6 +237,49 @@ with it.
 - **Ghost/passer flipbooks**: `tools/build_flipbook.py SRC.mp4 OUT.webp` —
   white-backdrop videos → alpha sprite sheets (6x4, 24 frames, 12fps),
   consumed via `ShadowFigure.FLIPBOOKS/BODY/SOFT` + `shaders/ghost.gdshader`.
+  Since 2026-08-15 hostile figures run the sheet with temporal frame
+  blending (`flip_blend`/`flip_loop`), a two-pose analog echo (`trail_amt`),
+  and a heat-haze rim shimmer (`aura_amt`); each figure also carries true-3D
+  presence — shed wisp particles (`shaders/ghost_wisp.gdshader`, absorption
+  like the body) and a local dark `FogVolume` (`GLOOM_DENSITY`), both
+  following `fade`. Both recording modes run one shader
+  (`shaders/post.gdshader`, c64cosmin's CC0 CRT, see THIRD_PARTY_ASSETS.md):
+  the CRT material uses its clean defaults (subtle roll bar), the RECOVERED
+  TAPE material a gritty preset the glitch machinery rides
+  (`PostProcessController.setup`/`_apply_found_footage_state`);
+  `found_footage.gdshader` is retired. The tape grit dials (all default off
+  so CRT is untouched: `jitter_amount`, `wobble_amount`, `tear_amount`,
+  `ghost_amount`, `flicker_amount`, `saturation`/`contrast`/`black_crush`,
+  `head_switch_amount`, `dropout_amount`) were grafted 2026-08-18 from an
+  owner-supplied found-footage shader; corruption and glitches push them
+  toward 1.0. Tape grid is 640x360 (854x480 read as too fine; the 3D world still
+  renders at 480 lines via `main._apply_scaling`, the shader resamples).
+  During ritual tape playback the full-screen pass is held
+  (`PostProcessController.hold_for_tape`) — playback CRT-ness belongs to
+  the TV's own `vhs_tape.gdshader`, not the display. Signal
+  model (2026-08-19): `signal_fps` 29.97 quantizes every tape-side random
+  process to video frames (CRT-side TIME stays continuous); `chroma_delay`,
+  `overscan` 3%, `black_lift`, `field_amount` (half-line parity shimmer,
+  never dark lines), row-correlated `line_noise`/`chroma_noise`,
+  horizontal `bloom_amount` above `bloom_threshold`, `color_balance`; the
+  warp is aspect-aware in both modes. Deliberately NOT done: a SubViewport
+  with a 29.97 fps frame hold (input-lag feel in mouse-look; broad
+  refactor) — the noise cadence gets the perceptual payoff. The tape is also the danger instrument
+  (2026-08-19): `PostProcessController.set_presence` takes the nearness of
+  the closest hostile figure, seen or not (fed from
+  `main._update_entity_halo`, 20m range, fast attack / 0.35 per s release)
+  and climbs a ladder — near: chroma split, line wobble, iris pulsing;
+  very near (>0.6): tears, frame displacement, noise, band-wise
+  `signal_loss` — and `ShadowFigures.spawned` fires `glitch_burst()`, ~0.11s
+  of catastrophic loss. Tape material only; CRT stays clean by owner
+  decision. The figure-interference halo
+  (`entity_pos/radius/amt`, fed by `main._update_entity_halo`) is fed to the
+  tape material only — the owner cut it from CRT mode. On the tape pass
+  hostile figures run the ghost shader's `density` at
+  `ShadowFigure.TAPE_DENSITY` (0.25, darker; tape grain is luminance-weighted so blacks stay black — a wider noise-veiled body floor was tried and is grey, do not reintroduce) via `ShadowFigure.set_tape_look`,
+  because the tape's grey lift and grain cost them their contrast; the
+  clean tube runs 1.0. Still no ground
+  shadow, ever.
 - **Third-party models/textures**: every asset needs a SOURCE.md next to it
   and an entry in `THIRD_PARTY_ASSETS.md`. Policy: CC0 / CC BY / marked
   CC BY-NC only — no ShareAlike, no ND. Sketchfab GLBs embed author/license

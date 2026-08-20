@@ -33,9 +33,12 @@ func run() -> void:
 	cadence.floor_idx = 0
 	get_root().add_child(cadence)
 	cadence.prepare_floor()
+	# Floor 1 breathes: the base window is scaled by the 1.9x depth easing
+	# added 2026-08-19 (photo hunt lengthened floors; flat cadence returns
+	# by floor 4).
 	expect(cadence._blackout_due >= DescentRun.FIRST_BLACKOUT_MIN \
-			and cadence._blackout_due <= DescentRun.FIRST_BLACKOUT_MAX,
-		"first blackout is outside its 22–34 second floor-opening window")
+			and cadence._blackout_due <= DescentRun.FIRST_BLACKOUT_MAX * 1.9,
+		"first blackout is outside its eased floor-opening window")
 	expect(DescentRun.FIRST_BLACKOUT_PROGRESS_CELLS <= 5 \
 			and DescentRun.FIRST_BLACKOUT_PROGRESS_SECONDS <= 16.0 \
 			and DescentRun.FIRST_BLACKOUT_PROGRESS_DUE <= 2.0,
@@ -50,8 +53,18 @@ func run() -> void:
 	cadence._blackouts_this_floor = 1
 	cadence._schedule_blackout()
 	expect(cadence._blackout_due >= DescentRun.REPEAT_BLACKOUT_MIN \
-			and cadence._blackout_due <= DescentRun.REPEAT_BLACKOUT_MAX,
-		"repeat blackout is outside its 24–38 second window")
+			and cadence._blackout_due <= DescentRun.REPEAT_BLACKOUT_MAX * 1.9,
+		"repeat blackout is outside its eased window")
+	# Depth easing must expire: floor 4+ runs the authored flat cadence.
+	var deep := DescentRun.new()
+	deep.world_seed = SEED
+	deep.floor_idx = 4
+	get_root().add_child(deep)
+	deep.prepare_floor()
+	expect(deep._blackout_due >= DescentRun.FIRST_BLACKOUT_MIN \
+			and deep._blackout_due <= DescentRun.FIRST_BLACKOUT_MAX,
+		"floor 5 first blackout should run the flat authored window")
+	deep.queue_free()
 	cadence.queue_free()
 	expect(game.run.blackout_mutation_ranker.is_valid() \
 			and game.run.blackout_mutation_fallback_ranker.is_valid(),
@@ -567,7 +580,9 @@ func run() -> void:
 	expect(not game.run.lift_called and not game.run.lift_open \
 		and not game.run.arrival_used,
 		"new floor inherited the previous floor's lift state")
-	expect(game.descent_route.min_dist > DescentRoute.MIN_DIST_FIRST,
+	expect(game.descent_route.min_dist > roundi(
+			float(DescentRoute.MIN_DIST_FIRST)
+			* float(DescentRoute.EARLY_SHORTEN[0])),
 		"second floor did not lengthen its objective route")
 
 	# The stop rule is retired: standing still under working lights is free.

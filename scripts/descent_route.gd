@@ -23,6 +23,11 @@ const MIN_DIST_FIRST := 26
 const MIN_DIST_LAST := 40
 const MAX_DIST_FIRST := 34
 const MAX_DIST_LAST := 52
+## Early floors are teaching floors (2026-08-19: with the photo hunt layered
+## on, a 26-34 edge floor 1 played "obnoxiously hard"): floors 1-3 shorten
+## toward these caps, floor 4+ runs the authored band untouched — the
+## airport audit depends on floor 4's route crossing baggage claim.
+const EARLY_SHORTEN := [0.62, 0.78, 0.9]
 ## How far from the world origin the arrival room is allowed to sit. Cell (0,0)
 ## is almost never wall-backed — every edge is a guaranteed doorway — so the
 ## arrival car needs a nearby room that owns a solid wall.
@@ -497,8 +502,12 @@ func walk_metres() -> float:
 
 func _build() -> void:
 	var depth := depth_of(floor_idx)
-	min_dist = roundi(lerpf(float(MIN_DIST_FIRST), float(MIN_DIST_LAST), depth))
-	max_dist = roundi(lerpf(float(MAX_DIST_FIRST), float(MAX_DIST_LAST), depth))
+	var shorten := float(EARLY_SHORTEN[floor_idx]) \
+		if floor_idx < EARLY_SHORTEN.size() else 1.0
+	min_dist = roundi(lerpf(float(MIN_DIST_FIRST), float(MIN_DIST_LAST),
+		depth) * shorten)
+	max_dist = roundi(lerpf(float(MAX_DIST_FIRST), float(MAX_DIST_LAST),
+		depth) * shorten)
 	_pick_origin()
 
 	# A shortest path of length d never leaves the Chebyshev box of radius d, so

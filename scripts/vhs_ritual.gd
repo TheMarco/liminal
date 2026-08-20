@@ -231,6 +231,23 @@ func _build_interactable() -> void:
 func _on_activated(actor: Node) -> void:
 	if _done or _playing:
 		return
+	# The tape is still the lift's sole gate, but the objective tape wants the
+	# floor proven first: it refuses to play until enough of what is wrong has
+	# been photographed. Same refusal shape as the lift's own.
+	if objective:
+		var listener := _listener()
+		if listener != null \
+				and listener.has_method("descent_photo_requirement_met") \
+				and not listener.descent_photo_requirement_met():
+			var now := Time.get_ticks_msec()
+			if now - int(get_meta("refused_ms", 0)) >= 1500:
+				set_meta("refused_ms", now)
+				if listener.has_method("descent_commit_refused"):
+					listener.descent_commit_refused(
+						str(listener.descent_photo_refusal_caption()) \
+						if listener.has_method("descent_photo_refusal_caption")
+						else "THE TAPE WANTS PROOF")
+			return
 	_claim_tape()
 	_playing = true
 	_tape_time = 0.0

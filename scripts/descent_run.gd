@@ -229,7 +229,17 @@ func _theme_mod(key: String) -> float:
 ## manager's spawn interval, so a theme can be sparse without touching the
 ## threat curve.
 func figure_interval_scale() -> float:
-	return _theme_mod("figures")
+	# The photo hunt lengthened floors 2-3x without touching this budget, so
+	# early floors drowned in encounters (2026-08-19). The first floors
+	# space figures out; the building closes in with depth.
+	var depth_ease := 1.0
+	if floor_idx == 0:
+		depth_ease = 1.7
+	elif floor_idx == 1:
+		depth_ease = 1.35
+	elif floor_idx == 2:
+		depth_ease = 1.15
+	return _theme_mod("figures") * depth_ease
 
 
 func prepare_floor() -> void:
@@ -675,7 +685,19 @@ func _schedule_blackout() -> void:
 		else REPEAT_BLACKOUT_MIN
 	var hi := FIRST_BLACKOUT_MAX if _blackouts_this_floor == 0 \
 		else REPEAT_BLACKOUT_MAX
-	_blackout_due = _rng.randf_range(lo, hi) * _theme_mod("blackout_due")
+	# Same depth easing as the figures: the photo hunt lengthened floors
+	# 2-3x, and at the flat ~30s cadence a first floor spent a third of its
+	# time frozen in the dark (owner: "hard as fuck", 2026-08-19). Early
+	# floors breathe between blackouts; the flat cadence returns by floor 4.
+	var depth_ease := 1.0
+	if floor_idx == 0:
+		depth_ease = 1.9
+	elif floor_idx == 1:
+		depth_ease = 1.5
+	elif floor_idx == 2:
+		depth_ease = 1.2
+	_blackout_due = _rng.randf_range(lo, hi) * _theme_mod("blackout_due") \
+		* depth_ease
 
 
 func _begin_blackout() -> void:

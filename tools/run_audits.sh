@@ -99,6 +99,8 @@ AUDITS=(
 	"ghost_room_contract|tools/audit_ghost_room_contract.gd|"
 	"horror_director|tools/audit_horror_director.gd|"
 	"corner_apparitions|tools/audit_corner_apparitions.gd|"
+	"photo_anomalies|tools/audit_photo_anomalies.gd|"
+	"photo_runtime|tools/audit_photo_runtime.gd|--mode=descent --nologo"
 	"title_screen|tools/audit_title_screen.gd|"
 	"font_check|tools/font_check.gd|"
 	"ceiling_seams|tools/audit_ceiling_seams.gd|"

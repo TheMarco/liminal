@@ -103,6 +103,8 @@ var _sprinting := false
 var allow_sprint := true
 var _stamina := STAMINA_MAX
 var _sprint_spent := false
+## Owned by PhotoCamera: true while the camera is raised, for the FOV pull.
+var photo_aim := false
 var _focused: Interactable
 var _focus_text := ""
 var _interaction_scan_left := 0.0
@@ -122,6 +124,9 @@ func _init() -> void:
 	cam.fov = 77.0
 	cam.near = 0.05
 	cam.far = 80.0
+	# The eye never sees photo-only geometry; only the snapshot camera adds
+	# this layer back.
+	cam.cull_mask &= ~PhotoAnomaly.PHOTO_LAYER
 	add_child(cam)
 	flashlight = SpotLight3D.new()
 	flashlight.position = Vector3(0.10, -0.10, -0.06)
@@ -441,7 +446,10 @@ func _process(dt: float) -> void:
 		_interaction_scan_left = INTERACTION_SCAN_SECONDS
 		_scan_interaction()
 	var hs := Vector2(velocity.x, velocity.z).length()
-	cam.fov = lerpf(cam.fov, 83.0 if (_sprinting and hs > 4.0) else 77.0, minf(1.0, dt * 5.0))
+	var fov_target := 83.0 if (_sprinting and hs > 4.0) else 77.0
+	if photo_aim:
+		fov_target = 58.0
+	cam.fov = lerpf(cam.fov, fov_target, minf(1.0, dt * 5.0))
 
 
 func _scan_interaction() -> void:

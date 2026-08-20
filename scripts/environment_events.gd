@@ -59,6 +59,20 @@ func elevator_response() -> void:
 	_spatial_sound(SoundBank.elev(), 1.5, -7.0)
 
 
+## The room's answer to a successful photograph: non-lethal, uncaptioned,
+## deliberately ambiguous about whether something worse just happened.
+func photo_response() -> void:
+	if player == null:
+		return
+	var pick := randf()
+	if pick < 0.4:
+		_power_sag(0.9, "")
+	elif pick < 0.7:
+		_spatial_sound(SoundBank.thud(), 4.0, -8.0)
+	else:
+		_spatial_sound(SoundBank.creak(), 3.0, -10.0)
+
+
 func door_response() -> void:
 	_spatial_sound(SoundBank.creak(), 1.2, -13.0)
 
@@ -67,7 +81,8 @@ func _power_sag(hold: float, caption: String) -> void:
 	if _busy or not is_instance_valid(level_root):
 		return
 	_busy = true
-	message.emit(caption)
+	if not caption.is_empty():
+		message.emit(caption)
 	var lights: Array[OmniLight3D] = []
 	var energy := {}
 	for n in level_root.find_children("*", "OmniLight3D", true, false):

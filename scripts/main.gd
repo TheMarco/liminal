@@ -102,6 +102,12 @@ var _charging_panel: VBoxContainer
 var _charging_label: Label
 var _charging_meter: VhsOsd.Meter
 var _events: EnvironmentEvents
+var _photo_director: PhotoDirector
+var _photo_camera: PhotoCamera
+var _photo_debug := false
+var _photo_sweep_hinted := false
+var _osd_layer: CanvasLayer
+var _halo_amt := 0.0
 var descent := false
 var run: DescentRun
 var descent_route: DescentRoute
@@ -224,6 +230,7 @@ func _ready() -> void:
 	# dev: start with the tube off, so screenshots show the raw full-res render
 	if opts.nocrt:
 		_post_enabled = false
+	_photo_debug = opts.photo_debug
 	_apply_scaling()
 	get_viewport().size_changed.connect(_apply_scaling)
 	_setup_audio_bus()
@@ -325,6 +332,7 @@ func _ready() -> void:
 	_set_presence(Presence.SILENT)
 	_figures.seen_by_player.connect(
 		func(): _heart.bump(Heartbeat.BUMP_SEEN))
+	_figures.spawned.connect(func(): _post_process.glitch_burst())
 	_figures.burned_away.connect(
 		func():
 			_heart.bump(Heartbeat.BUMP_BURNED)
@@ -335,6 +343,17 @@ func _ready() -> void:
 	_events.descent_mode = descent
 	_events.set_level(level_root)
 	add_child(_events)
+	_photo_camera = PhotoCamera.new()
+	_photo_camera.player = player
+	_photo_camera.run = run
+	_photo_camera.director = _photo_director
+	_photo_camera.figures = _figures
+	_photo_camera.events = _events
+	_photo_camera.enabled = descent
+	add_child(_photo_camera)
+	_photo_camera.photo_documented.connect(_on_photo_documented)
+	_photo_camera.first_raise.connect(
+		func(): _show_event_message("PHOTOGRAPH WHAT IS WRONG"))
 	_music = AudioStreamPlayer.new()
 	_music.bus = SoundBank.GAME_BUS
 	_music.volume_db = -50.0
@@ -470,6 +489,29 @@ func _build_level(level: int, around: Vector3) -> void:
 		_corner_apparitions.run = run
 		_corner_apparitions.topology = descent_route.topology \
 			if descent_route != null else null
+	if descent:
+		if _photo_director == null:
+			_photo_director = PhotoDirector.new()
+			_photo_director.debug_visible = _photo_debug
+			add_child(_photo_director)
+			_photo_director.documented_changed.connect(_update_photo_line)
+		var known_photo_ids: Array = []
+		if _progress_enabled and _descent_progress.has_checkpoint() \
+				and _descent_progress.run_seed == world_seed:
+			known_photo_ids = _descent_progress.photo_ids_for_floor(
+				run.floor_idx)
+		# Connected before warm_up so the first streamed cells can already
+		# carry their evidence.
+		_photo_director.configure(descent_route, run.floor_idx, cm,
+			known_photo_ids)
+		if _photo_camera != null:
+			_photo_camera.director = _photo_director
+		if _photo_debug:
+			for at in _photo_director.plan:
+				print("photo anomaly %s type %d required %s at %s" % [
+					_photo_director.plan[at]["id"],
+					int(_photo_director.plan[at]["type"]),
+					str(_photo_director.plan[at]["required"]), str(at)])
 	Chunk.prewarm_theme_content(_level_seed(level), level)
 	level_root.add_child(cm)
 	if descent:
@@ -608,7 +650,7 @@ func _confirm_return_to_title() -> void:
 	await _jump_to(0, spawn, false)
 	_transitions.clear_saved_positions()
 	_set_mode_hint()
-	_build_title()
+	_build_title(true)
 
 
 func _switch_level(level: int) -> void:
@@ -685,6 +727,14 @@ func descent_tape_watch(on: bool) -> void:
 	# the run's passive state.
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_active(not on)
+	# The footage fills the screen alone: the whole camcorder OSD (frame,
+	# REC, meters, captions) leaves with the viewfinder, not just the needle.
+	if _osd_layer != null:
+		_osd_layer.visible = not on
+	# Playback's CRT look lives on the TV's own screen shader; the
+	# full-screen pass would double it over the whole display.
+	if _post_process != null:
+		_post_process.hold_for_tape(on)
 	# The tape also owns the soundtrack: score and room tone hold their
 	# breath for it and pick up where they left off.
 	if _music != null:
@@ -770,11 +820,82 @@ func descent_station_died() -> void:
 
 
 ## The car turned an unready player away at the threshold.
+## The altar asks before playing the objective tape: is the floor proven?
+## An empty plan (a degenerate route that could place nothing) never
+## soft-locks the run.
+func descent_photo_requirement_met() -> bool:
+	if not descent or _photo_director == null \
+			or _photo_director.plan.is_empty():
+		return true
+	return _photo_director.requirement_met()
+
+
+func descent_photo_refusal_caption() -> String:
+	var count := 0
+	if _photo_director != null:
+		count = _photo_director.documented_count()
+	return "THE TAPE WANTS PROOF — PHOTOGRAPH WHAT IS WRONG — %d/%d" % [
+		count, PhotoDirector.REQUIRED]
+
+
+func _on_photo_documented(_anomaly_id: String, count: int,
+		required: int) -> void:
+	_show_event_message("PHOTOGRAPH %d / %d" % [count, required])
+	# If the evidence counter is live, walk it to the next nearest target —
+	# or retire it once the tape is satisfied.
+	if is_instance_valid(_descent_hud) \
+			and _descent_hud.evidence_target != Vector3.INF:
+		if count >= required:
+			_descent_hud.evidence_target = Vector3.INF
+		else:
+			_grant_evidence_hint()
+	if _post_process != null:
+		_post_process.damage_hit(0.12)
+	if _progress_enabled and _descent_progress.has_checkpoint() \
+			and _descent_progress.run_seed == world_seed \
+			and _photo_director != null and run != null:
+		_descent_progress.record_photo_ids(run.floor_idx,
+			_photo_director.documented_ids())
+
+
+func _update_photo_line(count: int, required: int) -> void:
+	if is_instance_valid(_descent_hud):
+		_descent_hud.set_photo_progress(count, required)
+
+
+func _on_photo_proximity(value: float, los: float) -> void:
+	if _vf_frame != null:
+		_vf_frame.interference = value
+	if is_instance_valid(_descent_hud):
+		_descent_hud.set_photo_proximity(los)
+	# The first time the warning lands, say how the hunt works — the nearest
+	# anomaly may be photo-only writing, invisible until the sweep.
+	if los > 0.14 and not _photo_sweep_hinted and descent and run != null \
+			and not run.ended:
+		_photo_sweep_hinted = true
+		_show_event_message("RAISE THE CAMERA (C) — SWEEP UNTIL IT FOCUSES")
+
+
 func descent_commit_refused(reason: String) -> void:
 	if not descent:
 		return
 	_show_event_message(reason, true)
 	_post_process.damage_hit(0.25)
+	# A photo refusal is the one place the hunt can dead-end (the route spine
+	# is not mandatory, so a floor can be walked without meeting evidence).
+	# The building relents: the HUD counts metres to the nearest undocumented
+	# anomaly for the rest of the floor.
+	_grant_evidence_hint()
+
+
+func _grant_evidence_hint() -> void:
+	if _photo_director == null or player == null \
+			or not is_instance_valid(_descent_hud):
+		return
+	if _photo_director.requirement_met():
+		return
+	_descent_hud.evidence_target = _photo_director.nearest_undocumented(
+		player.global_position)
 
 
 func _on_descent_lift_cancelled() -> void:
@@ -839,6 +960,7 @@ func _reveal_arrival() -> void:
 	if descent_route.origin_wall < 0:
 		_show_event_message("FLOOR %d — %s" % [
 			run.floor_idx + 1, floor_name.to_upper()])
+		_queue_photo_brief()
 		return
 	player.set_rumble(0.22)
 	var settle := create_tween()
@@ -857,12 +979,46 @@ func _finish_reveal_arrival(floor_name: String) -> void:
 		chunk.open_descent_arrival()
 	_show_event_message("FLOOR %d — %s" % [
 		run.floor_idx + 1, floor_name.to_upper()])
+	_queue_photo_brief()
+
+
+## The floor's second objective, told once per arrival right after the floor
+## card: the tape wants evidence, and the counter beside the lift distance
+## keeps score. Floor 1 spells the rule out; later floors just restate it.
+func _queue_photo_brief() -> void:
+	if not descent or _photo_director == null \
+			or _photo_director.plan.is_empty() \
+			or _photo_director.requirement_met():
+		return
+	var brief := create_tween()
+	brief.tween_interval(3.3)
+	brief.tween_callback(_show_photo_brief)
+
+
+func _show_photo_brief() -> void:
+	if not descent or run == null or run.ended or _photo_director == null \
+			or _photo_director.requirement_met():
+		return
+	var count := _photo_director.documented_count()
+	var required := _photo_director.required_count()
+	if run.floor_idx == 0 and count == 0:
+		_show_event_message(
+			"THE TAPE WANTS PROOF — PHOTOGRAPH %d THINGS THAT ARE WRONG"
+			% required)
+	else:
+		_show_event_message("PHOTOGRAPH WHAT IS WRONG — %d/%d"
+			% [count, required])
 
 
 func _connect_descent_run() -> void:
 	run.world_seed = world_seed
 	if _director != null:
 		run.horror_director = _director
+	# Runs are created at boot, at a summary restart and from the title; the
+	# camera must follow the live one or it stays dead outside CLI boots.
+	if _photo_camera != null:
+		_photo_camera.run = run
+		_photo_camera.enabled = true
 	run.pinned_attention = _attention_override
 	run.blackout_mutation_validator = _can_commit_blackout_mutation
 	run.blackout_mutation_ranker = _rank_blackout_mutation_visibility
@@ -1015,6 +1171,9 @@ func _ensure_descent_hud() -> void:
 		add_child(_descent_hud)
 	_descent_hud.configure(player, descent_route, run,
 		_level_seed(active_level), active_level)
+	if _photo_director != null:
+		_descent_hud.set_photo_progress(_photo_director.documented_count(),
+			_photo_director.required_count())
 
 
 func suspend_descent_rules() -> void:
@@ -1110,7 +1269,7 @@ func _die_to_title() -> void:
 	_switching = false
 	_dying = false
 	_set_mode_hint()
-	_build_title()
+	_build_title(true)
 
 
 func _on_descent_attention(_value: float) -> void:
@@ -1190,10 +1349,15 @@ func _on_descent_blackout(on: bool) -> void:
 					_pending_mutation_reveal_descriptor)
 			else:
 				_play_descent_cue(SoundBank.creak(), -7.0)
+			# Promise the glow only when a positioned reveal actually
+			# spawned; a bare architectural change gets an honest caption.
+			_play_descent_cue(SoundBank.thud(), -13.0)
+			if _pending_mutation_reveal_at != Vector3.INF:
+				_show_event_message("POWER RESTORED — FOLLOW THE GLOW", true)
+			else:
+				_show_event_message("POWER RESTORED — SOMETHING CHANGED", true)
 			_pending_mutation_reveal_at = Vector3.INF
 			_pending_mutation_reveal_descriptor = {}
-			_play_descent_cue(SoundBank.thud(), -13.0)
-			_show_event_message("POWER RESTORED — FOLLOW THE GLOW", true)
 		else:
 			# A failed preflight postpones the blackout, so this path is only a
 			# defensive fallback for teardown/level-switch races.
@@ -1480,6 +1644,9 @@ func _leave_descent() -> void:
 	run = null
 	descent = false
 	descent_route = null
+	if _photo_camera != null:
+		_photo_camera.enabled = false
+		_photo_camera.run = null
 	if is_instance_valid(_bleed_bed):
 		_bleed_bed.queue_free()
 	_bleed_bed = null
@@ -1498,7 +1665,7 @@ func _leave_descent() -> void:
 	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
 	await _jump_to(0, spawn, false)
 	_transitions.clear_saved_positions()
-	_build_title()
+	_build_title(true)
 
 
 func terminal_activity(page: int) -> void:
@@ -1531,6 +1698,7 @@ func _settle_initial_arrival() -> void:
 func _process(dt: float) -> void:
 	_check_torch_hint()
 	_post_process.update()
+	_update_entity_halo(dt)
 	_update_flashlight_hud()
 	_update_bleed()
 	# Once the mercy system has proven a stall, the whispers stop being
@@ -1590,11 +1758,11 @@ func _switch_music(level: int) -> void:
 		tw.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
 
 
-## With the CRT on, render a 480-line widescreen source. At a 16:9 viewport the
-## uniform 3D scale produces roughly 853x480 before the CRT pass resamples it
-## onto a 720x480 anamorphic signal grid — the way a widescreen 480i source uses
-## non-square pixels. The shader alternates its two 240-line fields. With the
-## tube off the world returns to full native resolution.
+## With the post pass on, render a 480-line widescreen source (≈854x480 at
+## 16:9, bilinear). The CRT material resamples that onto its 720x320 signal
+## grid; the RECOVERED TAPE material runs an 854x480 grid so it degrades the
+## real SD picture — bandwidth, not pixel count. With the tube off the world
+## returns to full native resolution.
 func _apply_scaling() -> void:
 	var vp := get_viewport()
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
@@ -1611,54 +1779,62 @@ func _apply_hud_scaling() -> void:
 	if _hint == null:
 		return
 	var viewport_size := Vector2(get_viewport().size)
-	var scale := clampf(viewport_size.y / 720.0, 1.0, 1.8)
-	var inset := 26.0 * scale
+	var scale := VhsOsd.hud_scale(viewport_size)
+	var inset := VhsOsd.safe_inset(viewport_size)
+	# Every size here assumes the OSD is read THROUGH the tube: the post pass
+	# emulates a 320-row signal, so no text may drop under ~5% of the
+	# viewport height (about 16 emulated rows) and everything sits inside the
+	# title-safe area the viewfinder brackets mark.
 	if _vf_frame != null:
 		_vf_frame.inset = inset
-		_vf_frame.arm = 30.0 * scale
-		_vf_frame.line = 2.0 * scale
-		_vf_frame.rec_font_size = roundi(24.0 * scale)
+		_vf_frame.arm = 40.0 * scale
+		_vf_frame.line = 3.0 * scale
+		_vf_frame.rec_font_size = roundi(40.0 * scale)
 	# The controls strip is a centred menu line low in the frame, clear of the
 	# REC lamp, the counters and the meters; it fades out on its own timer.
-	_hint.size = Vector2(viewport_size.x, 26.0 * scale)
-	_hint.position = Vector2(0.0, viewport_size.y - 152.0 * scale)
-	_hint.add_theme_font_size_override("font_size", roundi(16.0 * minf(scale, 1.5)))
+	_hint.size = Vector2(viewport_size.x - inset.x * 2.0, 84.0 * scale)
+	_hint.position = Vector2(inset.x, viewport_size.y - inset.y - 168.0 * scale)
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint.add_theme_font_size_override("font_size", roundi(32.0 * scale))
 
-	_interact_panel.custom_minimum_size = Vector2(520.0, 54.0) * scale
+	_interact_panel.custom_minimum_size = Vector2(760.0, 80.0) * scale
 	_interact_panel.position = Vector2(
 		(viewport_size.x - _interact_panel.custom_minimum_size.x) * 0.5,
-		viewport_size.y - 108.0 * scale)
-	_interact_hint.add_theme_font_size_override("font_size", roundi(30.0 * scale))
+		viewport_size.y - inset.y - 100.0 * scale)
+	_interact_hint.add_theme_font_size_override("font_size", roundi(50.0 * scale))
 
-	_event_panel.custom_minimum_size = Vector2(640.0, 60.0) * scale
-	_event_panel.position = Vector2(
-		(viewport_size.x - _event_panel.custom_minimum_size.x) * 0.5,
-		viewport_size.y * 0.5 + 150.0 * scale)
-	_event_hint.add_theme_font_size_override("font_size", roundi(32.0 * scale))
+	_event_panel.custom_minimum_size = Vector2(
+		viewport_size.x - inset.x * 2.0, 88.0 * scale)
+	_event_panel.position = Vector2(inset.x, viewport_size.y * 0.5 + 24.0 * scale)
+	_event_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_event_hint.custom_minimum_size = Vector2(
+		viewport_size.x - inset.x * 2.0, 0.0)
+	_event_hint.add_theme_font_size_override("font_size", roundi(56.0 * scale))
 
-	_battery_meter.font_size = roundi(22.0 * scale)
-	_battery_meter.size = Vector2(196.0, 58.0) * scale
+	_battery_meter.font_size = roundi(40.0 * scale)
+	_battery_meter.size = Vector2(320.0, 94.0) * scale
 	_battery_meter.position = Vector2(
-		viewport_size.x - inset - 14.0 * scale - _battery_meter.size.x,
-		inset + 8.0 * scale)
+		viewport_size.x - inset.x - 12.0 * scale - _battery_meter.size.x,
+		inset.y + 6.0 * scale)
 
-	_stamina_meter.font_size = roundi(22.0 * scale)
-	_stamina_meter.size = Vector2(196.0, 52.0) * scale
-	_stamina_meter.position = Vector2(inset + 14.0 * scale,
-		viewport_size.y - inset - 14.0 * scale - _stamina_meter.size.y)
+	_stamina_meter.font_size = roundi(40.0 * scale)
+	_stamina_meter.size = Vector2(320.0, 86.0) * scale
+	_stamina_meter.position = Vector2(inset.x + 12.0 * scale,
+		viewport_size.y - inset.y - 6.0 * scale - _stamina_meter.size.y)
 
-	_charging_label.add_theme_font_size_override("font_size", roundi(26.0 * scale))
-	_charging_meter.custom_minimum_size = Vector2(420.0, 26.0) * scale
-	_charging_panel.custom_minimum_size = Vector2(420.0 * scale, 0.0)
+	_charging_label.add_theme_font_size_override("font_size", roundi(44.0 * scale))
+	_charging_meter.custom_minimum_size = Vector2(640.0, 40.0) * scale
+	_charging_panel.custom_minimum_size = Vector2(640.0 * scale, 0.0)
 	_charging_panel.position = Vector2(
-		(viewport_size.x - 420.0 * scale) * 0.5,
-		viewport_size.y - 200.0 * scale)
+		(viewport_size.x - 640.0 * scale) * 0.5,
+		viewport_size.y - inset.y - 220.0 * scale)
 
 
 func _toggle_post_mode() -> void:
 	if _post_process == null:
 		return
 	var label := _post_process.toggle_mode()
+	ShadowFigure.set_tape_look(_post_process.is_found_footage())
 	if _title == null:
 		_show_event_message("VIDEO MODE — " + label)
 	_set_mode_hint()
@@ -1730,9 +1906,11 @@ func _build_ui() -> void:
 	_post_process = PostProcessController.new()
 	add_child(_post_process)
 	_post_process.setup(self, _found_footage_requested, _post_enabled)
+	ShadowFigure.set_tape_look(_post_process.is_found_footage())
 
 	var cl := CanvasLayer.new()
 	cl.layer = 2
+	_osd_layer = cl
 	var lb := VhsOsd.make_label(16, Color(0.92, 0.96, 0.90, 0.80))
 	_hint = lb
 	_set_mode_hint()
@@ -1741,6 +1919,8 @@ func _build_ui() -> void:
 	# Viewfinder chrome first so every other readout draws over it.
 	_vf_frame = VhsOsd.Frame.new()
 	cl.add_child(_vf_frame)
+	if _photo_camera != null:
+		_photo_camera.proximity_changed.connect(_on_photo_proximity)
 
 	_interact_panel = PanelContainer.new()
 	_interact_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1806,6 +1986,42 @@ func _build_ui() -> void:
 	_apply_hud_scaling()
 
 
+## The recording breaks around the thing it cannot hold: project the nearest
+## live figure into screen space and hand the post pass an interference halo.
+## Rises fast, decays slow, so a figure crossing a doorway leaves a wake.
+func _update_entity_halo(dt: float) -> void:
+	if _post_process == null or player == null:
+		return
+	var target := 0.0
+	var pos := Vector2(0.5, 0.5)
+	var radius := 0.25
+	# Presence is distance only: the nearest hostile figure, in frame or at
+	# your back, feeds the tape's corruption ladder.
+	var presence := 0.0
+	if descent and _figures != null and not _dying:
+		var cam := player.cam
+		var viewport_size := Vector2(get_viewport().size)
+		for figure in _figures.active_figures():
+			var head: Vector3 = figure.global_position + Vector3(0, 1.2, 0)
+			var d := cam.global_position.distance_to(head)
+			presence = maxf(presence, clampf(1.0 - (d - 2.0) / 18.0, 0.0, 1.0))
+			if cam.is_position_behind(head):
+				continue
+			if d > 24.0:
+				continue
+			var s := clampf(1.0 - (d - 2.0) / 22.0, 0.0, 1.0) * 0.55
+			if s <= target:
+				continue
+			target = s
+			pos = cam.unproject_position(head) / viewport_size
+			radius = clampf(1.3 / maxf(d, 1.5), 0.07, 0.28)
+	_halo_amt = lerpf(_halo_amt, target,
+		minf(1.0, dt * (10.0 if target > _halo_amt else 3.5)))
+	if _halo_amt > 0.001 or target > 0.0:
+		_post_process.set_entity_halo(pos, radius, _halo_amt)
+	_post_process.set_presence(presence)
+
+
 func _update_flashlight_hud() -> void:
 	if player == null or _battery_meter == null:
 		return
@@ -1825,8 +2041,7 @@ func _on_interaction_prompt(text: String) -> void:
 func _show_event_message(text: String, alert := false) -> void:
 	if _event_hint == null or _event_panel == null:
 		return
-	_event_hint.add_theme_color_override("font_color",
-		VhsOsd.RED if alert else VhsOsd.INK)
+	VhsOsd.set_ink(_event_hint, VhsOsd.RED if alert else VhsOsd.INK)
 	_event_hint.text = text
 	if _event_tween != null and _event_tween.is_valid():
 		_event_tween.kill()
@@ -1862,8 +2077,12 @@ func _start_hint_fade() -> void:
 ## The title menu and its dedicated information pages, over the already-running
 ## world.
 ## Skipped for `--screenshot=` runs, which want the view and not the titles.
-func _build_title() -> void:
-	if opts.skips_title():
+func _build_title(force := false) -> void:
+	# skips_title() means "boot straight into play" — it must not also mean
+	# "Q can never reach the title again": in every --mode=descent session
+	# the Y confirm silently dumped the player into a titleless wander world
+	# (2026-08-19). Boot skips; deliberate returns force.
+	if opts.skips_title() and not force:
 		# These starts never show a card, so the world was never silenced.
 		_title_music = false
 		_set_world_audio(true)
@@ -2001,9 +2220,9 @@ func _set_mode_hint() -> void:
 	if _hint == null:
 		return
 	if descent:
-		_hint.text = "WASD / arrows move   ·   Shift sprint   ·   E interact   ·   F flashlight   ·   B video mode   ·   the counter knows how far   ·   Q title   ·   Esc release mouse"
+		_hint.text = "WASD move  ·  Shift sprint  ·  E use  ·  F torch  ·  C camera + Space photo  ·  B mode  ·  Q title"
 	else:
-		_hint.text = "WASD / arrows move   ·   Shift run   ·   E interact   ·   F flashlight   ·   1-9 floors / 0 Monolith / − Bloom   ·   V filter   ·   B video mode   ·   Q title   ·   Esc release mouse"
+		_hint.text = "WASD move  ·  Shift run  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  V filter  ·  B mode  ·  Q title"
 
 
 ## The Poolrooms are the only floor with standing water. Everywhere else the

@@ -7,7 +7,9 @@ extends Node3D
 ## architectural edges get a fitted doorway trace. There is deliberately no
 ## camera-facing locator circle.
 
-const LIFE_SECONDS := 3.2
+## Long enough to be found: at 3.2s the glow was gone before a player who
+## froze through the blackout even looked up ("I almost never see the glow").
+const LIFE_SECONDS := 10.0
 const OUTLINE_SHADER := preload("res://shaders/mutation_outline.gdshader")
 const CORE_COLOR := Color(0.58, 1.0, 1.0)
 const FRINGE_COLOR := Color(0.32, 0.12, 1.0)
