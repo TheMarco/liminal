@@ -58,6 +58,10 @@ const RING_COUNT := 5
 const RING_RADIUS := 2.2
 
 ## Pre-authored, deliberately unreliable. No hints, no truths, no names.
+## Camera-only writing. The voice is the building addressing the intruder:
+## second person, present tense, hint-less, nameless. Distinct from the
+## asylum's eye-visible ASY_SCRAWLS (patient voices, marker on plaster) —
+## the two pools must not blur.
 const PHRASES := [
 	"STAY",
 	"DON'T LEAVE",
@@ -72,6 +76,43 @@ const PHRASES := [
 	"THERE IS NO EXIT",
 	"STOP TAKING PICTURES",
 	"YOU'RE STILL HERE",
+	"WE COUNTED YOU",
+	"YOU WERE FASTER YESTERDAY",
+	"THE LIGHTS ARE FOR YOU",
+	"IT LEARNED YOUR NAME",
+	"PUT THE CAMERA DOWN",
+	"THIS ONE IS OF YOU",
+	"SMILE",
+	"WE DEVELOP AT NIGHT",
+	"THE FILM REMEMBERS",
+	"YOU BLINKED",
+	"BEHIND THE WALLPAPER",
+	"UNDER THE CARPET TOO",
+	"THE FLOOR BELOW IS AWAKE",
+	"IT RIDES THE LIFT WITH YOU",
+	"THE LIFT GOES ONE WAY",
+	"DEEPER",
+	"ALMOST DOWN",
+	"YOU LIVE HERE NOW",
+	"THE DOORS MOVE WHEN IT'S DARK",
+	"HOLD STILL LONGER",
+	"IT PRACTISES STANDING STILL",
+	"DON'T FEED THE METER",
+	"THE TAPES LIE",
+	"WATCH THE CORNERS",
+	"IT WEARS THE ROOMS",
+	"NOT THAT DOOR",
+	"WRONG WAY",
+	"TURN BACK",
+	"TOO LATE FOR THAT",
+	"WHO TOLD YOU TO LOOK",
+	"YOU FOUND THE WRONG ONES",
+	"THERE ARE MORE OF US",
+	"ONE OF THESE ROOMS IS YOURS",
+	"IT SAVED YOU A SEAT",
+	"THE EXIT MOVED",
+	"ASK THE STATIC",
+	"IT HEARD THE SHUTTER",
 ]
 
 var type := Type.PLACEMENT
