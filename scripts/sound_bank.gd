@@ -463,6 +463,27 @@ static func shiver() -> AudioStreamWAV:
 	return _c["shiver"]
 
 
+## Looping tape-head static: filtered hiss with sparse crackles. Played under
+## the viewfinder while something photographable is near, gain by proximity.
+static func static_hiss() -> AudioStreamWAV:
+	if _c.has("static_hiss"):
+		return _c["static_hiss"]
+	var n := int(RATE * 1.2)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	var crackle := 0.0
+	for i in n:
+		var white := randf() * 2.0 - 1.0
+		lp = lerpf(lp, white, 0.28)
+		if randf() < 0.0012:
+			crackle = randf_range(0.5, 1.0) * (1.0 if randf() < 0.5 else -1.0)
+		crackle *= 0.86
+		s[i] = (lp * 0.35 + crackle * 0.6) * 0.5
+	_c["static_hiss"] = _wav(_loop_blend(s, int(RATE * 0.05)), true)
+	return _c["static_hiss"]
+
+
 ## Looping lift-car motor heard from inside the car: hoist whine over a cable
 ## drone, with the slow beat of a sheave that is fractionally out of round.
 static func lift_motor() -> AudioStreamWAV:

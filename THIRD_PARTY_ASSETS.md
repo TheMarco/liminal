@@ -847,3 +847,19 @@ Per-sheet provenance and the conversion settings are recorded in
 Font licenses and upstream links are recorded in
 [`fonts/SOURCES.md`](fonts/SOURCES.md). In particular, Peter Hull's VT323
 terminal typeface is distributed under the SIL Open Font License 1.1.
+
+## Shaders
+
+### CRT post filter (`shaders/post.gdshader`)
+
+- Author: @c64cosmin (godotshaders.com), combining pend00's
+  "VHS and CRT monitor effect" (warp, vignette) and Timothy Lottes'
+  Shadertoy scanline filter as ported by AHOPNESS
+  (https://www.shadertoy.com/view/MsjXzh).
+- Source: https://godotshaders.com (c64cosmin's combined CRT shader,
+  supplied by the project owner 2026-08-16).
+- License: CC0.
+- Modifications: emulated grid defaulted to 720x320; the authored noise dial
+  renamed `noise_level` with `noise_amount` reserved as the controller's
+  runtime multiplier; `bright_boost` uniform added for
+  PostProcessController's setup hook.
