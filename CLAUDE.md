@@ -167,9 +167,12 @@ with it.
   weight through walls (`PhotoCamera.PROXIMITY_*`). Raising
   the camera and framing it snaps the brackets with a tick — the last metre
   stays a search, and it is what makes invisible writing findable. Each
-  floor plans 3 required anomalies on the route spine plus 9 extras off it
-  (dense on purpose: the spine is one path through an open maze and nothing
-  forces the player across it), pure from (seed, theme, floor). Every bleed
+  floor plans MORE on-route anomalies than the tape demands
+  (`PhotoDirector.spine_count_for`: need 3 walk past 5, need 4 past 7, need
+  5 past 8; the gate itself is `required_for`, 3/4/5 by depth, prop-less
+  themes pinned at 3) plus 12 extras off the spine (dense on purpose: the
+  spine is one path through an open maze and nothing forces the player
+  across it), pure from (seed, theme, floor). Every bleed
   prop is also photographable evidence (`PhotoDirector._register_bleed_props`,
   id `bleed:x:y` per cell) worth ONE credit per floor
   (`bleed_credit_used`), except that ANY bleed item may serve as the LAST
