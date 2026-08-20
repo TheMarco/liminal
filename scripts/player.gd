@@ -127,6 +127,7 @@ func _init() -> void:
 	# The eye never sees photo-only geometry; only the snapshot camera adds
 	# this layer back.
 	cam.cull_mask &= ~PhotoAnomaly.PHOTO_LAYER
+	cam.cull_mask &= ~PhotoAnomaly.PRINT_LAYER
 	add_child(cam)
 	flashlight = SpotLight3D.new()
 	flashlight.position = Vector3(0.10, -0.10, -0.06)

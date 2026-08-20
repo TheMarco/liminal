@@ -60,11 +60,13 @@ func _run() -> void:
 					if not route.is_path_cell(at):
 						failures.append("%s: required anomaly %s off the spine"
 							% [label, id])
-				if int(spec["type"]) == PhotoAnomaly.Type.WRITING \
+				var wall_types := [PhotoAnomaly.Type.WRITING,
+					PhotoAnomaly.Type.PRINT]
+				if int(spec["type"]) in wall_types \
 						and int(spec["wall_dir"]) < 0:
 					failures.append("%s: writing %s without a wall" % [
 						label, id])
-				if int(spec["type"]) != PhotoAnomaly.Type.WRITING \
+				if not int(spec["type"]) in wall_types \
 						and not PhotoAnomaly.PROP_THEMES.has(theme):
 					failures.append("%s: prop anomaly %s on prop-less theme"
 						% [label, id])

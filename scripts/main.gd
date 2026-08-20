@@ -839,14 +839,14 @@ func descent_photo_refusal_caption() -> String:
 
 
 func _on_photo_documented(_anomaly_id: String, count: int,
-		required: int) -> void:
-	# A bleed credit says why it counted — a mall cart in the casino read
-	# as an arbitrary target until the caption named the wrongness.
-	if _anomaly_id.begins_with("bleed:"):
-		_show_event_message("PHOTOGRAPH %d / %d — IT BELONGS TO THE FLOOR BELOW"
-			% [count, required])
-	else:
+		required: int, caption: String) -> void:
+	# The circle on the print says where; the caption names the wrongness —
+	# without it a counted shot of something subtle read as arbitrary.
+	if caption.is_empty():
 		_show_event_message("PHOTOGRAPH %d / %d" % [count, required])
+	else:
+		_show_event_message("PHOTOGRAPH %d / %d — %s" % [
+			count, required, caption])
 	# The last photograph gets a heading without waiting for a tape refusal:
 	# at REQUIRED-1 the EVIDENCE counter comes up on its own (2026-08-19 —
 	# hunting the final anomaly blind was the feature's last frustration).

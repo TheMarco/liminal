@@ -18,12 +18,20 @@ extends Node3D
 ## cell * CELL_SIZE with y = 0). Documented state does NOT live here — the
 ## director owns it, so a rebuilt cell cannot resurrect a spent photograph.
 
-enum Type { PLACEMENT, DUPLICATE, WRITING, BLEED, GIANT, RING }
+enum Type { PLACEMENT, DUPLICATE, WRITING, BLEED, GIANT, RING, MISSING, PRINT }
 
 ## Render layer bit reserved for photo-only geometry. Player cameras clear
 ## this bit; the snapshot camera sets it.
 const PHOTO_LAYER_BIT := 19
 const PHOTO_LAYER := 1 << PHOTO_LAYER_BIT
+## Eye-only geometry: visible to the bare eye, cleared by the RAISED camera.
+## MISSING props live here — through the lens the spot is empty.
+const EYE_ONLY_LAYER_BIT := 17
+const EYE_ONLY_LAYER := 1 << EYE_ONLY_LAYER_BIT
+## Print-only geometry: invisible to eye AND raised viewfinder; only the
+## snapshot camera includes it, so it exists solely in the developed photo.
+const PRINT_LAYER_BIT := 16
+const PRINT_LAYER := 1 << PRINT_LAYER_BIT
 
 ## How far a photograph carries. Writing must be read, not glimpsed.
 const CAPTURE_DISTANCE := 15.0
@@ -82,6 +90,11 @@ var _points: Array[Vector3] = []   # chunk-local sample points
 ## its own body otherwise occludes it from every stance (found 2026-08-19:
 ## a required GIANT was uncapturable from 16/16 stances).
 var _body_rids: Array[RID] = []
+## Nodes a resolve() removes, plus the giant's glow and the floor height for
+## the placement drop.
+var _resolvables: Array[Node] = []
+var _glow: OmniLight3D
+var _floor_y := 0.0
 
 
 func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
@@ -92,16 +105,21 @@ func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
 	world_seed = p_world_seed
 	theme = p_theme
 	var floor_h := Chunk.cell_floor_h(world_seed, cell, theme)
+	_floor_y = floor_h
 	# configure() is called before add_child, so debug_visible is already set.
 	match type:
 		Type.WRITING:
-			_build_writing(floor_h, wall_dir, wall_along)
+			_build_writing(floor_h, wall_dir, wall_along, false)
+		Type.PRINT:
+			_build_writing(floor_h, wall_dir, wall_along, true)
 		Type.DUPLICATE:
 			_build_props(floor_h, 2)
 		Type.GIANT:
 			_build_giant(floor_h)
 		Type.RING:
 			_build_ring(floor_h)
+		Type.MISSING:
+			_build_missing(floor_h)
 		_:
 			_build_props(floor_h, 1)
 	if debug_visible:
@@ -143,6 +161,31 @@ var _facing := Vector3.ZERO
 
 func facing_normal() -> Vector3:
 	return _facing
+
+
+## One terse line for the counted-photo caption: the circle on the print
+## says where, this says what. Ambiguity-safe — names the wrongness, never
+## the cause.
+func count_caption() -> String:
+	match type:
+		Type.MISSING:
+			return "THE CAMERA SAYS IT IS NOT THERE"
+		Type.PRINT:
+			return "\"%s\" — ONLY THE FILM SEES IT" % phrase_for(
+				world_seed, cell)
+		Type.PLACEMENT:
+			return "NOTHING HOLDS IT"
+		Type.DUPLICATE:
+			return "THERE ARE TWO"
+		Type.GIANT:
+			return "IT IS THE WRONG SIZE"
+		Type.RING:
+			return "THEY FACE EACH OTHER"
+		Type.WRITING:
+			return "\"%s\"" % phrase_for(world_seed, cell)
+		Type.BLEED:
+			return "IT BELONGS TO THE FLOOR BELOW"
+	return ""
 
 
 func occlusion_excludes() -> Array[RID]:
@@ -190,7 +233,78 @@ static func writing_spot_for(route: DescentRoute, at: Vector2i) -> Dictionary:
 	return {}
 
 
-func _build_writing(floor_h: float, wall_dir: int, wall_along: float) -> void:
+## The room noticed being photographed: a counted shot resolves its
+## anomaly. Hanging props drop, lens-only and eye-only things are simply
+## gone afterwards, writings leave the wall, the giant's glow dies. Chunk
+## rebuilds skip documented anomalies entirely, so the resolution holds.
+func resolve() -> void:
+	match type:
+		Type.PLACEMENT:
+			if _spin != null and is_instance_valid(_spin):
+				var pivot := _spin
+				_spin = null
+				var drop := create_tween()
+				drop.tween_property(pivot, "position:y",
+					_floor_y + 0.45, 0.5) \
+					.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+				drop.tween_callback(func():
+					var thud := AudioStreamPlayer3D.new()
+					thud.stream = SoundBank.thud()
+					thud.volume_db = -4.0
+					thud.position = pivot.position
+					add_child(thud)
+					thud.play()
+					thud.finished.connect(thud.queue_free))
+		Type.GIANT:
+			if _glow != null and is_instance_valid(_glow):
+				_glow.queue_free()
+				_glow = null
+		_:
+			for node in _resolvables:
+				if is_instance_valid(node):
+					node.queue_free()
+			_resolvables.clear()
+
+
+func _build_missing(floor_h: float) -> void:
+	var row: Array = Chunk.BLEED_PROPS.get(theme, [])
+	if row.is_empty():
+		return
+	var scene := load(row[0]) as PackedScene
+	if scene == null:
+		return
+	var scl := float(row[1])
+	var centre_off: Vector3 = row[2]
+	var extents: Vector3 = row[3]
+	var spot := _find_spot(floor_h, 1.0, maxf(extents.y, 1.0))
+	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
+		* PI * 0.25
+	var pivot := Node3D.new()
+	pivot.position = spot
+	pivot.rotation.y = yaw
+	add_child(pivot)
+	var inst := scene.instantiate() as Node3D
+	inst.scale = Vector3.ONE * scl
+	inst.position = -centre_off * scl
+	pivot.add_child(inst)
+	_set_layer(inst, EYE_ONLY_LAYER)
+	if extents != Vector3.ZERO:
+		var body := StaticBody3D.new()
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = extents
+		shape.shape = box
+		shape.position = Vector3(0, extents.y * 0.5, 0)
+		body.add_child(shape)
+		pivot.add_child(body)
+		_body_rids.append(body.get_rid())
+	_resolvables.append(pivot)
+	_points = [spot + Vector3(0, maxf(extents.y, 1.0) * 0.5, 0),
+		spot + Vector3(0, maxf(extents.y, 1.0) * 0.85, 0)]
+
+
+func _build_writing(floor_h: float, wall_dir: int, wall_along: float,
+		print_only := false) -> void:
 	var dir := maxi(wall_dir, 0)
 	var half := WorldGen.CELL_SIZE * 0.5
 	var dirv3 := Vector3(WorldGen.DIRV[dir].x, 0.0, WorldGen.DIRV[dir].y)
@@ -204,7 +318,8 @@ func _build_writing(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.modulate = Color(0.88, 0.84, 0.76, 0.95)
 	label.outline_size = 0
-	label.layers = (1 | PHOTO_LAYER) if debug_visible else PHOTO_LAYER
+	var layer := PRINT_LAYER if print_only else PHOTO_LAYER
+	label.layers = (1 | layer) if debug_visible else layer
 	# Walls carry their thickness inward from the canonical edge, so the
 	# writing floats a hand's width proud of the paper, never inside it.
 	var plane := half + signf(dirv3.x + dirv3.z) * (half - 0.45)
@@ -213,6 +328,7 @@ func _build_writing(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	# Face back into the room.
 	label.rotation.y = atan2(dirv3.x, dirv3.z) + PI
 	add_child(label)
+	_resolvables.append(label)
 	_points = [label.position]
 	_facing = -dirv3
 
@@ -292,6 +408,7 @@ func _build_props(floor_h: float, count: int) -> void:
 			inst.position = -centre_off * scl
 			pivot.add_child(inst)
 			_set_photo_only(inst)
+			_resolvables.append(pivot)
 			_points.append(pivot.position + Vector3(0, 0.8, 0))
 
 
@@ -342,6 +459,7 @@ func _build_giant(floor_h: float) -> void:
 	glow.shadow_enabled = false
 	glow.position = spot + Vector3(0, base_h * factor + 0.3, 0)
 	add_child(glow)
+	_glow = glow
 	_points = [spot + Vector3(0, base_h * factor * 0.5, 0),
 		spot + Vector3(0, base_h * factor * 0.9, 0)]
 
@@ -370,6 +488,7 @@ func _build_ring(floor_h: float) -> void:
 		inst.position = -centre_off * scl
 		pivot.add_child(inst)
 		_set_photo_only(inst)
+		_resolvables.append(pivot)
 	_points = [centre + Vector3(0, 1.0, 0),
 		centre + Vector3(RING_RADIUS, 0.8, 0)]
 
@@ -398,11 +517,17 @@ func _find_spot(floor_h: float, radius: float, height: float) -> Vector3:
 ## normal layer under --photo-debug), and drop any collision it carries —
 ## nothing invisible may block the player.
 func _set_photo_only(node: Node) -> void:
+	_set_layer(node, PHOTO_LAYER, true)
+
+
+## Put every visual under `node` on exactly `layer` (adding the normal layer
+## under --photo-debug); with strip_collision, remove bodies as well.
+func _set_layer(node: Node, layer: int, strip_collision := false) -> void:
 	if node is VisualInstance3D:
 		(node as VisualInstance3D).layers = \
-			(1 | PHOTO_LAYER) if debug_visible else PHOTO_LAYER
-	if node is CollisionObject3D:
+			(1 | layer) if debug_visible else layer
+	if strip_collision and node is CollisionObject3D:
 		node.queue_free()
 		return
 	for child in node.get_children():
-		_set_photo_only(child)
+		_set_layer(child, layer, strip_collision)

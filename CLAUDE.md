@@ -182,7 +182,7 @@ with it.
   signature `Chunk.BLEED_PROPS` object (owner rule 2026-08-19: foreign
   objects appear only as the bleed near the elevator, never as scattered
   anomalies — the 2026-08-18 foreign-prop experiment is reverted; prop-less
-  themes plan WRITING only via `PhotoAnomaly.PROP_THEMES`): five types, and the required
+  themes plan WRITING only via `PhotoAnomaly.PROP_THEMES`): seven types, and the required
   trio on a floor is always three DIFFERENT ones where the theme allows,
   claiming one WRITING greedily the first time a route cell offers a wall
   (the writings are the feature's voice and were otherwise rare); extras
@@ -193,7 +193,11 @@ with it.
   duplicates of a theme's own prop read as furniture, a playtest proved
   it), GIANT (the prop scaled to nearly touch the ceiling, eye-visible,
   real collider), RING (five copies in a circle facing the centre,
-  LENS-ONLY), WRITING
+  LENS-ONLY), MISSING (eye-visible prop on `EYE_ONLY_LAYER` bit 17 that
+  VANISHES through the raised lens — photograph the absence), PRINT
+  (writing on `PRINT_LAYER` bit 16 that exists only in the developed
+  photo: eye and raised viewfinder never show it, the snapshot camera
+  does), WRITING
   (a phrase on a wall that exists only on render layer 20 — the RAISED
   viewfinder and the snapshot camera see it, the bare eye never does
   (`PhotoCamera._raise` adds the layer to the player cam cull mask; without
@@ -203,7 +207,16 @@ with it.
   room cells only, corridors line their walls). While raised the reticle
   runs hot/cold: brackets close and a tick accelerates as aim nears any
   findable anomaly (`PhotoCamera._aim_warmth`), full two-tone bite on true
-  framing. The arrival card is followed 3.3s later by the brief ("THE TAPE WANTS PROOF —
+  framing, and the reticle prints FOCUS when a shot will count. A counted
+  photograph is answered three ways: the review print carries a
+  hand-drawn red evidence circle around the anomaly
+  (`PhotoCamera.EvidenceMarks`), the caption names the wrongness
+  (`PhotoAnomaly.count_caption`, e.g. "NOTHING HOLDS IT"; writings quote
+  their phrase), and the anomaly RESOLVES (`PhotoAnomaly.resolve`:
+  hanging props drop with a thud, lens-only and eye-only things are gone
+  afterwards, the giant's glow dies); rebuilt cells skip documented
+  anomalies so resolutions hold. Type picks run through `WorldGen.r01`,
+  not raw hashes — neighbouring cells correlate modulo small pools. The arrival card is followed 3.3s later by the brief ("THE TAPE WANTS PROOF —
   PHOTOGRAPH 3 THINGS THAT ARE WRONG" on floor 1, "PHOTOGRAPH WHAT IS WRONG
   — n/3" after), and "PHOTOS n/3" sits under the LIFT distance in
   `DescentHUD` so the two objectives read as one instrument. The objective

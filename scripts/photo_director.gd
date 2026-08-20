@@ -107,9 +107,11 @@ static func _eligible_types(p_route: DescentRoute, at: Vector2i) -> Array:
 	var out: Array = []
 	if PhotoAnomaly.PROP_THEMES.has(p_route.theme):
 		out = [PhotoAnomaly.Type.PLACEMENT, PhotoAnomaly.Type.DUPLICATE,
-			PhotoAnomaly.Type.GIANT, PhotoAnomaly.Type.RING]
+			PhotoAnomaly.Type.GIANT, PhotoAnomaly.Type.RING,
+			PhotoAnomaly.Type.MISSING]
 	if not PhotoAnomaly.writing_spot_for(p_route, at).is_empty():
 		out.append(PhotoAnomaly.Type.WRITING)
+		out.append(PhotoAnomaly.Type.PRINT)
 	return out
 
 
@@ -143,10 +145,13 @@ static func _spec_for(p_route: DescentRoute, at: Vector2i, required: bool,
 			pool.append(PhotoAnomaly.Type.WRITING)
 	if pool.is_empty():
 		pool = eligible
-	var pick_seed := WorldGen.h(p_route.world_seed, at.x, at.y, 9311) \
-		if slot < 0 else WorldGen.h(p_route.world_seed,
-			p_route.floor_idx, slot, 9311)
-	var type: int = int(pool[pick_seed % pool.size()])
+	# Neighbouring cells' raw hashes correlate modulo small pool sizes
+	# (a floor once planned seven MISSINGs), so the pick runs through r01.
+	var roll := WorldGen.r01(p_route.world_seed, at.x, at.y, 9311) \
+		if slot < 0 else WorldGen.r01(p_route.world_seed,
+			p_route.floor_idx, slot + 977, 9311)
+	var type: int = int(pool[mini(int(roll * float(pool.size())),
+		pool.size() - 1)])
 	var spot := PhotoAnomaly.writing_spot_for(p_route, at)
 	return {
 		"id": "cell:%d:%d" % [at.x, at.y],
@@ -263,11 +268,16 @@ func _on_chunk_built(chunk: Chunk) -> void:
 	# them, and the arrival flag guards a respawned arrival reality too.
 	if chunk.descent_target or chunk.descent_arrival:
 		return
+	# A documented anomaly stays resolved: a rebuilt cell returns to normal
+	# instead of resurrecting the wrongness the photograph settled.
+	if _documented.has(str(spec["id"])):
+		return
 	var wall_dir := int(spec["wall_dir"])
 	var wall_along := float(spec["wall_along"])
 	# A blackout mutation may have opened the planned wall since planning;
 	# re-resolve against the current topology and fall back to the plan.
-	if int(spec["type"]) == PhotoAnomaly.Type.WRITING and route != null:
+	if int(spec["type"]) in [PhotoAnomaly.Type.WRITING,
+			PhotoAnomaly.Type.PRINT] and route != null:
 		var spot := PhotoAnomaly.writing_spot_for(route, chunk.cell)
 		if not spot.is_empty():
 			wall_dir = int(spot["dir"])

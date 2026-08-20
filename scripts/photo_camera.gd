@@ -56,6 +56,7 @@ var _hinted := false
 var _snap_viewport: SubViewport
 var _snap_cam: Camera3D
 var _photo: TextureRect
+var _marks: EvidenceMarks
 var _reticle: PhotoReticle
 var _flash: ColorRect
 var _shutter: AudioStreamPlayer
@@ -72,7 +73,8 @@ var _proximity_los := 0.0
 var _proximity_los_target := 0.0
 var _proximity_scan_left := 0.0
 
-signal photo_documented(anomaly_id: String, count: int, required: int)
+signal photo_documented(anomaly_id: String, count: int, required: int,
+	caption: String)
 signal first_raise()
 ## 0..1 nearness of the closest undocumented anomaly, smoothed; the OSD
 ## frame renders it as interference.
@@ -94,6 +96,9 @@ func _ready() -> void:
 	_photo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_photo.visible = false
 	add_child(_photo)
+	_marks = EvidenceMarks.new()
+	_marks.visible = false
+	add_child(_marks)
 	_flash = ColorRect.new()
 	_flash.color = Color(1, 1, 1, 0)
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -194,6 +199,7 @@ func _process(dt: float) -> void:
 		_review_left -= dt
 		if _review_left <= 0.0:
 			_photo.visible = false
+			_marks.visible = false
 			if _pending_risk:
 				_pending_risk = false
 				_roll_risk()
@@ -328,9 +334,11 @@ func _raise(toggled := false) -> void:
 	_toggled = toggled
 	player.photo_aim = true
 	# Through the lens you see the truth: the raised viewfinder renders the
-	# photo-only layer live, so hidden writing is visible while aiming, not
-	# only in the developed print. The eye still never sees it.
+	# photo-only layer live and DROPS the eye-only layer, so hidden writing
+	# appears while a MISSING prop vanishes. The eye never sees the first
+	# and always sees the second; the print-only layer stays for the film.
 	player.cam.cull_mask |= PhotoAnomaly.PHOTO_LAYER
+	player.cam.cull_mask &= ~PhotoAnomaly.EYE_ONLY_LAYER
 	_reticle.visible = true
 	if not _hinted:
 		_hinted = true
@@ -345,6 +353,7 @@ func _lower() -> void:
 	if player != null and is_instance_valid(player):
 		player.photo_aim = false
 		player.cam.cull_mask &= ~PhotoAnomaly.PHOTO_LAYER
+		player.cam.cull_mask |= PhotoAnomaly.EYE_ONLY_LAYER
 	_reticle.visible = false
 
 
@@ -358,6 +367,29 @@ func _take_photo() -> void:
 	# Judge the framing from the live camera at shutter time, before the
 	# render — what you saw is what you shot.
 	var captured := _captured_anomalies()
+	# Screen positions at shutter time, for the evidence circles the review
+	# draws — the investigator marks the print, so even an easy-to-miss
+	# wrongness is legible once it is on film.
+	var marks: Array[Rect2] = []
+	var cam := player.cam
+	var viewport_size := Vector2(get_viewport().size)
+	for anomaly in captured:
+		if director == null or director._documented.has(anomaly.id):
+			continue
+		var pts := anomaly.photo_points()
+		var lo := Vector2.INF
+		var hi := -Vector2.INF
+		for point in pts:
+			if cam.is_position_behind(point):
+				continue
+			var sp := cam.unproject_position(point)
+			lo = lo.min(sp)
+			hi = hi.max(sp)
+		if lo.x > hi.x:
+			continue
+		var centre := (lo + hi) * 0.5
+		var radius := maxf(70.0, (hi - lo).length() * 0.8 + 60.0)
+		marks.append(Rect2(centre, Vector2(radius, radius * 0.78)))
 	var image := await _render_snapshot()
 	_capturing = false
 	if image != null:
@@ -368,8 +400,11 @@ func _take_photo() -> void:
 	for anomaly in captured:
 		if director != null and director.mark_documented(anomaly.id):
 			counted = true
+			anomaly.resolve()
 			photo_documented.emit(anomaly.id, director.documented_count(),
-				director.required_count())
+				director.required_count(), anomaly.count_caption())
+	_marks.marks = marks if counted else []
+	_marks.visible = _photo.visible and not _marks.marks.is_empty()
 	# Only evidence provokes; snapshots of nothing stay free.
 	_pending_risk = counted
 
@@ -427,7 +462,8 @@ func _render_snapshot() -> Image:
 	_snap_cam.fov = cam.fov
 	_snap_cam.near = cam.near
 	_snap_cam.far = cam.far
-	_snap_cam.cull_mask = cam.cull_mask | PhotoAnomaly.PHOTO_LAYER
+	_snap_cam.cull_mask = (cam.cull_mask | PhotoAnomaly.PHOTO_LAYER
+		| PhotoAnomaly.PRINT_LAYER) & ~PhotoAnomaly.EYE_ONLY_LAYER
 	_snap_cam.current = true
 	_snap_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	await RenderingServer.frame_post_draw
@@ -445,6 +481,37 @@ func _roll_risk() -> void:
 			events.photo_response()
 	elif figures != null:
 		figures.force_encounter(ENCOUNTER_DELAY)
+
+
+## Hand-drawn red circles over the review print, one per counted anomaly.
+## Rect2: position = screen centre, size.x/size.y = ellipse radii.
+class EvidenceMarks extends Control:
+	var marks: Array[Rect2] = []:
+		set(value):
+			marks = value
+			queue_redraw()
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	func _draw() -> void:
+		var ink := Color(0.85, 0.14, 0.1, 0.9)
+		for mark in marks:
+			var centre := mark.position
+			var radii := mark.size
+			# Two slightly misregistered passes read as a marker, not UI.
+			for pass_i in 2:
+				var jog := Vector2(2.5, -1.5) * float(pass_i)
+				var prev := Vector2.INF
+				for i in 33:
+					var a := TAU * float(i) / 32.0
+					var wobble := 1.0 + 0.05 * sin(a * 3.0 + float(pass_i))
+					var p := centre + jog + Vector2(cos(a) * radii.x,
+						sin(a) * radii.y) * wobble
+					if prev != Vector2.INF:
+						draw_line(prev, p, ink, 3.5 - float(pass_i))
+					prev = p
 
 
 ## Viewfinder framing marks while aiming — thin OSD brackets around the
