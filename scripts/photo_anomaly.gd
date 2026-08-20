@@ -217,11 +217,13 @@ func count_caption() -> String:
 		Type.PLACEMENT:
 			return "NOTHING HOLDS IT"
 		Type.DUPLICATE:
-			return "THERE ARE TWO"
+			# Name the impossibility, never the arrangement — "THERE ARE
+			# TWO" read as a shrug (owner, 2026-08-20).
+			return "TWO, WHEN YOU AREN'T LOOKING"
 		Type.GIANT:
-			return "IT IS THE WRONG SIZE"
+			return "IT SHOULD NOT FIT IN HERE"
 		Type.RING:
-			return "THEY FACE EACH OTHER"
+			return "THEY MEET WHEN THE ROOM IS EMPTY"
 		Type.WRITING:
 			return "\"%s\"" % phrase_for(world_seed, cell)
 		Type.BLEED:
