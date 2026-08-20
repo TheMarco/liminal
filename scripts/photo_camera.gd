@@ -256,8 +256,10 @@ func _scan_proximity() -> Vector2:
 			continue
 		var k := 1.0 - clampf((d - PROXIMITY_NEAR)
 			/ (PROXIMITY_RANGE - PROXIMITY_NEAR), 0.0, 1.0)
+		var excludes: Array[RID] = [player.get_rid()]
+		excludes.append_array(anomaly.occlusion_excludes())
 		var query := PhysicsRayQueryParameters3D.create(
-			cam.global_position, point, 1, [player.get_rid()])
+			cam.global_position, point, 1, excludes)
 		var hit := space.intersect_ray(query)
 		var occluded := not hit.is_empty() and Vector3(hit["position"]) \
 			.distance_to(point) > OCCLUSION_TOLERANCE
@@ -293,8 +295,10 @@ func _aim_warmth() -> float:
 		var to_point := point - cam.global_position
 		if to_point.length() > anomaly.capture_distance():
 			continue
+		var excludes: Array[RID] = [player.get_rid()]
+		excludes.append_array(anomaly.occlusion_excludes())
 		var query := PhysicsRayQueryParameters3D.create(
-			cam.global_position, point, 1, [player.get_rid()])
+			cam.global_position, point, 1, excludes)
 		var hit := space.intersect_ray(query)
 		if not hit.is_empty() and Vector3(hit["position"]) \
 				.distance_to(point) > OCCLUSION_TOLERANCE:
@@ -383,6 +387,8 @@ func _captured_anomalies() -> Array[PhotoAnomaly]:
 			continue
 		if not _on_facing_side(anomaly, cam.global_position):
 			continue
+		var excludes: Array[RID] = [player.get_rid()]
+		excludes.append_array(anomaly.occlusion_excludes())
 		var all_good := true
 		for point in points:
 			var to_point: Vector3 = point - cam.global_position
@@ -392,7 +398,7 @@ func _captured_anomalies() -> Array[PhotoAnomaly]:
 				all_good = false
 				break
 			var query := PhysicsRayQueryParameters3D.create(
-				cam.global_position, point, 1, [player.get_rid()])
+				cam.global_position, point, 1, excludes)
 			var hit := space.intersect_ray(query)
 			if not hit.is_empty() and Vector3(hit["position"]) \
 					.distance_to(point) > OCCLUSION_TOLERANCE:

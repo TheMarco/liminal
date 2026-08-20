@@ -77,6 +77,11 @@ var debug_visible := false
 ## as a physics bug, a turning one reads as held.
 var _spin: Node3D
 var _points: Array[Vector3] = []   # chunk-local sample points
+## Colliders the anomaly itself carries (GIANT's walk-blocker). The camera's
+## occlusion rays must ignore them — sample points sit inside the prop, so
+## its own body otherwise occludes it from every stance (found 2026-08-19:
+## a required GIANT was uncapturable from 16/16 stances).
+var _body_rids: Array[RID] = []
 
 
 func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
@@ -138,6 +143,10 @@ var _facing := Vector3.ZERO
 
 func facing_normal() -> Vector3:
 	return _facing
+
+
+func occlusion_excludes() -> Array[RID]:
+	return _body_rids
 
 
 func capture_distance() -> float:
@@ -324,6 +333,7 @@ func _build_giant(floor_h: float) -> void:
 		shape.position = Vector3(0, extents.y * factor * 0.5, 0)
 		body.add_child(shape)
 		pivot.add_child(body)
+		_body_rids.append(body.get_rid())
 	var glow := OmniLight3D.new()
 	glow.light_color = Color(0.72, 0.82, 1.0)
 	glow.light_energy = 0.5
