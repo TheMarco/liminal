@@ -40,6 +40,7 @@ const CAPTURE_DISTANCE_WRITING := 9.5
 
 const WRITING_FONT := preload("res://fonts/RazorKeen-Regular.otf")
 const PORTAL_SHADER := preload("res://shaders/portal_glimpse.gdshader")
+const PORTAL_GLOW_SHADER := preload("res://shaders/portal_glow.gdshader")
 ## CC0 Poly Haven panoramas the tear looks out into (SOURCE.md alongside).
 const PORTAL_PANOS := [
 	"res://textures/portals/abandoned_parking_2k.hdr",
@@ -357,6 +358,24 @@ func _build_portal(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	quad.rotation.y = atan2(dirv3.x, dirv3.z) + PI
 	add_child(quad)
 	_resolvables.append(quad)
+	# The outer energy bleed: a second, slightly larger additive quad a
+	# hair proud of the crack so the glow feathers onto the wall.
+	var glow_quad := MeshInstance3D.new()
+	var glow_mesh := QuadMesh.new()
+	glow_mesh.size = mesh.size * 1.35
+	glow_quad.mesh = glow_mesh
+	var glow_mat := ShaderMaterial.new()
+	glow_mat.shader = PORTAL_GLOW_SHADER
+	glow_mat.set_shader_parameter("seed_phase",
+		float(WorldGen.h(world_seed, cell.x, cell.y, 9331) % 977))
+	glow_quad.material_override = glow_mat
+	glow_quad.layers = quad.layers
+	glow_quad.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	glow_quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	glow_quad.position = quad.position + dirv3 * -0.02
+	glow_quad.rotation.y = quad.rotation.y
+	add_child(glow_quad)
+	_resolvables.append(glow_quad)
 	_points = [quad.position, quad.position + Vector3(0, 0.9, 0)]
 	_facing = -dirv3
 

@@ -201,8 +201,11 @@ with it.
   (writing on `PRINT_LAYER` bit 16 that exists only in the developed
   photo: eye and raised viewfinder never show it, the snapshot camera
   does), PORTAL (a
-  camera-only CRACK in a wall — `shaders/portal_glimpse.gdshader`, a jagged
-  zigzag fissure with needle tips and a luminous seam, alpha-scissor, and
+  camera-only CRACK in a wall — `shaders/portal_glimpse.gdshader`, a fractal
+  zigzag fissure (coarse kinks + fine serration + S-drift), independent
+  pinching lips, a seam that flares at kinks and tips, alpha-scissor,
+  plus a second additive quad (`shaders/portal_glow.gdshader`) bleeding
+  cold energy onto the wall, and
   through it a CC0 Poly Haven 360 panorama of the real world sampled by
   the TRUE view ray, so perspective and parallax are geometrically
   correct; Reinhard + dead grade keeps it overcast; fog_disabled; panos
