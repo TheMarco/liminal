@@ -472,8 +472,11 @@ func _style(control: Control, size: int, color: Color,
 	control.add_theme_font_size_override("font_size", size)
 	control.add_theme_color_override("font_color", color)
 	control.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-	control.add_theme_constant_override("shadow_offset_x", 1)
-	control.add_theme_constant_override("shadow_offset_y", 1)
+	control.add_theme_constant_override("shadow_offset_x", 2)
+	control.add_theme_constant_override("shadow_offset_y", 2)
+	# Same-ink outline: fattens the hairline so the tube pass keeps it.
+	control.add_theme_color_override("font_outline_color", color)
+	control.add_theme_constant_override("outline_size", 1)
 	if width > 0.0 or height > 0.0:
 		control.custom_minimum_size = Vector2(width, height)
 
@@ -487,11 +490,14 @@ func _relayout() -> void:
 	# The footer used to retain a 70 px dock while its contents scaled up, which
 	# clipped the buttons on large and tall displays. Scale the dock itself and
 	# keep a generous safe margin below the controls.
+	# Title-safe: the footer keeps at least the OSD's safe fraction from
+	# every edge, whichever is larger at this size.
+	var safe := VhsOsd.safe_inset(Vector2(viewport))
 	if is_instance_valid(_main_dock):
-		_main_dock.offset_left = 34.0 * scale
-		_main_dock.offset_right = -34.0 * scale
-		_main_dock.offset_top = -124.0 * scale
-		_main_dock.offset_bottom = -24.0 * scale
+		_main_dock.offset_left = maxf(34.0 * scale, safe.x)
+		_main_dock.offset_right = -maxf(34.0 * scale, safe.x)
+		_main_dock.offset_top = -(100.0 * scale + safe.y)
+		_main_dock.offset_bottom = -safe.y
 		_main_dock.add_theme_constant_override("separation",
 			maxi(4, roundi(6.0 * scale)))
 	for entry in _scaled:

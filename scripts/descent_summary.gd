@@ -64,8 +64,10 @@ func _style(label: Label, base_size: int, color: Color) -> void:
 	label.add_theme_font_size_override("font_size", roundi(float(base_size) * scale))
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
-	label.add_theme_constant_override("shadow_offset_x", roundi(scale))
-	label.add_theme_constant_override("shadow_offset_y", roundi(scale))
+	label.add_theme_constant_override("shadow_offset_x", roundi(2.0 * scale))
+	label.add_theme_constant_override("shadow_offset_y", roundi(2.0 * scale))
+	label.add_theme_color_override("font_outline_color", color)
+	label.add_theme_constant_override("outline_size", roundi(scale))
 
 
 func _input(event: InputEvent) -> void:

@@ -12,7 +12,17 @@ const FONT := preload("res://fonts/VT323-Regular.ttf")
 
 ## Slightly green-grey white: pure white reads as UI, this reads as phosphor.
 const INK := Color(0.92, 0.96, 0.90, 0.94)
-const INK_DIM := Color(0.92, 0.96, 0.90, 0.55)
+const INK_DIM := Color(0.92, 0.96, 0.90, 0.78)
+## Title-safe margin as a fraction of each viewport dimension. Every OSD
+## element sits inside it and the viewfinder brackets mark it, so nothing is
+## lost to the tube's warp, vignette or an overscanning display.
+const SAFE_FRACTION := 0.06
+## Everything the OSD says is read through the CRT pass, which emulates a
+## 320-row signal: strokes thinner than a scanline vanish. Labels are set
+## with a same-ink outline that fattens VT323's hairline into a stroke that
+## survives, plus a hard shadow for contrast on bright rooms.
+const STROKE := 2
+const SHADOW_OFFSET := 3
 const RED := Color(1.0, 0.28, 0.20)
 const AMBER := Color(1.0, 0.72, 0.25)
 const SHADOW := Color(0.0, 0.0, 0.0, 0.85)
@@ -24,9 +34,42 @@ static func style_label(label: Label, size: int, color := INK) -> void:
 	label.add_theme_font_size_override("font_size", size)
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_shadow_color", SHADOW)
-	label.add_theme_constant_override("shadow_offset_x", 2)
-	label.add_theme_constant_override("shadow_offset_y", 2)
-	label.add_theme_constant_override("outline_size", 0)
+	label.add_theme_constant_override("shadow_offset_x", SHADOW_OFFSET)
+	label.add_theme_constant_override("shadow_offset_y", SHADOW_OFFSET)
+	label.add_theme_color_override("font_outline_color", color)
+	label.add_theme_constant_override("outline_size", STROKE)
+	label.add_theme_constant_override("shadow_outline_size", STROKE)
+
+
+## Recolour a styled label: ink and stroke move together, or a red caption
+## keeps a white fringe.
+static func set_ink(label: Label, color: Color) -> void:
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_outline_color", color)
+
+
+## Drawn-widget twin of style_label: shadowed, stroked OSD text.
+static func draw_osd_string(ci: CanvasItem, f: Font, at: Vector2, text: String,
+		size: int, ink: Color) -> void:
+	var off := Vector2(SHADOW_OFFSET, SHADOW_OFFSET)
+	ci.draw_string_outline(f, at + off, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		size, STROKE, SHADOW)
+	ci.draw_string(f, at + off, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+		SHADOW)
+	ci.draw_string_outline(f, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+		STROKE, ink)
+	ci.draw_string(f, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, ink)
+
+
+## Safe-area inset in pixels for a viewport of the given size.
+static func safe_inset(viewport_size: Vector2) -> Vector2:
+	return viewport_size * SAFE_FRACTION
+
+
+## HUD scale for a viewport: 1.0 at 720p, growing with height and never
+## clamped — a 3.0x display gets 3.0x text, or the tube eats it.
+static func hud_scale(viewport_size: Vector2) -> float:
+	return maxf(1.0, viewport_size.y / 720.0)
 
 
 static func make_label(size: int, color := INK) -> Label:
@@ -75,10 +118,8 @@ class Meter extends Control:
 				ink = VhsOsd.RED
 			elif value <= warn_threshold:
 				ink = VhsOsd.AMBER
-			draw_string(f, Vector2(tx + 2.0, ty + 2.0), text,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, VhsOsd.SHADOW)
-			draw_string(f, Vector2(tx, ty), text,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, ink)
+			VhsOsd.draw_osd_string(self, f, Vector2(tx, ty), text,
+				font_size, ink)
 		var low := value <= low_threshold
 		if low and blink_when_low and fmod(_blink_t, 0.9) > 0.55:
 			return
@@ -121,9 +162,14 @@ class Meter extends Control:
 ## camcorder cadence. Purely decorative; it owns no game state.
 class Frame extends Control:
 	var rec_font_size := 22
-	var inset := 24.0
+	var inset := Vector2(24.0, 24.0)
 	var arm := 30.0
 	var line := 2.0
+	## 0..1: something photographable is near. The REC lamp loses its
+	## cadence and tracking bars crawl through the frame — the camcorder
+	## picks up what the eye does not, growing with proximity, camera raised
+	## or not. Set by PhotoCamera; purely presentational here.
+	var interference := 0.0
 	var _t := 0.0
 
 	func _init() -> void:
@@ -139,24 +185,39 @@ class Frame extends Control:
 		var s := size
 		var c := VhsOsd.INK_DIM
 		for corner in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
-			var px: float = lerpf(inset, s.x - inset, corner.x)
-			var py: float = lerpf(inset, s.y - inset, corner.y)
+			var px: float = lerpf(inset.x, s.x - inset.x, corner.x)
+			var py: float = lerpf(inset.y, s.y - inset.y, corner.y)
 			var dx: float = 1.0 if corner.x == 0.0 else -1.0
 			var dy: float = 1.0 if corner.y == 0.0 else -1.0
 			draw_line(Vector2(px, py), Vector2(px + arm * dx, py), c, line)
 			draw_line(Vector2(px, py), Vector2(px, py + arm * dy), c, line)
+		# Interference: 1-3 translucent tracking bars, thicker and brighter
+		# the nearer the thing is, drifting down the frame at uneven speeds.
+		if interference > 0.01:
+			var k := clampf(interference, 0.0, 1.0)
+			var bars := 1 + int(k * 2.99)
+			for i in bars:
+				var speed := 0.16 + 0.11 * float(i)
+				var y := fposmod(_t * speed * s.y + float(i) * s.y * 0.37, s.y)
+				var thick := (3.0 + 9.0 * k) * (1.0 + 0.5 * float(i % 2))
+				var a := 0.06 + 0.16 * k
+				draw_rect(Rect2(0.0, y, s.x, thick), Color(1, 1, 1, a))
+				draw_rect(Rect2(0.0, y + thick, s.x, 1.5),
+					Color(0, 0, 0, a * 0.8))
 		# REC sits inside the top-left bracket. Dot and legend hold ~0.6s on,
-		# ~0.4s off.
+		# ~0.4s off — until interference breaks the cadence into a nervous
+		# stutter.
 		var on := fmod(_t, 1.0) < 0.6
+		if interference > 0.01:
+			var jitter := fmod(sin(_t * 41.0) * 43758.5453, 1.0)
+			if absf(jitter) < interference * 0.55:
+				on = not on
 		var f: Font = VhsOsd.FONT
-		var pos := Vector2(inset + 14.0, inset + 10.0)
+		var pos := Vector2(inset.x + 14.0, inset.y + 10.0)
 		var r := rec_font_size * 0.19
 		if on:
 			draw_circle(pos + Vector2(r + 2.0, r * 0.4 + 2.0), r, VhsOsd.SHADOW)
 			draw_circle(pos + Vector2(r, r * 0.4), r, VhsOsd.RED)
 		var tp := pos + Vector2(r * 2.0 + 9.0,
 			f.get_ascent(rec_font_size) - rec_font_size * 0.30)
-		draw_string(f, tp + Vector2(2, 2), "REC",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, rec_font_size, VhsOsd.SHADOW)
-		draw_string(f, tp, "REC",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, rec_font_size, VhsOsd.INK)
+		VhsOsd.draw_osd_string(self, f, tp, "REC", rec_font_size, VhsOsd.INK)
