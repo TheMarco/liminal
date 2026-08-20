@@ -420,9 +420,17 @@ func _take_photo() -> void:
 		# uniformly by the window's smaller fraction, centered.
 		var vs := Vector2(get_viewport().size)
 		var f := minf(ViewfinderMask.WINDOW_W, ViewfinderMask.WINDOW_H)
-		_photo.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		_photo.position = vs * (1.0 - f) * 0.5
-		_photo.size = vs * f
+		# Explicit zeroed anchors + offsets: the control was born FULL_RECT
+		# and a preset/position mix compounded into a bottom-right drift.
+		_photo.anchor_left = 0.0
+		_photo.anchor_top = 0.0
+		_photo.anchor_right = 0.0
+		_photo.anchor_bottom = 0.0
+		var top_left := vs * (1.0 - f) * 0.5
+		_photo.offset_left = top_left.x
+		_photo.offset_top = top_left.y
+		_photo.offset_right = top_left.x + vs.x * f
+		_photo.offset_bottom = top_left.y + vs.y * f
 		_photo.stretch_mode = TextureRect.STRETCH_SCALE
 		_photo.visible = true
 		# The evidence circles ride the same transform.
