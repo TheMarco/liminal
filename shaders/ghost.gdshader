@@ -21,6 +21,11 @@ uniform sampler2D screen_tex : hint_screen_texture, repeat_disable, filter_linea
 // both at once, the way a real one photographs.
 uniform float absorb_lit = 0.165;
 uniform float absorb_dark = 0.020;
+// Transmission multiplier for the recording mode. The RECOVERED TAPE pass
+// lifts black, adds grain and washes colour, so a figure tuned for the clean
+// tube loses its contrast there; the tape look closes the body down
+// (<1.0 = darker) to buy it back. 1.0 on the clean tube.
+uniform float density = 1.0;
 // Past the bottom of that range there is no light left to remove and black on
 // black is nothing at all. Only there, a noise-broken trace of value. Linear,
 // pre-tonemap.
@@ -64,9 +69,19 @@ instance uniform float flip_phase = 0.0;
 // this explicitly from script, advancing once from frame 0 to the final frame
 // so their walk can never wrap back to the entrance side.
 instance uniform float flip_frame = -1.0;
-// Opt-in temporal interpolation for one-shot passer sheets. Ordinary hostile
-// ghosts keep the crisp authored loop and pay no second-frame sample cost.
+// Opt-in temporal interpolation. Passers blend their one-shot walk; hostile
+// ghosts blend their loop too since 2026-08-15 — the 12fps step against a
+// 60fps world was the single loudest tell that they were sprites.
 instance uniform float flip_blend = 0.0;
+// Looping sheets blend the last frame back into the first instead of clamping
+// there. One-shot passer sheets keep the clamp: their walk must never wrap.
+instance uniform float flip_loop = 0.0;
+// Temporal echo: the two previous poses linger faintly inside the silhouette,
+// an analog smear that only shows against movement. Zero costs nothing.
+instance uniform float trail_amt = 0.0;
+// Animated heat-haze shimmer in the soft skirt just outside the body, so the
+// room wavers around the figure instead of ending at a cutout edge.
+uniform float aura_amt = 0.016;
 instance uniform float fade = 1.0;
 instance uniform float flip = 0.0;
 instance uniform float dissolve_seed = 0.0;
@@ -120,11 +135,17 @@ void vertex() {
 // Origin and size of the sprite-sheet cell showing this instant's pose. A
 // static cutout is simply the whole texture, so everything downstream can work
 // in one coordinate system without branching.
-void flip_cells(out vec2 org, out vec2 next_org, out vec2 size,
-		out float frame_mix) {
+vec2 cell_origin(float f, vec2 size) {
+	return vec2(mod(f, flip_cols), floor(f / flip_cols)) * size;
+}
+
+void flip_cells(out vec2 org, out vec2 next_org, out vec2 prev_org,
+		out vec2 prev2_org, out vec2 size, out float frame_mix) {
 	if (flip_cols < 0.5) {
 		org = vec2(0.0);
 		next_org = org;
+		prev_org = org;
+		prev2_org = org;
 		size = vec2(1.0);
 		frame_mix = 0.0;
 		return;
@@ -137,11 +158,15 @@ void flip_cells(out vec2 org, out vec2 next_org, out vec2 size,
 		raw_frame = mod(TIME * flip_fps + flip_phase * n, n);
 	}
 	float f = floor(raw_frame);
-	float next_f = min(f + 1.0, n - 1.0);
+	float next_f = flip_loop > 0.5 ? mod(f + 1.0, n) : min(f + 1.0, n - 1.0);
+	float prev_f = flip_loop > 0.5 ? mod(f - 1.0 + n, n) : max(f - 1.0, 0.0);
+	float prev2_f = flip_loop > 0.5 ? mod(f - 2.0 + n, n) : max(f - 2.0, 0.0);
 	frame_mix = flip_blend * fract(raw_frame);
 	size = vec2(1.0 / flip_cols, 1.0 / flip_rows);
-	org = vec2(mod(f, flip_cols), floor(f / flip_cols)) * size;
-	next_org = vec2(mod(next_f, flip_cols), floor(next_f / flip_cols)) * size;
+	org = cell_origin(f, size);
+	next_org = cell_origin(next_f, size);
+	prev_org = cell_origin(prev_f, size);
+	prev2_org = cell_origin(prev2_f, size);
 }
 
 
@@ -180,9 +205,12 @@ void fragment() {
 
 	vec2 cell_org;
 	vec2 next_cell_org;
+	vec2 prev_cell_org;
+	vec2 prev2_cell_org;
 	vec2 cell_size;
 	float frame_mix;
-	flip_cells(cell_org, next_cell_org, cell_size, frame_mix);
+	flip_cells(cell_org, next_cell_org, prev_cell_org, prev2_cell_org,
+		cell_size, frame_mix);
 
 	float remaining = clamp(fade, 0.0, 1.0);
 	float dissolve = 1.0 - remaining;
@@ -207,6 +235,15 @@ void fragment() {
 	if (frame_mix > 0.001) {
 		float next_a = soft_alpha(smoke_uv, next_cell_org, cell_size);
 		a = mix(a, next_a, frame_mix);
+	}
+	// The echo is two raw taps, not two more blur kernels: it only has to
+	// thicken the coverage where the previous poses stood, and the erosion
+	// below chews its edge ragged anyway.
+	if (trail_amt > 0.001 && flip_cols > 0.5) {
+		vec2 t_uv = clamp(smoke_uv, vec2(0.0), vec2(1.0));
+		float ta = texture(tex, prev_cell_org + t_uv * cell_size).a;
+		float ta2 = texture(tex, prev2_cell_org + t_uv * cell_size).a;
+		a = max(a, max(ta * 0.40, ta2 * 0.20) * trail_amt);
 	}
 	a *= smoothstep(base_cut, base_cut + 0.018, smoke_uv.y);
 	float n1 = texture(noise_tex,
@@ -282,7 +319,14 @@ void fragment() {
 	// where the surface turns away fastest — makes the room visibly swim as it
 	// passes behind the figure. Nothing else in the frame says as clearly that
 	// the thing occupies space rather than being pasted at that depth.
-	vec2 warp = nrm.xy * refract_amt * (0.35 + 0.65 * (1.0 - shape));
+	// In the soft skirt outside the body the same two noise fields drive an
+	// animated shimmer, so the room wavers around the silhouette the way air
+	// does around something the wrong temperature. Inside the body the relief
+	// normal keeps sole ownership of the refraction.
+	float rim = clamp(haze_shape - shape, 0.0, 1.0);
+	vec2 aura = vec2(bend_b - 0.5, bend_a - 0.5) * aura_amt
+		* rim * (0.6 + 0.4 * edge_noise);
+	vec2 warp = nrm.xy * refract_amt * (0.35 + 0.65 * (1.0 - shape)) + aura;
 	vec3 behind = texture(screen_tex, SCREEN_UV + warp).rgb;
 	float bg_luma = dot(behind, vec3(0.2126, 0.7152, 0.0722));
 	float absorb = mix(absorb_dark, absorb_lit, smoothstep(0.0, 0.22, bg_luma));
@@ -290,6 +334,7 @@ void fragment() {
 	// less of itself to see through where its silhouette turns away, and the
 	// coverage the blur already computed is a serviceable stand-in for that.
 	absorb *= (1.0 + form * form_gain) * mix(edge_transmit, 1.0, shape);
+	absorb *= density;
 	// Absorption is never perfectly neutral. Letting a little more blue through
 	// than red leaves the thin material faintly cold without the shader ever
 	// choosing a colour of its own — the tint is still the room's.

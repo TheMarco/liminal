@@ -8,6 +8,11 @@ extends Node3D
 ## the torch or its touch can end the encounter sooner.
 
 const FADE_T := 0.95
+const WISP_SHADER := preload("res://shaders/ghost_wisp.gdshader")
+## Local fog density at full presence. The env's volumetric fog is thin
+## (~0.0016), so even a modest local volume reads as the air going wrong
+## around the figure without becoming an opaque blob.
+const GLOOM_DENSITY := 0.65
 
 ## The creep. Watching a figure never freezes it — it keeps coming, slowly
 ## enough that a player with a plan has time to execute it.
@@ -221,6 +226,10 @@ var _unseen_min := UNSEEN_MIN
 var _chase_limit := CHASE_DOOR_LIMIT
 
 var _quad: MeshInstance3D
+## Matter it sheds and darkness it gathers: true-3D wisp particles and a local
+## fog volume anchor the flat card into the room's space. Both follow `fade`.
+var _wisps: GPUParticles3D
+var _gloom: FogVolume
 ## Private stream. World dressing draws from the global generator while chunks
 ## build, and a figure is built inside that: every extra global randf() here
 ## shifts every prop authored after it and moves the world hash. Anything added
@@ -270,11 +279,33 @@ var _move_shape: CapsuleShape3D
 var _move_query: PhysicsShapeQueryParameters3D
 
 
+## Body transmission on the RECOVERED TAPE pass (1.0 is the clean tube's).
+## 0.25: on the tape the body has to be a hole, because every lift the tape
+## adds (grain, black floor, bloom, chroma smear) is a lift toward grey. A
+## wider noise-veiled body floor was tried 2026-08-19 and made it worse — the
+## veil IS grey; do not bring it back.
+const TAPE_DENSITY := 0.25
+static var _tape_look := false
+
+
+## The recording mode changed: every cached body material follows. The tape
+## pass greys the frame, so figures close down to keep their contrast.
+static func set_tape_look(tape: bool) -> void:
+	_tape_look = tape
+	for m in _mats.values():
+		_apply_look(m as ShaderMaterial, tape)
+
+
+static func _apply_look(m: ShaderMaterial, tape: bool) -> void:
+	m.set_shader_parameter("density", TAPE_DENSITY if tape else 1.0)
+
+
 static func _mat_for(texname: String) -> ShaderMaterial:
 	if _mats.has(texname):
 		return _mats[texname]
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/ghost.gdshader")
+	_apply_look(m, _tape_look)
 	# Flipbook sheets are WebP: a two dozen frame grid is an order of magnitude
 	# larger than a single cutout, and PNG is the wrong trade at that size.
 	var ext := "webp" if FLIPBOOKS.has(texname) else "png"
@@ -349,6 +380,15 @@ func _ready() -> void:
 		_anim_frame = _rng.randf() * _anim_count
 		_anim_next_hold = _rng.randf_range(ANIM_HOLD_GAP_MIN, ANIM_HOLD_GAP_MAX)
 		_quad.set_instance_shader_parameter("flip_frame", _anim_frame)
+		# Temporal smoothing and echo: the fractional frame the script already
+		# feeds blends between poses (looping back through frame 0), and the
+		# two previous poses linger as a faint analog smear. The observation
+		# stalls in _animate freeze the fraction too, so a held pose stays
+		# perfectly still.
+		_quad.set_instance_shader_parameter("flip_blend", 1.0)
+		_quad.set_instance_shader_parameter("flip_loop", 1.0)
+		_quad.set_instance_shader_parameter("trail_amt", 0.55)
+	_build_presence()
 	_bob_base = position.y
 	_bob_t = randf() * TAU
 	if player != null:
@@ -383,6 +423,56 @@ func _ready() -> void:
 		sh.bus = SoundBank.HALL_BUS
 		add_child(sh)
 		sh.play()
+
+
+## The figure's 3D footprint: shed wisps and gathered darkness. The card is a
+## billboard; these two are not, and their parallax is what convinces the eye
+## the figure stands IN the room rather than being pasted at its depth.
+func _build_presence() -> void:
+	_wisps = GPUParticles3D.new()
+	_wisps.amount = 14
+	_wisps.lifetime = 2.4
+	_wisps.preprocess = 1.4
+	_wisps.local_coords = false
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(0.28, 0.95, 0.10)
+	pm.direction = Vector3(0, 1, 0)
+	pm.spread = 24.0
+	pm.initial_velocity_min = 0.04
+	pm.initial_velocity_max = 0.16
+	pm.gravity = Vector3(0, 0.10, 0)
+	pm.scale_min = 0.4
+	pm.scale_max = 1.0
+	pm.turbulence_enabled = true
+	pm.turbulence_noise_strength = 0.4
+	pm.turbulence_noise_scale = 2.4
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1, 1, 1, 0.0))
+	ramp.set_color(1, Color(1, 1, 1, 0.0))
+	ramp.add_point(0.35, Color(1, 1, 1, 0.6))
+	var ramp_tex := GradientTexture1D.new()
+	ramp_tex.gradient = ramp
+	pm.color_ramp = ramp_tex
+	_wisps.process_material = pm
+	var mote := QuadMesh.new()
+	mote.size = Vector2(0.46, 0.46)
+	var mat := ShaderMaterial.new()
+	mat.shader = WISP_SHADER
+	mote.material = mat
+	_wisps.draw_pass_1 = mote
+	_wisps.position = Vector3(0, 1.05, 0)
+	add_child(_wisps)
+
+	_gloom = FogVolume.new()
+	_gloom.shape = RenderingServer.FOG_VOLUME_SHAPE_ELLIPSOID
+	_gloom.size = Vector3(1.9, 2.8, 1.9)
+	var fog := FogMaterial.new()
+	fog.density = GLOOM_DENSITY
+	fog.albedo = Color(0.04, 0.04, 0.05)
+	_gloom.material = fog
+	_gloom.position = Vector3(0, 1.25, 0)
+	add_child(_gloom)
 
 
 ## Drives the sprite sheet's frame instead of letting the shader run it on a
@@ -515,6 +605,11 @@ func _physics_process(dt: float) -> void:
 		# three by FADE_T would make two of them jump.
 		var left := clampf(_fade / maxf(_fade_len, 0.001), 0.0, 1.0)
 		_quad.set_instance_shader_parameter("fade", left)
+		# The shed matter and the gathered dark go with the body.
+		if _wisps != null:
+			_wisps.emitting = left > 0.35
+		if _gloom != null and _gloom.material != null:
+			(_gloom.material as FogMaterial).density = GLOOM_DENSITY * left
 		if _flash != null:
 			# Envelope follows the front up the body; the flicker on top of it is
 			# what separates a fire from a lamp on a dimmer.
@@ -546,6 +641,10 @@ func _update_chase_lifetime() -> void:
 			_fade = -1.0
 			_fade_len = FADE_T
 			_quad.set_instance_shader_parameter("fade", 1.0)
+			if _wisps != null:
+				_wisps.emitting = true
+			if _gloom != null and _gloom.material != null:
+				(_gloom.material as FogMaterial).density = GLOOM_DENSITY
 		return
 	if _chase_doors >= _chase_limit and ghost_room != player_room \
 			and _fade < 0.0:

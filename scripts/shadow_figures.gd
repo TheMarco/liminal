@@ -40,6 +40,9 @@ const DEBUT_FLOOR := {
 
 signal burned_away
 signal seen_by_player
+## A hostile figure just entered the world (spawned or adopted) — the
+## recording's cue for a catastrophic frame or two.
+signal spawned
 ## One of them closed the distance. The owning game mode decides the outcome;
 ## Wander keeps this manager suspended, while Descent treats contact as fatal.
 signal reached_player
@@ -162,6 +165,7 @@ func adopt(f: ShadowFigure) -> void:
 	f.reached_player.connect(func(): reached_player.emit())
 	_figs.append(f)
 	_sync_director_count()
+	spawned.emit()
 
 
 ## Level switch or portal jump: whatever was standing there stays behind.
@@ -323,6 +327,7 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> void:
 	f.reached_player.connect(func(): reached_player.emit())
 	_figs.append(f)
 	_sync_director_count()
+	spawned.emit()
 	if _dev:
 		print("spawned variant %d at %s (player %s)" % [f.variant, ground, player.global_position])
 
