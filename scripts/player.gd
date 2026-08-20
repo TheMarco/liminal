@@ -366,6 +366,10 @@ func _physics_process(dt: float) -> void:
 	else:
 		_stamina = minf(STAMINA_MAX, _stamina + STAMINA_REGEN_RATE * dt)
 	var speed := SPRINT_SPEED if sprinting else WALK_SPEED
+	# Eye to the viewfinder: you shuffle. The mask already blinds the
+	# periphery; the slowdown makes walking with the camera up a choice.
+	if photo_aim:
+		speed *= 0.6
 
 	# Chest deep in water you do not stride, and you certainly do not sprint.
 	var submerged := global_position.y + 0.55 < water_y

@@ -157,7 +157,11 @@ with it.
   `photo_anomaly.gd`): the phone is also the camera — C toggles it up and
   down, Space is the shutter (hold-RMB / LMB still work for mouse users);
   the torch state is untouched, so a lit
-  torch keeps warding while shooting, and photos cost no charge. The
+  torch keeps warding while shooting, and photos cost no charge. Raising
+  the camera constricts vision to the viewfinder window
+  (`PhotoCamera.ViewfinderMask`: near-black eyecup surround, ~56x62%
+  live rectangle) and slows the walk to 0.6x — using the camera is meant
+  to feel blind and risky, not a free overlay. The
   camcorder is the detector: within 14m of an undocumented anomaly the OSD
   picks up interference (tracking bars, stuttering REC lamp, tape static
   from `SoundBank.static_hiss`, detector clicks that rattle faster as you

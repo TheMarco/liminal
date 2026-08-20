@@ -58,6 +58,7 @@ var _snap_cam: Camera3D
 var _photo: TextureRect
 var _marks: EvidenceMarks
 var _reticle: PhotoReticle
+var _mask: ViewfinderMask
 var _flash: ColorRect
 var _shutter: AudioStreamPlayer
 var _focus_tick: AudioStreamPlayer
@@ -87,6 +88,9 @@ signal proximity_changed(value: float, los: float)
 
 func _ready() -> void:
 	layer = 2
+	_mask = ViewfinderMask.new()
+	_mask.visible = false
+	add_child(_mask)
 	_reticle = PhotoReticle.new()
 	_reticle.visible = false
 	add_child(_reticle)
@@ -339,6 +343,7 @@ func _raise(toggled := false) -> void:
 	# and always sees the second; the print-only layer stays for the film.
 	player.cam.cull_mask |= PhotoAnomaly.PHOTO_LAYER
 	player.cam.cull_mask &= ~PhotoAnomaly.EYE_ONLY_LAYER
+	_mask.visible = true
 	_reticle.visible = true
 	if not _hinted:
 		_hinted = true
@@ -354,6 +359,7 @@ func _lower() -> void:
 		player.photo_aim = false
 		player.cam.cull_mask &= ~PhotoAnomaly.PHOTO_LAYER
 		player.cam.cull_mask |= PhotoAnomaly.EYE_ONLY_LAYER
+	_mask.visible = false
 	_reticle.visible = false
 
 
@@ -485,6 +491,46 @@ func _roll_risk() -> void:
 			events.photo_response()
 	elif figures != null:
 		figures.force_encounter(ENCOUNTER_DELAY)
+
+
+## The eyecup: raising the camera seriously constricts vision to the
+## viewfinder window — near-black surround, a small live rectangle, soft
+## inner falloff. Walking around with the camera up is meant to feel
+## blind and risky (owner, 2026-08-20).
+class ViewfinderMask extends Control:
+	## Fraction of the viewport the window occupies.
+	const WINDOW_W := 0.56
+	const WINDOW_H := 0.62
+	const FEATHER := 90.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	func _draw() -> void:
+		var s := size
+		var w := s.x * WINDOW_W
+		var h := s.y * WINDOW_H
+		var x0 := (s.x - w) * 0.5
+		var y0 := (s.y - h) * 0.5
+		var ink := Color(0.01, 0.01, 0.012, 0.985)
+		# Four opaque slabs around the window.
+		draw_rect(Rect2(0, 0, s.x, y0), ink)
+		draw_rect(Rect2(0, y0 + h, s.x, s.y - y0 - h), ink)
+		draw_rect(Rect2(0, y0, x0, h), ink)
+		draw_rect(Rect2(x0 + w, y0, s.x - x0 - w, h), ink)
+		# Soft inner falloff so the window edge reads as optics, not UI.
+		for i in 6:
+			var k := float(i + 1) / 6.0
+			var inset := FEATHER * (1.0 - k)
+			draw_rect(Rect2(x0 + inset, y0 + inset,
+				w - inset * 2.0, h - inset * 2.0),
+				Color(0.01, 0.01, 0.012, 0.16 * (1.0 - k)), false,
+				FEATHER / 6.0)
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
 
 
 ## Hand-drawn red circles over the review print, one per counted anomaly.
