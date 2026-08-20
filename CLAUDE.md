@@ -281,8 +281,15 @@ with it.
   process to video frames (CRT-side TIME stays continuous); `chroma_delay`,
   `overscan` 3%, `black_lift`, `field_amount` (half-line parity shimmer,
   never dark lines), row-correlated `line_noise`/`chroma_noise`,
-  horizontal `bloom_amount` above `bloom_threshold`, `color_balance`; the
-  warp is aspect-aware in both modes. Deliberately NOT done: a SubViewport
+  horizontal `bloom_amount` above `bloom_threshold`, `color_balance`, and an
+  auto-iris (`auto_exposure`/`ae_target`, a nine-fixed-tap scene average —
+  hint_screen_texture has no usable mip chain, textureLod reads black)
+  that stops bright rooms down (the Poolrooms fog wash) and lifts dark
+  ones; `highlight_rolloff`/`highlight_knee` compress only ABOVE the knee
+  (the base term must be min(l, knee) — a bare knee pins every darker
+  pixel UP to knee level and flattens the frame to beige, and `return` is
+  illegal in a canvas fragment, so a failed probe renders the ColorRect
+  solid white); the warp is aspect-aware in both modes. Deliberately NOT done: a SubViewport
   with a 29.97 fps frame hold (input-lag feel in mouse-look; broad
   refactor) — the noise cadence gets the perceptual payoff. The tape is also the danger instrument
   (2026-08-19): `PostProcessController.set_presence` takes the nearness of

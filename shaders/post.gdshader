@@ -31,7 +31,7 @@ fed a non-zero amount.
 
 shader_type canvas_item;
 
-uniform sampler2D SCREEN_TEXTURE: hint_screen_texture;
+uniform sampler2D SCREEN_TEXTURE: hint_screen_texture, filter_linear_mipmap;
 
 uniform vec2 resolution = vec2(720.0, 320.0);
 
@@ -97,6 +97,17 @@ uniform float chroma_noise :hint_range(0.0, 1.0) = 0.0;
 uniform float bloom_amount :hint_range(0.0, 1.0) = 0.0;
 uniform float bloom_threshold :hint_range(0.0, 1.0) = 0.7;
 uniform vec3 color_balance = vec3(1.0, 1.0, 1.0);
+// Highlight shoulder: bright interiors (white tile, water glare) washed the
+// tape out under bright_boost. Above the knee, excess luminance compresses
+// Reinhard-style; 0 disables (the clean tube keeps its linear response).
+uniform float highlight_rolloff :hint_range(0.0, 2.0) = 0.0;
+uniform float highlight_knee :hint_range(0.2, 1.0) = 0.72;
+// Auto-iris: expose by the scene's average luminance (deep mip of the
+// screen), the way a consumer camcorder hunts. 0 disables; the clean tube
+// keeps its fixed gain. Bright tile rooms pull the gain down instead of
+// washing out; dark corridors get a little help.
+uniform float auto_exposure :hint_range(0.0, 1.0) = 0.0;
+uniform float ae_target :hint_range(0.1, 0.6) = 0.30;
 
 float random(vec2 uv){
     return fract(cos(uv.x * 83.4827 + uv.y * 92.2842) * 43758.5453123);
@@ -423,6 +434,33 @@ void fragment(){
     clr *= 1.0 + scan_line_amount * 0.6 + line * 3.0 + grille_amount * 2.0;
     if(vignette_amount > 0.0)clr *= vignette(pos);
     clr *= bright_boost;
+    if(auto_exposure > 0.0){
+        // Nine fixed taps stand in for a scene average — hint_screen_texture
+        // provides no usable mip chain here, and a deep textureLod read
+        // returned black, slamming the iris to max gain (2026-08-20).
+        float avg = 0.0;
+        for(int ax = 0; ax < 3; ax++){
+            for(int ay = 0; ay < 3; ay++){
+                vec2 at = vec2(0.2 + 0.3 * float(ax), 0.2 + 0.3 * float(ay));
+                avg += dot(texture(SCREEN_TEXTURE, at).rgb,
+                    vec3(0.299, 0.587, 0.114));
+            }
+        }
+        avg /= 9.0;
+        float gain = clamp(ae_target / max(avg, 0.02), 0.42, 1.7);
+        clr *= mix(1.0, gain, auto_exposure);
+    }
+    if(highlight_rolloff > 0.0){
+        // Only luminance ABOVE the knee compresses. The base term must be
+        // min(l, knee): with a bare knee, every pixel below it was pulled
+        // UP to knee level, which pinned the whole frame to a flat beige
+        // and silently neutralised boost and iris (found 2026-08-20).
+        float l = dot(clr, vec3(0.299, 0.587, 0.114));
+        float excess = max(l - highlight_knee, 0.0);
+        float target = min(l, highlight_knee)
+            + excess / (1.0 + excess * highlight_rolloff);
+        clr *= target / max(l, 1e-4);
+    }
     // Exposure instability: an auto-iris hunting.
     if(flicker_amount > 0.0){
         float fl = sin(st * 17.0) * 0.35 + sin(st * 7.31) * 0.25

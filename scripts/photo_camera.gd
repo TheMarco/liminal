@@ -403,7 +403,11 @@ func _take_photo() -> void:
 			anomaly.resolve()
 			photo_documented.emit(anomaly.id, director.documented_count(),
 				director.required_count(), anomaly.count_caption())
-	_marks.marks = marks if counted else []
+	# The ternary must stay typed: `[] ` unifies the whole expression to a
+	# plain Array, and assigning that to Array[Rect2] is a runtime error
+	# that also skipped the risk roll (found in a play log, 2026-08-20).
+	var none: Array[Rect2] = []
+	_marks.marks = marks if counted else none
 	_marks.visible = _photo.visible and not _marks.marks.is_empty()
 	# Only evidence provokes; snapshots of nothing stay free.
 	_pending_risk = counted

@@ -59,6 +59,8 @@ func setup(host: Node, found_footage := false, enabled := true) -> void:
 	_crt_material.set_shader_parameter("bright_boost", 1.4)
 	_found_footage_material = ShaderMaterial.new()
 	_found_footage_material.shader = post_shader
+	# 1.0: with the auto-iris as the sole level control, a fixed boost only
+	# double-exposes bright rooms (the Poolrooms wash, 2026-08-20).
 	_found_footage_material.set_shader_parameter("bright_boost", 1.38)
 	# 854x480: the same grid main._apply_scaling renders the 3D world at, so
 	# the shader resamples a real SD picture instead of point-sampling a
@@ -96,6 +98,12 @@ func setup(host: Node, found_footage := false, enabled := true) -> void:
 	_found_footage_material.set_shader_parameter("scan_line_amount", 1.0)
 	_found_footage_material.set_shader_parameter("dv_blur", 0.5)
 	_found_footage_material.set_shader_parameter("dv_chroma_blur", 0.8)
+	# Bright interiors (Poolrooms tile) washed out under the boost; the
+	# shoulder compresses only the top of the range.
+	_found_footage_material.set_shader_parameter("highlight_rolloff", 1.0)
+	_found_footage_material.set_shader_parameter("highlight_knee", 0.78)
+	_found_footage_material.set_shader_parameter("auto_exposure", 1.0)
+	_found_footage_material.set_shader_parameter("ae_target", 0.21)
 	# Signal model: tape-side randomness steps at 29.97 Hz, chroma lags luma
 	# by under a source pixel, the tube overscans 3%, recorded black floats,
 	# fields shimmer, noise runs along rows, highlights bloom sideways, and
