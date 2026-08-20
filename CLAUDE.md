@@ -310,6 +310,10 @@ with it.
   detour every frame re-introduces the doorway "shiver".
 - `audit_descent_routes` costs ~6s/seed at current bands; the suite runs 40
   seeds to fit the 300s timeout.
+- `audit_photo_coverage` proves every REQUIRED anomaly on the boot floor is
+  capturable from a real stance — the guard against "EVIDENCE points at it,
+  nothing can frame it" (a GIANT's own collider once occluded its sample
+  points; camera rays exclude `PhotoAnomaly.occlusion_excludes()`).
 - One unexplained world-hash drift was accepted 2026-08-03: 8 wander Annex
   cells (seed 1) gained 1-2 nodes with no identified cause. If Annex wander
   dressing looks wrong, start bisecting there.
