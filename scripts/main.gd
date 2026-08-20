@@ -841,13 +841,15 @@ func descent_photo_refusal_caption() -> String:
 func _on_photo_documented(_anomaly_id: String, count: int,
 		required: int) -> void:
 	_show_event_message("PHOTOGRAPH %d / %d" % [count, required])
-	# If the evidence counter is live, walk it to the next nearest target —
-	# or retire it once the tape is satisfied.
-	if is_instance_valid(_descent_hud) \
-			and _descent_hud.evidence_target != Vector3.INF:
+	# The last photograph gets a heading without waiting for a tape refusal:
+	# at REQUIRED-1 the EVIDENCE counter comes up on its own (2026-08-19 —
+	# hunting the final anomaly blind was the feature's last frustration).
+	# A live counter walks to the next nearest target; satisfaction retires it.
+	if is_instance_valid(_descent_hud):
 		if count >= required:
 			_descent_hud.evidence_target = Vector3.INF
-		else:
+		elif count == required - 1 \
+				or _descent_hud.evidence_target != Vector3.INF:
 			_grant_evidence_hint()
 	if _post_process != null:
 		_post_process.damage_hit(0.12)
