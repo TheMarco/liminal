@@ -1506,6 +1506,10 @@ func _maybe_probe() -> void:
 		return
 	var probe := ReflectionProbe.new()
 	probe.update_mode = ReflectionProbe.UPDATE_ONCE
+	# Reflections must only know the world the eye knows: with the default
+	# mask, polished floors reflected lens-only anomalies and camera-only
+	# writing (owner report, 2026-08-20).
+	probe.cull_mask &= ~(PhotoAnomaly.PHOTO_LAYER | PhotoAnomaly.PRINT_LAYER)
 	var span := _room_span()
 	var rc := WorldGen.room_centre(wseed, room_root)
 	var local_c := Vector3(rc.x - float(cell.x) * S, ceil_h / 2.0,

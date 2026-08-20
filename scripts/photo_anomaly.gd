@@ -361,6 +361,7 @@ func _build_writing(floor_h: float, wall_dir: int, wall_along: float,
 	label.outline_size = 0
 	var layer := PRINT_LAYER if print_only else PHOTO_LAYER
 	label.layers = (1 | layer) if debug_visible else layer
+	label.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	# Walls carry their thickness inward from the canonical edge, so the
 	# writing floats a hand's width proud of the paper, never inside it.
 	var plane := half + signf(dirv3.x + dirv3.z) * (half - 0.45)
@@ -567,6 +568,12 @@ func _set_layer(node: Node, layer: int, strip_collision := false) -> void:
 	if node is VisualInstance3D:
 		(node as VisualInstance3D).layers = \
 			(1 | layer) if debug_visible else layer
+	# Camera-only geometry must not feed global illumination either, or
+	# glossy floors mirror things the eye cannot see (SDFGI ignores render
+	# layers; owner report, 2026-08-20).
+	if node is GeometryInstance3D and (layer & (PHOTO_LAYER | PRINT_LAYER)):
+		(node as GeometryInstance3D).gi_mode = \
+			GeometryInstance3D.GI_MODE_DISABLED
 	if strip_collision and node is CollisionObject3D:
 		node.queue_free()
 		return
