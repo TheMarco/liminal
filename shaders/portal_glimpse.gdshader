@@ -41,10 +41,10 @@ float crack_cx(float yn, float seed_v){
 
 // Independent lip widths: the crack pinches and bellies organically.
 vec2 crack_lips(float yn, float seed_v){
-	float taper = pow(max(1.0 - abs(yn), 0.0), 1.6);
+	float taper = pow(max(1.0 - abs(yn), 0.0), 1.1);
 	float wl = 0.5 + 0.6 * noise1((yn + 1.0) * 6.0, seed_v + 11.0);
 	float wr = 0.5 + 0.6 * noise1((yn + 1.0) * 6.0, seed_v + 17.0);
-	return vec2(wl, wr) * 0.17 * taper;
+	return vec2(wl, wr) * 0.30 * taper;
 }
 
 void fragment(){
@@ -76,7 +76,7 @@ void fragment(){
 		- crack_cx(yn - 0.02, seed_phase)) * 22.0;
 	float flare = 0.45 + 0.9 * kink + 0.8 * pow(abs(yn), 3.0);
 	flare *= 0.85 + 0.15 * sin(TIME * 2.3 + yn * 4.0 + seed_phase);
-	float seam = exp(-lip_d / (wsum * 0.16)) * flare;
+	float seam = exp(-lip_d / (wsum * 0.07)) * flare;
 	col = mix(col, vec3(0.88, 0.95, 1.05), clamp(seam, 0.0, 0.85));
 
 	ALBEDO = col;

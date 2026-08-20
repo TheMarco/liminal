@@ -33,10 +33,10 @@ float crack_cx(float yn, float seed_v){
 
 // Independent lip widths: the crack pinches and bellies organically.
 vec2 crack_lips(float yn, float seed_v){
-	float taper = pow(max(1.0 - abs(yn), 0.0), 1.6);
+	float taper = pow(max(1.0 - abs(yn), 0.0), 1.1);
 	float wl = 0.5 + 0.6 * noise1((yn + 1.0) * 6.0, seed_v + 11.0);
 	float wr = 0.5 + 0.6 * noise1((yn + 1.0) * 6.0, seed_v + 17.0);
-	return vec2(wl, wr) * 0.17 * taper;
+	return vec2(wl, wr) * 0.30 * taper;
 }
 
 void fragment(){
@@ -49,7 +49,9 @@ void fragment(){
 	float dx = cuv.x - cx;
 	float lip_d = max(max(-lips.x - dx, dx - lips.y), 0.0);
 	float tip = smoothstep(1.25, 1.0, abs(yn));
-	float halo = exp(-lip_d * 16.0) * 0.30 * tip;
+	// Outside the lips only — inside, this quad milked the view.
+	float outside = smoothstep(0.0, 0.012, lip_d);
+	float halo = exp(-lip_d * 16.0) * 0.30 * tip * outside;
 	halo *= 0.75 + 0.25 * sin(TIME * 2.3 + yn * 4.0 + seed_phase);
 	ALBEDO = vec3(0.55, 0.68, 0.85) * halo;
 	ALPHA = clamp(halo, 0.0, 1.0);
