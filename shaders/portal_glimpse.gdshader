@@ -32,25 +32,36 @@ void fragment(){
 	vec2 base_uv = UV - 0.5;
 	float t = TIME * 0.03 + seed_phase;
 
-	// The tear is a hole first: near-black void, murk barely breathing in
-	// it, and one dead horizon as the only light. The tint arrives at any
-	// brightness (it is a fog colour), so it is hard-normalised to a dim
-	// hue before use — a bright fill reads as a glowing sheet, not an
-	// opening.
+	// A hole needs depth grammar, not murk: a pale dead sky far behind the
+	// wall, a black ridge silhouetted against it, and parallax strong
+	// enough to notice while strafing (a timid version read as "a grey
+	// blanket", owner 2026-08-20). The tint arrives at any brightness (it
+	// is a fog colour), so it is hard-normalised to a hue.
 	float tmax = max(tint.r, max(tint.g, tint.b));
 	vec3 hue = tint / max(tmax, 1e-4);
-	vec3 col = hue * 0.004;
-	for(int i = 0; i < 3; i++){
-		float depth = 0.35 + 0.5 * float(i);
-		vec2 uv = base_uv + view.xy * depth * 0.35;
-		float n = noise2(uv * (3.0 + float(i) * 2.0)
-			+ vec2(t * (0.4 + float(i) * 0.3), float(i) * 7.0));
-		col += hue * n * (0.014 - 0.004 * float(i));
-	}
-	// A dead horizon line, low in the frame, faintly luminous.
-	vec2 huv = base_uv + view.xy * 0.9 * 0.35;
-	float horizon = exp(-abs(huv.y + 0.18) * 16.0);
-	col += mix(hue, vec3(0.75, 0.76, 0.72), 0.55) * horizon * 0.10;
+
+	// One fixed interior horizon; parallax comes ONLY from each layer's uv
+	// offset (a view-dependent horizon fought the layer offsets and pushed
+	// the composition out of frame). Quad UV y runs DOWN.
+	const float H = 0.16;
+	// Sky: far layer, big parallax, slow cloud bands drifting sideways.
+	vec2 sky_uv = base_uv + view.xy * vec2(2.6, 1.4);
+	float bands = noise2(vec2(sky_uv.x * 1.6 + t * 2.0, sky_uv.y * 3.0));
+	vec3 sky = mix(vec3(0.055, 0.058, 0.054), hue * 0.10, 0.45)
+		+ vec3(0.055) * bands;
+	sky *= 1.0 + 1.3 * exp(-abs(sky_uv.y - H) * 5.0);
+	// Dies overhead (negative y), breathes at the horizon.
+	sky *= mix(0.25, 1.0, smoothstep(-0.75, H, sky_uv.y));
+	sky *= 0.85;
+
+	// Ground: a black ridge against the sky, nearer, so less parallax.
+	vec2 ridge_uv = base_uv + view.xy * vec2(1.1, 0.6);
+	float ridge_h = H - 0.02
+		+ (noise2(vec2(ridge_uv.x * 3.5 + seed_phase, 3.7)) - 0.5) * 0.22;
+	float ground = smoothstep(ridge_h - 0.015, ridge_h + 0.015, ridge_uv.y);
+	vec3 col = mix(sky, vec3(0.004, 0.004, 0.005), ground);
+	// Dust that never settles, drifting in front of everything.
+	col += vec3(noise2(base_uv * 9.0 + vec2(t * 5.0, -t * 2.0))) * 0.012;
 	// Grain that never settles.
 	col += (h21(base_uv * 371.0 + fract(TIME) * vec2(13.7, 7.9)) - 0.5) * 0.05;
 
@@ -58,8 +69,11 @@ void fragment(){
 	// tear silhouette is noise-torn plaster with no blend halo (the soft
 	// feather composited a pale glow against the wall).
 	vec2 e = abs(base_uv) * 2.0;
-	float tear = noise2(base_uv * 7.0 + seed_phase) * 0.22;
-	float edge = smoothstep(1.0, 0.90, max(e.x, e.y) + tear);
+	float tear = noise2(base_uv * 7.0 + seed_phase) * 0.12;
+	float shape = max(e.x, e.y) + tear;
+	float edge = smoothstep(1.0, 0.92, shape);
+	// A dark inner rim: the wall has thickness, the hole has a lip.
+	col *= smoothstep(1.0, 0.88, shape) * 0.85 + 0.15;
 
 	ALBEDO = col;
 	ALPHA = edge;
