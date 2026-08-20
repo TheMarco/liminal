@@ -174,11 +174,11 @@ with it.
   id `bleed:x:y` per cell) worth ONE credit per floor
   (`bleed_credit_used`), except that ANY bleed item may serve as the LAST
   photograph regardless of spent credit — the lift area is thick with
-  them, so the floor is always completable there — guaranteed ops near the lift. If the tape refuses
-  on photos, the HUD gains a persistent "EVIDENCE NNNm" distance counter to
-  the nearest undocumented planned anomaly
-  (`DescentHUD.evidence_target`, granted in `descent_commit_refused`), so
-  0/3 at the altar is never a dead end. Props are ALWAYS the floor's own
+  them, so the floor is always completable there — guaranteed ops near the lift. The HUD's persistent "EVIDENCE NNNm"
+  distance counter to the nearest undocumented planned anomaly
+  (`DescentHUD.evidence_target`) appears automatically at 2/3 and on any
+  photo tape refusal (`descent_commit_refused`), so the last photograph
+  always has a heading and 0/3 at the altar is never a dead end. Props are ALWAYS the floor's own
   signature `Chunk.BLEED_PROPS` object (owner rule 2026-08-19: foreign
   objects appear only as the bleed near the elevator, never as scattered
   anomalies — the 2026-08-18 foreign-prop experiment is reverted; prop-less
