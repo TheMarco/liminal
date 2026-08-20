@@ -30,6 +30,15 @@ static func required_for(p_floor_idx: int, p_theme: int) -> int:
 	if p_floor_idx >= 6:
 		extra += 1
 	return REQUIRED + extra
+
+
+## The route spine carries MORE valid anomalies than the tape demands (need
+## 3, walk past 5; need 4, past 7; need 5, past 8), so "n-1 of n, where is
+## the last one" cannot strand a floor on route (owner, 2026-08-20). The
+## gate itself never changes.
+static func spine_count_for(p_floor_idx: int, p_theme: int) -> int:
+	var required := required_for(p_floor_idx, p_theme)
+	return required + (2 if required <= 3 else 3)
 ## Extras are the coverage: the route spine is one path through an open maze
 ## and nothing forces the player across it, so the off-route pool must be
 ## dense enough that ANY walk to the lift passes evidence (raised 3 -> 9
@@ -86,8 +95,8 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 	# repeated (playtest, 2026-08-19).
 	var used_types := {}
 	var slot := 0
-	var required := required_for(p_route.floor_idx, p_route.theme)
-	for fraction in route_fractions(required):
+	var spine := spine_count_for(p_route.floor_idx, p_route.theme)
+	for fraction in route_fractions(spine):
 		var idx := clampi(int(float(path.size()) * float(fraction)),
 			1, path.size() - 2)
 		var placed := false

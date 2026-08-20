@@ -42,6 +42,7 @@ func _run() -> void:
 			var plan := PhotoDirector.build_plan(route)
 			plans += 1
 			var required := PhotoDirector.required_for(floor_idx, theme)
+			var spine := PhotoDirector.spine_count_for(floor_idx, theme)
 			var label := "seed %d floor %d theme %d" % [
 				world_seed, floor_idx + 1, theme]
 			if plan.size() < required:
@@ -76,15 +77,15 @@ func _run() -> void:
 						and not PhotoAnomaly.PROP_THEMES.has(theme):
 					failures.append("%s: prop anomaly %s on prop-less theme"
 						% [label, id])
-			if on_route != required:
+			if on_route != spine:
 				failures.append("%s: %d on-route anomalies, need exactly %d"
-					% [label, on_route, required])
-			# Prop themes must vary the required set; WRITING-only themes
-			# cannot and are exempt.
+					% [label, on_route, spine])
+			# The spine must offer at least `required` distinct kinds on
+			# prop themes; WRITING-only themes cannot vary and are exempt.
 			if PhotoAnomaly.PROP_THEMES.has(theme) \
 					and required_types.size() < required:
-				failures.append("%s: required set repeats a type (%d kinds)"
-					% [label, required_types.size()])
+				failures.append("%s: spine repeats down to %d kinds, need %d"
+					% [label, required_types.size(), required])
 	for failure in failures:
 		print("  FAIL " + failure)
 	if failures.is_empty():

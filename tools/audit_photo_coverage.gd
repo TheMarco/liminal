@@ -52,8 +52,9 @@ func run() -> void:
 		expect(frames > 0, "required %s type %d capturable from 0/16 stances"
 			% [str(at), anomaly.type])
 		checked += 1
-	expect(checked == director.required_count(),
-		"expected %d required anomalies, checked %d" % [
-			director.required_count(), checked])
+	var spine := PhotoDirector.spine_count_for(
+		director.floor_idx, director.theme)
+	expect(checked == spine,
+		"expected %d on-route anomalies, checked %d" % [spine, checked])
 	await teardown_game(game)
 	finish("photo coverage: %d required anomalies capturable" % checked)
