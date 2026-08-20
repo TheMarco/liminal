@@ -18,7 +18,8 @@ extends Node3D
 ## cell * CELL_SIZE with y = 0). Documented state does NOT live here — the
 ## director owns it, so a rebuilt cell cannot resurrect a spent photograph.
 
-enum Type { PLACEMENT, DUPLICATE, WRITING, BLEED, GIANT, RING, MISSING, PRINT }
+enum Type { PLACEMENT, DUPLICATE, WRITING, BLEED, GIANT, RING, MISSING,
+	PRINT, PORTAL }
 
 ## Render layer bit reserved for photo-only geometry. Player cameras clear
 ## this bit; the snapshot camera sets it.
@@ -38,6 +39,7 @@ const CAPTURE_DISTANCE := 15.0
 const CAPTURE_DISTANCE_WRITING := 9.5
 
 const WRITING_FONT := preload("res://fonts/RazorKeen-Regular.otf")
+const PORTAL_SHADER := preload("res://shaders/portal_glimpse.gdshader")
 
 ## Themes whose BLEED_PROPS row is a portable, self-contained prop and can
 ## therefore carry PLACEMENT/DUPLICATE. Airport luggage is a scatter set with
@@ -136,6 +138,9 @@ var _body_rids: Array[RID] = []
 var _resolvables: Array[Node] = []
 var _glow: OmniLight3D
 var _floor_y := 0.0
+## PORTAL only: the theme whose air the tear looks out into (-1 = the
+## outside, a dead grey). Set by the director from the descent order.
+var next_theme := -1
 
 
 func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
@@ -161,6 +166,8 @@ func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
 			_build_ring(floor_h)
 		Type.MISSING:
 			_build_missing(floor_h)
+		Type.PORTAL:
+			_build_portal(floor_h, wall_dir, wall_along)
 		_:
 			_build_props(floor_h, 1)
 	if debug_visible:
@@ -211,6 +218,8 @@ func count_caption() -> String:
 	match type:
 		Type.MISSING:
 			return "THE CAMERA SAYS IT IS NOT THERE"
+		Type.PORTAL:
+			return "THAT IS NOT WHAT'S BEHIND THIS WALL"
 		Type.PRINT:
 			return "\"%s\" — ONLY THE FILM SEES IT" % phrase_for(
 				world_seed, cell)
@@ -307,6 +316,42 @@ func resolve() -> void:
 				if is_instance_valid(node):
 					node.queue_free()
 			_resolvables.clear()
+
+
+## A doorway-shaped tear in the wall, camera-only, looking out onto
+## somewhere that cannot be there: parallax murk tinted toward the next
+## floor's air, or a dead grey "outside" on the last floors. The image is
+## the camera's claim, never a confirmed place — the mystery contract holds.
+func _build_portal(floor_h: float, wall_dir: int, wall_along: float) -> void:
+	var dir := maxi(wall_dir, 0)
+	var half := WorldGen.CELL_SIZE * 0.5
+	var dirv3 := Vector3(WorldGen.DIRV[dir].x, 0.0, WorldGen.DIRV[dir].y)
+	var quad := MeshInstance3D.new()
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(1.5, 2.5)
+	quad.mesh = mesh
+	var mat := ShaderMaterial.new()
+	mat.shader = PORTAL_SHADER
+	var tint := Color(0.16, 0.165, 0.155)
+	if next_theme >= 0:
+		var env := EnvBuilder.build(next_theme)
+		if env != null:
+			tint = env.fog_light_color * 2.2
+	mat.set_shader_parameter("tint", Vector3(tint.r, tint.g, tint.b))
+	mat.set_shader_parameter("seed_phase",
+		float(WorldGen.h(world_seed, cell.x, cell.y, 9331) % 977))
+	quad.material_override = mat
+	quad.layers = (1 | PHOTO_LAYER) if debug_visible else PHOTO_LAYER
+	quad.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var plane := half + signf(dirv3.x + dirv3.z) * (half - 0.42)
+	quad.position = Vector3(plane, floor_h + 1.45, wall_along) \
+		if dirv3.x != 0.0 else Vector3(wall_along, floor_h + 1.45, plane)
+	quad.rotation.y = atan2(dirv3.x, dirv3.z) + PI
+	add_child(quad)
+	_resolvables.append(quad)
+	_points = [quad.position, quad.position + Vector3(0, 0.9, 0)]
+	_facing = -dirv3
 
 
 func _build_missing(floor_h: float) -> void:

@@ -185,7 +185,7 @@ with it.
   signature `Chunk.BLEED_PROPS` object (owner rule 2026-08-19: foreign
   objects appear only as the bleed near the elevator, never as scattered
   anomalies — the 2026-08-18 foreign-prop experiment is reverted; prop-less
-  themes plan WRITING only via `PhotoAnomaly.PROP_THEMES`): seven types, and the required
+  themes plan WRITING only via `PhotoAnomaly.PROP_THEMES`): eight types, and the required
   trio on a floor is always three DIFFERENT ones where the theme allows,
   claiming one WRITING greedily the first time a route cell offers a wall
   (the writings are the feature's voice and were otherwise rare); extras
@@ -200,7 +200,12 @@ with it.
   VANISHES through the raised lens — photograph the absence), PRINT
   (writing on `PRINT_LAYER` bit 16 that exists only in the developed
   photo: eye and raised viewfinder never show it, the snapshot camera
-  does), WRITING
+  does), PORTAL (a
+  doorway-shaped camera-only tear in a wall — `shaders/portal_glimpse.gdshader`,
+  alpha-scissor torn edges, fog_disabled, view-parallax murk tinted toward
+  the NEXT floor's air via `EnvBuilder` fog colour, dead grey past the
+  order's end; the image is the camera's claim, so the mystery contract
+  holds), WRITING
   (a phrase on a wall that exists only on render layer 20 — the RAISED
   viewfinder and the snapshot camera see it, the bare eye never does
   (`PhotoCamera._raise` adds the layer to the player cam cull mask; without

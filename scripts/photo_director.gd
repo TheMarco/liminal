@@ -144,6 +144,7 @@ static func _eligible_types(p_route: DescentRoute, at: Vector2i) -> Array:
 	if not PhotoAnomaly.writing_spot_for(p_route, at).is_empty():
 		out.append(PhotoAnomaly.Type.WRITING)
 		out.append(PhotoAnomaly.Type.PRINT)
+		out.append(PhotoAnomaly.Type.PORTAL)
 	return out
 
 
@@ -309,13 +310,19 @@ func _on_chunk_built(chunk: Chunk) -> void:
 	# A blackout mutation may have opened the planned wall since planning;
 	# re-resolve against the current topology and fall back to the plan.
 	if int(spec["type"]) in [PhotoAnomaly.Type.WRITING,
-			PhotoAnomaly.Type.PRINT] and route != null:
+			PhotoAnomaly.Type.PRINT, PhotoAnomaly.Type.PORTAL] \
+			and route != null:
 		var spot := PhotoAnomaly.writing_spot_for(route, chunk.cell)
 		if not spot.is_empty():
 			wall_dir = int(spot["dir"])
 			wall_along = float(spot["along"])
 	var node := PhotoAnomaly.new()
 	node.debug_visible = debug_visible
+	# The tear looks into the next floor's air; past the end it looks out.
+	var order: Array = DescentRun.FIXED_ORDER
+	var order_pos := order.find(theme)
+	node.next_theme = int(order[order_pos + 1]) \
+		if order_pos >= 0 and order_pos + 1 < order.size() else -1
 	if debug_visible:
 		print("photo anomaly spawn %s type %d wall %d along %.1f" % [
 			str(spec["id"]), int(spec["type"]), wall_dir, wall_along])

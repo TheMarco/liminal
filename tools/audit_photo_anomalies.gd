@@ -68,7 +68,7 @@ func _run() -> void:
 						failures.append("%s: required anomaly %s off the spine"
 							% [label, id])
 				var wall_types := [PhotoAnomaly.Type.WRITING,
-					PhotoAnomaly.Type.PRINT]
+					PhotoAnomaly.Type.PRINT, PhotoAnomaly.Type.PORTAL]
 				if int(spec["type"]) in wall_types \
 						and int(spec["wall_dir"]) < 0:
 					failures.append("%s: writing %s without a wall" % [
