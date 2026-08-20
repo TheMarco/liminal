@@ -198,6 +198,12 @@ func documented_ids() -> Array:
 ## guaranteed to occur near the lift where the planned pool may not reach.
 func capturable() -> Array[PhotoAnomaly]:
 	var out: Array[PhotoAnomaly] = []
+	# The hunt ends at the requirement: once the tape is satisfied the
+	# detector goes quiet and no further anomaly pings, focuses or counts
+	# (owner rule 2026-08-19). The undocumented ones stay in the world as
+	# set dressing for whoever notices.
+	if requirement_met():
+		return out
 	_collect_capturable(_live, out)
 	# Bleed marks: one counted credit per floor while the hunt is open, but
 	# ANY bleed item may serve as the LAST photograph (owner rule
