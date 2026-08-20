@@ -848,6 +848,17 @@ Font licenses and upstream links are recorded in
 [`fonts/SOURCES.md`](fonts/SOURCES.md). In particular, Peter Hull's VT323
 terminal typeface is distributed under the SIL Open Font License 1.1.
 
+## Portal panoramas (`textures/portals/`)
+
+- Author: Poly Haven contributors (https://polyhaven.com).
+- Files: `abandoned_parking_2k.hdr`, `kloppenheim_06_puresky_2k.hdr`,
+  `drackenstein_quarry_puresky_2k.hdr` — 360° equirectangular HDRIs.
+- License: CC0.
+- Use: sampled by view ray through the PORTAL anomaly's wall tear
+  (`shaders/portal_glimpse.gdshader`), so the tear is a geometrically
+  correct window into a photographed place. Per-file provenance in
+  `textures/portals/SOURCE.md`.
+
 ## Shaders
 
 ### CRT post filter (`shaders/post.gdshader`)

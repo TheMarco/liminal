@@ -1,17 +1,18 @@
-// Camera-only wall tear (PhotoAnomaly PORTAL, 2026-08-20). A doorway-shaped
-// opening that looks out onto somewhere that cannot be on the other side of
-// this wall: a vast dead horizon, tinted toward the next floor's air when
-// one exists. Pure shader illusion — parallax from the view direction fakes
-// a volume behind the wall; no second camera, no captures, and the image is
-// the CAMERA'S claim, so the mystery contract holds. GI-disabled and
-// lens-only via render layers set by the spawner.
+// Camera-only wall tear (PhotoAnomaly PORTAL). Through the ragged opening
+// you look out into a photographed 360 panorama (CC0 Poly Haven HDRIs, see
+// textures/portals/SOURCE.md), sampled by the TRUE view ray through the
+// hole — geometrically correct perspective and parallax, like a window cut
+// into a skybox of the real world. The image is the CAMERA'S claim, so the
+// mystery contract holds. GI-disabled and lens-only via render layers set
+// by the spawner; fog_disabled because the tear is not in this room's air.
 shader_type spatial;
-// fog_disabled: the room's fog inscatter flattened the dark interior to a
-// pale sheet — the tear is not in this room's air.
 render_mode unshaded, cull_back, fog_disabled;
 
-uniform vec3 tint : source_color = vec3(0.10, 0.11, 0.12);
+uniform sampler2D pano : source_color, filter_linear, repeat_enable;
+uniform float yaw_offset = 0.0;
+uniform float exposure = 0.5;
 uniform float seed_phase = 0.0;
+uniform vec3 grade : source_color = vec3(0.92, 0.94, 0.92);
 
 float h21(vec2 p){
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -26,56 +27,53 @@ float noise2(vec2 p){
 }
 
 void fragment(){
-	// Parallax: shift the interior by the view direction so the opening
-	// reads as depth, not decal. Deeper layers shift more.
-	vec3 view = normalize(-VIEW);
-	vec2 base_uv = UV - 0.5;
-	float t = TIME * 0.03 + seed_phase;
+	// True view ray, world space: from the eye through this fragment.
+	vec3 world_pos = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 eye = INV_VIEW_MATRIX[3].xyz;
+	vec3 dir = normalize(world_pos - eye);
 
-	// A hole needs depth grammar, not murk: a pale dead sky far behind the
-	// wall, a black ridge silhouetted against it, and parallax strong
-	// enough to notice while strafing (a timid version read as "a grey
-	// blanket", owner 2026-08-20). The tint arrives at any brightness (it
-	// is a fog colour), so it is hard-normalised to a hue.
-	float tmax = max(tint.r, max(tint.g, tint.b));
-	vec3 hue = tint / max(tmax, 1e-4);
+	// Equirectangular lookup with a seeded yaw so each tear faces its own
+	// slice of the world.
+	float u = atan(dir.z, dir.x) / (2.0 * PI) + 0.5 + yaw_offset;
+	float v = acos(clamp(dir.y, -1.0, 1.0)) / PI;
+	vec3 col = texture(pano, vec2(u, v)).rgb;
 
-	// One fixed interior horizon; parallax comes ONLY from each layer's uv
-	// offset (a view-dependent horizon fought the layer offsets and pushed
-	// the composition out of frame). Quad UV y runs DOWN.
-	const float H = 0.16;
-	// Sky: far layer, big parallax, slow cloud bands drifting sideways.
-	vec2 sky_uv = base_uv + view.xy * vec2(2.6, 1.4);
-	float bands = noise2(vec2(sky_uv.x * 1.6 + t * 2.0, sky_uv.y * 3.0));
-	vec3 sky = mix(vec3(0.055, 0.058, 0.054), hue * 0.10, 0.45)
-		+ vec3(0.055) * bands;
-	sky *= 1.0 + 1.3 * exp(-abs(sky_uv.y - H) * 5.0);
-	// Dies overhead (negative y), breathes at the horizon.
-	sky *= mix(0.25, 1.0, smoothstep(-0.75, H, sky_uv.y));
-	sky *= 0.85;
+	// Kill the sun: Reinhard on luminance, then a dead grade — the world
+	// out there is overcast even when the photograph wasn't.
+	float l = dot(col, vec3(0.299, 0.587, 0.114));
+	col *= (1.0 / (1.0 + l)) * exposure;
+	float lum = dot(col, vec3(0.299, 0.587, 0.114));
+	col = mix(vec3(lum), col, 0.55) * grade;
 
-	// Ground: a black ridge against the sky, nearer, so less parallax.
-	vec2 ridge_uv = base_uv + view.xy * vec2(1.1, 0.6);
-	float ridge_h = H - 0.02
-		+ (noise2(vec2(ridge_uv.x * 3.5 + seed_phase, 3.7)) - 0.5) * 0.22;
-	float ground = smoothstep(ridge_h - 0.015, ridge_h + 0.015, ridge_uv.y);
-	vec3 col = mix(sky, vec3(0.004, 0.004, 0.005), ground);
-	// Dust that never settles, drifting in front of everything.
-	col += vec3(noise2(base_uv * 9.0 + vec2(t * 5.0, -t * 2.0))) * 0.012;
 	// Grain that never settles.
-	col += (h21(base_uv * 371.0 + fract(TIME) * vec2(13.7, 7.9)) - 0.5) * 0.05;
+	vec2 base_uv = UV - 0.5;
+	col += vec3(h21(base_uv * 371.0 + fract(TIME) * vec2(13.7, 7.9)) - 0.5)
+		* 0.02;
 
-	// Ragged hard edges: alpha-scissor keeps the opaque pipeline, so the
-	// tear silhouette is noise-torn plaster with no blend halo (the soft
-	// feather composited a pale glow against the wall).
-	vec2 e = abs(base_uv) * 2.0;
-	float tear = noise2(base_uv * 7.0 + seed_phase) * 0.12;
-	float shape = max(e.x, e.y) + tear;
-	float edge = smoothstep(1.0, 0.92, shape);
-	// A dark inner rim: the wall has thickness, the hole has a lip.
-	col *= smoothstep(1.0, 0.88, shape) * 0.85 + 0.15;
+	// The silhouette is a FISSURE, not a window: a tall angular zigzag
+	// polyline (linear interp between stepped noise gives hard corners)
+	// that needles out at both tips, with a faint luminous seam along the
+	// broken edge. A soft-edged rectangle read as "a blanket hanging"
+	// (owner, 2026-08-20).
+	float yn = base_uv.y * 2.0;                  // -1 .. 1 top to bottom
+	float step_y = (yn + 1.0) * 3.5;             // 7 zigzag segments
+	float i0 = floor(step_y);
+	float cx = mix(h21(vec2(i0, seed_phase)) - 0.5,
+		h21(vec2(i0 + 1.0, seed_phase)) - 0.5, fract(step_y)) * 0.42;
+	// Widest at the waist, needle tips at the ends; a breath of pulse.
+	float widthc = 0.21 * pow(max(1.0 - abs(yn), 0.0), 1.4)
+		* (0.75 + 0.25 * noise2(vec2(yn * 3.0, seed_phase + 5.0)))
+		* (0.94 + 0.06 * sin(TIME * 1.7 + seed_phase));
+	float dist = abs(base_uv.x - cx);
+	float inside = step(dist, widthc);
+	// Luminous seam just inside the broken edge — energy along the crack.
+	float seam = smoothstep(widthc, widthc * 0.72, dist)
+		- smoothstep(widthc * 0.55, widthc * 0.2, dist);
+	col = mix(col, vec3(0.85, 0.92, 1.0), clamp(seam, 0.0, 1.0) * 0.55);
+	// Vertical clip so needle tips truly end.
+	inside *= step(abs(yn), 1.0);
 
 	ALBEDO = col;
-	ALPHA = edge;
+	ALPHA = inside;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 }

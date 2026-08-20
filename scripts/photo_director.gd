@@ -144,10 +144,7 @@ static func _eligible_types(p_route: DescentRoute, at: Vector2i) -> Array:
 	if not PhotoAnomaly.writing_spot_for(p_route, at).is_empty():
 		out.append(PhotoAnomaly.Type.WRITING)
 		out.append(PhotoAnomaly.Type.PRINT)
-		# PORTAL is benched: the procedural interior missed the visual bar
-		# (owner, 2026-08-20). The type, shader and wall plumbing stay for a
-		# future real-render interior; do not re-add until it looks like
-		# the game.
+		out.append(PhotoAnomaly.Type.PORTAL)
 	return out
 
 

@@ -40,6 +40,14 @@ const CAPTURE_DISTANCE_WRITING := 9.5
 
 const WRITING_FONT := preload("res://fonts/RazorKeen-Regular.otf")
 const PORTAL_SHADER := preload("res://shaders/portal_glimpse.gdshader")
+## CC0 Poly Haven panoramas the tear looks out into (SOURCE.md alongside).
+const PORTAL_PANOS := [
+	"res://textures/portals/abandoned_parking_2k.hdr",
+	"res://textures/portals/hilly_terrain_01_2k.hdr",
+	"res://textures/portals/quarry_04_2k.hdr",
+	"res://textures/portals/construction_yard_2k.hdr",
+	"res://textures/portals/outdoor_umbrellas_2k.hdr",
+]
 
 ## Themes whose BLEED_PROPS row is a portable, self-contained prop and can
 ## therefore carry PLACEMENT/DUPLICATE. Airport luggage is a scatter set with
@@ -332,12 +340,11 @@ func _build_portal(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	quad.mesh = mesh
 	var mat := ShaderMaterial.new()
 	mat.shader = PORTAL_SHADER
-	var tint := Color(0.16, 0.165, 0.155)
-	if next_theme >= 0:
-		var env := EnvBuilder.build(next_theme)
-		if env != null:
-			tint = env.fog_light_color * 2.2
-	mat.set_shader_parameter("tint", Vector3(tint.r, tint.g, tint.b))
+	var pano_path: String = PORTAL_PANOS[WorldGen.h(world_seed, cell.x,
+		cell.y, 9337) % PORTAL_PANOS.size()]
+	mat.set_shader_parameter("pano", load(pano_path))
+	mat.set_shader_parameter("yaw_offset",
+		WorldGen.r01(world_seed, cell.x, cell.y, 9341))
 	mat.set_shader_parameter("seed_phase",
 		float(WorldGen.h(world_seed, cell.x, cell.y, 9331) % 977))
 	quad.material_override = mat

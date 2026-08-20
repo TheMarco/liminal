@@ -201,11 +201,14 @@ with it.
   (writing on `PRINT_LAYER` bit 16 that exists only in the developed
   photo: eye and raised viewfinder never show it, the snapshot camera
   does), PORTAL (a
-  doorway-shaped camera-only tear in a wall — `shaders/portal_glimpse.gdshader`,
-  alpha-scissor torn edges, fog_disabled, view-parallax murk tinted toward
-  the NEXT floor's air via `EnvBuilder` fog colour, dead grey past the
-  order's end; the image is the camera's claim, so the mystery contract
-  holds), WRITING
+  camera-only CRACK in a wall — `shaders/portal_glimpse.gdshader`, a jagged
+  zigzag fissure with needle tips and a luminous seam, alpha-scissor, and
+  through it a CC0 Poly Haven 360 panorama of the real world sampled by
+  the TRUE view ray, so perspective and parallax are geometrically
+  correct; Reinhard + dead grade keeps it overcast; fog_disabled; panos
+  and provenance in `textures/portals/`; the image is the camera's claim,
+  so the mystery contract holds; a procedural interior and a soft-edged
+  rectangle both failed review — "grey blanket"), WRITING
   (a phrase on a wall that exists only on render layer 20 — the RAISED
   viewfinder and the snapshot camera see it, the bare eye never does
   (`PhotoCamera._raise` adds the layer to the player cam cull mask; without
