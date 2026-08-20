@@ -172,7 +172,9 @@ with it.
   forces the player across it), pure from (seed, theme, floor). Every bleed
   prop is also photographable evidence (`PhotoDirector._register_bleed_props`,
   id `bleed:x:y` per cell) worth ONE credit per floor
-  (`bleed_credit_used`) — guaranteed ops near the lift. If the tape refuses
+  (`bleed_credit_used`), except that ANY bleed item may serve as the LAST
+  photograph regardless of spent credit — the lift area is thick with
+  them, so the floor is always completable there — guaranteed ops near the lift. If the tape refuses
   on photos, the HUD gains a persistent "EVIDENCE NNNm" distance counter to
   the nearest undocumented planned anomaly
   (`DescentHUD.evidence_target`, granted in `descent_commit_refused`), so
@@ -181,9 +183,11 @@ with it.
   objects appear only as the bleed near the elevator, never as scattered
   anomalies — the 2026-08-18 foreign-prop experiment is reverted; prop-less
   themes plan WRITING only via `PhotoAnomaly.PROP_THEMES`): five types, and the required
-  trio on a floor is always three DIFFERENT ones where the theme allows
-  (`PhotoDirector._eligible_types`/`_spec_for`, enforced by the plan
-  audit): PLACEMENT (own prop inverted, hovering at head height under a
+  trio on a floor is always three DIFFERENT ones where the theme allows,
+  claiming one WRITING greedily the first time a route cell offers a wall
+  (the writings are the feature's voice and were otherwise rare); extras
+  weight WRITING double (`PhotoDirector._eligible_types`/`_spec_for`,
+  enforced by the plan audit): PLACEMENT (own prop inverted, hovering at head height under a
   faint cold underlight, slowly turning), DUPLICATE (two identical,
   shoulder to shoulder — LENS-ONLY like the writing: eye-visible
   duplicates of a theme's own prop read as furniture, a playtest proved

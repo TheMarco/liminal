@@ -124,9 +124,23 @@ static func _spec_for(p_route: DescentRoute, at: Vector2i, required: bool,
 		return {}
 	var pool: Array = []
 	if required:
-		for t in eligible:
-			if not used_types.has(int(t)):
-				pool.append(t)
+		# The wall writings are the feature's voice and the rarest type by
+		# eligibility, so the trio claims one greedily the first time a
+		# route cell offers a wall (owner: floors showed only prop
+		# anomalies, 2026-08-19).
+		if not used_types.has(PhotoAnomaly.Type.WRITING) \
+				and eligible.has(PhotoAnomaly.Type.WRITING):
+			pool = [PhotoAnomaly.Type.WRITING]
+		else:
+			for t in eligible:
+				if not used_types.has(int(t)):
+					pool.append(t)
+	else:
+		# Extras: double-weight WRITING so the endless neighbourhood keeps
+		# a voice too.
+		pool = eligible.duplicate()
+		if eligible.has(PhotoAnomaly.Type.WRITING):
+			pool.append(PhotoAnomaly.Type.WRITING)
 	if pool.is_empty():
 		pool = eligible
 	var pick_seed := WorldGen.h(p_route.world_seed, at.x, at.y, 9311) \
@@ -185,7 +199,11 @@ func documented_ids() -> Array:
 func capturable() -> Array[PhotoAnomaly]:
 	var out: Array[PhotoAnomaly] = []
 	_collect_capturable(_live, out)
-	if not bleed_credit_used():
+	# Bleed marks: one counted credit per floor while the hunt is open, but
+	# ANY bleed item may serve as the LAST photograph (owner rule
+	# 2026-08-19) — the lift area is thick with them, so the floor is
+	# always completable there.
+	if not bleed_credit_used() or documented_count() == REQUIRED - 1:
 		_collect_capturable(_live_bleed, out)
 	return out
 
