@@ -159,8 +159,12 @@ with it.
   the torch state is untouched, so a lit
   torch keeps warding while shooting, and photos cost no charge. Raising
   the camera constricts vision to the viewfinder window
-  (`PhotoCamera.ViewfinderMask`: near-black eyecup surround, ~56x62%
-  live rectangle) and slows the walk to 0.6x — using the camera is meant
+  (`PhotoCamera.ViewfinderMask`: near-black eyecup surround with a wide
+  defocused falloff, ~60x66% live window, centre metering patch on the
+  reticle) and slows the walk to 0.6x; after any shot the print shows
+  for 2.6s and the camera lowers itself. Camera keys listen in `_input`
+  (Space doubles as ui_accept — a focused Control stole the shutter in
+  `_unhandled_input`) — using the camera is meant
   to feel blind and risky, not a free overlay. The
   camcorder is the detector: within 14m of an undocumented anomaly the OSD
   picks up interference (tracking bars, stuttering REC lamp, tape static

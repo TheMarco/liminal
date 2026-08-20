@@ -144,16 +144,23 @@ func _allowed() -> bool:
 
 
 ## Trackpad-first controls: C toggles the camera, Space is the shutter.
-## Mouse users get the same through hold-RMB / LMB.
-func _unhandled_input(event: InputEvent) -> void:
+## Mouse users get the same through hold-RMB / LMB. Listens in _input, not
+## _unhandled_input: Space doubles as ui_accept, so any Control that
+## happened to hold focus swallowed the shutter before it arrived
+## (owner report, 2026-08-20). _allowed() gates everything on captured-
+## mouse gameplay, so menus never see a stolen key.
+func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_C:
 			if _raised:
 				_lower()
+				get_viewport().set_input_as_handled()
 			elif _allowed():
 				_raise(true)
+				get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_SPACE and _can_shoot():
 			_take_photo()
+			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			if event.pressed and _allowed():
@@ -204,6 +211,10 @@ func _process(dt: float) -> void:
 		if _review_left <= 0.0:
 			_photo.visible = false
 			_marks.visible = false
+			# The shot ends the stance: show the print, then put the
+			# camera down (owner, 2026-08-20). Whatever answers the
+			# photograph is met with bare eyes.
+			_lower()
 			if _pending_risk:
 				_pending_risk = false
 				_roll_risk()
@@ -499,9 +510,10 @@ func _roll_risk() -> void:
 ## blind and risky (owner, 2026-08-20).
 class ViewfinderMask extends Control:
 	## Fraction of the viewport the window occupies.
-	const WINDOW_W := 0.56
-	const WINDOW_H := 0.62
-	const FEATHER := 90.0
+	const WINDOW_W := 0.60
+	const WINDOW_H := 0.66
+	## Width of the blurry optical falloff around the window.
+	const FEATHER := 150.0
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -513,20 +525,25 @@ class ViewfinderMask extends Control:
 		var h := s.y * WINDOW_H
 		var x0 := (s.x - w) * 0.5
 		var y0 := (s.y - h) * 0.5
-		var ink := Color(0.01, 0.01, 0.012, 0.985)
-		# Four opaque slabs around the window.
-		draw_rect(Rect2(0, 0, s.x, y0), ink)
-		draw_rect(Rect2(0, y0 + h, s.x, s.y - y0 - h), ink)
-		draw_rect(Rect2(0, y0, x0, h), ink)
-		draw_rect(Rect2(x0 + w, y0, s.x - x0 - w, h), ink)
-		# Soft inner falloff so the window edge reads as optics, not UI.
-		for i in 6:
-			var k := float(i + 1) / 6.0
-			var inset := FEATHER * (1.0 - k)
+		var ink := Color(0.008, 0.008, 0.01, 0.99)
+		# Opaque surround, pulled back by the feather width.
+		var f := FEATHER
+		draw_rect(Rect2(0, 0, s.x, y0 - f), ink)
+		draw_rect(Rect2(0, y0 + h + f, s.x, s.y - y0 - h - f), ink)
+		draw_rect(Rect2(0, y0 - f, x0 - f, h + f * 2.0), ink)
+		draw_rect(Rect2(x0 + w + f, y0 - f, s.x - x0 - w - f, h + f * 2.0),
+			ink)
+		# Blurry edge: many translucent stroked rings walking outward — a
+		# defocused eyecup rim, not a UI border.
+		var rings := 18
+		for i in rings:
+			var k := float(i) / float(rings - 1)
+			var inset := f * (1.0 - k) - f
+			var alpha := 0.99 * pow(k, 1.7)
 			draw_rect(Rect2(x0 + inset, y0 + inset,
 				w - inset * 2.0, h - inset * 2.0),
-				Color(0.01, 0.01, 0.012, 0.16 * (1.0 - k)), false,
-				FEATHER / 6.0)
+				Color(0.008, 0.008, 0.01, alpha), false, f / float(rings)
+				* 2.2)
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
@@ -606,8 +623,17 @@ class PhotoReticle extends Control:
 			var py := cy + h * 0.5 * corner.y
 			draw_line(Vector2(px, py), Vector2(px - arm * corner.x, py), c, 2.0)
 			draw_line(Vector2(px, py), Vector2(px, py - arm * corner.y), c, 2.0)
-		draw_line(Vector2(cx - 10, cy), Vector2(cx + 10, cy), c, 2.5)
-		draw_line(Vector2(cx, cy - 10), Vector2(cx, cy + 10), c, 2.5)
+		# Centre metering patch: a faint translucent square with a fine
+		# cross, the way an optical finder marks its sweet spot.
+		var patch := minf(s.x, s.y) * 0.055
+		draw_rect(Rect2(cx - patch, cy - patch, patch * 2.0, patch * 2.0),
+			Color(1, 1, 1, 0.10 if not focused else 0.16))
+		draw_rect(Rect2(cx - patch, cy - patch, patch * 2.0, patch * 2.0),
+			c, false, 1.5)
+		draw_line(Vector2(cx - patch * 0.55, cy),
+			Vector2(cx + patch * 0.55, cy), c, 1.5)
+		draw_line(Vector2(cx, cy - patch * 0.55),
+			Vector2(cx, cy + patch * 0.55), c, 1.5)
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
