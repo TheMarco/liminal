@@ -107,6 +107,10 @@ var _photo_camera: PhotoCamera
 var _photo_debug := false
 var _photo_sweep_hinted := false
 var _osd_layer: CanvasLayer
+## Two independent reasons hide the OSD; the layer shows only when neither
+## holds (tape playback, raised camera).
+var _osd_hidden_tape := false
+var _osd_hidden_camera := false
 var _halo_amt := 0.0
 var descent := false
 var run: DescentRun
@@ -729,8 +733,8 @@ func descent_tape_watch(on: bool) -> void:
 		_descent_hud.set_active(not on)
 	# The footage fills the screen alone: the whole camcorder OSD (frame,
 	# REC, meters, captions) leaves with the viewfinder, not just the needle.
-	if _osd_layer != null:
-		_osd_layer.visible = not on
+	_osd_hidden_tape = on
+	_sync_osd_visible()
 	# Playback's CRT look lives on the TV's own screen shader; the
 	# full-screen pass would double it over the whole display.
 	if _post_process != null:
@@ -871,6 +875,19 @@ func _on_photo_documented(_anomaly_id: String, count: int,
 func _update_photo_line(count: int, required: int) -> void:
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_photo_progress(count, required)
+
+
+func _on_photo_raised(on: bool) -> void:
+	_osd_hidden_camera = on
+	_sync_osd_visible()
+	if is_instance_valid(_descent_hud):
+		_descent_hud.set_active(not on and descent \
+			and run != null and not run.ended)
+
+
+func _sync_osd_visible() -> void:
+	if _osd_layer != null:
+		_osd_layer.visible = not (_osd_hidden_tape or _osd_hidden_camera)
 
 
 func _on_photo_proximity(value: float, los: float) -> void:
@@ -1931,6 +1948,7 @@ func _build_ui() -> void:
 	cl.add_child(_vf_frame)
 	if _photo_camera != null:
 		_photo_camera.proximity_changed.connect(_on_photo_proximity)
+		_photo_camera.raised_changed.connect(_on_photo_raised)
 
 	_interact_panel = PanelContainer.new()
 	_interact_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE

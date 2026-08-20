@@ -77,6 +77,9 @@ var _proximity_scan_left := 0.0
 signal photo_documented(anomaly_id: String, count: int, required: int,
 	caption: String)
 signal first_raise()
+## True while the camera is up — main hides the whole HUD so only the
+## viewfinder exists (owner, 2026-08-20).
+signal raised_changed(on: bool)
 ## 0..1 nearness of the closest undocumented anomaly, smoothed; the OSD
 ## frame renders it as interference.
 ## `value` includes through-wall detections at reduced weight (drives the
@@ -356,6 +359,7 @@ func _raise(toggled := false) -> void:
 	player.cam.cull_mask &= ~PhotoAnomaly.EYE_ONLY_LAYER
 	_mask.visible = true
 	_reticle.visible = true
+	raised_changed.emit(true)
 	if not _hinted:
 		_hinted = true
 		first_raise.emit()
@@ -372,6 +376,7 @@ func _lower() -> void:
 		player.cam.cull_mask |= PhotoAnomaly.EYE_ONLY_LAYER
 	_mask.visible = false
 	_reticle.visible = false
+	raised_changed.emit(false)
 
 
 func _take_photo() -> void:
@@ -411,7 +416,20 @@ func _take_photo() -> void:
 	_capturing = false
 	if image != null:
 		_photo.texture = ImageTexture.create_from_image(image)
+		# The print fills the viewfinder window, not the screen: scale
+		# uniformly by the window's smaller fraction, centered.
+		var vs := Vector2(get_viewport().size)
+		var f := minf(ViewfinderMask.WINDOW_W, ViewfinderMask.WINDOW_H)
+		_photo.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		_photo.position = vs * (1.0 - f) * 0.5
+		_photo.size = vs * f
+		_photo.stretch_mode = TextureRect.STRETCH_SCALE
 		_photo.visible = true
+		# The evidence circles ride the same transform.
+		for i in marks.size():
+			var m := marks[i]
+			marks[i] = Rect2(m.position * f + vs * (1.0 - f) * 0.5,
+				m.size * f)
 	_review_left = REVIEW_SECONDS
 	var counted := false
 	for anomaly in captured:

@@ -161,8 +161,11 @@ with it.
   the camera constricts vision to the viewfinder window
   (`PhotoCamera.ViewfinderMask`: near-black eyecup surround with a wide
   defocused falloff, ~60x66% live window, centre metering patch on the
-  reticle) and slows the walk to 0.6x; after any shot the print shows
-  for 2.6s and the camera lowers itself. Camera keys listen in `_input`
+  reticle) and slows the walk to 0.6x; while raised the ENTIRE HUD hides
+  (only the viewfinder exists; `raised_changed` + `main._sync_osd_visible`
+  arbitrates with the tape-playback hide); after any shot the print shows
+  for 2.6s AT the viewfinder window's size (evidence circles ride the
+  same transform) and the camera lowers itself. Camera keys listen in `_input`
   (Space doubles as ui_accept — a focused Control stole the shutter in
   `_unhandled_input`) — using the camera is meant
   to feel blind and risky, not a free overlay. The
