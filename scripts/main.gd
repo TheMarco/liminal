@@ -834,8 +834,10 @@ func descent_photo_refusal_caption() -> String:
 	var count := 0
 	if _photo_director != null:
 		count = _photo_director.documented_count()
+	var required := _photo_director.required_count() \
+		if _photo_director != null else PhotoDirector.REQUIRED
 	return "THE TAPE WANTS PROOF — PHOTOGRAPH WHAT IS WRONG — %d/%d" % [
-		count, PhotoDirector.REQUIRED]
+		count, required]
 
 
 func _on_photo_documented(_anomaly_id: String, count: int,

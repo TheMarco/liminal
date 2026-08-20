@@ -25,9 +25,14 @@ func _run() -> void:
 		failures.append("phrase pool shrank to %d entries"
 			% PhotoAnomaly.PHRASES.size())
 	if PhotoDirector.REQUIRED != 3:
-		failures.append("REQUIRED drifted from the designed 3 (got %d) — "
+		failures.append("base REQUIRED drifted from 3 (got %d) — "
 			% PhotoDirector.REQUIRED
 			+ "deliberate retune? update this audit")
+	if PhotoDirector.required_for(10, 11) != 3 \
+			or PhotoDirector.required_for(10, 0) != 5 \
+			or PhotoDirector.required_for(4, 0) != 4:
+		failures.append("required_for ladder drifted from 3/4/5 with "
+			+ "prop-less floors pinned at 3")
 	var plans := 0
 	for world_seed in SEEDS:
 		for floor_idx in FLOORS:
@@ -36,9 +41,10 @@ func _run() -> void:
 				WorldGen.level_seed(world_seed, theme), theme, floor_idx)
 			var plan := PhotoDirector.build_plan(route)
 			plans += 1
+			var required := PhotoDirector.required_for(floor_idx, theme)
 			var label := "seed %d floor %d theme %d" % [
 				world_seed, floor_idx + 1, theme]
-			if plan.size() < PhotoDirector.REQUIRED:
+			if plan.size() < required:
 				failures.append("%s: only %d anomalies planned" % [
 					label, plan.size()])
 				continue
@@ -70,14 +76,14 @@ func _run() -> void:
 						and not PhotoAnomaly.PROP_THEMES.has(theme):
 					failures.append("%s: prop anomaly %s on prop-less theme"
 						% [label, id])
-			if on_route != PhotoDirector.REQUIRED:
+			if on_route != required:
 				failures.append("%s: %d on-route anomalies, need exactly %d"
-					% [label, on_route, PhotoDirector.REQUIRED])
-			# Prop themes must vary the required trio; WRITING-only themes
+					% [label, on_route, required])
+			# Prop themes must vary the required set; WRITING-only themes
 			# cannot and are exempt.
 			if PhotoAnomaly.PROP_THEMES.has(theme) \
-					and required_types.size() < PhotoDirector.REQUIRED:
-				failures.append("%s: required trio repeats a type (%d kinds)"
+					and required_types.size() < required:
+				failures.append("%s: required set repeats a type (%d kinds)"
 					% [label, required_types.size()])
 	for failure in failures:
 		print("  FAIL " + failure)

@@ -160,7 +160,7 @@ func _build_main() -> void:
 		"CHECKPOINT  /  FLOOR %02d  /  %s" % [
 			_checkpoint_floor + 1, _checkpoint_name.to_upper()]
 			if _has_descent_progress else "SELECT ENTRY",
-		15, Color(0.56, 0.58, 0.54))
+		22, Color(0.62, 0.64, 0.60))
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_main_dock.add_child(_prompt)
 
@@ -372,8 +372,10 @@ func _footer_button(parent: HBoxContainer, text: String,
 	button.focus_mode = Control.FOCUS_NONE
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var width := maxf(108.0, 28.0 + float(text.length()) * 9.2)
-	_style(button, 20, Color(0.76, 0.77, 0.72), width, 44)
+	# 30pt at the 720p base — the 20pt footer was unreadable through the
+	# tube on large displays (owner, 2026-08-20).
+	var width := maxf(150.0, 36.0 + float(text.length()) * 14.0)
+	_style(button, 30, Color(0.80, 0.81, 0.76), width, 60)
 	button.add_theme_color_override("font_hover_color", Color(0.94, 0.92, 0.82))
 	button.add_theme_color_override("font_pressed_color", Color(0.84, 0.79, 0.63))
 	button.add_theme_stylebox_override("normal",
@@ -496,7 +498,7 @@ func _relayout() -> void:
 	if is_instance_valid(_main_dock):
 		_main_dock.offset_left = maxf(34.0 * scale, safe.x)
 		_main_dock.offset_right = -maxf(34.0 * scale, safe.x)
-		_main_dock.offset_top = -(100.0 * scale + safe.y)
+		_main_dock.offset_top = -(132.0 * scale + safe.y)
 		_main_dock.offset_bottom = -safe.y
 		_main_dock.add_theme_constant_override("separation",
 			maxi(4, roundi(6.0 * scale)))

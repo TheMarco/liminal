@@ -25,7 +25,9 @@ var descent_floor := -1          # 1-based on the command line, -1 when absent
 var attention := -1.0            # -1 when not overridden
 
 # --- presentation ---
-var found_footage := false
+## RECOVERED TAPE is the default recording mode (owner, 2026-08-20);
+## --crt-mode boots the clean tube instead, B still toggles live.
+var found_footage := true
 var nocrt := false
 var notaa := false
 var nologo := false
@@ -87,6 +89,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.attention = clampf(float(arg.substr(12)), 0.0, 1.0)
 		elif arg == "--found-footage":
 			o.found_footage = true
+		elif arg == "--crt-mode":
+			o.found_footage = false
 		elif arg == "--nocrt":
 			o.nocrt = true
 		elif arg == "--notaa":

@@ -13,7 +13,23 @@ extends Node
 
 signal documented_changed(count: int, required: int)
 
+## Floor 1-3 wants 3 photographs, 4-6 wants 4, 7+ wants 5 — deeper floors
+## are 2.5x longer, so a flat count shrank to a footnote (owner,
+## 2026-08-20). Prop-less themes (airport, prison, Monolith, Bloom) stay
+## at 3: their anomalies are wall-writing only and qualifying cells are
+## scarcer. REQUIRED survives as the floor-1 base the audits anchor on.
 const REQUIRED := 3
+
+
+static func required_for(p_floor_idx: int, p_theme: int) -> int:
+	if not PhotoAnomaly.PROP_THEMES.has(p_theme):
+		return REQUIRED
+	var extra := 0
+	if p_floor_idx >= 3:
+		extra += 1
+	if p_floor_idx >= 6:
+		extra += 1
+	return REQUIRED + extra
 ## Extras are the coverage: the route spine is one path through an open maze
 ## and nothing forces the player across it, so the off-route pool must be
 ## dense enough that ANY walk to the lift passes evidence (raised 3 -> 9
@@ -21,7 +37,13 @@ const REQUIRED := 3
 const EXTRA := 12
 ## Path fractions for the guaranteed on-route anomalies, the optional-VHS
 ## pattern: spaced through the walk, never at the doors.
-const ROUTE_FRACTIONS := [0.22, 0.48, 0.74]
+## Path fractions for the guaranteed on-route anomalies: evenly spread
+## through the walk, never at the doors, count matching required_for.
+static func route_fractions(count: int) -> Array:
+	var out: Array = []
+	for i in count:
+		out.append((float(i) + 1.0) / (float(count) + 1.0))
+	return out
 
 var world_seed := 0
 var theme := 0
@@ -48,7 +70,7 @@ func configure(p_route: DescentRoute, p_floor_idx: int, cm: ChunkManager,
 		_documented[str(known)] = true
 	if cm != null and not cm.chunk_built.is_connected(_on_chunk_built):
 		cm.chunk_built.connect(_on_chunk_built)
-	documented_changed.emit(documented_count(), REQUIRED)
+	documented_changed.emit(documented_count(), required_count())
 
 
 ## Pure planning, shared with the audit. Guarantees REQUIRED valid cells on
@@ -64,7 +86,8 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 	# repeated (playtest, 2026-08-19).
 	var used_types := {}
 	var slot := 0
-	for fraction in ROUTE_FRACTIONS:
+	var required := required_for(p_route.floor_idx, p_route.theme)
+	for fraction in route_fractions(required):
 		var idx := clampi(int(float(path.size()) * float(fraction)),
 			1, path.size() - 2)
 		var placed := false
@@ -182,7 +205,7 @@ func nearest_undocumented(from: Vector3) -> Vector3:
 
 
 func requirement_met() -> bool:
-	return documented_count() >= REQUIRED
+	return documented_count() >= required_count()
 
 
 func documented_count() -> int:
@@ -190,7 +213,7 @@ func documented_count() -> int:
 
 
 func required_count() -> int:
-	return REQUIRED
+	return required_for(floor_idx, theme)
 
 
 func documented_ids() -> Array:
@@ -214,7 +237,7 @@ func capturable() -> Array[PhotoAnomaly]:
 	# ANY bleed item may serve as the LAST photograph (owner rule
 	# 2026-08-19) — the lift area is thick with them, so the floor is
 	# always completable there.
-	if not bleed_credit_used() or documented_count() == REQUIRED - 1:
+	if not bleed_credit_used() or documented_count() == required_count() - 1:
 		_collect_capturable(_live_bleed, out)
 	return out
 
@@ -255,7 +278,7 @@ func mark_documented(anomaly_id: String) -> bool:
 	if _documented.has(anomaly_id):
 		return false
 	_documented[anomaly_id] = true
-	documented_changed.emit(documented_count(), REQUIRED)
+	documented_changed.emit(documented_count(), required_count())
 	return true
 
 
