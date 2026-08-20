@@ -332,6 +332,8 @@ void fragment(){
             float soft = (y * 0.4 + y1 * 0.2 + y2 * 0.1);
             y = mix(y, soft, dv_blur);
         }
+        // Shadows stay achromatic: residual chroma in the dark floors
+        // sparkled once lifted by the iris.
         // Chroma is read a little late (chroma_delay) and smeared wide.
         vec2 cpos = pos + px * chroma_delay;
         vec3 cc = chroma_delay != 0.0 ? fetch_pixel(cpos, vec2(0.0)) : clr;
@@ -362,10 +364,14 @@ void fragment(){
                 vec2 k1 = vec2(row * 0.37 + c0 + 1.0, fract(st) * 11.0);
                 vec3 n0 = vec3(hash2(k0), hash2(k0 + 1.7), hash2(k0 + 3.1));
                 vec3 n1 = vec3(hash2(k1), hash2(k1 + 1.7), hash2(k1 + 3.1));
-                chroma += (mix(n0, n1, f) - 0.5) * 0.035 * chroma_noise;
+                // Luminance-weighted like the grain: unweighted chroma
+                // noise on near-black reads as flashing confetti once the
+                // iris lifts a dark floor (Monolith report, 2026-08-20).
+                chroma += (mix(n0, n1, f) - 0.5) * 0.035 * chroma_noise
+                    * smoothstep(0.02, 0.20, y);
             }
         }
-        clr = vec3(y) + chroma;
+        clr = vec3(y) + chroma * (0.25 + 0.75 * smoothstep(0.02, 0.16, y));
     }
     // Bloom: luminance past the knee smears sideways before it clips.
     if(bloom_amount > 0.0){
