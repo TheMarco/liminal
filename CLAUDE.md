@@ -196,13 +196,14 @@ with it.
   signature `Chunk.BLEED_PROPS` object (owner rule 2026-08-19: foreign
   objects appear only as the bleed near the elevator, never as scattered
   anomalies — the 2026-08-18 foreign-prop experiment is reverted; prop-less
-  themes plan WRITING only via `PhotoAnomaly.PROP_THEMES`): eight types, and the required
+  themes plan WRITING only via `PhotoAnomaly.PROP_THEMES`): nine types, and the required
   trio on a floor is always three DIFFERENT ones where the theme allows,
   claiming one WRITING greedily the first time a route cell offers a wall
   (the writings are the feature's voice and were otherwise rare); extras
   weight WRITING double (`PhotoDirector._eligible_types`/`_spec_for`,
-  enforced by the plan audit): PLACEMENT (own prop inverted, hovering at head height under a
-  faint cold underlight, slowly turning), DUPLICATE (two identical,
+  enforced by the plan audit): PLACEMENT (own furniture embedded upright
+  in the ceiling, completely still under a faint cold light until its
+  post-photo crash), DUPLICATE (two identical,
   shoulder to shoulder — LENS-ONLY like the writing: eye-visible
   duplicates of a theme's own prop read as furniture, a playtest proved
   it), GIANT (the prop scaled to nearly touch the ceiling, eye-visible,
@@ -229,16 +230,25 @@ with it.
   this the sweep was aiming at literally nothing visible — do not revert);
   it registers only from the side it faces (`PhotoAnomaly.facing_normal`,
   the occlusion tolerance alone cannot tell front from behind-the-wall);
-  room cells only, corridors line their walls). While raised the reticle
+  room cells only, corridors line their walls), TURNED (2026-08-20: the
+  prop stands at an ordinary yaw to the eye; through the lens a photo-layer
+  copy has rotated to face the camera and TRACKS it with a slight lag as
+  the player strafes — the anomaly passes the player's own test. The only
+  anomaly that resolves by escalating: when the review print closes, the
+  real eye-visible prop is snapped to face the player, no tween. The eye
+  copy blocks like real furniture, so like RING the builder demands a
+  proven clear floor spot and degrades to the compact ceiling form —
+  planned colliders may never claim a doorway lane). While raised the reticle
   runs hot/cold: brackets close and a tick accelerates as aim nears any
   findable anomaly (`PhotoCamera._aim_warmth`), full two-tone bite on true
   framing, and the reticle prints FOCUS when a shot will count. A counted
   photograph is answered three ways: the review print carries a
   hand-drawn red evidence circle around the anomaly
   (`PhotoCamera.EvidenceMarks`), the caption names the wrongness
-  (`PhotoAnomaly.count_caption`, e.g. "NOTHING HOLDS IT"; writings quote
+  (`PhotoAnomaly.count_caption`, e.g. "THE CEILING IS HOLDING IT"; writings quote
   their phrase), and the anomaly RESOLVES (`PhotoAnomaly.resolve`:
-  hanging props drop with a thud, lens-only and eye-only things are gone
+  ceiling-stuck furniture drops with a thud after the photo review closes;
+  lens-only and eye-only things are gone
   afterwards, the giant's glow dies); rebuilt cells skip documented
   anomalies so resolutions hold. Type picks run through `WorldGen.r01`,
   not raw hashes — neighbouring cells correlate modulo small pools. The arrival card is followed 3.3s later by the brief ("THE TAPE WANTS PROOF —

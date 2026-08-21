@@ -1367,6 +1367,49 @@ func _descent_ritual_set() -> void:
 	add_child(ritual)
 
 
+## The mandatory tutorial console: floor 1's arrival room only, standing in
+## the exit path a few metres out from the car, screen toward the opening
+## doors. It plays the pinned camera-tutorial tape (never the authored
+## pools) and VhsRitual's intro mode makes it seize the player on approach.
+## Site search walks outward/lateral offsets so authored dressing can shift
+## it but never delete it; the doorway veto keeps the collider honest.
+const INTRO_TAPE_PATH := "res://videos/intro/photo_tutorial.ogv"
+
+
+func _descent_intro_tv(dir: int) -> void:
+	var spot := {}
+	for offsets in [[4.2, 0.0], [4.2, 1.4], [4.2, -1.4], [3.4, 0.0],
+			[5.2, 0.0], [4.2, 2.4], [4.2, -2.4], [5.2, 1.6], [5.2, -1.6]]:
+		var candidate := _descent_wall_point(dir,
+			S / 2.0 + float(offsets[1]), float(offsets[0]))
+		var at: Vector3 = candidate["pos"]
+		var yaw := float(candidate["yaw"]) + PI
+		if not _floor_box_clear(at, yaw, 1.95, 0.82, 1.2):
+			continue
+		if _optional_vhs_hits_doorway(at, yaw):
+			continue
+		spot = {"at": at, "yaw": yaw}
+		break
+	if spot.is_empty():
+		# Authored dressing claimed every stance; stand it dead ahead anyway.
+		# A mandatory tutorial that silently fails to build is worse than a
+		# prop overlap in one seed's arrival room.
+		var fallback := _descent_wall_point(dir, S / 2.0, 4.2)
+		spot = {"at": fallback["pos"], "yaw": float(fallback["yaw"]) + PI}
+	var tv := VHS_RITUAL_SCRIPT.new() as Node3D
+	tv.name = "DescentIntroTv"
+	tv.world_seed = descent_base_seed
+	tv.floor_idx = descent_floor_idx
+	tv.home_cell = cell
+	tv.setup_key = "floor:0:intro"
+	tv.objective = false
+	tv.intro = true
+	tv.pinned_tape = INTRO_TAPE_PATH
+	tv.position = spot["at"]
+	tv.rotation.y = float(spot["yaw"])
+	add_child(tv)
+
+
 ## Rare optional playback altar. Route selection happens in DescentRoute and
 ## endless density in ChunkManager; this chunk only finds a physically honest
 ## wall site that does not overlap furniture or a doorway approach.
@@ -5164,6 +5207,8 @@ func _build_interactions() -> void:
 				_descent_ritual_set()
 		if descent_arrival and descent_arrival_wall >= 0:
 			_descent_arrival_car(descent_arrival_wall)
+			if descent_floor_idx == 0:
+				_descent_intro_tv(descent_arrival_wall)
 		return
 	if not WorldGen.elevator_cell(wseed, cell, theme):
 		return

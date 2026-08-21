@@ -735,10 +735,10 @@ func descent_tape_watch(on: bool) -> void:
 	# REC, meters, captions) leaves with the viewfinder, not just the needle.
 	_osd_hidden_tape = on
 	_sync_osd_visible()
-	# Playback's CRT look lives on the TV's own screen shader; the
-	# full-screen pass would double it over the whole display.
+	# Playback owns a high-resolution shared footage pass clipped to the TV
+	# glass. Hide the normal full-screen pass so the bezel and room stay clean.
 	if _post_process != null:
-		_post_process.hold_for_tape(on)
+		_post_process.set_tape_playback(on)
 	# The tape also owns the soundtrack: score and room tone hold their
 	# breath for it and pick up where they left off.
 	if _music != null:
@@ -778,6 +778,41 @@ func descent_setup_tape_finished(setup_key: String, objective: bool) -> void:
 		_descent_hud.grant_true_distance()
 		if _descent_hud.showing_true_distance():
 			_show_event_message("THE TAPE COUNTS THE ROOMS AHEAD")
+
+
+## Floor 1's mandatory arrival console ran its tutorial to the end. Teach
+## the two keys in plain words, then deliver the photo brief the arrival
+## card skipped while the console was still owed a viewing.
+func descent_intro_tape_finished(setup_key: String) -> void:
+	if not descent or run == null or run.ended:
+		return
+	run.mark_setup_tape_completed(setup_key)
+	if _intro_state != null:
+		_intro_state.mark_tutorial_viewed()
+	_show_event_message(
+		"PRESS C TO USE YOUR CAMERA. PRESS SPACE TO TAKE A PHOTO.")
+	var brief := create_tween()
+	brief.tween_interval(4.5)
+	brief.tween_callback(_show_photo_brief)
+
+
+## The console is only escapable mid-play once its tape has ever run to the
+## end on this machine — first viewing is mandatory, repeats are courtesy.
+func descent_intro_tape_skippable() -> bool:
+	return _intro_state != null and _intro_state.has_viewed_tutorial()
+
+
+## The player is walking away from the unwatched mandatory console.
+func descent_intro_nudge() -> void:
+	if not descent or run == null or run.ended:
+		return
+	_show_event_message("THE TELEVISION IS WAITING", true)
+
+
+## True while floor 1's arrival console still demands its viewing.
+func _intro_tv_pending() -> bool:
+	return descent and run != null and not run.ended and run.floor_idx == 0 \
+		and not run.setup_tape_completed("floor:0:intro")
 
 
 func _set_ambience_paused(paused: bool) -> void:
@@ -1016,6 +1051,10 @@ func _queue_photo_brief() -> void:
 	if not descent or _photo_director == null \
 			or _photo_director.plan.is_empty() \
 			or _photo_director.requirement_met():
+		return
+	# Floor 1 teaches by television first: the brief follows the mandatory
+	# console's tutorial (descent_intro_tape_finished) instead of the card.
+	if _intro_tv_pending():
 		return
 	var brief := create_tween()
 	brief.tween_interval(3.3)
@@ -1632,8 +1671,7 @@ func _continue_descent() -> void:
 
 
 func _restart_descent() -> void:
-	if _progress_enabled and _descent_progress.has_checkpoint():
-		world_seed = _descent_progress.run_seed
+	_reset_descent_checkpoint()
 	await _resume_descent_at(0)
 
 
@@ -2177,7 +2215,10 @@ func _prepare_descent(entry: int) -> void:
 		return
 	_descent_preparing = true
 	descent = true
-	_pending_new_descent_intro = entry == TitleScreen.DescentEntry.NEW
+	# New and Restart both open on the intro movie — Restart means the whole
+	# experience over, not floor one in silence. Once the movie has ever been
+	# watched to the end the Skip button is offered (IntroPlaybackState).
+	_pending_new_descent_intro = entry != TitleScreen.DescentEntry.CONTINUE
 	var floor_idx := _apply_descent_entry(entry)
 	player.allow_sprint = true
 	player.set_process_unhandled_input(false)
@@ -2207,10 +2248,18 @@ func _apply_descent_entry(entry: int) -> int:
 		return _descent_progress.deepest_floor
 	if entry == TitleScreen.DescentEntry.RESTART \
 			and _descent_progress.has_checkpoint():
-		world_seed = _descent_progress.run_seed
+		_reset_descent_checkpoint()
 		return 0
 	world_seed = _fresh_descent_seed()
 	return 0
+
+
+## R means reset, not "continue from floor one." Give the restarted run a
+## fresh building and replace the checkpoint before any level construction can
+## restore old photographs, mutations, opened objects or tape history.
+func _reset_descent_checkpoint() -> void:
+	world_seed = _fresh_descent_seed()
+	_commit_new_descent_checkpoint()
 
 
 func _fresh_descent_seed() -> int:

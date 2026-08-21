@@ -2,15 +2,17 @@ class_name PhotoAnomaly
 extends Node3D
 ## One wrong thing, standing in a cell, waiting to be photographed.
 ##
-## Four shapes share this node. PLACEMENT hangs the floor's own signature
-## prop inverted at head height, slowly turning under its own faint light;
+## Several shapes share this node. PLACEMENT wedges the floor's own signature
+## furniture upright into the ceiling, then lets it crash down only after its
+## developed photograph leaves the screen;
 ## DUPLICATE stands two identical copies of it shoulder to shoulder where one
 ## is furniture and two are a mistake; WRITING paints a phrase on a wall that
-## only the camera can see (photo-only render layer); BLEED wraps a bleed
-## prop the dressing already placed. Props are ALWAYS the floor's own — the
+## only the camera can see (photo-only render layer); TURNED swaps the prop
+## between an ordinary eye-visible stance and a lens-only copy that tracks
+## the camera; BLEED wraps a bleed prop the dressing already placed. Props are ALWAYS the floor's own — the
 ## owner ruled (2026-08-19) that foreign objects appear only as the bleed
 ## near the elevator, never scattered as anomalies. The wrongness is the
-## inversion, the hover, the duplication, never the object's origin.
+## impossible placement, the duplication, never the object's origin.
 ##
 ## The node is spawned by PhotoDirector on `chunk_built` and parented to the
 ## chunk, so streaming and blackout rebuilds retire and recreate it for free.
@@ -19,7 +21,7 @@ extends Node3D
 ## director owns it, so a rebuilt cell cannot resurrect a spent photograph.
 
 enum Type { PLACEMENT, DUPLICATE, WRITING, BLEED, GIANT, RING, MISSING,
-	PRINT, PORTAL }
+	PRINT, PORTAL, TURNED }
 
 ## Render layer bit reserved for photo-only geometry. Player cameras clear
 ## this bit; the snapshot camera sets it.
@@ -54,12 +56,10 @@ const PORTAL_PANOS := [
 ## therefore carry PLACEMENT/DUPLICATE. Airport luggage is a scatter set with
 ## per-piece centres and no footprint; prop-less themes plan WRITING only.
 const PROP_THEMES := [0, 1, 2, 5, 6, 7, 9]
-## The hanging prop hovers with its lowest point at least this high, and its
-## highest point at least this far under the ceiling.
-const HANG_CLEARANCE_HEAD := 1.9
-const HANG_CLEARANCE_CEIL := 0.35
-const HANG_MIN_ABOVE_FLOOR := 1.15
-const HANG_SPIN := 0.32
+## PLACEMENT: enough of the furniture pierces the ceiling to read as physically
+## stuck, while most of its body remains visible and photographable below it.
+const CEILING_EMBED_MIN := 0.14
+const CEILING_EMBED_MAX := 0.38
 ## GIANT: the prop at wrong scale, capped so it still fits under the cell's
 ## ceiling with a hand's width to spare.
 const GIANT_SCALE_MAX := 2.6
@@ -133,23 +133,27 @@ var world_seed := 0
 var theme := 0
 ## Dev (--photo-debug): writing renders on the normal camera too.
 var debug_visible := false
-## Slow drift for the hanging prop; a perfectly still floating object reads
-## as a physics bug, a turning one reads as held.
-var _spin: Node3D
+## PLACEMENT's furniture pivot. It stays completely still while lodged in the
+## slab; motion begins only when the developed print has left the screen.
+var _placement_pivot: Node3D
+var _placement_rest_y := 0.0
 var _points: Array[Vector3] = []   # chunk-local sample points
 ## Colliders the anomaly itself carries (GIANT's walk-blocker). The camera's
 ## occlusion rays must ignore them — sample points sit inside the prop, so
 ## its own body otherwise occludes it from every stance (found 2026-08-19:
 ## a required GIANT was uncapturable from 16/16 stances).
 var _body_rids: Array[RID] = []
-## Nodes a resolve() removes, plus the giant's glow and the floor height for
-## the placement drop.
+## Nodes a resolve() removes, plus the giant/placement glow and floor height.
 var _resolvables: Array[Node] = []
 var _glow: OmniLight3D
 var _floor_y := 0.0
 ## PORTAL only: the theme whose air the tear looks out into (-1 = the
 ## outside, a dead grey). Set by the director from the descent order.
 var next_theme := -1
+## TURNED only: the eye-visible copy at its ordinary yaw, and the lens-only
+## copy that tracks the camera. The eye pivot survives resolve() — turned.
+var _turned_eye: Node3D
+var _turned_lens: Node3D
 
 
 func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
@@ -161,8 +165,11 @@ func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
 	theme = p_theme
 	var floor_h := Chunk.cell_floor_h(world_seed, cell, theme)
 	_floor_y = floor_h
+	set_process(false)   # only TURNED tracks the camera per frame
 	# configure() is called before add_child, so debug_visible is already set.
 	match type:
+		Type.TURNED:
+			_build_turned(floor_h)
 		Type.WRITING:
 			_build_writing(floor_h, wall_dir, wall_along, false)
 		Type.PRINT:
@@ -181,11 +188,6 @@ func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
 			_build_props(floor_h, 1)
 	if debug_visible:
 		print("photo anomaly %s built, points %s" % [id, str(photo_points())])
-
-
-func _process(dt: float) -> void:
-	if _spin != null:
-		_spin.rotate_y(dt * HANG_SPIN)
 
 
 ## Global sample points the camera tests for framing. All must pass the
@@ -233,13 +235,15 @@ func count_caption() -> String:
 			return "\"%s\" — ONLY THE FILM SEES IT" % phrase_for(
 				world_seed, cell)
 		Type.PLACEMENT:
-			return "NOTHING HOLDS IT"
+			return "THE CEILING IS HOLDING IT"
 		Type.DUPLICATE:
 			# Name the impossibility, never the arrangement — "THERE ARE
 			# TWO" read as a shrug (owner, 2026-08-20).
 			return "TWO, WHEN YOU AREN'T LOOKING"
 		Type.GIANT:
 			return "IT SHOULD NOT FIT IN HERE"
+		Type.TURNED:
+			return "IT TURNED FOR THE PICTURE"
 		Type.RING:
 			return "THEY MEET WHEN THE ROOM IS EMPTY"
 		Type.WRITING:
@@ -414,36 +418,102 @@ static func _theme_furnished_walls(route: DescentRoute,
 
 
 ## The room noticed being photographed: a counted shot resolves its
-## anomaly. Hanging props drop, lens-only and eye-only things are simply
-## gone afterwards, writings leave the wall, the giant's glow dies. Chunk
+## anomaly. Ceiling furniture drops, lens-only and eye-only things are simply
+## gone afterwards, writings leave the wall, the giant's glow dies — and the
+## TURNED prop alone escalates: the real one now faces the player. Chunk
 ## rebuilds skip documented anomalies entirely, so the resolution holds.
 func resolve() -> void:
 	match type:
 		Type.PLACEMENT:
-			if _spin != null and is_instance_valid(_spin):
-				var pivot := _spin
-				_spin = null
-				var drop := create_tween()
-				drop.tween_property(pivot, "position:y",
-					_floor_y + 0.45, 0.5) \
-					.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-				drop.tween_callback(func():
-					var thud := AudioStreamPlayer3D.new()
-					thud.stream = SoundBank.thud()
-					thud.volume_db = -4.0
-					thud.position = pivot.position
-					add_child(thud)
-					thud.play()
-					thud.finished.connect(thud.queue_free))
+			_release_ceiling_furniture()
 		Type.GIANT:
 			if _glow != null and is_instance_valid(_glow):
 				_glow.queue_free()
 				_glow = null
+		Type.TURNED:
+			_turn_real_prop()
 		_:
 			for node in _resolvables:
 				if is_instance_valid(node):
 					node.queue_free()
 			_resolvables.clear()
+
+
+## PLACEMENT and TURNED are the anomalies whose resolution is a visible
+## payoff. The camera holds them until the paper-photo review closes:
+## PLACEMENT's fall would otherwise complete behind an opaque black review
+## card, and TURNED's point is that the prop has moved WHILE the paper was
+## up — the player lowers the print and it is facing them.
+func resolves_after_review() -> bool:
+	return type == Type.PLACEMENT or type == Type.TURNED
+
+
+## TURNED's resolve escalates instead of neutralizing: the lens copy goes,
+## and the real, eye-visible prop snaps to face wherever the player stands
+## now — on every layer, so raising the camera again changes nothing. No
+## tween: it did not turn, it was always facing you.
+func _turn_real_prop() -> void:
+	set_process(false)
+	if _turned_lens != null and is_instance_valid(_turned_lens):
+		_turned_lens.queue_free()
+		_turned_lens = null
+	if _turned_eye == null or not is_instance_valid(_turned_eye):
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam != null:
+		var to_cam := cam.global_position - _turned_eye.global_position
+		if Vector2(to_cam.x, to_cam.z).length_squared() > 0.04:
+			_turned_eye.rotation.y = atan2(to_cam.x, to_cam.z)
+	_set_layer(_turned_eye, 1)
+
+
+func _release_ceiling_furniture() -> void:
+	if _placement_pivot == null or not is_instance_valid(_placement_pivot):
+		return
+	var pivot := _placement_pivot
+	_placement_pivot = null
+	if _glow != null and is_instance_valid(_glow):
+		var dying_glow := _glow
+		_glow = null
+		var fade := create_tween()
+		fade.tween_property(dying_glow, "light_energy", 0.0, 0.12)
+		fade.tween_callback(dying_glow.queue_free)
+	var distance := maxf(0.1, pivot.position.y - _placement_rest_y)
+	var duration := clampf(sqrt(2.0 * distance / 9.8), 0.32, 0.62)
+	var tilt_sign := -1.0 \
+		if WorldGen.h(world_seed, cell.x, cell.y, 9383) % 2 == 0 else 1.0
+	var drop := create_tween()
+	drop.set_parallel(true)
+	drop.tween_property(pivot, "position:y", _placement_rest_y, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	# Gentle: the rest height is now the true mesh bottom on the carpet, so a
+	# hard tilt would visibly bury one edge and hang the other (the old 0.16
+	# was tuned when the whole prop floated and never met the floor).
+	drop.tween_property(pivot, "rotation:x", tilt_sign * 0.06, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	drop.tween_property(pivot, "rotation:z", -tilt_sign * 0.04, duration) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	drop.chain().tween_callback(_ceiling_furniture_impact.bind(pivot))
+	# A short, heavy rebound keeps the landing from reading as another smooth
+	# scripted translation.
+	drop.chain().tween_property(pivot, "position:y",
+		_placement_rest_y + 0.055, 0.055).set_trans(Tween.TRANS_QUAD)
+	drop.chain().tween_property(pivot, "position:y",
+		_placement_rest_y, 0.085).set_ease(Tween.EASE_IN) \
+		.set_trans(Tween.TRANS_QUAD)
+
+
+func _ceiling_furniture_impact(pivot: Node3D) -> void:
+	if not is_instance_valid(pivot):
+		return
+	var thud := AudioStreamPlayer3D.new()
+	thud.stream = SoundBank.thud()
+	thud.volume_db = -1.0
+	thud.max_distance = 24.0
+	thud.position = pivot.position
+	add_child(thud)
+	thud.play()
+	thud.finished.connect(thud.queue_free)
 
 
 ## A doorway-shaped tear in the wall, camera-only, looking out onto
@@ -497,6 +567,86 @@ func _build_portal(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	_resolvables.append(glow_quad)
 	_points = [quad.position, quad.position + Vector3(0, 0.9, 0)]
 	_facing = -dirv3
+
+
+## TURNED: to the bare eye the room's own furniture stands at an ordinary
+## hash yaw; through the raised lens the same object has rotated to face the
+## camera, and keeps facing it as the player strafes — the anomaly passes the
+## player's own test. The developed print catches it looking dead into the
+## shot. The one anomaly that resolves by getting WORSE: when the review
+## closes, the real prop is turned toward the player too. The eye copy
+## carries a real collider (ordinary furniture must block), so like RING the
+## build demands a proven clear floor spot and degrades to the compact
+## ceiling form in dense rooms — a collider may never claim a doorway lane.
+func _build_turned(floor_h: float) -> void:
+	var row: Array = Chunk.BLEED_PROPS.get(theme, [])
+	if row.is_empty():
+		_build_universal_photo(floor_h)
+		return
+	var scene := load(row[0]) as PackedScene
+	if scene == null:
+		return
+	var scl := float(row[1])
+	var centre_off: Vector3 = row[2]
+	var extents: Vector3 = row[3]
+	var footprint := maxf(1.0, maxf(extents.x, extents.z) * 0.5 + 0.10)
+	var spot := _find_spot(floor_h, footprint, maxf(extents.y, 2.1), false)
+	if spot == Vector3.INF:
+		type = Type.PLACEMENT
+		_build_props(floor_h, 1)
+		return
+	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
+		* PI * 0.25
+	_turned_eye = Node3D.new()
+	_turned_eye.position = spot
+	_turned_eye.rotation.y = yaw
+	add_child(_turned_eye)
+	var eye_inst := scene.instantiate() as Node3D
+	eye_inst.scale = Vector3.ONE * scl
+	eye_inst.position = -centre_off * scl
+	_turned_eye.add_child(eye_inst)
+	_set_layer(eye_inst, EYE_ONLY_LAYER)
+	if extents != Vector3.ZERO:
+		var body := StaticBody3D.new()
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = extents
+		shape.shape = box
+		shape.position = Vector3(0, extents.y * 0.5, 0)
+		body.add_child(shape)
+		_turned_eye.add_child(body)
+		_body_rids.append(body.get_rid())
+	_turned_lens = Node3D.new()
+	_turned_lens.position = spot
+	_turned_lens.rotation.y = yaw
+	add_child(_turned_lens)
+	var lens_inst := scene.instantiate() as Node3D
+	lens_inst.scale = Vector3.ONE * scl
+	lens_inst.position = -centre_off * scl
+	_turned_lens.add_child(lens_inst)
+	_set_photo_only(lens_inst)
+	_resolvables.append(_turned_lens)
+	var h := maxf(extents.y, 1.6)
+	_points = [spot + Vector3(0, h * 0.45, 0), spot + Vector3(0, h * 0.8, 0)]
+	set_process(true)
+
+
+## The lens copy tracks the camera with a slight lag — instant tracking
+## reads as a mechanism, the lag reads as something moving. Runs whether the
+## camera is raised or not (the copy is photo-layer-only, so the tracking is
+## invisible to the bare eye and costs one atan2).
+func _process(delta: float) -> void:
+	if _turned_lens == null or not is_instance_valid(_turned_lens):
+		set_process(false)
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var to_cam := cam.global_position - _turned_lens.global_position
+	if Vector2(to_cam.x, to_cam.z).length_squared() < 0.04:
+		return
+	_turned_lens.rotation.y = lerp_angle(_turned_lens.rotation.y,
+		atan2(to_cam.x, to_cam.z), minf(1.0, delta * 5.0))
 
 
 func _build_missing(floor_h: float) -> void:
@@ -587,33 +737,47 @@ func _build_props(floor_h: float, count: int) -> void:
 	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25
 	if count == 1:
-		# PLACEMENT: the prop hangs inverted overhead, slowly turning, lit
-		# faintly from beneath so it catches the eye from a doorway. Height
-		# is fitted between head clearance and the ceiling; a low ceiling
-		# with a tall prop drops it to chest height rather than into the
-		# slab, which reads as wrong all the same.
-		var ceil_h := Chunk.cell_ceil_h(world_seed, cell, theme)
-		var half_h := maxf(extents.y * 0.5, 0.3)
-		var pivot_y := minf(ceil_h - HANG_CLEARANCE_CEIL - half_h,
-			floor_h + HANG_CLEARANCE_HEAD + half_h)
-		pivot_y = maxf(pivot_y, floor_h + HANG_MIN_ABOVE_FLOOR + half_h)
-		_spin = Node3D.new()
-		_spin.position = Vector3(spot.x, pivot_y, spot.z)
-		_spin.rotation = Vector3(PI, yaw, 0.0)
-		add_child(_spin)
+		# PLACEMENT: ordinary furniture in its ordinary upright orientation,
+		# except its top has been driven through the ceiling. It remains rigidly
+		# still until the photograph has developed and gameplay returns.
+		#
+		# Both poses come from the MEASURED mesh bounds, never the BLEED_PROPS
+		# extents: those are collision boxes for foot-origined models, and
+		# reading them as a centred AABB parked every dropped prop half its
+		# own box height in the air (reported 2026-08-20 — fallen furniture
+		# floated 0.4-0.95m off the carpet).
 		var inst := scene.instantiate() as Node3D
 		inst.scale = Vector3.ONE * scl
 		inst.position = -centre_off * scl
-		_spin.add_child(inst)
-		var glow := OmniLight3D.new()
-		glow.light_color = Color(0.72, 0.82, 1.0)
-		glow.light_energy = 0.55
-		glow.omni_range = 4.2
-		glow.omni_attenuation = 1.4
-		glow.shadow_enabled = false
-		glow.position = Vector3(spot.x, pivot_y - half_h - 0.25, spot.z)
-		add_child(glow)
-		_points = [_spin.position, _spin.position - Vector3(0, half_h * 0.7, 0)]
+		var span := [INF, -INF]
+		_visual_span(inst, inst.transform, span)
+		var bottom := 0.0 if is_inf(float(span[0])) else float(span[0])
+		var top := maxf(extents.y, 0.6) \
+			if is_inf(float(span[1])) else float(span[1])
+		var height := maxf(top - bottom, 0.3)
+		var ceil_h := Chunk.cell_ceil_h(world_seed, cell, theme)
+		var embed := clampf(height * 0.22,
+			CEILING_EMBED_MIN, CEILING_EMBED_MAX)
+		var pivot_y := ceil_h - top + embed
+		_placement_rest_y = floor_h - bottom + 0.004
+		_placement_pivot = Node3D.new()
+		_placement_pivot.position = Vector3(spot.x, pivot_y, spot.z)
+		_placement_pivot.rotation.y = yaw
+		add_child(_placement_pivot)
+		_placement_pivot.add_child(inst)
+		_glow = OmniLight3D.new()
+		_glow.light_color = Color(0.72, 0.82, 1.0)
+		_glow.light_energy = 0.48
+		_glow.omni_range = 4.2
+		_glow.omni_attenuation = 1.4
+		_glow.shadow_enabled = false
+		_glow.position = Vector3(spot.x, pivot_y + bottom - 0.25, spot.z)
+		add_child(_glow)
+		# Sample only the portion below the slab; a point embedded in the ceiling
+		# would make an otherwise obvious anomaly fail the line-of-sight test.
+		_points = [
+			Vector3(spot.x, pivot_y + bottom + height * 0.2, spot.z),
+			Vector3(spot.x, pivot_y + bottom + height * 0.5, spot.z)]
 	else:
 		# DUPLICATE: two identical copies, identical yaw, near-touching —
 		# and lens-only. To the eye the floor is empty; through the raised
@@ -639,17 +803,18 @@ func _build_props(floor_h: float, count: int) -> void:
 ## Prop-less themes still need a guaranteed non-wall fallback when authored
 ## geometry claims every validated writing surface. A small impossible paper
 ## photograph is theme-neutral, compact enough for a doorway lane, has no
-## collider, and uses the ordinary PLACEMENT drop resolution.
+## collider, and uses the ordinary delayed PLACEMENT drop resolution.
 func _build_universal_photo(floor_h: float) -> void:
 	var spot := _find_spot(floor_h, 0.75, 1.8)
 	var ceil_h := Chunk.cell_ceil_h(world_seed, cell, theme)
 	var pivot_y := clampf(floor_h + 2.05,
 		floor_h + 1.45, ceil_h - 0.45)
-	_spin = Node3D.new()
-	_spin.position = Vector3(spot.x, pivot_y, spot.z)
-	_spin.rotation.y = float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
+	_placement_rest_y = floor_h + 0.42
+	_placement_pivot = Node3D.new()
+	_placement_pivot.position = Vector3(spot.x, pivot_y, spot.z)
+	_placement_pivot.rotation.y = float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25
-	add_child(_spin)
+	add_child(_placement_pivot)
 
 	var paper_mat := StandardMaterial3D.new()
 	paper_mat.albedo_color = Color(0.92, 0.89, 0.80)
@@ -659,7 +824,7 @@ func _build_universal_photo(floor_h: float) -> void:
 	var paper := MeshInstance3D.new()
 	paper.mesh = paper_mesh
 	paper.material_override = paper_mat
-	_spin.add_child(paper)
+	_placement_pivot.add_child(paper)
 
 	var exposure_mat := StandardMaterial3D.new()
 	exposure_mat.albedo_color = Color(0.055, 0.065, 0.06)
@@ -670,16 +835,18 @@ func _build_universal_photo(floor_h: float) -> void:
 	exposure.mesh = exposure_mesh
 	exposure.material_override = exposure_mat
 	exposure.position = Vector3(0.0, 0.065, -0.028)
-	_spin.add_child(exposure)
+	_placement_pivot.add_child(exposure)
 
 	var glow := OmniLight3D.new()
 	glow.light_color = Color(0.72, 0.82, 1.0)
 	glow.light_energy = 0.42
 	glow.omni_range = 3.6
 	glow.shadow_enabled = false
-	glow.position = _spin.position - Vector3(0, 0.55, 0)
+	glow.position = _placement_pivot.position - Vector3(0, 0.55, 0)
 	add_child(glow)
-	_points = [_spin.position, _spin.position - Vector3(0, 0.28, 0)]
+	_glow = glow
+	_points = [_placement_pivot.position,
+		_placement_pivot.position - Vector3(0, 0.28, 0)]
 
 
 ## GIANT: the room's own furniture at a scale it has no business being,
@@ -748,7 +915,7 @@ func _build_ring(floor_h: float) -> void:
 	var centre := _find_spot(floor_h, RING_RADIUS + 0.6, 2.0, false)
 	if centre == Vector3.INF:
 		# A ring is optional variety, never a placement gamble. Dense rooms keep
-		# the same evidence id but receive the compact, non-blocking hanging form.
+		# the same evidence id but receive the compact, non-blocking ceiling form.
 		type = Type.PLACEMENT
 		_build_props(floor_h, 1)
 		return
@@ -767,6 +934,22 @@ func _build_ring(floor_h: float) -> void:
 		_resolvables.append(pivot)
 	_points = [centre + Vector3(0, 1.0, 0),
 		centre + Vector3(RING_RADIUS, 0.8, 0)]
+
+
+## Lowest and highest visual mesh y under `node`, accumulated into
+## `span` = [low, high], in the space `xf` maps into. Walks local
+## transforms rather than global ones so tree-less audit builds measure
+## the same numbers the live game does.
+func _visual_span(node: Node, xf: Transform3D, span: Array) -> void:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		var aabb: AABB = (node as MeshInstance3D).mesh.get_aabb()
+		for i in 8:
+			var corner := xf * aabb.get_endpoint(i)
+			span[0] = minf(float(span[0]), corner.y)
+			span[1] = maxf(float(span[1]), corner.y)
+	for child in node.get_children():
+		if child is Node3D:
+			_visual_span(child, xf * (child as Node3D).transform, span)
 
 
 ## Deterministic clear-floor search shared by the standing builders. Random

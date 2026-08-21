@@ -9,6 +9,9 @@ const SECTION := "intro"
 const VERSION := 1
 
 var viewed := false
+## The floor 1 arrival console's camera tutorial: once it has run to the end
+## on this machine, later runs may skip it (E/Esc counts it as watched).
+var tutorial_viewed := false
 var _save_path := SAVE_PATH
 
 
@@ -28,20 +31,38 @@ func mark_viewed() -> Error:
 	if viewed:
 		return OK
 	viewed = true
+	return _persist()
+
+
+func has_viewed_tutorial() -> bool:
+	return tutorial_viewed
+
+
+func mark_tutorial_viewed() -> Error:
+	if tutorial_viewed:
+		return OK
+	tutorial_viewed = true
+	return _persist()
+
+
+func _persist() -> Error:
 	var config := ConfigFile.new()
 	config.set_value(SECTION, "version", VERSION)
-	config.set_value(SECTION, "viewed", true)
+	config.set_value(SECTION, "viewed", viewed)
+	config.set_value(SECTION, "tutorial_viewed", tutorial_viewed)
 	return config.save(_save_path)
 
 
 func load_from_disk() -> bool:
 	viewed = false
+	tutorial_viewed = false
 	var config := ConfigFile.new()
 	if config.load(_save_path) != OK:
 		return false
 	if int(config.get_value(SECTION, "version", 0)) != VERSION:
 		return false
 	viewed = bool(config.get_value(SECTION, "viewed", false))
+	tutorial_viewed = bool(config.get_value(SECTION, "tutorial_viewed", false))
 	return true
 
 
@@ -51,3 +72,4 @@ func clear_from_disk() -> void:
 	if FileAccess.file_exists(absolute):
 		DirAccess.remove_absolute(absolute)
 	viewed = false
+	tutorial_viewed = false

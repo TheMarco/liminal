@@ -528,8 +528,7 @@ func _physics_process(dt: float) -> void:
 	var eye := global_position + Vector3(0, _eye_h, 0)
 	var to := eye - cam.global_position
 	var dist := to.length()
-	var fwd := -cam.global_transform.basis.z
-	var aim := fwd.angle_to(to.normalized())
+	var aim := _beam_aim(cam)
 	var sighted := _clear_line(cam.global_position, eye)
 	# Coming out from behind cover costs it a beat.
 	if sighted and not _was_sighted:
@@ -831,6 +830,29 @@ static func room_for(p: Player, at: Vector3) -> Vector2i:
 	var cell := _cell_for(at)
 	return WorldGen.annex_room_id(p.world_seed, cell) \
 		if p.level_theme == 2 else WorldGen.room_id(p.world_seed, cell)
+
+
+## Angle from the camera's forward axis to the nearest part of the FIGURE,
+## not to its fixed eye point. At arm's length the body fills a third of the
+## frame: aiming square at the chest put the eye point ~25 degrees off axis,
+## outside BURN_CONE, so the beam neither lit nor burned a looming figure
+## (reported 2026-08-20). Sample the body axis at three heights, take the
+## best, and credit the silhouette's own angular half-width — capped so
+## "aiming should mean aiming" still holds at range.
+func _beam_aim(cam: Camera3D) -> float:
+	var fwd := -cam.global_transform.basis.z
+	var best := TAU
+	for h in [0.2, _eye_h * 0.55, _eye_h]:
+		var to := global_position + Vector3(0, float(h), 0) \
+			- cam.global_position
+		if to.length_squared() < 1e-6:
+			return 0.0
+		best = minf(best, fwd.angle_to(to.normalized()))
+	var dist := maxf(
+		global_position.distance_to(cam.global_position), 0.001)
+	# The card is about 0.9m wide.
+	best -= minf(atan(0.45 / dist), 0.6)
+	return maxf(best, 0.0)
 
 
 ## Is the torch actually on it? The light is mounted on the camera, so this is

@@ -1,18 +1,14 @@
 shader_type spatial;
 render_mode unshaded, cull_back;
-// The CRT face of the ritual television. Idle it runs analog snow; playing it
-// runs one of eight procedural recordings: a degraded fixed-camera view of a
-// dark corridor with something at the far end that is nearer every time the
-// tracking settles. Content is abstract on purpose — a tape is a mood, not a
-// cutscene, and it must loop through a 24-second play without authored video.
+// The spatial face of the ritual television. Authored footage arrives already
+// processed by the shared found-footage pass and is presented without another
+// signal simulation. Idle snow and the procedural no-file fallback stay here.
 
 uniform float playing : hint_range(0.0, 1.0) = 0.0;
 uniform float progress : hint_range(0.0, 1.0) = 0.0;
 uniform float variant = 0.0;
 uniform float watched : hint_range(0.0, 1.0) = 0.0;
-// Authored footage: the live texture of a VideoStreamPlayer rendering in a
-// SubViewport. When use_footage is set the recording is the video, and the
-// procedural corridor is only the fallback for tapes with no file.
+// Authored footage: the high-resolution, post-processed SubViewport texture.
 uniform sampler2D tape_tex : source_color, filter_linear;
 uniform float use_footage = 0.0;
 // Fade the luminous raster into the tube's dark glass. Keeping this as a
@@ -86,9 +82,13 @@ vec3 tape_frame(vec2 uv, float t) {
 
 void fragment() {
 	vec2 uv = UV;
-	// Slight barrel curvature so the flat quad reads as a tube.
-	vec2 c = uv - 0.5;
-	uv = c * (1.0 + dot(c, c) * 0.18) + 0.5;
+	// Authored footage arrives already processed by the game's recovered-tape
+	// shader. Idle snow and the procedural fallback retain the tube's local
+	// warp; applying it to authored video would bend and degrade the signal twice.
+	if (use_footage <= 0.5) {
+		vec2 c = uv - 0.5;
+		uv = c * (1.0 + dot(c, c) * 0.18) + 0.5;
+	}
 	// The barrel warp naturally rounds the corners. Distance from its warped
 	// edge gives the raster a soft falloff instead of exposing a sharp quad.
 	float edge_distance = min(min(uv.x, 1.0 - uv.x),
@@ -99,49 +99,15 @@ void fragment() {
 	vec3 idle = snow(uv, t) * mix(0.5, 0.12, watched);
 	vec3 recording;
 	if (use_footage > 0.5) {
-		// The footage goes through the tape, not just onto the glass:
-		// per-line jitter with rare violent rows, a slow rolling tracking
-		// band, chroma bleed, washed VHS colour, grain, sparkle dropouts,
-		// head-switching noise at the bottom, and the tube's vignette.
-		vec2 fuv = clamp(uv, vec2(0.0), vec2(1.0));
-		float row = floor(fuv.y * 240.0);
-		float jitter = (hash21(vec2(row, floor(t * 24.0))) - 0.5) * 0.006;
-		float rough = step(0.972, hash21(vec2(row * 0.37, floor(t * 13.0))));
-		jitter += rough * (hash21(vec2(row, floor(t * 31.0))) - 0.5) * 0.065;
-		fuv.x += jitter + sin(fuv.y * 9.0 + t * 1.7) * 0.0016;
-		// Keep smoothstep's edges ordered. Reversed edges are undefined GLSL
-		// and made the principal tracking band disappear on some renderers.
-		float band_center = fract(t * 0.061);
-		float band_dist = abs(fract(fuv.y - band_center + 0.5) - 0.5);
-		float band = 1.0 - smoothstep(0.018, 0.115, band_dist);
-		float band_shift = hash21(vec2(floor(fuv.y * 84.0),
-			floor(t * 16.0))) - 0.5;
-		fuv.x += band * band_shift * 0.038;
-		float ca = 0.0035 + band * 0.0045;
-		vec3 src;
-		src.r = texture(tape_tex, fuv + vec2(ca, 0.0)).r;
-		src.g = texture(tape_tex, fuv).g;
-		src.b = texture(tape_tex, fuv - vec2(ca, 0.0)).b;
-		float luma = dot(src, vec3(0.299, 0.587, 0.114));
-		recording = mix(vec3(luma), src, 0.76);
-		recording = recording * vec3(1.04, 0.99, 0.94) * 0.92 + vec3(0.04);
-		recording += band * 0.085;
-		recording += (hash21(uv * 251.0 + fract(t * 39.0)) - 0.5) * 0.18;
-		float sparkle = step(0.9985,
-			hash21(vec2(row, floor(t * 47.0)) + uv.x));
-		recording = mix(recording, vec3(0.95), sparkle * 0.8);
-		float tear = step(uv.y, 0.045)
-			* step(0.35, vnoise(vec2(t * 7.0, uv.y * 90.0)));
-		recording = mix(recording, snow(uv, t), tear * 0.8);
-		vec2 pc = uv - 0.5;
-		recording *= 0.45 + 0.55 * smoothstep(0.95, 0.45, length(pc) * 1.30);
+		recording = texture(tape_tex, clamp(uv, vec2(0.0), vec2(1.0))).rgb;
 	} else {
 		recording = tape_frame(uv, t);
 	}
 	vec3 col = mix(idle, recording, playing);
-	// 240 visible lines — the vertical resolution a VHS tape actually carried.
+	// Procedural material keeps its own tube scan. Authored video already carries
+	// the shared found-footage shader's field and scan-line treatment.
 	float scan = 0.76 + 0.24 * sin(uv.y * 240.0 * TAU);
-	col *= scan * tube_aperture;
+	col *= mix(scan * tube_aperture, 1.0, use_footage);
 	ALBEDO = col * 0.9;
 	EMISSION = col * mix(0.55, 1.1, playing);
 }

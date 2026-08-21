@@ -10,9 +10,9 @@ var _crt_material: ShaderMaterial
 var _found_footage_material: ShaderMaterial
 var _mode := Mode.CRT
 var _enabled := true
-## While a ritual tape owns the screen the full-screen pass steps aside:
-## the CRT-ness of playback belongs to the TV's own screen shader
-## (vhs_tape.gdshader), not the whole display.
+## While a ritual tape owns the camera, the main full-screen pass steps aside.
+## Playback has its own high-resolution, TV-glass-only instance of the shared
+## recovered-footage material.
 var _tape_hold := false
 var _signal_corruption := 0.0
 var _minor_at := 0.0
@@ -37,6 +37,64 @@ var _burst_until := 0.0
 const PRESENCE_ATTACK := 4.0    # per second toward a higher target
 const PRESENCE_RELEASE := 0.35  # per second toward a lower target
 const BURST_SECONDS := 0.11     # ~2-3 frames of catastrophic loss
+const POST_SHADER := preload("res://shaders/post.gdshader")
+const FOUND_FOOTAGE_RESOLUTION := Vector2(640.0, 360.0)
+## 240 visible rows at the ritual TV's physical tube aspect.
+const TV_TAPE_RESOLUTION := Vector2(344.0, 240.0)
+
+
+## One source of truth for recovered-footage rendering. Full-screen gameplay
+## and the television's private video viewport both request this material, so
+## tuning the tape look can no longer leave the two playback paths out of sync.
+static func make_found_footage_material(
+		signal_resolution := FOUND_FOOTAGE_RESOLUTION) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = POST_SHADER
+	# With the auto-iris as the main level control, this modest fixed boost keeps
+	# dark rooms readable without double-exposing bright interiors.
+	material.set_shader_parameter("bright_boost", 1.38)
+	material.set_shader_parameter("resolution", signal_resolution)
+	material.set_shader_parameter("noise_level", 0.018)
+	material.set_shader_parameter("interference_amount", 0.06)
+	material.set_shader_parameter("aberation_amount", 0.12)
+	material.set_shader_parameter("roll_line_amount", 0.08)
+	material.set_shader_parameter("roll_speed", 2.0)
+	material.set_shader_parameter("grille_amount", 0.03)
+	material.set_shader_parameter("scan_line_strength", -8.0)
+	material.set_shader_parameter("pixel_strength", -1.5)
+	material.set_shader_parameter("warp_amount", 0.13)
+	material.set_shader_parameter("vignette_amount", 0.6)
+	material.set_shader_parameter("vignette_intensity", 0.5)
+	material.set_shader_parameter("tube_edge_feather", 0.018)
+	material.set_shader_parameter("jitter_amount", 0.05)
+	material.set_shader_parameter("jitter_speed", 9.0)
+	material.set_shader_parameter("wobble_amount", 0.06)
+	material.set_shader_parameter("tear_amount", 0.05)
+	material.set_shader_parameter("ghost_amount", 0.2)
+	material.set_shader_parameter("flicker_amount", 0.15)
+	material.set_shader_parameter("saturation", 0.78)
+	material.set_shader_parameter("contrast", 1.0)
+	material.set_shader_parameter("black_crush", 0.004)
+	material.set_shader_parameter("head_switch_amount", 0.25)
+	material.set_shader_parameter("dropout_amount", 0.1)
+	material.set_shader_parameter("scan_line_amount", 1.0)
+	material.set_shader_parameter("dv_blur", 0.5)
+	material.set_shader_parameter("dv_chroma_blur", 0.8)
+	material.set_shader_parameter("highlight_rolloff", 1.0)
+	material.set_shader_parameter("highlight_knee", 0.78)
+	material.set_shader_parameter("auto_exposure", 1.0)
+	material.set_shader_parameter("ae_target", 0.21)
+	material.set_shader_parameter("signal_fps", 29.97)
+	material.set_shader_parameter("chroma_delay", 0.8)
+	material.set_shader_parameter("overscan", 0.03)
+	material.set_shader_parameter("black_lift", 0.01)
+	material.set_shader_parameter("field_amount", 0.7)
+	material.set_shader_parameter("line_noise", 0.012)
+	material.set_shader_parameter("chroma_noise", 0.5)
+	material.set_shader_parameter("bloom_amount", 0.35)
+	material.set_shader_parameter("bloom_threshold", 0.72)
+	material.set_shader_parameter("color_balance", Vector3(1.03, 1.0, 0.96))
+	return material
 
 
 func setup(host: Node, found_footage := false, enabled := true) -> void:
@@ -53,73 +111,10 @@ func setup(host: Node, found_footage := false, enabled := true) -> void:
 	# recovered tape runs the same glass driven far past spec — coarser
 	# grid, soft beam, heavy interference, wandering chroma, a tape-speed
 	# roll. The gritty dials are the baseline the glitch machinery rides on.
-	var post_shader: Shader = load("res://shaders/post.gdshader")
 	_crt_material = ShaderMaterial.new()
-	_crt_material.shader = post_shader
+	_crt_material.shader = POST_SHADER
 	_crt_material.set_shader_parameter("bright_boost", 1.4)
-	_found_footage_material = ShaderMaterial.new()
-	_found_footage_material.shader = post_shader
-	# 1.0: with the auto-iris as the sole level control, a fixed boost only
-	# double-exposes bright rooms (the Poolrooms wash, 2026-08-20).
-	_found_footage_material.set_shader_parameter("bright_boost", 1.38)
-	# 854x480: the same grid main._apply_scaling renders the 3D world at, so
-	# the shader resamples a real SD picture instead of point-sampling a
-	# sharp one. Bandwidth is destroyed below, not pixel count.
-	_found_footage_material.set_shader_parameter("resolution",
-		Vector2(640.0, 360.0))
-	_found_footage_material.set_shader_parameter("noise_level", 0.018)
-	_found_footage_material.set_shader_parameter("interference_amount", 0.06)
-	_found_footage_material.set_shader_parameter("aberation_amount", 0.12)
-	_found_footage_material.set_shader_parameter("roll_line_amount", 0.08)
-	_found_footage_material.set_shader_parameter("roll_speed", 2.0)
-	_found_footage_material.set_shader_parameter("grille_amount", 0.03)
-	_found_footage_material.set_shader_parameter("scan_line_strength", -8.0)
-	_found_footage_material.set_shader_parameter("pixel_strength", -1.5)
-	_found_footage_material.set_shader_parameter("warp_amount", 0.13)
-	_found_footage_material.set_shader_parameter("vignette_amount", 0.6)
-	_found_footage_material.set_shader_parameter("vignette_intensity", 0.5)
-	_found_footage_material.set_shader_parameter("tube_edge_feather", 0.018)
-	# The tape's own grit (2026-08-18): handheld shake, sparse line wobble,
-	# tears, ghosting, an iris that hunts, washed colour with crushed blacks,
-	# head-switching noise at the raster edges and oxide dropouts.
-	_found_footage_material.set_shader_parameter("jitter_amount", 0.05)
-	_found_footage_material.set_shader_parameter("jitter_speed", 9.0)
-	_found_footage_material.set_shader_parameter("wobble_amount", 0.06)
-	_found_footage_material.set_shader_parameter("tear_amount", 0.05)
-	_found_footage_material.set_shader_parameter("ghost_amount", 0.2)
-	_found_footage_material.set_shader_parameter("flicker_amount", 0.15)
-	_found_footage_material.set_shader_parameter("saturation", 0.78)
-	_found_footage_material.set_shader_parameter("contrast", 1.0)
-	_found_footage_material.set_shader_parameter("black_crush", 0.004)
-	_found_footage_material.set_shader_parameter("head_switch_amount", 0.25)
-	_found_footage_material.set_shader_parameter("dropout_amount", 0.1)
-	# MiniDV softness: a little luma low-pass, a wide chroma smear.
-	# Same scanline character as the clean tube (its defaults: 1.0 / -8);
-	# the tape only differs in raster count, 480 lines vs 320.
-	_found_footage_material.set_shader_parameter("scan_line_amount", 1.0)
-	_found_footage_material.set_shader_parameter("dv_blur", 0.5)
-	_found_footage_material.set_shader_parameter("dv_chroma_blur", 0.8)
-	# Bright interiors (Poolrooms tile) washed out under the boost; the
-	# shoulder compresses only the top of the range.
-	_found_footage_material.set_shader_parameter("highlight_rolloff", 1.0)
-	_found_footage_material.set_shader_parameter("highlight_knee", 0.78)
-	_found_footage_material.set_shader_parameter("auto_exposure", 1.0)
-	_found_footage_material.set_shader_parameter("ae_target", 0.21)
-	# Signal model: tape-side randomness steps at 29.97 Hz, chroma lags luma
-	# by under a source pixel, the tube overscans 3%, recorded black floats,
-	# fields shimmer, noise runs along rows, highlights bloom sideways, and
-	# the camera carries a slight warm cast.
-	_found_footage_material.set_shader_parameter("signal_fps", 29.97)
-	_found_footage_material.set_shader_parameter("chroma_delay", 0.8)
-	_found_footage_material.set_shader_parameter("overscan", 0.03)
-	_found_footage_material.set_shader_parameter("black_lift", 0.01)
-	_found_footage_material.set_shader_parameter("field_amount", 0.7)
-	_found_footage_material.set_shader_parameter("line_noise", 0.012)
-	_found_footage_material.set_shader_parameter("chroma_noise", 0.5)
-	_found_footage_material.set_shader_parameter("bloom_amount", 0.35)
-	_found_footage_material.set_shader_parameter("bloom_threshold", 0.72)
-	_found_footage_material.set_shader_parameter("color_balance",
-		Vector3(1.03, 1.0, 0.96))
+	_found_footage_material = make_found_footage_material()
 	_overlay.material = _material_for_mode()
 	_overlay.visible = _enabled and not _tape_hold
 	layer.add_child(_overlay)
@@ -137,7 +132,7 @@ func set_enabled(value: bool) -> void:
 	_sync_visible()
 
 
-func hold_for_tape(on: bool) -> void:
+func set_tape_playback(on: bool) -> void:
 	_tape_hold = on
 	_sync_visible()
 

@@ -107,9 +107,23 @@ func run() -> void:
 	expect(game._apply_descent_entry(TitleScreen.DescentEntry.CONTINUE) == 6 \
 		and game.world_seed == 24681,
 		"Continue did not restore the deepest floor and saved seed")
+	test_progress.record_short_tape(VhsTapeLibrary.random_paths()[0])
+	test_progress.record_mutation_state(6, 1, [0, 1], "changed",
+		["base", "changed"])
+	var restart_runtime := ChunkRuntimeState.new()
+	restart_runtime.put("restart:door", "swing_door", {"open": true})
+	test_progress.record_runtime_state(6, restart_runtime)
+	test_progress.record_photo_ids(6, ["old-photo"])
+	var restart_seed := test_progress.run_seed
 	expect(game._apply_descent_entry(TitleScreen.DescentEntry.RESTART) == 0 \
-		and test_progress.deepest_floor == 6 and game.world_seed == 24681,
-		"Restart did not keep the building/deepest checkpoint")
+		and game.world_seed != restart_seed
+		and test_progress.run_seed == game.world_seed
+		and test_progress.deepest_floor == 0
+		and test_progress.seen_short_tapes.is_empty()
+		and test_progress.mutation_states.is_empty()
+		and test_progress.runtime_states.is_empty()
+		and test_progress.photo_states.is_empty(),
+		"Restart did not replace every part of the old checkpoint")
 	var old_checkpoint_seed := test_progress.run_seed
 	expect(game._apply_descent_entry(TitleScreen.DescentEntry.NEW) == 0 \
 		and test_progress.run_seed == old_checkpoint_seed,

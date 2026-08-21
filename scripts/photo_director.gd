@@ -91,8 +91,8 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 		return out
 	var reserved := {p_route.origin: true, p_route.target: true}
 	# The three on-route anomalies are three DIFFERENT types wherever the
-	# cells allow it — a floor of three identical hangings reads as one idea
-	# repeated (playtest, 2026-08-19).
+	# cells allow it — a floor of three identical ceiling pieces reads as one
+	# idea repeated (playtest, 2026-08-19).
 	var used_types := {}
 	var slot := 0
 	var spine := spine_count_for(p_route.floor_idx, p_route.theme)
@@ -139,12 +139,14 @@ static func _eligible_types(p_route: DescentRoute, at: Vector2i) -> Array:
 	var out: Array = []
 	if PhotoAnomaly.PROP_THEMES.has(p_route.theme):
 		out = [PhotoAnomaly.Type.PLACEMENT, PhotoAnomaly.Type.DUPLICATE,
-			PhotoAnomaly.Type.RING]
+			PhotoAnomaly.Type.RING, PhotoAnomaly.Type.TURNED]
 		# GIANT, RING and MISSING all need a large clear floor footprint that
 		# only exists after authored furniture has built. GIANT and MISSING add
 		# colliders, so they remain authored-only; RING is non-blocking and its
-		# runtime builder safely becomes a hanging placement when the full circle
-		# cannot be proven. The plan otherwise uses validated wall pieces.
+		# runtime builder safely becomes a ceiling placement when the full circle
+		# cannot be proven, and TURNED (whose eye copy blocks like real
+		# furniture) does the same when no clear floor spot proves out.
+		# The plan otherwise uses validated wall pieces.
 	if not PhotoAnomaly.writing_spot_for(p_route, at).is_empty():
 		out.append(PhotoAnomaly.Type.WRITING)
 		out.append(PhotoAnomaly.Type.PRINT)
@@ -314,7 +316,7 @@ func _on_chunk_built(chunk: Chunk) -> void:
 	var spawn_type := int(spec["type"])
 	# A blackout mutation may have opened the planned wall since planning;
 	# re-resolve against the current topology and the furniture that actually
-	# built. Prop themes can fall back to a non-blocking hanging anomaly if a
+	# built. Prop themes can fall back to a non-blocking ceiling anomaly if a
 	# mutation or authored set claims every wall position.
 	if int(spec["type"]) in [PhotoAnomaly.Type.WRITING,
 			PhotoAnomaly.Type.PRINT, PhotoAnomaly.Type.PORTAL] \
@@ -324,7 +326,7 @@ func _on_chunk_built(chunk: Chunk) -> void:
 			wall_dir = int(spot["dir"])
 			wall_along = float(spot["along"])
 		else:
-			# Every theme has a universal compact hanging-photo fallback. This is
+			# Every theme has a universal compact ceiling-photo fallback. This is
 			# the final invariant: authored geometry may veto a wall, never the
 			# evidence objective itself.
 			spawn_type = PhotoAnomaly.Type.PLACEMENT

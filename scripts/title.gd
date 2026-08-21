@@ -74,7 +74,7 @@ const CREDIT_SECTIONS := [
 const CREAM := Color(0.93, 0.88, 0.75)
 const GOLD := Color(0.77, 0.69, 0.53)
 const BODY := Color(0.66, 0.64, 0.58)
-const DIM := Color(0.46, 0.45, 0.41)
+const DIM := Color(0.58, 0.57, 0.52)
 const BACK := Color8(2, 2, 2)
 
 var _background: TextureRect
@@ -95,7 +95,10 @@ var _descent_entry := DescentEntry.NEW
 
 
 func _ready() -> void:
-	layer = 3
+	# The supplied title art already owns its VHS treatment. Keep menu and rule
+	# typography above the layer-100 gameplay post pass so instructional text is
+	# not blurred, bloomed and scan-resampled a second time.
+	layer = 101
 	var back := ColorRect.new()
 	back.color = BACK
 	back.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -339,7 +342,7 @@ func _build_descent() -> void:
 		preparing = "PREPARING FLOOR %02d  —  %s" % [
 			_checkpoint_floor + 1, _checkpoint_name.to_upper()]
 	elif _descent_entry == DescentEntry.RESTART:
-		preparing = "PREPARING FLOOR 01  —  THE CASINO  /  SAME BUILDING"
+		preparing = "RESETTING EVERYTHING  —  PREPARING FLOOR 01"
 	_prompt = _label(preparing, 28, GOLD)
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page.add_child(_prompt)
@@ -530,7 +533,7 @@ func _process(dt: float) -> void:
 			+ sin(_t * 7.3) * 0.003
 		_background.modulate = Color(exposure, exposure, exposure, 1.0)
 	if is_instance_valid(_prompt):
-		_prompt.modulate.a = 0.68 + 0.22 * (0.5 + 0.5 * sin(_t * 2.2))
+		_prompt.modulate.a = 0.84 + 0.16 * (0.5 + 0.5 * sin(_t * 2.2))
 
 
 ## The title consumes every key so the already-built world cannot move behind

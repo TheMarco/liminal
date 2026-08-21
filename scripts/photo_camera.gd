@@ -51,6 +51,9 @@ var _raised := false
 ## right-mouse release cannot lower it.
 var _toggled := false
 var _review_left := 0.0
+## Counted anomalies with a visible resolution beat. They remain frozen while
+## the opaque developed print is up, then resolve as the bare-eyed view returns.
+var _review_resolves: Array[PhotoAnomaly] = []
 var _pending_risk := false
 var _hinted := false
 var _snap_viewport: SubViewport
@@ -238,6 +241,7 @@ func _process(dt: float) -> void:
 			# camera down (owner, 2026-08-20). Whatever answers the
 			# photograph is met with bare eyes.
 			_lower()
+			_release_review_resolutions()
 			if _pending_risk:
 				_pending_risk = false
 				_roll_risk()
@@ -462,7 +466,10 @@ func _take_photo() -> void:
 	for anomaly in captured:
 		if director != null and director.mark_documented(anomaly.id):
 			counted = true
-			anomaly.resolve()
+			if anomaly.resolves_after_review():
+				_review_resolves.append(anomaly)
+			else:
+				anomaly.resolve()
 			photo_documented.emit(anomaly.id, director.documented_count(),
 				director.required_count(), anomaly.count_caption())
 	# The ternary must stay typed: `[] ` unifies the whole expression to a
@@ -473,6 +480,13 @@ func _take_photo() -> void:
 	_marks.visible = _photo.visible and not _marks.marks.is_empty()
 	# Only evidence provokes; snapshots of nothing stay free.
 	_pending_risk = counted
+
+
+func _release_review_resolutions() -> void:
+	for anomaly in _review_resolves:
+		if is_instance_valid(anomaly):
+			anomaly.resolve()
+	_review_resolves.clear()
 
 
 ## The developed print occupies the same window the player framed. Deriving

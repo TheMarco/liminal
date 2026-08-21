@@ -87,10 +87,11 @@ func _run() -> void:
 		and topology.current_state_id() == 0,
 		"unknown topology signature was reinterpreted instead of falling back")
 
-	# A same-seed restart never lowers the checkpoint; a new seed resets it.
+	# Revisiting an earlier floor on the same seed never lowers the checkpoint;
+	# replacing the run with a new seed resets it.
 	loaded.reach_floor(111, 0)
 	_expect(loaded.deepest_floor == 6,
-		"same-building restart erased the deeper unlock")
+		"same-seed floor revisit erased the deeper unlock")
 	loaded.start_new(222)
 	_expect(loaded.run_seed == 222 and loaded.deepest_floor == 0,
 		"New Descent did not establish a fresh floor-one checkpoint")

@@ -87,13 +87,15 @@ func _run() -> void:
 	for path in longs:
 		if shorts.has(path):
 			failures.append("recording appears in both pools: " + path)
-	var shader_source := FileAccess.get_file_as_string(
+	var shared_shader_source := FileAccess.get_file_as_string(
+		"res://shaders/post.gdshader")
+	if not shared_shader_source.contains("wobble_amount") \
+			or not shared_shader_source.contains("tear_amount"):
+		failures.append("shared recovered-footage shader lost tracking damage")
+	var tube_shader_source := FileAccess.get_file_as_string(
 		"res://shaders/vhs_tape.gdshader")
-	if shader_source.contains("smoothstep(0.09, 0.0"):
-		failures.append("VHS tracking band still uses undefined reversed smoothstep")
-	if not shader_source.contains("band_shift") \
-			or not shader_source.contains("fuv.x += band"):
-		failures.append("VHS footage has no visible tracking displacement")
+	if not tube_shader_source.contains("Authored footage arrives already processed"):
+		failures.append("TV tube is no longer treating authored footage as preprocessed")
 	if not is_equal_approx(VhsRitual.display_aspect_for_size(
 			Vector2i(512, 410)), 4.0 / 3.0) \
 			or not is_equal_approx(VhsRitual.display_aspect_for_size(
@@ -300,12 +302,24 @@ func _audit_playback_modes(shorts: Array[String], longs: Array[String],
 	if optional._screen_mat == null \
 			or optional._screen_mat.shader.resource_path \
 				!= "res://shaders/vhs_tape.gdshader":
-		failures.append("CRT screen lost its VHS distortion shader")
+		failures.append("CRT screen lost its spatial presentation shader")
 	else:
 		if float(optional._screen_mat.get_shader_parameter("use_footage")) != 1.0:
-			failures.append("CRT shader did not enter distorted-footage mode")
+			failures.append("CRT shader did not enter authored-footage mode")
 		if optional._screen_mat.get_shader_parameter("tape_tex") == null:
 			failures.append("decoded recording was not bound to the CRT shader")
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if not main_source.contains("_post_process.set_tape_playback(on)"):
+		failures.append("TV watch no longer isolates playback from the main pass")
+	var tv_signal := PostProcessController.make_found_footage_material(
+		PostProcessController.TV_TAPE_RESOLUTION)
+	if tv_signal.get_shader_parameter("resolution") != Vector2(344.0, 240.0):
+		failures.append("TV recovered-footage pass is not a 240-line signal")
+	if optional._video_post == null \
+			or not optional._video_post.material is ShaderMaterial \
+			or (optional._video_post.material as ShaderMaterial).shader.resource_path \
+				!= "res://shaders/post.gdshader":
+		failures.append("TV glass did not receive the shared footage shader")
 	var interrupted_tape := optional._tape_path
 	optional.reset_tape()
 	if not optional._tape_path.is_empty():

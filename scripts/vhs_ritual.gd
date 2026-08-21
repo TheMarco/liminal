@@ -22,7 +22,10 @@ const OPTIONAL_HISS_DB := -21.0
 const OPTIONAL_HISS_RANGE := 18.0
 const OPTIONAL_CUE_RANGE := 8.5
 const CRT_SCREEN_SIZE := Vector2(0.578, 0.404)
-const VIDEO_VIEWPORT_SIZE := Vector2i(550, 384)
+## Render well above the 240-line signal grid before mapping to the 3D glass.
+## The old 550x384 target left only ~1.6 output pixels per scan line, which
+## resampled into broad moire bands on high-DPI displays.
+const VIDEO_VIEWPORT_SIZE := Vector2i(1280, 894)
 const WATCH_SCREEN_HEIGHT := 0.93
 ## The cabinet is wider on its control side. Aim slightly right of the glass so
 ## the complete set shifts left in-frame and covers the last strip of room.
@@ -35,6 +38,13 @@ var setup_key := ""
 var objective := true
 ## Mirrored from run state at build time so a rebuilt room remembers.
 var already_watched := false
+## The mandatory arrival console (floor 1): plays a pinned tutorial tape,
+## seizes the player on approach instead of waiting for E, cannot be
+## cancelled mid-play, and reports completion via
+## `descent_intro_tape_finished` instead of the optional-tape reward path.
+var intro := false
+## Non-empty: this set never claims from the tape pools; it plays this file.
+var pinned_tape := ""
 
 var _screen: MeshInstance3D
 var _screen_mat: ShaderMaterial
@@ -44,6 +54,7 @@ var _hiss: AudioStreamPlayer3D
 var _video: VideoStreamPlayer
 var _video_vp: SubViewport
 var _video_aspect: AspectRatioContainer
+var _video_post: ColorRect
 var _cam: Camera3D
 var _prev_cam: Camera3D
 var _viewer: Player
@@ -66,7 +77,9 @@ func _ready() -> void:
 	if setup_key.is_empty():
 		setup_key = "floor:%d:%s" % [floor_idx,
 			"objective" if objective else "cell:%d:%d" % [home_cell.x, home_cell.y]]
-	if objective:
+	if intro:
+		set_meta("intro_tv", true)
+	elif objective:
 		set_meta("descent_ritual", true)
 	else:
 		set_meta("optional_vhs", true)
@@ -175,9 +188,9 @@ func _build_discovery_cue() -> void:
 	add_child(_discovery_light)
 
 
-## The video decodes into an off-screen viewport whose texture the tube
-## shader samples, so the footage sits behind the same curvature, grain and
-## scanlines as everything else the television shows. Built on first play.
+## The video decodes into an off-screen viewport, then the shared recovered-
+## footage shader processes it at high output resolution with a 240-line signal
+## grid. That finished texture is clipped to the physical TV glass only.
 func _ensure_video() -> bool:
 	if _tape_path.is_empty():
 		return false
@@ -213,6 +226,13 @@ func _ensure_video() -> bool:
 	_video.volume_db = 2.0
 	_video.finished.connect(_on_video_finished)
 	_video_aspect.add_child(_video)
+	_video_post = ColorRect.new()
+	_video_post.name = "RecoveredFootagePass"
+	_video_post.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_video_post.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_video_post.material = PostProcessController.make_found_footage_material(
+		PostProcessController.TV_TAPE_RESOLUTION)
+	_video_vp.add_child(_video_post)
 	_screen_mat.set_shader_parameter("tape_tex", _video_vp.get_texture())
 	return true
 
@@ -356,15 +376,28 @@ func _restore_viewer() -> void:
 	_viewer = null
 
 
-## Backing out mid-tape is an interruption: the tape rewinds.
+## Backing out mid-tape is an interruption: the tape rewinds. The intro
+## console differs: its first viewing is mandatory (E/Esc do nothing), and
+## once the tutorial has ever been watched to the end, E/Esc SKIP it —
+## completing it, never rewinding, or the seize radius would immediately
+## restart what the player just declined.
 func _unhandled_input(event: InputEvent) -> void:
 	if not _watching or not _playing:
 		return
+	if intro:
+		var listener := _listener()
+		if listener == null \
+				or not listener.has_method("descent_intro_tape_skippable") \
+				or not listener.descent_intro_tape_skippable():
+			return
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo \
 			and (key.physical_keycode == KEY_E or key.physical_keycode == KEY_ESCAPE):
 		get_viewport().set_input_as_handled()
-		reset_tape()
+		if intro:
+			_finish_tape()
+		else:
+			reset_tape()
 
 
 func _next_voice() -> void:
@@ -413,13 +446,20 @@ func _finish_tape() -> void:
 			chunk = chunk.get_parent()
 		if chunk != null:
 			chunk.descent_tape_watched = true
-	get_tree().call_group("descent_listener", "descent_setup_tape_finished",
-		setup_key, objective)
+	if intro:
+		get_tree().call_group("descent_listener",
+			"descent_intro_tape_finished", setup_key)
+	else:
+		get_tree().call_group("descent_listener",
+			"descent_setup_tape_finished", setup_key, objective)
 	_end_watch()
 	_present_idle()
 
 
 func _claim_tape() -> void:
+	if not pinned_tape.is_empty():
+		_tape_path = pinned_tape
+		return
 	if not _tape_path.is_empty():
 		return
 	var listener := _listener()
@@ -475,6 +515,8 @@ func _process(dt: float) -> void:
 	if is_instance_valid(_discovery_light) and _discovery_light.visible:
 		var pulse := 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.0028)
 		_discovery_light.light_energy = lerpf(0.88, 1.28, pulse)
+	if intro and not _done and not _playing:
+		_intro_watch_for_player()
 	if not _playing:
 		return
 	if _watching and (_viewer == null or not is_instance_valid(_viewer) \
@@ -491,6 +533,38 @@ func _process(dt: float) -> void:
 			return
 		if _tape_time >= TAPE_SECONDS:
 			_finish_tape()
+
+
+## Seize radius for the mandatory console: the set stands in the exit path,
+## so crossing the room front-to-back passes through it. Tight enough that
+## the parked arrival car's interior can never be inside it.
+const INTRO_SEIZE_RANGE := 2.4
+## Beyond this the player is walking away from an unwatched mandatory tape.
+const INTRO_LEASH_RANGE := 10.0
+const INTRO_NUDGE_COOLDOWN_MS := 6000
+
+
+## The mandatory console does not wait for E: stepping up to it starts the
+## tape. A player who slips past instead gets a throttled reminder — the
+## console never physically walls the room, so it must keep asking.
+func _intro_watch_for_player() -> void:
+	var listener := _listener()
+	if listener == null:
+		return
+	var viewer := listener.get("player") as Player
+	if viewer == null or not is_instance_valid(viewer) \
+			or not viewer.is_inside_tree():
+		return
+	var d := viewer.global_position.distance_to(global_position)
+	if d <= INTRO_SEIZE_RANGE:
+		_on_activated(viewer)
+		return
+	if d >= INTRO_LEASH_RANGE:
+		var now := Time.get_ticks_msec()
+		if now - int(get_meta("intro_nudge_ms", 0)) >= INTRO_NUDGE_COOLDOWN_MS \
+				and listener.has_method("descent_intro_nudge"):
+			set_meta("intro_nudge_ms", now)
+			listener.descent_intro_nudge()
 
 
 func _player_cell() -> Vector2i:

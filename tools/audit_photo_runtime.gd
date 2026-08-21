@@ -70,8 +70,30 @@ func run() -> void:
 		"gate closed with the requirement met")
 	expect(director.documented_count() == 3, "documented count drifted")
 
+	# Ceiling furniture is the one anomaly whose resolution must be seen after
+	# the developed print leaves, never completed behind the review card.
+	var delayed := PhotoAnomaly.new()
+	delayed.type = PhotoAnomaly.Type.PLACEMENT
+	delayed.world_seed = SEED
+	delayed._placement_rest_y = 0.5
+	delayed._placement_pivot = Node3D.new()
+	delayed._placement_pivot.position.y = 2.5
+	delayed.add_child(delayed._placement_pivot)
+	game.level_root.add_child(delayed)
+	var lodged_y := delayed._placement_pivot.position.y
+	expect(delayed.resolves_after_review(),
+		"ceiling furniture did not opt into post-review resolution")
+	camera._review_resolves.append(delayed)
+	expect(is_equal_approx(delayed._placement_pivot.position.y, lodged_y),
+		"ceiling furniture moved while the developed print was still up")
+	camera._release_review_resolutions()
+	expect(delayed._placement_pivot == null \
+		and camera._review_resolves.is_empty(),
+		"closing the photo review did not release the ceiling furniture")
+	delayed.queue_free()
+
 	await teardown_game(game)
-	finish("photo runtime: spawn, framing, gate")
+	finish("photo runtime: spawn, framing, gate, delayed ceiling drop")
 
 
 func _frame_from_legal_stance(game: Node, director: PhotoDirector,

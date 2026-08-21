@@ -47,6 +47,8 @@ func _run() -> void:
 	var title := TitleScreen.new()
 	root.add_child(title)
 	await process_frame
+	_expect(title.layer > 100,
+		"title typography is still underneath the gameplay post-process")
 
 	var main_text := _page_text(title, TitleScreen.Page.MAIN)
 	_expect(_only_page_visible(title, TitleScreen.Page.MAIN),
