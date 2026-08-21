@@ -45,6 +45,9 @@ uniform float grille_amount :hint_range(0.0, 1.0) = 0.1;
 uniform float grille_size :hint_range(1.0, 5.0) = 1.0;
 uniform float vignette_amount :hint_range(0.0, 2.0) = 0.6;
 uniform float vignette_intensity : hint_range(0.0, 1.0) = 0.4;
+// Softens the warped raster boundary into the surrounding black glass. Zero
+// preserves the clean CRT edge; recovered footage uses a restrained feather.
+uniform float tube_edge_feather : hint_range(0.0, 0.08) = 0.0;
 uniform float aberation_amount :hint_range(0.0, 1.0) = 0.5;
 uniform float roll_line_amount :hint_range(0.0, 1.0) = 0.12;
 uniform float roll_speed :hint_range(-8.0, 8.0) = 1.0;
@@ -509,6 +512,14 @@ void fragment(){
         }
     }
     clr *= color_balance;
+
+    if(tube_edge_feather > 0.0){
+        float edge_distance = min(min(pos.x, 1.0 - pos.x),
+            min(pos.y, 1.0 - pos.y));
+        float tube_edge = smoothstep(-tube_edge_feather,
+            tube_edge_feather, edge_distance);
+        clr *= tube_edge;
+    }
 
     COLOR.rgb = clr;
     COLOR.a = 1.0;

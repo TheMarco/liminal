@@ -1114,6 +1114,18 @@ func _begin_descent_floor() -> void:
 	_reveal_arrival()
 	if opts.play_tape:
 		_dev_play_tape()
+	if opts.photo_shoot and _photo_camera != null:
+		# Past the arrival grace, or _allowed() lowers the camera at once.
+		var shoot := create_tween()
+		shoot.tween_interval(13.0)
+		shoot.tween_callback(func():
+			# Screenshot scheduling releases the mouse immediately. Recapture it
+			# here so the normal camera permission gate remains active during the
+			# visual test instead of lowering the camera on the next frame.
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			_photo_camera._raise(true))
+		shoot.tween_interval(0.7)
+		shoot.tween_callback(func(): _photo_camera._take_photo())
 
 
 ## Screenshot-run helper for `--play-tape`: walk into the objective room and
@@ -1201,6 +1213,11 @@ func _ensure_descent_hud() -> void:
 	if _photo_director != null:
 		_descent_hud.set_photo_progress(_photo_director.documented_count(),
 			_photo_director.required_count())
+		# Evidence is a required objective, so its locator is an instrument, not
+		# a consolation prize after the lift refuses the player. Distance-only
+		# keeps the maze intact while making a missing/occluded target impossible
+		# to confuse with intended difficulty.
+		_grant_evidence_hint()
 
 
 func suspend_descent_rules() -> void:
@@ -1811,14 +1828,13 @@ func _apply_hud_scaling() -> void:
 	# Every size here assumes the OSD is read THROUGH the tube: the post pass
 	# emulates a 320-row signal, so no text may drop under ~5% of the
 	# viewport height (about 16 emulated rows) and everything sits inside the
-	# title-safe area the viewfinder brackets mark.
+	# title-safe area used by the recovered-tape metadata.
+	var playback_font_size := roundi(54.0 * scale)
 	if _vf_frame != null:
 		_vf_frame.inset = inset
-		_vf_frame.arm = 40.0 * scale
-		_vf_frame.line = 3.0 * scale
-		_vf_frame.rec_font_size = roundi(40.0 * scale)
+		_vf_frame.font_size = playback_font_size
 	# The controls strip is a centred menu line low in the frame, clear of the
-	# REC lamp, the counters and the meters; it fades out on its own timer.
+	# playback metadata and meters; it fades out on its own timer.
 	_hint.size = Vector2(viewport_size.x - inset.x * 2.0, 84.0 * scale)
 	_hint.position = Vector2(inset.x, viewport_size.y - inset.y - 168.0 * scale)
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1838,14 +1854,22 @@ func _apply_hud_scaling() -> void:
 		viewport_size.x - inset.x * 2.0, 0.0)
 	_event_hint.add_theme_font_size_override("font_size", roundi(56.0 * scale))
 
-	_battery_meter.font_size = roundi(40.0 * scale)
-	_battery_meter.size = Vector2(320.0, 94.0) * scale
+	# The battery is secondary transport metadata: a compact glyph immediately
+	# left of the counter, aligned to its optical centre. It must never rival the
+	# objective or read as a second full-width status bar.
+	_battery_meter.font_size = roundi(16.0 * scale)
+	_battery_meter.size = Vector2(118.0, 28.0) * scale
+	var counter_width := VhsOsd.FONT.get_string_size("00:00:00",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, playback_font_size).x
+	var counter_height := VhsOsd.FONT.get_height(playback_font_size)
+	var battery_gap := 18.0 * scale
 	_battery_meter.position = Vector2(
-		viewport_size.x - inset.x - 12.0 * scale - _battery_meter.size.x,
-		inset.y + 6.0 * scale)
+		viewport_size.x - inset.x - counter_width - battery_gap
+			- _battery_meter.size.x,
+		inset.y + (counter_height - _battery_meter.size.y) * 0.48)
 
-	_stamina_meter.font_size = roundi(40.0 * scale)
-	_stamina_meter.size = Vector2(320.0, 86.0) * scale
+	_stamina_meter.font_size = roundi(34.0 * scale)
+	_stamina_meter.size = Vector2(280.0, 74.0) * scale
 	_stamina_meter.position = Vector2(inset.x + 12.0 * scale,
 		viewport_size.y - inset.y - 6.0 * scale - _stamina_meter.size.y)
 
@@ -1943,7 +1967,7 @@ func _build_ui() -> void:
 	_set_mode_hint()
 	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cl.add_child(lb)
-	# Viewfinder chrome first so every other readout draws over it.
+	# Recovered-tape playback metadata first so other readouts draw over it.
 	_vf_frame = VhsOsd.Frame.new()
 	cl.add_child(_vf_frame)
 	if _photo_camera != null:
@@ -1971,15 +1995,19 @@ func _build_ui() -> void:
 	_event_panel.add_child(_event_hint)
 
 	_battery_meter = VhsOsd.Meter.new()
-	_battery_meter.text = "BATT"
+	_battery_meter.text = ""
 	_battery_meter.battery_glyph = true
 	_battery_meter.segments = 5
+	_battery_meter.gap_ratio = 0.065
+	_battery_meter.channel_alpha = 0.72
 	_battery_meter.right_align = true
 	cl.add_child(_battery_meter)
 
 	_stamina_meter = VhsOsd.Meter.new()
 	_stamina_meter.text = "SPRINT"
 	_stamina_meter.segments = 10
+	_stamina_meter.gap_ratio = 0.035
+	_stamina_meter.channel_alpha = 0.58
 	_stamina_meter.low_threshold = Player.STAMINA_REARM / Player.STAMINA_MAX
 	_stamina_meter.warn_threshold = 0.35
 	cl.add_child(_stamina_meter)

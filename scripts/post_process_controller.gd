@@ -75,9 +75,10 @@ func setup(host: Node, found_footage := false, enabled := true) -> void:
 	_found_footage_material.set_shader_parameter("grille_amount", 0.03)
 	_found_footage_material.set_shader_parameter("scan_line_strength", -8.0)
 	_found_footage_material.set_shader_parameter("pixel_strength", -1.5)
-	_found_footage_material.set_shader_parameter("warp_amount", 0.18)
+	_found_footage_material.set_shader_parameter("warp_amount", 0.13)
 	_found_footage_material.set_shader_parameter("vignette_amount", 0.6)
 	_found_footage_material.set_shader_parameter("vignette_intensity", 0.5)
+	_found_footage_material.set_shader_parameter("tube_edge_feather", 0.018)
 	# The tape's own grit (2026-08-18): handheld shake, sparse line wobble,
 	# tears, ghosting, an iris that hunts, washed colour with crushed blacks,
 	# head-switching noise at the raster edges and oxide dropouts.

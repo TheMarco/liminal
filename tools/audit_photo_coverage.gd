@@ -1,27 +1,27 @@
 extends "res://tools/lib/audit_base.gd"
-## Photography coverage audit: every REQUIRED anomaly on the boot floor must
+## Photography coverage audit: every planned anomaly on the boot floor must
 ## be capturable from at least one player stance. Guards the class of bug
 ## where an anomaly exists, the EVIDENCE counter points at it, and no stance
 ## can frame it (2026-08-19: a GIANT's own walk-blocker collider occluded
-## its sample points from 16/16 stances and stranded the floor at 2/3).
+## its sample points from 16/16 stances and stranded the floor at 2/3;
+## 2026-08-20: prison cell fronts hid valid generic wall placements).
 ## Run: godot --headless --path . --script tools/audit_photo_coverage.gd \
 ##   -- --mode=descent --seed=7 --nologo
 
 func run() -> void:
-	var game := await boot_game(7)
+	var seed := arg_int(0, 7, 1, 0x7fffffff)
+	var game := await boot_game(seed)
 	var director: PhotoDirector = game._photo_director
 	var camera: PhotoCamera = game._photo_camera
 	expect(director != null and camera != null, "photo layer missing")
 	var checked := 0
 	for at in director.plan:
-		if not bool(director.plan[at]["required"]):
-			continue
 		game.cm.warm_up(at)
 		var ok := await await_until(func() -> bool:
 			return director._live.has(at) \
 				and is_instance_valid(director._live[at]) \
 				and director._live[at].is_inside_tree(), 8000)
-		expect(ok, "required anomaly %s did not spawn" % str(at))
+		expect(ok, "planned anomaly %s did not spawn" % str(at))
 		if not ok:
 			continue
 		var anomaly: PhotoAnomaly = director._live[at]
@@ -33,12 +33,30 @@ func run() -> void:
 		if points.size() > 1:
 			mid = (points[0] + points[1]) * 0.5
 		var frames := 0
-		for dist in [3.5, 6.0]:
+		for dist in [1.8, 3.5, 6.0]:
 			for ang in 8:
 				var dirv := Vector3(cos(TAU * ang / 8.0), 0,
 					sin(TAU * ang / 8.0))
 				var stand := mid + dirv * float(dist)
-				stand.y = 0.15
+				var stand_cell := Vector2i(
+					floori(stand.x / WorldGen.CELL_SIZE),
+					floori(stand.z / WorldGen.CELL_SIZE))
+				var stand_chunk: Chunk = game.cm.chunk_at(stand_cell)
+				if stand_chunk == null:
+					game.cm.warm_up(stand_cell)
+					stand_chunk = game.cm.chunk_at(stand_cell)
+				if stand_chunk == null:
+					continue
+				var floor_h := Chunk.cell_floor_h(director.world_seed,
+					stand_cell, director.theme)
+				var local_stand: Vector3 = stand - stand_chunk.global_position
+				local_stand.y = floor_h
+				# A ray from inside furniture is not proof a player can take the
+				# photograph. Require enough clear space for the real 0.38m x 1.8m
+				# capsule before accepting this framing stance.
+				if not stand_chunk._floor_spot_clear(local_stand, 0.38, 1.8):
+					continue
+				stand.y = floor_h + 0.15
 				game.player.teleport(stand)
 				var eye: Vector3 = game.player.cam.global_position
 				var flat := Vector2(mid.x - eye.x, mid.z - eye.z)
@@ -49,12 +67,14 @@ func run() -> void:
 				await physics_frame
 				if camera._captured_anomalies().has(anomaly):
 					frames += 1
-		expect(frames > 0, "required %s type %d capturable from 0/16 stances"
-			% [str(at), anomaly.type])
+		var style := WorldGen.cell_style(director.world_seed, at, director.theme)
+		expect(frames > 0,
+			"planned %s type %d style %d capturable from 0/24 legal stances"
+			% [str(at), anomaly.type, style])
 		checked += 1
-	var spine := PhotoDirector.spine_count_for(
-		director.floor_idx, director.theme)
-	expect(checked == spine,
-		"expected %d on-route anomalies, checked %d" % [spine, checked])
+	expect(checked == director.plan.size(),
+		"expected %d planned anomalies, checked %d" % [
+			director.plan.size(), checked])
 	await teardown_game(game)
-	finish("photo coverage: %d required anomalies capturable" % checked)
+	finish("photo coverage: seed %d, %d planned anomalies capturable" % [
+		seed, checked])

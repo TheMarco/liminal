@@ -309,23 +309,28 @@ func _build_credits() -> void:
 func _build_descent() -> void:
 	var page := _page_root()
 	_pages[Page.DESCENT] = page
-	_page_heading(page, "DESCENT", "THE BUILDING HAS ONE RULE")
+	# This is the last reading screen before the film/game takes over. Its old
+	# body sizes were technically scaled but still dissolved through a large
+	# display and the title artwork. Give the rule the visual authority of a
+	# warning card, with a clear hierarchy readable from across the room.
+	_page_heading(page, "DESCENT", "THE BUILDING HAS ONE RULE",
+		56, 23, 18)
 	var rules := [
 		"WHEN THE LIGHTS FAIL, STAND STILL",
 	]
 	for i in rules.size():
-		var line := _label("%02d     %s" % [i + 1, rules[i]], 25, CREAM)
+		var line := _label("%02d     %s" % [i + 1, rules[i]], 38, CREAM)
 		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		page.add_child(line)
 	var gap := Control.new()
-	gap.custom_minimum_size.y = 18
+	gap.custom_minimum_size.y = 28
 	page.add_child(gap)
-	var warn := _label("AND ONE THING THAT IS NOT A RULE", 15, DIM)
+	var warn := _label("AND ONE THING THAT IS NOT A RULE", 22, DIM)
 	warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page.add_child(warn)
 	var warn2 := _label(
 		"WHAT REACHES YOU TAKES YOU  —  BURN IT WITH THE TORCH",
-		20, Color(0.80, 0.66, 0.50))
+		30, Color(0.80, 0.66, 0.50))
 	warn2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page.add_child(warn2)
 	page.add_child(_rule(760))
@@ -335,20 +340,22 @@ func _build_descent() -> void:
 			_checkpoint_floor + 1, _checkpoint_name.to_upper()]
 	elif _descent_entry == DescentEntry.RESTART:
 		preparing = "PREPARING FLOOR 01  —  THE CASINO  /  SAME BUILDING"
-	_prompt = _label(preparing, 19, GOLD)
+	_prompt = _label(preparing, 28, GOLD)
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page.add_child(_prompt)
 
 
 func _page_heading(parent: VBoxContainer, heading: String,
-		subheading: String) -> void:
-	var marker := _label("IT WANTS YOU TO STAY  /  RECOVERED ARCHIVE", 13, DIM)
+		subheading: String, heading_size := 40, subheading_size := 16,
+		marker_size := 13) -> void:
+	var marker := _label("IT WANTS YOU TO STAY  /  RECOVERED ARCHIVE",
+		marker_size, DIM)
 	marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	parent.add_child(marker)
-	var head := _label(heading, 40, CREAM)
+	var head := _label(heading, heading_size, CREAM)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	parent.add_child(head)
-	var sub := _label(subheading, 16, GOLD)
+	var sub := _label(subheading, subheading_size, GOLD)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	parent.add_child(sub)
 	parent.add_child(_rule(820))

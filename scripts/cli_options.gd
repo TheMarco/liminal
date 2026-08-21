@@ -55,6 +55,9 @@ var play_tape := false
 ## Dev: force frequent passing-shadow and corner-apparition attempts.
 var passer := false
 var photo_debug := false
+## Dev: after the arrival hold, auto-raise the camera and fire the shutter
+## 0.7s later so screenshot runs can verify both camera presentation states.
+var photo_shoot := false
 var haunt_variant := -1
 var whispers := false
 var heartbeat := false
@@ -123,6 +126,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.passer = true
 		elif arg == "--photo-debug":
 			o.photo_debug = true
+		elif arg == "--photo-shoot":
+			o.photo_shoot = true
 		elif arg.begins_with("--haunt-at="):
 			var parts := arg.substr(11).split(",")
 			if parts.size() >= 2:

@@ -28,9 +28,9 @@ var _label: Label
 var _distance: Label
 var _photo: Label
 var _photo_warn: Label
-## Set after the tape refuses for lack of photos: the instrument relents and
-## counts metres to the nearest undocumented anomaly. Distance only, like
-## LIFT — the maze stays the maze. Cleared per floor by configure().
+## Counts metres to the nearest undocumented anomaly. Distance only, like
+## LIFT — the maze stays the maze, but required evidence can never masquerade
+## as missing content. Cleared per floor by configure().
 var evidence_target := Vector3.INF
 var _photo_proximity := 0.0
 var _warn_t := 0.0
@@ -50,29 +50,40 @@ func _ready() -> void:
 	add_child(_panel)
 
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 0)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 8)
 	_panel.add_child(box)
-	_label = VhsOsd.make_label(44, VhsOsd.INK_DIM)
+	# Two disciplined rows keep the objective readable as one instrument:
+	# destination and range above, evidence state below.
+	var lift_row := HBoxContainer.new()
+	lift_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	lift_row.add_theme_constant_override("separation", 16)
+	box.add_child(lift_row)
+	_label = VhsOsd.make_label(36, VhsOsd.INK_DIM)
 	_label.text = "LIFT"
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(_label)
-	_distance = VhsOsd.make_label(76)
+	lift_row.add_child(_label)
+	_distance = VhsOsd.make_label(68)
 	_distance.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(_distance)
+	lift_row.add_child(_distance)
 	# The floor's other objective sits under the first so the pair reads as
 	# one instrument: how far to the lift, how much proof the tape still wants.
-	_photo = VhsOsd.make_label(40, VhsOsd.INK_DIM)
+	var evidence_row := HBoxContainer.new()
+	evidence_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	evidence_row.add_theme_constant_override("separation", 34)
+	box.add_child(evidence_row)
+	_photo = VhsOsd.make_label(31, VhsOsd.INK_DIM)
 	_photo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_photo.text = "PHOTOS 0/%d" % PhotoDirector.REQUIRED
-	box.add_child(_photo)
+	evidence_row.add_child(_photo)
 	# Evidence warning: blinks while an undocumented anomaly is near, faster
 	# the nearer. The one readout in the hunt that cannot be mistaken for
 	# tape noise.
-	_photo_warn = VhsOsd.make_label(34, VhsOsd.AMBER)
+	_photo_warn = VhsOsd.make_label(31, VhsOsd.AMBER)
 	_photo_warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_photo_warn.text = "SOMETHING HERE IS WRONG"
 	_photo_warn.visible = false
-	box.add_child(_photo_warn)
+	evidence_row.add_child(_photo_warn)
 	_panel.visible = false
 
 
@@ -159,9 +170,9 @@ func _process(dt: float) -> void:
 		_last_viewport_size = viewport_size
 		_last_wide = wide
 		var scale := VhsOsd.hud_scale(viewport_size)
-		var width := 480.0
+		var width := 680.0
 		_panel.scale = Vector2.ONE * scale
-		_panel.size = Vector2(width, 230)
+		_panel.size = Vector2(width, 142)
 		_panel.position = Vector2(
 			viewport_size.x * 0.5 - width * 0.5 * scale,
 			VhsOsd.safe_inset(viewport_size).y - 8.0 * scale)
@@ -170,8 +181,8 @@ func _process(dt: float) -> void:
 	# Warning blink: 0.9s period far out, 0.3s close in. Two honest tiers —
 	# a long sight-line through a doorway is NEARBY, not HERE; calling
 	# everything "here" sent players searching the wrong room (2026-08-19).
-	# When the tape has refused and granted the evidence counter, the line
-	# shows metres to the nearest undocumented anomaly instead of blinking.
+	# The always-on evidence counter shows metres to the nearest undocumented
+	# anomaly instead of relying on a transient proximity blink.
 	if evidence_target != Vector3.INF:
 		var delta := evidence_target - player.global_position
 		_photo_warn.text = "EVIDENCE %dm" % maxi(1,

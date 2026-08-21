@@ -56,6 +56,8 @@ var _hinted := false
 var _snap_viewport: SubViewport
 var _snap_cam: Camera3D
 var _photo: TextureRect
+var _review_back: ColorRect
+var _paper: PhotoPaper
 var _marks: EvidenceMarks
 var _reticle: PhotoReticle
 var _mask: ViewfinderMask
@@ -97,10 +99,26 @@ func _ready() -> void:
 	_reticle = PhotoReticle.new()
 	_reticle.visible = false
 	add_child(_reticle)
+	# Review: a plain black card with the print centred on it. Anchors are
+	# never mixed with the photo's top-left offsets, so the two controls cannot
+	# compound each other's layout and drift down/right.
+	_review_back = ColorRect.new()
+	_review_back.color = Color.BLACK
+	_review_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_review_back.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_review_back.visible = false
+	add_child(_review_back)
+	_paper = PhotoPaper.new()
+	_paper.visible = false
+	add_child(_paper)
 	_photo = TextureRect.new()
 	_photo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_photo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_photo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_photo.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_photo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_photo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	# A very slight warm cast keeps the developed image from reading like a
+	# second digital viewport laid over the game.
+	_photo.modulate = Color(1.0, 0.985, 0.955, 1.0)
 	_photo.visible = false
 	add_child(_photo)
 	_marks = EvidenceMarks.new()
@@ -213,6 +231,8 @@ func _process(dt: float) -> void:
 		_review_left -= dt
 		if _review_left <= 0.0:
 			_photo.visible = false
+			_review_back.visible = false
+			_paper.visible = false
 			_marks.visible = false
 			# The shot ends the stance: show the print, then put the
 			# camera down (owner, 2026-08-20). Whatever answers the
@@ -380,6 +400,8 @@ func _lower() -> void:
 
 
 func _take_photo() -> void:
+	if not _raised:
+		return
 	_capturing = true
 	_shutter.pitch_scale = randf_range(1.35, 1.5)
 	_shutter.play()
@@ -394,7 +416,6 @@ func _take_photo() -> void:
 	# wrongness is legible once it is on film.
 	var marks: Array[Rect2] = []
 	var cam := player.cam
-	var viewport_size := Vector2(get_viewport().size)
 	for anomaly in captured:
 		if director == null or director._documented.has(anomaly.id):
 			continue
@@ -416,28 +437,26 @@ func _take_photo() -> void:
 	_capturing = false
 	if image != null:
 		_photo.texture = ImageTexture.create_from_image(image)
-		# The print fills the viewfinder window, not the screen: scale
-		# uniformly by the window's smaller fraction, centered.
-		var vs := Vector2(get_viewport().size)
-		var f := minf(ViewfinderMask.WINDOW_W, ViewfinderMask.WINDOW_H)
-		# Explicit zeroed anchors + offsets: the control was born FULL_RECT
-		# and a preset/position mix compounded into a bottom-right drift.
-		_photo.anchor_left = 0.0
-		_photo.anchor_top = 0.0
-		_photo.anchor_right = 0.0
-		_photo.anchor_bottom = 0.0
-		var top_left := vs * (1.0 - f) * 0.5
-		_photo.offset_left = top_left.x
-		_photo.offset_top = top_left.y
-		_photo.offset_right = top_left.x + vs.x * f
-		_photo.offset_bottom = top_left.y + vs.y * f
-		_photo.stretch_mode = TextureRect.STRETCH_SCALE
+		# Black card, centred print at exactly the live viewfinder's size; the
+		# viewfinder chrome leaves with it. The same covered-image transform maps
+		# the evidence marks, so annotations cannot drift away from the image.
+		var review_rect := _review_rect()
+		_paper.photo_rect = review_rect
+		_photo.position = review_rect.position
+		_photo.size = review_rect.size
+		_review_back.visible = true
+		_paper.visible = true
 		_photo.visible = true
-		# The evidence circles ride the same transform.
+		_mask.visible = false
+		_reticle.visible = false
+		var source_size := Vector2(image.get_size())
+		var scale := maxf(review_rect.size.x / source_size.x,
+			review_rect.size.y / source_size.y)
+		var crop := (source_size * scale - review_rect.size) * 0.5
 		for i in marks.size():
 			var m := marks[i]
-			marks[i] = Rect2(m.position * f + vs * (1.0 - f) * 0.5,
-				m.size * f)
+			marks[i] = Rect2(m.position * scale + review_rect.position - crop,
+				m.size * scale)
 	_review_left = REVIEW_SECONDS
 	var counted := false
 	for anomaly in captured:
@@ -454,6 +473,16 @@ func _take_photo() -> void:
 	_marks.visible = _photo.visible and not _marks.marks.is_empty()
 	# Only evidence provokes; snapshots of nothing stay free.
 	_pending_risk = counted
+
+
+## The developed print occupies the same window the player framed. Deriving
+## both axes from the viewport keeps it horizontally and vertically centred at
+## every supported window shape without mixing anchors and offsets.
+func _review_rect() -> Rect2:
+	var viewport_size := Vector2(get_viewport().size)
+	var window_size := viewport_size * Vector2(ViewfinderMask.WINDOW_W,
+		ViewfinderMask.WINDOW_H)
+	return Rect2((viewport_size - window_size) * 0.5, window_size)
 
 
 func _captured_anomalies() -> Array[PhotoAnomaly]:
@@ -531,45 +560,74 @@ func _roll_risk() -> void:
 
 
 ## The eyecup: raising the camera seriously constricts vision to the
-## viewfinder window — near-black surround, a small live rectangle, soft
-## inner falloff. Walking around with the camera up is meant to feel
-## blind and risky (owner, 2026-08-20).
-class ViewfinderMask extends Control:
+## viewfinder window. The shader measures its falloff in screen pixels and
+## clamps it to the available surround, which keeps every side continuous at
+## 720p, ultrawide and narrow window sizes.
+class ViewfinderMask extends ColorRect:
 	## Fraction of the viewport the window occupies.
 	const WINDOW_W := 0.60
 	const WINDOW_H := 0.66
-	## Width of the blurry optical falloff around the window.
-	const FEATHER := 150.0
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_anchors_preset(Control.PRESET_FULL_RECT)
+		color = Color.WHITE
+		var shader_material := ShaderMaterial.new()
+		shader_material.shader = preload("res://shaders/viewfinder_mask.gdshader")
+		shader_material.set_shader_parameter("window_fraction",
+			Vector2(WINDOW_W, WINDOW_H))
+		material = shader_material
+
+
+## A physical print beneath the developed image: warm photographic stock,
+## imperfect fibres, a fine cut edge and a soft shadow against the black
+## review table. It is a sibling behind TextureRect, so the image naturally
+## masks the paper texture inside the exposure area.
+class PhotoPaper extends Control:
+	var photo_rect := Rect2():
+		set(value):
+			photo_rect = value
+			queue_redraw()
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		set_anchors_preset(Control.PRESET_FULL_RECT)
 
 	func _draw() -> void:
-		var s := size
-		var w := s.x * WINDOW_W
-		var h := s.y * WINDOW_H
-		var x0 := (s.x - w) * 0.5
-		var y0 := (s.y - h) * 0.5
-		var ink := Color(0.008, 0.008, 0.01, 0.99)
-		# Opaque surround, pulled back by the feather width.
-		var f := FEATHER
-		draw_rect(Rect2(0, 0, s.x, y0 - f), ink)
-		draw_rect(Rect2(0, y0 + h + f, s.x, s.y - y0 - h - f), ink)
-		draw_rect(Rect2(0, y0 - f, x0 - f, h + f * 2.0), ink)
-		draw_rect(Rect2(x0 + w + f, y0 - f, s.x - x0 - w - f, h + f * 2.0),
-			ink)
-		# Blurry edge: many translucent stroked rings walking outward — a
-		# defocused eyecup rim, not a UI border.
-		var rings := 18
-		for i in rings:
-			var k := float(i) / float(rings - 1)
-			var inset := f * (1.0 - k) - f
-			var alpha := 0.99 * pow(k, 1.7)
-			draw_rect(Rect2(x0 + inset, y0 + inset,
-				w - inset * 2.0, h - inset * 2.0),
-				Color(0.008, 0.008, 0.01, alpha), false, f / float(rings)
-				* 2.2)
+		if photo_rect.size.x <= 0.0 or photo_rect.size.y <= 0.0:
+			return
+		var border := clampf(minf(size.x, size.y) * 0.021, 12.0, 34.0)
+		var paper_rect := photo_rect.grow(border)
+		var shadow_offset := Vector2(border * 0.28, border * 0.38)
+		# Layered, low-alpha silhouettes approximate a soft contact shadow without
+		# requiring a blur viewport or a full-screen post effect.
+		for i in range(10, 0, -1):
+			var spread := border * 0.055 * float(i)
+			var shadow_rect := paper_rect.grow(spread)
+			shadow_rect.position += shadow_offset
+			draw_rect(shadow_rect, Color(0.0, 0.0, 0.0,
+				0.010 + float(10 - i) * 0.003))
+		# Fibre stock is deliberately warm rather than screen-white. A slightly
+		# darker lower edge gives the sheet thickness when it catches the light.
+		draw_rect(paper_rect, Color(0.955, 0.942, 0.905, 1.0))
+		draw_rect(paper_rect, Color(0.72, 0.69, 0.62, 0.85), false, 1.0)
+		draw_line(paper_rect.position + Vector2(1.0, paper_rect.size.y - 1.0),
+			paper_rect.end - Vector2(1.0, 1.0),
+			Color(0.55, 0.51, 0.43, 0.42), 2.0)
+		# Deterministic microscopic fibres keep the border from reading as a flat
+		# UI rectangle. The photo sibling covers any strokes inside the exposure.
+		for i in 150:
+			var xi := (i * 73 + i * i * 19 + 41) % 997
+			var yi := (i * 151 + i * i * 7 + 83) % 991
+			var p := paper_rect.position + Vector2(
+				float(xi) / 997.0 * paper_rect.size.x,
+				float(yi) / 991.0 * paper_rect.size.y)
+			var fibre := 0.8 + float((i * 37) % 11) * 0.16
+			draw_line(p, p + Vector2(fibre, 0.0),
+				Color(0.36, 0.32, 0.25, 0.055), 1.0)
+		# A hairline around the exposure reads as the dark emulsion/paper seam.
+		draw_rect(photo_rect.grow(1.5), Color(0.12, 0.11, 0.095, 0.72),
+			false, 2.0)
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:

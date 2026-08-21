@@ -1,12 +1,12 @@
 class_name VhsOsd
 extends Object
 ## The HUD's one voice: everything the player is told in-game is on-screen
-## display burned into a camcorder viewfinder. Bare shadowed VT323 text, no
+## display burned into recovered video playback. Bare shadowed VT323 text, no
 ## panels, no chrome — the CRT/tape post filter supplies the rest of the look.
 ##
 ## Static helpers style Labels; the inner classes are the two drawn widgets:
 ## Meter (segmented block gauge, optionally wrapped in a battery outline) and
-## Frame (safe-area corner brackets plus the blinking REC lamp).
+## Frame (PLAY state, tape counter, clock/date and tracking interference).
 
 const FONT := preload("res://fonts/VT323-Regular.ttf")
 
@@ -14,8 +14,8 @@ const FONT := preload("res://fonts/VT323-Regular.ttf")
 const INK := Color(0.92, 0.96, 0.90, 0.94)
 const INK_DIM := Color(0.92, 0.96, 0.90, 0.78)
 ## Title-safe margin as a fraction of each viewport dimension. Every OSD
-## element sits inside it and the viewfinder brackets mark it, so nothing is
-## lost to the tube's warp, vignette or an overscanning display.
+## element sits inside it so nothing is lost to the tube's warp, vignette or
+## an overscanning display.
 const SAFE_FRACTION := 0.06
 ## Everything the OSD says is read through the CRT pass, which emulates a
 ## 320-row signal: strokes thinner than a scanline vanish. Labels are set
@@ -93,6 +93,12 @@ class Meter extends Control:
 	var battery_glyph := false
 	var font_size := 18
 	var right_align := false
+	## Width of each break between cells, as a fraction of the whole channel.
+	## Individual HUD meters tune this against the tape pass's horizontal bloom.
+	var gap_ratio := 0.014
+	## Optional black rail behind the cells. This keeps their rhythm legible over
+	## bright rooms without adding a modern UI panel around the meter.
+	var channel_alpha := 0.0
 	var _blink_t := 0.0
 
 	func _init() -> void:
@@ -139,9 +145,11 @@ class Meter extends Control:
 					+ (body.size.y - nub_h) * 0.5),
 				Vector2(nub_w - 1.0, nub_h)), VhsOsd.INK)
 			bar = body.grow(-(line + 2.0))
+		if channel_alpha > 0.0:
+			draw_rect(bar, Color(0.0, 0.0, 0.0, channel_alpha))
 		var fill := VhsOsd.RED if low else (
 			VhsOsd.AMBER if value <= warn_threshold else VhsOsd.INK)
-		var gap := maxf(2.0, bar.size.x * 0.014)
+		var gap := maxf(2.0, bar.size.x * gap_ratio)
 		var seg_w := (bar.size.x - gap * float(segments - 1)) / float(segments)
 		var lit := int(ceil(clampf(value, 0.0, 1.0) * float(segments) - 0.0001))
 		for i in segments:
@@ -157,18 +165,16 @@ class Meter extends Control:
 				draw_rect(r, VhsOsd.INK_DIM, false, 1.0)
 
 
-## The viewfinder itself: four corner brackets marking the recording safe
-## area, and the REC lamp — red dot plus legend, blinking on the classic
-## camcorder cadence. Purely decorative; it owns no game state.
+## Recovered-tape playback metadata. This is intentionally not a camera
+## viewfinder: the still camera owns that language while raised. Normal play
+## reads as footage already being watched, with transport state, tape counter,
+## an uncanny fixed recording date and tracking damage.
 class Frame extends Control:
-	var rec_font_size := 22
+	var font_size := 22
 	var inset := Vector2(24.0, 24.0)
-	var arm := 30.0
-	var line := 2.0
-	## 0..1: something photographable is near. The REC lamp loses its
-	## cadence and tracking bars crawl through the frame — the camcorder
-	## picks up what the eye does not, growing with proximity, camera raised
-	## or not. Set by PhotoCamera; purely presentational here.
+	## 0..1: something photographable is near. Tracking bars crawl through the
+	## footage — the tape picks up what the eye does not, growing with
+	## proximity. Set by PhotoCamera; purely presentational here.
 	var interference := 0.0
 	var _t := 0.0
 
@@ -183,14 +189,6 @@ class Frame extends Control:
 
 	func _draw() -> void:
 		var s := size
-		var c := VhsOsd.INK_DIM
-		for corner in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
-			var px: float = lerpf(inset.x, s.x - inset.x, corner.x)
-			var py: float = lerpf(inset.y, s.y - inset.y, corner.y)
-			var dx: float = 1.0 if corner.x == 0.0 else -1.0
-			var dy: float = 1.0 if corner.y == 0.0 else -1.0
-			draw_line(Vector2(px, py), Vector2(px + arm * dx, py), c, line)
-			draw_line(Vector2(px, py), Vector2(px, py + arm * dy), c, line)
 		# Interference: 1-3 translucent tracking bars, thicker and brighter
 		# the nearer the thing is, drifting down the frame at uneven speeds.
 		if interference > 0.01:
@@ -204,20 +202,61 @@ class Frame extends Control:
 				draw_rect(Rect2(0.0, y, s.x, thick), Color(1, 1, 1, a))
 				draw_rect(Rect2(0.0, y + thick, s.x, 1.5),
 					Color(0, 0, 0, a * 0.8))
-		# REC sits inside the top-left bracket. Dot and legend hold ~0.6s on,
-		# ~0.4s off — until interference breaks the cadence into a nervous
-		# stutter.
-		var on := fmod(_t, 1.0) < 0.6
-		if interference > 0.01:
-			var jitter := fmod(sin(_t * 41.0) * 43758.5453, 1.0)
-			if absf(jitter) < interference * 0.55:
-				on = not on
 		var f: Font = VhsOsd.FONT
-		var pos := Vector2(inset.x + 14.0, inset.y + 10.0)
-		var r := rec_font_size * 0.19
-		if on:
-			draw_circle(pos + Vector2(r + 2.0, r * 0.4 + 2.0), r, VhsOsd.SHADOW)
-			draw_circle(pos + Vector2(r, r * 0.4), r, VhsOsd.RED)
-		var tp := pos + Vector2(r * 2.0 + 9.0,
-			f.get_ascent(rec_font_size) - rec_font_size * 0.30)
-		VhsOsd.draw_osd_string(self, f, tp, "REC", rec_font_size, VhsOsd.INK)
+		var top_y := inset.y + f.get_ascent(font_size)
+		var play_at := Vector2(inset.x, top_y)
+		VhsOsd.draw_osd_string(self, f, play_at, "PLAY", font_size,
+			VhsOsd.INK)
+		# A transport glyph, drawn instead of sourced from the font so it stays
+		# a clean little playback triangle after the low-resolution tape pass.
+		var play_w := f.get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT,
+			-1, font_size).x
+		var tri_h := float(font_size) * 0.36
+		var tri_x := play_at.x + play_w + float(font_size) * 0.22
+		var tri_y := top_y - f.get_ascent(font_size) * 0.48
+		var tri := PackedVector2Array([
+			Vector2(tri_x, tri_y - tri_h * 0.5),
+			Vector2(tri_x, tri_y + tri_h * 0.5),
+			Vector2(tri_x + tri_h * 0.78, tri_y),
+		])
+		var tri_shadow := PackedVector2Array()
+		for p in tri:
+			tri_shadow.append(p + Vector2(VhsOsd.SHADOW_OFFSET,
+				VhsOsd.SHADOW_OFFSET))
+		draw_colored_polygon(tri_shadow, VhsOsd.SHADOW)
+		draw_colored_polygon(tri, VhsOsd.INK)
+
+		var counter := _tape_counter()
+		var counter_x := _right_x(f, counter)
+		VhsOsd.draw_osd_string(self, f, Vector2(counter_x, top_y), counter,
+			font_size, VhsOsd.INK)
+
+		var date_text := "Jan. 01 1986"
+		var clock_text := _clock_text()
+		var line_h := f.get_height(font_size) * 1.05
+		var date_y := s.y - inset.y
+		var clock_y := date_y - line_h
+		VhsOsd.draw_osd_string(self, f,
+			Vector2(_right_x(f, clock_text), clock_y), clock_text,
+			font_size, VhsOsd.INK)
+		VhsOsd.draw_osd_string(self, f,
+			Vector2(_right_x(f, date_text), date_y), date_text,
+			font_size, VhsOsd.INK)
+
+	func _right_x(f: Font, text: String) -> float:
+		return size.x - inset.x - f.get_string_size(text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+
+	func _tape_counter() -> String:
+		var total := maxi(0, floori(_t))
+		var hours := int(total / 3600)
+		var minutes := int(total / 60) % 60
+		var seconds := total % 60
+		return "%02d:%02d:%02d" % [hours, minutes, seconds]
+
+	func _clock_text() -> String:
+		var total_minutes := maxi(0, floori(_t / 60.0))
+		var hour := int(total_minutes / 60) % 24
+		var minute := total_minutes % 60
+		var meridiem := "AM" if hour < 12 else "PM"
+		return "%s %02d:%02d" % [meridiem, hour % 12, minute]

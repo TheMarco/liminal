@@ -41,25 +41,9 @@ func run() -> void:
 		var anomaly: PhotoAnomaly = director._live[at]
 		var points := anomaly.photo_points()
 		expect(not points.is_empty(), "anomaly exposes no photo points")
-		var target: Vector3 = points[0]
-		# Stand between the anomaly and the cell centre, facing it: always
-		# inside the room, never inside the wall the writing hangs on.
-		var centre := Vector3((float(at.x) + 0.5) * WorldGen.CELL_SIZE, 0.0,
-			(float(at.y) + 0.5) * WorldGen.CELL_SIZE)
-		var away := centre - target
-		away.y = 0.0
-		if away.length() < 0.5:
-			away = Vector3(1, 0, 0)
-		var stand := target + away.normalized() * 2.5
-		game.player.teleport(Vector3(stand.x, 0.15, stand.z))
-		var eye: Vector3 = game.player.cam.global_position
-		var flat := Vector2(target.x - eye.x, target.z - eye.z)
-		game.player.rotation.y = atan2(-flat.x, -flat.y)
-		game.player.cam.rotation = Vector3(
-			atan2(target.y - eye.y, flat.length()),
-			game.player.rotation.y, 0.0)
-		await physics_frame
-		await physics_frame
+		var framed: bool = await _frame_from_legal_stance(
+			game, director, camera, anomaly)
+		expect(framed, "no legal stance framed the spawned anomaly")
 		var captured := camera._captured_anomalies()
 		expect(captured.has(anomaly),
 			"framed anomaly was not detected by the capture test")
@@ -88,3 +72,45 @@ func run() -> void:
 
 	await teardown_game(game)
 	finish("photo runtime: spawn, framing, gate")
+
+
+func _frame_from_legal_stance(game: Node, director: PhotoDirector,
+		camera: PhotoCamera, anomaly: PhotoAnomaly) -> bool:
+	var points := anomaly.photo_points()
+	if points.is_empty():
+		return false
+	var target: Vector3 = points[0]
+	if points.size() > 1:
+		target = (points[0] + points[1]) * 0.5
+	for dist in [1.8, 3.5, 6.0]:
+		for ang in 8:
+			var direction := Vector3(cos(TAU * float(ang) / 8.0), 0.0,
+				sin(TAU * float(ang) / 8.0))
+			var stand := target + direction * float(dist)
+			var stand_cell := Vector2i(
+				floori(stand.x / WorldGen.CELL_SIZE),
+				floori(stand.z / WorldGen.CELL_SIZE))
+			var stand_chunk: Chunk = game.cm.chunk_at(stand_cell)
+			if stand_chunk == null:
+				game.cm.warm_up(stand_cell)
+				stand_chunk = game.cm.chunk_at(stand_cell)
+			if stand_chunk == null:
+				continue
+			var floor_h := Chunk.cell_floor_h(director.world_seed,
+				stand_cell, director.theme)
+			var local_stand: Vector3 = stand - stand_chunk.global_position
+			local_stand.y = floor_h
+			if not stand_chunk._floor_spot_clear(local_stand, 0.38, 1.8):
+				continue
+			game.player.teleport(Vector3(stand.x, floor_h + 0.15, stand.z))
+			var eye: Vector3 = game.player.cam.global_position
+			var flat := Vector2(target.x - eye.x, target.z - eye.z)
+			game.player.rotation.y = atan2(-flat.x, -flat.y)
+			game.player.cam.rotation = Vector3(
+				atan2(target.y - eye.y, flat.length()),
+				game.player.rotation.y, 0.0)
+			await physics_frame
+			await physics_frame
+			if camera._captured_anomalies().has(anomaly):
+				return true
+	return false

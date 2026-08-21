@@ -274,9 +274,19 @@ static func writing_spot_for(route: DescentRoute, at: Vector2i) -> Dictionary:
 	# canonical edge; writing on the edge plane would hide behind the lining.
 	if WorldGen.corridor(route.world_seed, at) != 0:
 		return {}
+	# Annex passage cells build a second, variable-width corridor shell inside
+	# their canonical perimeter. The outer wall can therefore pass every route
+	# test while remaining completely buried behind an authored corner mass.
+	if route.theme == 2 \
+			and WorldGen.cell_style(route.world_seed, at, route.theme) \
+			== WorldGen.ANNEX_PASSAGE:
+		return {}
+	var furnished_walls := _theme_furnished_walls(route, at)
 	var start := WorldGen.h(route.world_seed, at.x, at.y, 9257) % 4
 	for i in 4:
 		var dir := (start + i) % 4
+		if furnished_walls.has(dir):
+			continue
 		var info := route.edge_info(at, dir)
 		if not bool(info.get("wall", false)) \
 				or bool(info.get("full_open", false)):
@@ -292,6 +302,115 @@ static func writing_spot_for(route: DescentRoute, at: Vector2i) -> Dictionary:
 			else (t + w * 0.5 + right_run * 0.5)
 		return {"dir": dir, "along": along}
 	return {}
+
+
+## Scene-aware counterpart used when the chunk has finished its authored
+## furniture. A wall is acceptable only when a real player capsule can stand
+## in front of it and the whole approach between wall and stance is clear.
+## Alternate along-wall positions rescue dense rooms where the topology's
+## preferred midpoint happens to be occupied by a lounge or workstation.
+static func writing_spot_for_chunk(route: DescentRoute, at: Vector2i,
+		chunk: Chunk) -> Dictionary:
+	if chunk == null:
+		return writing_spot_for(route, at)
+	for spot in _writing_spot_candidates(route, at):
+		var dir := int(spot["dir"])
+		var along := float(spot["along"])
+		if _writing_approach_clear(chunk, dir, along):
+			return spot
+	return {}
+
+
+static func _writing_spot_candidates(route: DescentRoute,
+		at: Vector2i) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if WorldGen.corridor(route.world_seed, at) != 0:
+		return out
+	if route.theme == 2 \
+			and WorldGen.cell_style(route.world_seed, at, route.theme) \
+			== WorldGen.ANNEX_PASSAGE:
+		return out
+	var furnished_walls := _theme_furnished_walls(route, at)
+	var start := WorldGen.h(route.world_seed, at.x, at.y, 9257) % 4
+	for i in 4:
+		var dir := (start + i) % 4
+		if furnished_walls.has(dir):
+			continue
+		var info := route.edge_info(at, dir)
+		if not bool(info.get("wall", false)) \
+				or bool(info.get("full_open", false)):
+			continue
+		var t := float(info.get("t", WorldGen.CELL_SIZE * 0.5))
+		var w := float(info.get("w", 0.0))
+		var spans := [Vector2(0.8, t - w * 0.5),
+			Vector2(t + w * 0.5, 11.2)]
+		for span in spans:
+			var run: float = span.y - span.x
+			if run < MIN_WRITING_RUN:
+				continue
+			var lo: float = span.x + 1.45
+			var hi: float = span.y - 1.45
+			var alongs := [(lo + hi) * 0.5]
+			if hi - lo > 1.2:
+				alongs.append(lerpf(lo, hi, 0.20))
+				alongs.append(lerpf(lo, hi, 0.80))
+			for along in alongs:
+				out.append({"dir": dir, "along": along})
+	return out
+
+
+static func _writing_approach_clear(chunk: Chunk, dir: int,
+		along: float) -> bool:
+	var floor_h := Chunk.cell_floor_h(chunk.wseed, chunk.cell, chunk.theme)
+	var wall := Vector3(11.55, floor_h, along)
+	var inward := Vector3(-1, 0, 0)
+	match dir:
+		1:
+			wall = Vector3(0.45, floor_h, along)
+			inward = Vector3(1, 0, 0)
+		2:
+			wall = Vector3(along, floor_h, 11.55)
+			inward = Vector3(0, 0, -1)
+		3:
+			wall = Vector3(along, floor_h, 0.45)
+			inward = Vector3(0, 0, 1)
+	for distance in [1.0, 1.8, 2.6, 3.4, 4.2]:
+		if not chunk._floor_spot_clear(wall + inward * float(distance),
+				0.38, 1.8):
+			return false
+	return true
+
+
+## Theme builders can place an entire authored structure in front of an
+## otherwise valid canonical wall. Those walls are not evidence surfaces: a
+## phrase behind prison bars or a serving line exists mathematically but has
+## no legal view from the room. Keep this pure and mirror the builder's exact
+## deterministic wall choices so planning and runtime rebuilds agree.
+static func _theme_furnished_walls(route: DescentRoute,
+		at: Vector2i) -> Array[int]:
+	var blocked: Array[int] = []
+	if route.theme != 8:
+		return blocked
+	var style := WorldGen.cell_style(route.world_seed, at, route.theme)
+	if style == WorldGen.PRISON_CELLBLOCK:
+		var root := WorldGen.room_id(route.world_seed, at)
+		var along_x := WorldGen.r01(route.world_seed, root.x, root.y,
+			1840) < 0.5
+		blocked = [2, 3]
+		if not along_x:
+			blocked = [0, 1]
+		return blocked
+	if style in [WorldGen.PRISON_CELLS, WorldGen.PRISON_MESS,
+			WorldGen.PRISON_SHOWER]:
+		# Each of these builders claims the first solid wall: respectively a
+		# barred cell strip, serving line, or bank of shower fixtures.
+		for dir in 4:
+			var info := route.edge_info(at, dir)
+			if bool(info.get("wall", false)) \
+					and not bool(info.get("full_open", false)):
+				blocked.append(dir)
+				break
+	return blocked
 
 
 ## The room noticed being photographed: a counted shot resolves its
@@ -451,6 +570,7 @@ func _build_writing(floor_h: float, wall_dir: int, wall_along: float,
 func _build_props(floor_h: float, count: int) -> void:
 	var row: Array = Chunk.BLEED_PROPS.get(theme, [])
 	if row.is_empty():
+		_build_universal_photo(floor_h)
 		return
 	var scene := load(row[0]) as PackedScene
 	if scene == null:
@@ -458,23 +578,12 @@ func _build_props(floor_h: float, count: int) -> void:
 	var scl := float(row[1])
 	var centre_off: Vector3 = row[2]
 	var extents: Vector3 = row[3]
-	var half := WorldGen.CELL_SIZE * 0.5
-	# Deterministic spot search: the first candidate the chunk's collision
-	# bookkeeping calls clear, so the wrong thing never stands inside the
-	# right furniture. The last candidate is taken clearance or not — an
-	# overlapping anomaly beats a missing one.
-	var chunk := get_parent() as Chunk
-	var spot := Vector3(half, floor_h, half)
-	for attempt in 6:
-		var candidate := Vector3(
-			half + (WorldGen.r01(world_seed, cell.x, cell.y,
-				9271 + attempt * 7) - 0.5) * 5.0,
-			floor_h,
-			half + (WorldGen.r01(world_seed, cell.x, cell.y,
-				9277 + attempt * 7) - 0.5) * 5.0)
-		spot = candidate
-		if chunk == null or chunk._floor_spot_clear(candidate, 1.1, 2.1):
-			break
+	# Search the built room, not just six lucky random points. The exhaustive
+	# lattice and doorway-lane fallback share the same collision bookkeeping as
+	# authored furniture, so a planned prop cannot exist inside the set dressing.
+	var footprint := maxf(1.0, maxf(extents.x, extents.z) * 0.5
+		+ (0.45 if count > 1 else 0.10))
+	var spot := _find_spot(floor_h, footprint, maxf(extents.y, 2.1))
 	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25
 	if count == 1:
@@ -525,6 +634,52 @@ func _build_props(floor_h: float, count: int) -> void:
 			_set_photo_only(inst)
 			_resolvables.append(pivot)
 			_points.append(pivot.position + Vector3(0, 0.8, 0))
+
+
+## Prop-less themes still need a guaranteed non-wall fallback when authored
+## geometry claims every validated writing surface. A small impossible paper
+## photograph is theme-neutral, compact enough for a doorway lane, has no
+## collider, and uses the ordinary PLACEMENT drop resolution.
+func _build_universal_photo(floor_h: float) -> void:
+	var spot := _find_spot(floor_h, 0.75, 1.8)
+	var ceil_h := Chunk.cell_ceil_h(world_seed, cell, theme)
+	var pivot_y := clampf(floor_h + 2.05,
+		floor_h + 1.45, ceil_h - 0.45)
+	_spin = Node3D.new()
+	_spin.position = Vector3(spot.x, pivot_y, spot.z)
+	_spin.rotation.y = float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
+		* PI * 0.25
+	add_child(_spin)
+
+	var paper_mat := StandardMaterial3D.new()
+	paper_mat.albedo_color = Color(0.92, 0.89, 0.80)
+	paper_mat.roughness = 0.94
+	var paper_mesh := BoxMesh.new()
+	paper_mesh.size = Vector3(0.96, 0.78, 0.045)
+	var paper := MeshInstance3D.new()
+	paper.mesh = paper_mesh
+	paper.material_override = paper_mat
+	_spin.add_child(paper)
+
+	var exposure_mat := StandardMaterial3D.new()
+	exposure_mat.albedo_color = Color(0.055, 0.065, 0.06)
+	exposure_mat.roughness = 0.82
+	var exposure_mesh := BoxMesh.new()
+	exposure_mesh.size = Vector3(0.76, 0.52, 0.052)
+	var exposure := MeshInstance3D.new()
+	exposure.mesh = exposure_mesh
+	exposure.material_override = exposure_mat
+	exposure.position = Vector3(0.0, 0.065, -0.028)
+	_spin.add_child(exposure)
+
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(0.72, 0.82, 1.0)
+	glow.light_energy = 0.42
+	glow.omni_range = 3.6
+	glow.shadow_enabled = false
+	glow.position = _spin.position - Vector3(0, 0.55, 0)
+	add_child(glow)
+	_points = [_spin.position, _spin.position - Vector3(0, 0.28, 0)]
 
 
 ## GIANT: the room's own furniture at a scale it has no business being,
@@ -590,7 +745,13 @@ func _build_ring(floor_h: float) -> void:
 		return
 	var scl := float(row[1])
 	var centre_off: Vector3 = row[2]
-	var centre := _find_spot(floor_h, RING_RADIUS + 0.6, 2.0)
+	var centre := _find_spot(floor_h, RING_RADIUS + 0.6, 2.0, false)
+	if centre == Vector3.INF:
+		# A ring is optional variety, never a placement gamble. Dense rooms keep
+		# the same evidence id but receive the compact, non-blocking hanging form.
+		type = Type.PLACEMENT
+		_build_props(floor_h, 1)
+		return
 	for i in RING_COUNT:
 		var ang := TAU * float(i) / float(RING_COUNT)
 		var offset := Vector3(cos(ang), 0.0, sin(ang)) * RING_RADIUS
@@ -608,10 +769,12 @@ func _build_ring(floor_h: float) -> void:
 		centre + Vector3(RING_RADIUS, 0.8, 0)]
 
 
-## Deterministic clear-floor search shared by the standing builders: first
-## candidate the chunk's collision bookkeeping calls clear, last candidate
-## taken clearance or not.
-func _find_spot(floor_h: float, radius: float, height: float) -> Vector3:
+## Deterministic clear-floor search shared by the standing builders. Random
+## points give each cell a distinct composition; a dense lattice then proves
+## the rest of the room before the guaranteed clear approach lane through a
+## real doorway is used as the final fallback.
+func _find_spot(floor_h: float, radius: float, height: float,
+		allow_doorway_fallback := true) -> Vector3:
 	var half := WorldGen.CELL_SIZE * 0.5
 	var chunk := get_parent() as Chunk
 	var spot := Vector3(half, floor_h, half)
@@ -623,9 +786,66 @@ func _find_spot(floor_h: float, radius: float, height: float) -> Vector3:
 			half + (WorldGen.r01(world_seed, cell.x, cell.y,
 				9277 + attempt * 7) - 0.5) * 5.0)
 		spot = candidate
-		if chunk == null or chunk._floor_spot_clear(candidate, radius, height):
-			break
+		if chunk == null or (chunk._floor_spot_clear(candidate, radius, height)
+				and _photo_approach_clear(chunk, candidate, radius)):
+			return spot
+	if chunk == null:
+		return spot
+	var lattice := [1.25, 2.5, 3.75, 5.0, 6.25, 7.5, 8.75, 10.0, 10.75]
+	var count := lattice.size() * lattice.size()
+	var start := posmod(WorldGen.h(world_seed, cell.x, cell.y, 9291), count)
+	for offset in count:
+		var index := (start + offset) % count
+		var candidate := Vector3(
+			float(lattice[index % lattice.size()]), floor_h,
+			float(lattice[int(index / lattice.size())]))
+		if chunk._floor_spot_clear(candidate, radius, height) \
+				and _photo_approach_clear(chunk, candidate, radius):
+			return candidate
+	if not allow_doorway_fallback:
+		return Vector3.INF
+	# Every traversable cased opening owns a 3.6m furniture-free approach lane.
+	# Its centre is the only honest fallback when a room's entire interior is
+	# authored set dressing.
+	for dir in 4:
+		var info: Dictionary = chunk._edge_info(cell, dir)
+		if bool(info.get("wall", false)) or bool(info.get("full_open", false)):
+			continue
+		var along := float(info.get("t", half))
+		match dir:
+			0: return Vector3(10.6, floor_h, along)
+			1: return Vector3(1.4, floor_h, along)
+			2: return Vector3(along, floor_h, 10.6)
+			_: return Vector3(along, floor_h, 1.4)
 	return spot
+
+
+## At least one player-sized stance and the sight lane back to the prop must
+## be clear. Merely finding an empty square for the anomaly stranded props in
+## auditorium seating and dense lounges where the camera could never frame it.
+func _photo_approach_clear(chunk: Chunk, target: Vector3,
+		target_radius: float) -> bool:
+	for distance in [1.8, 3.5, 5.5]:
+		for ang in 8:
+			var direction := Vector3(cos(TAU * float(ang) / 8.0), 0.0,
+				sin(TAU * float(ang) / 8.0))
+			var stand := target + direction * float(distance)
+			if stand.x < 0.5 or stand.x > 11.5 \
+					or stand.z < 0.5 or stand.z > 11.5 \
+					or not chunk._floor_spot_clear(stand, 0.38, 1.8):
+				continue
+			var clear := true
+			var first := maxf(target_radius + 0.35, 0.75)
+			var travel := first
+			while travel < float(distance) - 0.35:
+				if not chunk._floor_spot_clear(
+						target + direction * travel, 0.20, 1.8):
+					clear = false
+					break
+				travel += 0.55
+			if clear:
+				return true
+	return false
 
 
 ## Move every visual under `node` to the photo-only render layer (plus the
