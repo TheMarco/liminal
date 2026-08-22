@@ -30,7 +30,10 @@ godot --headless --path . --import
   what you are judging. Yaw convention: forward = (−sin yaw, 0, −cos yaw).
 - Dev flags: `--play-tape` (auto-plays the ritual tape; needs `--pos` at the
   route target), `--passer` (rapid passing-shadow attempts), `--haunt-at`,
-  `--attention=`, `--descent-floor=N`.
+  `--attention=`, `--descent-floor=N`, `--test-ride` (simulates a real lift
+  ride from the target room to the next floor, then quits — the only
+  headless live-transition exerciser; any "arrival settle:" line in its
+  output means the ChunkManager.stream_focus arrival fix regressed).
 - `tools/find_cells.gd -- <seed> <theme>` scouts cell styles; a tiny route
   scout pattern: `DescentRoute.build(WorldGen.level_seed(seed, theme),
   theme, floor_idx)` printed from a throwaway SceneTree script.

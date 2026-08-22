@@ -229,6 +229,20 @@ func _ready() -> void:
 	add_to_group("portal_listener")
 	add_to_group("level_manager")
 	add_to_group("descent_listener")
+	# Dev (--test-ride): simulate a real lift ride — teleport to the route
+	# target at 2.5s, ride to the next floor at 8s, quit at 20s. This is the
+	# only code path that exercises a live floor transition headlessly; it
+	# root-caused the stale-streaming arrival bug (2026-08-22) and guards it.
+	if OS.get_cmdline_user_args().has("--test-ride"):
+		get_tree().create_timer(2.5).timeout.connect(func():
+			if descent_route != null:
+				player.position = Vector3(
+					(float(descent_route.target.x) + 0.5) * WorldGen.CELL_SIZE,
+					0.2,
+					(float(descent_route.target.y) + 0.5) * WorldGen.CELL_SIZE))
+		get_tree().create_timer(8.0).timeout.connect(_on_descent_lift)
+		get_tree().create_timer(20.0).timeout.connect(
+			func(): print("test-ride done"); get_tree().quit())
 	if opts.notaa:
 		get_viewport().use_taa = false
 	# dev: start with the tube off, so screenshots show the raw full-res render
@@ -520,6 +534,10 @@ func _build_level(level: int, around: Vector3) -> void:
 	level_root.add_child(cm)
 	if descent:
 		_configure_mutation_coordinator()
+	# Streaming must orbit the ARRIVAL until the player is teleported there,
+	# or the stale pre-teleport player position frees these warmed chunks
+	# mid-transition (see ChunkManager.stream_focus).
+	cm.stream_focus = around
 	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
 
 

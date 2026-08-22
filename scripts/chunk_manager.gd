@@ -80,6 +80,19 @@ var fail_next_staged_commit := false
 static var _dev_timing := false
 
 
+## While a floor transition is in flight the player node still stands at the
+## OUTGOING floor's coordinates — the teleport happens only after the arrival
+## probes pass. Streaming around that stale position freed the freshly warmed
+## arrival chunks whenever the previous floor's lift room was more than
+## UNLOAD_R cells from the new arrival (i.e. almost every real ride), so the
+## probes ran against an empty physics world and every landing fell back to
+## the raw requested point (root-caused 2026-08-22 via --test-ride). Until
+## the player is actually near this focus, streaming follows it instead of
+## the player; the first frame the player closes within LOAD_R it clears
+## itself and normal player-centred streaming resumes.
+var stream_focus := Vector3.INF
+
+
 func warm_up(center: Vector2i) -> void:
 	# Level changes happen behind a fade, but synchronously constructing 25
 	# dense chunks still held the main thread for too long. Build the safe 3x3
@@ -102,6 +115,13 @@ func _process(_dt: float) -> void:
 	var pc := Vector2i(
 		floori(player.global_position.x / CELL),
 		floori(player.global_position.z / CELL))
+	if stream_focus != Vector3.INF:
+		var fc := Vector2i(floori(stream_focus.x / CELL),
+			floori(stream_focus.z / CELL))
+		if _cheb(pc, fc) <= LOAD_R:
+			stream_focus = Vector3.INF
+		else:
+			pc = fc
 
 	for dz in range(-LOAD_R, LOAD_R + 1):
 		for dx in range(-LOAD_R, LOAD_R + 1):

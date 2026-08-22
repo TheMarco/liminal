@@ -138,6 +138,27 @@ func jump_to(level: int, requested_position: Vector3, via_portal: bool,
 
 	var cell := Vector2i(floori(position.x / WorldGen.CELL_SIZE),
 		floori(position.z / WorldGen.CELL_SIZE))
+	# Backstop: give the freshly built floor's colliders a few physics frames
+	# to enter the space before probing (the fade is opaque, so this is
+	# invisible, and it exits on the first frame the floor answers). The real
+	# 2026-08-2x arrival bug was ChunkManager streaming around the stale
+	# pre-teleport player position and freeing the warmed arrival chunks —
+	# fixed by `ChunkManager.stream_focus`; the settle print below should
+	# never fire now, and if it does, that fix has regressed.
+	var probe := position
+	probe.y = maxf(probe.y + 0.02, ArrivalSafety.STANDING_CLEARANCE)
+	var settle_pf0 := Engine.get_physics_frames()
+	var settle_waits := 0
+	for _attempt in 8:
+		if ArrivalSafety.has_floor(_port.world_3d.call(), probe,
+				[player_node.get_rid()]):
+			break
+		settle_waits += 1
+		await get_tree().physics_frame
+	if settle_waits > 0:
+		print("arrival settle: %d waits, physics advanced %d, paused=%s" % [
+			settle_waits, Engine.get_physics_frames() - settle_pf0,
+			str(get_tree().paused)])
 	var safe := _resolve_live_arrival(level, cell, position, exact, player_node)
 	player_node.teleport(safe)
 	if is_finite(yaw):

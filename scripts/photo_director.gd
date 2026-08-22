@@ -210,14 +210,45 @@ func nearest_undocumented(from: Vector3) -> Vector3:
 	for at in plan:
 		if _documented.has(str(plan[at]["id"])):
 			continue
-		var world := Vector3(
-			(float(at.x) + 0.5) * WorldGen.CELL_SIZE, 0.0,
-			(float(at.y) + 0.5) * WorldGen.CELL_SIZE)
+		var world := _anomaly_world_hint(at, plan[at])
 		var d := Vector2(world.x - from.x, world.z - from.z).length()
 		if d < best_d:
 			best_d = d
 			best = world
 	return best
+
+
+## The standable point the EVIDENCE counter steers to. The cell centre was
+## good enough for props but cruel for wall types: they register only from
+## the side they face, so a writing on the far side of a wall read as "2m"
+## while the photographable face was a corridor loop away — the counter
+## lied exactly when it existed to be merciful (owner report 2026-08-21).
+## Wall types steer to a point in front of their face; a live node's true
+## spot and facing win over the plan's estimate.
+func _anomaly_world_hint(at: Vector2i, spec: Dictionary) -> Vector3:
+	var raw: Variant = _live.get(at)
+	if is_instance_valid(raw) and (raw as Node).is_inside_tree():
+		var node := raw as PhotoAnomaly
+		if node != null:
+			var pts := node.photo_points()
+			if not pts.is_empty():
+				return pts[0] + node.facing_normal() * 1.2
+	var half := WorldGen.CELL_SIZE * 0.5
+	var base := Vector3(float(at.x) * WorldGen.CELL_SIZE, 0.0,
+		float(at.y) * WorldGen.CELL_SIZE)
+	var wall_dir := int(spec.get("wall_dir", -1))
+	if wall_dir >= 0 and int(spec["type"]) in [PhotoAnomaly.Type.WRITING,
+			PhotoAnomaly.Type.PRINT, PhotoAnomaly.Type.PORTAL]:
+		# Same wall-plane math as the writing builder, pulled 1.2m into the
+		# room on the side the piece faces.
+		var dirv: Vector2i = WorldGen.DIRV[wall_dir]
+		var dirv3 := Vector3(float(dirv.x), 0.0, float(dirv.y))
+		var along := float(spec.get("wall_along", half))
+		var plane := half + signf(dirv3.x + dirv3.z) * (half - 0.45)
+		var local := Vector3(plane, 0.0, along) if dirv3.x != 0.0 \
+			else Vector3(along, 0.0, plane)
+		return base + local - dirv3 * 1.2
+	return base + Vector3(half, 0.0, half)
 
 
 func requirement_met() -> bool:
