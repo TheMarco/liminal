@@ -27,9 +27,10 @@ const UI_FONT: Font = preload("res://fonts/VT323-Regular.ttf")
 const TITLE_ART: Texture2D = preload("res://textures/ui/title_screen.png")
 const INSTRUCTION_ROWS := [
 	["WASD  /  ARROWS", "Walk"],
-	["SHIFT", "Run  ·  Wander only"],
+	["SHIFT", "Run  ·  Draws attention in Descent"],
 	["E", "Use terminals, lifts, doors and charging stations"],
 	["F", "Toggle the flashlight"],
+	["C  /  SPACE", "Raise camera  /  Take photograph"],
 	["1  —  9", "Move between the original floors  ·  Wander only"],
 	["0", "Enter the Data Center  ·  Wander only"],
 	["−", "Enter the Bloom  ·  Wander only"],
@@ -185,11 +186,18 @@ func _build_main() -> void:
 	else:
 		_footer_button(menu, "ENTER  DESCENT",
 			func(): _select_descent(DescentEntry.NEW))
-	_footer_button(menu, "I  INSTRUCTIONS",
+	# Keep saved-run actions together and the reference pages on their own row.
+	# Seven full-size buttons cannot fit in one title-safe 16:9 footer.
+	var info := HBoxContainer.new()
+	info.alignment = BoxContainer.ALIGNMENT_CENTER
+	info.add_theme_constant_override("separation", 8)
+	info.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_main_dock.add_child(info)
+	_footer_button(info, "I  INSTRUCTIONS",
 		func(): _set_page(Page.INSTRUCTIONS))
-	_footer_button(menu, "A  ABOUT",
+	_footer_button(info, "A  ABOUT",
 		func(): _set_page(Page.ABOUT))
-	_footer_button(menu, "C  CREDITS",
+	_footer_button(info, "C  CREDITS",
 		func(): _set_page(Page.CREDITS))
 
 
@@ -509,7 +517,7 @@ func _relayout() -> void:
 	if is_instance_valid(_main_dock):
 		_main_dock.offset_left = maxf(34.0 * scale, safe.x)
 		_main_dock.offset_right = -maxf(34.0 * scale, safe.x)
-		_main_dock.offset_top = -(132.0 * scale + safe.y)
+		_main_dock.offset_top = -(186.0 * scale + safe.y)
 		_main_dock.offset_bottom = -safe.y
 		_main_dock.add_theme_constant_override("separation",
 			maxi(4, roundi(6.0 * scale)))

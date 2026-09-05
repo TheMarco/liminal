@@ -2151,6 +2151,10 @@ func _on_interaction_prompt(text: String) -> void:
 	if _interact_hint != null:
 		_interact_hint.text = text
 		_interact_panel.visible = not text.is_empty()
+		# The nearby action takes precedence over the temporary controls strip.
+		# Keep its fade timer running so looking away cannot revive an old hint.
+		if _hint != null:
+			_hint.visible = text.is_empty()
 
 
 func _show_event_message(text: String, alert := false,

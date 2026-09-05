@@ -109,6 +109,7 @@ AUDITS=(
 	"photo_runtime|tools/audit_photo_runtime.gd|--mode=descent --nologo"
 	"photo_coverage|tools/audit_photo_coverage.gd|--mode=descent --nologo"
 	"title_screen|tools/audit_title_screen.gd|"
+	"ui_layout|tools/audit_ui_layout.gd|"
 	"font_check|tools/font_check.gd|"
 	"ceiling_seams|tools/audit_ceiling_seams.gd|"
 	"chunk_smoke|tools/audit_chunk_smoke.gd|"

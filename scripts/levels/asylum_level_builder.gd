@@ -191,13 +191,20 @@ func _asy_ect(p: Vector3, yaw: float, salt: int) -> void:
 	for lx in [-0.25, 0.25]:
 		for lz in [-0.17, 0.17]:
 			scene.model_cylinder(v, Vector3(lx, 0.37, lz), 0.015, 0.7, Mats.chrome())
-			scene.model_sphere(v, Vector3(lx, 0.05, lz), 0.05, Mats.charcoal())
+			var wheel = scene.model_cylinder(v, Vector3(lx, 0.05, lz),
+				0.05, 0.032, Mats.charcoal())
+			wheel.rotation.z = PI / 2.0
 	# the machine itself: a grey box, a white gauge, red pilot, bakelite dials
 	scene.model_rounded_box(v, Vector3(0, 0.87, 0), Vector3(0.5, 0.26, 0.34), Mats.metal_gray(), 0.02)
 	var gauge = scene.model_cylinder(v, Vector3(-0.12, 0.9, 0.176), 0.06, 0.015, Mats.paint_white())
 	gauge.rotation.x = PI / 2.0
+	scene.model_quad(v, Vector3(-0.12, 0.9, 0.185),
+		Vector2(0.116, 0.116), Mats.instrument_dial())
 	for di in 3:
-		var knob = scene.model_cylinder(v, Vector3(0.06 + 0.11 * float(di), 0.84, 0.176), 0.025, 0.03, Mats.red_knob())
+		# All three controls sit on the fascia; the former last centre (0.28)
+		# was outside the 0.25m half-width and visibly floated off the side.
+		var knob = scene.model_cylinder(v, Vector3(-0.01 + 0.10 * float(di),
+			0.84, 0.176), 0.025, 0.03, Mats.charcoal())
 		knob.rotation.x = PI / 2.0
 	scene.model_sphere(v, Vector3(0.18, 0.95, 0.17), 0.014, Mats.lamp_red())
 	# paddles resting on the lower shelf, leads drooping back up to the box

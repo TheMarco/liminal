@@ -481,8 +481,8 @@ func _prison_shower_station(wall: int, along: float) -> void:
 	# Exposed riser, wall flange and vandal-resistant cross valve.
 	var pipe_bottom = 1.24
 	var pipe_top = ctx.ceiling_height - 0.42
-	scene.model_box(v, Vector3(0, (pipe_bottom + pipe_top) * 0.5, 0),
-		Vector3(0.045, pipe_top - pipe_bottom, 0.045), Mats.pipe_rust())
+	scene.model_cylinder(v, Vector3(0, (pipe_bottom + pipe_top) * 0.5, 0),
+		0.0225, pipe_top - pipe_bottom, Mats.pipe_rust())
 	var flange = MeshInstance3D.new()
 	flange.mesh = Chunk.TOR
 	flange.material_override = Mats.prison_iron()
@@ -496,11 +496,15 @@ func _prison_shower_station(wall: int, along: float) -> void:
 		Mats.prison_green())
 	scene.model_cylinder(v, Vector3(0, 1.25, -0.11), 0.035, 0.04, Mats.chrome()).rotation.x = PI / 2.0
 	# Bent arm and a thick shower rose aimed down into the room.
-	var arm_y = ctx.ceiling_height - 1.02
-	scene.model_beam(v, Vector3(0, arm_y, 0), Vector3(0, arm_y, -0.52),
-		0.038, Mats.pipe_rust())
-	scene.model_beam(v, Vector3(0, arm_y, -0.52), Vector3(0, arm_y - 0.13, -0.66),
-		0.038, Mats.pipe_rust())
+	# Plumbing stays at human height even in a double-height washroom.
+	var arm_y = minf(2.36, ctx.ceiling_height - 0.35)
+	for segment in [[Vector3(0, arm_y, 0), Vector3(0, arm_y, -0.52)],
+			[Vector3(0, arm_y, -0.52), Vector3(0, arm_y - 0.13, -0.66)]]:
+		var a: Vector3 = segment[0]
+		var b: Vector3 = segment[1]
+		var arm = scene.model_cylinder(v, (a + b) * 0.5, 0.019,
+			a.distance_to(b), Mats.pipe_rust())
+		arm.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
 	var rose = scene.model_cylinder(v, Vector3(0, arm_y - 0.18, -0.70), 0.17, 0.09,
 		Mats.prison_iron())
 	rose.rotation.x = 0.60

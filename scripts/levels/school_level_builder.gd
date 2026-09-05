@@ -902,6 +902,13 @@ func _sch_servery(dir: int) -> void:
 		scene.box(Vector3(d, 0.45, c), Vector3(0.9, 0.9, ln), Mats.sch_trim())
 		scene.box(Vector3(d, 0.93, c), Vector3(1.0, 0.06, ln + 0.1), Mats.steel(), false)
 		scene.box(Vector3(d - n * 0.1, 1.55, c), Vector3(0.03, 0.5, ln), Mats.glass(), false)
+		for rail_y in [1.30, 1.80]:
+			var rail = scene.model_cylinder(null, Vector3(d - n * 0.1, rail_y, c),
+				0.022, ln, Mats.steel())
+			rail.rotation.x = PI / 2.0
+		for end_z in [c - ln * 0.5, c + ln * 0.5]:
+			scene.model_cylinder(null, Vector3(d - n * 0.1, 1.38, end_z),
+				0.022, 0.84, Mats.steel())
 		for i in 3:
 			scene.box(Vector3(d, 0.97, c - 1.5 + 1.5 * float(i)), Vector3(0.55, 0.05, 0.9),
 				Mats.charcoal(), false)
@@ -909,6 +916,13 @@ func _sch_servery(dir: int) -> void:
 		scene.box(Vector3(c, 0.45, d), Vector3(ln, 0.9, 0.9), Mats.sch_trim())
 		scene.box(Vector3(c, 0.93, d), Vector3(ln + 0.1, 0.06, 1.0), Mats.steel(), false)
 		scene.box(Vector3(c, 1.55, d - n * 0.1), Vector3(ln, 0.5, 0.03), Mats.glass(), false)
+		for rail_y in [1.30, 1.80]:
+			var rail = scene.model_cylinder(null, Vector3(c, rail_y, d - n * 0.1),
+				0.022, ln, Mats.steel())
+			rail.rotation.z = PI / 2.0
+		for end_x in [c - ln * 0.5, c + ln * 0.5]:
+			scene.model_cylinder(null, Vector3(end_x, 1.38, d - n * 0.1),
+				0.022, 0.84, Mats.steel())
 		for i in 3:
 			scene.box(Vector3(c - 1.5 + 1.5 * float(i), 0.97, d), Vector3(0.9, 0.05, 0.55),
 				Mats.charcoal(), false)

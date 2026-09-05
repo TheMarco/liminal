@@ -11,6 +11,7 @@ const UI_FONT: Font = preload("res://fonts/VT323-Regular.ttf")
 
 var _skip_allowed := false
 var _video: VideoStreamPlayer
+var _skip_button: Button
 var _done := false
 
 
@@ -37,7 +38,8 @@ func _ready() -> void:
 	add_child(_video)
 
 	if _skip_allowed:
-		var skip := Button.new()
+		_skip_button = Button.new()
+		var skip := _skip_button
 		skip.name = "SkipIntro"
 		skip.text = "SKIP INTRO"
 		skip.add_theme_font_override("font", UI_FONT)
@@ -68,9 +70,26 @@ func _ready() -> void:
 		skip.add_theme_stylebox_override("pressed", hover)
 		skip.pressed.connect(func(): _finish(false))
 		add_child(skip)
+		get_viewport().size_changed.connect(_layout_skip_button)
+		_layout_skip_button()
 
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_video.play()
+
+
+func _layout_skip_button() -> void:
+	if _skip_button == null or not is_instance_valid(_skip_button):
+		return
+	var viewport_size := Vector2(get_viewport().size)
+	var scale := VhsOsd.hud_scale(viewport_size)
+	var inset := VhsOsd.safe_inset(viewport_size)
+	var button_size := Vector2(190.0, 48.0) * scale
+	_skip_button.add_theme_font_size_override("font_size", roundi(22.0 * scale))
+	_skip_button.scale = Vector2.ONE
+	_skip_button.offset_left = -inset.x - button_size.x
+	_skip_button.offset_top = -inset.y - button_size.y
+	_skip_button.offset_right = -inset.x
+	_skip_button.offset_bottom = -inset.y
 
 
 func skip_available() -> bool:

@@ -1032,6 +1032,17 @@ static func steel() -> StandardMaterial3D:
 		m.anisotropy = 0.6)
 
 
+## Printed, non-emissive instrument face. One shared texture keeps fine gauge marks
+## on the equipment rather than adding dozens of tiny pieces of geometry.
+static func instrument_dial() -> StandardMaterial3D:
+	return _std("instrument_dial", func(m: StandardMaterial3D):
+		m.albedo_texture = load("res://textures/props/instrument_dial.svg")
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		m.alpha_scissor_threshold = 0.5
+		m.roughness = 0.68
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS)
+
+
 ## Backlit navy wayfinding sign housing; Label3D text rides on top.
 static func sign_navy() -> StandardMaterial3D:
 	return _std("sign_navy", func(m: StandardMaterial3D):

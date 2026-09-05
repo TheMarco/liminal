@@ -608,14 +608,17 @@ func _air_gate_desk(o: Vector3, yw: float, code: String) -> void:
 	# two dead monitors on poles
 	for mx in [-0.5, 0.5]:
 		scene.model_cylinder(v, Vector3(mx, 1.2, 0.05), 0.02, 0.2, Mats.charcoal())
-		scene.model_rounded_box(v, Vector3(mx, 1.44, 0.05), Vector3(0.44, 0.3, 0.035), Mats.screen_dark(), 0.008)
+		scene.model_box(v, Vector3(mx, 1.1125, 0.05), Vector3(0.12, 0.025, 0.09), Mats.charcoal())
+		scene.model_rounded_box(v, Vector3(mx, 1.44, 0.05), Vector3(0.44, 0.3, 0.05), Mats.charcoal(), 0.008)
+		scene.model_quad(v, Vector3(mx, 1.44, 0.076), Vector2(0.37, 0.235), Mats.screen_dark())
 	scene.collider_yaw_box(v.position + Vector3(0, 0.6, 0), Vector3(2.3, 1.2, 0.7), yw)
 	# the lit gate sign overhead
 	var sv = Node3D.new()
-	sv.position = scene.world_point(o, Vector3(1.7, 3.4, 1.7), yw)
+	var sign_y = minf(3.4, ctx.ceiling_height - 0.45)
+	sv.position = scene.world_point(o, Vector3(1.7, sign_y, 1.7), yw)
 	sv.rotation.y = yw
 	scene.add_node(sv)
-	var rod_h = ctx.ceiling_height - 3.4 - 0.34
+	var rod_h = ctx.ceiling_height - sign_y - 0.34
 	for sx in [-0.5, 0.5]:
 		scene.model_cylinder(sv, Vector3(sx, 0.34 + rod_h / 2.0, 0), 0.016, rod_h, Mats.charcoal())
 	scene.model_rounded_box(sv, Vector3.ZERO, Vector3(1.5, 0.68, 0.1), Mats.sign_navy(), 0.015)

@@ -703,6 +703,7 @@ class PhotoReticle extends Control:
 
 	func _draw() -> void:
 		var s := size
+		var scale := VhsOsd.hud_scale(s)
 		var k := 1.0 if focused else warmth
 		var c := VhsOsd.INK if focused else VhsOsd.INK_DIM.lerp(VhsOsd.INK,
 			warmth * 0.7)
@@ -713,7 +714,7 @@ class PhotoReticle extends Control:
 		var cy := s.y * 0.5
 		if focused:
 			var f: Font = VhsOsd.FONT
-			var fs := 30
+			var fs := roundi(30.0 * scale)
 			var tw := f.get_string_size("FOCUS", HORIZONTAL_ALIGNMENT_LEFT,
 				-1, fs).x
 			VhsOsd.draw_osd_string(self, f,
@@ -723,19 +724,19 @@ class PhotoReticle extends Control:
 				Vector2(-1, 1), Vector2(1, 1)]:
 			var px := cx + w * 0.5 * corner.x
 			var py := cy + h * 0.5 * corner.y
-			draw_line(Vector2(px, py), Vector2(px - arm * corner.x, py), c, 2.0)
-			draw_line(Vector2(px, py), Vector2(px, py - arm * corner.y), c, 2.0)
+			draw_line(Vector2(px, py), Vector2(px - arm * corner.x, py), c, 2.0 * scale)
+			draw_line(Vector2(px, py), Vector2(px, py - arm * corner.y), c, 2.0 * scale)
 		# Centre metering patch: a faint translucent square with a fine
 		# cross, the way an optical finder marks its sweet spot.
 		var patch := minf(s.x, s.y) * 0.055
 		draw_rect(Rect2(cx - patch, cy - patch, patch * 2.0, patch * 2.0),
 			Color(1, 1, 1, 0.10 if not focused else 0.16))
 		draw_rect(Rect2(cx - patch, cy - patch, patch * 2.0, patch * 2.0),
-			c, false, 1.5)
+			c, false, 1.5 * scale)
 		draw_line(Vector2(cx - patch * 0.55, cy),
-			Vector2(cx + patch * 0.55, cy), c, 1.5)
+			Vector2(cx + patch * 0.55, cy), c, 1.5 * scale)
 		draw_line(Vector2(cx, cy - patch * 0.55),
-			Vector2(cx, cy + patch * 0.55), c, 1.5)
+			Vector2(cx, cy + patch * 0.55), c, 1.5 * scale)
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
