@@ -24,6 +24,10 @@ func box(pos: Vector3, size: Vector3, material: Material,
 	return _host._box(pos, size, material, collide)
 
 
+func occluder_wall(mesh: MeshInstance3D) -> void:
+	_host.record_occluder_wall(mesh)
+
+
 func model_box(parent: Node3D, pos: Vector3, size: Vector3,
 		material: Material) -> MeshInstance3D:
 	return _host._mbox(_model_parent(parent), pos, size, material)

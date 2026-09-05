@@ -98,7 +98,11 @@ AUDITS=(
 	"optional_vhs|tools/audit_optional_vhs.gd|"
 	"post_process|tools/audit_post_process.gd|"
 	"surface_wear|tools/audit_surface_wear.gd|"
+	"render_resource_cache|tools/audit_render_resource_cache.gd|"
+	"floor_resource_preloader|tools/audit_floor_resource_preloader.gd|"
+	"incremental_streaming|tools/audit_incremental_streaming.gd|"
 	"ghost_room_contract|tools/audit_ghost_room_contract.gd|"
+	"ghost_visuals|tools/audit_ghost_visuals.gd|"
 	"horror_director|tools/audit_horror_director.gd|"
 	"corner_apparitions|tools/audit_corner_apparitions.gd|"
 	"photo_anomalies|tools/audit_photo_anomalies.gd|"
@@ -120,7 +124,7 @@ AUDITS=(
 	"blackout_lighting|tools/audit_blackout_lighting.gd|"
 	"mutation_reveal|tools/audit_mutation_reveal.gd|"
 	"wander_mode|tools/audit_wander_mode.gd|--nologo"
-	# Not just a generation fingerprint: it builds 423 chunks across every theme
+	# Not just a generation fingerprint: it builds 522 chunks across every theme
 	# and style, so a method reached through the wrong level builder shows up here
 	# as a SCRIPT ERROR, which run_one treats as a failure.
 	"world_hash|tools/audit_world_hash.gd|--check=tools/golden/world_hash.txt"
@@ -230,7 +234,17 @@ for entry in "${AUDITS[@]}"; do
 	[ -n "$FILTER" ] && [[ "$name" != *"$FILTER"* ]] && continue
 	run_one "$name" "$script" "$extra" &
 	active=$((active + 1))
-	if [ "$active" -ge "$JOBS" ]; then wait -n 2>/dev/null || wait; active=$((active - 1)); fi
+	if [ "$active" -ge "$JOBS" ]; then
+		if [ "${BASH_VERSINFO[0]}" -ge 5 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -ge 3 ]; }; then
+			wait -n || true
+			active=$((active - 1))
+		else
+			# macOS Bash 3.2 waits for the entire batch. Reset its count too,
+			# otherwise all remaining audits accidentally run one at a time.
+			wait
+			active=0
+		fi
+	fi
 done
 wait
 

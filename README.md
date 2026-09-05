@@ -481,8 +481,15 @@ near-absence of props is enforced as part of its generation contract.
   real chunks for every floor, reporting first-pass and steady-state build
   latency plus mesh, collision, light and reflection-probe counts.
 
-GitHub Actions runs every `audit_*.gd` check above on pushes to `main` and on
-pull requests via `.github/workflows/audits.yml`.
+The rendering performance changes and measured limits are documented in
+[`docs/RENDERING_PERFORMANCE_AUDIT.md`](docs/RENDERING_PERFORMANCE_AUDIT.md).
+`tools/profile_streaming.gd` measures main-thread streaming work along a warmed
+out-and-back route. The GPU-only `audit_vhs_exposure_render.gd` and
+`audit_occlusion_render.gd` compare actual rendered pixels; run them separately
+with a GPU rather than adding them to the headless suite.
+
+GitHub Actions runs the headless checks configured in
+`.github/workflows/audits.yml` on pushes to `main` and on pull requests.
 
 ## Assets and attribution
 

@@ -22,6 +22,11 @@ uniform float rgb_split_px : hint_range(0.0, 5.0) = 0.0;
 // Deterministic visual QA; negative values use the live signal clock.
 uniform float tape_time = -1.0;
 
+// Every fragment used the same nine source samples for exposure. Evaluate
+// them at the quad vertices instead; flat interpolation preserves that one
+// value across the whole image, using this pass's current screen copy.
+varying flat float tape_exposure_gain;
+
 float tape_hash(vec2 p) {
     // Multiplication hash avoids large sin() seeds losing precision over time.
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -45,6 +50,21 @@ vec3 tape_yiq(vec3 c) {
     return vec3(dot(c, vec3(0.299, 0.587, 0.114)),
         dot(c, vec3(0.596, -0.274, -0.322)),
         dot(c, vec3(0.211, -0.523, 0.312)));
+}
+
+float tape_exposure() {
+    float gain = 1.0;
+    if (auto_exposure > 0.0) {
+        float avg = 0.0;
+        for (int ax = 0; ax < 3; ax++) {
+            for (int ay = 0; ay < 3; ay++) {
+                avg += tape_yiq(tape_sample(vec2(0.2 + float(ax) * 0.3,
+                    0.2 + float(ay) * 0.3))).x;
+            }
+        }
+        gain = mix(1.0, clamp(ae_target / max(avg / 9.0, 0.02), 0.6, 1.6), auto_exposure);
+    }
+    return gain;
 }
 
 vec3 tape_rgb(vec3 c) {
@@ -224,18 +244,7 @@ vec3 recovered_tape(vec2 screen_uv, vec2 screen_pixel_size, vec2 fragcoord) {
     }
 
     vec3 clr = max(tape_rgb(vec3(y, iq)), vec3(0.0));
-    float gain = 1.0;
-    if (auto_exposure > 0.0) {
-        float avg = 0.0;
-        for (int ax = 0; ax < 3; ax++) {
-            for (int ay = 0; ay < 3; ay++) {
-                avg += tape_yiq(tape_sample(vec2(0.2 + float(ax) * 0.3,
-                    0.2 + float(ay) * 0.3))).x;
-            }
-        }
-        gain = mix(1.0, clamp(ae_target / max(avg / 9.0, 0.02), 0.6, 1.6), auto_exposure);
-    }
-    clr *= bright_boost * gain;
+    clr *= bright_boost * tape_exposure_gain;
     clr *= 1.0 + (tape_noise(vec2(t * 2.4, 30.0)) - 0.5) * 0.04 * flicker_amount;
     float lum = max(tape_yiq(clr).x, 0.0001);
     float excess = max(lum - highlight_knee, 0.0);

@@ -35,6 +35,8 @@ const FLESH_FLOOR_OFFSET := Vector3(0.204127, 0.295808, -0.004298)
 
 static var _vine_cylinder: CylinderMesh
 static var _pine_roots_prototype: Node3D
+static var _bloom_hoop_mesh: TorusMesh
+static var _particle_quad_meshes: Dictionary = {}
 
 
 func _vine_mesh() -> CylinderMesh:
@@ -483,9 +485,12 @@ func _bloom_particle_layer(tag: String, amount: int, quad_size: float,
 	process.anim_speed_min = 0.0
 	process.anim_speed_max = 0.0
 	particles.process_material = process
-	var quad := QuadMesh.new()
-	quad.size = Vector2.ONE * quad_size
-	quad.material = Mats.bloom_spore()
+	var quad: QuadMesh = _particle_quad_meshes.get(quad_size)
+	if quad == null:
+		quad = QuadMesh.new()
+		quad.size = Vector2.ONE * quad_size
+		quad.material = Mats.bloom_spore()
+		_particle_quad_meshes[quad_size] = quad
 	particles.draw_pass_1 = quad
 	particles.position = Vector3(6.0, ctx.ceiling_height * 0.48, 6.0)
 	particles.set_meta(tag, true)
@@ -535,7 +540,9 @@ func _pine_roots(pos: Vector3, yaw: float, scale: float) -> Node3D:
 static func clear_runtime_cache() -> void:
 	if _pine_roots_prototype != null:
 		_pine_roots_prototype.free()
-	_pine_roots_prototype = null
+		_pine_roots_prototype = null
+	_bloom_hoop_mesh = null
+	_particle_quad_meshes.clear()
 
 
 func _authored_vines(pos: Vector3, rotation: Vector3, scale: float,
@@ -760,11 +767,12 @@ func _basketball_hoop(pos: Vector3, yaw: float) -> void:
 		Mats.bloom_metal())
 	scene.model_box(root, Vector3(0, 4.05, 0.42), Vector3(1.55, 0.95, 0.08),
 		Mats.bloom_wall())
-	var rim := TorusMesh.new()
-	rim.inner_radius = 0.28
-	rim.outer_radius = 0.33
+	if _bloom_hoop_mesh == null:
+		_bloom_hoop_mesh = TorusMesh.new()
+		_bloom_hoop_mesh.inner_radius = 0.28
+		_bloom_hoop_mesh.outer_radius = 0.33
 	var mi := MeshInstance3D.new()
-	mi.mesh = rim
+	mi.mesh = _bloom_hoop_mesh
 	mi.material_override = Mats.bloom_red()
 	mi.position = Vector3(0, 3.75, 0.92)
 	root.add_child(mi)

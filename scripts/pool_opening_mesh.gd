@@ -3,6 +3,23 @@ extends RefCounted
 ## Smooth, truly cut Poolrooms wall openings. Local X runs along the wall,
 ## local Y is height, and local Z crosses the 30cm wall thickness.
 
+static var _mesh_cache := {}
+static var _mesh_cache_order: Array[String] = []
+
+static func clear_runtime_cache() -> void:
+	_mesh_cache.clear()
+	_mesh_cache_order.clear()
+
+static func _cached(key_args: Array, builder: Callable) -> ArrayMesh:
+	var key := var_to_bytes(key_args).hex_encode()
+	if _mesh_cache.has(key):
+		return _mesh_cache[key]
+	var mesh: ArrayMesh = builder.call()
+	_mesh_cache[key] = mesh
+	_mesh_cache_order.append(key)
+	if _mesh_cache_order.size() > 128:
+		_mesh_cache.erase(_mesh_cache_order.pop_front())
+	return mesh
 
 static func rounded_door_profile(width: float, top: float, radius: float,
 		segments: int = 8) -> Array[Vector2]:
@@ -41,6 +58,12 @@ static func arched_door_profile(width: float, top: float, rise: float,
 
 static func doorway_header(profile: Array[Vector2], depth: float,
 		wall_top: float) -> ArrayMesh:
+	return _cached(
+		["doorway_header", profile, depth, wall_top],
+		func(): return _doorway_header_build(profile, depth, wall_top))
+
+static func _doorway_header_build(profile: Array[Vector2], depth: float,
+		wall_top: float) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	if profile.size() < 2:
@@ -78,6 +101,15 @@ static func doorway_header(profile: Array[Vector2], depth: float,
 
 
 static func circular_aperture_panel(radius: float, depth: float,
+		wall_top: float, center_y: float,
+		segments: int = 24) -> ArrayMesh:
+	return _cached(
+		["circular_aperture_panel", radius, depth, wall_top, center_y,
+		segments],
+		func(): return _circular_aperture_panel_build(
+			radius, depth, wall_top, center_y, segments))
+
+static func _circular_aperture_panel_build(radius: float, depth: float,
 		wall_top: float, center_y: float,
 		segments: int = 24) -> ArrayMesh:
 	var st := SurfaceTool.new()

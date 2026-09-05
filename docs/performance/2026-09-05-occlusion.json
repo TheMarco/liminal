@@ -1,0 +1,85 @@
+{
+  "engine": "Godot 4.6.1 Metal Forward+",
+  "machine": "Apple M3 Max",
+  "output": "1280x720; live 480-line scaling; TAA; MSAA4x",
+  "seed": 240721,
+  "measurement": "Production authored Data Center occluders, sequential 240-frame yaw sweeps. GPU timestamps unavailable. Renderer CPU and draw counts are not FPS.",
+  "rows": [
+    {
+      "draws": {
+        "max": 3455.0,
+        "mean": 1589.16666666667,
+        "p50": 1102.0,
+        "p95": 3396.0
+      },
+      "gpu_ms": {
+        "max": 0.0,
+        "mean": 0.0,
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "occlusion": false,
+      "position": "(6.0, -0.0, 2.0)",
+      "primitives": {
+        "max": 4442160.0,
+        "mean": 1944291.20416667,
+        "p50": 1182353.0,
+        "p95": 4345931.0
+      },
+      "render_cpu_ms": {
+        "max": 5.24599981307983,
+        "mean": 1.73173749893904,
+        "p50": 1.24399995803833,
+        "p95": 3.48200011253357
+      },
+      "resident_chunks": 28,
+      "scale_3d": 0.666666686534882,
+      "setup_cpu_ms": {
+        "max": 0.078,
+        "mean": 0.0268083333333333,
+        "p50": 0.025,
+        "p95": 0.039
+      },
+      "theme": 10,
+      "vram_mib": 1556.546875
+    },
+    {
+      "draws": {
+        "max": 2420.0,
+        "mean": 474.054166666667,
+        "p50": 468.0,
+        "p95": 646.0
+      },
+      "gpu_ms": {
+        "max": 0.0,
+        "mean": 0.0,
+        "p50": 0.0,
+        "p95": 0.0
+      },
+      "occlusion": true,
+      "position": "(6.0, -0.0, 2.0)",
+      "primitives": {
+        "max": 3694427.0,
+        "mean": 585493.854166667,
+        "p50": 577600.0,
+        "p95": 810041.0
+      },
+      "render_cpu_ms": {
+        "max": 4.66400003433228,
+        "mean": 1.14866666793823,
+        "p50": 1.07500004768372,
+        "p95": 1.65900003910065
+      },
+      "resident_chunks": 28,
+      "scale_3d": 0.666666686534882,
+      "setup_cpu_ms": {
+        "max": 0.076,
+        "mean": 0.0320958333333333,
+        "p50": 0.029,
+        "p95": 0.055
+      },
+      "theme": 10,
+      "vram_mib": 1556.546875
+    }
+  ]
+}

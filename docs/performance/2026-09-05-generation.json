@@ -1,0 +1,162 @@
+{
+  "engine": "Godot 4.6.1.stable.official.14d19694e",
+  "machine": "Apple M3 Max",
+  "seed": 240721,
+  "measurement": "Main-thread synchronous warmed chunk construction; 25 cells per floor; sequential before/after processes; no all-game threaded preload",
+  "rows": [
+    {
+      "phase": "before",
+      "theme": 0,
+      "mean_ms": 3.17,
+      "p95_ms": 4.83,
+      "max_ms": 5.2
+    },
+    {
+      "phase": "before",
+      "theme": 1,
+      "mean_ms": 5.18,
+      "p95_ms": 10.26,
+      "max_ms": 10.49
+    },
+    {
+      "phase": "before",
+      "theme": 2,
+      "mean_ms": 1.71,
+      "p95_ms": 2.67,
+      "max_ms": 2.84
+    },
+    {
+      "phase": "before",
+      "theme": 4,
+      "mean_ms": 3.69,
+      "p95_ms": 7.35,
+      "max_ms": 7.64
+    },
+    {
+      "phase": "before",
+      "theme": 5,
+      "mean_ms": 3.55,
+      "p95_ms": 4.7,
+      "max_ms": 5.14
+    },
+    {
+      "phase": "before",
+      "theme": 6,
+      "mean_ms": 4.48,
+      "p95_ms": 7.72,
+      "max_ms": 7.76
+    },
+    {
+      "phase": "before",
+      "theme": 7,
+      "mean_ms": 3.39,
+      "p95_ms": 4.9,
+      "max_ms": 4.96
+    },
+    {
+      "phase": "before",
+      "theme": 8,
+      "mean_ms": 5.05,
+      "p95_ms": 9.46,
+      "max_ms": 9.49
+    },
+    {
+      "phase": "before",
+      "theme": 9,
+      "mean_ms": 6.77,
+      "p95_ms": 10.17,
+      "max_ms": 12.79
+    },
+    {
+      "phase": "before",
+      "theme": 10,
+      "mean_ms": 8.68,
+      "p95_ms": 34.51,
+      "max_ms": 34.69
+    },
+    {
+      "phase": "before",
+      "theme": 11,
+      "mean_ms": 6.26,
+      "p95_ms": 7.42,
+      "max_ms": 7.82
+    },
+    {
+      "phase": "after",
+      "theme": 0,
+      "mean_ms": 3.01,
+      "p95_ms": 4.54,
+      "max_ms": 5.2
+    },
+    {
+      "phase": "after",
+      "theme": 1,
+      "mean_ms": 5.38,
+      "p95_ms": 10.69,
+      "max_ms": 11.05
+    },
+    {
+      "phase": "after",
+      "theme": 2,
+      "mean_ms": 1.57,
+      "p95_ms": 2.25,
+      "max_ms": 2.36
+    },
+    {
+      "phase": "after",
+      "theme": 4,
+      "mean_ms": 3.62,
+      "p95_ms": 6.73,
+      "max_ms": 6.74
+    },
+    {
+      "phase": "after",
+      "theme": 5,
+      "mean_ms": 3.64,
+      "p95_ms": 4.36,
+      "max_ms": 5.51
+    },
+    {
+      "phase": "after",
+      "theme": 6,
+      "mean_ms": 4.33,
+      "p95_ms": 7.06,
+      "max_ms": 7.46
+    },
+    {
+      "phase": "after",
+      "theme": 7,
+      "mean_ms": 3.16,
+      "p95_ms": 4.64,
+      "max_ms": 5.0
+    },
+    {
+      "phase": "after",
+      "theme": 8,
+      "mean_ms": 4.32,
+      "p95_ms": 7.66,
+      "max_ms": 8.42
+    },
+    {
+      "phase": "after",
+      "theme": 9,
+      "mean_ms": 5.7,
+      "p95_ms": 9.09,
+      "max_ms": 9.11
+    },
+    {
+      "phase": "after",
+      "theme": 10,
+      "mean_ms": 7.63,
+      "p95_ms": 26.67,
+      "max_ms": 27.66
+    },
+    {
+      "phase": "after",
+      "theme": 11,
+      "mean_ms": 6.59,
+      "p95_ms": 7.75,
+      "max_ms": 7.89
+    }
+  ]
+}

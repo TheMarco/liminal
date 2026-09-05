@@ -34,11 +34,16 @@ func _process(dt: float) -> void:
 			_t = _rng.randf_range(0.03, 0.15)
 	for i in lights.size():
 		if is_instance_valid(lights[i]):
-			lights[i].light_energy = lerpf(lights[i].light_energy,
+			var light_target := lerpf(lights[i].light_energy,
 				base_energies[i] * _target, minf(1.0, dt * 30.0))
+			if lights[i].light_energy != light_target:
+				lights[i].light_energy = light_target
 	var emission_energy := 2.7 * clampf(_target, 0.12, 1.0)
 	for mat in mats:
 		if is_instance_valid(mat):
-			mat.emission_energy_multiplier = emission_energy
+			if mat.emission_energy_multiplier != emission_energy:
+				mat.emission_energy_multiplier = emission_energy
 	if buzz != null:
-		buzz.volume_db = lerpf(-13.0, -26.0, clampf(_target, 0.0, 1.0))
+		var buzz_volume := lerpf(-13.0, -26.0, clampf(_target, 0.0, 1.0))
+		if buzz.volume_db != buzz_volume:
+			buzz.volume_db = buzz_volume

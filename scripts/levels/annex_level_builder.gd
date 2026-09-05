@@ -20,6 +20,12 @@ const CARPET_DAMAGE_MASKS := [
 	"res://textures/annex/carpet_damage_07.png",
 	"res://textures/annex/carpet_damage_08.png",
 ]
+static var _carpet_damage_quad: QuadMesh
+static var _moisture_quad: QuadMesh
+
+static func clear_runtime_cache() -> void:
+	_carpet_damage_quad = null
+	_moisture_quad = null
 
 
 func _annex_floor_ceiling() -> void:
@@ -39,12 +45,13 @@ func _annex_carpet_damage() -> void:
 		return
 	var asset_idx := posmod(WorldGen.h(
 		ctx.world_seed, ctx.cell.x, ctx.cell.y, 19392), CARPET_DAMAGE_MASKS.size())
-	var quad := QuadMesh.new()
 	const STAIN_SIZE := 5.4
-	quad.size = Vector2(STAIN_SIZE, STAIN_SIZE)
-	quad.orientation = PlaneMesh.FACE_Y
+	if _carpet_damage_quad == null:
+		_carpet_damage_quad = QuadMesh.new()
+		_carpet_damage_quad.size = Vector2(STAIN_SIZE, STAIN_SIZE)
+		_carpet_damage_quad.orientation = PlaneMesh.FACE_Y
 	var overlay := MeshInstance3D.new()
-	overlay.mesh = quad
+	overlay.mesh = _carpet_damage_quad
 	var strength_roll := posmod(WorldGen.h(
 		ctx.world_seed, ctx.cell.x, ctx.cell.y, 19393), 1000)
 	var strength := 0.52 + float(strength_roll) / 1000.0 * 0.20
@@ -90,12 +97,13 @@ func _annex_carpet_damage() -> void:
 func _annex_moisture_tile(center: Vector2, mask_path: String,
 		atlas_scale: Vector2, atlas_offset: Vector2, strength: float,
 		quarter_turns: int, test_id: String) -> void:
-	var quad := QuadMesh.new()
 	var tile_face := Chunk.ANNEX_CEILING_TILE - 0.09
-	quad.size = Vector2(tile_face, tile_face)
-	quad.orientation = PlaneMesh.FACE_Y
+	if _moisture_quad == null:
+		_moisture_quad = QuadMesh.new()
+		_moisture_quad.size = Vector2(tile_face, tile_face)
+		_moisture_quad.orientation = PlaneMesh.FACE_Y
 	var overlay := MeshInstance3D.new()
-	overlay.mesh = quad
+	overlay.mesh = _moisture_quad
 	overlay.material_override = Mats.annex_moisture_overlay(mask_path)
 	overlay.set_instance_shader_parameter("atlas_scale", atlas_scale)
 	overlay.set_instance_shader_parameter("atlas_offset", atlas_offset)

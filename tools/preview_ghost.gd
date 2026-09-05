@@ -3,11 +3,11 @@ extends Node3D
 ##
 ## A ghost in the world can only be looked at by playing until one arrives and
 ## then killing it, which takes about a minute per frame you want to judge and
-## never gives you the same frame twice. This stages one card against a lit wall
+## never gives you the same frame twice. This stages one ghost against a lit wall
 ## and pins its shader state, so the burn can be stepped through and compared
 ## shot for shot.
 ##
-## It builds the quad the way ShadowFigure does — same material, same instance
+## It builds the layered visual the way ShadowFigure does — same material, same instance
 ## uniforms — so what it shows is the shader the game runs, not a copy.
 ##
 ## Run: godot --path . tools/preview_ghost.tscn -- \
@@ -18,7 +18,7 @@ extends Node3D
 ##   --burn=0..1     torch charge, the ember heat before a kill
 ##   --ignite=0..1   consumption progress; implies the kill path
 ##   --wall=0..1     how brightly lit the wall behind it is, default 0.55
-##   --shot=PATH     where to write the frame
+##   --screenshot=PATH  where to write the frame
 
 const CELL := 1.0
 
@@ -140,12 +140,9 @@ func _figure(sheet: String, frame: float, burn: float, ignite: float,
 	var h := 2.05
 	var qh: float = h / (float(body[2]) - float(body[1]))
 	var w: float = qh * float(body[0])
-	var quad := MeshInstance3D.new()
-	quad.mesh = Chunk.QUAD
+	var quad := ShadowFigure.make_visual(sheet)
 	quad.scale = Vector3(w, qh, 1.0)
-	quad.material_override = ShadowFigure._mat_for(sheet)
 	quad.position = Vector3(0, qh * (0.5 - float(body[1])), 0)
-	quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	quad.set_instance_shader_parameter("flip_frame", frame)
 	quad.set_instance_shader_parameter("burn", clampf(burn, 0.0, 1.0))
 	quad.set_instance_shader_parameter("torch", clampf(torch, 0.0, 1.0))

@@ -71,13 +71,21 @@ func _build() -> void:
 		var bounds := AABB()
 		var first := true
 		for entry: Dictionary in prop.meshes:
-			var b: AABB = entry.transform * entry.mesh.mesh.get_aabb()
+			# Imported furnishings can contain hundreds of meshes. Bounds and sort
+			# keys are immutable during this pass; do this once, not in every
+			# comparison of both overlay-allocation sorts.
+			var local_bounds: AABB = entry.mesh.mesh.get_aabb()
+			entry["local_bounds"] = local_bounds
+			var b: AABB = entry.transform * local_bounds
+			entry["wear_size_squared"] = b.size.length_squared()
 			bounds = b if first else bounds.merge(b)
 			first = false
 		# Some builders keep an assembly pivot at (0,0,0) and author all of its
 		# children in room coordinates. The geometry, not that pivot, locates wear.
 		prop["foot"] = Vector3(bounds.get_center().x, bounds.position.y,
 			bounds.get_center().z) if not first else prop.transform.origin
+		prop["fixture_priority"] = _fixture_priority(prop.kind)
+		prop["fixture_hash"] = _hash(prop.foot, 28401)
 	# Stable physical ordering, independent of scene instance IDs/names.
 	walls.sort_custom(func(a: Face, b: Face): return a.salt < b.salt)
 	floors.sort_custom(func(a: Face, b: Face): return a.center.y > b.center.y)
@@ -601,9 +609,8 @@ func _lifted_finish(face: Face, at: Vector3, type_: String) -> void:
 
 func _fixture_wear() -> void:
 	props.sort_custom(func(a: Dictionary, b: Dictionary):
-		var ap := _fixture_priority(a.kind)
-		var bp := _fixture_priority(b.kind)
-		return ap < bp if ap != bp else _hash(a.foot, 28401) < _hash(b.foot, 28401))
+		return a.fixture_priority < b.fixture_priority if a.fixture_priority != b.fixture_priority \
+			else a.fixture_hash < b.fixture_hash)
 	var floor_marks := 0
 	var glazing_leaks := 0
 	var overlays: Array[Dictionary] = []
@@ -702,26 +709,35 @@ func _fixture_priority(kind: String) -> int:
 
 
 func _prop_overlay(prop: Dictionary, profile: int, limit: int) -> void:
+	if prop_meshes >= MAX_PROP_MESHES:
+		return
 	var anchor: Transform3D = prop.transform
 	# Use metres in the furnishing's orientation. Some raw primitives carry
 	# their entire size in the root scale; retaining it here would make a thin
 	# window and a cube both have 1x1x1 bounds and misidentify the glass face.
-	var anchor_inverse := Transform3D(anchor.basis.orthonormalized(),
-		anchor.origin).affine_inverse()
+	var anchor_inverse: Transform3D = prop.get("wear_anchor_inverse",
+		Transform3D.IDENTITY)
 	var bounds := AABB()
-	var has_bounds := false
-	for entry: Dictionary in prop.meshes:
-		var mesh: MeshInstance3D = entry.mesh
-		var b: AABB = (anchor_inverse * entry.transform) * mesh.mesh.get_aabb()
-		bounds = bounds.merge(b) if has_bounds else b
-		has_bounds = true
-	if not has_bounds or bounds.size.length_squared() < 0.02:
+	if prop.has("wear_bounds"):
+		bounds = prop.wear_bounds
+	else:
+		anchor_inverse = Transform3D(anchor.basis.orthonormalized(),
+			anchor.origin).affine_inverse()
+		var has_bounds := false
+		for entry: Dictionary in prop.meshes:
+			var b: AABB = (anchor_inverse * entry.transform) * entry.local_bounds
+			bounds = bounds.merge(b) if has_bounds else b
+			has_bounds = true
+		prop["wear_bounds"] = bounds
+		prop["wear_anchor_inverse"] = anchor_inverse
+	if prop.meshes.is_empty() or bounds.size.length_squared() < 0.02:
 		return
 	var seed_ := float(_hash(prop.foot, 28501) % 8192)
 	var selected := 0
+	# Preserve the original two sorts and their tie ordering. Only the costly
+	# comparator arithmetic is cached, not the resulting order.
 	prop.meshes.sort_custom(func(a: Dictionary, b: Dictionary):
-		return (a.transform * a.mesh.mesh.get_aabb()).size.length_squared() \
-			> (b.transform * b.mesh.mesh.get_aabb()).size.length_squared())
+		return a.wear_size_squared > b.wear_size_squared)
 	for entry: Dictionary in prop.meshes:
 		if prop_meshes >= MAX_PROP_MESHES or selected >= limit:
 			break

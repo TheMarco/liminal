@@ -438,6 +438,7 @@ func _create_descent_route(level: int, floor_idx: int) -> DescentRoute:
 
 
 func _build_level(level: int, around: Vector3) -> void:
+	get_viewport().use_occlusion_culling = level in Chunk.occlusion_themes
 	level_root = Node3D.new()
 	add_child(level_root)
 	cm = ChunkManager.new()
@@ -519,6 +520,8 @@ func _build_level(level: int, around: Vector3) -> void:
 	# mid-transition (see ChunkManager.stream_focus).
 	cm.stream_focus = around
 	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
+	# Startup collision is ready before background decoding begins.
+	FloorResourcePreloader.configure(Chunk.theme_prop_paths(level))
 
 
 func _configure_mutation_coordinator() -> void:

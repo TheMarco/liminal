@@ -1,11 +1,13 @@
 extends Node3D
 ## Lightweight art-direction prototype, isolated from the game's enemies.
-## Restored layered baseline. D: darkness. V: VHS. Space: pause. Drag: orbit.
+## A: prototype / regular. 1: body density. 2: trailing wisps. D: darkness.
+## V: VHS. Space: pause. Drag: orbit.
 ## --screenshot=PATH saves a frame and exits; otherwise the preview stays open.
 
 const PROTOTYPE := preload("res://shaders/ghost_depth_preview.gdshader")
 var _camera: Camera3D
 var _depth: Node3D
+var _regular: GhostVisual
 var _materials: Array[ShaderMaterial] = []
 var _post: CanvasLayer
 var _label: Label
@@ -16,14 +18,25 @@ var _pause := false
 var _angle := 0.0
 var _auto_orbit := true
 var _dark := false
+var _show_regular := false
+var _cohesive_body := true
+var _lag_wisps := true
 var _shot := ""
 
 
 func _ready() -> void:
+	var clean := false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--screenshot="): _shot = arg.trim_prefix("--screenshot=")
 		if arg == "--dark": _dark = true
-	DisplayServer.window_set_title("Ghost baseline — D: darkness · V: VHS")
+		if arg == "--regular": _show_regular = true
+		if arg == "--baseline":
+			_cohesive_body = false
+			_lag_wisps = false
+		if arg == "--no-density": _cohesive_body = false
+		if arg == "--no-wisps": _lag_wisps = false
+		if arg == "--clean": clean = true
+	DisplayServer.window_set_title("Ghost comparison — A: prototype/regular · D: darkness · V: VHS")
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_environment = WorldEnvironment.new()
 	add_child(_environment)
@@ -68,6 +81,15 @@ func _ready() -> void:
 		layer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_materials.append(material)
 		_depth.add_child(layer)
+	# Use the game's actual material and animation settings. Keep placement,
+	# size, artwork orientation and playback frame matched to the prototype.
+	_regular = ShadowFigure.make_visual("wraith5")
+	_regular.scale = Vector3(1.39,2.23,1.0)
+	_regular.position = Vector3(0.0,1.0,0.0)
+	_regular.set_instance_shader_parameter("flip_blend",1.0)
+	_regular.set_instance_shader_parameter("flip_loop",1.0)
+	_regular.set_instance_shader_parameter("trail_amt",0.55)
+	add_child(_regular)
 	_post = CanvasLayer.new()
 	add_child(_post)
 	var overlay := ColorRect.new()
@@ -76,6 +98,8 @@ func _ready() -> void:
 	overlay.material = PostProcessController.make_live_found_footage_material()
 	_post.add_child(overlay)
 	PostProcessController.add_crt_display_pass(_post)
+	if clean: _post.visible = false
+	ShadowFigure.set_tape_look(_post.visible)
 	var ui := CanvasLayer.new()
 	ui.layer = 5
 	add_child(ui)
@@ -84,8 +108,13 @@ func _ready() -> void:
 	_label.add_theme_font_size_override("font_size",16)
 	ui.add_child(_label)
 	_update_view()
+	await RenderingServer.frame_post_draw
+	print("GHOST_COMPARISON_READY: A toggles prototype / regular game material")
 	if not _shot.is_empty():
 		await get_tree().create_timer(2.0).timeout
+		_time = 2.0
+		_pause = true
+		await get_tree().process_frame
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_shot)
 		get_tree().quit()
@@ -107,15 +136,24 @@ func _process(dt: float) -> void:
 	_camera.position = Vector3(sin(_angle)*4.2,1.65,cos(_angle)*4.2)
 	_camera.look_at(Vector3(0,1.08,0))
 	for material in _materials: material.set_shader_parameter("elapsed",_time)
+	_regular.set_instance_shader_parameter("flip_frame",fmod(_time*5.5,24.0))
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not _shot.is_empty(): return
 	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_A:
+			_show_regular = not _show_regular
+		if event.keycode == KEY_1:
+			_cohesive_body = not _cohesive_body
+		if event.keycode == KEY_2:
+			_lag_wisps = not _lag_wisps
 		if event.keycode == KEY_D:
 			_dark = not _dark
 			_update_lighting()
 		if event.keycode == KEY_V:
 			_post.visible = not _post.visible
+			ShadowFigure.set_tape_look(_post.visible)
 		if event.keycode == KEY_SPACE: _pause = not _pause
 		if event.keycode == KEY_ESCAPE: get_tree().quit()
 		_update_view()
@@ -140,6 +178,12 @@ func _update_lighting() -> void:
 
 
 func _update_view() -> void:
-	_label.text = "LAYERED GHOST BASELINE" \
+	_depth.visible = not _show_regular
+	_regular.visible = _show_regular
+	for material in _materials:
+		material.set_shader_parameter("cohesive_body",_cohesive_body)
+		material.set_shader_parameter("lag_wisps",_lag_wisps)
+	_label.text = ("REGULAR GHOST / GAME MATERIAL" if _show_regular else "LAYERED GHOST PROTOTYPE") \
 		+ ("  /  DARK ROOM" if _dark else "  /  LIT ROOM") \
-		+ "\nD: darkness   V: VHS   Space: pause   Drag: orbit"
+		+ ("\n1 / 2: prototype effects only" if _show_regular else "\n1: body density " + ("ON" if _cohesive_body else "OFF") + "   2: trailing wisps " + ("ON" if _lag_wisps else "OFF")) \
+		+ "\nA: prototype/regular   D: darkness   V: VHS   Space: pause   Drag: orbit"

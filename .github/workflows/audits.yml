@@ -101,6 +101,15 @@ jobs:
       - name: Audit runtime level switching
         run: godot --headless --path . --script tools/audit_level_switches.gd -- --nologo
 
+      - name: Audit render-resource cache equivalence
+        run: godot --headless --path . --script tools/audit_render_resource_cache.gd
+
+      - name: Audit bounded floor-resource preparation
+        run: godot --headless --path . --script tools/audit_floor_resource_preloader.gd
+
+      - name: Audit incremental chunk streaming
+        run: godot --headless --path . --script tools/audit_incremental_streaming.gd
+
       - name: Audit Descent objective routes
         run: godot --headless --path . --script tools/audit_descent_routes.gd -- 8
 

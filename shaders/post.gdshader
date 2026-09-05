@@ -249,6 +249,10 @@ float roll_line(vec2 uv){
 
 #include "res://shaders/vhs_signal.gdshaderinc"
 
+void vertex() {
+    tape_exposure_gain = tape_signal ? tape_exposure() : 1.0;
+}
+
 void fragment(){
     if (tape_signal) {
         COLOR = vec4(recovered_tape(SCREEN_UV, SCREEN_PIXEL_SIZE, FRAGCOORD.xy), 1.0);
@@ -312,7 +316,7 @@ void fragment(){
             + halo * 9.0)) / resolution.x;
     }
 
-    vec3 clr = Tri(pos);
+    vec3 clr;
     if(aberation_amount + halo > 0.0){
         float chromatic = aberation_amount + line * 2.0 + halo * 2.5;
         vec2 chromatic_x = vec2(chromatic,0.0) / resolution.x;
@@ -321,6 +325,8 @@ void fragment(){
         float g = Tri(pos + chromatic_y).g;
         float b = Tri(pos + chromatic_x).b;
         clr = vec3(r,g,b);
+    } else {
+        clr = Tri(pos);
     }
 
     // The halo disturbs the signal AROUND the figure (displacement and

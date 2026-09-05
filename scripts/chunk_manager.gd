@@ -4,10 +4,8 @@ extends Node3D
 ## so chunks can be freed aggressively and rebuilt identical later.
 
 const CELL := WorldGen.CELL_SIZE
-## Five-by-five is the largest resident square that stays comfortably inside
-## the authored 30–62m fog horizons. The former seven-by-seven square more than
-## doubled draw calls in dense Bloom rooms while its outer ring was already
-## dissolved by fog.
+## Base visible neighbourhood. Owning room anchors are retained too, so a
+## merged room never loses its furniture while one of its member cells remains.
 const LOAD_R := 2
 ## One cell of hysteresis prevents boundary churn without retaining the former
 ## 9x9 worst-case neighbourhood near long-route objectives.
@@ -16,6 +14,8 @@ const UNLOAD_R := 3
 ## Building only one per frame prevents three individually legal rooms from
 ## stacking into a visible hitch; the 3x3 warm-up keeps collision ahead safe.
 const BUDGET := 1  # chunks built per frame; selection below assumes one
+const BUILD_BUDGET_USEC := 3000
+const LOOKAHEAD_SECONDS := 1.5
 const WARM_R := 1  # 3x3 is enough collision coverage for a safe arrival
 ## 12m cells at a 6% hit rate produce one optional set per ~200m of newly
 ## explored off-route space. The authored objective route gets an exact 2–3
@@ -61,6 +61,14 @@ var bleed_theme := -1
 var descent_broken_station_tried := false
 var chunks := {}
 var queued := {}
+var _wanted := {}
+var _ahead := {}
+var _last_center := NO_BROKEN_STATION
+var _last_ahead := NO_BROKEN_STATION
+var _pending_chunk: Chunk
+var _pending_cell := NO_BROKEN_STATION
+var _chunks_since_prefetch := 0
+var _pending_run_state: Array = []
 var _staged_cells: Array[Vector2i] = []
 var _staged_index := 0
 var _staged_state := -1
@@ -123,45 +131,133 @@ func _process(_dt: float) -> void:
 		else:
 			pc = fc
 
-	for dz in range(-LOAD_R, LOAD_R + 1):
-		for dx in range(-LOAD_R, LOAD_R + 1):
-			var c := pc + Vector2i(dx, dz)
-			if not chunks.has(c) and not queued.has(c):
-				queued[c] = true
+	var prediction := player.global_position
+	if stream_focus != Vector3.INF:
+		prediction = stream_focus
+	elif player is CharacterBody3D:
+		var motion: Vector3 = (player as CharacterBody3D).velocity * LOOKAHEAD_SECONDS
+		motion.y = 0.0
+		prediction += motion.limit_length(CELL * 0.9)
+	var ahead_cell := Vector2i(floori(prediction.x / CELL), floori(prediction.z / CELL))
+	if pc != _last_center or ahead_cell != _last_ahead:
+		_last_center = pc
+		_last_ahead = ahead_cell
+		_wanted = _room_complete_cells(pc)
+		_ahead = _room_complete_cells(ahead_cell)
+		_refill_queue()
 
-	if not queued.is_empty():
-		# The budget is one: selecting the closest candidate in-place avoids copying
-		# and sorting the whole pending-key set on every rendered frame.
+
+	if _pending_chunk != null and (chunks.has(_pending_cell) or
+			(not _wanted.has(_pending_cell) and not _ahead.has(_pending_cell))):
+		_cancel_pending()
+	var run_state := _pending_run_state
+	if _pending_chunk != null or not queued.is_empty():
+		run_state = [descent_arrival_used, descent_lift_called, descent_lift_open,
+			descent_tape_watched, descent_broken_station_tried, bleed, bleed_theme]
+	if _pending_chunk != null and _pending_run_state != run_state:
+		_cancel_pending()
+	var loading_asset := FloorResourcePreloader.poll()
+	if _pending_chunk == null and not queued.is_empty():
 		var closest := NO_BROKEN_STATION
-		var closest_distance := 1 << 20
+		var best := INF
 		var stale: Array[Vector2i] = []
 		for key in queued:
 			var c: Vector2i = key
-			var distance := _cheb(c, pc)
-			if distance > LOAD_R or chunks.has(c):
+			if chunks.has(c) or (not _wanted.has(c) and not _ahead.has(c)):
 				stale.append(c)
 				continue
-			if distance < closest_distance or (distance == closest_distance \
-					and (c.x < closest.x or (c.x == closest.x and c.y < closest.y))):
+			var centre := Vector3((c.x + 0.5) * CELL, prediction.y, (c.y + 0.5) * CELL)
+			var score := centre.distance_squared_to(prediction)
+			if _cheb(c, pc) <= WARM_R:
+				score -= 100000.0
+			elif not _wanted.has(c):
+				score += 100000.0
+			if score < best or (score == best and
+					(c.x < closest.x or (c.x == closest.x and c.y < closest.y))):
 				closest = c
-				closest_distance = distance
+				best = score
 		for c in stale:
 			queued.erase(c)
-		if closest != NO_BROKEN_STATION:
+		if closest != NO_BROKEN_STATION and (not loading_asset or _cheb(closest, pc) <= WARM_R):
 			queued.erase(closest)
-			_build(closest)
+			_pending_run_state = run_state
+			_pending_cell = closest
+			_pending_chunk = Chunk.new(world_seed, closest, theme,
+				_build_spec(closest), true)
+			_pending_chunk.position = Vector3(closest.x * CELL, 0.0, closest.y * CELL)
+	if _pending_chunk != null:
+		var started := Time.get_ticks_usec()
+		var urgent := _cheb(_pending_cell, pc) <= WARM_R or (descent_route != null and
+			(_pending_cell == descent_route.target or _pending_cell == descent_route.origin))
+		while true:
+			if _pending_chunk.build_next_stage():
+				var complete := _pending_chunk
+				var at := _pending_cell
+				_pending_chunk = null
+				_pending_cell = NO_BROKEN_STATION
+				_install_chunk(at, complete)
+				_chunks_since_prefetch += 1
+				break
+			if not urgent and Time.get_ticks_usec() - started >= BUILD_BUDGET_USEC:
+				break
 
 	for c in chunks.keys():
-		var distance := _cheb(c, pc)
-		# The retained hysteresis ring prevents rebuild churn at cell boundaries,
-		# but it must not remain a rendered seventh row/column. Node3D visibility
-		# culls the complete chunk subtree while its collision stays ready.
 		var ch := chunks[c] as Chunk
-		ch.visible = distance <= LOAD_R
-		if distance > UNLOAD_R:
+		var show: bool = _wanted.has(c)
+		if ch.visible != show:
+			ch.visible = show
+		if _cheb(c, pc) > UNLOAD_R and not show and not _ahead.has(c):
 			_capture_chunk_runtime(ch)
-			chunks[c].queue_free()
+			ch.queue_free()
 			chunks.erase(c)
+
+	# Keep one decode in flight, between chunk builds. Never consume a request
+	# before it completes or stack first-use decoding with ordinary generation.
+	if _pending_chunk == null and (_chunks_since_prefetch >= 2 or queued.is_empty()):
+		FloorResourcePreloader.request_next()
+		_chunks_since_prefetch = 0
+
+
+func _room_complete_cells(center: Vector2i) -> Dictionary:
+	var cells := {}
+	for dz in range(-LOAD_R, LOAD_R + 1):
+		for dx in range(-LOAD_R, LOAD_R + 1):
+			var at := center + Vector2i(dx, dz)
+			cells[at] = true
+			var corridor := WorldGen.annex_corridor_axis(world_seed, at) if theme == 2 \
+				else WorldGen.corridor(world_seed, at)
+			if corridor == 0:
+				var anchor := WorldGen.annex_room_id(world_seed, at) if theme == 2 \
+					else WorldGen.room_id(world_seed, at)
+				cells[anchor] = true
+	return cells
+
+
+func _refill_queue() -> void:
+	for cells in [_wanted, _ahead]:
+		for c in cells:
+			if not chunks.has(c) and c != _pending_cell:
+				queued[c] = true
+
+
+func _cancel_pending() -> void:
+	if _pending_cell != NO_BROKEN_STATION and (_wanted.has(_pending_cell) or _ahead.has(_pending_cell)):
+		queued[_pending_cell] = true
+	if _pending_chunk != null:
+		_pending_chunk.free()
+		_pending_chunk = null
+	_pending_cell = NO_BROKEN_STATION
+
+
+func _install_chunk(c: Vector2i, chunk: Chunk) -> void:
+	chunk.restore_runtime_state(_runtime_state.subset_for_cells([c]))
+	chunk.set_blackout(blackout)
+	# Added only to complete live chunks: fingerprints of authored geometry
+	# stay comparable and PhotoDirector never observes half-built content.
+	chunk.prepare_runtime_rendering()
+	add_child(chunk)
+	chunks[c] = chunk
+	chunk_built.emit(chunk)
 
 
 func _cheb(a: Vector2i, b: Vector2i) -> int:
@@ -171,6 +267,21 @@ func _cheb(a: Vector2i, b: Vector2i) -> int:
 func _build(c: Vector2i, install := true,
 		topology_state_override := -1) -> Chunk:
 	var t0 := Time.get_ticks_usec()
+	var spec := _build_spec(c, topology_state_override)
+	var ch := Chunk.new(world_seed, c, theme, spec)
+	if not install:
+		ch.restore_runtime_state(_runtime_state.subset_for_cells([c]))
+	if _dev_timing:
+		var ms := float(Time.get_ticks_usec() - t0) / 1000.0
+		if ms > 4.0:
+			print("chunk %s built in %.1f ms (theme %d, style %d)" % [c, ms, theme, ch.style])
+	ch.position = Vector3(c.x * CELL, 0.0, c.y * CELL)
+	if install:
+		_install_chunk(c, ch)
+	return ch
+
+
+func _build_spec(c: Vector2i, topology_state_override := -1) -> ChunkBuildSpec:
 	var spec := ChunkBuildSpec.new()
 	spec.player = player as Player
 	if descent and descent_route != null:
@@ -200,18 +311,7 @@ func _build(c: Vector2i, install := true,
 		spec.broken_station = c == _broken_station_cell()
 		spec.broken_station_tried = descent_broken_station_tried
 		spec.player = player as Player
-	var ch := Chunk.new(world_seed, c, theme, spec)
-	ch.restore_runtime_state(_runtime_state.subset_for_cells([c]))
-	if _dev_timing:
-		var ms := float(Time.get_ticks_usec() - t0) / 1000.0
-		if ms > 4.0:
-			print("chunk %s built in %.1f ms (theme %d, style %d)" % [c, ms, theme, ch.style])
-	ch.position = Vector3(c.x * CELL, 0.0, c.y * CELL)
-	if install:
-		add_child(ch)
-		chunks[c] = ch
-		chunk_built.emit(ch)
-	return ch
+	return spec
 
 
 ## Prepare only rooms that are currently resident. Unloaded changed rooms have
@@ -224,6 +324,7 @@ func stage_rebuild_cells(cells: Array[Vector2i], state_override: int,
 	if not _staged_cells.is_empty() or state_override < 0 \
 			or not when_staged.is_valid():
 		return false
+	_cancel_pending()
 	var unique := {}
 	for at in cells:
 		if chunks.has(at) and is_instance_valid(chunks[at]):
@@ -296,6 +397,7 @@ func _commit_staged_rebuild() -> bool:
 	for at in _staged_cells:
 		var replacement := _staged_replacements[at] as Chunk
 		replacement.descent_topology_state_override = -1
+		replacement.prepare_runtime_rendering()
 		add_child(replacement)
 		chunks[at] = replacement
 		var snapshot := _staged_snapshots.get(at, null) as ChunkRuntimeState
@@ -328,6 +430,7 @@ func _clear_staged_rebuild(free_replacements: bool) -> void:
 
 
 func _exit_tree() -> void:
+	_cancel_pending()
 	if not _staged_cells.is_empty():
 		_discard_staged_rebuild()
 
@@ -397,6 +500,8 @@ func _broken_station_cell() -> Vector2i:
 
 
 func set_blackout(on: bool) -> void:
+	if blackout != on:
+		_cancel_pending()
 	blackout = on
 	for ch in chunks.values():
 		if is_instance_valid(ch):
@@ -476,6 +581,8 @@ func _capture_chunk_runtime(chunk: Chunk) -> void:
 
 
 func set_anomaly(at: Vector2i, kind: int) -> void:
+	if at == _pending_cell:
+		_cancel_pending()
 	anomalies[at] = kind
 	if chunks.has(at) and is_instance_valid(chunks[at]):
 		(chunks[at] as Chunk).activate_anomaly(kind)

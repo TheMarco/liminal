@@ -1,0 +1,26 @@
+{
+  "engine": "Godot 4.6.1 headless",
+  "machine": "Apple M3 Max",
+  "seed": 240721,
+  "measurement": "Main-thread ChunkManager._process work only, separate sequential processes, exact route prewarmed. Simulated 1200-update sprint 60m out and back at 6m/s. Excludes GPU, presentation, player physics and main-game signal listeners.",
+  "rows": [
+    {
+      "phase": "before",
+      "theme": 10,
+      "mean_ms": 0.414,
+      "p95_ms": 1.539,
+      "p99_ms": 9.191,
+      "max_ms": 37.983,
+      "resident_chunks": 30
+    },
+    {
+      "phase": "after",
+      "theme": 10,
+      "mean_ms": 0.47,
+      "p95_ms": 3.458,
+      "p99_ms": 6.361,
+      "max_ms": 16.434,
+      "resident_chunks": 37
+    }
+  ]
+}

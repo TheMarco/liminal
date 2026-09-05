@@ -1,4 +1,8 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
+static var _monolith_tendril_mesh: CylinderMesh
+
+static func clear_runtime_cache() -> void:
+	_monolith_tendril_mesh = null
 ## Theme 10 — the Data Center.
 ##
 ## The monumental civic concrete shell remains, but it has been occupied by an
@@ -148,14 +152,15 @@ func _monolith_tendril(parent: Node3D, a: Vector3, b: Vector3,
 	var d := b - a
 	if d.length_squared() < 0.0004:
 		return
-	var mesh := CylinderMesh.new()
-	mesh.radial_segments = 7
-	mesh.rings = 1
-	mesh.height = 2.0
-	mesh.top_radius = 0.31
-	mesh.bottom_radius = 0.5
+	if _monolith_tendril_mesh == null:
+		_monolith_tendril_mesh = CylinderMesh.new()
+		_monolith_tendril_mesh.radial_segments = 7
+		_monolith_tendril_mesh.rings = 1
+		_monolith_tendril_mesh.height = 2.0
+		_monolith_tendril_mesh.top_radius = 0.31
+		_monolith_tendril_mesh.bottom_radius = 0.5
 	var tendril := MeshInstance3D.new()
-	tendril.mesh = mesh
+	tendril.mesh = _monolith_tendril_mesh
 	tendril.material_override = Mats.bloom_growth()
 	tendril.position = (a + b) * 0.5
 	tendril.quaternion = Quaternion(Vector3.UP, d.normalized())
@@ -728,6 +733,8 @@ func _tunnel_box(pos: Vector3, size: Vector3, part: String,
 		collide := true, mat: Material = null) -> MeshInstance3D:
 	var use_mat: Material = Mats.brutal_structure() if mat == null else mat
 	var mesh := scene.box(pos, size, use_mat, collide)
+	if part in ["side_wall", "opening_header", "vestibule_return"]:
+		scene.occluder_wall(mesh)
 	mesh.set_meta("brutal_tunnel_part", part)
 	mesh.set_meta("brutal_tunnel_height", TUNNEL_HEIGHT)
 	mesh.set_meta("brutal_tunnel_width", TUNNEL_HALF_WIDTH * 2.0)

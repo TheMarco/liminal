@@ -926,6 +926,112 @@ static func _prop_preload_paths() -> Array[String]:
 	return paths
 
 
+## Bounded live prefetch manifests. Required assets still have synchronous
+## fallbacks; this only prepares known floor families ahead of their first use.
+static func theme_prop_paths(p_theme: int) -> Array[String]:
+	var paths: Array[String] = []
+	match p_theme:
+		0:
+			paths.append_array([SLOT_MACHINE_PATH, SLOT_ALT_PATH, CHANGE_MACHINE_PATH])
+			paths.append_array([CASINO_BLACKJACK_PATH, CASINO_ROULETTE_PATH, ROPE_BARRIER_PATH])
+			paths.append("res://models/cc0/Chandelier_03/Chandelier_03_1k.gltf")
+			paths.append("res://models/cc0/bar_chair_round_01/bar_chair_round_01_1k.gltf")
+			paths.append("res://models/cc0/coffee_table_round_01/coffee_table_round_01_1k.gltf")
+			paths.append("res://models/cc0/vintage_grandfather_clock_01/vintage_grandfather_clock_01_1k.gltf")
+			paths.append("res://models/cc0/sofa_03/sofa_03_1k.gltf")
+			paths.append("res://models/cc0/CoffeeTable_01/CoffeeTable_01_1k.gltf")
+			paths.append("res://models/cc0/ArmChair_01/ArmChair_01_1k.gltf")
+			paths.append("res://models/cc0/Ottoman_01/Ottoman_01_1k.gltf")
+			paths.append("res://models/cc0/potted_plant_01/potted_plant_01_1k.gltf")
+		1:
+			paths.append_array([OFFICE_AIR_CONDITIONER_PATH, OFFICE_PHONE_PATH, OFFICE_PRINTER_PATH])
+			paths.append_array([OFFICE_WATER_COOLER_PATH, OFFICE_CHAIR_PATH, OFFICE_TERMINAL_PATH])
+			paths.append_array([OFFICE_BOXES_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
+			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
+			paths.append("res://models/cc0/clipboard/clipboard_1k.gltf")
+			paths.append("res://models/cc0/office_notepads/office_notepads_1k.gltf")
+			paths.append("res://models/cc0/stationery_supplies/stationery_supplies_1k.gltf")
+			paths.append("res://models/cc0/steel_frame_shelves_01/steel_frame_shelves_01_1k.gltf")
+			paths.append("res://models/cc0/drawer_cabinet/drawer_cabinet_1k.gltf")
+			paths.append("res://models/cc0/CoffeeCart_01/CoffeeCart_01_1k.gltf")
+			paths.append("res://models/cc0/coffee_table_round_01/coffee_table_round_01_1k.gltf")
+			paths.append("res://models/cc0/television_02/television_02_1k.gltf")
+			paths.append("res://models/cc0/potted_plant_02/potted_plant_02_1k.gltf")
+			paths.append("res://models/cc0/security_camera_01/security_camera_01_1k.gltf")
+		2:
+			paths.append_array([OFFICE_AIR_CONDITIONER_PATH, ANNEX_EXIT_DOOR_PATH, ANNEX_CHAIR_PATH])
+			paths.append_array([ANNEX_SHELVING_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
+			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
+		4:
+			paths.append_array([AIRPORT_SEATS_PATH, AIRPORT_DEPARTURE_BOARD_PATH, AIRPORT_LUGGAGE_PATH])
+			paths.append_array([CHECKIN_DESK_PATH])
+			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
+			paths.append("res://models/cc0/wooden_picnic_table/wooden_picnic_table_1k.gltf")
+			paths.append("res://models/cc0/CoffeeCart_01/CoffeeCart_01_1k.gltf")
+		5:
+			paths.append_array([ASY_BED_PATH, ASY_GURNEY_PATH, ASY_TROLLEY_PATH])
+			paths.append_array([ASY_BATH_PATH, ASY_SCRUB_SINK_PATH, ASY_NOTICES_PATH])
+			paths.append_array([ASY_AUTOPSY_PATH, IV_DRIP_PATH, CHEMISTRY_GLASSWARE_PATH])
+			paths.append_array(ASY_DOOR_PATHS)
+			paths.append("res://models/asylum/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf")
+			paths.append("res://models/asylum/old_bed_frame/old_bed_frame_1k.gltf")
+			paths.append("res://models/asylum/wheelchair_01/wheelchair_01_1k.gltf")
+			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
+			paths.append("res://models/asylum/medical_box/medical_box_1k.gltf")
+			paths.append("res://models/asylum/Rockingchair_01/Rockingchair_01_1k.gltf")
+			paths.append("res://models/asylum/BarberShopChair_01/BarberShopChair_01_1k.gltf")
+			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
+		6:
+			paths.append_array([LOCKERS_PATH, GYM_LOCKER_PATH, SCH_CLEANING_CART_PATH])
+			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH, CHEMISTRY_GLASSWARE_PATH])
+			paths.append_array([SCH_TOILET_PATH, SCH_SINK_PATH, SCH_URINAL_PATH])
+			paths.append_array([SCH_FOUNTAIN_PATH])
+			paths.append("res://models/cc0/stationery_supplies/stationery_supplies_1k.gltf")
+			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
+			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
+		7:
+			paths.append_array([MALL_PAYPHONE_PATH, MALL_DIRECTORY_PATH, MALL_SHOPPING_CART_PATH])
+			paths.append_array([CITY_BENCH_PATH, FOOD_COURT_SET_PATH, MALL_HOTDOG_PATH])
+			paths.append_array([ROPE_BARRIER_PATH])
+			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
+			paths.append("res://models/cc0/potted_plant_02/potted_plant_02_1k.gltf")
+			paths.append("res://models/cc0/wooden_crate_01/wooden_crate_01_1k.gltf")
+			paths.append("res://models/cc0/sofa_03/sofa_03_1k.gltf")
+			paths.append("res://models/cc0/bar_chair_round_01/bar_chair_round_01_1k.gltf")
+			paths.append("res://models/cc0/CoffeeCart_01/CoffeeCart_01_1k.gltf")
+			paths.append("res://models/cc0/steel_frame_shelves_01/steel_frame_shelves_01_1k.gltf")
+			paths.append("res://models/cc0/plastic_crate_03/plastic_crate_03_1k.gltf")
+			paths.append("res://models/cc0/trashbag/trashbag_1k.gltf")
+		8:
+			paths.append_array([PRISON_DOOR_OLD_PATH, PRISON_BUNK_PATH, PRISON_TOILET_PATH])
+			paths.append_array([PRISON_WALL_PHONE_PATH, DESK_PHONE_PATH])
+			paths.append("res://models/cc0/book_encyclopedia_set_01/book_encyclopedia_set_01_1k.gltf")
+			paths.append("res://models/cc0/can_rusted/can_rusted_1k.gltf")
+			paths.append("res://models/cc0/wooden_crate_02/wooden_crate_02_1k.gltf")
+			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
+			paths.append("res://models/cc0/office_notepads/office_notepads_1k.gltf")
+			paths.append("res://models/cc0/steel_frame_shelves_01/steel_frame_shelves_01_1k.gltf")
+			paths.append("res://models/cc0/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf")
+			paths.append("res://models/cc0/old_tyre/old_tyre_1k.gltf")
+			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
+		9:
+			paths.append_array([POOL_BUOY_PATH, POOL_LADDER_PATH, POOL_CHAIR_PATH])
+			paths.append_array([POOL_LOUNGE_CHAIR_PATH, POOL_JACUZZI_PATH, POOL_LIGHT_PATH])
+		10:
+			paths.append_array([DATA_CENTER_CONSOLE_PATH, DATA_CENTER_RACK_BANK_PATH, DATA_CENTER_RACK_PATH])
+			paths.append_array([DATA_CENTER_NETWORK_RACK_PATH, DATA_CENTER_DETAILED_RACK_PATH, DATA_CENTER_GLASS_SERVER_PATH])
+			paths.append_array([DATA_CENTER_AZURE_SERVER_PATH, BRUTAL_LIGHT_PATH, BLOOM_VINES_PATH])
+			paths.append_array([ANNEX_EXIT_DOOR_PATH])
+			paths.append_array(DATA_CENTER_AC_PATHS)
+		11:
+			paths.append_array([BLOOM_ROOT_PATH, BLOOM_VINES_PATH, BLOOM_FLESH_BLOB_PATH])
+			paths.append_array([BRUTAL_LIGHT_PATH, ANNEX_EXIT_DOOR_PATH, LOCKERS_PATH])
+			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH])
+	if p_theme != 7:
+		paths.append(ALARM_PATH)
+	return paths
+
+
 ## Headless tools exit soon after sampling and may not naturally encounter
 ## every requested prop. Consuming completed requests avoids reporting those
 ## intentionally preloaded resources as leaked audit objects.
@@ -983,6 +1089,7 @@ static func prewarm_theme_content(ws: int, p_theme: int) -> void:
 ## Audit/test teardown for process-lifetime scene/prototype caches.
 static func clear_runtime_caches() -> void:
 	finish_prop_preloads()
+	FloorResourcePreloader.finish()
 	_prop_preloads_requested = false
 	_slot_scene = null
 	_attributed_scenes.clear()
@@ -991,6 +1098,10 @@ static func clear_runtime_caches() -> void:
 	_cc0_scenes.clear()
 	_prewarmed_themes.clear()
 	BLOOM_LEVEL_BUILDER.clear_runtime_cache()
+	ANNEX_LEVEL_BUILDER.clear_runtime_cache()
+	MALL_LEVEL_BUILDER.clear_runtime_cache()
+	BRUTALIST_LEVEL_BUILDER.clear_runtime_cache()
+	POOL_LEVEL_BUILDER.clear_runtime_cache()
 
 
 ## Named process-lifetime asset cache APIs used by the construction façade.
@@ -1013,9 +1124,16 @@ static func cached_scrawl_font(which: int) -> FontFile:
 	return _scrawl_font(which)
 
 
+var _build_stage := 0
+var _build_blackout := false
+var _build_started_usec := 0
+var _occluder_walls: Array[MeshInstance3D] = []
+var _rendering_prepared := false
+
+
 func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
-		p_config: Variant = null) -> void:
-	var build_started := Time.get_ticks_usec()
+		p_config: Variant = null, deferred_build := false) -> void:
+	_build_started_usec = Time.get_ticks_usec()
 	var spec: ChunkBuildSpec
 	if p_config is ChunkBuildSpec:
 		spec = p_config
@@ -1057,7 +1175,7 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	# figure is built during construction, and its own _ready — which sizes the
 	# capsule it moves with — runs before anything outside could set this.
 	anomaly_player = spec.player
-	var requested_blackout := spec.blackout
+	_build_blackout = spec.blackout
 	body = StaticBody3D.new()
 	add_child(body)
 	style = WorldGen.cell_style(wseed, cell, theme)
@@ -1085,51 +1203,88 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	_scene_writer = ChunkSceneWriter.new(self, body)
 	_level_builder = LEVEL_BUILDERS.get(theme, BASE_LEVEL_BUILDER).new(
 		_build_context, _scene_writer)
-	# ceiling follows the room, so a small room feels small and a hall soars
-	var stage_started := Time.get_ticks_usec()
-	_build_floor_ceiling()
-	_profile_stage("floor_ceiling", stage_started)
-	stage_started = Time.get_ticks_usec()
-	_build_walls()
-	_profile_stage("walls", stage_started)
-	if theme == 2:
-		# Annex columns and internal partitions must exist before its ceiling
-		# grid is populated, otherwise a valid tile-centred fixture can still
-		# be cut in half by later architecture.
-		stage_started = Time.get_ticks_usec()
-		_build_props()
-		_profile_stage("props", stage_started)
-		if not is_room_anchor:
-			_level_builder._annex_room_member_architecture()
-		stage_started = Time.get_ticks_usec()
-		_build_lighting()
-		_profile_stage("lighting", stage_started)
-	else:
-		stage_started = Time.get_ticks_usec()
-		_build_lighting()
-		_profile_stage("lighting", stage_started)
-		stage_started = Time.get_ticks_usec()
-		_build_props()
-		_profile_stage("props", stage_started)
-	stage_started = Time.get_ticks_usec()
-	_build_optional_vhs_set()
-	_build_charging_station()
-	_build_bleed_dressing()
-	_build_interactions()
-	_profile_stage("gameplay", stage_started)
-	if mutation_furniture_variant > 0:
-		stage_started = Time.get_ticks_usec()
-		_apply_furniture_variant(mutation_furniture_variant)
-		_profile_stage("furniture_mutation", stage_started)
-	stage_started = Time.get_ticks_usec()
-	SurfaceWear.apply(self, _build_context)
-	_profile_stage("surface_wear", stage_started)
-	if anomaly_kind >= 0:
-		activate_anomaly(anomaly_kind)
-	if requested_blackout:
-		set_blackout(true)
-	_maybe_probe()
-	_profile_stage("TOTAL", build_started)
+	if not deferred_build:
+		while not build_next_stage():
+			pass
+
+
+## Off-tree streaming can stop between authored stages. Direct constructors
+## still finish synchronously, retaining the established tool/build contract.
+func build_next_stage() -> bool:
+	var started := Time.get_ticks_usec()
+	match _build_stage:
+		0:
+			_build_floor_ceiling()
+			_profile_stage("floor_ceiling", started)
+		1:
+			_build_walls()
+			_profile_stage("walls", started)
+		2:
+			if theme == 2:
+				_build_props()
+				if not is_room_anchor:
+					_level_builder._annex_room_member_architecture()
+			else:
+				_build_lighting()
+			_profile_stage("props" if theme == 2 else "lighting", started)
+		3:
+			if theme == 2:
+				_build_lighting()
+			else:
+				_build_props()
+			_profile_stage("lighting" if theme == 2 else "props", started)
+		4:
+			_build_optional_vhs_set()
+			_build_charging_station()
+			_build_bleed_dressing()
+			_build_interactions()
+			_profile_stage("gameplay", started)
+		5:
+			if mutation_furniture_variant > 0:
+				_apply_furniture_variant(mutation_furniture_variant)
+				_profile_stage("furniture_mutation", started)
+		6:
+			SurfaceWear.apply(self, _build_context)
+			_profile_stage("surface_wear", started)
+		7:
+			if anomaly_kind >= 0:
+				activate_anomaly(anomaly_kind)
+			if _build_blackout:
+				set_blackout(true)
+			_maybe_probe()
+			_profile_stage("TOTAL", _build_started_usec)
+	_build_stage = mini(_build_stage + 1, 8)
+	return _build_stage == 8
+
+
+## The allowlist is intentionally conservative: other enclosed floors are
+## measurable with the same diagnostic, but culling can cost more CPU there.
+static var occlusion_themes: Array[int] = [10]
+
+
+## Only explicitly authored opaque walls can occlude. Store references until
+## gameplay cutouts have finished; removed car/door geometry must not leave an
+## invisible occluder behind. Parenting to the surviving wall keeps lifetime,
+## visibility and transforms coupled during streaming and reality changes.
+func record_occluder_wall(mesh: MeshInstance3D) -> void:
+	if theme in occlusion_themes and mesh.mesh is BoxMesh:
+		_occluder_walls.append(mesh)
+
+
+func prepare_runtime_rendering() -> void:
+	if _rendering_prepared:
+		return
+	_rendering_prepared = true
+	for mesh in _occluder_walls:
+		if not is_instance_valid(mesh) or mesh.get_parent() == null:
+			continue
+		var occluder := OccluderInstance3D.new()
+		occluder.name = "StructuralOccluder"
+		var box := BoxOccluder3D.new()
+		box.size = mesh.mesh.get_aabb().size * 0.998
+		occluder.occluder = box
+		mesh.add_child(occluder)
+	_occluder_walls.clear()
 
 
 func _profile_stage(label: String, started_usec: int) -> void:
@@ -3434,6 +3589,7 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		if theme == 2:
 			_level_builder._annex_register_ceiling_obstruction(
 				Vector3(c, 0.0, plane), ln, wall_t, 0.0, y1)
+	record_occluder_wall(wall_mesh)
 	if theme == 9:
 		# Final extents let the audit verify the topology contract: true L ends
 		# stop at their common curved-corner tangent radius, T stubs stop at
@@ -7333,6 +7489,9 @@ static var _cc0_scenes := {}
 
 
 static func _prop_scene(path: String) -> PackedScene:
+	var prepared := FloorResourcePreloader.cached_scene(path)
+	if prepared != null:
+		return prepared
 	if not _prop_preloads_requested:
 		return load(path) as PackedScene
 	var status := ResourceLoader.load_threaded_get_status(path)

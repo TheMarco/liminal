@@ -6,9 +6,37 @@ extends RefCounted
 ## coplanar and could flicker at distance.
 
 static var _straight_bullnose_cache := {}
+static var _mesh_cache := {}
+static var _mesh_cache_order: Array[String] = []
+
+static func clear_runtime_cache() -> void:
+	_mesh_cache.clear()
+	_mesh_cache_order.clear()
+	_straight_bullnose_cache.clear()
+
+static func _cached(key_args: Array, builder: Callable) -> ArrayMesh:
+	var key := var_to_bytes(key_args).hex_encode()
+	if _mesh_cache.has(key):
+		return _mesh_cache[key]
+	var mesh: ArrayMesh = builder.call()
+	_mesh_cache[key] = mesh
+	_mesh_cache_order.append(key)
+	if _mesh_cache_order.size() > 128:
+		_mesh_cache.erase(_mesh_cache_order.pop_front())
+	return mesh
 
 
 static func quarter_annulus(center: Vector2, radial_start: Vector2,
+		sweep: float, inner_radius: float, outer_radius: float,
+		y0: float, y1: float, segments: int) -> ArrayMesh:
+	return _cached(
+		["quarter_annulus", center, radial_start, sweep, inner_radius,
+		outer_radius, y0, y1, segments],
+		func(): return _quarter_annulus_build(
+			center, radial_start, sweep, inner_radius, outer_radius,
+			y0, y1, segments))
+
+static func _quarter_annulus_build(center: Vector2, radial_start: Vector2,
 		sweep: float, inner_radius: float, outer_radius: float,
 		y0: float, y1: float, segments: int) -> ArrayMesh:
 	var st := SurfaceTool.new()
@@ -103,6 +131,17 @@ static func annular_bullnose(center: Vector2, radial_start: Vector2,
 		sweep: float, deck_radius: float, water_radius: float,
 		y_mid: float, height: float, arc_segments: int,
 		nose_segments: int = 8) -> ArrayMesh:
+	return _cached(
+		["annular_bullnose", center, radial_start, sweep, deck_radius,
+		water_radius, y_mid, height, arc_segments, nose_segments],
+		func(): return _annular_bullnose_build(
+			center, radial_start, sweep, deck_radius, water_radius,
+			y_mid, height, arc_segments, nose_segments))
+
+static func _annular_bullnose_build(center: Vector2, radial_start: Vector2,
+		sweep: float, deck_radius: float, water_radius: float,
+		y_mid: float, height: float, arc_segments: int,
+		nose_segments: int = 8) -> ArrayMesh:
 	var profile := _bullnose_profile(
 		deck_radius, water_radius, height, nose_segments)
 	var profile_center := _profile_center(profile)
@@ -179,6 +218,16 @@ static func annular_bullnose(center: Vector2, radial_start: Vector2,
 ## the rounded water nose and the square deck edge remain C1-continuous through
 ## an S bend. `water_side` selects which perpendicular to the path faces water.
 static func path_bullnose(path: Array[Vector2], water_side: float,
+		deck_span: float, water_overhang: float,
+		y_mid: float, height: float, nose_segments: int = 8) -> ArrayMesh:
+	return _cached(
+		["path_bullnose", path, water_side, deck_span, water_overhang,
+		y_mid, height, nose_segments],
+		func(): return _path_bullnose_build(
+			path, water_side, deck_span, water_overhang, y_mid, height,
+			nose_segments))
+
+static func _path_bullnose_build(path: Array[Vector2], water_side: float,
 		deck_span: float, water_overhang: float,
 		y_mid: float, height: float, nose_segments: int = 8) -> ArrayMesh:
 	if path.size() < 2:
@@ -307,6 +356,15 @@ static func _profile_edge_normal(a: Vector2, b: Vector2,
 ## corner and the tangent arc; the two omitted end caps remain buried in the
 ## existing straight walls, avoiding coplanar overlap.
 static func quarter_cove(center: Vector2, radial_start: Vector2,
+		sweep: float, radius: float, corner: Vector2,
+		y0: float, y1: float, segments: int) -> ArrayMesh:
+	return _cached(
+		["quarter_cove", center, radial_start, sweep, radius, corner,
+		y0, y1, segments],
+		func(): return _quarter_cove_build(
+			center, radial_start, sweep, radius, corner, y0, y1, segments))
+
+static func _quarter_cove_build(center: Vector2, radial_start: Vector2,
 		sweep: float, radius: float, corner: Vector2,
 		y0: float, y1: float, segments: int) -> ArrayMesh:
 	var st := SurfaceTool.new()

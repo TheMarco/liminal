@@ -47,6 +47,33 @@ const POOL_JACUZZI_WATER_SIZE := Vector2(2.32, 1.72)
 const POOL_JACUZZI_EXIT_SIZE := Vector2(2.32, 1.72)
 const POOL_JACUZZI_WATER_INSET := 0.12
 
+static var _buoy_material_cache := {}
+static var _jacuzzi_water_mesh: PlaneMesh
+
+static func clear_runtime_cache() -> void:
+	_buoy_material_cache.clear()
+	_jacuzzi_water_mesh = null
+	PoolCornerMesh.clear_runtime_cache()
+	PoolOpeningMesh.clear_runtime_cache()
+
+static func _buoy_material(tint: Color) -> StandardMaterial3D:
+	var key := var_to_bytes(tint).hex_encode()
+	if _buoy_material_cache.has(key):
+		return _buoy_material_cache[key]
+	var material := StandardMaterial3D.new()
+	material.albedo_color = tint
+	material.roughness = 0.34
+	_buoy_material_cache[key] = material
+	return material
+
+static func _jacuzzi_water_plane() -> PlaneMesh:
+	if _jacuzzi_water_mesh == null:
+		_jacuzzi_water_mesh = PlaneMesh.new()
+		_jacuzzi_water_mesh.size = POOL_JACUZZI_WATER_SIZE
+		_jacuzzi_water_mesh.subdivide_width = 8
+		_jacuzzi_water_mesh.subdivide_depth = 8
+	return _jacuzzi_water_mesh
+
 
 func _pool_style_dry_local(pool_style: int) -> bool:
 	# Keep the level builder in lockstep with world generation. Reclassifying
@@ -1526,10 +1553,7 @@ func _pool_float(salt: int) -> void:
 		WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + 7) % Chunk.POOL_BUOY_TINTS.size()]
 	for node in inst.find_children("*", "MeshInstance3D", true, false):
 		var mi = node as MeshInstance3D
-		var m = StandardMaterial3D.new()
-		m.albedo_color = tint
-		m.roughness = 0.34
-		mi.material_override = m
+		mi.material_override = _buoy_material(tint)
 	inst.set_meta("pool_float_tint", tint)
 
 
@@ -1752,12 +1776,9 @@ func _pool_jacuzzi(at: Vector3, yaw: float) -> bool:
 	# ring around it read as pool coping and made the inset tub double-rimmed.
 	# The cutout remains smaller than the authored shell, so that native rim
 	# alone overlaps the deck and hides the structural opening.
-	var water_mesh := PlaneMesh.new()
+	var water_mesh := _jacuzzi_water_plane()
 	# The structural cutout follows the outer rim; the water remains confined
 	# to the inner bath and must not expand with that cutout.
-	water_mesh.size = POOL_JACUZZI_WATER_SIZE
-	water_mesh.subdivide_width = 8
-	water_mesh.subdivide_depth = 8
 	var water := MeshInstance3D.new()
 	water.mesh = water_mesh
 	water.material_override = Mats.pool_water()

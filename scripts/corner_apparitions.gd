@@ -282,13 +282,10 @@ func _show(at: Vector3) -> void:
 	add_child(pivot)
 	_live = pivot
 
-	var quad := MeshInstance3D.new()
+	var quad: GhostVisual = ShadowFigure.make_visual(key)
 	quad.name = "Silhouette"
-	quad.mesh = Chunk.QUAD
 	quad.scale = Vector3(width, height, 1.0)
 	quad.position = Vector3(0, height * 0.5, 0)
-	quad.material_override = ShadowFigure._mat_for(key)
-	quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	quad.set_instance_shader_parameter("fade", 1.0)
 	quad.set_instance_shader_parameter("flip", 0.0)
 	quad.set_instance_shader_parameter("dissolve_seed", _rng.randf())

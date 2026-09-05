@@ -136,10 +136,14 @@ func _run() -> void:
 		var meshes := live.find_children("*", "MeshInstance3D", true, false)
 		var sounds := live.find_children("*", "AudioStreamPlayer3D", true, false)
 		var collisions := live.find_children("*", "CollisionObject3D", true, false)
-		if meshes.size() != 1:
-			failures.append("apparition does not own exactly one silhouette mesh")
-		elif (meshes[0] as MeshInstance3D).material_override == null:
-			failures.append("apparition silhouette has no ghost material")
+		if meshes.size() != 4:
+			failures.append("apparition does not own exactly four silhouette meshes")
+		else:
+			for mesh_node in meshes:
+				var mesh := mesh_node as MeshInstance3D
+				if mesh.material_override == null \
+						or mesh.material_override.shader != GhostVisual.SHADER:
+					failures.append("apparition silhouette layer has wrong ghost material")
 		if sounds.size() != 1 or (sounds[0] as AudioStreamPlayer3D).stream == null:
 			failures.append("apparition reveal has no jump-scare cue")
 		if not collisions.is_empty():

@@ -1,7 +1,7 @@
 class_name ShadowFigure
 extends Node3D
 ## One of them. A real human silhouette (CC0/CC-BY photo-traced cutouts in
-## textures/ghosts/) on a cylindrical billboard, edges eaten by drifting
+## textures/ghosts/) in a curved layered apparition, edges eaten by drifting
 ## noise. Watching it does not stop it and cannot banish it: it walks at you
 ## slowly while you hold it in view, and closes hard the moment you cannot see
 ## it. It follows through several rooms before distance can finally shed it;
@@ -200,6 +200,7 @@ const ANIM_HOLD_GAP_MIN := 1.4
 const ANIM_HOLD_GAP_MAX := 4.2
 
 static var _mats := {}
+static var _layered_mats := {}
 ## Shared across every figure: a scare that fires twice in a minute is a
 ## sound effect, not a scare. Wall-clock so it survives level switches.
 static var _last_scare := -1000.0
@@ -225,9 +226,9 @@ var _burn_time := BURN_TIME
 var _unseen_min := UNSEEN_MIN
 var _chase_limit := CHASE_DOOR_LIMIT
 
-var _quad: MeshInstance3D
+var _quad: GhostVisual
 ## Matter it sheds and darkness it gathers: true-3D wisp particles and a local
-## fog volume anchor the flat card into the room's space. Both follow `fade`.
+## fog volume surround the layered body. Both follow `fade`.
 var _wisps: GPUParticles3D
 var _gloom: FogVolume
 ## Private stream. World dressing draws from the global generator while chunks
@@ -300,6 +301,28 @@ static func _apply_look(m: ShaderMaterial, tape: bool) -> void:
 	m.set_shader_parameter("density", TAPE_DENSITY if tape else 1.0)
 
 
+## The approved body uses consistent density in both recording modes. Keep its
+## material separate from the screen-absorbing walk-by shadows in _mat_for().
+static func make_visual(texname: String) -> GhostVisual:
+	if _layered_mats.has(texname):
+		var cached: ShaderMaterial = _layered_mats[texname]
+		var layout: Array = FLIPBOOKS.get(texname, [1, 1, 1, 1.0])
+		return GhostVisual.new(cached, int(layout[2]), float(layout[3]))
+	var m := ShaderMaterial.new()
+	m.shader = GhostVisual.SHADER
+	var ext := "webp" if FLIPBOOKS.has(texname) else "png"
+	m.set_shader_parameter("tex", load("res://textures/ghosts/%s.%s" % [texname, ext]))
+	m.set_shader_parameter("noise_tex", Mats.detail_noise())
+	var fb: Array = FLIPBOOKS.get(texname, [1, 1, 1, 1.0])
+	m.set_shader_parameter("flip_cols", float(fb[0]))
+	m.set_shader_parameter("flip_rows", float(fb[1]))
+	m.set_shader_parameter("flip_count", float(fb[2]))
+	m.set_shader_parameter("base_cut", float(BASE_CUT.get(texname, 0.0)))
+	m.set_shader_parameter("keep_colour", 1.0 if COLOURED.has(texname) else 0.0)
+	_layered_mats[texname] = m
+	return GhostVisual.new(m, int(fb[2]), float(fb[3]))
+
+
 static func _mat_for(texname: String) -> ShaderMaterial:
 	if _mats.has(texname):
 		return _mats[texname]
@@ -351,13 +374,10 @@ func _ready() -> void:
 	var w: float = qh * float(body[0]) * float(look[2])
 	_floats = look[4]
 	_eye_h = h * 0.78
-	_quad = MeshInstance3D.new()
-	_quad.mesh = Chunk.QUAD
+	_quad = make_visual(look[0])
 	_quad.scale = Vector3(w, qh, 1.0)
-	_quad.material_override = _mat_for(look[0])
 	_quad.position = Vector3(0, qh * (0.5 - float(body[1]))
 		+ (0.06 if _floats else 0.0), 0)
-	_quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# ShaderMaterial is cached per texture; per-instance uniforms keep mirrored
 	# poses and dissolves independent when several use the same cutout.
 	_quad.set_instance_shader_parameter("fade", 1.0)
@@ -425,9 +445,8 @@ func _ready() -> void:
 		sh.play()
 
 
-## The figure's 3D footprint: shed wisps and gathered darkness. The card is a
-## billboard; these two are not, and their parallax is what convinces the eye
-## the figure stands IN the room rather than being pasted at its depth.
+## The figure's additional 3D presence: shed wisps and gathered darkness.
+## These retain their existing world-space movement around the layered body.
 func _build_presence() -> void:
 	_wisps = GPUParticles3D.new()
 	_wisps.amount = 14

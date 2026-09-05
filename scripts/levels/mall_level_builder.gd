@@ -1,5 +1,12 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 
+static var _painted_sign_materials: Array[StandardMaterial3D] = []
+static var _fountain_meshes: Dictionary = {}
+
+static func clear_runtime_cache() -> void:
+	_painted_sign_materials.clear()
+	_fountain_meshes.clear()
+
 
 func _mall_payphone_bank(dir: int, count: int) -> void:
 	var facing = scene.wall_facing(dir)
@@ -276,11 +283,16 @@ func _mall_painted_sign(dir: int, plane: float, uc: float, index: int,
 	# Fit to whichever bound binds first, never stretching the artwork.
 	var h: float = minf(Chunk.MALL_SIGN_MAX_H, Chunk.MALL_SIGN_MAX_W / aspect)
 	var w: float = h * aspect
-	var mat = StandardMaterial3D.new()
-	mat.albedo_texture = tex
-	mat.roughness = 0.86
-	mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	while _painted_sign_materials.size() < Chunk.MALL_SIGN_FACES.size():
+		_painted_sign_materials.append(null)
+	var mat := _painted_sign_materials[index]
+	if mat == null:
+		mat = StandardMaterial3D.new()
+		mat.albedo_texture = tex
+		mat.roughness = 0.86
+		mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+		_painted_sign_materials[index] = mat
 	var n = -1.0 if dir == 0 or dir == 2 else 1.0
 	# The shutter housing's front face stands 0.665m off the plane. Anything
 	# shallower than that has its lower half swallowed by the housing, which is
@@ -825,6 +837,11 @@ func _mall_atrium() -> void:
 
 
 func _mall_fountain_water_disc(radius: float, segments: int) -> ArrayMesh:
+	var key := "%s:%s" % [radius, segments]
+	if _fountain_meshes.has(key):
+		return _fountain_meshes[key]
+	if _fountain_meshes.size() >= 64:
+		_fountain_meshes.clear()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in maxi(segments, 12):
@@ -840,7 +857,9 @@ func _mall_fountain_water_disc(radius: float, segments: int) -> ArrayMesh:
 				p.x / (radius * 2.0) + 0.5,
 				p.z / (radius * 2.0) + 0.5))
 			st.add_vertex(p)
-	return st.commit()
+	var mesh := st.commit()
+	_fountain_meshes[key] = mesh
+	return mesh
 
 
 func _mall_service() -> void:
