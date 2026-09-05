@@ -1858,11 +1858,11 @@ func _switch_music(level: int) -> void:
 		tw.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
 
 
-## With the post pass on, render a 480-line widescreen source (≈854x480 at
-## 16:9, bilinear). The CRT material resamples that onto its 720x320 signal
-## grid; the RECOVERED TAPE material runs an 854x480 grid so it degrades the
-## real SD picture — bandwidth, not pixel count. With the tube off the world
-## returns to full native resolution.
+## With post enabled, render the 3D source at 480 lines (about 854x480 at
+## 16:9). Recovered tape targets a 720x480 signal; its separate CRT display
+## runs at the full viewport resolution, preserving fine phosphor detail.
+## scaling_3d_scale affects only the world, not the CanvasItem post passes.
+## With the tube off, the world returns to full native resolution.
 func _apply_scaling() -> void:
 	var vp := get_viewport()
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR

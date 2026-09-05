@@ -96,6 +96,7 @@ AUDITS=(
 	"cross_video_review|tools/audit_cross_video_review.gd|"
 	"descent_ritual|tools/audit_descent_ritual.gd|"
 	"optional_vhs|tools/audit_optional_vhs.gd|"
+	"post_process|tools/audit_post_process.gd|"
 	"ghost_room_contract|tools/audit_ghost_room_contract.gd|"
 	"horror_director|tools/audit_horror_director.gd|"
 	"corner_apparitions|tools/audit_corner_apparitions.gd|"

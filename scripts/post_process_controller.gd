@@ -4,8 +4,10 @@ extends Node
 ## Gameplay reports pressure and camera hits; it does not manipulate shaders.
 
 enum Mode { CRT, FOUND_FOOTAGE }
+enum GlitchKind { TRACKING, COLOR_UNLOCK, DROPOUT, RF_STATIC, SYNC_SLIP }
 
 var _overlay: ColorRect
+var _tube_display: Control
 var _crt_material: ShaderMaterial
 var _found_footage_material: ShaderMaterial
 var _mode := Mode.CRT
@@ -21,10 +23,10 @@ var _glitch_until := 0.0
 var _damage_until := 0.0
 var _glitch_active := false
 var _glitch_major := false
-var _glitch_jitter := 0.006
-var _glitch_tracking := 0.18
-var _glitch_aberration := 0.0035
-var _glitch_noise := 0.10
+var _glitch_started := 0.0
+var _glitch_kind := GlitchKind.TRACKING
+var _glitch_strength := 0.0
+var _glitch_origin := 0.6
 var _damage_intensity := 0.0
 ## Nearness of the closest hostile figure, seen or not, 0..1. Fast attack,
 ## slow release: the footage breaks before the cause is in frame and takes
@@ -38,63 +40,93 @@ const PRESENCE_ATTACK := 4.0    # per second toward a higher target
 const PRESENCE_RELEASE := 0.35  # per second toward a lower target
 const BURST_SECONDS := 0.11     # ~2-3 frames of catastrophic loss
 const POST_SHADER := preload("res://shaders/post.gdshader")
-const FOUND_FOOTAGE_RESOLUTION := Vector2(640.0, 360.0)
+const CRT_DISPLAY_SHADER := preload("res://shaders/crt_display.gdshader")
+const FOUND_FOOTAGE_RESOLUTION := Vector2(720.0, 480.0)
 ## 240 visible rows at the ritual TV's physical tube aspect.
 const TV_TAPE_RESOLUTION := Vector2(344.0, 240.0)
 
 
-## One source of truth for recovered-footage rendering. Full-screen gameplay
-## and the television's private video viewport both request this material, so
-## tuning the tape look can no longer leave the two playback paths out of sync.
+## Base signal preset used by the in-world televisions. The live feed builds
+## on this through make_live_found_footage_material(), so added player-camera
+## wear can be tuned without changing the recordings displayed on those TVs.
 static func make_found_footage_material(
 		signal_resolution := FOUND_FOOTAGE_RESOLUTION) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = POST_SHADER
+	material.set_shader_parameter("tape_signal", true)
 	# With the auto-iris as the main level control, this modest fixed boost keeps
 	# dark rooms readable without double-exposing bright interiors.
 	material.set_shader_parameter("bright_boost", 1.38)
 	material.set_shader_parameter("resolution", signal_resolution)
-	material.set_shader_parameter("noise_level", 0.018)
-	material.set_shader_parameter("interference_amount", 0.06)
-	material.set_shader_parameter("aberation_amount", 0.12)
-	material.set_shader_parameter("roll_line_amount", 0.08)
-	material.set_shader_parameter("roll_speed", 2.0)
-	material.set_shader_parameter("grille_amount", 0.03)
-	material.set_shader_parameter("scan_line_strength", -8.0)
-	material.set_shader_parameter("pixel_strength", -1.5)
-	material.set_shader_parameter("warp_amount", 0.13)
-	material.set_shader_parameter("vignette_amount", 0.6)
-	material.set_shader_parameter("vignette_intensity", 0.5)
-	material.set_shader_parameter("tube_edge_feather", 0.018)
-	material.set_shader_parameter("jitter_amount", 0.05)
-	material.set_shader_parameter("jitter_speed", 9.0)
-	material.set_shader_parameter("wobble_amount", 0.06)
-	material.set_shader_parameter("tear_amount", 0.05)
-	material.set_shader_parameter("ghost_amount", 0.2)
-	material.set_shader_parameter("flicker_amount", 0.15)
-	material.set_shader_parameter("saturation", 0.78)
+	material.set_shader_parameter("noise_level", 0.026)
+	material.set_shader_parameter("interference_amount", 0.035)
+	material.set_shader_parameter("aberation_amount", 0.10)
+	material.set_shader_parameter("jitter_amount", 0.035)
+	material.set_shader_parameter("wobble_amount", 0.07)
+	material.set_shader_parameter("tear_amount", 0.12)
+	material.set_shader_parameter("ghost_amount", 0.16)
+	material.set_shader_parameter("flicker_amount", 0.12)
+	material.set_shader_parameter("saturation", 0.86)
 	material.set_shader_parameter("contrast", 1.0)
-	material.set_shader_parameter("black_crush", 0.004)
-	material.set_shader_parameter("head_switch_amount", 0.25)
-	material.set_shader_parameter("dropout_amount", 0.1)
-	material.set_shader_parameter("scan_line_amount", 1.0)
-	material.set_shader_parameter("dv_blur", 0.5)
-	material.set_shader_parameter("dv_chroma_blur", 0.8)
+	material.set_shader_parameter("black_crush", 0.002)
+	material.set_shader_parameter("head_switch_amount", 0.38)
+	material.set_shader_parameter("dropout_amount", 0.12)
+	material.set_shader_parameter("dv_blur", 0.7)
+	material.set_shader_parameter("dv_chroma_blur", 0.86)
 	material.set_shader_parameter("highlight_rolloff", 1.0)
 	material.set_shader_parameter("highlight_knee", 0.78)
-	material.set_shader_parameter("auto_exposure", 1.0)
+	material.set_shader_parameter("auto_exposure", 0.85)
 	material.set_shader_parameter("ae_target", 0.21)
 	material.set_shader_parameter("signal_fps", 29.97)
-	material.set_shader_parameter("chroma_delay", 0.8)
-	material.set_shader_parameter("overscan", 0.03)
-	material.set_shader_parameter("black_lift", 0.01)
-	material.set_shader_parameter("field_amount", 0.7)
-	material.set_shader_parameter("line_noise", 0.012)
-	material.set_shader_parameter("chroma_noise", 0.5)
-	material.set_shader_parameter("bloom_amount", 0.35)
-	material.set_shader_parameter("bloom_threshold", 0.72)
-	material.set_shader_parameter("color_balance", Vector3(1.03, 1.0, 0.96))
+	material.set_shader_parameter("chroma_delay", 1.3)
+	material.set_shader_parameter("black_lift", 0.007)
+	material.set_shader_parameter("field_amount", 0.35)
+	material.set_shader_parameter("line_noise", 0.006)
+	material.set_shader_parameter("chroma_noise", 0.45)
+	material.set_shader_parameter("color_balance", Vector3(1.015, 1.0, 0.985))
 	return material
+
+
+## Extra wear belongs to the player's live feed. In-world recordings retain
+## the existing factory preset and never receive these extra disturbances.
+static func make_live_found_footage_material() -> ShaderMaterial:
+	var material := make_found_footage_material()
+	material.set_shader_parameter("noise_level", 0.038)
+	material.set_shader_parameter("line_noise", 0.009)
+	material.set_shader_parameter("dropout_amount", 0.22)
+	material.set_shader_parameter("head_switch_amount", 0.5)
+	material.set_shader_parameter("tape_speckle", 0.22)
+	# Colour trails the brightness edge, with a gentle mismatch between its
+	# two components. The shader lets existing corruption/presence widen it.
+	material.set_shader_parameter("chroma_delay", 2.4)
+	material.set_shader_parameter("chroma_misalignment", 0.65)
+	material.set_shader_parameter("rgb_split_px", 2.0)
+	return material
+
+
+## Second pass: copy the decoded tape signal before reconstructing the tube.
+## Both gameplay and in-world recordings use the same ordered pair of passes.
+static func add_crt_display_pass(parent: Node,
+		signal_resolution := FOUND_FOOTAGE_RESOLUTION) -> Control:
+	var display := Control.new()
+	display.name = "CRTDisplayPass"
+	display.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	display.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var copy := BackBufferCopy.new()
+	copy.name = "TapeSignalCopy"
+	copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	display.add_child(copy)
+	var face := ColorRect.new()
+	face.name = "Display"
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var material := ShaderMaterial.new()
+	material.shader = CRT_DISPLAY_SHADER
+	material.set_shader_parameter("signal_resolution", signal_resolution)
+	face.material = material
+	display.add_child(face)
+	parent.add_child(display)
+	return display
 
 
 func setup(host: Node, found_footage := false, enabled := true) -> void:
@@ -107,18 +139,18 @@ func setup(host: Node, found_footage := false, enabled := true) -> void:
 	_overlay = ColorRect.new()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# One shader, two characters: the clean tube runs its defaults, the
-	# recovered tape runs the same glass driven far past spec — coarser
-	# grid, soft beam, heavy interference, wandering chroma, a tape-speed
-	# roll. The gritty dials are the baseline the glitch machinery rides on.
+	# Shared presentation shader, with a separate analog signal path for tape.
+	# The clean CRT retains its original beam and raster response.
 	_crt_material = ShaderMaterial.new()
 	_crt_material.shader = POST_SHADER
 	_crt_material.set_shader_parameter("bright_boost", 1.4)
-	_found_footage_material = make_found_footage_material()
+	_found_footage_material = make_live_found_footage_material()
 	_overlay.material = _material_for_mode()
 	_overlay.visible = _enabled and not _tape_hold
 	layer.add_child(_overlay)
+	_tube_display = add_crt_display_pass(layer)
 	host.add_child(layer)
+	_sync_visible()
 	_schedule_glitches(Time.get_ticks_msec() * 0.001)
 	_apply_found_footage_state()
 
@@ -140,6 +172,8 @@ func set_tape_playback(on: bool) -> void:
 func _sync_visible() -> void:
 	if _overlay != null:
 		_overlay.visible = _enabled and not _tape_hold
+	if _tube_display != null:
+		_tube_display.visible = _enabled and not _tape_hold and _mode == Mode.FOUND_FOOTAGE
 
 
 func toggle_enabled() -> bool:
@@ -153,6 +187,7 @@ func toggle_mode() -> String:
 		return mode_label()
 	_mode = Mode.FOUND_FOOTAGE if _mode == Mode.CRT else Mode.CRT
 	_overlay.material = _material_for_mode()
+	_sync_visible()
 	if _mode == Mode.FOUND_FOOTAGE:
 		_schedule_glitches(Time.get_ticks_msec() * 0.001)
 		_apply_found_footage_state()
@@ -236,7 +271,9 @@ func update() -> void:
 	if _glitch_active and now >= _glitch_until:
 		_glitch_active = false
 		changed = true
-	if _mode == Mode.FOUND_FOOTAGE and _enabled:
+	if _glitch_active:
+		changed = true
+	if _mode == Mode.FOUND_FOOTAGE and _enabled and not _tape_hold:
 		if _minor_at <= 0.0 or _major_at <= 0.0:
 			_schedule_glitches(now)
 		if not _glitch_active:
@@ -256,92 +293,110 @@ func _material_for_mode() -> ShaderMaterial:
 
 
 func _schedule_glitches(now: float) -> void:
-	# Glitches are EVENTS: at the old 1.5-5s minor cadence the picture never
-	# sat still and the owner called it "way too much" (2026-08-19).
-	_minor_at = now + randf_range(9.0, 22.0)
-	_major_at = now + randf_range(45.0, 90.0)
+	# More event variety and tape wear in the live feed, with quiet intervals
+	# between faults so the underlying CRT image remains readable.
+	_minor_at = now + randf_range(5.0, 11.0)
+	_major_at = now + randf_range(28.0, 55.0)
 	_glitch_active = false
 
 
 func _start_glitch(major: bool, now: float) -> void:
 	_glitch_active = true
 	_glitch_major = major
+	_glitch_started = now
+	_glitch_kind = randi_range(0, GlitchKind.SYNC_SLIP) as GlitchKind
+	_glitch_origin = randf_range(0.15, 0.82)
+	_glitch_strength = randf_range(0.65, 0.9) if major else randf_range(0.24, 0.48)
+	_glitch_until = now + (randf_range(0.18, 0.45) if major else randf_range(0.08, 0.20))
 	if major:
-		_glitch_until = now + randf_range(0.12, 0.42)
-		_glitch_jitter = randf_range(0.85, 1.0)
-		_glitch_tracking = randf_range(0.6, 1.0)
-		_glitch_noise = randf_range(0.16, 0.28)
-		_glitch_aberration = randf_range(0.95, 1.0)
-		_major_at = now + randf_range(45.0, 90.0)
-	else:
-		_glitch_until = now + randf_range(0.04, 0.16)
-		_glitch_jitter = randf_range(0.4, 0.6)
-		_glitch_aberration = randf_range(0.85, 0.95)
-		_minor_at = now + randf_range(9.0, 22.0)
+		_major_at = now + randf_range(28.0, 55.0)
+	# A major event also buys a quiet interval instead of immediately releasing
+	# an overdue minor glitch. Keep the colour fringe continuous between events.
+	_minor_at = now + randf_range(5.0, 11.0)
 	_apply_found_footage_state()
 
 
-## The tape's live state, in the shared shader's dials: interference for
-## jitter, roll for tracking damage, noise_level for static, aberation for
-## chroma splits. Corruption raises the resting grime; glitches spike it.
+## Short attack, decaying recovery: tape transport settles after a disturbance.
+## Kept pure so deterministic QA can exercise attack/recovery without waiting.
+static func glitch_envelope(progress: float) -> float:
+	return smoothstep(0.0, 0.12, progress) * (1.0 - smoothstep(0.25, 1.0, progress))
+
+
 func _apply_found_footage_state() -> void:
 	if _found_footage_material == null:
 		return
-	var interference := lerpf(0.06, 0.45, _signal_corruption)
-	var roll := lerpf(0.08, 0.4, _signal_corruption)
-	var noise := lerpf(0.018, 0.07, _signal_corruption)
-	var aberration := lerpf(0.12, 0.7, _signal_corruption)
-	var jitter := lerpf(0.05, 0.4, _signal_corruption)
-	var wobble := lerpf(0.06, 0.45, _signal_corruption)
-	var tear := lerpf(0.05, 0.4, _signal_corruption)
-	var dropout := lerpf(0.1, 0.5, _signal_corruption)
-	var saturation := lerpf(0.78, 0.55, _signal_corruption)
-	var flicker := 0.15
+	var interference := lerpf(0.035, 0.32, _signal_corruption)
+	var noise := lerpf(0.038, 0.085, _signal_corruption)
+	var aberration := lerpf(0.10, 0.65, _signal_corruption)
+	var jitter := lerpf(0.035, 0.28, _signal_corruption)
+	var wobble := lerpf(0.07, 0.4, _signal_corruption)
+	var tear := lerpf(0.12, 0.5, _signal_corruption)
+	var dropout := lerpf(0.22, 0.7, _signal_corruption)
+	var saturation := lerpf(0.86, 0.62, _signal_corruption)
+	var flicker := 0.12
 	var loss := 0.0
-	# Presence ladder. The tape WHISPERS danger — the player must still be
-	# able to see the figure to survive the watched creep, so the ladder
-	# tops out well short of obscuring (owner: "way too much", 2026-08-19).
-	# Near (0..0.6): a little chroma and iris unrest. Very near (0.6..1):
-	# some tracking unrest and a thin band of loss.
+	var tracking := 0.0
+	var tracking_pos := 0.6
+	var color_loss := 0.0
+	var slip := 0.0
+	var rf_static := 0.0
+	var sync := 0.0
+	var speckle := lerpf(0.22, 0.65, _signal_corruption)
+	# Preserve the diegetic threat cue while keeping silhouettes readable.
 	if _presence > 0.0:
 		var near := clampf(_presence / 0.6, 0.0, 1.0)
 		var very := clampf((_presence - 0.6) / 0.4, 0.0, 1.0)
 		aberration = maxf(aberration, lerpf(aberration, 0.45, near))
 		wobble = maxf(wobble, lerpf(wobble, 0.3, near))
 		interference = maxf(interference, lerpf(interference, 0.25, near))
-		flicker = lerpf(0.15, 0.8, near)
+		flicker = lerpf(0.12, 0.65, near)
 		tear = maxf(tear, lerpf(tear, 0.4, very))
-		jitter = maxf(jitter, lerpf(jitter, 0.35, very))
 		noise = maxf(noise, lerpf(noise, 0.045, very))
 		loss = very * 0.12
-	if _burst_until > 0.0:
-		interference = 1.0
-		tear = 1.0
-		jitter = 1.0
-		noise = 0.2
-		aberration = 1.0
-		loss = 1.0
 	if _glitch_active:
-		interference = maxf(interference, _glitch_jitter)
-		aberration = maxf(aberration, _glitch_aberration)
-		jitter = 1.0
-		if _glitch_major:
-			roll = maxf(roll, _glitch_tracking)
-			noise = maxf(noise, _glitch_noise)
-			wobble = 1.0
-			tear = 1.0
-			dropout = 1.0
+		var now := Time.get_ticks_msec() * 0.001
+		var phase := clampf((now - _glitch_started)
+			/ maxf(_glitch_until - _glitch_started, 0.001), 0.0, 1.0)
+		var strength := glitch_envelope(phase) * _glitch_strength
+		tracking_pos = clampf(_glitch_origin + phase * 0.14, 0.0, 1.0)
+		match _glitch_kind:
+			GlitchKind.TRACKING:
+				tracking = strength
+				tracking_pos = clampf(_glitch_origin + phase * 0.14, 0.0, 1.0)
+				if _glitch_major:
+					slip = sin(phase * TAU) * strength * 0.65
+			GlitchKind.COLOR_UNLOCK:
+				color_loss = strength
+				aberration += strength * 0.3
+			GlitchKind.DROPOUT:
+				dropout = maxf(dropout, strength)
+				tracking = strength * 0.25
+				tracking_pos = _glitch_origin
+				speckle = maxf(speckle, strength)
+			GlitchKind.RF_STATIC:
+				rf_static = strength
+				color_loss = strength * 0.4
+				speckle = maxf(speckle, strength)
+			GlitchKind.SYNC_SLIP:
+				sync = strength
+				slip = sin(phase * TAU * 1.5) * strength
+				tracking = strength * 0.45
+				rf_static = strength * 0.35
+	if _burst_until > 0.0:
+		tracking = 1.0
+		tracking_pos = 0.5
+		jitter = 0.8
+		noise = 0.12
+		color_loss = 0.7
+		loss = 0.85
 	if _damage_intensity > 0.0:
-		aberration = 1.0
-		noise = maxf(noise, lerpf(0.12, 0.26, _damage_intensity))
-		jitter = 1.0
-		wobble = 1.0
-	_found_footage_material.set_shader_parameter(
-		"interference_amount", interference)
-	_found_footage_material.set_shader_parameter("roll_line_amount", roll)
+		tracking = maxf(tracking, 0.65 * _damage_intensity)
+		noise = maxf(noise, lerpf(0.05, 0.10, _damage_intensity))
+		jitter = maxf(jitter, 0.5)
+		wobble = maxf(wobble, 0.5)
+	_found_footage_material.set_shader_parameter("interference_amount", interference)
 	_found_footage_material.set_shader_parameter("noise_level", noise)
-	_found_footage_material.set_shader_parameter(
-		"aberation_amount", aberration)
+	_found_footage_material.set_shader_parameter("aberation_amount", aberration)
 	_found_footage_material.set_shader_parameter("jitter_amount", jitter)
 	_found_footage_material.set_shader_parameter("wobble_amount", wobble)
 	_found_footage_material.set_shader_parameter("tear_amount", tear)
@@ -349,3 +404,10 @@ func _apply_found_footage_state() -> void:
 	_found_footage_material.set_shader_parameter("saturation", saturation)
 	_found_footage_material.set_shader_parameter("flicker_amount", flicker)
 	_found_footage_material.set_shader_parameter("signal_loss", loss)
+	_found_footage_material.set_shader_parameter("tracking_error", tracking)
+	_found_footage_material.set_shader_parameter("tracking_y", tracking_pos)
+	_found_footage_material.set_shader_parameter("chroma_loss", color_loss)
+	_found_footage_material.set_shader_parameter("vertical_slip", slip)
+	_found_footage_material.set_shader_parameter("rf_noise", rf_static)
+	_found_footage_material.set_shader_parameter("sync_error", sync)
+	_found_footage_material.set_shader_parameter("tape_speckle", speckle)

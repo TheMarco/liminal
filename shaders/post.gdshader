@@ -27,6 +27,10 @@ One shader serves both recording modes — the controller builds a clean CRT
 material and a gritty RECOVERED TAPE material from it. The `entity_*`
 uniforms are the figure-interference halo; only the tape material is ever
 fed a non-zero amount.
+
+Recovered-tape revision (2026-09-04): vhs_signal.gdshaderinc owns the analog
+Y/C path. The legacy fragment below remains the clean CRT path so its
+presentation is preserved when switching modes.
 */
 
 shader_type canvas_item;
@@ -81,8 +85,8 @@ uniform float signal_loss :hint_range(0.0, 1.0) = 0.0;     // bands of lost sync
 // DV softness: consumer digital-tape optics and 4:1:1 chroma. Detail is
 // low-passed a little sideways; colour is smeared several emulated pixels
 // wide, so edges stay roughly where they are but hues bleed past them.
-uniform float dv_blur :hint_range(0.0, 1.0) = 0.0;          // luma softness
-uniform float dv_chroma_blur :hint_range(0.0, 1.0) = 0.0;   // chroma smear width
+uniform float dv_blur :hint_range(0.0, 1.0) = 0.0;          // legacy name: luma bandwidth
+uniform float dv_chroma_blur :hint_range(0.0, 1.0) = 0.0;   // legacy name: chroma bandwidth
 uniform float chroma_delay :hint_range(-3.0, 3.0) = 0.0;     // chroma lags luma, source px
 // Signal model (2026-08-19). signal_fps quantizes every tape-side random
 // process to video frames (0 = continuous); the CRT's own behaviour keeps
@@ -243,7 +247,12 @@ float roll_line(vec2 uv){
     return roll_line * roll_line_amount;
 }
 
+#include "res://shaders/vhs_signal.gdshaderinc"
+
 void fragment(){
+    if (tape_signal) {
+        COLOR = vec4(recovered_tape(SCREEN_UV, SCREEN_PIXEL_SIZE, FRAGCOORD.xy), 1.0);
+    } else {
     vec2 pix = FRAGCOORD.xy;
     float aspect = SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x;
     vec2 pos = warp(SCREEN_UV, aspect);
@@ -523,4 +532,5 @@ void fragment(){
 
     COLOR.rgb = clr;
     COLOR.a = 1.0;
+    }
 }

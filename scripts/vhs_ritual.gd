@@ -55,6 +55,7 @@ var _video: VideoStreamPlayer
 var _video_vp: SubViewport
 var _video_aspect: AspectRatioContainer
 var _video_post: ColorRect
+var _video_crt: Control
 var _cam: Camera3D
 var _prev_cam: Camera3D
 var _viewer: Player
@@ -233,6 +234,8 @@ func _ensure_video() -> bool:
 	_video_post.material = PostProcessController.make_found_footage_material(
 		PostProcessController.TV_TAPE_RESOLUTION)
 	_video_vp.add_child(_video_post)
+	_video_crt = PostProcessController.add_crt_display_pass(
+		_video_vp, PostProcessController.TV_TAPE_RESOLUTION)
 	_screen_mat.set_shader_parameter("tape_tex", _video_vp.get_texture())
 	return true
 

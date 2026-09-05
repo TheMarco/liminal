@@ -320,6 +320,16 @@ func _audit_playback_modes(shorts: Array[String], longs: Array[String],
 			or (optional._video_post.material as ShaderMaterial).shader.resource_path \
 				!= "res://shaders/post.gdshader":
 		failures.append("TV glass did not receive the shared footage shader")
+	if optional._video_crt == null:
+		failures.append("TV glass is missing the CRT display pass")
+	else:
+		var display := optional._video_crt.get_node("Display") as ColorRect
+		var display_material := display.material as ShaderMaterial
+		if display_material.shader != PostProcessController.CRT_DISPLAY_SHADER:
+			failures.append("TV glass did not use the shared CRT display shader")
+		if display_material.get_shader_parameter("signal_resolution") \
+				!= PostProcessController.TV_TAPE_RESOLUTION:
+			failures.append("TV signal and CRT display resolutions differ")
 	var interrupted_tape := optional._tape_path
 	optional.reset_tape()
 	if not optional._tape_path.is_empty():

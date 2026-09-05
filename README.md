@@ -84,11 +84,26 @@ doorway leaves can be opened and closed, and rare physical elevator panels
 carry you onward. Local lights occasionally sag, an unused lift may chime down
 the hall, and inaccessible rooms sometimes knock from the other side.
 
-The whole feed plays back as **720×480 interlaced footage on a widescreen CRT
-tube**: barrel curvature, beam scanlines, a
-Trinitron aperture grille, RGB convergence error, halation, interlace
-flicker, a rolling scan band, and rounded tube corners. Press **V** to
-look at the world with your own eyes instead.
+The default **RECOVERED TAPE** feed uses two passes: a VHS signal followed by
+a CRT display. The signal has separate brightness and color bandwidth,
+horizontal color bleed, fine field-paced noise, and gentle transport wobble.
+The live camera also has drifting red/blue separation, visible around bright
+edges and lettering while the underlying brightness detail stays aligned.
+The display uses gamma-aware Gaussian beam reconstruction, an RGB slot mask,
+beam misconvergence, phosphor bloom, glass diffusion, and curved edges. Its
+beam and mask are filtered for the output resolution. This is an original
+Godot implementation informed by [CRT-Royale's display model](https://docs.libretro.com/shader/crt_royale/).
+
+Tape faults are brief events: tracking tears, momentary color loss, and
+compensated dropout streaks, with head-switch noise confined to the bottom
+edge. The full-screen feed adds RF snow bursts, sync slips, and short
+white/dark tape streaks. Minor disturbances occur about every 5–11 seconds;
+larger ones every 28–55 seconds, with quick attack and a settling recovery. The 720×480 signal
+approximates interlaced playback without storing previous fields. **B**
+switches to the original clean CRT look; **V** toggles the filter. In-world
+televisions retain their 344×240 signal in a 1280×894 render target. The
+full-screen CRT pass uses the full window resolution; only its 3D source is
+rendered at 480 lines.
 
 In Descent, you are not alone. **The figures belong to Descent and only to
 Descent** — Wander is a peaceful place to explore and photograph the building,
