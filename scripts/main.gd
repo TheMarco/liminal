@@ -9,7 +9,7 @@ extends Node3D
 ##   7 — an abandoned shopping mall with every shutter down (theme 7)
 ##   8 — an island prison whose cell blocks never end (theme 8)
 ##   9 — flooded white-tile Poolrooms (theme 9)
-##   0 — the monumental concrete Monolith (theme 10)
+##   0 — the monumental concrete Data Center (theme 10)
 ##   - — the organic mirror-campus called the Bloom (theme 11)
 ## The number key is an index into WorldGen.THEMES, NOT the theme id — theme 3
 ## was a derelict theme park, cut, and the rest keep their original ids so every
@@ -23,29 +23,6 @@ extends Node3D
 const DEFAULT_SPAWN := Vector3(6.0, 0.15, 2.0)
 const MUTATION_REVEAL_EFFECT := preload(
 	"res://scripts/mutation_reveal_effect.gd")
-# Safe arrival offsets within a cell, per theme, for portal jumps. Only a hint:
-# _safe_arrival() sweeps outward from here for somewhere the player actually
-# fits. WorldGen.portal() can return any live theme, so every entry in
-# WorldGen.THEMES needs one -- Pool Rooms was added as theme 9 without one, and
-# arriving through a portal into the Poolrooms read PORTAL_ARRIVE[9] and failed
-# the jump. PORTAL_ARRIVE_DEFAULT keeps the next added theme from doing it again.
-#
-# The y component is clearance ABOVE the destination cell's floor, matching
-# ArrivalSafety.STANDING_CLEARANCE -- not an absolute world height. It reads the
-# same as it always did, but _safe_arrival now adds Chunk.cell_floor_h() to it,
-# which is what makes the Poolrooms' raised dry slab arrive correctly.
-const PORTAL_ARRIVE_DEFAULT := Vector3(3.2, 0.15, 2.0)
-const PORTAL_ARRIVE := {
-	0: Vector3(3.2, 0.15, 2.0), 1: Vector3(3.2, 0.15, 2.0),
-	2: Vector3(3.2, 0.15, 2.0),
-	4: Vector3(3.2, 0.15, 2.0), 5: Vector3(3.2, 0.15, 2.0),
-	6: Vector3(3.2, 0.15, 2.0),
-	7: Vector3(3.2, 0.15, 2.0), 8: Vector3(3.2, 0.15, 2.0),
-	9: Vector3(3.2, 0.15, 2.0),
-	10: Vector3(3.2, 0.15, 2.0),
-	11: Vector3(3.2, 0.15, 2.0),
-}
-
 ## What the ambient presence systems are allowed to do right now. Only three
 ## combinations of {figures, whispers, heartbeat} are ever wanted, and they were
 ## previously spelled out three lines at a time in eleven places -- including the
@@ -75,7 +52,6 @@ var _switching: bool:
 		if _transitions != null:
 			_transitions.set_switching(value)
 var _fade: ColorRect
-var _warp: AudioStreamPlayer
 var _post_process: PostProcessController
 var _post_enabled := true
 var _found_footage_requested := false
@@ -106,6 +82,7 @@ var _photo_director: PhotoDirector
 var _photo_camera: PhotoCamera
 var _photo_debug := false
 var _photo_sweep_hinted := false
+var _pending_photo_message := ""
 var _osd_layer: CanvasLayer
 ## Two independent reasons hide the OSD; the layer shows only when neither
 ## holds (tape playback, raised camera).
@@ -123,6 +100,7 @@ var _descent_preparing := false
 var _pending_new_descent_intro := false
 var _attention_override := -1.0
 var _blackout_ambient := -1.0
+var _blackout_office_environment := {}
 var _blackout_locate_cue := 0
 var _pending_mutation_reveal := false
 var _pending_mutation_reveal_at := Vector3.INF
@@ -222,11 +200,12 @@ func _ready() -> void:
 		else:
 			spawn = _safe_arrival(active_level, Vector2i.ZERO, DEFAULT_SPAWN)
 	print("It wants you to stay — seed %d" % world_seed)
-	# Audits and screenshot helpers intentionally quit after a few seconds;
-	# don't leave background resource workers alive during their forced exit.
-	if not opts.quick_exit():
-		Chunk.request_prop_preloads()
-	add_to_group("portal_listener")
+	# Do not queue the whole game's imported scenes here. Godot 4.6 can leave
+	# the main thread blocked in `load_threaded_get()` when many complicated
+	# scenes are requested together, so the exported Windows build never reaches
+	# its first frame. Props are resource-cached by `_prop_scene()` when their
+	# current floor actually needs them; this keeps launch work bounded to the
+	# first resident neighbourhood instead of every level in the game.
 	add_to_group("level_manager")
 	add_to_group("descent_listener")
 	# Dev (--test-ride): simulate a real lift ride — teleport to the route
@@ -370,6 +349,7 @@ func _ready() -> void:
 	_photo_camera.enabled = descent
 	add_child(_photo_camera)
 	_photo_camera.photo_documented.connect(_on_photo_documented)
+	_photo_camera.review_finished.connect(_on_photo_review_finished)
 	_photo_camera.first_raise.connect(
 		func(): _show_event_message("PHOTOGRAPH WHAT IS WRONG"))
 	_music = AudioStreamPlayer.new()
@@ -569,8 +549,7 @@ func _configure_level_transitions() -> void:
 	port.sealed_descent_arrival = func() -> bool:
 		return descent and descent_route != null \
 			and descent_route.origin_wall >= 0
-	_transitions.configure(port, _fade, _warp, DEFAULT_SPAWN,
-		PORTAL_ARRIVE, PORTAL_ARRIVE_DEFAULT)
+	_transitions.configure(port, _fade, DEFAULT_SPAWN)
 
 
 func _reset_transition_presence() -> void:
@@ -677,11 +656,6 @@ func _confirm_return_to_title() -> void:
 
 func _switch_level(level: int) -> void:
 	_transitions.switch_wander(level)
-
-
-## Stepping into a swirling portal: emerge in the same cell of another world.
-func _on_portal(dest: int, cellv: Vector2i) -> void:
-	_transitions.enter_portal(dest, cellv)
 
 
 ## Called by physical lift panels built into selected generated rooms.
@@ -900,12 +874,13 @@ func descent_photo_refusal_caption() -> String:
 func _on_photo_documented(_anomaly_id: String, count: int,
 		required: int, caption: String) -> void:
 	# The circle on the print says where; the caption names the wrongness —
-	# without it a counted shot of something subtle read as arbitrary.
+	# without it a counted shot of something subtle read as arbitrary. Queue it
+	# until the opaque print review lowers the camera and reveals the HUD again.
 	if caption.is_empty():
-		_show_event_message("PHOTOGRAPH %d / %d" % [count, required])
+		_pending_photo_message = "PHOTOGRAPH %d / %d" % [count, required]
 	else:
-		_show_event_message("PHOTOGRAPH %d / %d — %s" % [
-			count, required, caption])
+		_pending_photo_message = "PHOTOGRAPH %d / %d — %s" % [
+			count, required, caption]
 	# The last photograph gets a heading without waiting for a tape refusal:
 	# at REQUIRED-1 the EVIDENCE counter comes up on its own (2026-08-19 —
 	# hunting the final anomaly blind was the feature's last frustration).
@@ -923,6 +898,13 @@ func _on_photo_documented(_anomaly_id: String, count: int,
 			and _photo_director != null and run != null:
 		_descent_progress.record_photo_ids(run.floor_idx,
 			_photo_director.documented_ids())
+
+
+func _on_photo_review_finished() -> void:
+	if _pending_photo_message.is_empty():
+		return
+	_show_event_message(_pending_photo_message, false, 4.0)
+	_pending_photo_message = ""
 
 
 func _update_photo_line(count: int, required: int) -> void:
@@ -1295,7 +1277,7 @@ func _on_descent_lift() -> void:
 	var next_theme := run.theme()
 	# Route/reality planning happens only after the fade reaches black.
 	descent_route = null
-	await _jump_to(next_theme, Vector3.INF, false, true)
+	await _jump_to(next_theme, Vector3.INF, true)
 	_begin_descent_floor()
 
 
@@ -1430,16 +1412,40 @@ func _on_descent_blackout(on: bool) -> void:
 	if not descent or cm == null:
 		return
 	cm.set_blackout(on)
+	if is_instance_valid(ambience):
+		ambience.set_powered(not on)
 	if on:
 		if _blackout_ambient < 0.0:
 			_blackout_ambient = we.environment.ambient_light_energy
 		we.environment.ambient_light_energy = 0.003
+		# Office lighting leans heavily on bright SDFGI bounce, pale distance fog
+		# and its background fill. Hiding the fixtures alone leaves those three
+		# sources looking like live power, so suppress them for this floor while
+		# preserving the exact authored values for restoration.
+		if active_level == 1 and _blackout_office_environment.is_empty():
+			_blackout_office_environment = {
+				"sdfgi_energy": we.environment.sdfgi_energy,
+				"fog_light_energy": we.environment.fog_light_energy,
+				"background_energy_multiplier": \
+					we.environment.background_energy_multiplier,
+			}
+			we.environment.sdfgi_energy = 0.0
+			we.environment.fog_light_energy = 0.01
+			we.environment.background_energy_multiplier = 0.01
 		_play_descent_cue(SoundBank.thud(), -7.0)
 		_show_event_message("BLACKOUT — STAND STILL · THE TORCH STILL WORKS", true)
 	else:
 		if _blackout_ambient >= 0.0:
 			we.environment.ambient_light_energy = _blackout_ambient
 			_blackout_ambient = -1.0
+		if not _blackout_office_environment.is_empty():
+			we.environment.sdfgi_energy = float(
+				_blackout_office_environment["sdfgi_energy"])
+			we.environment.fog_light_energy = float(
+				_blackout_office_environment["fog_light_energy"])
+			we.environment.background_energy_multiplier = float(
+				_blackout_office_environment["background_energy_multiplier"])
+			_blackout_office_environment.clear()
 		_blackout_locate_cue = 0
 		if _pending_mutation_reveal:
 			_pending_mutation_reveal = false
@@ -1724,7 +1730,7 @@ func _resume_descent_at(floor_idx: int) -> void:
 	_dying = false
 	_blackout_locate_cue = 0
 	descent_route = null
-	await _jump_to(run.theme(), Vector3.INF, false, true)
+	await _jump_to(run.theme(), Vector3.INF, true)
 	player.grab_look()
 	player.set_process_unhandled_input(true)
 	_begin_descent_floor()
@@ -1786,9 +1792,8 @@ func _safe_arrival(level: int, cellv: Vector2i, base: Vector3) -> Vector3:
 		level, cellv, base, _level_seed(level))
 
 
-func _jump_to(level: int, pos: Vector3, via_portal: bool, exact := false,
-		yaw := NAN) -> void:
-	await _transitions.jump_to(level, pos, via_portal, exact, yaw)
+func _jump_to(level: int, pos: Vector3, exact := false, yaw := NAN) -> void:
+	await _transitions.jump_to(level, pos, exact, yaw)
 
 
 func _settle_initial_arrival() -> void:
@@ -2090,11 +2095,6 @@ func _build_ui() -> void:
 	_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	cl.add_child(_fade)
 	add_child(cl)
-	_warp = AudioStreamPlayer.new()
-	_warp.bus = SoundBank.GAME_BUS
-	_warp.stream = SoundBank.warp()
-	_warp.volume_db = -6.0
-	add_child(_warp)
 	_apply_hud_scaling()
 
 
@@ -2150,7 +2150,8 @@ func _on_interaction_prompt(text: String) -> void:
 		_interact_panel.visible = not text.is_empty()
 
 
-func _show_event_message(text: String, alert := false) -> void:
+func _show_event_message(text: String, alert := false,
+		hold_seconds := 2.2) -> void:
 	if _event_hint == null or _event_panel == null:
 		return
 	VhsOsd.set_ink(_event_hint, VhsOsd.RED if alert else VhsOsd.INK)
@@ -2160,7 +2161,7 @@ func _show_event_message(text: String, alert := false) -> void:
 	_event_panel.modulate.a = 0.0
 	_event_tween = create_tween()
 	_event_tween.tween_property(_event_panel, "modulate:a", 0.96, 0.18)
-	_event_tween.tween_interval(2.2)
+	_event_tween.tween_interval(hold_seconds)
 	_event_tween.tween_property(_event_panel, "modulate:a", 0.0, 0.7)
 
 
@@ -2251,7 +2252,7 @@ func _prepare_descent(entry: int) -> void:
 	_events.descent_mode = true
 	_set_presence(Presence.SILENT)
 	_set_mode_hint()
-	await _jump_to(run.theme(), Vector3.INF, false, true)
+	await _jump_to(run.theme(), Vector3.INF, true)
 	_descent_preparing = false
 	if is_instance_valid(_title):
 		_title.set_descent_ready()

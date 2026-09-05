@@ -92,7 +92,7 @@ Descent has eleven fixed floors:
 7. Asylum
 8. Poolrooms
 9. Annex
-10. Monolith
+10. Data Center
 11. Bloom / Upside Down
 
 The first ten floors use the objective-room ritual. Bloom has no Cross tape
@@ -249,7 +249,7 @@ The levels are not equally difficult.
 Threat equals persistent player attention plus floor pressure, clamped to one.
 At maximum threat, successful ambient ghost intervals can fall to roughly
 2.45–6.3 seconds. During the lift wait, the spawn scale is forced to 0.6 early
-and approximately 0.33 on Monolith, making the vigil the floor's deliberate
+and approximately 0.33 in the Data Center, making the vigil the floor's deliberate
 combat peak.
 
 The Poolrooms also halve walking speed while chest-deep in water. Theme order

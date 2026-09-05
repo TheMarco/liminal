@@ -96,7 +96,7 @@ static func _bloom(env: Environment) -> void:
 static func _brutalist(env: Environment) -> void:
 	# Cold light falls through tall concrete volumes into a near-black horizon.
 	# Strong contact occlusion gives the deep beams their mass; SSR carries the
-	# black water courts and damp floor without turning the room glossy overall.
+	# steel busways and cabinet faces without turning the concrete floor glossy.
 	env.background_color = Color(0.005, 0.007, 0.009)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.43, 0.50, 0.55)

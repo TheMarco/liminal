@@ -124,8 +124,8 @@ const POOL_STAIRS := 95     # a wide tiled stair descending into the water
 const POOL_GALLERY := 96    # piers and a mezzanine walkway with handrails
 const POOL_CISTERN := 97    # landmark: a vast dim hall of piers and skylights
 
-# The Monolith. A civic megastructure of board-formed concrete, deep beams,
-# black reflecting courts and impossible upper galleries. Theme 10 deliberately
+# The Data Center. A civic megastructure of board-formed concrete, deep beams,
+# dense machine aisles and impossible upper galleries. Theme 10 deliberately
 # sits outside the 1-9 floor strip: Wander reaches it with the 0 key.
 const BRUTAL_PASSAGE := 100
 const BRUTAL_HALL := 101
@@ -913,7 +913,7 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 		# nothing interrupts a running corridor — not even a door frame
 		return {"wall": false, "full_open": true, "t": 6.0, "w": 4.0, "exit_sign": false}
 	# inside one room there is simply nothing there
-	# Monolith corridors are a real inserted circulation shell. A side that
+	# Data Center corridors are a real inserted circulation shell. A side that
 	# happens to share a room id still needs a cased connection through that
 	# shell; opening the whole twelve metres exposes the inaccessible flank.
 	if room_id(ws, cell) == room_id(ws, cell + DIRV[dir]) \
@@ -1089,40 +1089,10 @@ static func corridor(ws: int, cell: Vector2i) -> int:
 	return 0
 
 
-## Swirling portal to another theme. Returns the destination theme, or -1.
-## Portals only open in each theme's roomiest style so the set pieces stay
-## clear, and never in the spawn cell.
-static func portal(ws: int, cell: Vector2i, theme := 0) -> int:
-	if cell == Vector2i.ZERO:
-		return -1
-	var st := cell_style(ws, cell, theme)
-	var ok := false
-	match theme:
-		0: ok = st == STYLE_EMPTY
-		1: ok = st == OFFICE_EMPTY
-		2: ok = st == ANNEX_QUIET
-		4: ok = st == AIR_HALL
-		5: ok = st == ASY_DAYROOM
-		6: ok = st == SCH_GYM
-		7: ok = st == MALL_ATRIUM
-		8: ok = st == PRISON_GUARD
-		9: ok = st == POOL_DECK
-		10: ok = st == BRUTAL_HALL
-		11: ok = st == BLOOM_COMMONS
-	if not ok:
-		return -1
-	# Preserve Wander's cross-floor portal contract while keeping the minimalist
-	# Annex genuinely sparse: about one percent of its cells qualify, versus the
-	# denser set-piece floors' established rate.
-	var portal_p := 0.04 if theme == 2 else 0.30
-	if r01(ws, cell.x, cell.y, 501) > portal_p:
-		return -1
-	# pick any OTHER live theme; THEMES is sparse (3 was the theme park)
-	var others: Array[int] = []
-	for t in THEMES:
-		if t != theme:
-			others.append(t)
-	return others[int(r01(ws, cell.x, cell.y, 502) * (float(others.size()) - 0.01))]
+## Legacy compatibility predicate. Traversable cross-floor portals were retired;
+## Wander now changes floors only through its number keys and physical lifts.
+static func portal(_ws: int, _cell: Vector2i, _theme := 0) -> int:
+	return -1
 
 
 ## Rare working lift facade in a quiet, unsplit single-cell room. Keeping the

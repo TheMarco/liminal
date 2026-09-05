@@ -26,6 +26,78 @@ and remove it from the distributed build.
 
 ## Attributed work
 
+### `server_v2_console.glb`
+
+- **Title:** `Server V2 +console`
+- **Creator:** [FlevasGR](https://sketchfab.com/FlevasGR)
+- **Source:** <https://sketchfab.com/3d-models/server-v2-console-f24594ece9634cec9c1210c041838371>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Model geometry and PBR materials are retained; runtime re-centres, scales and rotates it for the theme-10 data center. Godot-extracted embedded textures remain adjacent.
+- **Local record:** [`models/cc_by/server_v2_console/SOURCE.md`](models/cc_by/server_v2_console/SOURCE.md)
+
+### `server_racking_system.glb`
+
+- **Title:** `Server Racking System`
+- **Creator:** [wpanayides](https://sketchfab.com/mcpanayides)
+- **Source:** <https://sketchfab.com/3d-models/server-racking-system-6fe2cacf836b4aed96c650b286db5486>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Geometry and materials are retained; runtime re-centres, scales and rotates it for the theme-10 Data Center. Embedded textures extracted by Godot remain adjacent where applicable.
+- **Local record:** [`models/cc_by/server_racking_system/SOURCE.md`](models/cc_by/server_racking_system/SOURCE.md)
+
+### `server.glb`
+
+- **Title:** `Server`
+- **Creator:** [JmPrsh153](https://sketchfab.com/JmPrsh153)
+- **Source:** <https://sketchfab.com/3d-models/server-754e568abf1846ca96cee73e87d88c60>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Geometry and materials are retained; runtime re-centres, scales and rotates it for the theme-10 Data Center. Embedded textures extracted by Godot remain adjacent where applicable.
+- **Local record:** [`models/cc_by/server/SOURCE.md`](models/cc_by/server/SOURCE.md)
+
+### `tall_server_of_base_with_azure_lane_island.glb`
+
+- **Title:** `Tall server of base with azure lane island`
+- **Creator:** [Network manager](https://sketchfab.com/netmanager)
+- **Source:** <https://sketchfab.com/3d-models/tall-server-of-base-with-azure-lane-island-cfcb307fcfb341708710a6fe28a7d616>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Geometry and materials are retained; runtime re-centres, scales and rotates it for the theme-10 Data Center. Embedded textures extracted by Godot remain adjacent where applicable.
+- **Local record:** [`models/cc_by/tall_server_of_base_with_azure_lane_island/SOURCE.md`](models/cc_by/tall_server_of_base_with_azure_lane_island/SOURCE.md)
+
+### `server_rack.glb`
+
+- **Title:** `Server Rack`
+- **Creator:** [JamieDTran](https://sketchfab.com/JamieDTran)
+- **Source:** <https://sketchfab.com/3d-models/server-rack-4fbfda083c8a4bb79ffd4ebccc21c380>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Model geometry and PBR materials are retained; runtime re-centres, scales and rotates it for the theme-10 data center. Godot-extracted embedded textures remain adjacent.
+- **Local record:** [`models/cc_by/server_rack/SOURCE.md`](models/cc_by/server_rack/SOURCE.md)
+
+### `data_center_server_rack.glb`
+
+- **Title:** `Data Center Server Rack`
+- **Creator:** [EntropyNine](https://sketchfab.com/entropy9ine)
+- **Source:** <https://sketchfab.com/3d-models/data-center-server-rack-01b49d9d1f694ba5b41e4b2b0e10d16e>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Model geometry and PBR materials are retained; runtime re-centres, scales and rotates it for the theme-10 data center. Godot-extracted embedded textures remain adjacent.
+- **Local record:** [`models/cc_by/data_center_server_rack/SOURCE.md`](models/cc_by/data_center_server_rack/SOURCE.md)
+
+### `network_server_rack.glb`
+
+- **Title:** `Network Server Rack`
+- **Creator:** [Khoa Nguyen](https://sketchfab.com/ngdkh)
+- **Source:** <https://sketchfab.com/3d-models/network-server-rack-3b15fb8779274844b54e63a40194d450>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Model geometry and PBR materials are retained; runtime re-centres, scales and rotates it for the theme-10 data center. Godot-extracted embedded textures remain adjacent.
+- **Local record:** [`models/cc_by/network_server_rack/SOURCE.md`](models/cc_by/network_server_rack/SOURCE.md)
+
+### `air_conditioners.glb`
+
+- **Title:** `air conditioners`
+- **Creator:** [Lora](https://sketchfab.com/Lora_o)
+- **Source:** <https://sketchfab.com/3d-models/air-conditioners-65417369a2724c9ebf06e7698238a856>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** The original collection is retained. Its three complete floor condenser units are spatially extracted into individual `.scn` scenes by `tools/extract_air_conditioners.gd`, with the source parent rotation baked and every unit centred and bottom-aligned. Geometry, UVs, colour/alpha and normal maps are retained; the legacy specular/gloss workflow is converted to one lightweight engine-native painted-metal material shared by the three scenes. Godot-extracted embedded textures remain adjacent.
+- **Local record:** [`models/cc_by/air_conditioners/SOURCE.md`](models/cc_by/air_conditioners/SOURCE.md)
+
 ### `old_school_vcr.glb`
 
 - **Title:** `Old School VCR`
@@ -90,7 +162,7 @@ and remove it from the distributed build.
 - **Source:** <https://sketchfab.com/3d-models/fluorescent-light-fixtures-4x-4096px2-2a05034d61dc49bf81b33de44add7aa8>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - **Modifications:** The four authored designs are selected individually,
-  centred and ceiling-mounted throughout the Monolith. Their PBR/emissive
+  centred and ceiling-mounted throughout the Data Center. Their PBR/emissive
   materials are retained and paired with deterministic room lights; dead and
   flickering cells isolate emission state per instance.
 - **Local record:** [`models/cc_by/fluorescent_light_fixtures/SOURCE.md`](models/cc_by/fluorescent_light_fixtures/SOURCE.md)
@@ -633,17 +705,6 @@ supplied by the project owner and are used only as embedded game content.
   corridor run is too short for a full bank.
 - **Local record:** [`models/cc_by/gym_locker/SOURCE.md`](models/cc_by/gym_locker/SOURCE.md)
 
-#### `wall_telephone.glb`
-
-- **Title:** `Old Wall Mounted Telephone.`
-- **Creator:** [ShepDes](https://sketchfab.com/ShepDes)
-- **Source:** <https://sketchfab.com/3d-models/old-wall-mounted-telephone-d7efe01f8f51469c821407c9e248c519>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** Authored in centimetres; scaled to 0.38 m and hung on
-  a prison visitation divider, replacing a generated plate, keypad,
-  receiver and cord.
-- **Local record:** [`models/cc_by/wall_telephone/SOURCE.md`](models/cc_by/wall_telephone/SOURCE.md)
-
 #### `sink.glb`
 
 - **Title:** `Sink`
@@ -783,7 +844,7 @@ to recognize the artists.
 - **License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
 - **Use:** Furniture, fixtures and environmental props across the game;
   board-formed, structural and damaged-floor concrete PBR surfaces in the
-  Monolith; and Pine Roots, wet mud, and wrinkled leather-derived tissue in
+  Data Center; and Pine Roots, wet mud, and wrinkled leather-derived tissue in
   the Bloom.
 - **Per-asset inventory:** [`models/cc0/SOURCES.md`](models/cc0/SOURCES.md) and
   [`models/asylum/SOURCES.md`](models/asylum/SOURCES.md), plus

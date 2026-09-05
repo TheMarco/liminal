@@ -46,7 +46,7 @@ const FLOOR_COUNT := 11
 const THEME_NAMES := {
 	0: "the casino", 1: "the office", 2: "the Annex", 4: "the airport",
 	5: "the asylum", 6: "the school", 7: "the mall", 8: "the prison",
-	9: "the Poolrooms", 10: "the Monolith", 11: "the Upside Down",
+	9: "the Poolrooms", 10: "the Data Center", 11: "the Upside Down",
 }
 const ARRIVAL_GRACE := 8.0
 const FLOOR_PRESSURE := [0.0, 0.07, 0.14, 0.21, 0.28,
@@ -95,11 +95,11 @@ const LIFT_WAIT_LONG_FLOOR := 6     # the asylum
 ## What a floor's theme does to pacing knobs that already exist. Multipliers
 ## on the baseline; a theme missing from the table is 1.0 across the board.
 ## This is authoring, not difficulty scaling: the prison's power fails often
-## and briefly, the Monolith is slow, sparse and heavy.
+## and briefly, the Data Center is slow, dense and heavy.
 const THEME_MODS := {
 	8: {"blackout_due": 0.70, "blackout_len": 0.80},              # the prison
 	10: {"blackout_due": 1.15, "blackout_len": 1.10,
-		"grace": 1.35, "figures": 1.35},                          # the Monolith
+		"grace": 1.35, "figures": 1.35},                          # the Data Center
 }
 
 var floor_idx := 0

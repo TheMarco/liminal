@@ -207,22 +207,27 @@ func _mall_unit(dir: int, plane: float, uc: float, w: float, salt: int) -> void:
 	scene.surface_facing_box(dir, plane, 0.24, uc, gt / 2.0, w - 0.5, gt, 0.44, Mats.charcoal())
 	# floor bulkhead riser
 	scene.surface_facing_box(dir, plane, 0.47, uc, 0.175, w - 0.4, 0.35, 0.12, Mats.mall_trim())
+	var shutter: Node3D
 	if state == 0:
-		scene.surface_facing_box(dir, plane, 0.50, uc, (0.06 + gt) / 2.0, w - 0.5, gt - 0.06, 0.05,
+		shutter = scene.surface_facing_box(dir, plane, 0.50, uc, (0.06 + gt) / 2.0, w - 0.5, gt - 0.06, 0.05,
 			Mats.mall_shutter())
+		shutter.set_meta("surface_wear_prop", "mall_shutter")
 		scene.surface_facing_box(dir, plane, 0.50, uc, 0.10, w - 0.5, 0.08, 0.07, Mats.mall_trim())
 	elif state == 1:
 		# stuck three-quarters down: a black gap breathes underneath
-		scene.surface_facing_box(dir, plane, 0.50, uc, (1.1 + gt) / 2.0, w - 0.5, gt - 1.1, 0.05,
+		shutter = scene.surface_facing_box(dir, plane, 0.50, uc, (1.1 + gt) / 2.0, w - 0.5, gt - 1.1, 0.05,
 			Mats.mall_shutter())
+		shutter.set_meta("surface_wear_prop", "mall_shutter")
 		scene.surface_facing_box(dir, plane, 0.50, uc, 1.06, w - 0.5, 0.08, 0.07, Mats.mall_trim())
 	else:
 		# dead glass over the dark: three bays, mullions, a push-bar door
 		var bw = (w - 0.5) / 3.0
+		var glazing: Node3D
 		for b in 3:
 			var bc = uc - (w - 0.5) / 2.0 + bw * (float(b) + 0.5)
-			scene.surface_facing_box(dir, plane, 0.50, bc, 0.35 + (gt - 0.35) / 2.0, bw - 0.06,
+			glazing = scene.surface_facing_box(dir, plane, 0.50, bc, 0.35 + (gt - 0.35) / 2.0, bw - 0.06,
 				gt - 0.35, 0.02, Mats.mall_glass())
+			glazing.set_meta("surface_wear_prop", "glazing")
 		for mx in [-1.5, -0.5, 0.5, 1.5]:
 			scene.surface_facing_box(dir, plane, 0.50, uc + mx * bw, gt / 2.0 + 0.175, 0.06,
 				gt - 0.35, 0.07, Mats.mall_trim())
@@ -704,7 +709,8 @@ func _mall_foodcourt() -> void:
 		v.rotation.y = yw
 		v.set_meta("mall_foodcourt_vendor", true)
 		scene.add_node(v)
-		scene.model_rounded_box(v, Vector3(0, 0.62, 4.65), Vector3(7.4, 1.24, 0.8), Mats.mall_trim(), 0.05)
+		var food_counter = scene.model_rounded_box(v, Vector3(0, 0.62, 4.65), Vector3(7.4, 1.24, 0.8), Mats.mall_trim(), 0.05)
+		food_counter.set_meta("surface_wear_prop", "mall_food_counter")
 		scene.model_rounded_box(v, Vector3(0, 1.28, 4.65), Vector3(7.6, 0.08, 0.95), Mats.sch_white(), 0.02)
 		# tray slide
 		for tr in 3:

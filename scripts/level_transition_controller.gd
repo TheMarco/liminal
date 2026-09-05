@@ -4,9 +4,6 @@ extends Node
 
 var _port: LevelTransitionPort
 var _fade: ColorRect
-var _warp: AudioStreamPlayer
-var _portal_arrivals: Dictionary
-var _portal_arrival_default: Vector3
 var _default_spawn: Vector3
 var _switching := false
 var _saved_positions: Dictionary = {}
@@ -19,15 +16,11 @@ func _exit_tree() -> void:
 
 
 func configure(port: LevelTransitionPort, fade: ColorRect,
-		warp: AudioStreamPlayer, default_spawn: Vector3,
-		portal_arrivals: Dictionary, portal_arrival_default: Vector3) -> void:
+		default_spawn: Vector3) -> void:
 	assert(port != null and port.is_valid())
 	_port = port
 	_fade = fade
-	_warp = warp
 	_default_spawn = default_spawn
-	_portal_arrivals = portal_arrivals.duplicate(true)
-	_portal_arrival_default = portal_arrival_default
 
 
 func is_switching() -> bool:
@@ -53,16 +46,7 @@ func switch_wander(level: int) -> void:
 	var pos: Vector3 = _saved_positions.get(level, Vector3.INF)
 	if pos == Vector3.INF:
 		pos = safe_arrival(level, Vector2i.ZERO, _default_spawn)
-	jump_to(level, pos, false)
-
-
-func enter_portal(destination: int, cell: Vector2i) -> void:
-	if bool(_port.descent_mode.call()) or _switching \
-			or destination == int(_port.active_level.call()):
-		return
-	var base: Vector3 = _portal_arrivals.get(
-		destination, _portal_arrival_default)
-	jump_to(destination, safe_arrival(destination, cell, base), true)
+	jump_to(level, pos)
 
 
 ## Convert a cell-local arrival hint into a world-space point, including the
@@ -104,7 +88,7 @@ static func safe_arrival_for_seed(level: int, cell: Vector2i, base: Vector3,
 	return pos
 
 
-func jump_to(level: int, requested_position: Vector3, via_portal: bool,
+func jump_to(level: int, requested_position: Vector3,
 		exact := false, yaw := NAN) -> void:
 	_switching = true
 	var player_node: Player = _port.player.call()
@@ -112,11 +96,8 @@ func jump_to(level: int, requested_position: Vector3, via_portal: bool,
 		player_node.stop_charging()
 	if not bool(_port.descent_mode.call()):
 		_saved_positions[int(_port.active_level.call())] = player_node.position
-	if via_portal:
-		_warp.play()
 	var fade_out := create_tween()
-	fade_out.tween_property(
-		_fade, "color:a", 1.0, 0.16 if via_portal else 0.3)
+	fade_out.tween_property(_fade, "color:a", 1.0, 0.3)
 	await fade_out.finished
 
 	var outgoing: Node3D = _port.level_root.call()
@@ -165,8 +146,7 @@ func jump_to(level: int, requested_position: Vector3, via_portal: bool,
 		player_node.rotation.y = yaw
 	await get_tree().process_frame
 	var fade_in := create_tween()
-	fade_in.tween_property(
-		_fade, "color:a", 0.0, 0.45 if via_portal else 0.5)
+	fade_in.tween_property(_fade, "color:a", 0.0, 0.5)
 	await fade_in.finished
 	_switching = false
 

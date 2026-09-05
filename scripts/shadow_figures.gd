@@ -168,7 +168,7 @@ func adopt(f: ShadowFigure) -> void:
 	spawned.emit()
 
 
-## Level switch or portal jump: whatever was standing there stays behind.
+## Level switch: whatever was standing there stays behind.
 func despawn() -> void:
 	for f in _figs:
 		if is_instance_valid(f):

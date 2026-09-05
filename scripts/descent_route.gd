@@ -106,6 +106,7 @@ var _target_distance := {}
 var _optional_vhs_ready := false
 var _optional_vhs: Array[Vector2i] = []
 var _path_cells := {}
+var _path_rooms := {}
 var _ritual_cell := Vector2i(1 << 30, 1 << 30)
 var _base_wall_cache := {}
 
@@ -427,6 +428,13 @@ func is_path_cell(at: Vector2i) -> bool:
 	return _path_cells.has(at)
 
 
+func is_path_room(at: Vector2i) -> bool:
+	_build_optional_vhs_cells()
+	var room := WorldGen.annex_room_id(world_seed, at) if theme == 2 \
+		else WorldGen.room_id(world_seed, at)
+	return _path_rooms.has(room)
+
+
 func _build_optional_vhs_cells() -> void:
 	if _optional_vhs_ready:
 		return
@@ -434,6 +442,9 @@ func _build_optional_vhs_cells() -> void:
 	var path := path_from_origin()
 	for c in path:
 		_path_cells[c] = true
+		var room := WorldGen.annex_room_id(world_seed, c) if theme == 2 \
+			else WorldGen.room_id(world_seed, c)
+		_path_rooms[room] = true
 	if path.size() < 10:
 		return
 	var wanted := clampi(roundi(walk_metres() / OPTIONAL_VHS_METRES),
@@ -479,17 +490,22 @@ func _optional_vhs_candidates(path: Array[Vector2i], dry_pool_only: bool) \
 		if seen_rooms.has(room):
 			continue
 		seen_rooms[room] = true
+		# Furniture for a merged room belongs to its anchor chunk. Assign the set
+		# there even when the route entered through another member; otherwise the
+		# placement scan cannot see the room's desks, dividers and couches.
+		if room == origin or room == target or room == objective_ritual_cell():
+			continue
 		if theme == 9 and dry_pool_only \
-				and not Chunk.pool_style_dry(WorldGen.cell_style(world_seed, c, theme)):
+				and not Chunk.pool_style_dry(WorldGen.cell_style(world_seed, room, theme)):
 			continue
 		var has_wall := false
 		for dir in 4:
-			if WorldGen.edge_info(world_seed, c, dir, theme)["wall"]:
+			if WorldGen.edge_info(world_seed, room, dir, theme)["wall"]:
 				has_wall = true
 				break
 		if not has_wall:
 			continue
-		out.append({"cell": c, "path_idx": idx})
+		out.append({"cell": room, "path_idx": idx})
 	return out
 
 

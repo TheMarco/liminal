@@ -10,7 +10,7 @@
 
 The four source-authored fixture variants are selected independently at
 runtime, centred on their individual transformed bounds, and mounted flush to
-the Monolith's room and tunnel ceilings at measured real-world scale. The
+the Data Center's room and tunnel ceilings at measured real-world scale. The
 authored PBR and emissive materials are retained. Each visible fixture is
 paired with a game light; dead and flickering cells receive per-instance
 emission-material duplicates so their state does not leak to other rooms.

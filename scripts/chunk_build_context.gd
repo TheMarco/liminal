@@ -158,8 +158,7 @@ func _init(p_world_seed: int, p_cell: Vector2i, p_theme: int,
 	_room_size = p_room_size
 	_room_anchor = p_room_anchor
 	_furniture_variant = p_furniture_variant
-	_portal_destination = -1 if spec.descent \
-		else WorldGen.portal(p_world_seed, p_cell, p_theme)
+	_portal_destination = -1
 
 	_descent = spec.descent
 	_target = spec.target

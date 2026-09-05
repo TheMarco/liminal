@@ -8,8 +8,12 @@ extends AudioStreamPlayer
 ## Theme 4 (airport): vast HVAC air mass — deep, wide, never off.
 ## Theme 5 (asylum): dead-building air — a hollow draught through broken
 ## windows over a faint mains hum, breathing far too slowly.
+## Theme 10 (Data Center): a recorded machinery bed that fades with the power.
 
 const RATE := 22050.0
+const DATA_CENTER_THEME := 10
+const POWER_FADE_SECONDS := 1.0
+const POWER_SILENCE_DB := -60.0
 
 var theme := 0
 
@@ -17,6 +21,8 @@ var _pb: AudioStreamGeneratorPlayback
 var _t := 0.0
 var _lp := 0.0
 var _lp2 := 0.0
+var _bed_volume_db := 0.0
+var _power_fade: Tween
 
 
 func _init(p_theme := 0) -> void:
@@ -28,6 +34,7 @@ func _init(p_theme := 0) -> void:
 		var b := Sfx.bed(theme)
 		stream = b[0]
 		volume_db = b[1]
+		_bed_volume_db = volume_db
 		return
 	var gen := AudioStreamGenerator.new()
 	gen.mix_rate = RATE
@@ -94,3 +101,25 @@ func _process(_dt: float) -> void:
 			v += 0.09 * _lp
 			v *= 0.8 + 0.2 * sin(TAU * 0.05 * _t)
 		_pb.push_frame(Vector2(v, v))
+
+
+## The Data Center's machinery is part of the powered environment. Keep the
+## loop running beneath the fade so restoration resumes at the same point
+## instead of audibly restarting the 30-second recording.
+func set_powered(on: bool) -> void:
+	if theme != DATA_CENTER_THEME:
+		return
+	if _power_fade != null:
+		_power_fade.kill()
+		_power_fade = null
+	var target := _bed_volume_db if on else POWER_SILENCE_DB
+	if not is_inside_tree():
+		volume_db = target
+		return
+	var fade := create_tween()
+	_power_fade = fade
+	fade.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	fade.tween_property(self, "volume_db", target, POWER_FADE_SECONDS)
+	fade.finished.connect(func():
+		if _power_fade == fade:
+			_power_fade = null)

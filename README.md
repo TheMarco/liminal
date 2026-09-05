@@ -57,9 +57,10 @@ procedurally generated liminal spaces** across eleven worlds:
   from nowhere, submerged LED units glow below the waterline, caustics dance
   on everything the water touches — and occasionally a single white plastic
   chair waits alone in a coved, windowless room.
-- **Key 0 — the Monolith**: monumental board-formed concrete halls, deep
-  structural beams, suspended galleries, cold skylight shafts and black
-  reflecting courts. Structure itself is the set dressing.
+- **Key 0 — the Data Center**: monumental board-formed concrete halls occupied
+  by dense server aisles, network racks, operations consoles, overhead cable
+  busways and condenser plants. Cold cyan service light cuts through the raw
+  structure while broad maintenance routes keep the machinery traversable.
 - **Key − — the Bloom**: a dead civic campus colonized by glossy black roots,
   animated flesh masses, thorn canopies and pulsing heart nodes. Locker tunnels
   and compressed spore nests open into drowned gyms, root forests and
@@ -72,11 +73,10 @@ Instructions, About and Credits each have their own screen. Nothing moves until
 you choose a mode.
 
 Press **1**–**9** to ride the elevator between the original floors, **0**
-to enter the Monolith, or **−** to enter the Bloom — each world keeps
-its own geography and remembers where you were. Or don't press anything:
-**swirling portals** hang in the roomier chambers of every floor, tinted the
-colour of wherever they lead. Step in and you emerge in the same cell of
-another world.
+to enter the Data Center, or **−** to enter the Bloom — each world keeps
+its own geography and remembers where you were. Rare physical elevator panels
+offer an in-world alternative; the old swirling cross-floor portals have been
+retired from Wander.
 
 Some of the building now answers back. Aim at an active control and press
 **E**: office terminals reveal successive records, a small selection of real
@@ -275,7 +275,7 @@ export templates installed):
 | E | Use a focused terminal, elevator panel or working door |
 | F | Toggle the handheld flashlight |
 | 1–9 | Switch floor (casino / office / Annex / airport / asylum / school / mall / prison / Poolrooms) |
-| 0 | Enter the Monolith |
+| 0 | Enter the Data Center |
 | − | Enter the Bloom |
 | V | Toggle the active video filter |
 | B | Switch between CRT and recovered-tape video modes |
@@ -417,10 +417,10 @@ near-absence of props is enforced as part of its generation contract.
 - `godot --headless --path . --script tools/audit_zones.gd` — samples more than
   26,000 rooms per theme, verifies room-level district/style consistency and
   checks that landmarks only occupy eligible 2x2 halls at the intended rarity.
-- `godot --headless --path . --script tools/audit_arrivals.gd -- 16` — follows
-  real generated portals across every floor and many seeds, builds each 3×3
-  destination neighbourhood, then verifies both portal and restored saved-position
-  landing capsules have a supporting floor and at least two clear escape directions.
+- `godot --headless --path . --script tools/audit_arrivals.gd -- 16` — verifies
+  that Wander generates no traversable portals, then builds representative 3×3
+  neighbourhoods and checks both initial and restored saved-position landing
+  capsules for supporting floor and clear escape directions.
 - `godot --headless --path . --script tools/audit_level_switches.gd -- --nologo`
   — runs the actual floor-transition path against the school regression seed and
   verifies the outgoing floor leaves physics before the landing probe begins.

@@ -19,6 +19,27 @@ func run() -> void:
 	if director == null or camera == null:
 		finish()
 		return
+	# A successful shot is described only after the opaque developed print has
+	# closed. The caption must then retain a full readable hold instead of
+	# spending its lifetime behind the camera layer.
+	var before_caption: String = game._event_hint.text
+	var evidence_caption := "PHOTOGRAPH 1 / 3 — THE CLOCK HAS TOO MANY HANDS"
+	game._on_photo_documented("audit-caption", 1, 3,
+		"THE CLOCK HAS TOO MANY HANDS")
+	expect(game._pending_photo_message == evidence_caption,
+		"successful photo did not queue its anomaly description")
+	expect(game._event_hint.text == before_caption,
+		"photo description appeared before the developed print closed")
+	camera._review_left = 0.01
+	camera._process(0.02)
+	expect(game._pending_photo_message.is_empty() \
+		and game._event_hint.text == evidence_caption,
+		"closing the developed print did not reveal the anomaly description")
+	if game._event_tween != null and game._event_tween.is_valid():
+		game._event_tween.custom_step(3.0)
+		expect(game._event_panel.modulate.a > 0.9,
+			"successful photo description did not retain a readable hold")
+		game._event_tween.kill()
 	expect(director.plan.size() >= PhotoDirector.REQUIRED,
 		"floor 1 plan holds fewer anomalies than the requirement")
 	expect(not game.descent_photo_requirement_met(),

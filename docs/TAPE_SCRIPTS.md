@@ -222,7 +222,7 @@ Does: Still speaking past the lens, softer with each sentence, ending near a whi
 
 ---
 
-## Tape 10 — Monolith floor — "Acceptance" (60s)
+## Tape 10 — Data Center floor — "Acceptance" (60s)
 
 *Performance: serene. Every earlier tape had tension in it somewhere; this
 one has none, and the absence should unsettle. She has decided something and

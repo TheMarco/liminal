@@ -131,10 +131,18 @@ func _run() -> void:
 			for slot in cells.size():
 				var cell: Vector2i = cells[slot]
 				route_setups += 1
-				if not path.has(cell) or cell == route.origin or cell == route.target \
+				var route_room_idx := -1
+				for path_idx in path.size():
+					var path_cell := path[path_idx]
+					var path_room := WorldGen.annex_room_id(ws, path_cell) if theme == 2 \
+						else WorldGen.room_id(ws, path_cell)
+					if path_room == cell:
+						route_room_idx = path_idx
+						break
+				if route_room_idx < 0 or cell == route.origin or cell == route.target \
 						or cell == route.objective_ritual_cell():
 					failures.append("invalid route setup cell %s" % cell)
-				var progress := float(path.find(cell)) / float(path.size() - 1)
+				var progress := float(maxi(0, route_room_idx)) / float(path.size() - 1)
 				earliest_progress = minf(earliest_progress, progress)
 				var key := "audit:%d:%d:%d:%d" % [
 					base, floor_idx, cell.x, cell.y]
@@ -348,6 +356,13 @@ func _audit_playback_modes(shorts: Array[String], longs: Array[String],
 	root.add_child(viewer)
 	await process_frame
 	optional._begin_watch(viewer)
+	if optional._cam == null \
+			or optional._cam.cull_mask != VhsRitual.WATCH_LAYER:
+		failures.append("VCR watch camera can still render outside room geometry")
+	for node in optional.find_children("*", "GeometryInstance3D", true, false):
+		if ((node as GeometryInstance3D).layers & VhsRitual.WATCH_LAYER) == 0:
+			failures.append("VCR geometry missing private watch layer")
+			break
 	optional._end_watch()
 	if not listener.watching or viewer.is_physics_processing():
 		failures.append("VCR released protection before restoring player control")

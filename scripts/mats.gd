@@ -21,6 +21,8 @@ static func _shader(key: String, path: String) -> ShaderMaterial:
 		return _c[key]
 	var m := ShaderMaterial.new()
 	m.shader = load(path)
+	# Shared names identify authored surface types for downstream weathering passes.
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -30,6 +32,7 @@ static func _std(key: String, fn: Callable) -> StandardMaterial3D:
 		return _c[key]
 	var m := StandardMaterial3D.new()
 	fn.call(m)
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -90,6 +93,7 @@ static func wallpaper_variant(idx: int) -> Material:
 		m.set_shader_parameter("col_flock", Color(0.57, 0.36, 0.15))
 		m.set_shader_parameter("col_wood", Color(0.21, 0.105, 0.06))
 		m.set_shader_parameter("col_trim", Color(0.63, 0.42, 0.14))
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -111,6 +115,7 @@ static func hall_wallpaper() -> Material:
 	m.set_shader_parameter("col_trim", Color(0.46, 0.31, 0.11))
 	m.set_shader_parameter("bump_strength", 0.09)
 	m.set_shader_parameter("peel_amount", 0.45)
+	m.resource_name = "hall_wallpaper"
 	_c["hall_wallpaper"] = m
 	return m
 
@@ -139,6 +144,7 @@ static func hall_wallpaper_variant(idx: int) -> Material:
 		m.set_shader_parameter("col_trim", Color(0.47, 0.30, 0.10))
 	m.set_shader_parameter("bump_strength", 0.09)
 	m.set_shader_parameter("peel_amount", 0.45)
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -173,6 +179,7 @@ static func slot_artwork(idx: int) -> Material:
 	m.set_shader_parameter("artwork", load(paths[idx]))
 	m.set_shader_parameter("glow_strength", [0.58, 0.48, 0.70][idx])
 	m.set_shader_parameter("age", [0.24, 0.34, 0.14][idx])
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -222,6 +229,7 @@ static func _velvet(key: String, col: Color, sheen: Color, amt: float) -> Shader
 	m.set_shader_parameter("albedo", col)
 	m.set_shader_parameter("sheen_col", sheen)
 	m.set_shader_parameter("sheen_amount", amt)
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -269,6 +277,7 @@ static func slot_cabinet_variant(idx: int) -> Material:
 	m.set_shader_parameter("metalness", p[1])
 	m.set_shader_parameter("base_roughness", p[2])
 	m.set_shader_parameter("wear", p[3])
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -536,6 +545,7 @@ static func office_lane_carpet() -> Material:
 	m.set_shader_parameter("col_dark", Color(0.035, 0.105, 0.072))
 	m.set_shader_parameter("col_light", Color(0.12, 0.245, 0.17))
 	m.set_shader_parameter("bump_strength", 0.22)
+	m.resource_name = "office_lane_carpet"
 	_c["office_lane_carpet"] = m
 	return m
 
@@ -555,6 +565,7 @@ static func office_wall_variant(idx: int) -> Material:
 	m.shader = load("res://shaders/office_wall.gdshader")
 	m.set_shader_parameter("base_col", Color(0.81, 0.84, 0.80) if idx == 1 \
 		else Color(0.86, 0.83, 0.76))
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -645,6 +656,7 @@ static func annex_wall_variant(idx: int) -> StandardMaterial3D:
 	var physical_repeat := 2.40 if idx < 3 else (1.175 if idx == 4 else 2.05)
 	m.uv1_scale = Vector3.ONE / physical_repeat
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -689,6 +701,7 @@ static func annex_moisture_overlay(mask_path: String) -> ShaderMaterial:
 	m.set_shader_parameter("effect_mask", load(mask_path))
 	m.set_shader_parameter("effect_color", Color(0.28, 0.19, 0.095))
 	m.set_shader_parameter("surface_breakup", 0.07)
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -702,6 +715,7 @@ static func annex_carpet_damage_overlay(mask_path: String) -> ShaderMaterial:
 	m.set_shader_parameter("effect_mask", load(mask_path))
 	m.set_shader_parameter("effect_color", Color(0.085, 0.055, 0.025))
 	m.set_shader_parameter("surface_breakup", 0.34)
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -874,6 +888,7 @@ static func concrete_floor() -> Material:
 	m.set_shader_parameter("detail_tex", detail_noise())
 	m.set_shader_parameter("base_col", Color(0.34, 0.36, 0.33))
 	m.set_shader_parameter("wetness", 0.75)
+	m.resource_name = "concrete_floor"
 	_c["concrete_floor"] = m
 	return m
 
@@ -946,6 +961,7 @@ static func adbox(idx: int) -> ShaderMaterial:
 	m.set_shader_parameter("col_a", pals[idx % 4][0])
 	m.set_shader_parameter("col_b", pals[idx % 4][1])
 	m.set_shader_parameter("seed", float(idx % 4))
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -957,6 +973,7 @@ static func airport_wall() -> Material:
 	m.shader = load("res://shaders/office_wall.gdshader")
 	m.set_shader_parameter("base_col", Color(0.80, 0.81, 0.83))
 	m.set_shader_parameter("ceil_h", 5.0)
+	m.resource_name = "airport_wall"
 	_c["airport_wall"] = m
 	return m
 
@@ -973,6 +990,7 @@ static func airport_wall_variant(idx: int) -> Material:
 	m.set_shader_parameter("base_col", Color(0.73, 0.77, 0.82) if idx == 1 \
 		else Color(0.80, 0.78, 0.71))
 	m.set_shader_parameter("ceil_h", 5.0)
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -985,6 +1003,7 @@ static func airport_ceiling() -> Material:
 	m.set_shader_parameter("col", Color(0.68, 0.70, 0.73))
 	m.set_shader_parameter("stain_amount", 0.08)
 	m.set_shader_parameter("tile", 1.2)
+	m.resource_name = "airport_ceiling"
 	_c["airport_ceiling"] = m
 	return m
 
@@ -999,6 +1018,7 @@ static func airport_carpet() -> Material:
 	m.set_shader_parameter("col_dark", Color(0.06, 0.08, 0.14))
 	m.set_shader_parameter("col_light", Color(0.18, 0.22, 0.32))
 	m.set_shader_parameter("detail_tex", detail_noise())
+	m.resource_name = "airport_carpet"
 	_c["airport_carpet"] = m
 	return m
 
@@ -1089,6 +1109,7 @@ static func neon_col(name_key: String, col: Color) -> StandardMaterial3D:
 	m.emission_enabled = true
 	m.emission = col
 	m.emission_energy_multiplier = 5.0
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1105,7 +1126,7 @@ const PORTAL_COLS := {
 	7: [Color(0.22, 0.82, 0.78), Color(1.0, 0.68, 0.28)],  # mall: teal / sodium
 	8: [Color(0.36, 0.48, 0.42), Color(0.78, 0.84, 0.76)], # prison: oxidised iron
 	9: [Color(0.18, 0.62, 0.55), Color(0.86, 0.98, 0.94)], # Poolrooms: chlorine
-	10: [Color(0.30, 0.67, 0.78), Color(0.80, 0.93, 1.0)], # Monolith: cold skylight
+	10: [Color(0.30, 0.67, 0.78), Color(0.80, 0.93, 1.0)], # Data Center: cold skylight
 	11: [Color(0.82, 0.018, 0.008), Color(0.54, 0.80, 1.0)], # Bloom: wound / cold route
 }
 
@@ -1119,6 +1140,7 @@ static func portal(dest: int) -> ShaderMaterial:
 	m.set_shader_parameter("col_edge", PORTAL_COLS[dest][0])
 	m.set_shader_parameter("col_core", PORTAL_COLS[dest][1])
 	m.render_priority = 1
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1130,6 +1152,7 @@ static func portal_floor(dest: int) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/portal_floor.gdshader")
 	m.set_shader_parameter("col", PORTAL_COLS[dest][0])
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1144,6 +1167,7 @@ static func portal_spark(dest: int) -> StandardMaterial3D:
 	m.emission_enabled = true
 	m.emission = PORTAL_COLS[dest][0]
 	m.emission_energy_multiplier = 3.5
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1197,6 +1221,7 @@ static func wall_art(path: String) -> StandardMaterial3D:
 	m.roughness = 0.72
 	m.metallic = 0.0
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1221,6 +1246,7 @@ static func poster_lightbox(path: String) -> StandardMaterial3D:
 	m.emission_energy_multiplier = 0.34
 	m.roughness = 0.42
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1250,6 +1276,7 @@ static func _photo(key: String, root: String, folder: String, per_m: float,
 	m.uv1_world_triplanar = true
 	m.uv1_scale = Vector3.ONE * per_m
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1357,6 +1384,7 @@ static func sch_wall() -> Material:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/office_wall.gdshader")
 	m.set_shader_parameter("base_col", Color(0.85, 0.82, 0.74))
+	m.resource_name = "sch_wall"
 	_c["sch_wall"] = m
 	return m
 
@@ -1372,6 +1400,7 @@ static func sch_wall_variant(idx: int) -> Material:
 	m.shader = load("res://shaders/office_wall.gdshader")
 	m.set_shader_parameter("base_col", Color(0.77, 0.81, 0.74) if idx == 1 \
 		else Color(0.85, 0.79, 0.66))
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1427,6 +1456,7 @@ static func sch_ceiling() -> Material:
 	m.set_shader_parameter("stain_amount", 0.10)
 	m.set_shader_parameter("bump_strength", 0.02)
 	m.set_shader_parameter("missing_amount", 0.10)
+	m.resource_name = "sch_ceiling"
 	_c["sch_ceiling"] = m
 	return m
 
@@ -1550,6 +1580,7 @@ static func mall_ceiling() -> Material:
 	# grazing sodium light exaggerates the tile relief into pressed tin —
 	# keep the grid, flatten the surface
 	m.set_shader_parameter("bump_strength", 0.045)
+	m.resource_name = "mall_ceiling"
 	_c["mall_ceiling"] = m
 	return m
 
@@ -1677,7 +1708,7 @@ static func prison_panel() -> StandardMaterial3D:
 		m.emission_energy_multiplier = 3.1)
 
 
-# --- the Monolith -----------------------------------------------------------
+# --- the Data Center --------------------------------------------------------
 
 ## Poly Haven CC0 maps used by the brutalist floor. Unlike the ambientCG
 ## directory convention above, these downloads keep Poly Haven's map names.
@@ -1699,6 +1730,7 @@ static func _brutalist_photo(key: String, folder: String, stem: String,
 	m.uv1_world_triplanar = true
 	m.uv1_scale = Vector3.ONE * per_m
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.resource_name = key
 	_c[key] = m
 	return m
 
@@ -1719,16 +1751,6 @@ static func brutal_floor() -> StandardMaterial3D:
 		"damaged_concrete_floor_02", 0.46, Color(0.44, 0.46, 0.46), 0.72)
 
 
-static func brutal_black_water() -> StandardMaterial3D:
-	return _std("brutal_black_water", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.008, 0.012, 0.014)
-		m.metallic = 0.42
-		m.roughness = 0.06
-		m.clearcoat_enabled = true
-		m.clearcoat = 1.0
-		m.clearcoat_roughness = 0.05)
-
-
 static func brutal_steel() -> StandardMaterial3D:
 	return _std("brutal_steel", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.055, 0.065, 0.070)
@@ -1742,6 +1764,36 @@ static func brutal_panel() -> StandardMaterial3D:
 		m.emission_enabled = true
 		m.emission = Color(0.66, 0.78, 0.88)
 		m.emission_energy_multiplier = 4.2)
+
+
+static func data_center_floor_mark() -> StandardMaterial3D:
+	return _std("data_center_floor_mark", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.055, 0.18, 0.23)
+		m.metallic = 0.18
+		m.roughness = 0.74)
+
+
+static func data_center_cable() -> StandardMaterial3D:
+	return _std("data_center_cable", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.025, 0.10, 0.15)
+		m.metallic = 0.38
+		m.roughness = 0.42)
+
+
+static func data_center_status() -> StandardMaterial3D:
+	return _std("data_center_status", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.10, 0.86, 0.98)
+		m.emission_enabled = true
+		m.emission = Color(0.03, 0.62, 0.88)
+		m.emission_energy_multiplier = 4.8)
+
+
+static func data_center_warning() -> StandardMaterial3D:
+	return _std("data_center_warning", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.95, 0.16, 0.045)
+		m.emission_enabled = true
+		m.emission = Color(0.95, 0.035, 0.008)
+		m.emission_energy_multiplier = 6.0)
 
 
 # --- The Bloom ---------------------------------------------------------------
@@ -1779,6 +1831,7 @@ static func bloom_floor() -> StandardMaterial3D:
 	m.clearcoat = 0.62
 	m.clearcoat_roughness = 0.16
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.resource_name = "bloom_floor"
 	_c["bloom_floor"] = m
 	return m
 
@@ -1798,6 +1851,7 @@ static func bloom_growth() -> ShaderMaterial:
 		load(BLOOM_FLESH_TEX_DIR + "others_0001_height_2k.png"))
 	m.set_shader_parameter("ao_tex",
 		load(BLOOM_FLESH_TEX_DIR + "others_0001_ao_2k.jpg"))
+	m.resource_name = "bloom_growth"
 	_c["bloom_growth"] = m
 	return m
 
@@ -1946,6 +2000,7 @@ static func pool_tile() -> ShaderMaterial:
 	_pool_tile_maps(m)
 	# Small mosaic underfoot: ten tiles to 1.15m puts each one at 11.5cm.
 	m.set_shader_parameter("tex_metres", 1.642)
+	m.resource_name = "pool_tile"
 	_c["pool_tile"] = m
 	return m
 
@@ -1965,6 +2020,7 @@ static func pool_wall_tile() -> ShaderMaterial:
 	m.set_shader_parameter("tex_metres", 1.575)
 	m.set_shader_parameter("tile_tint", Color(1.0, 1.0, 0.97))
 	m.set_shader_parameter("caustic_strength", 0.55)
+	m.resource_name = "pool_wall_tile"
 	_c["pool_wall_tile"] = m
 	return m
 

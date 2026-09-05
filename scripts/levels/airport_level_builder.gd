@@ -691,6 +691,7 @@ func _air_concourse() -> void:
 
 func _travelator(p: Vector3, yaw: float, flow: float, salt: int, L = 8.4) -> void:
 	var v = Node3D.new()
+	v.set_meta("surface_wear_prop", "airport_travelator")
 	v.position = p
 	v.rotation.y = yaw
 	scene.add_node(v)
@@ -700,6 +701,7 @@ func _travelator(p: Vector3, yaw: float, flow: float, salt: int, L = 8.4) -> voi
 	belt.set_instance_shader_parameter("speed", flow * 0.75)
 	for e in [-1.0, 1.0]:
 		var ramp = scene.model_box(v, Vector3(e * (L / 2.0 + 0.26), 0.048, 0), Vector3(0.64, 0.02, BW + 0.7), Mats.steel())
+		ramp.set_meta("surface_wear_prop", "airport_travelator_plate")
 		ramp.rotation.z = -e * 0.16
 		scene.model_box(v, Vector3(e * (L / 2.0 - 0.30), 0.115, 0), Vector3(0.5, 0.014, BW), Mats.caution_yellow())
 	for szn in [-1.0, 1.0]:

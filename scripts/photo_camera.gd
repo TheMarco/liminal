@@ -81,6 +81,9 @@ var _proximity_scan_left := 0.0
 
 signal photo_documented(anomaly_id: String, count: int, required: int,
 	caption: String)
+## Emitted only after the opaque developed-print review has closed and Main's
+## HUD is visible again, so evidence captions never expire behind the photo.
+signal review_finished()
 signal first_raise()
 ## True while the camera is up — main hides the whole HUD so only the
 ## viewfinder exists (owner, 2026-08-20).
@@ -241,6 +244,7 @@ func _process(dt: float) -> void:
 			# camera down (owner, 2026-08-20). Whatever answers the
 			# photograph is met with bare eyes.
 			_lower()
+			review_finished.emit()
 			_release_review_resolutions()
 			if _pending_risk:
 				_pending_risk = false

@@ -2,7 +2,7 @@
 
 > **Status update (2026-08-08).** The implementation has moved past this plan.
 > Current live structure: 11 floors in fixed order — Casino, Mall, Office,
-> Airport, School, Prison, Asylum, Poolrooms, Annex, Monolith, then
+> Airport, School, Prison, Asylum, Poolrooms, Annex, Data Center, then
 > Bloom/Upside Down (theme 11) with
 > the exit passage. The "do not go back" and "do not stare" charges are both gone
 > (backtrack anomalies remain; figures can no longer be banished by staring —
@@ -77,7 +77,7 @@ Descent order is not the Wander key order:
 | 7 | 5 | the asylum |
 | 8 | 9 | the Poolrooms |
 | 9 | 2 | the Annex |
-| 10 | 10 | the Monolith |
+| 10 | 10 | the Data Center |
 | 11 | 11 | Bloom/Upside Down |
 
 Continue resumes the deepest unlocked floor with the same saved seed/building.
@@ -91,7 +91,7 @@ The sequence reads as a physical and psychological descent:
 > → confined → wrong → watched
 
 It places the more physically hostile and less-human spaces late, while
-reserving the Monolith and Bloom for the ending.
+reserving the Data Center and Bloom for the ending.
 
 ### The rule
 
@@ -383,8 +383,8 @@ _title.started.connect(_on_start)
 5. prepare `DescentRun.ORDER[0]`;
 6. rebuild the casino at a safe origin arrival while the rule card is black;
 7. configure `ChunkManager` with that floor's `DescentRoute`;
-8. suppress Wander portals and Wander elevators through explicit manager/chunk
-   configuration;
+8. suppress Wander elevators through explicit manager/chunk configuration
+   (cross-floor Wander portals have been retired globally);
 9. despawn any figures created while the title was open and suspend new
    Descent figures until the run actually starts;
 10. put `EnvironmentEvents` in Descent mode.
@@ -435,7 +435,7 @@ Wander retains every current input.
 ### Acceptance
 
 - `SPACE` starts Wander without a world rebuild.
-- Wander floor keys, CRT toggle, flashlight, sprint, portals and current lifts
+- Wander floor keys, CRT toggle, flashlight, sprint and current lifts
   work.
 - `ENTER` shows the rule card; second `SPACE` starts a fresh Descent casino.
 - Descent floor keys and CRT toggle are disabled; sprint remains enabled.
@@ -477,7 +477,7 @@ Candidate contract:
 - single-cell room anchor;
 - unsplit;
 - at least one solid `anchor_wall`;
-- not a cell selected by the current Wander portal or elevator predicates;
+- not a cell selected by the current Wander elevator predicate;
 - style compatible with a wall alcove;
 - enough safe interior footprint for the set piece.
 
@@ -759,7 +759,7 @@ For at least 200 seeds × 6 themes:
 - normal graph distance is 7–12 or a documented fallback;
 - every `next_from()` hop is adjacent and open;
 - following next hops reaches the target without a loop;
-- target is not a corridor, split room, portal or Wander lift;
+- target is not a corridor, split room or Wander lift;
 - target wall exists;
 - every Descent arrival has the existing capsule/floor/escape guarantees.
 
@@ -920,7 +920,7 @@ hunting in it. Descent is the only mode that releases the manager.
 Blackouts are unmistakable run events, not inferred from ambient light:
 
 - interval: 35–55 seconds for the first blackout on a floor, then 25–45;
-  prison/Monolith theme modifiers and high-attention caps still apply;
+  prison/Data Center theme modifiers and high-attention caps still apply;
 - duration: 5–8 seconds;
 - breaker thud at onset;
 - clear power-return sound at the end;

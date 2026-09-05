@@ -42,6 +42,20 @@ const CC_BY_MODELS := [
 	["res://models/cc_by/fluorescent_light_fixtures/fluorescent_light_fixtures.glb",
 		"fluorescent_light_fixtures"],
 	["res://models/cc_by/bunk_bed/bunk_bed.glb", "bunk_bed"],
+	["res://models/cc_by/server_v2_console/server_v2_console.glb",
+		"server_v2_console"],
+	["res://models/cc_by/server_rack/server_rack.glb", "server_rack"],
+	["res://models/cc_by/data_center_server_rack/data_center_server_rack.glb",
+		"data_center_server_rack"],
+	["res://models/cc_by/network_server_rack/network_server_rack.glb",
+		"network_server_rack"],
+	["res://models/cc_by/server_racking_system/server_racking_system.glb",
+		"server_racking_system"],
+	["res://models/cc_by/server/server.glb", "server"],
+	["res://models/cc_by/tall_server_of_base_with_azure_lane_island/" +
+		"tall_server_of_base_with_azure_lane_island.glb", "tall_server_azure"],
+	["res://models/cc_by/air_conditioners/air_conditioners.glb",
+		"air_conditioners"],
 ]
 
 

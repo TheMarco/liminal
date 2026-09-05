@@ -15,7 +15,7 @@ signal documented_changed(count: int, required: int)
 
 ## Floor 1-3 wants 3 photographs, 4-6 wants 4, 7+ wants 5 — deeper floors
 ## are 2.5x longer, so a flat count shrank to a footnote (owner,
-## 2026-08-20). Prop-less themes (airport, prison, Monolith, Bloom) stay
+## 2026-08-20). Anomaly-prop-less themes (airport, prison, Data Center, Bloom) stay
 ## at 3: their anomalies are wall-writing only and qualifying cells are
 ## scarcer. REQUIRED survives as the floor-1 base the audits anchor on.
 const REQUIRED := 3

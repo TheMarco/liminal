@@ -750,7 +750,8 @@ func _office_storage() -> void:
 func _office_break() -> void:
 	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
 	# round table with four chairs
-	scene.cylinder(c + Vector3(0, 0.72, 0), 0.55, 0.05, Mats.desk_white(), false)
+	var table_top = scene.cylinder(c + Vector3(0, 0.72, 0), 0.55, 0.05, Mats.desk_white(), false)
+	table_top.set_meta("surface_wear_prop", "office_break_table")
 	scene.cylinder(c + Vector3(0, 0.36, 0), 0.06, 0.72, Mats.metal_gray(), false)
 	scene.cylinder(c + Vector3(0, 0.02, 0), 0.3, 0.04, Mats.metal_gray(), false)
 	scene.collider_cylinder(c + Vector3(0, 0.4, 0), 0.6, 0.8)
@@ -759,7 +760,8 @@ func _office_break() -> void:
 		var cp = c + Vector3(cos(ang) * 1.15, 0, sin(ang) * 1.15)
 		scene.task_chair(cp, ang + PI / 2.0 + (ctx.random01(98 + i) - 0.5) * 0.7)
 	# counter along the south wall with a coffee maker
-	scene.rounded_box(Vector3(4.5, 0.45, 0.75), Vector3(3.0, 0.9, 0.6), Mats.desk_white(), 0.015)
+	var coffee_counter = scene.rounded_box(Vector3(4.5, 0.45, 0.75), Vector3(3.0, 0.9, 0.6), Mats.desk_white(), 0.015)
+	coffee_counter.set_meta("surface_wear_prop", "office_coffee_counter")
 	scene.rounded_box(Vector3(3.6, 1.08, 0.75), Vector3(0.3, 0.36, 0.3), Mats.charcoal(), 0.02, false)
 	scene.box(Vector3(3.6, 1.02, 0.92), Vector3(0.05, 0.02, 0.04), Mats.lamp_red(), false)
 	# water cooler in the corner

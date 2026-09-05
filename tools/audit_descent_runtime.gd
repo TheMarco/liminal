@@ -481,6 +481,35 @@ func run() -> void:
 			"dead-cell anomaly revived after blackout")
 	dead_chunk.free()
 
+	# The office carries substantial environment fill in addition to its room
+	# fixtures. A blackout must suppress that fill and restore every authored
+	# value exactly when power returns.
+	var live_level: int = game.active_level
+	var live_environment: Environment = game.we.environment
+	var office_environment := EnvBuilder.build(1)
+	game.active_level = 1
+	game.we.environment = office_environment
+	var office_ambient := office_environment.ambient_light_energy
+	var office_sdfgi := office_environment.sdfgi_energy
+	var office_fog := office_environment.fog_light_energy
+	var office_background := office_environment.background_energy_multiplier
+	game._on_descent_blackout(true)
+	expect(office_environment.ambient_light_energy <= 0.0031 \
+		and is_zero_approx(office_environment.sdfgi_energy) \
+		and office_environment.fog_light_energy <= 0.0101 \
+		and office_environment.background_energy_multiplier <= 0.0101,
+		"office blackout left environment fill lighting the floor")
+	game._on_descent_blackout(false)
+	expect(is_equal_approx(office_environment.ambient_light_energy,
+			office_ambient) \
+		and is_equal_approx(office_environment.sdfgi_energy, office_sdfgi) \
+		and is_equal_approx(office_environment.fog_light_energy, office_fog) \
+		and is_equal_approx(office_environment.background_energy_multiplier,
+			office_background),
+		"office blackout did not restore the authored environment")
+	game.we.environment = live_environment
+	game.active_level = live_level
+
 	# Blackout restoration must preserve both a working and intentionally dead
 	# fixture instead of turning every light on.
 	var lights: Array[Node] = game.level_root.find_children(

@@ -1,10 +1,9 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
-## Theme 10 — the Monolith.
+## Theme 10 — the Data Center.
 ##
-## The visual language comes from monumental civic brutalism rather than a
-## furnished building: structure is the prop. Repeating board-form concrete,
-## deep ceiling beams, stacked galleries, light wells and reflecting courts
-## produce scale without putting clutter in the player's route.
+## The monumental civic concrete shell remains, but it has been occupied by an
+## impossible machine estate: hot/cold aisles, operations consoles, cooling
+## plants, cable risers and dense server banks repeat through the structure.
 
 const TUNNEL_HALF_WIDTH := 1.65
 const TUNNEL_HEIGHT := 3.45
@@ -30,6 +29,37 @@ const BRUTAL_DOOR_TOP := 3.15
 const BRUTAL_LIGHT_PATH := "res://models/cc_by/fluorescent_light_fixtures/fluorescent_light_fixtures.glb"
 const BLOOM_VINES_PATH := "res://models/cc_by/modular_vines/modular_vines.glb"
 const ANNEX_EXIT_DOOR_PATH := "res://models/cc_by/backrooms_vr_exit_door/backrooms_exit_door.scn"
+
+# Imported-space centres are (visual centre X, visual minimum Y, visual centre Z).
+# Keeping the measurements beside their placement scales makes every instance
+# floor-centred without hiding source-unit corrections in call sites.
+const CONSOLE_SCALE := 0.40
+const CONSOLE_CENTRE := Vector3(0.689082, 0.002568, -0.020504)
+const CONSOLE_SIZE := Vector3(1.3513, 2.0608, 0.6898)
+const RACK_BANK_SCALE := 0.021
+const RACK_BANK_CENTRE := Vector3(-0.15934, 0.0, 7.42196)
+const RACK_BANK_SIZE := Vector3(3.9690, 2.0162, 1.0191)
+const SERVER_RACK_SCALE := 0.90
+const SERVER_RACK_CENTRE := Vector3(0.0, -0.000464, -0.024479)
+const SERVER_RACK_SIZE := Vector3(0.5400, 2.2506, 0.7672)
+const NETWORK_RACK_SCALE := 1.0
+const NETWORK_RACK_CENTRE := Vector3(0.036023, -0.011138, 0.472491)
+const NETWORK_RACK_SIZE := Vector3(1.1151, 1.8309, 2.0999)
+const DETAILED_RACK_SCALE := 1.0
+const DETAILED_RACK_CENTRE := Vector3(0.0, 0.136780, 0.002161)
+const DETAILED_RACK_SIZE := Vector3(0.7994, 2.0656, 1.1384)
+const GLASS_SERVER_SCALE := 0.158
+const GLASS_SERVER_CENTRE := Vector3(4.992994, 0.0, 6.671851)
+const GLASS_SERVER_SIZE := Vector3(0.6335, 2.1995, 0.6335)
+const AZURE_SERVER_SCALE := 1.0
+const AZURE_SERVER_CENTRE := Vector3(-0.000005, 0.0, 0.0)
+const AZURE_SERVER_SIZE := Vector3(0.9311, 1.7581, 0.9393)
+const AC_SCALE := 0.008
+const AC_SIZES := [
+	Vector3(1.3124, 1.0160, 1.6942),
+	Vector3(1.7624, 1.1282, 1.3124),
+	Vector3(1.6900, 1.0132, 1.3124),
+]
 
 
 func _brutalist_floor_ceiling() -> void:
@@ -90,7 +120,7 @@ func _monolith_incursion() -> void:
 
 	# Roughly one trace in three gets a small authored knot. It stays tucked at
 	# the ceiling and carries no collision, so the incursion never changes the
-	# Monolith's routes or silhouette at room scale.
+	# Data Center's routes or silhouette at room scale.
 	if ctx.random01(2234) < 0.34:
 		var pivot := Node3D.new()
 		pivot.name = "MonolithVineKnot"
@@ -304,15 +334,336 @@ func _upper_gallery(axis_x: bool, side: float, height: float) -> void:
 		scene.box(rp, Vector3(0.055, 0.78, 0.055), Mats.brutal_steel(), false)
 
 
-func _black_court(cross_walk := true) -> void:
-	if cross_walk:
-		for x in [2.25, 9.75]:
-			for z in [2.25, 9.75]:
-				scene.box(Vector3(x, 0.022, z), Vector3(3.25, 0.028, 3.25),
-					Mats.brutal_black_water(), false)
+func _data_center_asset(path: String, at: Vector3, yaw: float, scl: float,
+		centre: Vector3, size: Vector3, kind: String,
+		disable_shadows := false) -> Node3D:
+	var body0 := scene.collider_mark()
+	var pivot := scene.attributed_floor_prop(path, at, yaw, scl, centre,
+		kind, null, true)
+	if pivot == null:
+		return null
+	pivot.set_meta("data_center_infrastructure", true)
+	pivot.set_meta("data_center_kind", kind)
+	if kind.contains("rack") or kind.contains("console") \
+			or kind.contains("control"):
+		pivot.set_meta("data_center_rack", true)
+	if kind.contains("cooling"):
+		pivot.set_meta("data_center_cooling", true)
+	if disable_shadows:
+		scene.disable_shadows(pivot)
+	scene.collider_yaw_box(at + Vector3(0.0, size.y * 0.5, 0.0), size, yaw)
+	scene.bind_furnishing_colliders(pivot, body0)
+	return pivot
+
+
+func _network_rack(at: Vector3, yaw: float) -> Node3D:
+	# This three-cabinet bank is authored with its service fronts on +X. Rotate
+	# that axis onto the +Z convention shared by every single-rack wrapper, so a
+	# row can give all variants one logical yaw without exposing random backs.
+	return _data_center_asset(Chunk.DATA_CENTER_NETWORK_RACK_PATH, at,
+		yaw - PI * 0.5,
+		NETWORK_RACK_SCALE, NETWORK_RACK_CENTRE, NETWORK_RACK_SIZE,
+		"data_center_network_rack", true)
+
+
+func _server_rack(at: Vector3, yaw: float) -> Node3D:
+	return _data_center_asset(Chunk.DATA_CENTER_RACK_PATH, at, yaw,
+		SERVER_RACK_SCALE, SERVER_RACK_CENTRE, SERVER_RACK_SIZE,
+		"data_center_server_rack")
+
+
+func _detailed_server_rack(at: Vector3, yaw: float) -> Node3D:
+	# This exceptionally detailed 459-mesh rack is a hero prop, never a row
+	# filler. Keeping it to the core vault avoids multiplying its scene cost.
+	return _data_center_asset(Chunk.DATA_CENTER_DETAILED_RACK_PATH, at, yaw,
+		DETAILED_RACK_SCALE, DETAILED_RACK_CENTRE, DETAILED_RACK_SIZE,
+		"data_center_detailed_server_rack", true)
+
+
+func _glass_server_rack(at: Vector3, yaw: float) -> Node3D:
+	# The authored glass door faces backward in imported space.
+	return _data_center_asset(Chunk.DATA_CENTER_GLASS_SERVER_PATH, at, yaw + PI,
+		GLASS_SERVER_SCALE, GLASS_SERVER_CENTRE, GLASS_SERVER_SIZE,
+		"data_center_glass_server_rack")
+
+
+func _azure_server_rack(at: Vector3, yaw: float) -> Node3D:
+	return _data_center_asset(Chunk.DATA_CENTER_AZURE_SERVER_PATH, at, yaw,
+		AZURE_SERVER_SCALE, AZURE_SERVER_CENTRE, AZURE_SERVER_SIZE,
+		"data_center_azure_server_rack")
+
+
+func _console_rack(at: Vector3, yaw: float) -> Node3D:
+	return _data_center_asset(Chunk.DATA_CENTER_CONSOLE_PATH, at, yaw,
+		CONSOLE_SCALE, CONSOLE_CENTRE, CONSOLE_SIZE,
+		"data_center_console_rack")
+
+
+func _control_bank(at: Vector3, yaw: float) -> Node3D:
+	return _data_center_asset(Chunk.DATA_CENTER_RACK_BANK_PATH, at, yaw,
+		RACK_BANK_SCALE, RACK_BANK_CENTRE, RACK_BANK_SIZE,
+		"data_center_control_bank", true)
+
+
+func _cooling_unit(at: Vector3, yaw: float, variant: int) -> Node3D:
+	# Lora's source is a collection. Each extracted scene is one complete floor
+	# condenser, so a placement always selects exactly one unit rather than
+	# instancing the collection as though it were a single prop.
+	variant = posmod(variant, Chunk.DATA_CENTER_AC_PATHS.size())
+	var size: Vector3 = AC_SIZES[variant]
+	var unit_at := at + Vector3(0.0, 0.09, 0.0)
+	var unit := _data_center_asset(Chunk.DATA_CENTER_AC_PATHS[variant],
+		unit_at, yaw,
+		AC_SCALE, Vector3.ZERO, AC_SIZES[variant],
+		"data_center_cooling_unit", true)
+	if unit != null:
+		unit.set_meta("data_center_cooling_variant", variant)
+		var pad := scene.model_box(unit, Vector3(0.0, -0.045, 0.0),
+			Vector3(size.x + 0.18, 0.09, size.z + 0.18),
+			Mats.brutal_structure())
+		pad.set_meta("data_center_cooling_pad", true)
+	return unit
+
+
+func _aisle_floor_guides(axis_x: bool, centre: float = 6.0,
+		long_span: float = 12.0) -> void:
+	var guide_length := maxf(3.0, long_span - 1.5)
+	for offset in [-0.58, 0.58]:
+		var lane: float = centre + float(offset)
+		var p := Vector3(6.0, 0.022, lane) if axis_x \
+			else Vector3(lane, 0.022, 6.0)
+		var s := Vector3(guide_length, 0.026, 0.07) if axis_x \
+			else Vector3(0.07, 0.026, guide_length)
+		var guide := scene.box(p, s, Mats.data_center_floor_mark(), false)
+		guide.set_meta("data_center_aisle_guide", true)
+	# Short luminous thresholds identify the cold aisle without reintroducing a
+	# glossy floor finish.
+	var edge := long_span * 0.5 - 0.85
+	for end in [6.0 - edge, 6.0 + edge]:
+		var p2 := Vector3(end, 0.038, centre) if axis_x \
+			else Vector3(centre, 0.038, end)
+		var s2 := Vector3(0.055, 0.018, 1.05) if axis_x \
+			else Vector3(1.05, 0.018, 0.055)
+		scene.box(p2, s2, Mats.data_center_status(), false)
+
+
+func _overhead_busways(axis_x: bool, lanes: Array, height: float,
+		long_span: float = 12.0) -> void:
+	var bus_length := maxf(3.0, long_span - 1.2)
+	for lane in lanes:
+		var p := Vector3(6.0, height, float(lane)) if axis_x \
+			else Vector3(float(lane), height, 6.0)
+		var s := Vector3(bus_length, 0.12, 0.48) if axis_x \
+			else Vector3(0.48, 0.12, bus_length)
+		var tray := scene.box(p, s, Mats.brutal_steel(), false)
+		tray.set_meta("data_center_overhead_busway", true)
+		var glow_p := p - Vector3(0.0, 0.075, 0.0)
+		var glow_s := Vector3(bus_length - 0.35, 0.025, 0.065) if axis_x \
+			else Vector3(0.065, 0.025, bus_length - 0.35)
+		scene.box(glow_p, glow_s, Mats.data_center_status(), false)
+		# Two readable cable looms sit above each ladder tray.
+		for side in [-0.13, 0.13]:
+			var cp := p + (Vector3(0.0, 0.09, side) if axis_x \
+				else Vector3(side, 0.09, 0.0))
+			var cs := Vector3(bus_length - 0.20, 0.045, 0.055) if axis_x \
+				else Vector3(0.055, 0.045, bus_length - 0.20)
+			scene.box(cp, cs, Mats.data_center_cable(), false)
+		var t := 6.0 - long_span * 0.5 + 0.8
+		var last := 6.0 + long_span * 0.5 - 0.8
+		while t <= last + 0.01:
+			var rp := Vector3(t, height + 0.08, float(lane)) if axis_x \
+				else Vector3(float(lane), height + 0.08, t)
+			var rs := Vector3(0.055, 0.055, 0.58) if axis_x \
+				else Vector3(0.58, 0.055, 0.055)
+			scene.box(rp, rs, Mats.brutal_steel(), false)
+			t += 1.70
+
+
+func _machine_room_light(at: Vector3, energy := 2.0) -> void:
+	var light := OmniLight3D.new()
+	light.position = Vector3(at.x,
+		minf(ctx.ceiling_height - 1.05, 3.35), at.z)
+	light.light_color = Color(0.42, 0.72, 0.92)
+	light.light_energy = energy
+	light.omni_range = 10.5
+	light.shadow_enabled = false
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = 22.0
+	light.distance_fade_length = 8.0
+	light.set_meta("data_center_aisle_light", true)
+	scene.add_node(light)
+
+
+func _rack_aisle(axis_x: bool) -> void:
+	var span := scene.room_span()
+	var long_span := span.x if axis_x else span.y
+	var cross_span := span.y if axis_x else span.x
+	var rack_lanes: Array[float] = []
+	if cross_span > 18.0:
+		# A 24m hall is one machine floor, not two sparse 12m islands. Ten rows
+		# continue across the merge seam at an even 2m rhythm.
+		var lane := 6.0 - cross_span * 0.5 + 2.70
+		var last := 6.0 + cross_span * 0.5 - 2.70
+		while lane <= last + 0.01:
+			rack_lanes.append(lane)
+			lane += 2.0
 	else:
-		scene.box(Vector3(6.0, 0.022, 6.0), Vector3(7.4, 0.028, 4.2),
-			Mats.brutal_black_water(), false)
+		rack_lanes.assign([2.70, 4.70, 7.30, 9.30])
+	for row_index in rack_lanes.size():
+		var lane: float = rack_lanes[row_index]
+		# Rows close to the four concrete hall columns begin beyond the column
+		# footprint; the other rows can use the whole dense run.
+		var near_column := absf(lane - 1.70) < 0.95 \
+			or absf(lane - 10.30) < 0.95
+		_dense_rack_row(axis_x, lane, row_index % 2, long_span,
+			3.25 if near_column else 1.25)
+	# Guide and light every facing pair; the continuous transverse break through
+	# all rows remains the cross-route even in ten-row merged rooms.
+	for pair_start in range(0, rack_lanes.size() - 1, 2):
+		var aisle_lane: float = (rack_lanes[pair_start] \
+			+ rack_lanes[pair_start + 1]) * 0.5
+		_aisle_floor_guides(axis_x, aisle_lane, long_span)
+		_machine_room_light(
+			Vector3(6.0, 0.0, aisle_lane) if axis_x \
+			else Vector3(aisle_lane, 0.0, 6.0), 2.15)
+	var cable_y := minf(ctx.ceiling_height - 1.05, 3.55)
+	_overhead_busways(axis_x, rack_lanes, cable_y, long_span)
+
+
+func _dense_rack_row(axis_x: bool, lane: float, side: int,
+		long_span: float, end_inset := 1.25) -> void:
+	# Four clusters plus two closed racks make each 12m row read almost
+	# continuous. The deliberate 4m break around t=6 is the transverse service
+	# aisle, so higher density never turns the room into an impassable wall.
+	var rack_yaw := 0.0 if axis_x else PI * 0.5
+	if side == 1:
+		rack_yaw += PI
+	var limits := [
+		Vector2(6.0 - long_span * 0.5 + end_inset, 4.40),
+		Vector2(7.60, 6.0 + long_span * 0.5 - end_inset),
+	]
+	for limit in limits:
+		var points: Array[float] = []
+		var t: float = float(limit.x)
+		while t <= float(limit.y) + 0.01:
+			var p := Vector3(t, 0.0, lane) if axis_x \
+				else Vector3(lane, 0.0, t)
+			_network_rack(p, rack_yaw)
+			points.append(t)
+			t += 3.05
+		# The slim enclosed rack precisely fills the safe gap between the wider
+		# three-frame network clusters, adding density and visible variation.
+		for i in maxi(0, points.size() - 1):
+			var middle: float = (points[i] + points[i + 1]) * 0.5
+			var sp := Vector3(middle, 0.0, lane) if axis_x \
+				else Vector3(lane, 0.0, middle)
+			var variant := posmod(WorldGen.h(ctx.world_seed,
+				ctx.cell.x + int(round(middle * 10.0)),
+				ctx.cell.y + side, 2260), 3)
+			match variant:
+				0:
+					_server_rack(sp, rack_yaw)
+				1:
+					_glass_server_rack(sp, rack_yaw)
+				_:
+					_azure_server_rack(sp, rack_yaw)
+
+
+func _compact_server_field() -> void:
+	# Huge edge openings can leave no perimeter safe from the generic doorway
+	# approach cull. Build a compact machine island in the protected centre
+	# instead. Its shared x=6 break is also the safe-arrival path on the zero cell,
+	# so the player materializes among racks without materializing in one.
+	var lanes := [4.10, 5.10, 6.10, 7.10, 8.10]
+	var positions := [4.25, 5.25, 6.75, 7.75]
+	for row_index in lanes.size():
+		var lane: float = float(lanes[row_index])
+		# Alternating pairs face their cold aisle. The fifth bank has no sixth
+		# partner, so face it back toward the interior guide instead of presenting
+		# four blank rear panels to the room.
+		var yaw := PI if row_index % 2 == 1 \
+			or row_index == lanes.size() - 1 else 0.0
+		for position_index in positions.size():
+			var t: float = float(positions[position_index])
+			var p := Vector3(t, 0.0, lane)
+			var variant := posmod(WorldGen.h(ctx.world_seed,
+				ctx.cell.x + position_index, ctx.cell.y + row_index, 2280), 3)
+			match variant:
+				0:
+					_server_rack(p, yaw)
+				1:
+					_glass_server_rack(p, yaw)
+				_:
+					_azure_server_rack(p, yaw)
+	for guide_lane in [4.60, 6.60, 7.60]:
+		_aisle_floor_guides(true, float(guide_lane), 5.6)
+	_overhead_busways(true, lanes,
+		minf(ctx.ceiling_height - 1.05, 3.55), 5.6)
+	_machine_room_light(Vector3(6.0, 0.0, 4.60), 2.35)
+	_machine_room_light(Vector3(6.0, 0.0, 7.60), 2.10)
+
+
+func _emergency_beacon(at: Vector3) -> void:
+	var y := minf(ctx.ceiling_height - 0.62, 3.45)
+	var housing := scene.cylinder(Vector3(at.x, y, at.z), 0.18, 0.24,
+		Mats.data_center_warning(), false)
+	housing.set_meta("data_center_emergency_beacon", true)
+	var light := OmniLight3D.new()
+	light.position = Vector3(at.x, y - 0.10, at.z)
+	light.light_color = Color(1.0, 0.045, 0.018)
+	light.light_energy = 1.15
+	light.omni_range = 6.5
+	light.shadow_enabled = false
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = 16.0
+	light.distance_fade_length = 6.0
+	scene.add_node(light)
+
+
+func _passage_server_rows(along_x: bool, side_data: Array[Dictionary]) -> void:
+	# Passage cells are data aisles too: enclosed rack models form both walls,
+	# with explicit cuts around every real side opening. Their shallow footprints
+	# leave at least 1.4m clear through the middle of the 3.3m concrete shell.
+	var base_yaw := 0.0 if along_x else PI * 0.5
+	for entry in side_data:
+		var side := float(entry["side"])
+		var info: Dictionary = entry["info"]
+		var segments: Array = [[0.58, WorldGen.CELL_SIZE - 0.58]]
+		if not bool(info["wall"]):
+			var width := clampf(float(info["w"]), 2.25, 3.40)
+			var centre := clampf(float(info["t"]), width * 0.5 + 0.45,
+				WorldGen.CELL_SIZE - width * 0.5 - 0.45)
+			segments = scene.cut_segments(segments,
+				centre - width * 0.5 - 0.42,
+				centre + width * 0.5 + 0.42)
+		var lane := 6.0 + side * 1.17
+		var yaw := base_yaw + (PI if side > 0.0 else 0.0)
+		for segment in segments:
+			var t := float(segment[0]) + 0.48
+			var last := float(segment[1]) - 0.48
+			while t <= last + 0.01:
+				var p := Vector3(t, 0.0, lane) if along_x \
+					else Vector3(lane, 0.0, t)
+				var variant := posmod(WorldGen.h(ctx.world_seed,
+					ctx.cell.x + int(round(t * 10.0)),
+					ctx.cell.y + (0 if side < 0.0 else 31), 2270), 3)
+				var rack: Node3D
+				match variant:
+					0:
+						rack = _server_rack(p, yaw)
+					1:
+						rack = _glass_server_rack(p, yaw)
+					_:
+						rack = _azure_server_rack(p, yaw)
+				if rack != null:
+					rack.set_meta("data_center_passage_rack", true)
+					rack.set_meta("data_center_passage_side", int(signf(side)))
+				t += 1.02
+
+
+func _data_center_tunnel_dressing(along_x: bool) -> void:
+	var cable_y := TUNNEL_HEIGHT - 0.45
+	_overhead_busways(along_x, [5.28, 6.72], cable_y)
 
 
 func _brutal_passage() -> void:
@@ -332,7 +683,12 @@ func _brutal_passage() -> void:
 			else (1 if side < 0.0 else 0)
 		var info: Dictionary = scene.edge_info(ctx.cell, dir)
 		_brutal_tunnel_side(along_x, side, dir, info)
-		side_data.append({"side": side, "dir": dir, "wall": bool(info["wall"])})
+		side_data.append({
+			"side": side,
+			"dir": dir,
+			"wall": bool(info["wall"]),
+			"info": info,
+		})
 	# Close-spaced transverse ribs and one visible cable tray reinforce the
 	# change from monumental room to compressed service tunnel.
 	for t in [1.0, 3.5, 6.0, 8.5, 11.0]:
@@ -347,6 +703,8 @@ func _brutal_passage() -> void:
 	var tray_s := Vector3(WorldGen.CELL_SIZE, 0.08, 0.34) if along_x \
 		else Vector3(0.34, 0.08, WorldGen.CELL_SIZE)
 	_tunnel_box(tray_p, tray_s, "cable_tray", false, Mats.brutal_steel())
+	_passage_server_rows(along_x, side_data)
+	_data_center_tunnel_dressing(along_x)
 	# A long sealed wall gets one familiar Annex double door. It is a real
 	# authored facade backed by solid tunnel structure, never a fake route.
 	if ctx.random01(2190) < 0.72:
@@ -470,6 +828,8 @@ func _maybe_brutal_annex_door(salt: int, chance := 0.44) -> bool:
 func _brutal_hall() -> void:
 	_perimeter_columns()
 	_maybe_brutal_annex_door(2200)
+	var axis_x := ctx.random01(2143) < 0.5
+	_rack_aisle(axis_x)
 	if ctx.random01(2140) < 0.58:
 		_upper_gallery(ctx.random01(2141) < 0.5, -1.0 if ctx.random01(2142) < 0.5 else 1.0,
 			minf(ctx.ceiling_height * 0.58, ctx.ceiling_height - 2.5))
@@ -479,6 +839,7 @@ func _brutal_gallery() -> void:
 	_perimeter_columns()
 	_maybe_brutal_annex_door(2204, 0.50)
 	var axis_x := ctx.random01(2150) < 0.5
+	_rack_aisle(axis_x)
 	_upper_gallery(axis_x, -1.0, minf(3.65, ctx.ceiling_height - 2.2))
 	if ctx.ceiling_height > 8.0:
 		_upper_gallery(axis_x, 1.0, minf(6.9, ctx.ceiling_height - 2.2))
@@ -486,34 +847,46 @@ func _brutal_gallery() -> void:
 
 func _brutal_atrium() -> void:
 	_perimeter_columns()
-	_black_court(true)
 	_maybe_brutal_annex_door(2208, 0.34)
+	if ctx.cell == Vector2i.ZERO:
+		# Start inside the machine estate, not in a ceremonial empty lobby. Every
+		# row shares the x=6 transverse break, which keeps the safe-arrival sweep
+		# and a straight route out of the spawn while surrounding it with racks.
+		_compact_server_field()
+	else:
+		_rack_aisle(ctx.random01(2161) < 0.5)
 	var axis_x := ctx.random01(2160) < 0.5
 	_upper_gallery(axis_x, -1.0, minf(3.8, ctx.ceiling_height - 2.4))
 	_upper_gallery(not axis_x, 1.0, minf(7.1, ctx.ceiling_height - 2.4))
+	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
 
 
 func _brutal_water_court() -> void:
-	_black_court(false)
 	_maybe_brutal_annex_door(2212, 0.38)
-	for p in [Vector3(1.55, 0, 1.55), Vector3(10.45, 0, 1.55),
-			Vector3(1.55, 0, 10.45), Vector3(10.45, 0, 10.45)]:
-		_column(p, ctx.ceiling_height, 0.54)
+	# The former reflecting court is now a server hall with cooling on its
+	# service spine, never a room made exclusively from condensers. The normal
+	# A compact room gets five rows; a merged hall gets ten full rack rows.
+	var span := scene.room_span()
+	if span.x > 18.0 or span.y > 18.0:
+		_rack_aisle(true)
+	else:
+		_compact_server_field()
+	# Two individual condenser variants sit at the room ends. Both clear the
+	# nearest rack row while using the common x=6 transverse service break.
+	var cross_min := 6.0 - span.y * 0.5
+	var cross_max := 6.0 + span.y * 0.5
+	_cooling_unit(Vector3(6.0, 0.0, cross_min + 1.18), 0.0, 0)
+	_cooling_unit(Vector3(6.0, 0.0, cross_max - 1.18), PI, 2)
+	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
 
 
 func _brutal_ramp() -> void:
-	# A massive ascending procession seen from the room, deliberately kept
-	# outside the central cross-lane so it never becomes mandatory traversal.
+	# This room used to contain nine ascending concrete blocks that resembled a
+	# staircase but reached nothing. It is now a dense switching floor: continuous
+	# server rows, a transverse service gap and overhead cable feeds.
 	var along_x := ctx.random01(2170) < 0.5
-	var side := -1.0 if ctx.random01(2171) < 0.5 else 1.0
-	for i in 9:
-		var rise := 0.16 + float(i) * 0.30
-		var run := 1.35 + float(i) * 0.82
-		var p := Vector3(run, rise * 0.5, 6.0 + side * 3.65) if along_x \
-			else Vector3(6.0 + side * 3.65, rise * 0.5, run)
-		var s := Vector3(0.86, rise, 2.25) if along_x \
-			else Vector3(2.25, rise, 0.86)
-		scene.box(p, s, Mats.brutal_structure())
+	_rack_aisle(along_x)
+	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
 	_maybe_brutal_annex_door(2216, 0.48)
 
 
@@ -526,29 +899,22 @@ func _brutal_service() -> void:
 			var pipe := scene.cylinder(p, 0.11, 11.5, Mats.brutal_steel(), false)
 			pipe.rotation.z = PI * 0.5 if axis_x else 0.0
 			pipe.rotation.x = 0.0 if axis_x else PI * 0.5
-	for p2 in [Vector3(2.0, 0, 2.0), Vector3(10.0, 0, 10.0)]:
-		if ctx.descent:
-			# These service plinths are equipment, not structure. In Descent keep
-			# each visual and solid body atomic so a reality may move it safely.
-			var b0 := scene.collider_mark()
-			var plinth := scene.furnishing_pivot(
-				p2, 0.0, "monolith_service_plinth")
-			scene.model_box(plinth, Vector3(0, 1.25, 0),
-				Vector3(1.25, 2.5, 1.25), Mats.brutal_structure())
-			scene.collider_box(p2 + Vector3(0, 1.25, 0),
-				Vector3(1.25, 2.5, 1.25))
-			scene.bind_furnishing_colliders(plinth, b0)
-		else:
-			scene.box(p2 + Vector3(0, 1.25, 0),
-				Vector3(1.25, 2.5, 1.25), Mats.brutal_structure())
+	# Service rooms are still server rooms; the high pipe mains distinguish them
+	# without sacrificing the floor to two token cabinets and empty concrete.
+	_rack_aisle(axis_x)
+	_machine_room_light(Vector3(6.0, 0.0, 6.0), 2.10)
+	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
 	_maybe_brutal_annex_door(2220, 0.58)
 
 
 func _brutal_sanctum() -> void:
-	_black_court(true)
 	_maybe_brutal_annex_door(2224, 0.42)
-	for x in [1.35, 3.25, 8.75, 10.65]:
-		_column(Vector3(x, 0, 6.0), ctx.ceiling_height, 0.52)
+	_rack_aisle(true)
+	# One expensive hero rack anchors the far wall; the ordinary field does the
+	# visual work everywhere else. The central transverse break keeps it clear.
+	_detailed_server_rack(Vector3(6.0, 0.0, 10.90), PI)
+	_machine_room_light(Vector3(6.0, 0.0, 6.0), 2.35)
+	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
 	if ctx.ceiling_height > 8.2:
 		_upper_gallery(true, -1.0, 4.0)
 		_upper_gallery(true, 1.0, 7.2)

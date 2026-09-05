@@ -20,7 +20,7 @@ func run() -> void:
 	game._unhandled_input(zero)
 	await await_until(func(): return not game._switching)
 	expect(game.active_level == 10,
-		"0 key did not enter the Monolith")
+		"0 key did not enter the Data Center")
 	var filter_before: bool = game._post_process.is_enabled()
 	var video := InputEventKey.new()
 	video.pressed = true

@@ -87,7 +87,7 @@ Descent has eleven floors in a fixed order:
 7. Asylum
 8. Poolrooms
 9. Annex
-10. Monolith
+10. Data Center
 11. Bloom/Upside Down
 
 The first ten floors end in an elevator objective room containing a television,
@@ -290,7 +290,7 @@ or repeating warnings that were left for her.
 **Story movement:** The tapes themselves become part of the mystery without
 being explained as a mechanism.
 
-### Tape 10 — Monolith — “Acceptance”
+### Tape 10 — Data Center — “Acceptance”
 
 Cross is exhausted but almost peaceful. She no longer offers theories. She
 believes she is near an ending, but refuses to call it an escape. The sentiment

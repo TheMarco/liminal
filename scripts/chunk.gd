@@ -8,7 +8,7 @@ extends Node3D
 ## photo textures and models (ambientCG / Poly Haven) instead of pure math.
 ## Theme 6: a sealed school. Theme 7: an abandoned shopping mall.
 ## Theme 8: a decaying island prison.
-## Theme 9: the flooded Poolrooms. Theme 10: the concrete Monolith.
+## Theme 9: the flooded Poolrooms. Theme 10: the concrete Data Center.
 ## Theme 11: the organic civic nightmare of the Bloom.
 ## All geometry is local; the ChunkManager places the node at the cell origin.
 
@@ -478,9 +478,10 @@ const SCH_FOUNTAIN_CENTRE := Vector3(-0.0249, -0.9555, -0.0157)
 ## only ever have contributed a frame around a quad that five boxes already do.
 
 const PRISON_WALL_PHONE_PATH := \
-	"res://models/cc_by/wall_telephone/wall_telephone.glb"
-const PRISON_WALL_PHONE_SCALE := 0.01025
-const PRISON_WALL_PHONE_CENTRE := Vector3(13.5224, -18.2725, 0.0)
+	"res://models/prison/stainless_wall_phone/Stainless_Wall_Phone_GAME.glb"
+## Metric asset: centre vertically and align its back with the mounting plane.
+const PRISON_WALL_PHONE_SCALE := 1.0
+const PRISON_WALL_PHONE_CENTRE := Vector3(0.0, 0.1609867, -0.0318079)
 
 ## CC BY replacement for the former noncommercial school cart. Its source is
 ## 7.75 units high, so a 0.16 scale yields a realistic 1.24m trolley.
@@ -701,6 +702,26 @@ const POOL_LIGHT_PATH := "res://models/cc_by/pool_light/pool_light.glb"
 const POOL_LIGHT_SCALE := 0.045
 const BRUTAL_LIGHT_PATH := \
 	"res://models/cc_by/fluorescent_light_fixtures/fluorescent_light_fixtures.glb"
+const DATA_CENTER_CONSOLE_PATH := \
+	"res://models/cc_by/server_v2_console/server_v2_console.glb"
+const DATA_CENTER_RACK_BANK_PATH := \
+	"res://models/cc_by/server_rack/server_rack.glb"
+const DATA_CENTER_RACK_PATH := \
+	"res://models/cc_by/data_center_server_rack/data_center_server_rack.glb"
+const DATA_CENTER_NETWORK_RACK_PATH := \
+	"res://models/cc_by/network_server_rack/network_server_rack.glb"
+const DATA_CENTER_DETAILED_RACK_PATH := \
+	"res://models/cc_by/server_racking_system/server_racking_system.glb"
+const DATA_CENTER_GLASS_SERVER_PATH := \
+	"res://models/cc_by/server/server.glb"
+const DATA_CENTER_AZURE_SERVER_PATH := \
+	"res://models/cc_by/tall_server_of_base_with_azure_lane_island/" + \
+	"tall_server_of_base_with_azure_lane_island.glb"
+const DATA_CENTER_AC_PATHS := [
+	"res://models/cc_by/air_conditioners/air_conditioner_floor_a.scn",
+	"res://models/cc_by/air_conditioners/air_conditioner_floor_b.scn",
+	"res://models/cc_by/air_conditioners/air_conditioner_floor_c.scn",
+]
 const BLOOM_ROOT_PATH := "res://models/cc0/pine_roots/pine_roots.gltf"
 const BLOOM_VINES_PATH := "res://models/cc_by/modular_vines/modular_vines.glb"
 const BLOOM_FLESH_BLOB_PATH := "res://models/cc_by/flesh_blob/flesh_blob.glb"
@@ -865,6 +886,15 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(ANNEX_CHAIR_PATH)
 	paths.append(ANNEX_EXIT_DOOR_PATH)
 	paths.append(BRUTAL_LIGHT_PATH)
+	paths.append(DATA_CENTER_CONSOLE_PATH)
+	paths.append(DATA_CENTER_RACK_BANK_PATH)
+	paths.append(DATA_CENTER_RACK_PATH)
+	paths.append(DATA_CENTER_NETWORK_RACK_PATH)
+	paths.append(DATA_CENTER_DETAILED_RACK_PATH)
+	paths.append(DATA_CENTER_GLASS_SERVER_PATH)
+	paths.append(DATA_CENTER_AZURE_SERVER_PATH)
+	for ac_path in DATA_CENTER_AC_PATHS:
+		paths.append(ac_path)
 	paths.append(BLOOM_ROOT_PATH)
 	paths.append(BLOOM_VINES_PATH)
 	paths.append(BLOOM_FLESH_BLOB_PATH)
@@ -1091,6 +1121,9 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 		stage_started = Time.get_ticks_usec()
 		_apply_furniture_variant(mutation_furniture_variant)
 		_profile_stage("furniture_mutation", stage_started)
+	stage_started = Time.get_ticks_usec()
+	SurfaceWear.apply(self, _build_context)
+	_profile_stage("surface_wear", stage_started)
 	if anomaly_kind >= 0:
 		activate_anomaly(anomaly_kind)
 	if requested_blackout:
@@ -1225,7 +1258,7 @@ func _place_bleed_prop(at: Vector3, yaw: float) -> void:
 	intrusion.set_meta("bleed_prop", true)
 	add_child(intrusion)
 	if bleed_theme == 10:
-		# A concrete pier that belongs to the Monolith, run floor to ceiling.
+		# A concrete pier that belongs to the Data Center, run floor to ceiling.
 		var h := ceil_h - _floor_h()
 		_mbox(intrusion, Vector3(0, h * 0.5, 0), Vector3(0.82, h, 0.82),
 			Mats.brutal_structure())
@@ -1384,7 +1417,7 @@ func _descent_intro_tv(dir: int) -> void:
 			S / 2.0 + float(offsets[1]), float(offsets[0]))
 		var at: Vector3 = candidate["pos"]
 		var yaw := float(candidate["yaw"]) + PI
-		if not _floor_box_clear(at, yaw, 1.95, 0.82, 1.2):
+		if not _vhs_site_clear(at, yaw):
 			continue
 		if _optional_vhs_hits_doorway(at, yaw):
 			continue
@@ -1415,7 +1448,8 @@ func _descent_intro_tv(dir: int) -> void:
 ## wall site that does not overlap furniture or a doorway approach.
 func _build_optional_vhs_set() -> void:
 	if not descent or not optional_vhs or optional_vhs_key.is_empty() \
-			or descent_target or descent_arrival:
+			or descent_target or descent_arrival \
+			or not is_room_anchor:
 		return
 	var site := _pick_vhs_site()
 	if site.is_empty():
@@ -1476,18 +1510,39 @@ func _pick_vhs_site() -> Dictionary:
 			})
 	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 7391),
 		sites.size())
+	var footprint_fallback := {}
 	for i in sites.size():
 		var site: Dictionary = sites[(start + i) % sites.size()]
 		var yaw := float(site["yaw"])
 		var at: Vector3 = site["at"]
-		var clear := _floor_spot_clear(at, 1.05, 1.2) if theme == 9 \
-			else _floor_box_clear(at, yaw, 1.95, 0.82, 1.2)
-		if not clear:
+		var footprint_clear := _floor_spot_clear(at, 1.05, 1.2) \
+			if theme == 9 else _floor_box_clear(at, yaw, 1.95, 0.82, 1.2)
+		if not footprint_clear:
 			continue
 		if _optional_vhs_hits_doorway(at, yaw):
 			continue
-		return site
-	return {}
+		if _vhs_watch_path_clear(at, yaw):
+			return site
+		if footprint_fallback.is_empty():
+			footprint_fallback = site
+	# The private watch layer prevents a neighbouring prop from entering the
+	# close-up. Retain a furniture-safe set when a dense authored room cannot
+	# also provide the ideal camera corridor.
+	return footprint_fallback
+
+
+## The table footprint alone is not enough: playback puts a camera about half
+## a metre in front of the glass. Reserve that complete short view corridor so
+## dividers, desks and columns cannot occupy the eventual close-up.
+func _vhs_site_clear(at: Vector3, yaw: float) -> bool:
+	return _floor_box_clear(at, yaw, 1.95, 0.82, 1.2) \
+		and _vhs_watch_path_clear(at, yaw)
+
+
+func _vhs_watch_path_clear(at: Vector3, yaw: float) -> bool:
+	var local_centre := Vector3(-0.35, 0.0, 0.80)
+	var world_centre := at + local_centre.rotated(Vector3.UP, yaw)
+	return _floor_box_clear(world_centre, yaw, 1.10, 1.10, 1.65)
 
 
 func _optional_vhs_hits_doorway(at: Vector3, yaw: float) -> bool:
@@ -3601,7 +3656,7 @@ func _door_casing(dir: int, plane: float, a: float, b: float) -> void:
 	if theme == 9:
 		return
 	if theme == 10:
-		# The Monolith cuts a 3.15m portal. Its old generic casing stopped at
+		# The Data Center cuts a 3.15m portal. Its old generic casing stopped at
 		# DOOR_TOP (2.25m), leaving a conspicuous 90cm strip of naked opening
 		# above the lintel. Build one substantial cast-concrete surround to the
 		# exact same datum as the wall cut.
@@ -4471,15 +4526,13 @@ func _resolved_room_split_for(member: Vector2i) -> Array:
 
 
 func _build_props() -> void:
-	portal_dest = -1 if descent else WorldGen.portal(wseed, cell, theme)
-	if portal_dest >= 0:
-		_build_portal(portal_dest)
+	portal_dest = -1
 	# Cell strips hug their own cell's walls, so every cell of a merged block
 	# builds its own — the anchor-only path would leave the rest of the block
 	# as bare box rooms.
 	if not is_room_anchor and style == WorldGen.PRISON_CELLBLOCK and not descent_target:
 		_level_builder._prison_cellblock()
-	# Monolith tunnels are cell-local circulation shells. A corridor cell can
+	# Data Center tunnels are cell-local circulation shells. A corridor cell can
 	# belong to a merged room whose anchor is elsewhere; skipping it here would
 	# widen that one twelve-metre segment back into an empty hall.
 	if not is_room_anchor and style == WorldGen.BRUTAL_PASSAGE and not descent_target:
@@ -7254,76 +7307,6 @@ func _small_desk(p: Vector3, yaw: float) -> void:
 	_task_chair(p + Vector3(sin(yaw) * 0.95, 0, cos(yaw) * 0.95), yaw + PI)
 
 
-# --- portals ------------------------------------------------------------------
-
-## A swirling tear in the middle of the room, tinted for wherever it goes.
-## The Area3D hands the player to main when they step in.
-func _build_portal(dest: int) -> void:
-	var c := Vector3(S / 2.0, _floor_h(), S / 2.0)
-	var pt := Portal.new()
-	pt.dest = dest
-	pt.cellv = cell
-	pt.position = c
-	var cs := CollisionShape3D.new()
-	var sh := BoxShape3D.new()
-	sh.size = Vector3(1.0, 2.3, 1.0)
-	cs.shape = sh
-	cs.position = Vector3(0, 1.2, 0)
-	pt.add_child(cs)
-	add_child(pt)
-	# the swirl itself — billboard quad, scaled in-shader
-	var disc := MeshInstance3D.new()
-	disc.mesh = QUAD
-	disc.material_override = Mats.portal(dest)
-	disc.position = Vector3(0, 1.35, 0)
-	disc.scale = Vector3(2.3, 2.3, 1.0)
-	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	pt.add_child(disc)
-	# glow pooled on the floor
-	var fl := MeshInstance3D.new()
-	fl.mesh = QUAD
-	fl.material_override = Mats.portal_floor(dest)
-	fl.position = Vector3(0, 0.03, 0)
-	fl.rotation.x = -PI / 2.0
-	fl.scale = Vector3(3.2, 3.2, 1.0)
-	fl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	pt.add_child(fl)
-	# three sparks in orbit
-	var orb := Node3D.new()
-	orb.position = Vector3(0, 1.35, 0)
-	pt.add_child(orb)
-	pt.sparks = orb
-	for i in 3:
-		var ang := TAU * float(i) / 3.0
-		var sp := MeshInstance3D.new()
-		sp.mesh = SPH
-		sp.material_override = Mats.portal_spark(dest)
-		sp.position = Vector3(cos(ang) * 1.15, sin(ang * 2.0) * 0.45, sin(ang) * 1.15)
-		sp.scale = Vector3.ONE * 0.08
-		sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		orb.add_child(sp)
-	# light of the other place leaking through
-	var l := OmniLight3D.new()
-	l.light_color = Mats.PORTAL_COLS[dest][0]
-	l.light_energy = 1.1
-	l.omni_range = 6.5
-	l.position = Vector3(0, 1.5, 0)
-	l.shadow_enabled = false
-	l.distance_fade_enabled = true
-	l.distance_fade_begin = 22.0
-	l.distance_fade_length = 8.0
-	pt.add_child(l)
-	var hum := AudioStreamPlayer3D.new()
-	hum.stream = SoundBank.portal_hum()
-	hum.unit_size = 3.0
-	hum.max_distance = 18.0
-	hum.volume_db = -9.0
-	hum.bus = SoundBank.HALL_BUS
-	hum.autoplay = true
-	hum.position = Vector3(0, 1.35, 0)
-	pt.add_child(hum)
-
-
 # --- vegas: grand chandelier is above; shared below --------------------------
 
 
@@ -7367,6 +7350,7 @@ func _load_model(mname: String, pos: Vector3, yaw: float) -> Node3D:
 		ps = _prop_scene("res://models/asylum/%s/%s_1k.gltf" % [mname, mname])
 		_asy_scenes[mname] = ps
 	var inst: Node3D = ps.instantiate()
+	inst.set_meta("surface_wear_prop", mname)
 	inst.position = pos
 	inst.rotation.y = yaw
 	add_child(inst)
@@ -7380,6 +7364,7 @@ func _cc0_prop(mname: String, pos: Vector3, yaw: float, scl := 1.0) -> Node3D:
 		ps = _prop_scene("res://models/cc0/%s/%s_1k.gltf" % [mname, mname])
 		_cc0_scenes[mname] = ps
 	var inst: Node3D = ps.instantiate()
+	inst.set_meta("surface_wear_prop", mname)
 	inst.position = pos
 	inst.rotation.y = yaw
 	if scl != 1.0:
@@ -7398,6 +7383,7 @@ func _cc0_prop_local(parent: Node3D, mname: String, pos: Vector3,
 		ps = _prop_scene("res://models/cc0/%s/%s_1k.gltf" % [mname, mname])
 		_cc0_scenes[mname] = ps
 	var inst: Node3D = ps.instantiate()
+	inst.set_meta("surface_wear_prop", mname)
 	inst.position = pos
 	inst.rotation.y = yaw
 	if scl != 1.0:
@@ -7621,6 +7607,7 @@ func _task_chair(pos: Vector3, yaw: float) -> Node3D:
 		ps = _prop_scene(OFFICE_CHAIR_PATH)
 		_cc0_scenes["office_chair"] = ps
 	var inst: Node3D = ps.instantiate()
+	inst.set_meta("surface_wear_prop", "office_task_chair")
 	inst.position = pos + Vector3(0, 0.50676, 0)
 	inst.rotation.y = yaw
 	_set_model_material(inst, Mats.office_task_chair())
@@ -8183,6 +8170,13 @@ func prison_visitation_phone_audit() -> Dictionary:
 		for child in node.find_children("*", "Node3D", true, false):
 			if child.has_meta("prison_visitation_phone"):
 				booth_phones += 1
+				var authored_phones := 0
+				for model in child.find_children("*", "Node3D", true, false):
+					if str(model.get_meta("authored_model", "")) == "visitation_phone" \
+							and str(model.get_meta("attributed_asset", "")) == PRISON_WALL_PHONE_PATH:
+						authored_phones += 1
+				if authored_phones != 1:
+					report["violations"] = int(report["violations"]) + 1
 		report["phones"] = int(report["phones"]) + booth_phones
 		if booth_phones != 2:
 			report["violations"] = int(report["violations"]) + 1

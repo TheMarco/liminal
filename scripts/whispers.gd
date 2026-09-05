@@ -51,7 +51,7 @@ func _ready() -> void:
 		_dev = true
 
 
-## Level switch or portal jump: whatever was muttering stays behind.
+## Level switch: whatever was muttering stays behind.
 func stop() -> void:
 	if is_instance_valid(_p3d):
 		_p3d.stop()

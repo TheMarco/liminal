@@ -685,17 +685,16 @@ func _prison_industry() -> void:
 
 func _prison_visitation_phone(parent: Node3D, side_z: float) -> void:
 	var phone = Node3D.new()
-	phone.position = Vector3(0, 0, side_z * 0.08)
+	phone.position = Vector3(0, 0, side_z * 0.28)
 	phone.set_meta("prison_visitation_phone", true)
 	phone.set_meta("enrichment_prop", "visitation_phone")
 	parent.add_child(phone)
-	# The authored handset carries its own body, cradle and coiled cord. It
-	# hangs on the divider facing whichever side of the glass this booth is,
-	# which is what `side_z` selects. Its centre is corrected under a pivot
-	# rather than in the offset, so the turn cannot get the sign wrong.
+	# Mount to the inner face of a solid side divider, facing into the booth.
+	# Mirror the wall and quarter-turn across the glass so each occupant has
+	# the same arrangement. The source's back is aligned beneath this pivot.
 	var mount = Node3D.new()
-	mount.position = Vector3(0.42, 1.28, 0.0)
-	mount.rotation.y = 0.0 if side_z > 0.0 else PI
+	mount.position = Vector3(side_z * 0.6215, 1.28, 0.0)
+	mount.rotation.y = -side_z * PI / 2.0
 	phone.add_child(mount)
 	var hung = scene.attributed_prop_local(mount, Chunk.PRISON_WALL_PHONE_PATH,
 		Vector3(-Chunk.PRISON_WALL_PHONE_CENTRE.x, -Chunk.PRISON_WALL_PHONE_CENTRE.y,
@@ -703,38 +702,6 @@ func _prison_visitation_phone(parent: Node3D, side_z: float) -> void:
 		0.0, Vector3.ONE * Chunk.PRISON_WALL_PHONE_SCALE)
 	if hung != null:
 		hung.set_meta("authored_model", "visitation_phone")
-		return
-	mount.get_parent().remove_child(mount)
-	mount.free()
-	# Wall plate and keypad on the occupant's side of the glass.
-	scene.model_rounded_box(phone, Vector3(0.33, 1.35, 0),
-		Vector3(0.34, 0.46, 0.09), Mats.prison_green(), 0.025)
-	for row in 3:
-		for col in 2:
-			var key = scene.model_cylinder(phone, Vector3(0.25 + float(col) * 0.085,
-				1.25 + float(row) * 0.085, side_z * 0.052),
-				0.018, 0.018, Mats.metal_gray())
-			key.rotation.x = PI / 2.0
-	# A heavy vertical receiver with distinct ear and mouth caps.
-	scene.model_rounded_box(phone, Vector3(0.51, 1.37, side_z * 0.075),
-		Vector3(0.085, 0.34, 0.085), Mats.charcoal(), 0.025)
-	for py in [1.18, 1.56]:
-		var cap = scene.model_cylinder(phone, Vector3(0.51, py, side_z * 0.075),
-			0.075, 0.11, Mats.rubber_black())
-		cap.rotation.x = PI / 2.0
-	for py in [1.22, 1.52]:
-		scene.model_box(phone, Vector3(0.45, py, side_z * 0.04),
-			Vector3(0.08, 0.045, 0.09), Mats.prison_iron())
-	# Slack cord drops to the counter in a crooked, readable loop.
-	var cord = [
-		Vector3(0.50, 1.15, side_z * 0.09),
-		Vector3(0.55, 1.06, side_z * 0.11),
-		Vector3(0.48, 0.98, side_z * 0.12),
-		Vector3(0.56, 0.91, side_z * 0.12),
-		Vector3(0.45, 0.86, side_z * 0.10),
-	]
-	for i in cord.size() - 1:
-		scene.model_beam(phone, cord[i], cord[i + 1], 0.012, Mats.rubber_black())
 
 
 func _prison_visitation_booth(p: Vector3) -> void:

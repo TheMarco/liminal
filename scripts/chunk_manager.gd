@@ -340,7 +340,13 @@ func _is_optional_vhs_cell(c: Vector2i) -> bool:
 		return true
 	# Route frequency is explicitly authored above. Independent rolls here
 	# would make a lucky route contain six televisions and another contain none.
-	if descent_route.is_path_cell(c):
+	if descent_route.is_path_room(c):
+		return false
+	var room := WorldGen.annex_room_id(world_seed, c) if theme == 2 \
+		else WorldGen.room_id(world_seed, c)
+	# Merged-room furniture is owned by the anchor chunk, so only that chunk can
+	# make an honest collision-aware placement decision for an off-route set.
+	if room != c:
 		return false
 	if theme == 9 and not Chunk.pool_style_dry(
 			WorldGen.cell_style(world_seed, c, theme)):

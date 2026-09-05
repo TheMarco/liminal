@@ -31,7 +31,7 @@ const INSTRUCTION_ROWS := [
 	["E", "Use terminals, lifts, doors and charging stations"],
 	["F", "Toggle the flashlight"],
 	["1  —  9", "Move between the original floors  ·  Wander only"],
-	["0", "Enter the Monolith  ·  Wander only"],
+	["0", "Enter the Data Center  ·  Wander only"],
 	["−", "Enter the Bloom  ·  Wander only"],
 	["V", "Toggle the video filter"],
 	["B", "Switch CRT / recovered-tape video mode"],
@@ -56,9 +56,10 @@ const CREDIT_SECTIONS := [
 			"MALL   AdrianXY · mtaesiri · kapookkt · shirlanne · matejbiskup97 · Katydid",
 			"    Some Random Mall Modeller · MaX3Dd",
 			"PRISON   neverfollow81 · Mark Peters · Mehdi Shahsavan / adventurer",
-			"    dudecon · ShepDes",
+			"    dudecon",
 			"POOLROOMS   NXTLVLPLY · CadmiumCoffee (bsishir) · JackFarrand",
-			"MONOLITH   Mark Peters · carlcapu9",
+			"DATA CENTER   Mark Peters · carlcapu9 · FlevasGR · JamieDTran",
+			"    EntropyNine · Khoa Nguyen · Lora · wpanayides · JmPrsh153 · Network manager",
 			"BLOOM   Somersby · ChopperManiac · Mark Peters",
 			"CC BY 4.0 except  Katydid  ·  CC BY-NC 4.0",
 			"and  dannaki_, assetfactory, MaX3Dd  ·  Sketchfab Standard",
@@ -198,8 +199,8 @@ func _build_instructions() -> void:
 	_page_heading(page, "INSTRUCTIONS", "THE BUILDING WILL NOT EXPLAIN ITSELF TWICE")
 
 	var wander := _paragraph(
-		"WANDER  /  Explore eleven endless procedural worlds. Elevators and "
-		+ "portals carry you between floors, and every floor remembers where "
+		"WANDER  /  Explore eleven endless procedural worlds. Number keys and "
+		+ "physical elevators carry you between floors, and every floor remembers where "
 		+ "you left it.", 17, BODY, 820)
 	page.add_child(wander)
 	var descent := _paragraph(

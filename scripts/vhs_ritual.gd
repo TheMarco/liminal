@@ -30,6 +30,11 @@ const WATCH_SCREEN_HEIGHT := 0.93
 ## The cabinet is wider on its control side. Aim slightly right of the glass so
 ## the complete set shifts left in-frame and covers the last strip of room.
 const WATCH_CAMERA_RIGHT_OFFSET := 0.065
+## The playback camera renders only this set. A clearance bug or neighbouring
+## streamed chunk can no longer put a wall/prop between the lens and the tube;
+## ordinary cameras still see the models through their original layer 1 bit.
+const WATCH_LAYER_BIT := 15
+const WATCH_LAYER := 1 << WATCH_LAYER_BIT
 const FOUR_BY_THREE := 4.0 / 3.0
 var world_seed := 1
 var floor_idx := 0
@@ -95,6 +100,7 @@ func _ready() -> void:
 	_build_audio()
 	_build_discovery_cue()
 	_build_interactable()
+	_add_watch_layer(self)
 	set_process_unhandled_input(false)
 	_present_idle()
 
@@ -111,6 +117,16 @@ func _model(path: String, scl: float, pos: Vector3, yaw := 0.0) -> Node3D:
 	inst.set_meta("attributed_asset", path)
 	add_child(inst)
 	return inst
+
+
+## Give every physical piece of this particular altar a private presentation
+## layer without removing its normal world layer. Imported scenes can nest
+## meshes several levels deep, so this must recurse from the ritual root.
+func _add_watch_layer(node: Node) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).layers |= WATCH_LAYER
+	for child in node.get_children():
+		_add_watch_layer(child)
 
 
 func _build_furniture() -> void:
@@ -310,6 +326,7 @@ func _begin_watch(viewer: Player) -> void:
 		_cam = Camera3D.new()
 		_cam.fov = 50.0
 		add_child(_cam)
+	_cam.cull_mask = WATCH_LAYER
 	_cam.global_transform = _prev_cam.global_transform
 	_cam.make_current()
 	# Fit the full tube vertically instead of zooming until its 4:3 content is

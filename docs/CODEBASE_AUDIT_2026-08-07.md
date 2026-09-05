@@ -151,7 +151,7 @@ Measured steady-state generation results:
 | Mall | 1.86 ms | 2.85 ms | 3.08 ms |
 | Prison | 1.82 ms | 3.81 ms | 3.97 ms |
 | Poolrooms | 4.61 ms | 7.90 ms | 8.99 ms |
-| Monolith | 1.46 ms | 2.27 ms | 2.91 ms |
+| Data Center | 1.46 ms | 2.27 ms | 2.91 ms |
 | Bloom | 20.99 ms | 111.68 ms | 113.37 ms |
 
 First-use maxima also reached roughly 90 ms for Annex, 111 ms for Bloom, and 57 ms for School. One Bloom chunk can consume many frame budgets by itself, while a mutation rebuilding multiple owning-room cells can compound that hitch.
