@@ -106,6 +106,13 @@ func _prison_bars(origin: Vector3, yaw: float, width: float, height: float,
 				Mats.prison_iron())
 		scene.model_box(v, Vector3(0, height - 0.18, 0), Vector3(gate_half * 2.0, 0.08, 0.08),
 			Mats.prison_iron())
+		var gate_key = "prison_gate_plates_w%.3f_h%.3f" % [width, height]
+		ProceduralDetails.attach(v, gate_key, func(d: ProceduralDetails):
+			d.box(Vector3(gate_half - 0.01, 1.08, -0.055), Vector3(0.18, 0.30, 0.035), Mats.iron_dark(), 0.012)
+			d.box(Vector3(gate_half - 0.01, 1.08, -0.078), Vector3(0.055, 0.11, 0.025), Mats.brass(), 0.008)
+			for sx in [-gate_half, gate_half]:
+				d.box(Vector3(sx, 0.12, 0), Vector3(0.18, 0.055, 0.18), Mats.prison_iron(), 0.008)
+		)
 	if solid:
 		if with_gate:
 			var side_w = width * 0.5 - gate_half
@@ -204,6 +211,12 @@ func _prison_corridor() -> void:
 		for lz in [-0.42, 0.42]:
 			scene.model_box(table, Vector3(lx, 0.49, lz), Vector3(0.09, 0.98, 0.09),
 				Mats.prison_iron())
+	ProceduralDetails.attach(table, "prison_shakedown_underframe_1.1", func(d: ProceduralDetails):
+		for z in [-0.42, 0.42]:
+			d.tube(Vector3(-0.42, 0.28, z), Vector3(0.42, 0.28, z), 0.025, Mats.prison_iron())
+		for x in [-0.42, 0.42]:
+			d.tube(Vector3(x, 0.18, -0.42), Vector3(x, 0.18, 0.42), 0.022, Mats.prison_iron())
+	)
 	scene.collider_box(Vector3(6, 0.55, 6), Vector3(1.1, 1.1, 1.1))
 	scene.bind_furnishing_colliders(table, table_b0)
 	if ctx.random01(1830) < 0.45:
@@ -399,6 +412,12 @@ func _prison_cells() -> void:
 			Mats.prison_iron())
 	scene.model_box(desk, Vector3(0, 0.20, 0), Vector3(1.12, 0.06, 0.08),
 		Mats.prison_iron())
+	ProceduralDetails.attach(desk, "prison_writing_table_underframe_1.35", func(d: ProceduralDetails):
+		d.tube(Vector3(-0.55, 0.56, -0.24), Vector3(0.55, 0.56, -0.24), 0.022, Mats.prison_iron())
+		d.tube(Vector3(-0.55, 0.56, 0.24), Vector3(0.55, 0.56, 0.24), 0.022, Mats.prison_iron())
+		for x in [-0.55, 0.55]:
+			d.box(Vector3(x, 0.025, 0), Vector3(0.20, 0.05, 0.58), Mats.prison_iron(), 0.008)
+	)
 	scene.collider_yaw_box(Vector3(8.8, 0.42, 6.4), Vector3(1.35, 0.84, 0.64), 0)
 	scene.bind_furnishing_colliders(desk, desk_b0)
 	if ctx.random01(1877) < 0.5:
@@ -413,6 +432,15 @@ func _prison_mess_table(p: Vector3, yaw: float) -> void:
 		scene.model_box(v, Vector3(0, 0.48, z), Vector3(3.2, 0.09, 0.35), Mats.prison_green())
 		for x in [-1.35, 1.35]:
 			scene.model_box(v, Vector3(x, 0.27, z), Vector3(0.08, 0.54, 0.08), Mats.prison_iron())
+	ProceduralDetails.attach(v, "prison_mess_table_frame_l3.5", func(d: ProceduralDetails):
+		for x in [-1.35, 1.35]:
+			d.tube(Vector3(x, 0.08, -0.88), Vector3(x, 0.70, -0.34), 0.025, Mats.prison_iron())
+			d.tube(Vector3(x, 0.08, 0.88), Vector3(x, 0.70, 0.34), 0.025, Mats.prison_iron())
+			for z in [-0.88, 0.88]:
+				d.box(Vector3(x, 0.025, z), Vector3(0.22, 0.05, 0.25), Mats.prison_iron(), 0.008)
+				d.box(Vector3(x, 0.51, z), Vector3(0.18, 0.24, 0.05), Mats.iron_dark(), 0.006)
+		d.tube(Vector3(-1.35, 0.36, 0), Vector3(1.35, 0.36, 0), 0.03, Mats.prison_iron())
+	)
 	# A few abandoned stainless trays, cups and one dented food tin stop the
 	# room reading as four pristine geometry blocks.
 	for ti in 2:
@@ -458,6 +486,21 @@ func _prison_mess() -> void:
 		var well_b = scene.surface_facing_box(d, plane, 0.30, 7.6, 1.05, 2.2, 0.24, 0.35, Mats.steel())
 		scene.adopt_local(service, well_a)
 		scene.adopt_local(service, well_b)
+		var serving_key = "prison_serving_detail_d%d_plane%.3f" % [d, plane]
+		ProceduralDetails.attach(service, serving_key, func(det: ProceduralDetails):
+			for along in [2.6, 4.9, 7.1, 9.4]:
+				var seam = _wall_pt(d, along, 1.17, 0.58)
+				var seam_size = Vector3(0.018, 0.82, 0.035) if d < 2 else Vector3(0.035, 0.82, 0.018)
+				det.box(seam, seam_size, Mats.iron_dark())
+			for along in [4.2, 7.6]:
+				var wc = _wall_pt(d, along, 0.86, 1.18)
+				if d < 2:
+					for z in [-1.10, 1.10]:
+						det.box(wc + Vector3(0, 0, z), Vector3(0.40, 0.025, 0.035), Mats.steel())
+				else:
+					for x in [-1.10, 1.10]:
+						det.box(wc + Vector3(x, 0, 0), Vector3(0.035, 0.025, 0.40), Mats.steel())
+		)
 		scene.bind_furnishing_colliders(service, service_b0)
 		break
 	# Put the clock on the same real wall as the serving line. The old fixed
@@ -495,6 +538,11 @@ func _prison_shower_station(wall: int, along: float) -> void:
 	scene.model_box(v, Vector3(0, 1.25, -0.07), Vector3(0.035, 0.30, 0.035),
 		Mats.prison_green())
 	scene.model_cylinder(v, Vector3(0, 1.25, -0.11), 0.035, 0.04, Mats.chrome()).rotation.x = PI / 2.0
+	ProceduralDetails.attach(v, "prison_shower_valve_hardware_v1", func(d: ProceduralDetails):
+		d.ring(Vector3(0, 1.25, -0.105), 0.105, 0.012, Mats.prison_iron(), Vector3.FORWARD)
+		for yy in [1.58, 1.96]:
+			d.box(Vector3(0, yy, -0.012), Vector3(0.11, 0.045, 0.05), Mats.prison_iron(), 0.008)
+	)
 	# Bent arm and a thick shower rose aimed down into the room.
 	# Plumbing stays at human height even in a double-height washroom.
 	var arm_y = minf(2.36, ctx.ceiling_height - 0.35)
@@ -511,6 +559,16 @@ func _prison_shower_station(wall: int, along: float) -> void:
 	var face = scene.model_cylinder(v, Vector3(0, arm_y - 0.215, -0.725), 0.135, 0.012,
 		Mats.charcoal())
 	face.rotation.x = 0.60
+	var perforations = Node3D.new()
+	perforations.position = Vector3(0, arm_y - 0.222, -0.730)
+	perforations.rotation.x = 0.60
+	v.add_child(perforations)
+	ProceduralDetails.attach(perforations, "prison_shower_face_perforations_r0.135_13", func(d: ProceduralDetails):
+		for hole in [Vector2.ZERO, Vector2(-0.055, 0), Vector2(0.055, 0),
+				Vector2(0, -0.055), Vector2(0, 0.055), Vector2(-0.04, -0.04),
+				Vector2(0.04, -0.04), Vector2(-0.04, 0.04), Vector2(0.04, 0.04)]:
+			d.box(Vector3(hole.x, -0.008, hole.y), Vector3(0.012, 0.004, 0.012), Mats.prison_iron(), 0.004)
+	)
 	# Soap dish and drain-cleaning hose hook at waist height.
 	scene.model_rounded_box(v, Vector3(0.28, 0.92, -0.10), Vector3(0.34, 0.045, 0.24),
 		Mats.prison_iron(), 0.018)
@@ -546,6 +604,13 @@ func _prison_shower() -> void:
 	for bx in [-2.7, 0.0, 2.7]:
 		scene.model_box(bench, Vector3(bx, 0.36, 0), Vector3(0.08, 0.72, 0.38),
 			Mats.prison_iron())
+	ProceduralDetails.attach(bench, "prison_shower_bench_slats_l5.8", func(d: ProceduralDetails):
+		for z in [-0.15, 0.0, 0.15]:
+			d.box(Vector3(0, 0.776, z), Vector3(5.76, 0.012, 0.018), Mats.iron_dark())
+		for x in [-2.7, 0.0, 2.7]:
+			d.tube(Vector3(x, 0.08, -0.16), Vector3(x, 0.66, 0.16), 0.022, Mats.prison_iron())
+			d.tube(Vector3(x, 0.08, 0.16), Vector3(x, 0.66, -0.16), 0.022, Mats.prison_iron())
+	)
 	scene.collider_yaw_box(bench_pos + Vector3(0, 0.42, 0),
 		Vector3(5.8, 0.84, 0.48), scene.yaw_for(wall))
 	scene.bind_furnishing_colliders(bench, bench_b0)
@@ -622,6 +687,13 @@ func _prison_guard() -> void:
 			scene.model_box(keys, Vector3(-0.17 + float(kx) * 0.17,
 				0.92 + float(ky) * 0.22, -0.245), Vector3(0.025, 0.05, 0.015),
 				Mats.brass())
+	ProceduralDetails.attach(keys, "prison_key_cabinet_door_0.72x1.90", func(d: ProceduralDetails):
+		for x in [-0.30, 0.30]:
+			d.box(Vector3(x, 0.95, -0.238), Vector3(0.025, 1.72, 0.025), Mats.prison_iron())
+		for y in [0.09, 1.81]:
+			d.box(Vector3(0, y, -0.238), Vector3(0.62, 0.025, 0.025), Mats.prison_iron())
+		d.ring(Vector3(0.23, 0.95, -0.262), 0.045, 0.012, Mats.brass(), Vector3.FORWARD)
+	)
 	scene.collider_yaw_box(key_pos + Vector3(0, 0.95, 0), Vector3(0.74, 1.9, 0.44), 0)
 	scene.bind_furnishing_colliders(keys, key_b0)
 	var monitor_b0 = scene.collider_mark()
@@ -641,6 +713,17 @@ func _prison_guard() -> void:
 		scene.model_rounded_box(mv, mp, Vector3(0.5, 0.42, 0.42), Mats.iron_dark(), 0.025)
 		scene.model_box(mv, mp + Vector3(0, 0, -0.215),
 			Vector3(0.38, 0.30, 0.01), Mats.screen_glow() if mi == 2 else Mats.screen_dark())
+	ProceduralDetails.attach(mv, "prison_monitor_console_crt4_v1", func(d: ProceduralDetails):
+		for mi in 4:
+			var mp = Vector3(-0.28 + 0.56 * float(mi % 2), 0.94 + 0.49 * float(mi / 2), 0)
+			for x in [-0.205, 0.205]:
+				d.box(mp + Vector3(x, 0, -0.226), Vector3(0.025, 0.36, 0.025), Mats.prison_iron())
+			for y in [-0.165, 0.165]:
+				d.box(mp + Vector3(0, y, -0.226), Vector3(0.435, 0.025, 0.025), Mats.prison_iron())
+			d.box(mp + Vector3(0.15, -0.145, -0.245), Vector3(0.035, 0.025, 0.018), Mats.brass(), 0.006)
+		for x in [-0.42, -0.21, 0.0, 0.21, 0.42]:
+			d.box(Vector3(x, 0.48, -0.302), Vector3(0.10, 0.018, 0.012), Mats.iron_dark())
+	)
 	scene.collider_yaw_box(mv.position + Vector3(0, 0.9, 0), Vector3(1.25, 1.9, 0.55), mv.rotation.y)
 	scene.bind_furnishing_colliders(mv, monitor_b0)
 
@@ -657,8 +740,16 @@ func _prison_industry() -> void:
 				Mats.prison_iron())
 		scene.collider_yaw_box(p + Vector3(0, 0.5, 0), Vector3(4.6, 1.0, 1.2), 0)
 		# a vice and left-behind work on each bench
-		scene.model_box(bench, Vector3(-1.2, 0.95, 0.2), Vector3(0.24, 0.22, 0.18),
+		scene.model_box(bench, Vector3(-1.2, 0.91, 0.2), Vector3(0.30, 0.14, 0.24),
 			Mats.iron_dark())
+		ProceduralDetails.attach(bench, "prison_workbench_vice_and_brace_l4.6", func(d: ProceduralDetails):
+			d.box(Vector3(-1.2, 1.01, 0.13), Vector3(0.34, 0.14, 0.08), Mats.prison_iron(), 0.008)
+			d.box(Vector3(-1.2, 1.01, 0.27), Vector3(0.34, 0.14, 0.08), Mats.prison_iron(), 0.008)
+			d.tube(Vector3(-1.42, 0.91, 0.34), Vector3(-0.98, 0.91, 0.34), 0.018, Mats.prison_iron())
+			d.box(Vector3(-1.46, 0.91, 0.34), Vector3(0.06, 0.12, 0.06), Mats.iron_dark(), 0.008)
+			d.tube(Vector3(-2.0, 0.25, -0.40), Vector3(2.0, 0.25, -0.40), 0.028, Mats.prison_iron())
+			d.tube(Vector3(-2.0, 0.25, 0.40), Vector3(2.0, 0.25, 0.40), 0.028, Mats.prison_iron())
+		)
 		if ctx.random01(1893 + int(z)) < 0.6:
 			scene.model_box(bench, Vector3(1.1, 0.90, -0.15), Vector3(0.5, 0.12, 0.35),
 				Mats.box_white())
@@ -722,6 +813,13 @@ func _prison_visitation_booth(p: Vector3) -> void:
 		Mats.prison_green())
 	scene.model_box(booth, Vector3(0, 1.75, 0), Vector3(1.34, 1.7, 0.055),
 		Mats.mall_glass())
+	ProceduralDetails.attach(booth, "prison_visitation_frame_w1.34_h1.7", func(d: ProceduralDetails):
+		for x in [-0.64, 0.64]:
+			d.box(Vector3(x, 1.75, -0.04), Vector3(0.045, 1.72, 0.045), Mats.iron_dark(), 0.006)
+		for y in [0.90, 2.60]:
+			d.box(Vector3(0, y, -0.04), Vector3(1.32, 0.045, 0.045), Mats.iron_dark(), 0.006)
+		d.box(Vector3(0, 0.88, 0), Vector3(0.38, 0.035, 0.24), Mats.iron_dark(), 0.008)
+	)
 	for side_x in [-1.0, 1.0]:
 		scene.model_box(booth, Vector3(side_x * 0.65, 1.28, 0),
 			Vector3(0.055, 1.95, 1.1), Mats.prison_iron())
@@ -732,6 +830,10 @@ func _prison_visitation_booth(p: Vector3) -> void:
 			Mats.prison_iron())
 		scene.model_cylinder(booth, Vector3(0, 0.63, stool_z), 0.19, 0.06,
 			Mats.prison_green())
+		ProceduralDetails.attach(booth, "prison_visitation_stool_baseplates_z%.2f" % stool_z,
+			func(d: ProceduralDetails):
+				d.box(Vector3(0, 0.025, stool_z), Vector3(0.28, 0.05, 0.28), Mats.prison_iron(), 0.012)
+		)
 		scene.collider_cylinder(p + Vector3(0, 0.35, stool_z), 0.20, 0.70)
 	scene.collider_yaw_box(p + Vector3(0, 0.75, 0), Vector3(1.34, 1.5, 1.2), 0)
 	scene.bind_furnishing_colliders(booth, b0)

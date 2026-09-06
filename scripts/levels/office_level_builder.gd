@@ -110,6 +110,14 @@ func _office_floor_files(p: Vector3, salt: int) -> void:
 		var y = 0.70 if i == 2 else 0.24
 		scene.model_rounded_box(v, Vector3(0, y, 0), Vector3(0.58, 0.46, 0.48), Mats.box_white(), 0.015)
 		scene.model_box(v, Vector3(0, y + 0.235, 0), Vector3(0.5, 0.018, 0.4), Mats.paint_white())
+		ProceduralDetails.attach(v, "office_floor_file_folder_tabs_y" + str(y), func(d: ProceduralDetails):
+			for layer in 3:
+				var ly = y + 0.245 + float(layer) * 0.012
+				d.box(Vector3(0, ly, 0), Vector3(0.48, 0.009, 0.37), Mats.paint_white(), 0.002,
+					Vector3(0, (float(layer) - 1.0) * 0.025, 0))
+				d.box(Vector3(-0.13 + float(layer) * 0.12, ly + 0.006, -0.17),
+					Vector3(0.13, 0.018, 0.035), Mats.box_white(), 0.003)
+		)
 	scene.scattered_papers(p + Vector3(0.6, 0, 0.35), salt + 8, 6)
 	scene.collider_box(p + Vector3(0, 0.42, 0), Vector3(1.25, 0.84, 1.0))
 
@@ -488,6 +496,11 @@ func _office_corridor_door(o: Vector3, yw: float, t: float,
 	var plate = scene.model_rounded_box(v, Vector3(-0.78, 1.58, 0.075),
 		Vector3(0.34, 0.24, 0.025), Mats.paint_white(), 0.006)
 	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ProceduralDetails.attach(v, "office_corridor_door_sign_mounts_034_024_v1", func(d: ProceduralDetails):
+		for sy in [1.48, 1.68]:
+			d.box(Vector3(-0.96, sy, 0.071), Vector3(0.035, 0.035, 0.018),
+				Mats.metal_gray(), 0.006)
+	)
 	var lb = Label3D.new()
 	lb.text = "ELECTRICAL" if service else Chunk.OFFICE_CORRIDOR_LABELS[
 		WorldGen.h(ctx.world_seed, ctx.cell.x + int(t * 5.0), ctx.cell.y, salt + 2) % Chunk.OFFICE_CORRIDOR_LABELS.size()]
@@ -508,6 +521,13 @@ func _office_corridor_directory(o: Vector3, yw: float, side: float, t: float) ->
 	scene.add_node(v)
 	scene.model_rounded_box(v, Vector3(0, 0, 0), Vector3(0.76, 0.88, 0.045), Mats.charcoal(), 0.008)
 	scene.model_quad(v, Vector3(0, 0, 0.026), Vector2(0.69, 0.81), Mats.paint_white())
+	ProceduralDetails.attach(v, "office_directory_mounts_076_088_v1", func(d: ProceduralDetails):
+		for sx in [-0.34, 0.34]:
+			d.box(Vector3(sx, 0, -0.045), Vector3(0.055, 0.94, 0.045), Mats.metal_gray(), 0.008)
+		for sx in [-0.31, 0.31]:
+			for sy in [-0.36, 0.36]:
+				d.box(Vector3(sx, sy, 0.055), Vector3(0.022, 0.022, 0.012), Mats.charcoal(), 0.004)
+	)
 	var title = Label3D.new()
 	title.text = "DIRECTORY"
 	title.font_size = 50
@@ -581,6 +601,18 @@ func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
 	var leg_size = Vector3(0.74, 0.71, 0.04) if d.x != 0.0 else Vector3(0.04, 0.71, 0.74)
 	scene.model_rounded_box(workstation, deskc + leg_off + Vector3(0, 0.355, 0), leg_size, Mats.desk_white(), 0.008)
 	scene.model_rounded_box(workstation, deskc - leg_off + Vector3(0, 0.355, 0), leg_size, Mats.desk_white(), 0.008)
+	var desk_detail = Node3D.new()
+	desk_detail.position = deskc
+	desk_detail.rotation.y = atan2(dv.x, dv.z)
+	workstation.add_child(desk_detail)
+	ProceduralDetails.attach(desk_detail, "office_desk_150_080_modesty_feet_edges_v1", func(dd: ProceduralDetails):
+		dd.box(Vector3(0, 0.37, -0.31), Vector3(1.25, 0.46, 0.035), Mats.desk_white(), 0.008)
+		for x in [-0.68, 0.68]:
+			for z in [-0.32, 0.32]:
+				dd.box(Vector3(x, 0.035, z), Vector3(0.11, 0.07, 0.11), Mats.metal_gray(), 0.012)
+		dd.box(Vector3(0, 0.735, -0.39), Vector3(1.48, 0.025, 0.025), Mats.metal_gray(), 0.006)
+		dd.box(Vector3(0, 0.735, 0.39), Vector3(1.48, 0.025, 0.025), Mats.metal_gray(), 0.006)
+	)
 	scene.collider_box(deskc + Vector3(0, 0.4, 0), top_size * Vector3(1.0, 1.0, 1.0) + Vector3(0, 0.77, 0))
 	# Terminal at the inner edge, screen facing the worker (outward). Every
 	# office desk uses the authored IBM 3278/VT100-style unit. It arrives as one
@@ -689,6 +721,12 @@ func _office_dept_sign(along_x: bool) -> void:
 	for sx in [-0.55, 0.55]:
 		scene.model_cylinder(v, Vector3(sx, 0.19 + rod_h / 2.0, 0), 0.012, rod_h, Mats.metal_gray())
 	scene.model_rounded_box(v, Vector3.ZERO, Vector3(1.6, 0.38, 0.05), Mats.paint_white(), 0.01)
+	ProceduralDetails.attach(v, "office_dept_sign_mount_caps_160_038_rh" + str(rod_h), func(d: ProceduralDetails):
+		for sx in [-0.55, 0.55]:
+			d.ring(Vector3(sx, 0.205, 0), 0.035, 0.008, Mats.metal_gray(), Vector3.FORWARD)
+			d.box(Vector3(sx, 0.19 + rod_h, 0), Vector3(0.07, 0.035, 0.07),
+				Mats.metal_gray(), 0.008)
+	)
 	var zone = WorldGen.macro_zone(ctx.world_seed, ctx.cell, ctx.theme)
 	var labels: Array = Chunk.OFFICE_ZONE_DEPTS[zone]
 	for sside in [-1.0, 1.0]:
@@ -764,6 +802,17 @@ func _office_break() -> void:
 	coffee_counter.set_meta("surface_wear_prop", "office_coffee_counter")
 	scene.rounded_box(Vector3(3.6, 1.08, 0.75), Vector3(0.3, 0.36, 0.3), Mats.charcoal(), 0.02, false)
 	scene.box(Vector3(3.6, 1.02, 0.92), Vector3(0.05, 0.02, 0.04), Mats.lamp_red(), false)
+	var break_detail = Node3D.new()
+	break_detail.position = Vector3(4.5, 0, 0.75)
+	scene.add_node(break_detail)
+	ProceduralDetails.attach(break_detail, "office_break_counter300_090_060_coffee_v1", func(d: ProceduralDetails):
+		d.box(Vector3(0, 0.095, 0.305), Vector3(2.78, 0.19, 0.06), Mats.charcoal(), 0.012)
+		for x in [-1.02, 0.0, 1.02]:
+			d.box(Vector3(x, 0.49, 0.306), Vector3(0.82, 0.58, 0.025), Mats.desk_white(), 0.018)
+		d.box(Vector3(-0.9, 1.11, 0.17), Vector3(0.19, 0.12, 0.025), Mats.charcoal(), 0.008)
+		d.tube(Vector3(-0.86, 1.02, 0.19), Vector3(-0.82, 0.98, 0.23), 0.012, Mats.charcoal())
+		d.box(Vector3(-0.90, 0.99, 0.16), Vector3(0.16, 0.16, 0.10), Mats.charcoal(), 0.025)
+	)
 	# water cooler in the corner
 	var wc = Vector3(10.5, 0, 1.0)
 	var wc_body0 = scene.collider_mark()
@@ -797,6 +846,19 @@ func _office_boardroom() -> void:
 	scene.rounded_box(c + Vector3(0, 0.75, 0), Vector3(ln, 0.10, 2.15), Mats.desk_white(), 0.045)
 	for x in [-4.7, -1.6, 1.6, 4.7]:
 		scene.rounded_box(c + Vector3(x, 0.38, 0), Vector3(0.18, 0.72, 1.65), Mats.metal_gray(), 0.025)
+	var board_detail = Node3D.new()
+	board_detail.position = c
+	scene.add_node(board_detail)
+	ProceduralDetails.attach(board_detail, "office_boardroom_table1150_215_apron_ports_display_bezel_v1", func(d: ProceduralDetails):
+		d.box(Vector3(0, 0.64, -0.91), Vector3(10.9, 0.22, 0.08), Mats.metal_gray(), 0.018)
+		d.box(Vector3(0, 0.64, 0.91), Vector3(10.9, 0.22, 0.08), Mats.metal_gray(), 0.018)
+		for x in [-2.8, 0.0, 2.8]:
+			d.ring(Vector3(x, 0.806, 0), 0.07, 0.012, Mats.charcoal())
+		for y in [0.62, 2.88]:
+			d.box(Vector3(-8.835, y, 0), Vector3(0.045, 0.08, 5.92), Mats.metal_gray(), 0.012)
+		for z in [-2.92, 2.92]:
+			d.box(Vector3(-8.835, 1.75, z), Vector3(0.045, 2.34, 0.08), Mats.metal_gray(), 0.012)
+	)
 	scene.collider_box(c + Vector3(0, 0.48, 0), Vector3(ln, 0.96, 2.2))
 	for side in [-1.0, 1.0]:
 		for i in 8:

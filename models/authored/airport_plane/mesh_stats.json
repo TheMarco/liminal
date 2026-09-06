@@ -1,0 +1,15 @@
+{
+  "triangles": 8952,
+  "meshes": 1,
+  "materials": 1,
+  "texture_resolution": 1024,
+  "dimensions_godot_m": [
+    10.505000114440918,
+    3.390000104904175,
+    8.899999618530273
+  ],
+  "front_axis": "-X",
+  "engines": 2,
+  "landing_gear": "deployed",
+  "apron_depth_scale": 0.115
+}

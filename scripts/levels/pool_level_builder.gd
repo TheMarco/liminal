@@ -1213,6 +1213,14 @@ func _pool_round_ceiling_fixture(at: Vector2, index: int) -> void:
 	disc.set_meta("pool_light_emitter", true)
 	disc.set_meta("pool_light_pair_id", pair_id)
 	disc.set_meta("pool_light_type", "ceiling_disc")
+	var trim := Node3D.new()
+	trim.position = Vector3(at.x, ctx.ceiling_height, at.y)
+	scene.add_node(trim)
+	ProceduralDetails.attach(trim, "pool_disc_retainer", func(d: ProceduralDetails):
+		d.ring(Vector3(0, -0.12, 0), 0.445, 0.012, Mats.pool_rail())
+		for angle in [0.0, TAU / 3.0, TAU * 2.0 / 3.0]:
+			var p := Vector3(cos(angle) * 0.475, -0.112, sin(angle) * 0.475)
+			d.tube(p, p - Vector3(0, 0.008, 0), 0.012, Mats.pool_rail()))
 	var lamp = OmniLight3D.new()
 	lamp.light_color = Color(1.0, 0.975, 0.90)
 	var height_scale := clampf(
@@ -1269,6 +1277,13 @@ func _pool_wall_orb_fixture(salt: int) -> bool:
 	else:
 		stem.rotation.x = PI * 0.5
 	stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var collar := Node3D.new()
+	collar.position = stem_pos
+	collar.quaternion = Quaternion(Vector3.UP, room_dir)
+	scene.add_node(collar)
+	ProceduralDetails.attach(collar, "pool_orb_collar", func(d: ProceduralDetails):
+		d.ring(Vector3(0, 0.035, 0), 0.067, 0.008, Mats.pool_rail())
+		d.ring(Vector3(0, -0.073, 0), 0.087, 0.007, Mats.pool_rail()))
 	var orb: MeshInstance3D = scene.sphere(
 		wall_pos + room_dir * 0.27, 0.21, Mats.pool_daylight())
 	orb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -1577,6 +1592,15 @@ func _pool_handrail(dir: int, inset: float) -> void:
 	for i in 4:
 		var z = -span * 0.5 + span * (float(i) / 3.0)
 		scene.model_cylinder(pivot, Vector3(0, 0.46, z), 0.024, 0.92, rail)
+	ProceduralDetails.attach(pivot, "pool_rail_mounts", func(d: ProceduralDetails):
+		for i in 4:
+			var z := -5.2 + 10.4 * (float(i) / 3.0)
+			d.tube(Vector3(0, 0.012, z), Vector3(0, 0.035, z), 0.065, rail)
+			for x in [-0.043, 0.043]:
+				d.tube(Vector3(x, 0.035, z), Vector3(x, 0.041, z), 0.009, rail)
+		# Round end caps replace the visibly hollow-looking cuts at the joints.
+		for z in [-5.2, 5.2]:
+			d.ring(Vector3(0, 0.92, z), 0.023, 0.006, rail, Vector3.FORWARD))
 
 
 ## A real pool ladder: two uprights from the basin floor, rungs at and below

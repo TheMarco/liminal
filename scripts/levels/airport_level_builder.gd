@@ -317,6 +317,15 @@ func _air_column(p: Vector2) -> void:
 	scene.model_cylinder(pivot, Vector3(0, ctx.ceiling_height / 2.0, 0), 0.34, ctx.ceiling_height, Mats.paint_white())
 	scene.model_cylinder(pivot, Vector3(0, 0.09, 0), 0.40, 0.18, Mats.steel())
 	scene.model_cylinder(pivot, Vector3(0, ctx.ceiling_height - 0.15, 0), 0.40, 0.3, Mats.charcoal())
+	var detail_key = "air_column_h%.3f" % ctx.ceiling_height
+	ProceduralDetails.attach(pivot, detail_key, func(d: ProceduralDetails) -> void:
+		# Narrow collars break up the otherwise featureless shaft.  The cover is
+		# shallow enough to remain inside the column's existing floor shoe.
+		d.ring(Vector3(0, 0.22, 0), 0.345, 0.012, Mats.steel())
+		d.ring(Vector3(0, ctx.ceiling_height - 0.32, 0), 0.345, 0.012, Mats.steel())
+		d.box(Vector3(0, 0.82, -0.337), Vector3(0.19, 0.28, 0.014),
+			Mats.metal_gray(), 0.012)
+	)
 	scene.collider_cylinder(pivot.position + Vector3(0, ctx.ceiling_height / 2.0, 0), 0.34, ctx.ceiling_height)
 	scene.bind_furnishing_colliders(pivot, b0)
 
@@ -325,45 +334,65 @@ func _air_bin(p: Vector3) -> void:
 	scene.waste_bin(p, ctx.random01(int(p.x * 7.0 + p.z * 13.0) + 431) * TAU, "airport_bin")
 
 
-## Nested baggage trolley (optionally a rank of them).
+## Authored four-caster steel trolley (optionally a rank of them).
 
 
 func _air_trolley(p: Vector3, yaw: float, salt: int, count = 1) -> void:
+	if count <= 0:
+		return
+	var ps = scene.prop_scene(Chunk.AIRPORT_TROLLEY_PATH)
+	if ps == null:
+		push_error("Airport trolley asset failed to load: %s" % Chunk.AIRPORT_TROLLEY_PATH)
+		return
+	var b0 = scene.collider_mark()
+	var rank = scene.furnishing_pivot(p, yaw, "airport_trolley_rank")
+	rank.name = "AirportTrolleyRank"
+	rank.set_meta("airport_trolley_rank", true)
+	rank.set_meta("trolley_count", count)
 	for k in count:
-		var v = Node3D.new()
-		v.position = p + Vector3(0, 0, 0).rotated(Vector3.UP, yaw) + Vector3(sin(yaw), 0, cos(yaw)) * (0.55 * float(k))
-		v.rotation.y = yaw
-		scene.add_node(v)
-		var bs = scene.model_box(v, Vector3(0, 0.26, 0.05), Vector3(0.6, 0.045, 0.86), Mats.steel())
-		bs.rotation.x = 0.07
-		scene.model_box(v, Vector3(0, 0.47, 0.46), Vector3(0.58, 0.42, 0.035), Mats.steel())
-		for sx in [-0.27, 0.27]:
-			scene.model_cylinder(v, Vector3(sx, 0.66, -0.38), 0.02, 0.8, Mats.steel())
-		var hb = scene.model_cylinder(v, Vector3(0, 1.05, -0.38), 0.022, 0.58, Mats.rubber_black())
-		hb.rotation.z = PI / 2.0
-		for sx in [-0.24, 0.24]:
-			var wh = scene.model_cylinder(v, Vector3(sx, 0.075, 0.34), 0.075, 0.05, Mats.rubber_black())
-			wh.rotation.z = PI / 2.0
-		var wb = scene.model_cylinder(v, Vector3(0, 0.075, -0.34), 0.075, 0.05, Mats.rubber_black())
-		wb.rotation.z = PI / 2.0
-		if k == 0 and ctx.random01(salt + 7) < 0.4:
-			_airport_luggage_model(v, Vector3(0, 0.285, 0.05), 0.0,
+		var v := Node3D.new()
+		v.name = "AirportTrolley"
+		v.position = Vector3(0, 0, 0.55 * float(k))
+		v.set_meta("airport_trolley", true)
+		v.set_meta("trolley_index", k)
+		rank.add_child(v)
+		var inst := ps.instantiate() as Node3D
+		v.add_child(inst)
+		inst.set_meta("authored_asset", Chunk.AIRPORT_TROLLEY_PATH)
+		# Frontmost load avoids nesting intersection with the next cart's sign panel.
+		if k == count - 1 and ctx.random01(salt + 7) < 0.4:
+			# Contact height and tilt follow the authored platform's slope.
+			var bag = _airport_luggage_model(v, Vector3(0, 0.3253, 0.06), 0.0,
 				salt + 8, true)
+			if bag != null:
+				bag.rotation.x = -atan(0.055)
+				bag.set_meta("airport_trolley_load", true)
 	var dv = Vector3(sin(yaw), 0, cos(yaw))
 	var cc = p + dv * (0.275 * float(count - 1))
-	scene.collider_yaw_box(cc + Vector3(0, 0.55, 0), Vector3(0.7, 1.1, 1.1 + 0.55 * float(count - 1)), yaw)
+	scene.collider_yaw_box(cc + Vector3(0, 0.58, 0), Vector3(0.70, 1.16, 1.10 + 0.55 * float(count - 1)), yaw)
+	scene.bind_furnishing_colliders(rank, b0)
 
 
 ## Chrome queue posts with retractable belts strung between them.
 
 
 func _stanchion_line(a: Vector3, b: Vector3, n: int) -> void:
+	var line_yaw = atan2((b - a).x, (b - a).z)
 	for i in n:
 		var t = float(i) / float(n - 1)
 		var pp = a.lerp(b, t)
 		scene.cylinder(pp + Vector3(0, 0.49, 0), 0.028, 0.98, Mats.chrome())
 		scene.cylinder(pp + Vector3(0, 0.015, 0), 0.16, 0.03, Mats.chrome(), false)
 		scene.cylinder(pp + Vector3(0, 0.95, 0), 0.045, 0.06, Mats.charcoal(), false)
+		var reel = Node3D.new()
+		reel.position = pp
+		reel.rotation.y = line_yaw
+		scene.add_node(reel)
+		ProceduralDetails.attach(reel, "air_stanchion_reel_v2", func(d: ProceduralDetails) -> void:
+			d.box(Vector3(0, 0.95, 0), Vector3(0.13, 0.105, 0.085), Mats.charcoal(), 0.025)
+			d.box(Vector3(0, 0.91, -0.049), Vector3(0.065, 0.07, 0.014), Mats.steel(), 0.004)
+			d.box(Vector3(0, 0.91, 0.049), Vector3(0.065, 0.07, 0.014), Mats.steel(), 0.004)
+		)
 	for i in n - 1:
 		var p0 = a.lerp(b, float(i) / float(n - 1)) + Vector3(0, 0.88, 0)
 		var p1 = a.lerp(b, float(i + 1) / float(n - 1)) + Vector3(0, 0.88, 0)
@@ -476,120 +505,63 @@ func _air_window_wall(o: Vector3, yw: float) -> void:
 		Vector3(0.3, 0.4, 0.02), Mats.airport_glass())
 
 
-## A widebody parked at the stand, seen side-on through the glass. This is a
-## deliberately shallow forced-perspective diorama: the aircraft stays inside
-## the sealed apron strip while the dark rear plane supplies the missing depth.
+## Authored twin-engine airliner staged at shallow depth for the sealed apron.
 
 
 func _air_docked_plane(W: Node3D) -> void:
-	# This is a shallow gate-window diorama, not real exterior space. The old
-	# 2.3 m fuselage was centred on the terminal boundary and deliberately ran
-	# past the side returns. In adjoining rooms its end cap and body therefore
-	# appeared through solid walls as giant grey discs and tubes. Keep every
-	# visible aircraft mesh wholly inside the sealed apron strip instead.
-	var P = Node3D.new()
+	var ps = scene.prop_scene(Chunk.AIRPORT_PLANE_PATH)
+	if ps == null:
+		push_error("Airport plane asset failed to load: %s" % Chunk.AIRPORT_PLANE_PATH)
+		return
+	var P := Node3D.new()
+	P.name = "AirportAirliner"
+	P.position = Vector3(0, 0.025, 5.275)
+	# Face the nose and forward boarding door toward the jetway's docking cab.
+	P.rotation.y = PI
+	P.scale = Vector3(1.0, minf(1.0, (ctx.ceiling_height - 0.18) / 3.41), 0.115)
 	P.set_meta("airport_apron_setpiece", "docked_plane")
+	P.set_meta("authored_asset", Chunk.AIRPORT_PLANE_PATH)
 	W.add_child(P)
-	var fus_y = 2.3
-	var fus_z = 4.88
-	var fus_r = 0.88
-	var fus = scene.model_cylinder(P, Vector3(0, fus_y, fus_z), fus_r, 10.5, Mats.jetway_body())
-	fus.rotation.z = PI / 2.0
-	fus.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# cabin windows above the centreline — a scatter of them still warm
-	for i in 15:
-		var wx = -5.6 + 0.8 * float(i)
-		if absf(wx) > 5.05:
-			continue
-		if ctx.random01(560 + i) < 0.25:
-			continue
-		var lit = ctx.random01(580 + i) < 0.4
-		var wmat: Material = Mats.cabin_warm() if lit else Mats.screen_dark()
-		var wnd = scene.model_box(P, Vector3(wx, fus_y + 0.24, fus_z - fus_r - 0.015),
-			Vector3(0.10, 0.13, 0.03), wmat)
-		wnd.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# one engine pod slung ahead of the glassline, its wing lost in the dark
-	var wing = scene.model_box(P, Vector3(2.6, 2.0, 5.18), Vector3(2.4, 0.1, 0.86), Mats.jetway_body())
-	wing.rotation.y = 0.28
-	wing.rotation.z = 0.05
-	wing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var nac = scene.model_cylinder(P, Vector3(2.1, 1.28, 4.82), 0.44, 1.35, Mats.jetway_body())
-	nac.rotation.z = PI / 2.0
-	nac.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var intake = scene.model_cylinder(P, Vector3(1.40, 1.28, 4.82), 0.37, 0.05, Mats.screen_dark())
-	intake.rotation.z = PI / 2.0
-	intake.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# anti-collision beacon flashing on the shoulder of the hull
-	var bmat: StandardMaterial3D = Mats.lamp_red().duplicate()
-	var bulb = scene.model_sphere(P, Vector3(0.8, fus_y + 0.76, 4.38), 0.055, bmat)
-	bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var bc = Beacon.new()
-	bc.mat = bmat
-	bc.phase = ctx.random01(590) * 1.4
-	bc.light_color = Color(1.0, 0.12, 0.08)
-	bc.omni_range = 4.0
-	bc.position = Vector3(0.8, fus_y + 0.72, 4.32)
-	bc.shadow_enabled = false
-	bc.distance_fade_enabled = true
-	bc.distance_fade_begin = 20.0
-	bc.distance_fade_length = 8.0
-	P.add_child(bc)
-	# faint spill of cabin light onto the apron below the windows
-	var spill = OmniLight3D.new()
-	spill.light_color = Color(1.0, 0.8, 0.55)
-	spill.light_energy = 0.2
-	spill.omni_range = 3.2
-	spill.position = Vector3(-1.5, fus_y, 4.15)
-	spill.shadow_enabled = false
-	spill.distance_fade_enabled = true
-	spill.distance_fade_begin = 16.0
-	spill.distance_fade_length = 6.0
-	P.add_child(spill)
+	var inst := ps.instantiate() as Node3D
+	P.add_child(inst)
+	for mesh in P.find_children("*", "MeshInstance3D", true, false):
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.12, 0.08)
+	l.light_energy = 0.22
+	l.omni_range = 2.6
+	l.position = Vector3(0.18, 1.95, 0)
+	l.shadow_enabled = false
+	l.distance_fade_enabled = true
+	l.distance_fade_begin = 18.0
+	l.distance_fade_length = 8.0
+	P.add_child(l)
 
 
-## The jetway out on the apron: ribbed telescoping tunnel on its wheel bogie,
-## rotunda at the far end, red beacon still breathing.
+## Glass boarding bridge with a blue lift frame, service stairs and docking
+## bellows. Its depth is staged for the sealed apron behind the terminal glass.
 
 
 func _air_jetway(W: Node3D) -> void:
-	var J = Node3D.new()
-	J.position = Vector3(-0.8, 1.95, 5.15)
-	J.rotation.y = 0.06
-	J.rotation.z = 0.08
+	var ps = scene.prop_scene(Chunk.AIRPORT_JETWAY_PATH)
+	if ps == null:
+		push_error("Airport jetway asset failed to load: %s" % Chunk.AIRPORT_JETWAY_PATH)
+		return
+	var J := Node3D.new()
+	J.name = "AirportJetway"
+	J.position = Vector3(0.55, 0.024, 4.4)
+	# Keep the bridge floor below the aircraft windows in the shallow apron.
+	J.scale = Vector3(1.0, 0.76 * minf(1.0, (ctx.ceiling_height - 0.18) / 3.41), 0.42)
+	J.set_meta("authored_asset", Chunk.AIRPORT_JETWAY_PATH)
+	J.set_meta("airport_apron_setpiece", "jetway")
 	W.add_child(J)
-	var tube = scene.model_cylinder(J, Vector3.ZERO, 0.5, 5.6, Mats.jetway_body())
-	tube.rotation.z = PI / 2.0
-	# accordion ribs over the telescoping midsection
-	for i in 7:
-		var rx = -1.9 + 0.5 * float(i)
-		var tor = MeshInstance3D.new()
-		tor.mesh = Chunk.TOR
-		tor.material_override = Mats.charcoal()
-		tor.position = Vector3(rx, 0, 0)
-		tor.rotation.z = PI / 2.0
-		tor.scale = Vector3(0.72, 0.5, 0.72)
-		J.add_child(tor)
-	# dark window band along the tunnel
-	scene.model_box(J, Vector3(0.6, 0.18, 0.55), Vector3(2.6, 0.34, 0.04), Mats.screen_dark())
-	# rotunda cab at the far end
-	scene.model_rounded_box(J, Vector3(-3.1, -0.1, 0), Vector3(1.35, 1.6, 1.5), Mats.jetway_body(), 0.08)
-	scene.model_box(J, Vector3(-3.1, 0.25, 0), Vector3(1.4, 0.4, 1.4), Mats.screen_dark())
-	# service door end nearest the glass
-	scene.model_rounded_box(J, Vector3(2.85, -0.05, 0), Vector3(0.95, 1.9, 1.05), Mats.jetway_body(), 0.05)
-	# wheel bogie
-	scene.model_box(J, Vector3(-1.0, -1.25, 0), Vector3(0.16, 1.7, 0.16), Mats.charcoal())
-	var axle = scene.model_cylinder(J, Vector3(-1.0, -2.05, 0), 0.04, 0.6, Mats.charcoal())
-	axle.rotation.x = PI / 2.0
-	for sz in [-0.26, 0.26]:
-		var wh = scene.model_cylinder(J, Vector3(-1.0, -2.05, sz), 0.3, 0.18, Mats.rubber_black())
-		wh.rotation.x = PI / 2.0
-	# anti-collision beacon
-	scene.model_sphere(J, Vector3(0.4, 0.6, 0), 0.05, Mats.lamp_red())
+	var inst := ps.instantiate() as Node3D
+	J.add_child(inst)
 	var l = OmniLight3D.new()
 	l.light_color = Color(1.0, 0.15, 0.1)
 	l.light_energy = 0.22
 	l.omni_range = 2.6
-	l.position = Vector3(0.4, 0.85, 0)
+	l.position = Vector3(2.61, 3.36, -0.58)
 	l.shadow_enabled = false
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = 18.0
@@ -611,6 +583,15 @@ func _air_gate_desk(o: Vector3, yw: float, code: String) -> void:
 		scene.model_box(v, Vector3(mx, 1.1125, 0.05), Vector3(0.12, 0.025, 0.09), Mats.charcoal())
 		scene.model_rounded_box(v, Vector3(mx, 1.44, 0.05), Vector3(0.44, 0.3, 0.05), Mats.charcoal(), 0.008)
 		scene.model_quad(v, Vector3(mx, 1.44, 0.076), Vector2(0.37, 0.235), Mats.screen_dark())
+	ProceduralDetails.attach(v, "air_gate_desk_controls_v2", func(d: ProceduralDetails) -> void:
+		# Recessed queue-side panels and compact keyboards beneath the monitors.
+		for x in [-0.72, 0.0, 0.72]:
+			d.box(Vector3(x, 0.54, -0.294), Vector3(0.58, 0.58, 0.012), Mats.metal_gray(), 0.012)
+		for x in [-0.5, 0.5]:
+			d.box(Vector3(x, 1.115, -0.12), Vector3(0.36, 0.025, 0.16), Mats.charcoal(), 0.012,
+				Vector3(-0.08, 0, 0))
+			d.tube(Vector3(x, 1.10, -0.02), Vector3(x + 0.08, 0.92, 0.18), 0.009, Mats.charcoal())
+	)
 	scene.collider_yaw_box(v.position + Vector3(0, 0.6, 0), Vector3(2.3, 1.2, 0.7), yw)
 	# the lit gate sign overhead
 	var sv = Node3D.new()
@@ -720,6 +701,18 @@ func _travelator(p: Vector3, yaw: float, flow: float, salt: int, L = 8.4) -> voi
 		for e in [-1.0, 1.0]:
 			scene.model_rounded_box(v, Vector3(e * (L / 2.0 - 0.06), 0.6, z), Vector3(0.1, 0.98, 0.09), Mats.rubber_black(), 0.04)
 		scene.collider_yaw_box(scene.world_point(p, Vector3(0, 0.6, z), yaw), Vector3(L, 1.25, 0.1), yaw)
+	var travelator_key = "air_travelator_trim_v2_L%.3f_W%.3f" % [L, BW]
+	ProceduralDetails.attach(v, travelator_key, func(d: ProceduralDetails) -> void:
+		# Fine combs at the belt mouths and a few broad skirt return seams.
+		for e in [-1.0, 1.0]:
+			for zi in 9:
+				var zz = -BW * 0.42 + BW * 0.84 * float(zi) / 8.0
+				d.box(Vector3(e * (L / 2.0 - 0.54), 0.126, zz),
+					Vector3(0.20, 0.014, 0.018), Mats.steel())
+			for side in [-1.0, 1.0]:
+				d.box(Vector3(e * (L / 2.0 - 0.34), 0.34,
+					side * (BW / 2.0 + 0.191)), Vector3(0.012, 0.34, 0.012), Mats.charcoal())
+	)
 	# deck + end ramps the player can actually walk up
 	scene.collider_yaw_box(p + Vector3(0, 0.065, 0), Vector3(L - 0.9, 0.13, BW + 0.5), yaw)
 	for e in [-1.0, 1.0]:
@@ -1093,6 +1086,16 @@ func _air_baggage() -> void:
 			Vector3(0.82, 0.055, 0.22), Mats.steel(), 0.012)
 		lip.rotation.y = -(ang + PI / 2.0)
 		lip.set_meta("airport_carousel_lip", true)
+	ProceduralDetails.attach(carousel, "air_carousel_access_v2_r2.05", func(d: ProceduralDetails) -> void:
+		# Four broad removable access panels and a continuous rubber rub rail.
+		for i in 4:
+			var ang = TAU * float(i) / 4.0 + PI / 8.0
+			var radial = Vector3(cos(ang), 0, sin(ang))
+			d.box(radial * 2.145 + Vector3(0, 0.23, 0),
+				Vector3(0.56, 0.25, 0.014), Mats.metal_gray(), 0.012,
+				Vector3(0, -(ang + PI / 2.0), 0))
+		d.ring(Vector3(0, 0.40, 0), 2.13, 0.018, Mats.rubber_black())
+	)
 	for i in 8:
 		var ang = TAU * float(i) / 8.0
 		scene.collider_yaw_box(c + Vector3(cos(ang) * rim_radius, 0.35,
@@ -1147,6 +1150,12 @@ func _air_baggage() -> void:
 	var chute_lip = scene.model_box(chute, c + Vector3(0, 1.03, -1.86),
 		Vector3(1.21, 0.08, 0.12), Mats.caution_yellow())
 	chute_lip.rotation.x = 0.5
+	ProceduralDetails.attach(chute, "air_baggage_chute_roller_v2", func(d: ProceduralDetails) -> void:
+		for i in 5:
+			var x = c.x - 0.43 + 0.215 * float(i)
+			d.tube(Vector3(x, c.y + 0.94, c.z - 1.72),
+				Vector3(x, c.y + 1.05, c.z - 1.91), 0.022, Mats.charcoal())
+	)
 	scene.collider_rotated_box(c + Vector3(0, 1.86, -3.43),
 		Vector3(1.15, 0.55, 3.6), Vector3(0.5, 0, 0))
 	scene.bind_furnishing_colliders(chute, chute_body0)
@@ -1164,6 +1173,10 @@ func _air_baggage() -> void:
 	totem.set_meta("airport_baggage_number_totem", true)
 	scene.model_box(totem, Vector3(0, 1.35, 0),
 		Vector3(0.55, 2.7, 0.2), Mats.charcoal())
+	ProceduralDetails.attach(totem, "air_baggage_totem_plinth_v2", func(d: ProceduralDetails) -> void:
+		d.box(Vector3(0, 0.06, 0), Vector3(0.72, 0.12, 0.34), Mats.metal_gray(), 0.025)
+		d.box(Vector3(0, 0.15, 0), Vector3(0.61, 0.08, 0.25), Mats.charcoal(), 0.012)
+	)
 	scene.model_quad(totem, Vector3(0, 1.9, 0.104),
 		Vector2(0.42, 0.6), Mats.screen_glow())
 	var num = Label3D.new()
@@ -1327,6 +1340,16 @@ func _escalator_flight(o: Vector3, yw: float, cx: float) -> void:
 		scene.model_box(v, Vector3(sxn, 2.25 + 0.47, 3.45), Vector3(0.06, 0.96, 0.06), Mats.steel())
 		scene.collider_rotated_box(scene.world_point(v.position, Vector3(sxn, 1.75, 0.95), yw),
 			Vector3(0.1, 1.6, 5.1), Vector3(-ang, yw, 0))
+	ProceduralDetails.attach(v, "air_escalator_combs_v2", func(d: ProceduralDetails) -> void:
+		for end_data in [[-1.40, 0.075], [2.82, 2.20]]:
+			for xi in 9:
+				var xx = -0.43 + 0.1075 * float(xi)
+				d.box(Vector3(xx, float(end_data[1]), float(end_data[0])),
+					Vector3(0.025, 0.014, 0.22), Mats.steel())
+		for sxn in [-0.62, 0.62]:
+			d.box(Vector3(sxn, 0.54, -1.50), Vector3(0.012, 0.46, 0.30), Mats.charcoal())
+			d.box(Vector3(sxn, 2.45, 3.12), Vector3(0.012, 0.38, 0.22), Mats.charcoal())
+	)
 	# truss cladding underneath
 	var tr = scene.model_box(v, Vector3(0, 0.52, 0.95), Vector3(1.36, 0.4, 5.15), Mats.jetway_body())
 	tr.rotation.x = -ang

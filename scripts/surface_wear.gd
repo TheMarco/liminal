@@ -135,6 +135,11 @@ func _kind(node: Node) -> String:
 
 
 func _scan(node: Node, parent_transform: Transform3D, prop: int) -> void:
+	# Batched fasteners and frames span empty space. Their combined bounds
+	# are not a furnishing surface and must not displace the original meshes
+	# (including imported models) from the existing wear budget.
+	if node.has_meta("procedural_detail"):
+		return
 	# These are discoveries and interactions, not worn furnishing surfaces.
 	if node.has_meta("charging_station") or node.has_meta("optional_vhs_set") \
 			or node is VhsRitual or node is Light3D or node is CollisionObject3D:

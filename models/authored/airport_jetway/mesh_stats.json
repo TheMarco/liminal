@@ -1,0 +1,15 @@
+{
+  "triangles": 5080,
+  "meshes": 2,
+  "materials": 2,
+  "texture_resolution": 1024,
+  "dimensions_godot_m": [
+    6.864999771118164,
+    3.3858020305633545,
+    1.845500111579895
+  ],
+  "front_axis": "+X",
+  "service_stairs_side": "-Z",
+  "apron_depth_scale": 0.42,
+  "glazing_triangles": 24
+}

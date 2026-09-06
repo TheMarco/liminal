@@ -165,7 +165,6 @@ func _asy_restraint_table(p: Vector3, yaw: float) -> void:
 	v.position = p
 	v.rotation.y = yaw
 	scene.add_node(v)
-	scene.model_box(v, Vector3(0, 0.3, 0), Vector3(0.5, 0.6, 0.9), Mats.asy_metal())
 	scene.model_rounded_box(v, Vector3(0, 0.72, 0), Vector3(0.85, 0.09, 2.0), Mats.asy_metal(), 0.02)
 	scene.model_rounded_box(v, Vector3(0, 0.8, 0.04), Vector3(0.74, 0.08, 1.82), Mats.asy_canvas(), 0.04)
 	scene.model_rounded_box(v, Vector3(0, 0.86, -0.78), Vector3(0.4, 0.07, 0.26), Mats.asy_canvas(), 0.03)
@@ -175,6 +174,21 @@ func _asy_restraint_table(p: Vector3, yaw: float) -> void:
 	for sx in [-0.44, 0.44]:
 		var strap = scene.model_box(v, Vector3(sx, 0.6, 0.28), Vector3(0.025, 0.34, 0.09), Mats.charcoal())
 		strap.rotation.x = (0.2 if sx > 0.0 else -0.15)
+	ProceduralDetails.attach(v, "asy_restraint_supports_v2", func(d: ProceduralDetails) -> void:
+		# Four planted legs and cross braces replace the monolithic pedestal.
+		for sx in [-0.31, 0.31]:
+			for sz in [-0.70, 0.70]:
+				d.tube(Vector3(sx, 0.68, sz), Vector3(sx, 0.035, sz), 0.035, Mats.asy_metal())
+				d.box(Vector3(sx, 0.018, sz), Vector3(0.12, 0.035, 0.12),
+					Mats.asy_metal(), 0.015)
+			d.tube(Vector3(sx, 0.25, -0.70), Vector3(sx, 0.25, 0.70), 0.025, Mats.asy_metal())
+		d.tube(Vector3(-0.31, 0.25, 0), Vector3(0.31, 0.25, 0), 0.025, Mats.asy_metal())
+		# Buckles sit proud of the straps; a second pad gives the headrest a
+		# readable raised edge rather than merging into the mattress.
+		for sz in [-0.42, 0.08, 0.56]:
+			d.box(Vector3(0.39, 0.873, sz), Vector3(0.10, 0.022, 0.075), Mats.steel(), 0.01)
+		d.box(Vector3(0, 0.895, -0.78), Vector3(0.34, 0.035, 0.21), Mats.asy_canvas(), 0.025)
+	)
 	scene.collider_yaw_box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 2.0), yaw)
 
 
@@ -207,31 +221,35 @@ func _asy_ect(p: Vector3, yaw: float, salt: int) -> void:
 			0.84, 0.176), 0.025, 0.03, Mats.charcoal())
 		knob.rotation.x = PI / 2.0
 	scene.model_sphere(v, Vector3(0.18, 0.95, 0.17), 0.014, Mats.lamp_red())
-	# paddles resting on the lower shelf, leads drooping back up to the box
-	for px in [-0.12, 0.1]:
-		scene.model_cylinder(v, Vector3(px, 0.39, 0.05), 0.05, 0.035, Mats.charcoal())
-		scene.model_cylinder(v, Vector3(px, 0.42, 0.05), 0.012, 0.09, Mats.charcoal())
+	# Paddles resting on the lower shelf, with shaped grips and metal faces.
+	ProceduralDetails.attach(v, "asy_ect_paddles_v2", func(d: ProceduralDetails) -> void:
+		for px in [-0.12, 0.10]:
+			d.box(Vector3(px, 0.385, 0.05), Vector3(0.10, 0.025, 0.085), Mats.steel(), 0.025)
+			d.tube(Vector3(px, 0.41, 0.05), Vector3(px, 0.49, 0.015), 0.018, Mats.charcoal())
+			d.box(Vector3(px, 0.485, 0.012), Vector3(0.055, 0.055, 0.11), Mats.charcoal(), 0.02)
+	)
 	# leads sagging from the paddles back up into the box
 	_asy_wire(v, Vector3(-0.12, 0.46, 0.05), Vector3(-0.2, 0.87, -0.1))
 	_asy_wire(v, Vector3(0.1, 0.46, 0.05), Vector3(0.2, 0.87, -0.1))
 	scene.collider_yaw_box(p + Vector3(0, 0.5, 0), Vector3(0.62, 1.0, 0.5), yaw)
 
 
-## Sagging two-segment cable between two local points.
+## Sagging cable between two local points, baked into one rubber mesh.
 
 
 func _asy_wire(parent: Node3D, a: Vector3, b: Vector3) -> void:
-	var mid = (a + b) * 0.5 + Vector3(0, -0.14, 0.1)
-	for seg in [[a, mid], [mid, b]]:
-		var mi = MeshInstance3D.new()
-		mi.mesh = Chunk.BOX
-		mi.material_override = Mats.rubber_black()
-		var d: Vector3 = seg[1] - seg[0]
-		var up = Vector3.UP if absf(d.normalized().y) < 0.99 else Vector3.RIGHT
-		mi.transform = Transform3D(Basis.looking_at(d, up), (seg[0] + seg[1]) / 2.0)
-		mi.scale = Vector3(0.014, 0.014, d.length())
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		parent.add_child(mi)
+	var wire_key = "asy_wire_v2_%s_%s" % [str(a), str(b)]
+	ProceduralDetails.attach(parent, wire_key, func(d: ProceduralDetails) -> void:
+		var points: Array[Vector3] = [a]
+		for i in range(1, 5):
+			var t = float(i) / 5.0
+			var q = a.lerp(b, t)
+			q += Vector3(0, -sin(t * PI) * 0.16, sin(t * PI) * 0.10)
+			points.append(q)
+		points.append(b)
+		for i in 5:
+			d.tube(points[i], points[i + 1], 0.010, Mats.rubber_black())
+	)
 
 
 ## Transport props share conservative floor radii. If a later furnishing rolls
@@ -334,6 +352,19 @@ func _asy_tub(p: Vector3, yaw: float, salt: int) -> void:
 	# taps
 	scene.model_cylinder(v, Vector3(0.14, 0.75, -0.8), 0.025, 0.16, Mats.brass())
 	scene.model_cylinder(v, Vector3(-0.14, 0.75, -0.8), 0.025, 0.16, Mats.brass())
+	ProceduralDetails.attach(v, "asy_generated_tub_v2", func(d: ProceduralDetails) -> void:
+		# A separate rolled rim, drain fitting, short spouts and claw-like feet.
+		for sx in [-0.38, 0.38]:
+			d.tube(Vector3(sx, 0.66, -0.78), Vector3(sx, 0.66, 0.78), 0.025, Mats.paint_white())
+		for sz in [-0.78, 0.78]:
+			d.tube(Vector3(-0.38, 0.66, sz), Vector3(0.38, 0.66, sz), 0.025, Mats.paint_white())
+		for sx in [-0.32, 0.32]:
+			for sz in [-0.69, 0.69]:
+				d.tube(Vector3(sx, 0.15, sz), Vector3(sx * 1.08, 0.055, sz * 1.05), 0.035, Mats.iron_dark())
+		d.ring(Vector3(0, 0.644, 0.48), 0.055, 0.010, Mats.brass())
+		for sx in [-0.14, 0.14]:
+			d.tube(Vector3(sx, 0.77, -0.80), Vector3(sx, 0.77, -0.69), 0.018, Mats.brass())
+	)
 	scene.collider_yaw_box(p + Vector3(0, 0.35, 0), Vector3(0.85, 0.7, 1.75), yaw)
 
 
@@ -421,7 +452,7 @@ func _asy_locked_door_wall(dir: int, plane: float) -> void:
 	inst.set_meta("asylum_authored_leaf", pick)
 
 
-## A straitjacket on a wall hook, straps hanging loose.
+## An authored aged-canvas straitjacket hanging from a wall hook.
 
 
 func _asy_straitjacket(dir: int, plane: float) -> void:
@@ -436,20 +467,19 @@ func _asy_straitjacket(dir: int, plane: float) -> void:
 		v.position = Vector3(along, 0, inner)
 		v.rotation.y = 0.0 if n > 0.0 else PI
 	scene.add_node(v)
-	scene.model_cylinder(v, Vector3(0, 2.06, 0.045), 0.015, 0.09, Mats.iron_dark())
-	var torso = scene.model_rounded_box(v, Vector3(0, 1.6, 0.1), Vector3(0.52, 0.78, 0.15), Mats.asy_canvas(), 0.07)
-	torso.rotation.z = (ctx.random01(48 + dir) - 0.5) * 0.1
-	# arms wrapped across the front
-	var arm = scene.model_rounded_box(v, Vector3(0, 1.52, 0.185), Vector3(0.46, 0.13, 0.06), Mats.asy_canvas(), 0.04)
-	arm.rotation.z = 0.28
-	var arm2 = scene.model_rounded_box(v, Vector3(0, 1.42, 0.2), Vector3(0.46, 0.13, 0.05), Mats.asy_canvas(), 0.04)
-	arm2.rotation.z = -0.24
-	for si in 3:
-		var sx = -0.14 + 0.14 * float(si)
-		var strap = scene.model_box(v, Vector3(sx, 1.02, 0.12), Vector3(0.045, 0.42, 0.015), Mats.asy_canvas())
-		strap.rotation.x = (ctx.random01(50 + dir + si) - 0.5) * 0.25
-		strap.rotation.z = (ctx.random01(53 + dir + si) - 0.5) * 0.2
-		scene.model_box(v, Vector3(sx, 0.82, 0.12), Vector3(0.05, 0.03, 0.02), Mats.steel())
+	var authored_scene := scene.asylum_scene("authored_straitjacket", Chunk.ASY_STRAITJACKET_PATH)
+	if authored_scene == null:
+		push_error("Failed to load authored straitjacket: %s" % Chunk.ASY_STRAITJACKET_PATH)
+		v.get_parent().remove_child(v)
+		v.free()
+		return
+	var authored: Node3D = authored_scene.instantiate()
+	authored.name = "Straitjacket"
+	authored.position = Vector3(0, 0.92, 0)
+	v.add_child(authored)
+	v.name = "WallStraitjacket"
+	v.set_meta("asylum_straitjacket", true)
+	authored.set_meta("authored_asset", Chunk.ASY_STRAITJACKET_PATH)
 
 
 ## Written by hand, by someone who was not well. Two hands share the walls:
@@ -513,6 +543,14 @@ func _asy_noticeboard(dir: int, plane: float) -> void:
 			var sheet = scene.model_box(v, Vector3(px, 1.6 + (ctx.random01(63 + i) - 0.5) * 0.3, 0.062),
 				Vector3(0.16, 0.22, 0.004), Mats.box_white())
 			sheet.rotation.z = (ctx.random01(66 + dir + i) - 0.5) * (0.9 if i == 2 else 0.14)
+	ProceduralDetails.attach(v, "asy_noticeboard_frame_v2", func(d: ProceduralDetails) -> void:
+		for x in [-0.58, 0.58]:
+			d.box(Vector3(x, 1.62, 0.076), Vector3(0.045, 0.85, 0.035), Mats.darkwood(), 0.008)
+		for y in [1.22, 2.02]:
+			d.box(Vector3(0, y, 0.076), Vector3(1.20, 0.045, 0.035), Mats.darkwood(), 0.008)
+		for x in [-0.32, -0.08, 0.16, 0.40]:
+			d.box(Vector3(x, 1.82, 0.081), Vector3(0.018, 0.018, 0.014), Mats.steel(), 0.006)
+	)
 
 
 func _asy_crutches(dir: int, plane: float) -> void:
@@ -659,6 +697,12 @@ func _asy_dayroom_table(c: Vector3, salt: int) -> void:
 		for sz in [-0.36, 0.36]:
 			scene.model_cylinder(table, Vector3(sx, 0.35, sz), 0.025, 0.7,
 				Mats.asy_metal())
+	ProceduralDetails.attach(table, "asy_dayroom_apron_v2", func(d: ProceduralDetails) -> void:
+		for z in [-0.43, 0.43]:
+			d.box(Vector3(0, 0.62, z), Vector3(1.38, 0.16, 0.045), Mats.asy_metal(), 0.012)
+		for x in [-0.70, 0.70]:
+			d.box(Vector3(x, 0.62, 0), Vector3(0.045, 0.16, 0.82), Mats.asy_metal(), 0.012)
+	)
 	# A minority of common-room tables retain one or two abandoned vessels.
 	# Both are children of the supported table assembly, so doorway culling can
 	# never leave them suspended after removing the furniture underneath.
@@ -693,6 +737,16 @@ func _asy_chemistry_counter(p: Vector3, yaw: float, salt: int) -> void:
 		Mats.asy_concrete(), 0.02)
 	scene.model_box(counter, Vector3(0, 0.92, -0.27), Vector3(1.48, 0.30, 0.035),
 		Mats.asy_metal())
+	ProceduralDetails.attach(counter, "asy_chemistry_counter_v2", func(d: ProceduralDetails) -> void:
+		# Recessed toe space and cabinet break lines make the base legible.
+		d.box(Vector3(0, 0.08, 0.245), Vector3(1.18, 0.16, 0.025), Mats.charcoal(), 0.008)
+		for x in [-0.36, 0.36]:
+			d.box(Vector3(x, 0.39, 0.266), Vector3(0.012, 0.49, 0.012), Mats.charcoal())
+		# Small inset utility basin and a low gooseneck, clear of the glassware.
+		d.box(Vector3(0.48, 0.791, 0.12), Vector3(0.34, 0.018, 0.22), Mats.charcoal(), 0.06)
+		d.tube(Vector3(0.48, 0.80, -0.18), Vector3(0.48, 1.00, -0.18), 0.015, Mats.steel())
+		d.tube(Vector3(0.48, 1.00, -0.18), Vector3(0.48, 1.03, 0.02), 0.015, Mats.steel())
+	)
 	scene.chemistry_glassware(counter, Vector3(-0.34, 0.788, 0.04),
 		(ctx.random01(salt) - 0.5) * 0.65, salt + 1, false, "asylum_treatment")
 	scene.chemistry_glassware(counter, Vector3(0.32, 0.788, -0.03),

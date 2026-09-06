@@ -575,6 +575,10 @@ static func room_split(ws: int, root: Vector2i, theme: int) -> Array:
 	# Only styles that plausibly contain a little stockroom/office annex may be
 	# subdivided; every other style keeps its authored furnishing contract.
 	var st := cell_style(ws, root, theme)
+	# A regular 12x12 casino room fits the authored slot banks. Its interior
+	# must stay open; generic partitions replace the room's furnishing recipe.
+	if theme == 0 and st == STYLE_SLOTS:
+		return []
 	if theme == 6 and st != SCH_ADMIN:
 		return []
 	if theme == 7 and st != MALL_STORE and st != MALL_SERVICE:
@@ -1416,22 +1420,41 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 		return OFFICE_BREAK if r < 0.66 else OFFICE_EMPTY
 	if root == Vector2i.ZERO:
 		return STYLE_LOUNGE
+	# The casino should announce itself immediately outside the arrival lounge.
+	# This is root-stable for merged rooms, and corridors/landmarks already took
+	# their dedicated branches above. Descent keeps its arrival car room clear.
+	if absi(root.x) + absi(root.y) <= 2:
+		return STYLE_SLOTS
 	if n >= 4:
-		if zone == 0: return STYLE_GRAND if r < 0.38 else STYLE_SLOTS
-		if zone == 1: return STYLE_GRAND if r < 0.48 else STYLE_LOUNGE
-		return STYLE_GRAND if r < 0.72 else STYLE_PILLARS
+		if zone == 0:
+			if r < 0.72: return STYLE_SLOTS
+			return STYLE_GRAND if r < 0.90 else STYLE_PILLARS
+		if zone == 1:
+			if r < 0.45: return STYLE_SLOTS
+			return STYLE_GRAND if r < 0.70 else STYLE_LOUNGE
+		if r < 0.35: return STYLE_SLOTS
+		return STYLE_GRAND if r < 0.80 else STYLE_PILLARS
 	if n >= 2:
 		if zone == 0:
-			if r < 0.64: return STYLE_SLOTS
-			if r < 0.82: return STYLE_PILLARS
+			if r < 0.70: return STYLE_SLOTS
+			if r < 0.85: return STYLE_PILLARS
 			return STYLE_LOUNGE
 		if zone == 1:
-			if r < 0.62: return STYLE_LOUNGE
-			if r < 0.82: return STYLE_EMPTY
+			if r < 0.42: return STYLE_SLOTS
+			if r < 0.75: return STYLE_LOUNGE
+			if r < 0.88: return STYLE_EMPTY
 			return STYLE_PILLARS
-		if r < 0.54: return STYLE_PILLARS
-		if r < 0.82: return STYLE_LOUNGE
+		if r < 0.35: return STYLE_SLOTS
+		if r < 0.63: return STYLE_PILLARS
+		if r < 0.85: return STYLE_LOUNGE
 		return STYLE_EMPTY
-	if zone == 0: return STYLE_EMPTY if r < 0.22 else (STYLE_LOUNGE if r < 0.42 else STYLE_PILLARS)
-	if zone == 1: return STYLE_EMPTY if r < 0.38 else (STYLE_LOUNGE if r < 0.82 else STYLE_PILLARS)
-	return STYLE_EMPTY if r < 0.46 else (STYLE_PILLARS if r < 0.78 else STYLE_LOUNGE)
+	# Slot machines belong on the ordinary casino floor as well as in its rare
+	# large halls. Hotel and convention districts retain quieter room mixes.
+	if zone == 0:
+		if r < 0.60: return STYLE_SLOTS
+		return STYLE_EMPTY if r < 0.70 else (STYLE_LOUNGE if r < 0.85 else STYLE_PILLARS)
+	if zone == 1:
+		if r < 0.35: return STYLE_SLOTS
+		return STYLE_LOUNGE if r < 0.62 else (STYLE_EMPTY if r < 0.83 else STYLE_PILLARS)
+	if r < 0.30: return STYLE_SLOTS
+	return STYLE_PILLARS if r < 0.62 else (STYLE_LOUNGE if r < 0.84 else STYLE_EMPTY)

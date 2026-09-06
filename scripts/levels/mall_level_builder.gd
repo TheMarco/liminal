@@ -509,6 +509,17 @@ func _mall_display_table(p: Vector3, yaw: float, salt: int) -> void:
 		var x = -0.72 + float(i) * 0.48
 		var col = Mats.sch_chair(WorldGen.r01(ctx.world_seed, ctx.cell.x + i, ctx.cell.y, salt))
 		scene.model_rounded_box(v, Vector3(x, 0.88, 0), Vector3(0.30, 0.11, 0.48), col, 0.03)
+	ProceduralDetails.attach(v, "mall_display_table_apron_edges_layers_220_090_s" + str(salt), func(d: ProceduralDetails):
+		d.box(Vector3(0, 0.64, -0.39), Vector3(1.92, 0.22, 0.055), Mats.mall_trim(), 0.012)
+		d.box(Vector3(0, 0.64, 0.39), Vector3(1.92, 0.22, 0.055), Mats.mall_trim(), 0.012)
+		for z in [-0.445, 0.445]:
+			d.box(Vector3(0, 0.815, z), Vector3(2.16, 0.035, 0.025), Mats.mall_trim(), 0.006)
+		for i in 4:
+			var x = -0.72 + float(i) * 0.48
+			d.box(Vector3(x, 0.945, 0.02), Vector3(0.27, 0.018, 0.42), Mats.sch_white(),
+				0.004, Vector3(0, (float(i) - 1.5) * 0.025, 0))
+			d.box(Vector3(x, 0.958, -0.11), Vector3(0.25, 0.014, 0.12), Mats.sch_white(), 0.003)
+	)
 	scene.collider_yaw_box(p + Vector3(0, 0.52, 0), Vector3(2.2, 1.04, 0.92), yaw)
 
 
@@ -534,6 +545,13 @@ func _mall_shelves(dir: int, salt: int) -> void:
 	for b in 4:
 		var by = 0.42 + float(b) * 0.55
 		scene.model_box(v, Vector3(0, by, 5.36), Vector3(7.1, 0.04, 0.34), Mats.sch_white())
+	ProceduralDetails.attach(v, "mall_wall_shelves_brackets_price_lips_710_034_v1", func(d: ProceduralDetails):
+		for ux in [-3.25, -1.65, 0.0, 1.65, 3.25]:
+			for by in [0.42, 0.97, 1.52, 2.07]:
+				d.box(Vector3(ux, by - 0.07, 5.48), Vector3(0.06, 0.14, 0.18), Mats.mall_trim(), 0.008)
+		for by in [0.42, 0.97, 1.52, 2.07]:
+			d.box(Vector3(0, by + 0.025, 5.18), Vector3(7.08, 0.055, 0.025), Mats.sch_white(), 0.004)
+	)
 	for b2 in 3:
 		if WorldGen.hr01(WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + b2), 3) < 0.4:
 			var bx = lerpf(-3.2, 3.2, WorldGen.hr01(WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + b2), 4))
@@ -550,24 +568,30 @@ func _mall_shelves(dir: int, salt: int) -> void:
 		Vector3(7.1, 2.2, 0.45), scene.yaw_for(dir))
 
 
-## A chrome garment rack, picked clean but for a few dark shapes.
+## White powder-coated retail rack with a shelf and deterministic outfits.
 
 
 func _mall_rack(p: Vector3, yaw: float, salt: int) -> void:
-	var v = Node3D.new()
-	v.position = p
-	v.rotation.y = yaw
-	scene.add_node(v)
-	for sx in [-0.7, 0.7]:
-		scene.model_cylinder(v, Vector3(sx, 0.7, 0), 0.022, 1.4, Mats.chrome())
-		scene.model_box(v, Vector3(sx, 0.02, 0), Vector3(0.5, 0.04, 0.5), Mats.chrome())
-	scene.model_cylinder(v, Vector3(0, 1.38, 0), 0.018, 1.5, Mats.chrome()).rotation.z = PI / 2.0
-	var ng = 1 + WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt) % 3
-	for g in ng:
-		var gx = lerpf(-0.55, 0.55, WorldGen.hr01(WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + g), 5))
-		scene.model_box(v, Vector3(gx, 0.98, 0), Vector3(0.34, 0.78, 0.06),
-			Mats.fabric_charcoal())
-	scene.collider_yaw_box(p + Vector3(0, 0.7, 0), Vector3(1.6, 1.4, 0.55), yaw)
+	var ps = scene.prop_scene(Chunk.MALL_GARMENT_RACK_PATH)
+	if ps == null:
+		push_error("Missing authored mall garment rack: " + Chunk.MALL_GARMENT_RACK_PATH)
+		return
+	var b0 = scene.collider_mark()
+	var v = scene.furnishing_pivot(p, yaw, "mall_garment_rack")
+	var rack := ps.instantiate() as Node3D
+	v.add_child(rack)
+	rack.name = "GarmentRack"
+	rack.set_meta("authored_asset", Chunk.MALL_GARMENT_RACK_PATH)
+	var casual := WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt) % 2 == 1
+	var remove_name := "ClothesFormal" if casual else "ClothesCasual"
+	var remove_mesh := rack.find_child(remove_name, true, false)
+	if remove_mesh != null:
+		remove_mesh.get_parent().remove_child(remove_mesh)
+		remove_mesh.free()
+	v.set_meta("mall_garment_rack", true)
+	v.set_meta("garment_style", "casual" if casual else "formal")
+	scene.collider_yaw_box(p + Vector3(0, 0.97, 0), Vector3(1.60, 1.94, 0.64), yaw)
+	scene.bind_furnishing_colliders(v, b0)
 
 
 ## Checkout counter with a dead register.
@@ -579,6 +603,11 @@ func _mall_counter(p: Vector3, yaw: float) -> void:
 	v.set_meta("enrichment_prop", "CashRegister_01")
 	scene.model_rounded_box(v, Vector3(0, 0.5, 0), Vector3(2.2, 1.0, 0.75), Mats.mall_trim(), 0.05)
 	scene.model_rounded_box(v, Vector3(0, 1.02, 0), Vector3(2.35, 0.06, 0.9), Mats.sch_white(), 0.02)
+	ProceduralDetails.attach(v, "mall_checkout_counter_panel_toekick_lip_220_100_075_v1", func(d: ProceduralDetails):
+		d.box(Vector3(0, 0.52, -0.381), Vector3(1.92, 0.68, 0.025), Mats.mall_trim(), 0.025)
+		d.box(Vector3(0, 0.09, -0.39), Vector3(2.02, 0.18, 0.06), Mats.charcoal(), 0.012)
+		d.box(Vector3(0, 1.045, -0.47), Vector3(2.32, 0.035, 0.08), Mats.sch_white(), 0.008)
+	)
 	scene.cc0_prop_local(v, "CashRegister_01", Vector3(-0.58, 1.05, -0.02),
 		PI, 0.78)
 	# Receipt roll, card pad and a forgotten price gun.
@@ -629,6 +658,17 @@ func _mall_gondola(p: Vector3, yaw: float, ln: float, salt: int) -> void:
 		for b in 3:
 			scene.model_box(v, Vector3(0, 0.34 + float(b) * 0.44, side * 0.28),
 				Vector3(ln, 0.035, 0.42), Mats.sch_white())
+	ProceduralDetails.attach(v, "mall_gondola_end_brackets_lips_ln" + str(ln), func(d: ProceduralDetails):
+		for x in [-ln * 0.5 + 0.025, ln * 0.5 - 0.025]:
+			d.box(Vector3(x, 0.71, 0), Vector3(0.05, 1.30, 0.92), Mats.mall_trim(), 0.012)
+		for side in [-1.0, 1.0]:
+			for by in [0.34, 0.78, 1.22]:
+				d.box(Vector3(0, by + 0.025, side * 0.49), Vector3(ln - 0.06, 0.05, 0.025),
+					Mats.sch_white(), 0.004)
+				for x in [-ln * 0.42, 0.0, ln * 0.42]:
+					d.box(Vector3(x, by - 0.06, side * 0.37), Vector3(0.05, 0.12, 0.14),
+						Mats.mall_trim(), 0.006)
+	)
 	var nb = WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt) % 4
 	for i in nb:
 		var bx = lerpf(-ln * 0.4, ln * 0.4, WorldGen.hr01(WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + i), 6))
@@ -724,6 +764,13 @@ func _mall_foodcourt() -> void:
 		var food_counter = scene.model_rounded_box(v, Vector3(0, 0.62, 4.65), Vector3(7.4, 1.24, 0.8), Mats.mall_trim(), 0.05)
 		food_counter.set_meta("surface_wear_prop", "mall_food_counter")
 		scene.model_rounded_box(v, Vector3(0, 1.28, 4.65), Vector3(7.6, 0.08, 0.95), Mats.sch_white(), 0.02)
+		ProceduralDetails.attach(v, "mall_food_vendor_counter740_124_080_panels_toe_lip_v1", func(detail: ProceduralDetails):
+			for x in [-2.45, 0.0, 2.45]:
+				detail.box(Vector3(x, 0.64, 4.238), Vector3(2.14, 0.86, 0.025),
+					Mats.mall_trim(), 0.025)
+			detail.box(Vector3(0, 0.10, 4.22), Vector3(7.10, 0.20, 0.06), Mats.charcoal(), 0.012)
+			detail.box(Vector3(0, 1.315, 4.14), Vector3(7.55, 0.045, 0.09), Mats.sch_white(), 0.008)
+		)
 		# tray slide
 		for tr in 3:
 			scene.model_cylinder(v, Vector3(0, 0.98, 4.14 - float(tr) * 0.055), 0.016, 7.2,
@@ -803,6 +850,13 @@ func _mall_atrium() -> void:
 	scene.model_cylinder(fountain, Vector3(0, 0.25, 0), 1.65, 0.50, Mats.marble_photo())
 	scene.model_cylinder(fountain, Vector3(0, 0.49, 0), 1.38, 0.08, Mats.mall_glass())
 	scene.model_cylinder(fountain, Vector3(0, 0.67, 0), 0.20, 0.36, Mats.brass())
+	ProceduralDetails.attach(fountain, "mall_fountain_jet_collar_drain_r165_v1", func(d: ProceduralDetails):
+		d.ring(Vector3(0, 0.87, 0), 0.10, 0.018, Mats.brass())
+		d.ring(Vector3(0.82, 0.525, 0.28), 0.12, 0.012, Mats.charcoal())
+		for a in [0.0, PI * 0.5, PI, PI * 1.5]:
+			d.box(Vector3(0.82 + cos(a) * 0.07, 0.528, 0.28 + sin(a) * 0.07),
+				Vector3(0.018, 0.008, 0.018), Mats.charcoal(), 0.003)
+	)
 	scene.collider_cylinder(fc + Vector3(0, 0.28, 0), 1.65, 0.56)
 	# The former near-black puddle looked like polished plastic. A top-only
 	# circular surface now uses the Poolrooms' animated refraction/ripples,
@@ -893,6 +947,15 @@ func _mall_kiosk(p: Vector3, yaw: float, salt: int) -> void:
 	var v = scene.furnishing_pivot(p, yaw, "mall_kiosk")
 	scene.model_rounded_box(v, Vector3(0, 0.62, 0), Vector3(2.6, 1.24, 1.5), Mats.mall_trim(), 0.08)
 	scene.model_rounded_box(v, Vector3(0, 1.28, 0), Vector3(2.85, 0.12, 1.75), Mats.sch_white(), 0.035)
+	ProceduralDetails.attach(v, "mall_kiosk260_124_150_panels_toe_lip_v1", func(d: ProceduralDetails):
+		for x in [-0.72, 0.72]:
+			for z in [-0.755, 0.755]:
+				d.box(Vector3(x, 0.64, z), Vector3(1.10, 0.82, 0.025), Mats.mall_trim(), 0.025)
+		for side in [-1.0, 1.0]:
+			d.box(Vector3(side * 1.305, 0.64, 0), Vector3(0.025, 0.82, 1.22), Mats.mall_trim(), 0.025)
+		d.box(Vector3(0, 0.10, -0.76), Vector3(2.38, 0.20, 0.055), Mats.charcoal(), 0.012)
+		d.box(Vector3(0, 1.33, -0.91), Vector3(2.80, 0.045, 0.10), Mats.sch_white(), 0.008)
+	)
 	for cx in [-1.25, 1.25]:
 		for cz in [-0.72, 0.72]:
 			scene.model_cylinder(v, Vector3(cx, 2.0, cz), 0.03, 1.5, Mats.brass())
@@ -938,6 +1001,12 @@ func _mall_cinema() -> void:
 		Mats.mall_trim(), 0.06)
 	scene.model_box(cv, Vector3(0, 1.1, -0.39), Vector3(5.4, 0.34, 0.035),
 		Mats.mall_glass())
+	ProceduralDetails.attach(cv, "mall_cinema_counter580_136_072_panels_toe_lip_v1", func(d: ProceduralDetails):
+		for x in [-1.9, 0.0, 1.9]:
+			d.box(Vector3(x, 0.65, -0.371), Vector3(1.58, 0.78, 0.025), Mats.mall_trim(), 0.025)
+		d.box(Vector3(0, 0.10, -0.38), Vector3(5.46, 0.20, 0.06), Mats.charcoal(), 0.012)
+		d.box(Vector3(0, 1.37, -0.43), Vector3(5.72, 0.06, 0.12), Mats.sch_white(), 0.01)
+	)
 	for rx in [-1.65, 1.65]:
 		scene.cc0_prop_local(cv, "CashRegister_01", Vector3(rx, 1.39, -0.12),
 			PI, 0.68)
@@ -994,6 +1063,13 @@ func _mall_poster_stand(p: Vector3) -> void:
 		Mats.sch_chair(0.04 + ctx.random01(1704) * 0.48))
 	scene.model_rounded_box(v, Vector3(0, 0.05, 0), Vector3(1.38, 0.10, 0.52),
 		Mats.mall_trim(), 0.025)
+	ProceduralDetails.attach(v, "mall_poster_stand120_210_inset_brace_v1", func(d: ProceduralDetails):
+		for x in [-0.535, 0.535]:
+			d.box(Vector3(x, 1.20, -0.105), Vector3(0.045, 1.98, 0.035), Mats.mall_trim(), 0.008)
+		for y in [0.24, 2.16]:
+			d.box(Vector3(0, y, -0.105), Vector3(1.11, 0.045, 0.035), Mats.mall_trim(), 0.008)
+		d.tube(Vector3(0, 0.12, 0.12), Vector3(0, 1.05, 0.07), 0.025, Mats.charcoal())
+	)
 	scene.collider_yaw_box(p + Vector3(0, 1.1, 0), Vector3(1.2, 2.2, 0.22), 0)
 	scene.bind_furnishing_colliders(v, b0)
 

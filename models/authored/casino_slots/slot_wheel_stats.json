@@ -1,0 +1,30 @@
+{
+  "variant": "wheel",
+  "triangles": 5030,
+  "meshes": 5,
+  "materials": 5,
+  "texture_resolution": [
+    1024,
+    1024
+  ],
+  "printed_texture_resolution": [
+    1024,
+    2048
+  ],
+  "front_axis": "+Z",
+  "dimensions_godot_m": [
+    0.8659999966621399,
+    2.634343147277832,
+    0.8560000360012054
+  ],
+  "bounds_godot_min": [
+    -0.43299999833106995,
+    0.0,
+    -0.3360000550746918
+  ],
+  "bounds_godot_max": [
+    0.43299999833106995,
+    2.634343147277832,
+    0.5199999809265137
+  ]
+}

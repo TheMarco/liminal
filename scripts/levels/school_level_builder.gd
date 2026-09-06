@@ -663,6 +663,15 @@ func _sch_chalkboard(dir: int) -> void:
 		for edge in [-1.0, 1.0]:
 			scene.model_box(board_root, Vector3(cen + edge * ln / 2.0, y, d0),
 				Vector3(0.06, 1.33, 0.07), Mats.sch_trim())
+	var board_key = "school_chalkboard_trim_d%d_c%.2f_l%.2f" % [dir, cen, ln]
+	ProceduralDetails.attach(board_root, board_key, func(d: ProceduralDetails):
+		if dir < 2:
+			d.box(Vector3(d0 + n * 0.04, y - 0.705, cen), Vector3(0.05, 0.025, ln + 0.06), Mats.sch_trim(), 0.006)
+			d.box(Vector3(d0 + n * 0.047, y - 0.67, cen - 0.62), Vector3(0.035, 0.055, 0.24), Mats.charcoal(), 0.012)
+		else:
+			d.box(Vector3(cen, y - 0.705, d0 + n * 0.04), Vector3(ln + 0.06, 0.025, 0.05), Mats.sch_trim(), 0.006)
+			d.box(Vector3(cen - 0.62, y - 0.67, d0 + n * 0.047), Vector3(0.24, 0.055, 0.035), Mats.charcoal(), 0.012)
+	)
 	_sch_chalk(board_root, dir, cen, ln)
 	# a row of work pinned above it, curling off the wall
 	if ctx.random01(71) < 0.7:
@@ -752,6 +761,14 @@ func _sch_cupboard(p: Vector3, yaw: float, salt: int) -> void:
 		scene.model_box(v, Vector3(sx, hgt / 2.0, 0.235), Vector3(0.47, hgt - 0.08, 0.02),
 			Mats.metal_gray())
 		scene.model_box(v, Vector3(sx + 0.19, 1.0, 0.25), Vector3(0.05, 0.16, 0.02), Mats.charcoal())
+	ProceduralDetails.attach(v, "school_cupboard_detail_h1.95", func(d: ProceduralDetails):
+		d.box(Vector3(0, 0.055, 0.015), Vector3(1.02, 0.11, 0.48), Mats.charcoal(), 0.015)
+		d.box(Vector3(0, 0.98, 0.252), Vector3(0.018, 1.79, 0.018), Mats.charcoal())
+		for sx in [-0.25, 0.25]:
+			d.box(Vector3(sx, 0.98, 0.254), Vector3(0.41, 1.76, 0.009), Mats.metal_gray(), 0.012)
+			d.tube(Vector3(sx + 0.16, 0.91, 0.270),
+				Vector3(sx + 0.16, 1.09, 0.270), 0.008, Mats.sch_trim())
+	)
 	scene.collider_yaw_box(p + Vector3(0, hgt / 2.0, 0), Vector3(1.0, hgt, 0.5), yaw)
 	if ctx.random01(salt) < 0.5:
 		for i in 3:
@@ -843,6 +860,17 @@ func _sch_screen(dir: int) -> void:
 		for side in [-1.0, 1.0]:
 			scene.model_box(screen, Vector3(t + side * 0.86, ctx.ceiling_height - 0.3, inner),
 				Vector3(0.07, 0.22, 0.16), Mats.sch_trim())
+	var cord_top = ctx.ceiling_height - 0.39
+	var cord_bottom = maxf(y - drop * 0.5, cord_top - 0.72)
+	var cord_pos = Vector3(inner + n * 0.15, 0, t + 0.91) if dir < 2 \
+		else Vector3(t + 0.91, 0, inner + n * 0.15)
+	var screen_key = "school_screen_cord_d%d_t%.3f_top%.3f_bottom%.3f" % [dir, t, cord_top, cord_bottom]
+	ProceduralDetails.attach(screen, screen_key, func(d: ProceduralDetails):
+		d.tube(Vector3(cord_pos.x, cord_top, cord_pos.z),
+			Vector3(cord_pos.x, cord_bottom, cord_pos.z), 0.006, Mats.charcoal())
+		d.ring(Vector3(cord_pos.x, cord_bottom - 0.035, cord_pos.z),
+			0.035, 0.006, Mats.charcoal(), Vector3.FORWARD if dir < 2 else Vector3.RIGHT)
+	)
 
 
 ## Folding table with the benches welded on — cafeteria, and nowhere else.
@@ -862,6 +890,14 @@ func _sch_caf_table(p: Vector3, yaw: float, salt: int) -> void:
 	for sx in [-ln * 0.32, ln * 0.32]:
 		scene.model_box(v, Vector3(sx, 0.37, 0), Vector3(0.07, 0.74, 0.1), Mats.sch_trim())
 		scene.model_box(v, Vector3(sx, 0.06, 0), Vector3(0.09, 0.12, 1.5), Mats.sch_trim())
+	ProceduralDetails.attach(v, "school_caf_table_underframe_l2.9", func(d: ProceduralDetails):
+		for sx in [-ln * 0.32, ln * 0.32]:
+			d.tube(Vector3(sx, 0.10, -0.69), Vector3(sx, 0.70, -0.32), 0.022, Mats.sch_trim())
+			d.tube(Vector3(sx, 0.10, 0.69), Vector3(sx, 0.70, 0.32), 0.022, Mats.sch_trim())
+			for sz in [-0.72, 0.72]:
+				d.box(Vector3(sx, 0.485, sz), Vector3(0.16, 0.025, 0.22), Mats.metal_gray(), 0.006)
+		d.tube(Vector3(-0.93, 0.37, 0), Vector3(0.93, 0.37, 0), 0.025, Mats.sch_trim())
+	)
 	scene.collider_yaw_box(p + Vector3(0, 0.4, 0), Vector3(ln, 0.8, 1.6), yaw)
 	if ctx.random01(salt) < 0.4:
 		scene.model_box(v, Vector3((ctx.random01(salt + 1) - 0.5) * 1.8, 0.785, (ctx.random01(salt + 2) - 0.5) * 0.4),
@@ -926,6 +962,33 @@ func _sch_servery(dir: int) -> void:
 		for i in 3:
 			scene.box(Vector3(c - 1.5 + 1.5 * float(i), 0.97, d), Vector3(0.9, 0.05, 0.55),
 				Mats.charcoal(), false)
+	var details = Node3D.new()
+	scene.add_node(details)
+	var servery_key = "school_servery_detail_d%d_p%.3f_c%.2f_l%.2f" % [dir, d, c, ln]
+	ProceduralDetails.attach(details, servery_key, func(det: ProceduralDetails):
+		if dir < 2:
+			det.tube(Vector3(d + n * 0.51, 0.965, c - ln * 0.5),
+				Vector3(d + n * 0.51, 0.965, c + ln * 0.5), 0.025, Mats.steel())
+			for i in 3:
+				var zc = c - 1.5 + 1.5 * float(i)
+				for zz in [zc - 0.48, zc + 0.48]:
+					det.box(Vector3(d, 0.995, zz), Vector3(0.61, 0.025, 0.025), Mats.steel())
+			for zc in [c - 1.25, c, c + 1.25]:
+				det.box(Vector3(d + n * 0.456, 0.45, zc), Vector3(0.018, 0.62, 0.018), Mats.charcoal())
+			for vent_z in [c - 0.18, c, c + 0.18]:
+				det.box(Vector3(d + n * 0.466, 0.24, vent_z), Vector3(0.016, 0.025, 0.11), Mats.charcoal(), 0.005)
+		else:
+			det.tube(Vector3(c - ln * 0.5, 0.965, d + n * 0.51),
+				Vector3(c + ln * 0.5, 0.965, d + n * 0.51), 0.025, Mats.steel())
+			for i in 3:
+				var xc = c - 1.5 + 1.5 * float(i)
+				for xx in [xc - 0.48, xc + 0.48]:
+					det.box(Vector3(xx, 0.995, d), Vector3(0.025, 0.025, 0.61), Mats.steel())
+			for xc in [c - 1.25, c, c + 1.25]:
+				det.box(Vector3(xc, 0.45, d + n * 0.456), Vector3(0.018, 0.62, 0.018), Mats.charcoal())
+			for vent_x in [c - 0.18, c, c + 0.18]:
+				det.box(Vector3(vent_x, 0.24, d + n * 0.466), Vector3(0.11, 0.025, 0.016), Mats.charcoal(), 0.005)
+	)
 
 
 func _sch_bathroom() -> void:
@@ -987,6 +1050,16 @@ func _sch_stalls(dir: int) -> void:
 			1.10, 0).rotated(Vector3.UP, door.rotation.y)
 		scene.collider_yaw_box(scene.world_point(stall_pos, door_local, yaw),
 			Vector3(door_w, 1.66, 0.06), yaw + door.rotation.y)
+		ProceduralDetails.attach(door, "school_stall_door_hardware_w1.04_e%.0f" % extent, func(d: ProceduralDetails):
+			for hy in [0.52, 1.58]:
+				d.box(Vector3(extent * 0.035, hy, -0.042), Vector3(0.07, 0.15, 0.025), Mats.sch_trim(), 0.006)
+			d.box(Vector3(extent * (door_w - 0.16), 1.10, -0.047),
+				Vector3(0.12, 0.055, 0.035), Mats.charcoal(), 0.008)
+		)
+		ProceduralDetails.attach(stall, "school_stall_partition_feet_w1.18_d1.58", func(d: ProceduralDetails):
+			for sx in [-w * 0.5, w * 0.5]:
+				d.box(Vector3(sx, 0.09, -0.24), Vector3(0.16, 0.18, 0.22), Mats.sch_trim(), 0.018)
+		)
 		# Authored porcelain. The stall runs from the wall at local z=0 out to
 		# its door at -depth, so the pan turns to put its cistern against the
 		# wall and its bowl toward the door. Six primitives used to fake it.
@@ -1033,6 +1106,22 @@ func _sch_sinks(dir: int) -> void:
 		else Vector3(WorldGen.CELL_SIZE / 2.0, 1.72, inner + n * 0.02)
 	scene.box(mp, Vector3(0.02, 0.9, float(cnt) * w) if dir < 2 else Vector3(float(cnt) * w, 0.9, 0.02),
 		Mats.gold_mirror(), false)
+	var mirror_root = Node3D.new()
+	scene.add_node(mirror_root)
+	var mirror_w = float(cnt) * w
+	var mirror_key = "school_mirror_frame_d%d_w%.2f" % [dir, mirror_w]
+	ProceduralDetails.attach(mirror_root, mirror_key, func(det: ProceduralDetails):
+		if dir < 2:
+			for yy in [1.27, 2.17]:
+				det.box(Vector3(inner + n * 0.035, yy, WorldGen.CELL_SIZE / 2.0), Vector3(0.035, 0.035, mirror_w + 0.05), Mats.sch_trim())
+			for zz in [WorldGen.CELL_SIZE / 2.0 - mirror_w * 0.5, WorldGen.CELL_SIZE / 2.0 + mirror_w * 0.5]:
+				det.box(Vector3(inner + n * 0.035, 1.72, zz), Vector3(0.035, 0.93, 0.035), Mats.sch_trim())
+		else:
+			for yy in [1.27, 2.17]:
+				det.box(Vector3(WorldGen.CELL_SIZE / 2.0, yy, inner + n * 0.035), Vector3(mirror_w + 0.05, 0.035, 0.035), Mats.sch_trim())
+			for xx in [WorldGen.CELL_SIZE / 2.0 - mirror_w * 0.5, WorldGen.CELL_SIZE / 2.0 + mirror_w * 0.5]:
+				det.box(Vector3(xx, 1.72, inner + n * 0.035), Vector3(0.035, 0.93, 0.035), Mats.sch_trim())
+	)
 	for i in cnt:
 		var t = start + w * (float(i) + 0.5)
 		# The authored basin is a pedestal unit with its own tap and trap, so
@@ -1181,15 +1270,26 @@ func _sch_hoop(p: Vector3, yaw: float) -> void:
 	v.rotation.y = yaw
 	scene.add_node(v)
 	scene.model_box(v, Vector3(0, 3.05, 0), Vector3(1.8, 1.05, 0.05), Mats.sch_white())
-	scene.model_box(v, Vector3(0, 2.86, 0), Vector3(0.59, 0.45, 0.02), Mats.sch_red())
-	scene.model_box(v, Vector3(0, 2.62, 0.22), Vector3(0.45, 0.03, 0.45), Mats.sch_red())
-	for sx in [-0.5, 0.5]:
-		scene.model_box(v, Vector3(sx, 3.5, -0.5), Vector3(0.06, 0.06, 1.1), Mats.sch_trim())
-	scene.model_box(v, Vector3(0, 3.05, -0.55), Vector3(0.08, 0.08, 1.1), Mats.sch_trim())
-	# net, as a ring of short hanging strands
-	for i in 8:
-		var a = TAU * float(i) / 8.0
-		scene.model_cylinder(v, Vector3(sin(a) * 0.2, 2.46, 0.22 + cos(a) * 0.2), 0.008, 0.3, Mats.box_white())
+	ProceduralDetails.attach(v, "school_hoop_regulation_r0.225_net8", func(d: ProceduralDetails):
+		# Painted target is an outline; the old solid rectangle looked like a patch.
+		for sx in [-0.295, 0.295]:
+			d.box(Vector3(sx, 2.86, 0.031), Vector3(0.025, 0.45, 0.018), Mats.sch_red())
+		for yy in [2.645, 3.075]:
+			d.box(Vector3(0, yy, 0.031), Vector3(0.615, 0.025, 0.018), Mats.sch_red())
+		d.ring(Vector3(0, 2.62, 0.22), 0.225, 0.015, Mats.sch_red())
+		# Folded triangular wall/backboard support.
+		for sx in [-0.50, 0.50]:
+			d.tube(Vector3(sx, 3.48, -0.52), Vector3(sx, 3.48, -0.03), 0.025, Mats.sch_trim())
+			d.tube(Vector3(sx, 3.48, -0.52), Vector3(sx, 2.62, -0.03), 0.025, Mats.sch_trim())
+		d.tube(Vector3(0, 3.05, -0.52), Vector3(0, 3.05, -0.03), 0.03, Mats.sch_trim())
+		# Sparse tapered net: eight cords converge toward a smaller lower ring.
+		for i in 8:
+			var a = TAU * float(i) / 8.0
+			var top = Vector3(sin(a) * 0.205, 2.605, 0.22 + cos(a) * 0.205)
+			var bottom = Vector3(sin(a) * 0.13, 2.32, 0.22 + cos(a) * 0.13)
+			d.tube(top, bottom, 0.005, Mats.box_white())
+		d.ring(Vector3(0, 2.32, 0.22), 0.13, 0.005, Mats.box_white())
+	)
 
 
 ## Retractable bleachers, pulled out and left out.
@@ -1206,6 +1306,16 @@ func _sch_bleachers(p: Vector3, yaw: float, ln: float) -> void:
 		var z = -0.4 - 0.62 * float(i)
 		scene.model_box(v, Vector3(0, y, z), Vector3(ln, 0.06, 0.5), Mats.sch_desk())
 		scene.model_box(v, Vector3(0, y - 0.21, z - 0.28), Vector3(ln, 0.42, 0.06), Mats.sch_trim())
+	var bleacher_key = "school_bleacher_braces_l%.3f_t4" % ln
+	ProceduralDetails.attach(v, bleacher_key, func(d: ProceduralDetails):
+		for x in [-ln * 0.5 + 0.08, 0.0, ln * 0.5 - 0.08]:
+			d.tube(Vector3(x, 0.08, -0.26), Vector3(x, 1.68, -2.20), 0.025, Mats.sch_trim())
+			d.tube(Vector3(x, 0.08, -2.20), Vector3(x, 1.68, -2.20), 0.025, Mats.sch_trim())
+		for x in [-ln * 0.5 - 0.015, ln * 0.5 + 0.015]:
+			for i in tiers:
+				d.box(Vector3(x, 0.42 + 0.42 * float(i), -0.4 - 0.62 * float(i)),
+					Vector3(0.03, 0.13, 0.52), Mats.sch_trim(), 0.006)
+	)
 	scene.collider_yaw_box(p + Vector3(-sin(yaw) * 1.5, 1.0, -cos(yaw) * 1.5),
 		Vector3(ln, 2.0, 3.0), yaw)
 
@@ -1281,6 +1391,11 @@ func _sch_stack(p: Vector3, yaw: float, salt: int) -> void:
 				x += bw + 0.03
 				k += 1
 	scene.model_box(v, Vector3(0, hgt - 0.02, 0), Vector3(ln, 0.05, 0.42), Mats.sch_desk())
+	ProceduralDetails.attach(v, "school_library_stack_case_l4.4_h2.0", func(d: ProceduralDetails):
+		d.box(Vector3(0, 0.055, 0), Vector3(ln + 0.04, 0.11, 0.44), Mats.sch_trim(), 0.012)
+		for x in [-ln * 0.5, ln * 0.5]:
+			d.box(Vector3(x, hgt * 0.5, 0), Vector3(0.055, hgt, 0.44), Mats.sch_trim())
+	)
 	var origin_x = real_left if real_side > 0.0 else real_left + 0.55
 	var by = 0.42 + 0.46 * float(real_sh) + 0.025
 	var books = scene.cc0_prop_local(v, "book_encyclopedia_set_01",
@@ -1365,10 +1480,14 @@ func _sch_stool(p: Vector3, salt: int) -> void:
 	var v = scene.furnishing_pivot(p,
 		WorldGen.r01(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt) * TAU, "school_lab_stool")
 	scene.model_cylinder(v, Vector3(0, 0.62, 0), 0.17, 0.05, Mats.sch_desk())
-	for i in 4:
-		var a = TAU * float(i) / 4.0 + PI / 4.0
-		scene.model_cylinder(v, Vector3(sin(a) * 0.13, 0.31, cos(a) * 0.13), 0.014, 0.62, Mats.sch_trim())
-	scene.model_cylinder(v, Vector3(0, 0.28, 0), 0.15, 0.02, Mats.sch_trim())
+	ProceduralDetails.attach(v, "school_lab_stool_splayed_r0.17", func(d: ProceduralDetails):
+		for i in 4:
+			var a = TAU * float(i) / 4.0 + PI / 4.0
+			d.tube(Vector3(sin(a) * 0.10, 0.60, cos(a) * 0.10),
+				Vector3(sin(a) * 0.175, 0.02, cos(a) * 0.175), 0.014, Mats.sch_trim())
+		d.ring(Vector3(0, 0.28, 0), 0.15, 0.012, Mats.sch_trim())
+		d.ring(Vector3(0, 0.635, 0), 0.17, 0.012, Mats.sch_trim())
+	)
 	scene.collider_cylinder(p + Vector3(0, 0.32, 0), 0.2, 0.64)
 	scene.bind_furnishing_colliders(v, body0)
 
@@ -1420,6 +1539,25 @@ func _sch_noticeboard(dir: int, plane: float) -> void:
 		var ps = Vector3(0.008, 0.26, 0.19) if dir < 2 else Vector3(0.19, 0.26, 0.008)
 		var pp = Vector3(d0 + n * 0.05, py, px) if dir < 2 else Vector3(px, py, d0 + n * 0.05)
 		scene.box(pp, ps, Mats.box_white(), false)
+	var notice_detail = Node3D.new()
+	scene.add_node(notice_detail)
+	var notice_key = "school_notice_trim_" + var_to_str([dir, plane, along, w, y])
+	ProceduralDetails.attach(notice_detail, notice_key, func(d: ProceduralDetails):
+		if dir < 2:
+			for yy in [y - 0.625, y + 0.625]:
+				d.box(Vector3(d0 + n * 0.065, yy, along), Vector3(0.025, 0.045, w + 0.05), Mats.sch_trim())
+			for zz in [along - w * 0.5, along + w * 0.5]:
+				d.box(Vector3(d0 + n * 0.065, y, zz), Vector3(0.025, 1.29, 0.045), Mats.sch_trim())
+		else:
+			for yy in [y - 0.625, y + 0.625]:
+				d.box(Vector3(along, yy, d0 + n * 0.065), Vector3(w + 0.05, 0.045, 0.025), Mats.sch_trim())
+			for xx in [along - w * 0.5, along + w * 0.5]:
+				d.box(Vector3(xx, y, d0 + n * 0.065), Vector3(0.045, 1.29, 0.025), Mats.sch_trim())
+		for pin in [-0.28, 0.22]:
+			var pp = Vector3(d0 + n * 0.075, y + pin, along + pin * 1.7) if dir < 2 \
+				else Vector3(along + pin * 1.7, y + pin, d0 + n * 0.075)
+			d.box(pp, Vector3(0.016, 0.016, 0.016), Mats.sch_red(), 0.006)
+	)
 
 
 ## Drinking fountain. Two of them, always, at the height of two different
@@ -1495,6 +1633,18 @@ func _sch_case(dir: int, plane: float) -> void:
 	var gp = Vector3(inner + n * (depth + 0.01), y, along) if dir < 2 \
 		else Vector3(along, y, inner + n * (depth + 0.01))
 	scene.box(gp, gs, Mats.glass(), false)
+	var case_detail = Node3D.new()
+	scene.add_node(case_detail)
+	var case_key = "school_trophy_case_" + var_to_str([dir, plane, along, w, y])
+	ProceduralDetails.attach(case_detail, case_key, func(d: ProceduralDetails):
+		for offset in [-w * 0.5, 0.0, w * 0.5]:
+			if dir < 2:
+				d.box(Vector3(inner + n * (depth + 0.025), y, along + offset),
+					Vector3(0.035, 1.86, 0.035), Mats.sch_trim())
+			else:
+				d.box(Vector3(along + offset, y, inner + n * (depth + 0.025)),
+					Vector3(0.035, 1.86, 0.035), Mats.sch_trim())
+	)
 	for sh in 3:
 		var sy = 0.95 + 0.52 * float(sh)
 		var ss = Vector3(depth - 0.08, 0.03, w - 0.16) if dir < 2 else Vector3(w - 0.16, 0.03, depth - 0.08)
@@ -1503,11 +1653,11 @@ func _sch_case(dir: int, plane: float) -> void:
 		for i in 4:
 			var tx = along + (float(i) - 1.5) * 0.48
 			var hgt = lerpf(0.16, 0.3, WorldGen.r01(ctx.world_seed, ctx.cell.x + i, ctx.cell.y + sh, 934))
-			var tp = Vector3(d0, sy + 0.03 + hgt * 0.5, tx) if dir < 2 \
-				else Vector3(tx, sy + 0.03 + hgt * 0.5, d0)
-			scene.cylinder(tp, 0.05, hgt, Mats.brass(), false)
-			var cp2 = tp + Vector3(0, hgt * 0.5, 0)
-			scene.sphere(cp2, 0.06, Mats.brass())
+			var tp = Vector3(d0, sy + 0.03 + hgt * 0.42, tx) if dir < 2 \
+				else Vector3(tx, sy + 0.03 + hgt * 0.42, d0)
+			scene.cylinder(tp, 0.025, hgt * 0.58, Mats.brass(), false)
+			var cp2 = tp + Vector3(0, hgt * 0.42, 0)
+			scene.model_ellipsoid(null, cp2, Vector3(0.13, hgt * 0.42, 0.13), Mats.brass())
 
 
 ## A poster, curling at one corner: fire drill, periodic table, a motto.

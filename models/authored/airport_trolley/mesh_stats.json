@@ -1,0 +1,16 @@
+{
+  "triangles": 3228,
+  "meshes": 1,
+  "materials": 1,
+  "texture_resolution": 1024,
+  "dimensions_godot_m": [
+    0.6303755640983582,
+    1.1119999885559082,
+    0.9945204257965088
+  ],
+  "casters": 4,
+  "front_axis": "+Z",
+  "nesting_pitch_m": 0.55,
+  "deck_y_intercept_m": 0.322,
+  "deck_slope": 0.055
+}

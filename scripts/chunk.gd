@@ -128,6 +128,13 @@ const OFFICE_CHAIR_PATH := "res://models/cc0/office_chair/Office_Chair.fbx"
 const SLOT_MACHINE_PATH := "res://models/cc_by/slot_machine/slot_machine.glb"
 const SLOT_MACHINE_SCALE := 1.30
 const SLOT_MACHINE_FLOOR_OFFSET := 0.548386
+const CASINO_SLOT_PATHS: Array[String] = [
+	"res://models/authored/casino_slots/slot_classic.glb",
+	"res://models/authored/casino_slots/slot_wheel.glb",
+	"res://models/authored/casino_slots/slot_dual.glb",
+	"res://models/authored/casino_slots/slot_triple.glb",
+]
+const CASINO_SLOT_HEIGHTS: Array[float] = [2.25, 2.67, 2.40, 2.62]
 const PRISON_BUNK_PATH := \
 	"res://models/cc_by/bunk_bed/bunk_bed.glb"
 const PRISON_TOILET_PATH := \
@@ -157,6 +164,8 @@ const ASY_SCRUB_SINK_PATH := \
 	"res://models/cc_by/abandoned_hospital/scrub_sink.glb"
 const ASY_NOTICES_PATH := \
 	"res://models/cc_by/abandoned_hospital/pinned_notices.glb"
+const ASY_STRAITJACKET_PATH := \
+	"res://models/authored/straitjacket/straitjacket.glb"
 const ASY_TRANSPORT_CLEARANCE := 0.25
 # Four leaves from the same hospital. Mounted at authored height as sealed
 # façades on solid walls, and at ASY_DOOR_FIT in a generated opening, whose
@@ -228,6 +237,8 @@ const MALL_HOTDOG_SCALE := 0.017
 const MALL_HOTDOG_CENTRE := Vector3(55.9571, 0.0, -16.2907)
 const MALL_SHOPPING_CART_PATH := \
 	"res://models/cc_by/shopping_cart/shopping_cart.glb"
+const MALL_GARMENT_RACK_PATH := \
+	"res://models/authored/mall_garment_rack/garment_rack.glb"
 # Source bounds are 0.560 x 0.876 x 0.906m. A modest lift brings the handle to
 # a natural 1.01m while keeping the cart narrow enough for the generated aisles.
 const MALL_SHOPPING_CART_SCALE := 1.15
@@ -286,6 +297,9 @@ const AIRPORT_DEPARTURE_BOARD_UNITS := Vector3(18.1539, 12.3137, 1.1244)
 # The source origin is at floor level, so centre it vertically before mounting.
 const AIRPORT_DEPARTURE_BOARD_CENTRE := Vector3(-0.0715, 6.1565, 0.0)
 const AIRPORT_LUGGAGE_PATH := "res://models/cc_by/luggage/luggage.glb"
+const AIRPORT_TROLLEY_PATH := "res://models/authored/airport_trolley/airport_trolley.glb"
+const AIRPORT_JETWAY_PATH := "res://models/authored/airport_jetway/airport_jetway.glb"
+const AIRPORT_PLANE_PATH := "res://models/authored/airport_plane/airport_plane.glb"
 const AIRPORT_LUGGAGE_SCALE := 0.23
 # The source scene is one staged set whose material-merger grouped geometry by
 # material rather than by suitcase. These node lists recover its three physical
@@ -486,13 +500,6 @@ const PRISON_WALL_PHONE_CENTRE := Vector3(0.0, 0.1609867, -0.0318079)
 ## CC BY replacement for the former noncommercial school cart. Its source is
 ## 7.75 units high, so a 0.16 scale yields a realistic 1.24m trolley.
 ##
-## Two authored jetways have been measured for `_air_jetway` and neither
-## shipped. The apron is a sealed 2.14m diorama strip that the docked aircraft
-## already fills — fuselage z 4.00..5.76 across its full 10.5m width. A tunnel
-## sized to that depth is either too short to read as a jetway, or tall enough
-## to swallow the aircraft rather than dock against it. The generated tube is
-## 1m across and tuned to meet a fuselage, which is what this space actually
-## needs; a replacement has to be authored as a shallow facade, not a bridge.
 const SCH_CLEANING_CART_PATH := \
 	"res://models/cc_by/cleaning_cart/cleaning_cart.glb"
 const SCH_CLEANING_CART_SCALE := 0.16
@@ -852,6 +859,7 @@ static func _prop_preload_paths() -> Array[String]:
 		paths.append("res://models/cc0/%s/%s_1k.gltf" % [mname, mname])
 	paths.append(OFFICE_CHAIR_PATH)
 	paths.append(SLOT_MACHINE_PATH)
+	paths.append_array(CASINO_SLOT_PATHS)
 	paths.append(PRISON_BUNK_PATH)
 	paths.append(PRISON_TOILET_PATH)
 	paths.append(PRISON_DOOR_OLD_PATH)
@@ -862,6 +870,7 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(ASY_BATH_PATH)
 	paths.append(ASY_SCRUB_SINK_PATH)
 	paths.append(ASY_NOTICES_PATH)
+	paths.append(ASY_STRAITJACKET_PATH)
 	for door_path in ASY_DOOR_PATHS:
 		paths.append(door_path)
 	paths.append(OFFICE_TERMINAL_PATH)
@@ -877,6 +886,7 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(CASINO_ROULETTE_PATH)
 	paths.append(MALL_HOTDOG_PATH)
 	paths.append(MALL_SHOPPING_CART_PATH)
+	paths.append(MALL_GARMENT_RACK_PATH)
 	paths.append(ASY_AUTOPSY_PATH)
 	paths.append(OFFICE_PRINTER_PATH)
 	paths.append(OFFICE_BOXES_PATH)
@@ -901,6 +911,9 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(AIRPORT_SEATS_PATH)
 	paths.append(AIRPORT_DEPARTURE_BOARD_PATH)
 	paths.append(AIRPORT_LUGGAGE_PATH)
+	paths.append(AIRPORT_TROLLEY_PATH)
+	paths.append(AIRPORT_JETWAY_PATH)
+	paths.append(AIRPORT_PLANE_PATH)
 	paths.append(SCH_DESK_PATH)
 	paths.append(SCH_CHEMISTRY_TABLE_PATH)
 	paths.append(CHEMISTRY_GLASSWARE_PATH)
@@ -933,6 +946,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 	match p_theme:
 		0:
 			paths.append_array([SLOT_MACHINE_PATH, SLOT_ALT_PATH, CHANGE_MACHINE_PATH])
+			paths.append_array(CASINO_SLOT_PATHS)
 			paths.append_array([CASINO_BLACKJACK_PATH, CASINO_ROULETTE_PATH, ROPE_BARRIER_PATH])
 			paths.append("res://models/cc0/Chandelier_03/Chandelier_03_1k.gltf")
 			paths.append("res://models/cc0/bar_chair_round_01/bar_chair_round_01_1k.gltf")
@@ -963,7 +977,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array([ANNEX_SHELVING_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
 			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
 		4:
-			paths.append_array([AIRPORT_SEATS_PATH, AIRPORT_DEPARTURE_BOARD_PATH, AIRPORT_LUGGAGE_PATH])
+			paths.append_array([AIRPORT_SEATS_PATH, AIRPORT_DEPARTURE_BOARD_PATH, AIRPORT_LUGGAGE_PATH,
+				AIRPORT_TROLLEY_PATH, AIRPORT_JETWAY_PATH, AIRPORT_PLANE_PATH])
 			paths.append_array([CHECKIN_DESK_PATH])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/wooden_picnic_table/wooden_picnic_table_1k.gltf")
@@ -971,6 +986,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 		5:
 			paths.append_array([ASY_BED_PATH, ASY_GURNEY_PATH, ASY_TROLLEY_PATH])
 			paths.append_array([ASY_BATH_PATH, ASY_SCRUB_SINK_PATH, ASY_NOTICES_PATH])
+			paths.append(ASY_STRAITJACKET_PATH)
 			paths.append_array([ASY_AUTOPSY_PATH, IV_DRIP_PATH, CHEMISTRY_GLASSWARE_PATH])
 			paths.append_array(ASY_DOOR_PATHS)
 			paths.append("res://models/asylum/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf")
@@ -990,7 +1006,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
 		7:
-			paths.append_array([MALL_PAYPHONE_PATH, MALL_DIRECTORY_PATH, MALL_SHOPPING_CART_PATH])
+			paths.append_array([MALL_PAYPHONE_PATH, MALL_DIRECTORY_PATH, MALL_SHOPPING_CART_PATH,
+				MALL_GARMENT_RACK_PATH])
 			paths.append_array([CITY_BENCH_PATH, FOOD_COURT_SET_PATH, MALL_HOTDOG_PATH])
 			paths.append_array([ROPE_BARRIER_PATH])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
@@ -1088,6 +1105,7 @@ static func prewarm_theme_content(ws: int, p_theme: int) -> void:
 
 ## Audit/test teardown for process-lifetime scene/prototype caches.
 static func clear_runtime_caches() -> void:
+	ProceduralDetails.clear_runtime_cache()
 	finish_prop_preloads()
 	FloorResourcePreloader.finish()
 	_prop_preloads_requested = false
@@ -4757,16 +4775,9 @@ func _build_props() -> void:
 			elif _r(241) < 0.55:
 				_level_builder._roulette(Vector3(6.0, 0, 6.0), 243)
 		WorldGen.STYLE_SLOTS:
+			# Slot rooms are dedicated machine floors. Table-game set pieces
+			# include wide player seating arcs that intrude into the slot banks.
 			_level_builder._slots()
-			# Table games sit at either end of the machine floor, clear of both
-			# banks. This is the room that most reads as a casino and it had
-			# nothing but slots in it.
-			if _r(250) < 0.72:
-				var table_z := 1.95 if _r(251) < 0.5 else 10.05
-				if _r(252) < 0.55:
-					_level_builder._blackjack(Vector3(6.0, 0, table_z), 253)
-				else:
-					_level_builder._roulette(Vector3(6.0, 0, table_z), 254)
 		WorldGen.STYLE_LOUNGE:
 			_level_builder._lounge()
 			if _r(240) < 0.58:
@@ -6657,6 +6668,18 @@ func _filing_bank(dir: int, plane: float) -> void:
 				closed_face.set_meta("filing_bank_drawer_row", j)
 				_mbox(v, Vector3(0, dy + 0.245, 0.315),
 					Vector3(0.13, 0.022, 0.014), Mats.chrome())
+		var open_row := open_j if i == open_i else -1
+		ProceduralDetails.attach(v, "filing_trim_%d" % open_row, func(d: ProceduralDetails):
+			d.box(Vector3(0, 0.024, 0.004), Vector3(0.43, 0.048, 0.57), Mats.charcoal(), 0.008)
+			for row in 4:
+				var y := 0.19 + 0.31 * float(row)
+				var z := 0.448 if row == open_row else 0.314
+				# Recessed label holders sit below the protruding pull, with short
+				# end mounts making the existing chrome bar a usable handle.
+				d.box(Vector3(0, y - 0.01, z), Vector3(0.15, 0.055, 0.006), Mats.chrome(), 0.003)
+				d.box(Vector3(0, y - 0.01, z + 0.004), Vector3(0.128, 0.036, 0.004), Mats.box_white())
+				for x in [-0.056, 0.056]:
+					d.box(Vector3(x, y + 0.096, z - 0.001), Vector3(0.016, 0.026, 0.022), Mats.chrome(), 0.004))
 	var cc: Vector3
 	var csize: Vector3
 	if dir < 2:
@@ -6698,6 +6721,14 @@ func _vt100(pos: Vector3, yaw: float) -> Node3D:
 	# dark trim strip across the top front, and a little model badge
 	_mrbox(p, Vector3(0, 1.103, 0.03), Vector3(0.36, 0.012, 0.12), dark, 0.004)
 	_mrbox(p, Vector3(0.13, 0.826, 0.155), Vector3(0.055, 0.016, 0.008), dark, 0.003)
+	ProceduralDetails.attach(p, "vt100_service_details", func(d: ProceduralDetails):
+		for side in [-1.0, 1.0]:
+			for i in 6:
+				d.box(Vector3(side * 0.2205, 0.94, -0.19 + i * 0.035),
+					Vector3(0.003, 0.12, 0.012), dark)
+		for x in [-0.165, 0.165]:
+			d.box(Vector3(x, 0.752, -0.03), Vector3(0.045, 0.01, 0.24), dark, 0.003)
+		d.box(Vector3(0.09, 0.867, 0.158), Vector3(0.035, 0.012, 0.006), dark, 0.003))
 	var readout := Label3D.new()
 	readout.set_meta("terminal_readout", true)
 	readout.text = TERMINAL_PAGES[WorldGen.h(wseed, cell.x, cell.y, 1801) % TERMINAL_PAGES.size()]
@@ -6924,12 +6955,14 @@ func _vt100_keyboard(pos: Vector3, yaw: float) -> Node3D:
 	add_child(p)
 	_mrbox(p, Vector3(0, 0.766, 0), Vector3(0.42, 0.035, 0.17), Mats.crt_shell(), 0.01)
 	_mrbox(p, Vector3(0, 0.7855, -0.01), Vector3(0.38, 0.014, 0.125), Mats.crt_dark(), 0.004)
-	for row in 4:
-		var rz := -0.058 + 0.026 * row
-		var rx := row * 0.004 - 0.006
-		for col in 12:
-			_mbox(p, Vector3(rx - 0.154 + 0.028 * col, 0.799, rz), Vector3(0.024, 0.014, 0.02), Mats.charcoal())
-	_mbox(p, Vector3(0, 0.799, 0.044), Vector3(0.13, 0.012, 0.018), Mats.charcoal())
+	ProceduralDetails.attach(p, "terminal_keycaps", func(d: ProceduralDetails):
+		for row in 4:
+			var rz := -0.058 + 0.026 * row
+			var rx := row * 0.004 - 0.006
+			for col in 12:
+				d.box(Vector3(rx - 0.154 + 0.028 * col, 0.799, rz),
+					Vector3(0.024, 0.014, 0.02), Mats.charcoal(), 0.003)
+		d.box(Vector3(0, 0.799, 0.044), Vector3(0.13, 0.012, 0.018), Mats.charcoal(), 0.003))
 	return p
 
 
@@ -6960,6 +6993,21 @@ func _shelf_unit(c: Vector3, along_x: bool, salt: int) -> void:
 					var bx := _mrbox(rack, bpos, Vector3(0.5, 0.34, 0.45),
 						Mats.box_white(), 0.01)
 					bx.rotation.y = box_yaw
+					ProceduralDetails.attach(bx, "shelf_carton_flaps", func(d: ProceduralDetails):
+						d.box(Vector3(0, 0.173, 0), Vector3(0.006, 0.003, 0.41), Mats.charcoal())
+						d.box(Vector3(0, 0.02, 0.227), Vector3(0.17, 0.085, 0.003), Mats.crt_shell()))
+	var frame := Node3D.new()
+	frame.rotation.y = 0.0 if along_x else PI * 0.5
+	rack.add_child(frame)
+	ProceduralDetails.attach(frame, "shelf_frame_brackets", func(d: ProceduralDetails):
+		for y in [0.5, 1.1, 1.7]:
+			for z in [-0.287, 0.287]:
+				d.box(Vector3(0, y - 0.022, z), Vector3(2.38, 0.07, 0.026), Mats.metal_gray())
+		for x in [-1.2, 1.2]:
+			for z in [-0.3, 0.3]:
+				d.box(Vector3(x, 0.013, z), Vector3(0.10, 0.026, 0.08), Mats.metal_gray(), 0.004)
+		d.tube(Vector3(-1.18, 0.50, -0.29), Vector3(1.18, 2.1, -0.29), 0.012, Mats.metal_gray())
+		d.tube(Vector3(1.18, 0.50, -0.29), Vector3(-1.18, 2.1, -0.29), 0.012, Mats.metal_gray()))
 	_collider_box(c + Vector3(0, 1.1, 0), Vector3(2.5, 2.2, 0.65) if along_x else Vector3(0.65, 2.2, 2.5))
 	_bind_furnishing_colliders(rack, body0)
 
@@ -7454,6 +7502,11 @@ func _small_desk(p: Vector3, yaw: float) -> void:
 	_mrbox(v, Vector3(0, 0.73, 0), Vector3(1.4, 0.035, 0.72), Mats.desk_white(), 0.012)
 	for sx in [-0.62, 0.62]:
 		_mrbox(v, Vector3(sx, 0.355, 0), Vector3(0.04, 0.71, 0.66), Mats.desk_white(), 0.008)
+	ProceduralDetails.attach(v, "compact_desk_frame", func(d: ProceduralDetails):
+		d.box(Vector3(0, 0.49, -0.29), Vector3(1.23, 0.37, 0.026), Mats.divider_gray(), 0.005)
+		for x in [-0.62, 0.62]:
+			d.box(Vector3(x, 0.017, 0), Vector3(0.06, 0.034, 0.66), Mats.charcoal(), 0.008)
+		d.box(Vector3(0, 0.703, 0.34), Vector3(1.35, 0.012, 0.016), Mats.divider_gray()))
 	_collider_yaw_box(p + Vector3(0, 0.4, 0), Vector3(1.4, 0.8, 0.75), yaw)
 	_office_ibm_terminal(v, Vector3.ZERO, 0.0, 648)
 	var paper_side := Vector3(cos(yaw), 0, -sin(yaw)) * 0.34
@@ -7468,9 +7521,8 @@ func _small_desk(p: Vector3, yaw: float) -> void:
 
 # --- asylum ------------------------------------------------------------------
 # Downloaded CC0 kit: photo textures (ambientCG) on the structure, glTF props
-# (Poly Haven) for beds, wheelchairs, chairs and desks; everything the models
-# don't cover — restraint tables, ECT carts, tubs, straitjackets — is built
-# from primitives dressed in the same textures.
+# (Poly Haven) for beds, wheelchairs, chairs and desks; uncovered details use
+# authored assets or primitives dressed in the same textures.
 
 const ASY_SCRAWLS := ["LET ME OUT", "THEY LISTEN AT NIGHT", "NO ONE LEFT",
 	"I AM NOT SICK", "IT WATCHES THE DOOR", "ROOM 9 ROOM 9 ROOM 9",

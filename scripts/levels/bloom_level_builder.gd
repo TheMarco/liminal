@@ -42,8 +42,8 @@ static var _particle_quad_meshes: Dictionary = {}
 func _vine_mesh() -> CylinderMesh:
 	if _vine_cylinder == null:
 		_vine_cylinder = CylinderMesh.new()
-		_vine_cylinder.radial_segments = 7
-		_vine_cylinder.rings = 1
+		_vine_cylinder.radial_segments = 12
+		_vine_cylinder.rings = 3
 		_vine_cylinder.height = 2.0
 		_vine_cylinder.top_radius = 0.34
 		_vine_cylinder.bottom_radius = 0.5
@@ -668,16 +668,23 @@ func _incubator_pod(pos: Vector3, scale: Vector3, phase: float) -> void:
 	pulse.phase = phase
 	pulse.set_meta("bloom_incubator", true)
 	scene.add_node(pulse)
-	scene.model_ellipsoid(pulse, Vector3(0, 0.88, 0), Vector3(0.52, 0.88, 0.52),
+	# The membrane fills its cage and tapers at both ends rather than looking
+	# like a small egg suspended halfway up five disconnected poles.
+	scene.model_ellipsoid(pulse, Vector3(0, 0.88, 0), Vector3(0.92, 1.58, 0.88),
 		Mats.bloom_flesh())
 	scene.model_ellipsoid(pulse, Vector3(0, 0.93, 0), Vector3(0.34, 0.61, 0.34),
 		Mats.bloom_red())
-	for i in 5:
-		var a := float(i) * TAU / 5.0
-		scene.model_beam(pulse,
-			Vector3(cos(a) * 0.56, 0.05, sin(a) * 0.56),
-			Vector3(cos(a) * 0.44, 1.72, sin(a) * 0.44), 0.026,
-			Mats.bloom_metal())
+	ProceduralDetails.attach(pulse, "incubator_cradle", func(d: ProceduralDetails):
+		d.ring(Vector3(0, 0.09, 0), 0.43, 0.025, Mats.bloom_metal())
+		d.ring(Vector3(0, 1.55, 0), 0.32, 0.018, Mats.bloom_metal())
+		for i in 5:
+			var a := float(i) * TAU / 5.0
+			var lower := Vector3(cos(a) * 0.43, 0.10, sin(a) * 0.43)
+			var middle := Vector3(cos(a) * 0.49, 0.86, sin(a) * 0.47)
+			var upper := Vector3(cos(a) * 0.32, 1.55, sin(a) * 0.32)
+			d.tube(lower, middle, 0.013, Mats.bloom_metal())
+			d.tube(middle, upper, 0.013, Mats.bloom_metal())
+			d.box(Vector3(lower.x, 0.035, lower.z), Vector3(0.10, 0.05, 0.10), Mats.bloom_metal(), 0.012))
 
 
 func _bloom_incubator() -> void:
@@ -747,8 +754,16 @@ func _bleachers(base: Vector3, yaw: float, swallowed: bool) -> void:
 	root.set_meta("bloom_bleachers", true)
 	scene.add_node(root)
 	for i in 5:
-		scene.model_box(root, Vector3(0, 0.16 + i * 0.24, i * 0.42),
-			Vector3(6.8, 0.14, 0.52), Mats.bloom_metal())
+		scene.model_rounded_box(root, Vector3(0, 0.16 + i * 0.24, i * 0.42),
+			Vector3(6.8, 0.14, 0.52), Mats.bloom_metal(), 0.008)
+	ProceduralDetails.attach(root, "bloom_bleacher_frame", func(d: ProceduralDetails):
+		for x in [-2.8, 0.0, 2.8]:
+			d.tube(Vector3(x, 0.06, 0), Vector3(x, 0.99, 1.68), 0.036, Mats.bloom_metal())
+			d.tube(Vector3(x, 0.03, 1.68), Vector3(x, 0.99, 1.68), 0.036, Mats.bloom_metal())
+			d.box(Vector3(x, 0.035, 0.84), Vector3(0.10, 0.055, 1.80), Mats.bloom_metal(), 0.008)
+		for i in 5:
+			d.box(Vector3(0, 0.145 + i * 0.24, -0.257 + i * 0.42),
+				Vector3(6.7, 0.038, 0.016), Mats.charcoal()))
 	if swallowed:
 		for i in 5:
 			_vine_path(root, [Vector3(-3.2 + i * 1.55, 0, -0.28),
@@ -776,6 +791,18 @@ func _basketball_hoop(pos: Vector3, yaw: float) -> void:
 	mi.material_override = Mats.bloom_red()
 	mi.position = Vector3(0, 3.75, 0.92)
 	root.add_child(mi)
+	ProceduralDetails.attach(root, "bloom_hoop_hardware", func(d: ProceduralDetails):
+		for x in [-0.34, 0.34]:
+			d.tube(Vector3(0, 3.46, 0), Vector3(x, 3.96, 0.38), 0.023, Mats.bloom_metal())
+			d.box(Vector3(x, 3.94, 0.467), Vector3(0.035, 0.40, 0.012), Mats.charcoal())
+		for y in [3.74, 4.14]:
+			d.box(Vector3(0, y, 0.467), Vector3(0.70, 0.028, 0.012), Mats.charcoal())
+		d.tube(Vector3(0, 3.75, 0.46), Vector3(0, 3.75, 0.64), 0.025, Mats.bloom_metal())
+		for i in 8:
+			var a := float(i) * TAU / 8.0
+			var top := Vector3(cos(a) * 0.285, 3.73, 0.92 + sin(a) * 0.285)
+			var bottom := Vector3(cos(a + 0.20) * 0.17, 3.32, 0.92 + sin(a + 0.20) * 0.17)
+			d.tube(top, bottom, 0.005, Mats.charcoal()))
 
 
 func _bloom_gym() -> void:

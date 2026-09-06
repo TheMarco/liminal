@@ -1,0 +1,17 @@
+{
+  "triangles": {
+    "ClothesFormal": 3880,
+    "ClothesCasual": 3448,
+    "RackFrame": 2368,
+    "formal_visible": 6248,
+    "casual_visible": 5816
+  },
+  "visible_meshes": 2,
+  "shared_materials": 1,
+  "texture_size": 1024,
+  "orientation": "Godot Y up, long rail X, centred footprint, floor origin",
+  "variants": [
+    "formal",
+    "casual"
+  ]
+}

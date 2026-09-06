@@ -373,6 +373,10 @@ static func slot_reels() -> Material:
 	return _shader("slot_reels", "res://shaders/slot_reels.gdshader")
 
 
+static func casino_slot_lights() -> Material:
+	return _shader("casino_slot_lights", "res://shaders/casino_slot_lights.gdshader")
+
+
 static func slot_wheel() -> Material:
 	return _shader("slot_wheel", "res://shaders/slot_wheel.gdshader")
 

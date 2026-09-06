@@ -3,6 +3,15 @@ extends "res://scripts/levels/chunk_level_builder.gd"
 
 func _casino_flush_mount(at: Vector3, lens_mat: Material) -> void:
 	var y = ctx.ceiling_height - 0.045
+	var detail = Node3D.new()
+	detail.position = Vector3(at.x, y, at.z)
+	scene.add_node(detail)
+	ProceduralDetails.attach(detail, "casino_flush_mount_collar_r034_screws4", func(d: ProceduralDetails):
+		d.ring(Vector3(0, -0.065, 0), 0.31, 0.012, Mats.brass())
+		for a in [0.0, PI * 0.5, PI, PI * 1.5]:
+			var q = Vector3(cos(a) * 0.265, -0.102, sin(a) * 0.265)
+			d.box(q, Vector3(0.025, 0.012, 0.025), Mats.darkwood(), 0.004)
+	)
 	var plate = scene.cylinder(Vector3(at.x, y, at.z), 0.34, 0.055, Mats.darkwood(), false)
 	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var ring = scene.cylinder(Vector3(at.x, y - 0.035, at.z), 0.285, 0.075, Mats.brass(), false)
@@ -148,83 +157,53 @@ func _slots() -> void:
 	scene.add_node(snd)
 
 
-## Most of the casino floor uses morrrtu1o's properly attributed, textured
-## vintage cabinet, while a small minority remains newer procedural hardware
-## so the bank does not read as ten copies of one machine. The downloaded
-## source can disappear without breaking the generated fallback.
+## Four Blender-authored cabinet families share cached meshes and materials.
+## A room-stable offset varies their order while retaining every family in a bank.
 
 
 func _slot_machine(x: float, z: float, f: float, idx: int) -> void:
-	if posmod(idx, 5) == 4:
-		_slot_machine_alt(x, z, f, idx)
-		return
-	var slot_scene := scene.slot_machine_scene()
-	if slot_scene == null:
+	var variant := posmod(idx + floori(ctx.random01(593) * 4.0), 4)
+	_authored_slot_machine(x, z, f, idx, variant)
+
+
+func _authored_slot_machine(x: float, z: float, f: float, idx: int,
+		variant: int) -> void:
+	var path := Chunk.CASINO_SLOT_PATHS[variant]
+	var height := Chunk.CASINO_SLOT_HEIGHTS[variant]
+	var authored_scene := scene.prop_scene(path)
+	var inst := authored_scene.instantiate() as Node3D if authored_scene != null else null
+	if inst == null:
 		_procedural_slot_machine(x, z, f, idx)
 		return
-
-	var m = Node3D.new()
-	m.name = "VintageSlotMachine"
-	m.set_meta("slot_machine", true)
-	m.set_meta("slot_asset", "morrrtu1o_slot_machine")
-	m.position = Vector3(x, 0, z)
-	if f < 0.0:
-		m.rotation.y = PI
-	scene.add_node(m)
-
-	var inst = slot_scene.instantiate() as Node3D
-	inst.name = "AttributedCabinet"
-	inst.scale = Vector3.ONE * Chunk.SLOT_MACHINE_SCALE
-	inst.position.y = Chunk.SLOT_MACHINE_FLOOR_OFFSET * Chunk.SLOT_MACHINE_SCALE
-	# The model is a closed, double-sided cabinet with an explicit front and
-	# service back. These tags let the generated-world audit distinguish that
-	# deliberate volume from the old stacks of unsupported display quads.
+	var pivot := scene.furnishing_pivot(Vector3(x, 0, z),
+		0.0 if f > 0.0 else PI, "casino_slot", true)
+	pivot.set_meta("slot_machine", true)
+	pivot.set_meta("slot_asset", path.get_file())
+	pivot.set_meta("authored_asset", path)
+	pivot.set_meta("slot_variant", variant)
+	inst.name = "AuthoredCabinet"
 	inst.set_meta("slot_front_shell", true)
 	inst.set_meta("slot_rear_shell", true)
-	m.add_child(inst)
-
-	# The downloaded prop supplies the cabinet and PBR wear. A tiny live status
-	# lamp ties it into the surrounding bank lighting without bleaching its
-	# baked artwork or turning the vintage machine into another neon pillar.
-	var status = scene.model_cylinder(m, Vector3(0.22, 0.91, 0.31),
-		0.015, 0.012, Mats.slot_status_blue())
-	status.rotation.x = PI / 2.0
-
-	if ctx.random01(60 + idx) < 0.85:
-		var cyaw = (0.0 if f > 0.0 else PI) + (ctx.random01(66 + idx) - 0.5) * 0.6
-		var cpos = Vector3(x + (ctx.random01(96 + idx) - 0.5) * 0.16, 0, z + f * 0.95)
-		scene.cc0_prop("bar_chair_round_01", cpos, cyaw)
-		scene.collider_cylinder(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
-	scene.collider_box(Vector3(x, 0.85, z), Vector3(0.88, 1.70, 0.76))
-
-
-## The minority cabinet, so a bank never reads as ten copies of the vintage
-## one. This used to be forty-two primitives with live shader screens; it is
-## now a second authored machine, and the generated cabinet below stays as the
-## fallback if the model is missing.
-
-
-func _slot_machine_alt(x: float, z: float, f: float, idx: int) -> void:
-	var yaw = 0.0 if f > 0.0 else PI
-	var b0 = scene.collider_mark()
-	var pivot = scene.attributed_floor_prop(Chunk.SLOT_ALT_PATH, Vector3(x, 0, z), yaw,
-		Chunk.SLOT_ALT_SCALE, Chunk.SLOT_ALT_CENTRE, "slot_machine_alt", null, true)
-	if pivot == null:
-		_procedural_slot_machine(x, z, f, idx)
-		return
-	pivot.set_meta("slot_machine", true)
-	pivot.set_meta("slot_asset", "slot_machine_alt")
-	# The generated-world audit checks that no cabinet is an unsupported stack
-	# of display quads. This one is a closed authored volume, front and back.
-	pivot.set_meta("slot_front_shell", true)
-	pivot.set_meta("slot_rear_shell", true)
-	if ctx.random01(60 + idx) < 0.85:
-		var cyaw = yaw + (ctx.random01(66 + idx) - 0.5) * 0.6
-		var cpos = Vector3(x + (ctx.random01(96 + idx) - 0.5) * 0.16, 0, z + f * 0.95)
-		scene.cc0_prop("bar_chair_round_01", cpos, cyaw)
-		scene.collider_cylinder(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
-	scene.collider_box(Vector3(x, 0.88, z), Vector3(0.62, 1.76, 1.10))
+	var scale := minf(1.0, (ctx.ceiling_height - 0.12) / height)
+	inst.scale = Vector3.ONE * scale
+	pivot.add_child(inst)
+	for mesh: MeshInstance3D in inst.find_children("LightGuides", "MeshInstance3D", true, false):
+		mesh.material_override = Mats.casino_slot_lights()
+	var b0 := scene.collider_mark()
+	scene.collider_box(Vector3(x, height * scale * 0.5, z + f * 0.09 * scale),
+		Vector3(0.96, height, 0.90) * scale)
 	scene.bind_furnishing_colliders(pivot, b0)
+	if ctx.random01(60 + idx) < 0.85:
+		var yaw := (0.0 if f > 0.0 else PI) + (ctx.random01(66 + idx) - 0.5) * 0.6
+		var cpos := Vector3(x + (ctx.random01(96 + idx) - 0.5) * 0.16,
+			0, z + f * 0.95)
+		scene.cc0_prop("bar_chair_round_01", cpos, yaw)
+		scene.collider_cylinder(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
+	return
+
+## Compatibility entry point for the existing alternate-cabinet preview.
+func _slot_machine_alt(x: float, z: float, f: float, idx: int) -> void:
+	_authored_slot_machine(x, z, f, idx, 2)
 
 
 ## Newer alternate machine: sculpted cabinet shell (shared ArrayMesh) with the
@@ -613,13 +592,24 @@ func _casino_ballroom() -> void:
 	# Low stage across the far side, curtain folds and an abandoned microphone.
 	var stage = c + Vector3(0, 0, -8.0)
 	scene.rounded_box(stage + Vector3(0, 0.22, 0), Vector3(9.2, 0.44, 2.7), Mats.darkwood(), 0.025)
-	for i in 9:
-		var x = -4.2 + 1.05 * float(i)
-		scene.box(stage + Vector3(x, 2.45, -1.22), Vector3(0.58, 4.4, 0.10),
-			Mats.velvet() if i % 2 == 0 else Mats.velvet2(), false)
+	for i in 11:
+		var x = -4.2 + 0.84 * float(i)
+		var fold = scene.model_box(null, stage + Vector3(x, 2.45, -1.22),
+			Vector3(0.78, 4.4, 0.11), Mats.velvet() if i % 2 == 0 else Mats.velvet2())
+		fold.rotation.y = (0.14 if i % 2 == 0 else -0.14)
 	var mic = stage + Vector3(0.8, 0.44, 0.35)
 	scene.cylinder(mic + Vector3(0, 0.72, 0), 0.025, 1.44, Mats.chrome(), false)
 	scene.sphere(mic + Vector3(0, 1.48, 0), 0.065, Mats.charcoal())
+	var ballroom_detail = Node3D.new()
+	ballroom_detail.position = stage
+	scene.add_node(ballroom_detail)
+	ProceduralDetails.attach(ballroom_detail, "casino_ballroom_stage_nosing_mic_base_clip_v1", func(d: ProceduralDetails):
+		d.box(Vector3(0, 0.43, 1.36), Vector3(9.18, 0.09, 0.08), Mats.brass(), 0.018)
+		d.box(Vector3(0.8, 0.455, 0.35), Vector3(0.34, 0.03, 0.34), Mats.charcoal(), 0.12)
+		d.ring(Vector3(0.8, 0.455, 0.35), 0.19, 0.026, Mats.charcoal())
+		d.box(Vector3(0.8, 1.84, 0.35), Vector3(0.09, 0.12, 0.08), Mats.chrome(), 0.018,
+			Vector3(0, 0, 0.18))
+	)
 	scene.collider_box(stage + Vector3(0, 0.24, 0), Vector3(9.3, 0.48, 2.8))
 	# Supper tables form a loose ring, leaving the dance floor empty.
 	for i in 6:
@@ -934,15 +924,37 @@ func _casino_service_cart(p: Vector3, salt: int) -> void:
 	scene.add_node(v)
 	scene.model_rounded_box(v, Vector3(0, 0.76, 0), Vector3(1.05, 0.07, 0.56), Mats.darkwood(), 0.025)
 	scene.model_rounded_box(v, Vector3(0, 0.28, 0), Vector3(0.92, 0.045, 0.46), Mats.darkwood(), 0.018)
+	ProceduralDetails.attach(v, "casino_service_cart_rims_handle_caster_yokes_105_056_v1", func(d: ProceduralDetails):
+		for y in [0.315, 0.795]:
+			d.box(Vector3(0, y, -0.285), Vector3(1.05, 0.035, 0.025), Mats.brass(), 0.008)
+			d.box(Vector3(0, y, 0.285), Vector3(1.05, 0.035, 0.025), Mats.brass(), 0.008)
+			d.box(Vector3(-0.525, y, 0), Vector3(0.025, 0.035, 0.56), Mats.brass(), 0.008)
+			d.box(Vector3(0.525, y, 0), Vector3(0.025, 0.035, 0.56), Mats.brass(), 0.008)
+		d.tube(Vector3(-0.50, 0.76, 0.24), Vector3(-0.50, 1.12, 0.24), 0.018, Mats.brass())
+		d.tube(Vector3(-0.50, 1.12, 0.24), Vector3(-0.25, 1.20, 0.24), 0.018, Mats.brass())
+		for sx in [-0.44, 0.44]:
+			for sz in [-0.20, 0.20]:
+				d.box(Vector3(sx, 0.10, sz), Vector3(0.095, 0.11, 0.035), Mats.brass(), 0.012)
+		d.tube(Vector3(0.32, 0.99, 0.08), Vector3(0.32, 1.08, 0.08),
+			0.026, Mats.glass_tint())
+		d.box(Vector3(0.32, 1.087, 0.08), Vector3(0.055, 0.018, 0.055),
+			Mats.brass(), 0.008)
+	)
 	for sx in [-0.44, 0.44]:
 		for sz in [-0.20, 0.20]:
 			scene.model_cylinder(v, Vector3(sx, 0.40, sz), 0.018, 0.72, Mats.brass())
-			scene.model_cylinder(v, Vector3(sx, 0.055, sz), 0.055, 0.05, Mats.charcoal())
+			var wheel = scene.model_cylinder(v, Vector3(sx, 0.055, sz), 0.055, 0.05, Mats.charcoal())
+			wheel.rotation.x = PI / 2.0
 	# Two glasses, one bottle, and a plate left slightly off square.
 	for gx in [-0.22, 0.10]:
-		scene.model_cylinder(v, Vector3(gx, 0.84, -0.06), 0.045, 0.13, Mats.glass_tint())
-		scene.model_cylinder(v, Vector3(gx, 0.92, -0.06), 0.065, 0.018, Mats.glass_tint())
-	scene.model_cylinder(v, Vector3(0.32, 0.91, 0.08), 0.045, 0.28, Mats.glass_tint())
+		scene.model_cylinder(v, Vector3(gx, 0.93, -0.06), 0.060, 0.10, Mats.glass_tint())
+	ProceduralDetails.attach(v, "casino_cart_stemware_pair_xm022_x010_v1", func(d: ProceduralDetails):
+		for gx in [-0.22, 0.10]:
+			d.tube(Vector3(gx, 0.805, -0.06), Vector3(gx, 0.88, -0.06), 0.009, Mats.glass_tint())
+			d.ring(Vector3(gx, 0.80, -0.06), 0.05, 0.008, Mats.glass_tint())
+			d.ring(Vector3(gx, 0.985, -0.06), 0.06, 0.007, Mats.glass_tint())
+	)
+	scene.model_cylinder(v, Vector3(0.32, 0.89, 0.08), 0.052, 0.24, Mats.glass_tint())
 	scene.model_cylinder(v, Vector3(-0.08, 0.805, 0.12), 0.18, 0.025, Mats.crown())
 	scene.collider_yaw_box(p + Vector3(0, 0.42, 0), Vector3(1.08, 0.84, 0.6), v.rotation.y)
 

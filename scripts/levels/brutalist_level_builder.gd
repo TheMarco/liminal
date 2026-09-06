@@ -337,6 +337,15 @@ func _upper_gallery(axis_x: bool, side: float, height: float) -> void:
 	for t in [-4.8, -3.2, -1.6, 0.0, 1.6, 3.2, 4.8]:
 		var rp := edge + (Vector3(t, -0.36, 0) if axis_x else Vector3(0, -0.36, t))
 		scene.box(rp, Vector3(0.055, 0.78, 0.055), Mats.brutal_steel(), false)
+	var braces := Node3D.new()
+	braces.position = p
+	braces.rotation.y = 0.0 if axis_x else PI * 0.5
+	scene.add_node(braces)
+	ProceduralDetails.attach(braces, "gallery_brackets", func(d: ProceduralDetails):
+		for x in [-4.5, 0.0, 4.5]:
+			d.box(Vector3(x, -0.19, 0), Vector3(0.11, 0.10, 1.92), Mats.brutal_steel())
+			for z in [-0.91, 0.91]:
+				d.box(Vector3(x, -0.14, z), Vector3(0.20, 0.025, 0.23), Mats.brutal_steel()))
 
 
 func _data_center_asset(path: String, at: Vector3, yaw: float, scl: float,
@@ -482,6 +491,21 @@ func _overhead_busways(axis_x: bool, lanes: Array, height: float,
 				else Vector3(0.58, 0.055, 0.055)
 			scene.box(rp, rs, Mats.brutal_steel(), false)
 			t += 1.70
+		var hardware := Node3D.new()
+		hardware.position = p
+		hardware.rotation.y = 0.0 if axis_x else PI * 0.5
+		scene.add_node(hardware)
+		var drop := maxf(0.12, ctx.ceiling_height - height - 0.04)
+		ProceduralDetails.attach(hardware, "busway_%.4f_%.4f" % [bus_length, drop],
+			func(d: ProceduralDetails):
+				for x in [-bus_length * 0.33, bus_length * 0.33]:
+					d.box(Vector3(x, -0.082, 0), Vector3(0.08, 0.035, 0.58), Mats.brutal_steel())
+					for z in [-0.265, 0.265]:
+						d.tube(Vector3(x, -0.08, z), Vector3(x, drop, z), 0.011, Mats.brutal_steel())
+						d.box(Vector3(x, drop, z), Vector3(0.10, 0.018, 0.10), Mats.brutal_steel())
+				# Broad clamps read at player distance without a forest of fasteners.
+				for x in [-bus_length * 0.23, 0.0, bus_length * 0.23]:
+					d.box(Vector3(x, 0.117, 0), Vector3(0.038, 0.016, 0.35), Mats.charcoal()))
 
 
 func _machine_room_light(at: Vector3, energy := 2.0) -> void:
@@ -613,6 +637,18 @@ func _emergency_beacon(at: Vector3) -> void:
 	var housing := scene.cylinder(Vector3(at.x, y, at.z), 0.18, 0.24,
 		Mats.data_center_warning(), false)
 	housing.set_meta("data_center_emergency_beacon", true)
+	var mount := Node3D.new()
+	mount.position = Vector3(at.x, y, at.z)
+	scene.add_node(mount)
+	var drop := ctx.ceiling_height - y - 0.14
+	ProceduralDetails.attach(mount, "beacon_mount_%.4f" % drop, func(d: ProceduralDetails):
+		d.tube(Vector3(0, 0.12, 0), Vector3(0, 0.12 + drop, 0), 0.022, Mats.brutal_steel())
+		d.box(Vector3(0, 0.12 + drop, 0), Vector3(0.24, 0.026, 0.24), Mats.brutal_steel(), 0.01)
+		for h in [-0.11, 0.11]:
+			d.ring(Vector3(0, h, 0), 0.177, 0.012, Mats.brutal_steel())
+		for angle in [0.0, PI * 0.5, PI, PI * 1.5]:
+			var p := Vector3(cos(angle) * 0.177, 0, sin(angle) * 0.177)
+			d.tube(p - Vector3(0, 0.105, 0), p + Vector3(0, 0.105, 0), 0.009, Mats.brutal_steel()))
 	var light := OmniLight3D.new()
 	light.position = Vector3(at.x, y - 0.10, at.z)
 	light.light_color = Color(1.0, 0.045, 0.018)
@@ -906,6 +942,17 @@ func _brutal_service() -> void:
 			var pipe := scene.cylinder(p, 0.11, 11.5, Mats.brutal_steel(), false)
 			pipe.rotation.z = PI * 0.5 if axis_x else 0.0
 			pipe.rotation.x = 0.0 if axis_x else PI * 0.5
+			var clamps := Node3D.new()
+			clamps.position = p
+			clamps.rotation.y = 0.0 if axis_x else PI * 0.5
+			scene.add_node(clamps)
+			var drop: float = ctx.ceiling_height - y
+			ProceduralDetails.attach(clamps, "service_pipe_%.4f" % drop, func(d: ProceduralDetails):
+				for x in [-4.0, 0.0, 4.0]:
+					d.ring(Vector3(x, 0, 0), 0.117, 0.012, Mats.brutal_steel(), Vector3.RIGHT)
+					d.tube(Vector3(x, 0.12, 0), Vector3(x, drop, 0), 0.016, Mats.brutal_steel())
+				for x in [-2.8, 2.8]:
+					d.ring(Vector3(x, 0, 0), 0.115, 0.018, Mats.charcoal(), Vector3.RIGHT))
 	# Service rooms are still server rooms; the high pipe mains distinguish them
 	# without sacrificing the floor to two token cabinets and empty concrete.
 	_rack_aisle(axis_x)

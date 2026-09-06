@@ -1,0 +1,30 @@
+{
+  "variant": "classic",
+  "triangles": 2620,
+  "meshes": 5,
+  "materials": 5,
+  "texture_resolution": [
+    1024,
+    1024
+  ],
+  "printed_texture_resolution": [
+    1024,
+    2048
+  ],
+  "front_axis": "+Z",
+  "dimensions_godot_m": [
+    0.847000002861023,
+    2.239000082015991,
+    0.8559999763965607
+  ],
+  "bounds_godot_min": [
+    -0.38499999046325684,
+    0.0,
+    -0.3360000550746918
+  ],
+  "bounds_godot_max": [
+    0.4620000123977661,
+    2.239000082015991,
+    0.5199999213218689
+  ]
+}

@@ -143,6 +143,9 @@ jobs:
       - name: Audit saved-run UI layout and resizing
         run: godot --headless --path . --script tools/audit_ui_layout.gd
 
+      - name: Audit procedural detail batching
+        run: godot --headless --path . --script tools/audit_procedural_details.gd
+
       - name: Audit bundled fonts
         run: godot --headless --path . --script tools/font_check.gd
 

@@ -1598,6 +1598,21 @@ func _annex_furniture_pile() -> bool:
 	for sy in [-0.33, 0.10, 0.53]:
 		scene.model_box(pile, Vector3(0.02, 0.76 + sy, -0.895),
 			Vector3(1.30, 0.035, 0.025), Mats.darkwood())
+	ProceduralDetails.attach(pile, "annex_pile_cabinet152_152_072_bookcase104_176_lamp_v1", func(d: ProceduralDetails):
+		# Two inset cabinet leaves and restrained pulls keep the generated core
+		# distinct from the attributed drawer cabinet beside it.
+		for sx in [-0.36, 0.36]:
+			d.box(Vector3(0.02 + sx, 0.76, -0.895), Vector3(0.61, 1.30, 0.025),
+				Mats.wood_door(), 0.018)
+			d.box(Vector3(0.02 + sx * 0.22, 0.76, -0.923), Vector3(0.035, 0.20, 0.025),
+				Mats.metal_gray(), 0.008)
+		# The open bookcase gets a shadowed back and visible shelf brackets.
+		d.box(Vector3(1.34, 0.88, 0.295), Vector3(0.92, 1.62, 0.025), Mats.darkwood(), 0.004)
+		for shelf_y in [0.55, 1.02, 1.49]:
+			for sx in [-0.43, 0.43]:
+				d.box(Vector3(1.34 + sx, shelf_y - 0.055, -0.25),
+					Vector3(0.07, 0.12, 0.10), Mats.metal_gray(), 0.008)
+	)
 	# Open bookcase on one flank.
 	scene.model_box(pile, Vector3(1.34, 0.88, 0.27),
 		Vector3(1.04, 1.76, 0.055), Mats.darkwood())
@@ -1667,6 +1682,12 @@ func _annex_furniture_pile() -> bool:
 		var shade = scene.model_cylinder(pile, Vector3(-0.22, 2.46, 0.12), 0.18, 0.16,
 			Mats.shade())
 		shade.rotation.z = 0.18
+		ProceduralDetails.attach(pile, "annex_pile_lamp_bent_neck_v1", func(d: ProceduralDetails):
+			d.tube(Vector3(-0.22, 2.38, 0.12), Vector3(-0.19, 2.48, 0.12),
+				0.018, Mats.metal_gray())
+			d.tube(Vector3(-0.19, 2.48, 0.12), Vector3(-0.13, 2.52, 0.12),
+				0.018, Mats.metal_gray())
+		)
 
 	# A single conservative collision volume is intentional: the hoard is a
 	# pile, not a platforming course, and one group can be culled atomically.

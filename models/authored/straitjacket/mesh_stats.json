@@ -1,0 +1,13 @@
+{
+  "triangles": 4454,
+  "vertices_blender": 3468,
+  "materials": 1,
+  "textures": "1024x1024 basecolor, tangent normal, ORM (embedded)",
+  "dimensions_blender_m": [
+    0.9607373476028442,
+    0.2712380290031433,
+    1.1794660091400146
+  ],
+  "godot_front": "+Z",
+  "godot_mount_y_m": 0.92
+}
