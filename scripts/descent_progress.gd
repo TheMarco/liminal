@@ -6,8 +6,8 @@ extends RefCounted
 
 const SAVE_PATH := "user://descent_progress.cfg"
 const SECTION := "descent"
-const VERSION := 3
-const LEGACY_VERSIONS := [1, 2]
+const VERSION := 4
+const LEGACY_VERSIONS := [1, 2, 3]
 
 var run_seed := 0
 var deepest_floor := -1
@@ -24,6 +24,9 @@ var runtime_states := {}
 ## A photograph taken is a photograph kept: the set survives death on the
 ## floor, and dies with the checkpoint like everything else.
 var photo_states := {}
+## Completed objective chapters, keyed by floor and identified by the actual
+## recording. An updated chapter still gets its first viewing.
+var objective_tapes := {}
 var _save_path := SAVE_PATH
 
 
@@ -45,6 +48,7 @@ func start_new(seed: int) -> void:
 	mutation_states.clear()
 	runtime_states.clear()
 	photo_states.clear()
+	objective_tapes.clear()
 	save_to_disk()
 
 
@@ -62,9 +66,27 @@ func reach_floor(seed: int, floor_idx: int) -> void:
 		mutation_states.clear()
 		runtime_states.clear()
 		photo_states.clear()
+		objective_tapes.clear()
 	else:
 		deepest_floor = maxi(deepest_floor, floor)
 	save_to_disk()
+
+
+func record_objective_tape(floor_idx: int) -> void:
+	if not has_checkpoint() or floor_idx < 0 or floor_idx >= DescentRun.FLOOR_COUNT - 1:
+		return
+	var chapter := VhsTapeLibrary.objective_chapter(floor_idx)
+	if chapter.is_empty() or objective_tapes.get(str(floor_idx), "") == chapter:
+		return
+	objective_tapes[str(floor_idx)] = chapter
+	save_to_disk()
+
+
+func objective_tape_completed(floor_idx: int) -> bool:
+	if not has_checkpoint() or floor_idx < 0 or floor_idx >= DescentRun.FLOOR_COUNT - 1:
+		return false
+	var chapter := VhsTapeLibrary.objective_chapter(floor_idx)
+	return not chapter.is_empty() and objective_tapes.get(str(floor_idx), "") == chapter
 
 
 func record_short_tape(path: String) -> void:
@@ -171,6 +193,7 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, "mutation_states", mutation_states)
 	config.set_value(SECTION, "runtime_states", runtime_states)
 	config.set_value(SECTION, "photo_states", photo_states)
+	config.set_value(SECTION, "objective_tapes", objective_tapes)
 	return config.save(_save_path)
 
 
@@ -182,6 +205,7 @@ func load_from_disk() -> bool:
 	mutation_states.clear()
 	runtime_states.clear()
 	photo_states.clear()
+	objective_tapes.clear()
 	var config := ConfigFile.new()
 	if config.load(_save_path) != OK:
 		return false
@@ -241,7 +265,7 @@ func load_from_disk() -> bool:
 				"visited_signatures": visited_signatures \
 					if saved_version >= 2 else [],
 			}
-	if saved_version == VERSION:
+	if saved_version >= 3:
 		var saved_runtime: Variant = config.get_value(
 			SECTION, "runtime_states", {})
 		if saved_runtime is Dictionary:
@@ -271,6 +295,15 @@ func load_from_disk() -> bool:
 					clean.append(id)
 			if not clean.is_empty():
 				photo_states[str(floor)] = clean
+	var saved_objectives: Variant = config.get_value(SECTION, "objective_tapes", {})
+	if saved_objectives is Dictionary:
+		for key in saved_objectives:
+			if not str(key).is_valid_int():
+				continue
+			var floor := int(str(key))
+			if floor >= 0 and floor < DescentRun.FLOOR_COUNT - 1 \
+					and str(saved_objectives[key]) == VhsTapeLibrary.objective_chapter(floor):
+				objective_tapes[str(floor)] = str(saved_objectives[key])
 	return true
 
 
@@ -286,3 +319,4 @@ func clear_from_disk() -> void:
 	mutation_states.clear()
 	runtime_states.clear()
 	photo_states.clear()
+	objective_tapes.clear()

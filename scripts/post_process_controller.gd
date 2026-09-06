@@ -36,6 +36,23 @@ var _presence := 0.0
 var _presence_target := 0.0
 var _burst_until := 0.0
 
+const _COMFORT_META := "_comfort_raw_uniforms"
+const _COMFORT_FIELDS := [
+	"noise_level", "noise_amount", "interference_amount", "aberation_amount",
+	"jitter_amount", "wobble_amount", "tear_amount", "ghost_amount",
+	"flicker_amount", "head_switch_amount", "dropout_amount", "entity_amt",
+	"field_amount", "line_noise", "chroma_noise", "chroma_delay",
+	"chroma_misalignment", "rgb_split_px", "signal_loss", "tracking_error",
+	"chroma_loss", "vertical_slip", "rf_noise", "sync_error", "tape_speckle",
+	"roll_line_amount"
+]
+const _REDUCED_FIELDS := [
+	"flicker_amount", "signal_loss", "rf_noise", "dropout_amount",
+	"tracking_error", "vertical_slip", "sync_error", "head_switch_amount",
+	"field_amount"
+]
+static var _comfort_materials: Array[WeakRef] = []
+
 const PRESENCE_ATTACK := 4.0    # per second toward a higher target
 const PRESENCE_RELEASE := 0.35  # per second toward a lower target
 const BURST_SECONDS := 0.11     # ~2-3 frames of catastrophic loss
@@ -84,6 +101,7 @@ static func make_found_footage_material(
 	material.set_shader_parameter("line_noise", 0.006)
 	material.set_shader_parameter("chroma_noise", 0.45)
 	material.set_shader_parameter("color_balance", Vector3(1.015, 1.0, 0.985))
+	_register_comfort_material(material)
 	return material
 
 
@@ -91,17 +109,71 @@ static func make_found_footage_material(
 ## the existing factory preset and never receive these extra disturbances.
 static func make_live_found_footage_material() -> ShaderMaterial:
 	var material := make_found_footage_material()
-	material.set_shader_parameter("noise_level", 0.038)
-	material.set_shader_parameter("line_noise", 0.009)
-	material.set_shader_parameter("dropout_amount", 0.22)
-	material.set_shader_parameter("head_switch_amount", 0.5)
-	material.set_shader_parameter("tape_speckle", 0.22)
+	_set_signal(material, "noise_level", 0.038)
+	_set_signal(material, "line_noise", 0.009)
+	_set_signal(material, "dropout_amount", 0.22)
+	_set_signal(material, "head_switch_amount", 0.5)
+	_set_signal(material, "tape_speckle", 0.22)
 	# Colour trails the brightness edge, with a gentle mismatch between its
 	# two components. The shader lets existing corruption/presence widen it.
-	material.set_shader_parameter("chroma_delay", 2.4)
-	material.set_shader_parameter("chroma_misalignment", 0.65)
-	material.set_shader_parameter("rgb_split_px", 2.0)
+	_set_signal(material, "chroma_delay", 2.4)
+	_set_signal(material, "chroma_misalignment", 0.65)
+	_set_signal(material, "rgb_split_px", 2.0)
 	return material
+
+
+static func _comfort_state() -> Dictionary:
+	var strength := 1.0
+	var reduced := false
+	if GameSettings.current != null:
+		strength = clampf(float(GameSettings.current.values.get("vhs_distortion", 1.0)), 0.0, 1.0)
+		reduced = bool(GameSettings.current.values.get("reduced_flashing", false))
+	return {"strength": strength, "reduced": reduced}
+
+
+static func _scaled_signal(key: String, value: float) -> float:
+	var state := _comfort_state()
+	var result := value * float(state.strength)
+	if key == "noise_level" or key == "noise_amount" or key == "tape_speckle":
+		result = minf(result, value * (0.2 if state.reduced else 1.0))
+	if state.reduced and key in _REDUCED_FIELDS:
+		result = 0.0
+	return result
+
+
+static func _register_comfort_material(material: ShaderMaterial) -> void:
+	var raw := {}
+	for key in _COMFORT_FIELDS:
+		var value = material.get_shader_parameter(key)
+		if value != null and (value is float or value is int):
+			raw[key] = float(value)
+	material.set_meta(_COMFORT_META, raw)
+	_comfort_materials.append(weakref(material))
+	_apply_comfort_material(material, raw)
+
+
+static func _apply_comfort_material(material: ShaderMaterial, raw: Dictionary) -> void:
+	for key in raw:
+		material.set_shader_parameter(key, _scaled_signal(key, float(raw[key])))
+
+
+static func _set_signal(material: ShaderMaterial, key: String, value: float) -> void:
+	if material == null:
+		return
+	var raw: Dictionary = material.get_meta(_COMFORT_META, {})
+	raw[key] = value
+	material.set_meta(_COMFORT_META, raw)
+	material.set_shader_parameter(key, _scaled_signal(key, value))
+
+
+static func refresh_comfort() -> void:
+	var alive: Array[WeakRef] = []
+	for reference in _comfort_materials:
+		var material = reference.get_ref()
+		if material != null and is_instance_valid(material):
+			alive.append(reference)
+			_apply_comfort_material(material, material.get_meta(_COMFORT_META, {}))
+	_comfort_materials = alive
 
 
 ## Second pass: copy the decoded tape signal before reconstructing the tube.
@@ -205,7 +277,7 @@ func mode_label() -> String:
 func set_noise(value: float) -> void:
 	for material in [_crt_material, _found_footage_material]:
 		if material != null:
-			material.set_shader_parameter("noise_amount", value)
+			_set_signal(material, "noise_amount", value)
 
 
 func pulse_noise(high: float, baseline: float, duration: float) -> void:
@@ -228,8 +300,7 @@ func set_entity_halo(pos: Vector2, radius: float, amount: float) -> void:
 		return
 	_found_footage_material.set_shader_parameter("entity_pos", pos)
 	_found_footage_material.set_shader_parameter("entity_radius", radius)
-	_found_footage_material.set_shader_parameter("entity_amt",
-		clampf(amount, 0.0, 1.0))
+	_set_signal(_found_footage_material, "entity_amt", clampf(amount, 0.0, 1.0))
 
 
 ## The diegetic danger indicator: how near the nearest hostile figure is,
@@ -394,20 +465,20 @@ func _apply_found_footage_state() -> void:
 		noise = maxf(noise, lerpf(0.05, 0.10, _damage_intensity))
 		jitter = maxf(jitter, 0.5)
 		wobble = maxf(wobble, 0.5)
-	_found_footage_material.set_shader_parameter("interference_amount", interference)
-	_found_footage_material.set_shader_parameter("noise_level", noise)
-	_found_footage_material.set_shader_parameter("aberation_amount", aberration)
-	_found_footage_material.set_shader_parameter("jitter_amount", jitter)
-	_found_footage_material.set_shader_parameter("wobble_amount", wobble)
-	_found_footage_material.set_shader_parameter("tear_amount", tear)
-	_found_footage_material.set_shader_parameter("dropout_amount", dropout)
+	_set_signal(_found_footage_material, "interference_amount", interference)
+	_set_signal(_found_footage_material, "noise_level", noise)
+	_set_signal(_found_footage_material, "aberation_amount", aberration)
+	_set_signal(_found_footage_material, "jitter_amount", jitter)
+	_set_signal(_found_footage_material, "wobble_amount", wobble)
+	_set_signal(_found_footage_material, "tear_amount", tear)
+	_set_signal(_found_footage_material, "dropout_amount", dropout)
 	_found_footage_material.set_shader_parameter("saturation", saturation)
-	_found_footage_material.set_shader_parameter("flicker_amount", flicker)
-	_found_footage_material.set_shader_parameter("signal_loss", loss)
-	_found_footage_material.set_shader_parameter("tracking_error", tracking)
+	_set_signal(_found_footage_material, "flicker_amount", flicker)
+	_set_signal(_found_footage_material, "signal_loss", loss)
+	_set_signal(_found_footage_material, "tracking_error", tracking)
 	_found_footage_material.set_shader_parameter("tracking_y", tracking_pos)
-	_found_footage_material.set_shader_parameter("chroma_loss", color_loss)
-	_found_footage_material.set_shader_parameter("vertical_slip", slip)
-	_found_footage_material.set_shader_parameter("rf_noise", rf_static)
-	_found_footage_material.set_shader_parameter("sync_error", sync)
-	_found_footage_material.set_shader_parameter("tape_speckle", speckle)
+	_set_signal(_found_footage_material, "chroma_loss", color_loss)
+	_set_signal(_found_footage_material, "vertical_slip", slip)
+	_set_signal(_found_footage_material, "rf_noise", rf_static)
+	_set_signal(_found_footage_material, "sync_error", sync)
+	_set_signal(_found_footage_material, "tape_speckle", speckle)

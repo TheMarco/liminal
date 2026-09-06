@@ -112,10 +112,9 @@ const PRISON_INDUSTRY := 86 # prison workshop / laundry
 const PRISON_VISITATION := 87 # divided booths and a dead telephone line
 const PRISON_ROTUNDA := 88  # landmark radial guard hub
 
-# The Poolrooms. Every cell floods to the same level, so the water is one
-# continuous body across the whole floor and is always chest deep — the styles
-# differ in what stands in it and what you can climb out onto, never in depth.
-const POOL_BASIN := 90      # open water under a grid of tiled piers
+# The Poolrooms. Compact basins share a water datum and connect through
+# occasional channel rooms. Each has dry circulation and an assured exit.
+const POOL_BASIN := 90      # compact open water, occasional perimeter support
 const POOL_CHANNEL := 91    # the narrow swimming lane between rooms
 const POOL_DECK := 92       # a dry walkway along one or two walls, with ladders
 const POOL_SOLARIUM := 93   # window wall, blown-out daylight, god rays
@@ -454,6 +453,19 @@ const POOL_HEIGHT_DOUBLE := 2
 const POOL_HEIGHT_TRIPLE := 3
 
 
+## Pick equipment before sizing the room so slides get usable headroom and
+## a staging deck. Kind indices match PoolEquipment.KINDS; -1 is a quiet pool.
+static func pool_equipment_kind(ws: int, root: Vector2i) -> int:
+	if root != room_id(ws, root) \
+			or cell_style(ws, root, 9) not in [POOL_BASIN, POOL_CISTERN]:
+		return -1
+	var roll := r01(ws, root.x, root.y, 2470)
+	if roll < 0.24: return 1
+	if roll < 0.40: return 2
+	if roll < 0.60: return 0
+	return -1
+
+
 ## A room-root-stable height class for Poolrooms. Large footprints are the
 ## dependable open halls: all of them are at least double-height and a smaller
 ## share rise through three storeys. A few two-cell rooms are promoted too, so
@@ -465,6 +477,8 @@ static func pool_room_height_tier(ws: int, root: Vector2i) -> int:
 		return POOL_HEIGHT_TRIPLE if tier_roll < 0.24 \
 			else POOL_HEIGHT_DOUBLE
 	if n >= 2 and tier_roll < 0.28:
+		return POOL_HEIGHT_DOUBLE
+	if pool_equipment_kind(ws, root) == 2:
 		return POOL_HEIGHT_DOUBLE
 	return POOL_HEIGHT_SINGLE
 
@@ -507,6 +521,8 @@ static func room_height(ws: int, root: Vector2i, theme: int) -> float:
 			return lerpf(11.4, 12.6, height_roll)
 		if pool_tier == POOL_HEIGHT_DOUBLE:
 			return lerpf(8.1, 9.0, height_roll)
+		if pool_equipment_kind(ws, root) == 1:
+			return 5.35
 		return 5.2 if n >= 2 else lerpf(4.1, 4.6, r)
 	if theme == 10:
 		# Even its smallest chambers are over-scaled; merged halls become the

@@ -19,6 +19,11 @@ var _room_anchor: bool
 var _furniture_variant: int
 var _portal_destination: int
 
+var _casino_landmark: String
+var casino_landmark: String:
+	get:
+		return _casino_landmark
+
 var _descent: bool
 var _target: bool
 var _target_wall: int
@@ -160,6 +165,7 @@ func _init(p_world_seed: int, p_cell: Vector2i, p_theme: int,
 	_furniture_variant = p_furniture_variant
 	_portal_destination = -1
 
+	_casino_landmark = spec.casino_landmark
 	_descent = spec.descent
 	_target = spec.target
 	_target_wall = spec.target_wall

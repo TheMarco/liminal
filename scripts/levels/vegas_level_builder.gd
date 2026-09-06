@@ -151,7 +151,6 @@ func _slots() -> void:
 	scene.box(Vector3(WorldGen.CELL_SIZE / 2.0, cy, WorldGen.CELL_SIZE - 0.5), Vector3(WorldGen.CELL_SIZE - 1.6, 0.05, 0.06), Mats.neon_pink(), false)
 	scene.box(Vector3(0.5, cy, WorldGen.CELL_SIZE / 2.0), Vector3(0.06, 0.05, WorldGen.CELL_SIZE - 1.6), Mats.neon_pink(), false)
 	scene.box(Vector3(WorldGen.CELL_SIZE - 0.5, cy, WorldGen.CELL_SIZE / 2.0), Vector3(0.06, 0.05, WorldGen.CELL_SIZE - 1.6), Mats.neon_pink(), false)
-	_slots_sign()
 	var snd = SlotSounds.new()
 	snd.position = Vector3(WorldGen.CELL_SIZE / 2.0, 1.6, WorldGen.CELL_SIZE / 2.0)
 	scene.add_node(snd)
@@ -167,7 +166,7 @@ func _slot_machine(x: float, z: float, f: float, idx: int) -> void:
 
 
 func _authored_slot_machine(x: float, z: float, f: float, idx: int,
-		variant: int) -> void:
+		variant: int, powered := true) -> void:
 	var path := Chunk.CASINO_SLOT_PATHS[variant]
 	var height := Chunk.CASINO_SLOT_HEIGHTS[variant]
 	var authored_scene := scene.prop_scene(path)
@@ -181,6 +180,7 @@ func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 	pivot.set_meta("slot_asset", path.get_file())
 	pivot.set_meta("authored_asset", path)
 	pivot.set_meta("slot_variant", variant)
+	pivot.set_meta("powered", powered)
 	inst.name = "AuthoredCabinet"
 	inst.set_meta("slot_front_shell", true)
 	inst.set_meta("slot_rear_shell", true)
@@ -189,6 +189,14 @@ func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 	pivot.add_child(inst)
 	for mesh: MeshInstance3D in inst.find_children("LightGuides", "MeshInstance3D", true, false):
 		mesh.material_override = Mats.casino_slot_lights()
+	if not powered:
+		var glass := StandardMaterial3D.new()
+		glass.albedo_color = Color(0.013, 0.019, 0.022)
+		glass.metallic = 0.3
+		glass.roughness = 0.25
+		for mesh: MeshInstance3D in inst.find_children("*", "MeshInstance3D", true, false):
+			if str(mesh.name) in ["Displays", "PrintedGlass", "LightGuides"]:
+				mesh.material_override = glass
 	var b0 := scene.collider_mark()
 	scene.collider_box(Vector3(x, height * scale * 0.5, z + f * 0.09 * scale),
 		Vector3(0.96, height, 0.90) * scale)
@@ -386,7 +394,8 @@ func _chair_at(p: Vector3, yaw: float, _mat: Material) -> Node3D:
 	return ch
 
 
-## Backlit SLOTS sign on the first solid wall of the room.
+## Backlit SLOTS sign on this cell's first solid wall. Chunk calls this after
+## recentering the cabinet banks, so merged rooms cannot detach it from the wall.
 
 
 func _slots_sign() -> void:
@@ -666,7 +675,17 @@ func _hallway() -> void:
 
 	# A grandfather clock that no longer agrees with anything.  It is allowed
 	# only on uninterrupted wall, never in an actual room bay or over a door.
-	if ctx.random01(288) < 0.14:
+	if ctx.casino_landmark == CasinoLandmarks.PHONE:
+		for si in 2:
+			var sd: Dictionary = side_data[si]
+			var t := _hall_sconce_t(si, sd["doors"], sd["bay"])
+			if t < 90.0:
+				var side: float = sd["side"]
+				_red_telephone(scene.world_point(o, Vector3(t, 0, side - signf(side) * 0.11), yw), yw + (PI if side > 0 else 0.0))
+				break
+	if ctx.casino_landmark == CasinoLandmarks.PHONE:
+		return
+	if ctx.casino_landmark.is_empty() and ctx.random01(288) < 0.14:
 		var csi = 0 if ctx.random01(290) < 0.5 else 1
 		var ct = -3.9 + 7.8 * ctx.random01(289)
 		if _hall_clear_at(ct, side_data[csi]["doors"], side_data[csi]["bay"], 0.62):
@@ -709,7 +728,7 @@ func _hall_locked_doors(si: int, bay: Array) -> Array:
 	var doors = []
 	for di in 3:
 		var t = -3.2 + 3.2 * float(di)
-		if ctx.random01(270 + si * 4 + di) >= 0.78:
+		if ctx.casino_landmark != CasinoLandmarks.PHONE and ctx.random01(270 + si * 4 + di) >= 0.78:
 			continue
 		if not bay.is_empty() and absf(t - float(bay[0])) < float(bay[1]) * 0.5 + 1.0:
 			continue
@@ -847,6 +866,17 @@ func _hall_door(o: Vector3, yw: float, t: float, side: float, salt: int) -> void
 	num.modulate = Color(0.85, 0.7, 0.4)
 	num.position = Vector3(0, 1.98, 0.09)
 	v.add_child(num)
+	if ctx.casino_landmark == CasinoLandmarks.PHONE and not _numbered_door_built:
+		_numbered_door_built = true
+		v.name = "NumberedDoor"
+		num.name = "NumberPlate"
+		num.set_meta("casino_number_plate", true)
+		num.text = "104"
+		num.font_size = 72
+		num.pixel_size = 0.002
+		num.position = Vector3(0, 1.8, 0.102)
+		scene.model_box(v, Vector3(0, 1.8, 0.084), Vector3(0.46, 0.23, 0.015), Mats.brass())
+		scene.model_box(v, Vector3(0, 1.8, 0.096), Vector3(0.43, 0.20, 0.009), Mats.darkwood())
 	if ctx.random01(salt + 2) < 0.22:
 		scene.model_cylinder(v, Vector3(0.72, 0.025, 0.35), 0.16, 0.03, Mats.chrome())
 		scene.model_sphere(v, Vector3(0.72, 0.075, 0.35), 0.09, Mats.chrome())
@@ -961,3 +991,174 @@ func _casino_service_cart(p: Vector3, salt: int) -> void:
 
 ## Archive boxes and loose forms occupy a corner of some otherwise empty
 ## offices. The pile is broad enough to read, low enough not to become a wall.
+
+
+# Deliberate route landmarks. These rooms own their furniture exclusively.
+var _numbered_door_built := false
+
+func _casino_landmark() -> void:
+	match ctx.casino_landmark:
+		CasinoLandmarks.LAST_CHANCE:
+			for i in 8:
+				var row := i / 4
+				_authored_slot_machine(4.35 + 1.1 * (i % 4),
+					4.85 if row == 0 else 7.15, -1.0 if row == 0 else 1.0,
+					i, 1 if i == 2 else i % 4, i == 2)
+			_landmark_sign("LAST CHANCE", Vector3(6, minf(3.05, ctx.ceiling_height - 0.33), 4.72), PI, Color(1, 0.62, 0.22), 0.006)
+			_landmark_sign("LAST CHANCE", Vector3(6, minf(3.05, ctx.ceiling_height - 0.33), 7.28), 0.0, Color(1, 0.62, 0.22), 0.006)
+			var glow := OmniLight3D.new()
+			glow.position = Vector3(6, 2.2, 3.25)
+			glow.light_color = Color(1, 0.58, 0.22)
+			glow.light_energy = 1.25
+			glow.omni_range = 6.0
+			scene.add_node(glow)
+		CasinoLandmarks.LOUNGE:
+			for pair in [[4.6, 0.0], [7.4, PI]]:
+				var pos := Vector3(6, -0.32, pair[0])
+				scene.cc0_prop("sofa_03", pos, pair[1])
+				scene.collider_box(pos + Vector3(0, 0.55, 0), Vector3(2.75, 1.1, 0.95))
+			scene.cc0_prop("CoffeeTable_01", Vector3(6, -0.32, 6), 0.0)
+			scene.collider_box(Vector3(6, -0.05, 6), Vector3(1.55, 0.54, 1.0))
+			for x in [4.25, 7.75]:
+				var pos := Vector3(x, -0.32, 6)
+				scene.cylinder(pos + Vector3(0, 0.78, 0), 0.035, 1.56, Mats.brass(), false)
+				scene.cylinder(pos + Vector3(0, 1.58, 0), 0.24, 0.32, Mats.shade(), false)
+				scene.sphere(pos + Vector3(0, 1.48, 0), 0.06, Mats.bulb())
+				var lamp := OmniLight3D.new()
+				lamp.position = pos + Vector3(0, 1.5, 0)
+				lamp.light_color = Color(1.0, 0.61, 0.27)
+				lamp.light_energy = 0.85
+				lamp.omni_range = 6.5
+				scene.add_node(lamp)
+			_landmark_sign("THE AMBER LOUNGE", Vector3(6, 2.75, 4.6), 0, Color(0.94, 0.74, 0.42), 0.0035)
+			var music := AudioStreamPlayer3D.new()
+			music.stream = SoundBank.muzak()
+			music.bus = SoundBank.HALL_BUS
+			music.position = Vector3(6, 2.8, 6)
+			music.volume_db = -20
+			music.max_distance = 18
+			music.autoplay = true
+			scene.add_node(music)
+		CasinoLandmarks.PHONE:
+			if ctx.style == WorldGen.STYLE_HALLWAY:
+				_hallway()
+			else:
+				# A short inserted passage, open around BOTH ends. All canonical
+				# room entrances retain a three-metre perimeter apron.
+				for z in [4.1, 7.9]:
+					scene.box(Vector3(6, ctx.ceiling_height / 2, z),
+						Vector3(4.4, ctx.ceiling_height, 0.75), Mats.hall_wallpaper_variant(0))
+				_hall_door(Vector3(6, 0, 6), 0, -1.4, -1.5, 275)
+				_red_telephone(Vector3(7.65, 0, 4.5), 0)
+				_landmark_sign("GUEST ROOMS", Vector3(6, 2.65, 4.43), 0, Color(0.85, 0.72, 0.46), 0.003)
+
+
+func _landmark_sign(text: String, at: Vector3, yaw: float, color: Color, pixel: float) -> void:
+	var board := Node3D.new()
+	board.position = at
+	board.rotation.y = yaw
+	scene.add_node(board)
+	var width := float(text.length()) * 36.0 * pixel + 0.25
+	var height := 72.0 * pixel + 0.14
+	scene.model_box(board, Vector3.ZERO, Vector3(width, height, 0.075), Mats.darkwood())
+	for x in [-width * 0.5, width * 0.5]:
+		scene.model_box(board, Vector3(x, 0, 0.04), Vector3(0.025, height, 0.025), Mats.brass())
+	for y in [-height * 0.5, height * 0.5]:
+		scene.model_box(board, Vector3(0, y, 0.04), Vector3(width, 0.025, 0.025), Mats.brass())
+	if at.y > 2.7:
+		var drop := maxf(0.0, ctx.ceiling_height - at.y - height * 0.5)
+		for x in [-width * 0.38, width * 0.38]:
+			scene.model_cylinder(board, Vector3(x, height * 0.5 + drop * 0.5, 0), 0.014, maxf(0.02, drop), Mats.brass())
+	var sign := Label3D.new()
+	sign.text = text
+	sign.font = VhsOsd.FONT
+	sign.font_size = 72
+	sign.pixel_size = pixel
+	sign.modulate = color
+	sign.outline_size = 0
+	sign.position.z = 0.045
+	sign.double_sided = false
+	board.add_child(sign)
+
+
+func _landmark_lighting() -> void:
+	# Steady, modest fill maintains navigation even in the mostly dead bank.
+	var light := OmniLight3D.new()
+	light.position = Vector3(6, ctx.ceiling_height - 0.4, 6)
+	light.omni_range = 10
+	light.light_energy = 0.42 if ctx.casino_landmark == CasinoLandmarks.LAST_CHANCE else 0.7
+	light.light_color = Color(0.70, 0.76, 0.85) if ctx.casino_landmark == CasinoLandmarks.LAST_CHANCE else Color(1, 0.70, 0.42)
+	scene.add_node(light)
+	_casino_flush_mount(Vector3(6, 0, 6), Mats.panel_on())
+
+
+func _landmark_lounge_floor() -> void:
+	# Six-metre recess, 32cm deep, with four broad gentle ramps. The outer
+	# three metres retain the canonical floor height at every generated door.
+	for x in [1.5, 10.5]:
+		scene.box(Vector3(x, -0.15, 6), Vector3(3, 0.3, 12), Mats.carpet())
+	for z in [1.5, 10.5]:
+		scene.box(Vector3(6, -0.15, z), Vector3(6, 0.3, 3), Mats.carpet())
+	scene.box(Vector3(6, -0.47, 6), Vector3(6, 0.3, 6), Mats.carpet_red())
+	var angle := atan(0.32)
+	var length := sqrt(1.0 + 0.32 * 0.32) + 0.025
+	for side in [-1.0, 1.0]:
+		var pos := Vector3(6 + side * 2.5, -0.185, 6)
+		var size := Vector3(length, 0.05, 6)
+		var rot := Vector3(0, 0, side * angle)
+		var ramp := scene.model_box(null, pos, size, Mats.carpet_red())
+		ramp.rotation = rot
+		scene.collider_rotated_box(pos, size, rot)
+		pos = Vector3(6, -0.185, 6 + side * 2.5)
+		size = Vector3(6, 0.05, length)
+		rot = Vector3(-side * angle, 0, 0)
+		ramp = scene.model_box(null, pos, size, Mats.carpet_red())
+		ramp.rotation = rot
+		scene.collider_rotated_box(pos, size, rot)
+	# Fine brass lip outlines the change in level without a collision step.
+	for pos in [Vector3(3, 0.008, 6), Vector3(9, 0.008, 6)]:
+		scene.box(pos, Vector3(0.055, 0.012, 6), Mats.brass(), false)
+	for pos in [Vector3(6, 0.008, 3), Vector3(6, 0.008, 9)]:
+		scene.box(pos, Vector3(6, 0.012, 0.055), Mats.brass(), false)
+
+
+func _red_telephone(at: Vector3, yaw: float) -> void:
+	var phone := Node3D.new()
+	phone.name = "RedTelephone"
+	phone.set_meta("casino_landmark", CasinoLandmarks.PHONE)
+	phone.position = at
+	phone.rotation.y = yaw
+	scene.add_node(phone)
+	var red := StandardMaterial3D.new()
+	red.albedo_color = Color(0.55, 0.018, 0.025)
+	red.roughness = 0.28
+	scene.model_rounded_box(phone, Vector3(0, 1.5, 0.14), Vector3(0.38, 0.54, 0.20), red, 0.04)
+	scene.model_rounded_box(phone, Vector3(-0.22, 1.53, 0.26), Vector3(0.10, 0.44, 0.12), red, 0.035)
+	for y in [1.31, 1.75]:
+		scene.model_rounded_box(phone, Vector3(-0.22, y, 0.30), Vector3(0.16, 0.12, 0.17), red, 0.04)
+	for y in range(4):
+		for x in range(3):
+			scene.model_box(phone, Vector3(-0.055 + x * 0.06, 1.60 - y * 0.055, 0.248), Vector3(0.044, 0.035, 0.014), Mats.chrome())
+	for i in range(16):
+		scene.model_sphere(phone, Vector3(-0.18 + cos(i * PI) * 0.014, 1.08 - i * 0.025, 0.19), 0.018, Mats.darkwood())
+	var light := OmniLight3D.new()
+	light.position = Vector3(0, 1.85, 0.65)
+	light.light_color = Color(1, 0.08, 0.035)
+	light.light_energy = 0.65
+	light.omni_range = 3.5
+	phone.add_child(light)
+	var label := Label3D.new()
+	label.text = "RECEPTION"
+	label.font_size = 44
+	label.pixel_size = 0.0016
+	label.position = Vector3(0, 1.96, 0.19)
+	phone.add_child(label)
+	var ring := AudioStreamPlayer3D.new()
+	ring.stream = CasinoLandmarks.telephone_ring()
+	ring.bus = SoundBank.HALL_BUS
+	ring.position = Vector3(0, 1.5, 0.3)
+	ring.max_distance = 24
+	ring.unit_size = 4
+	ring.volume_db = -15
+	ring.autoplay = true
+	phone.add_child(ring)

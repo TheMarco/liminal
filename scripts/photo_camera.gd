@@ -413,7 +413,7 @@ func _take_photo() -> void:
 	_capturing = true
 	_shutter.pitch_scale = randf_range(1.35, 1.5)
 	_shutter.play()
-	_flash.color = Color(1, 1, 1, 0.85)
+	_flash.color = Color(1, 1, 1, 0.0 if GameSettings.flashing_reduced() else 0.85)
 	var fade := create_tween()
 	fade.tween_property(_flash, "color:a", 0.0, FLASH_SECONDS * 3.0)
 	# Judge the framing from the live camera at shutter time, before the
@@ -483,7 +483,11 @@ func _take_photo() -> void:
 	_marks.marks = marks if counted else none
 	_marks.visible = _photo.visible and not _marks.marks.is_empty()
 	# Only evidence provokes; snapshots of nothing stay free.
-	_pending_risk = counted
+	var number_reveal := false
+	for anomaly in captured:
+		if anomaly.type == PhotoAnomaly.Type.NUMBERED_DOOR:
+			number_reveal = true
+	_pending_risk = counted and not number_reveal
 
 
 func _release_review_resolutions() -> void:

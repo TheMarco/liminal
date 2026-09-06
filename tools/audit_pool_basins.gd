@@ -1,8 +1,6 @@
 extends SceneTree
-## Pool Rooms basin-shape contract. Rounded corner decks are occasional
-## Basin-only variants. Piers in wet cells are part of the authored look
-## (POOL_BASIN is "open water under a grid of tiled piers" by definition), so
-## this audit checks water/coping/ladder geometry, never pier presence.
+## Pool Rooms water/coping/ladder geometry contract. Pier density, open-water
+## crossings and access clearances are covered by audit_pool_layout.gd.
 ##
 ## Run: godot --headless --path . \
 ##   --script tools/audit_pool_basins.gd -- [seeds]

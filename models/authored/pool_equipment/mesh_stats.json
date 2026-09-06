@@ -1,0 +1,86 @@
+{
+  "pool_diving_board": {
+    "triangles": 784,
+    "meshes": 1,
+    "materials": 3,
+    "bounds_godot_m": {
+      "min": [
+        -0.2800000011920929,
+        0.0,
+        -1.5
+      ],
+      "max": [
+        0.2800000011920929,
+        0.531000018119812,
+        0.8999999761581421
+      ]
+    },
+    "source": "art/pool_equipment/pool_diving_board/pool_diving_board.blend",
+    "glb": "models/authored/pool_equipment/pool_diving_board.glb",
+    "front_axis": "+Z",
+    "pool_lip_z": 0,
+    "deck_y": 0,
+    "nonmanifold_edges": 0,
+    "material_names": [
+      "Warm white molded fiberglass",
+      "Graphite nonslip tread",
+      "Brushed stainless fittings"
+    ]
+  },
+  "pool_slide_straight": {
+    "triangles": 1732,
+    "meshes": 1,
+    "materials": 3,
+    "bounds_godot_m": {
+      "min": [
+        -0.5475600361824036,
+        0.0,
+        -2.5515999794006348
+      ],
+      "max": [
+        0.5475600361824036,
+        2.3249094486236572,
+        0.44999998807907104
+      ]
+    },
+    "source": "art/pool_equipment/pool_slide_straight/pool_slide_straight.blend",
+    "glb": "models/authored/pool_equipment/pool_slide_straight.glb",
+    "front_axis": "+Z",
+    "pool_lip_z": 0,
+    "deck_y": 0,
+    "nonmanifold_edges": 0,
+    "material_names": [
+      "Pool blue molded fiberglass",
+      "Ivory powder coated frame",
+      "Satin stainless ladder treads"
+    ]
+  },
+  "pool_slide_spiral": {
+    "triangles": 3068,
+    "meshes": 1,
+    "materials": 3,
+    "bounds_godot_m": {
+      "min": [
+        -1.356835961341858,
+        0.0,
+        -2.552091360092163
+      ],
+      "max": [
+        2.2116000652313232,
+        3.454909563064575,
+        0.5055762529373169
+      ]
+    },
+    "source": "art/pool_equipment/pool_slide_spiral/pool_slide_spiral.blend",
+    "glb": "models/authored/pool_equipment/pool_slide_spiral.glb",
+    "front_axis": "+Z",
+    "pool_lip_z": 0,
+    "deck_y": 0,
+    "nonmanifold_edges": 0,
+    "material_names": [
+      "Pool blue molded fiberglass.001",
+      "Ivory powder coated frame.001",
+      "Satin stainless ladder treads.001"
+    ]
+  }
+}

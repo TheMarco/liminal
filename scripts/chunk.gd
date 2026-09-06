@@ -1035,6 +1035,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 		9:
 			paths.append_array([POOL_BUOY_PATH, POOL_LADDER_PATH, POOL_CHAIR_PATH])
 			paths.append_array([POOL_LOUNGE_CHAIR_PATH, POOL_JACUZZI_PATH, POOL_LIGHT_PATH])
+			paths.append_array(PoolEquipment.PATHS)
 		10:
 			paths.append_array([DATA_CENTER_CONSOLE_PATH, DATA_CENTER_RACK_BANK_PATH, DATA_CENTER_RACK_PATH])
 			paths.append_array([DATA_CENTER_NETWORK_RACK_PATH, DATA_CENTER_DETAILED_RACK_PATH, DATA_CENTER_GLASS_SERVER_PATH])
@@ -1148,6 +1149,7 @@ var _build_blackout := false
 var _build_started_usec := 0
 var _occluder_walls: Array[MeshInstance3D] = []
 var _rendering_prepared := false
+var casino_landmark := ""
 
 
 func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
@@ -1167,6 +1169,7 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	wseed = p_seed
 	cell = p_cell
 	theme = p_theme
+	casino_landmark = spec.casino_landmark
 	descent = spec.descent
 	descent_topology = spec.topology
 	descent_topology_state_override = spec.topology_state_override
@@ -1197,7 +1200,7 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	_build_blackout = spec.blackout
 	body = StaticBody3D.new()
 	add_child(body)
-	style = WorldGen.cell_style(wseed, cell, theme)
+	style = CasinoLandmarks.style_for(casino_landmark, WorldGen.cell_style(wseed, cell, theme))
 	# The Annex has its own room/corridor graph rather than inheriting the
 	# Vegas-era graph shared by the older floors.
 	room_root = WorldGen.annex_room_id(wseed, cell) if theme == 2 \
@@ -2411,7 +2414,10 @@ func _build_floor_ceiling() -> void:
 		return
 	var floor_mat: Material = Mats.marble_photo() if style == WorldGen.STYLE_GRAND \
 		or style == WorldGen.STYLE_BALLROOM else Mats.carpet()
-	_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), floor_mat)
+	if casino_landmark == CasinoLandmarks.LOUNGE and is_room_anchor:
+		_level_builder._landmark_lounge_floor()
+	else:
+		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), floor_mat)
 	_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.ceiling())
 
 	if style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_BALLROOM:
@@ -4622,6 +4628,9 @@ func _wall_clock(dir: int, plane: float) -> void:
 # --- lighting ----------------------------------------------------------------
 
 func _build_lighting() -> void:
+	if not casino_landmark.is_empty():
+		_level_builder._landmark_lighting()
+		return
 	if theme == 11:
 		_level_builder._bloom_lighting()
 		return
@@ -4731,6 +4740,8 @@ func _resolved_room_split() -> Array:
 
 
 func _resolved_room_split_for(member: Vector2i) -> Array:
+	if not casino_landmark.is_empty():
+		return []
 	var member_root := WorldGen.room_id(wseed, member)
 	var split := WorldGen.room_split(wseed, member_root, theme)
 	if split.is_empty():
@@ -4805,6 +4816,13 @@ func _build_props() -> void:
 		off = Vector3.ZERO
 	var n0 := get_child_count()
 	var b0 := body.get_child_count()
+	if not casino_landmark.is_empty():
+		_level_builder._casino_landmark()
+		# Recess and fitted passages belong to their anchor floor slab.
+		if casino_landmark == CasinoLandmarks.LAST_CHANCE:
+			_shift_props(off, n0, b0)
+		_clear_furnishings_from_doorways(n0, b0)
+		return
 	# On rare 24x24 Annex rooms the furniture hoard replaces that room's usual
 	# architectural dressing. It remains one atomic, clearance-aware set piece.
 	if theme == 2 and _level_builder._annex_furniture_pile():
@@ -5045,6 +5063,10 @@ func _build_props() -> void:
 		# doorway cull then deletes the very decks a door steps onto.
 		return
 	_shift_props(off, n0, b0)
+	if style == WorldGen.STYLE_SLOTS:
+		# Cabinet banks belong at the complete room's centre. Their wall sign
+		# belongs to the anchor cell's actual wall and must keep its coordinates.
+		_level_builder._slots_sign()
 	_clear_furnishings_from_doorways(n0, b0)
 
 
@@ -8093,7 +8115,7 @@ func mall_fixture_audit() -> Dictionary:
 				as ShaderMaterial
 			if fountain_mat == null or fountain_mat.shader == null \
 					or fountain_mat.shader.resource_path != \
-						"res://shaders/pool_water.gdshader" \
+						"res://shaders/fountain_water.gdshader" \
 					or not bool(node.get_meta(
 						"mall_fountain_water_visual_only", false)) \
 					or absf(float(node.get_meta(

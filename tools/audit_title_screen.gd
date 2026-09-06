@@ -53,7 +53,7 @@ func _run() -> void:
 	var main_text := _page_text(title, TitleScreen.Page.MAIN)
 	_expect(_only_page_visible(title, TitleScreen.Page.MAIN),
 		"main title is not the sole visible page")
-	for choice in ["WANDER", "DESCENT", "INSTRUCTIONS", "ABOUT", "CREDITS"]:
+	for choice in ["WANDER", "DESCENT", "SETTINGS", "INSTRUCTIONS", "ABOUT", "CREDITS"]:
 		_expect(main_text.contains(choice),
 			"main title is missing %s" % choice)
 	_expect(not main_text.contains("WASD"),

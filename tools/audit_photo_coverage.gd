@@ -16,6 +16,7 @@ func run() -> void:
 	expect(director != null and camera != null, "photo layer missing")
 	var checked := 0
 	for at in director.plan:
+		game.cm.stream_focus = Vector3(at.x * 12.0 + 6, 0.0, at.y * 12.0 + 6)
 		game.cm.warm_up(at)
 		var ok := await await_until(func() -> bool:
 			return director._live.has(at) \

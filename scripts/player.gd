@@ -22,6 +22,9 @@ const STAMINA_REARM := 0.75
 const ACCEL := 12.0
 const GRAVITY := 16.0
 const SENS := 0.0022
+var sensitivity_multiplier := 1.0
+var base_fov := 77.0
+var head_bob_strength := 1.0
 ## Lowered 15% from the original 1.62m eye line. The collision capsule remains
 ## a full 1.8m tall; only the viewpoint changes, so clearance and movement stay
 ## identical while the player no longer reads as unusually tall.
@@ -71,6 +74,13 @@ var _charge_session_active := false
 ## the floor has no water. Set by main on every level switch.
 var water_y := -1.0e9
 var _on_ladder := false
+var _pool_slide: PoolSlide
+var _slide_collision: StaticBody3D
+var _slide_distance := 0.0
+var _slide_speed := 0.0
+var _slide_alignment := Vector3.ZERO
+var _slide_coast := 0.0
+var _slide_rearm := 0.0
 var _was_submerged := false
 var _water_audio_primed := false
 var _wade_p: AudioStreamPlayer
@@ -124,7 +134,7 @@ func _init() -> void:
 	cam = Camera3D.new()
 	cam.top_level = true
 	cam.position = Vector3(0, CAM_H, 0)
-	cam.fov = 77.0
+	cam.fov = base_fov
 	cam.near = 0.05
 	cam.far = 80.0
 	# The eye never sees photo-only geometry; only the snapshot camera adds
@@ -177,6 +187,7 @@ func _ready() -> void:
 ## Move without the camera sweeping across the world to catch up — the
 ## interpolation would otherwise smear from the old position for a tick.
 func teleport(to: Vector3) -> void:
+	_cancel_pool_slide()
 	if _water_fx != null: _water_fx.reset()
 	_was_submerged = false
 	_water_audio_primed = false
@@ -207,8 +218,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if Time.get_ticks_msec() - _grabbed < GRAB_SETTLE_MS:
 			return
-		rotate_y(-event.relative.x * SENS)
-		_pitch = clampf(_pitch - event.relative.y * SENS, -1.45, 1.45)
+		var look_sens := SENS * sensitivity_multiplier
+		rotate_y(-event.relative.x * look_sens)
+		_pitch = clampf(_pitch - event.relative.y * look_sens, -1.45, 1.45)
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		grab_look()
 	elif event is InputEventKey and event.pressed and not event.echo \
@@ -263,6 +275,7 @@ func sprint_spent() -> bool:
 ## A checkpoint restores the player at an arrival elevator, not in the exact
 ## state of the death. Resource and motion state therefore reset together.
 func reset_descent_resources() -> void:
+	_cancel_pool_slide()
 	if is_charging():
 		stop_charging()
 	if flashlight != null:
@@ -336,7 +349,9 @@ func _update_flashlight(dt: float) -> void:
 		flashlight.light_energy = FLASH_ENERGY
 		return
 	var dying := 1.0 - left
-	var stutter := 1.0 - 0.42 * dying * maxf(0.0, sin(_flash_t * 27.0))
+	var stutter := 1.0
+	if not GameSettings.flashing_reduced():
+		stutter = 1.0 - 0.42 * dying * maxf(0.0, sin(_flash_t * 27.0))
 	flashlight.light_energy = FLASH_ENERGY * (0.48 + 0.52 * left) * stutter
 
 
@@ -363,6 +378,7 @@ func _physics_process(dt: float) -> void:
 	if _sprint_spent and _stamina >= STAMINA_REARM:
 		_sprint_spent = false
 	var sprinting := allow_sprint and not _sprint_spent and _stamina > 0.0 \
+		and not is_pool_sliding() \
 		and Input.is_physical_key_pressed(KEY_SHIFT) and input != Vector2.ZERO
 	if sprinting:
 		_stamina = maxf(0.0, _stamina - dt)
@@ -389,15 +405,35 @@ func _physics_process(dt: float) -> void:
 		input = input.normalized()
 		wish = (global_transform.basis * Vector3(input.x, 0.0, input.y)).normalized()
 
+	_slide_rearm = maxf(0.0, _slide_rearm - dt)
+	if not is_pool_sliding() and is_instance_valid(_slide_collision):
+		_cancel_pool_slide()
+	if water_y < -1.0e8:
+		_cancel_pool_slide()
+	elif not is_pool_sliding() and _slide_rearm <= 0.0:
+		_try_board_pool_slide()
+	var sliding := is_pool_sliding()
+	var coasting := _slide_coast > 0.0 and not submerged and not is_on_floor()
+	_slide_coast = maxf(0.0, _slide_coast - dt) if coasting else 0.0
 	var flat := Vector3(velocity.x, 0, velocity.z)
 	var accel := ACCEL * (WADE_ACCEL if submerged else 1.0)
-	flat = flat.lerp(wish * speed, minf(1.0, accel * dt))
+	if not coasting:
+		flat = flat.lerp(wish * speed, minf(1.0, accel * dt))
 	velocity.x = flat.x
 	velocity.z = flat.z
 	# On a ladder the world stops pulling: forward climbs, back descends, and
 	# stepping off the top is just walking forward onto the deck.
-	_on_ladder = water_y > -1.0e8 and _ladder_here()
-	if _on_ladder:
+	_on_ladder = not sliding and water_y > -1.0e8 and _ladder_here()
+	if sliding:
+		var tangent := _pool_slide.tangent_at(_slide_distance)
+		_slide_speed = minf(PoolSlide.MAX_SPEED,
+			_slide_speed + (1.2 + GRAVITY * maxf(0.0, -tangent.y)) * dt)
+		_slide_distance = minf(_pool_slide.length, _slide_distance + _slide_speed * dt)
+		_slide_alignment = _slide_alignment.move_toward(Vector3.ZERO, dt * 1.5)
+		var target := _pool_slide.point_at(_slide_distance) \
+			+ Vector3.UP * PoolSlide.FOOT_CLEARANCE + _slide_alignment
+		velocity = (target - global_position) / dt
+	elif _on_ladder:
 		velocity.y = -input.y * CLIMB_SPEED
 		velocity.x *= 0.35
 		velocity.z *= 0.35
@@ -412,12 +448,24 @@ func _physics_process(dt: float) -> void:
 			velocity.y = lerpf(velocity.y, -2.2, minf(1.0, dt * 6.0))
 	var vy_before := velocity.y
 	move_and_slide()
+	if sliding:
+		var target := _pool_slide.point_at(_slide_distance) + Vector3.UP * PoolSlide.FOOT_CLEARANCE
+		if global_position.distance_to(target) > 0.65:
+			# A changed room or unexpected obstacle must block a ride normally,
+			# never teleport the capsule through the obstruction.
+			_cancel_pool_slide()
+		elif _slide_distance >= _pool_slide.length:
+			velocity = _pool_slide.tangent_at(_slide_distance) * _slide_speed * 0.75
+			velocity.y = minf(velocity.y, -0.5)
+			_cancel_pool_slide()
+			_slide_coast = 0.65
+			_slide_rearm = 0.8
 	_prev_pos = _curr_pos
 	_curr_pos = global_position
 
 	# landing dip
 	if is_on_floor() and not _was_floor:
-		_land = clampf(-vy_before * 0.02, 0.0, 0.15)
+		_land = clampf(-vy_before * 0.02, 0.0, 0.15) * head_bob_strength
 
 	if _water_fx != null:
 		local_water = _water_fx.surface_height(global_position, [get_rid()])
@@ -428,16 +476,58 @@ func _physics_process(dt: float) -> void:
 	_land = lerpf(_land, 0.0, minf(1.0, dt * 6.0))
 	_strafe = input.x
 	_sprinting = sprinting
+	if sliding:
+		_sprinting = false
 	_update_walk(dt)
 
 	# footsteps stay on the physics clock
 	var hs := Vector2(velocity.x, velocity.z).length()
-	if is_on_floor() and hs > 0.4:
+	if not sliding and is_on_floor() and hs > 0.4:
 		_bob += dt * hs * 1.6
-		_cam_y = CAM_H + sin(_bob * 2.0) * 0.035 - _land
+		_cam_y = CAM_H + sin(_bob * 2.0) * 0.035 * head_bob_strength - _land
 		_step_acc += hs * dt
 	else:
 		_cam_y = lerpf(_cam_y, CAM_H - _land, minf(1.0, dt * 6.0))
+
+
+func is_pool_sliding() -> bool:
+	return is_instance_valid(_pool_slide) and _pool_slide.is_inside_tree()
+
+
+func _cancel_pool_slide() -> void:
+	if is_instance_valid(_slide_collision):
+		remove_collision_exception_with(_slide_collision)
+	_slide_collision = null
+	_pool_slide = null
+	_slide_distance = 0.0
+	_slide_speed = 0.0
+	_slide_alignment = Vector3.ZERO
+	_slide_coast = 0.0
+	_slide_rearm = 0.8
+
+
+func _try_board_pool_slide() -> void:
+	var query := PhysicsPointQueryParameters3D.new()
+	query.position = global_position + Vector3.UP * 0.20
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	query.collision_mask = PoolSlide.ENTRY_LAYER
+	for hit: Dictionary in get_world_3d().direct_space_state.intersect_point(query, 4):
+		var slide := hit["collider"] as PoolSlide
+		if slide != null and slide.can_board(global_position):
+			_pool_slide = slide
+			# The guide keeps the rider inside the chute. Its coarse walking
+			# collider must not catch the capsule on each steep path segment;
+			# the rest of the room continues to collide normally throughout.
+			_slide_collision = slide.collision_body
+			if is_instance_valid(_slide_collision):
+				add_collision_exception_with(_slide_collision)
+			_slide_distance = slide.entry_distance(global_position)
+			_slide_alignment = global_position - slide.point_at(_slide_distance) \
+				- Vector3.UP * PoolSlide.FOOT_CLEARANCE
+			_slide_speed = PoolSlide.START_SPEED
+			_on_ladder = false
+			return
 
 
 ## Place the camera for THIS frame: body position interpolated through the
@@ -446,7 +536,7 @@ func _physics_process(dt: float) -> void:
 func _process(dt: float) -> void:
 	var f := Engine.get_physics_interpolation_fraction()
 	cam.global_position = _prev_pos.lerp(_curr_pos, f) + Vector3(0, _cam_y, 0)
-	_roll = lerpf(_roll, -_strafe * 0.022, minf(1.0, dt * 8.0))
+	_roll = lerpf(_roll, -_strafe * 0.022 * head_bob_strength, minf(1.0, dt * 8.0))
 	var tilt := 0.0
 	if _rumble > 0.0:
 		# Deliberately not random per frame: a lift is a machine with a period,
@@ -455,17 +545,17 @@ func _process(dt: float) -> void:
 		cam.global_position += Vector3(
 			sin(_rumble_t * 1.31) * 0.0090,
 			sin(_rumble_t) * 0.0155,
-			cos(_rumble_t * 0.79) * 0.0090) * _rumble
-		tilt = sin(_rumble_t * 0.61) * 0.0045 * _rumble
+			cos(_rumble_t * 0.79) * 0.0090) * _rumble * head_bob_strength
+		tilt = sin(_rumble_t * 0.61) * 0.0045 * _rumble * head_bob_strength
 	cam.rotation = Vector3(_pitch, rotation.y, _roll + tilt)
 	_interaction_scan_left -= dt
 	if _interaction_scan_left <= 0.0:
 		_interaction_scan_left = INTERACTION_SCAN_SECONDS
 		_scan_interaction()
 	var hs := Vector2(velocity.x, velocity.z).length()
-	var fov_target := 83.0 if (_sprinting and hs > 4.0) else 77.0
+	var fov_target := base_fov + 6.0 if (_sprinting and hs > 4.0) else base_fov
 	if photo_aim:
-		fov_target = 58.0
+		fov_target = base_fov * 58.0 / 77.0
 	cam.fov = lerpf(cam.fov, fov_target, minf(1.0, dt * 5.0))
 
 
@@ -534,7 +624,7 @@ func _surface() -> String:
 ## up when running so the stride rate matches your legs.
 func _update_walk(dt: float) -> void:
 	var hs := Vector2(velocity.x, velocity.z).length()
-	var moving := is_on_floor() and hs > 0.5
+	var moving := not is_pool_sliding() and is_on_floor() and hs > 0.5
 	if moving:
 		var surf := _surface()
 		if surf != _walk_surface:

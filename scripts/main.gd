@@ -131,6 +131,10 @@ var _music_target := ""
 var _descent_summary: DescentSummary
 var _descent_hud: DescentHUD
 var _return_prompt: ReturnPrompt
+var _settings: GameSettings
+var _pause_menu: PauseMenu
+var _pause_mouse_mode := Input.MOUSE_MODE_VISIBLE
+const MUSIC_BUS := "Music"
 
 # One mood track per floor.
 const MUSIC_TRACKS := {
@@ -152,6 +156,9 @@ const TITLE_MUSIC := "res://music/title.mp3"
 
 
 func _ready() -> void:
+	_settings = GameSettings.new()
+	GameSettings.current = _settings
+	_settings.changed.connect(_apply_game_settings)
 	randomize()
 	opts = CliOptions.parse()
 	# Command-line starts are isolated QA/dev worlds. Only a normal title-screen
@@ -353,7 +360,7 @@ func _ready() -> void:
 	_photo_camera.first_raise.connect(
 		func(): _show_event_message("PHOTOGRAPH WHAT IS WRONG"))
 	_music = AudioStreamPlayer.new()
-	_music.bus = SoundBank.GAME_BUS
+	_music.bus = MUSIC_BUS
 	_music.volume_db = -50.0
 	add_child(_music)
 	# Decide before the first note: `_build_title` runs several lines later, and
@@ -363,6 +370,7 @@ func _ready() -> void:
 		_set_world_audio(false)
 	_switch_music(active_level)
 	_build_ui()
+	_apply_game_settings()
 	_configure_level_transitions()
 	player.interaction_prompt_changed.connect(_on_interaction_prompt)
 	_events.message.connect(_show_event_message)
@@ -447,6 +455,9 @@ func _build_level(level: int, around: Vector3) -> void:
 	cm.player = player
 	cm.descent = descent
 	if descent:
+		if _progress_enabled and _descent_progress.run_seed == world_seed \
+				and _descent_progress.objective_tape_completed(run.floor_idx):
+			run.mark_tape_watched()
 		if descent_route == null or descent_route.theme != level:
 			descent_route = _create_descent_route(level, run.floor_idx)
 		cm.descent_floor_idx = run.floor_idx
@@ -581,6 +592,60 @@ func _finish_transition_build(level: int) -> void:
 	add_child(ambience)
 	if _title_music:
 		ambience.stop()
+
+
+func _apply_game_settings() -> void:
+	if _settings == null:
+		return
+	if is_instance_valid(player):
+		player.sensitivity_multiplier = float(_settings.values.sensitivity)
+		player.base_fov = float(_settings.values.field_of_view)
+		player.head_bob_strength = float(_settings.values.head_bob)
+	for pair in [[MUSIC_BUS, "music_volume"], [SoundBank.GAME_BUS, "effects_volume"]]:
+		var idx := AudioServer.get_bus_index(pair[0])
+		if idx >= 0:
+			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(0.0001, float(_settings.values[pair[1]]))))
+	PostProcessController.refresh_comfort()
+	for mat in [Mats.casino_slot_lights(), Mats.ticker()]:
+		if mat is ShaderMaterial:
+			mat.set_shader_parameter("reduced_flashing", GameSettings.flashing_reduced())
+
+
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel") and not is_instance_valid(_pause_menu) \
+			and not is_instance_valid(_title) and not _switching and not _dying \
+			and not is_instance_valid(_return_prompt) \
+			and not is_instance_valid(_descent_summary) \
+			and not is_instance_valid(_descent_intro):
+		get_viewport().set_input_as_handled()
+		_open_settings(false)
+
+
+func _open_settings(only_options := false) -> void:
+	if is_instance_valid(_pause_menu):
+		return
+	_pause_mouse_mode = Input.mouse_mode
+	_pause_menu = PauseMenu.new()
+	add_child(_pause_menu)
+	_pause_menu.setup(_settings, only_options)
+	_pause_menu.resumed.connect(_close_settings)
+	_pause_menu.return_to_title.connect(func():
+		_close_settings()
+		_confirm_return_to_title())
+	get_tree().paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_pause_menu.open()
+
+
+func _close_settings() -> void:
+	if is_instance_valid(_pause_menu):
+		_pause_menu.queue_free()
+	_pause_menu = null
+	get_tree().paused = false
+	# Playback/title/death own their controller gates; pause never changes them.
+	Input.mouse_mode = _pause_mouse_mode
+	if _pause_mouse_mode == Input.MOUSE_MODE_CAPTURED and is_instance_valid(player):
+		player.grab_look()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -828,14 +893,17 @@ func _set_ambience_paused(paused: bool) -> void:
 func descent_tape_finished() -> void:
 	if not descent or run == null or run.ended:
 		return
+	var first_viewing := not run.tape_watched
 	run.mark_tape_watched()
+	if _progress_enabled and _descent_progress.run_seed == world_seed:
+		_descent_progress.record_objective_tape(run.floor_idx)
 	_sync_descent_chunk_state()
 	_show_event_message("THE TAPE ENDS")
 	# Finishing the tape costs something: one directed arrival, behind the
 	# player, a beat after the camera has handed the room back. The countdown
 	# only runs once the passive hold releases, so it never lands under the
 	# dolly-back.
-	if _figures != null:
+	if first_viewing and _figures != null:
 		_figures.force_encounter(2.2)
 
 
@@ -880,10 +948,10 @@ func _on_photo_documented(_anomaly_id: String, count: int,
 	# without it a counted shot of something subtle read as arbitrary. Queue it
 	# until the opaque print review lowers the camera and reveals the HUD again.
 	if caption.is_empty():
-		_pending_photo_message = "PHOTOGRAPH %d / %d" % [count, required]
+		_pending_photo_message = "PHOTOGRAPH %d / %d" % [mini(count, required), required]
 	else:
 		_pending_photo_message = "PHOTOGRAPH %d / %d — %s" % [
-			count, required, caption]
+			mini(count, required), required, caption]
 	# The last photograph gets a heading without waiting for a tape refusal:
 	# at REQUIRED-1 the EVIDENCE counter comes up on its own (2026-08-19 —
 	# hunting the final anomaly blind was the feature's last frustration).
@@ -1955,9 +2023,9 @@ func _toggle_post_mode() -> void:
 	_set_mode_hint()
 
 
-## Everything the game makes routes through Game. Spatial sounds first pass
-## through Hall for reverb; Hall then sends into Game. Master is deliberately
-## reserved for the VCR recording while it owns the screen.
+## World effects route through Game; spatial sounds first pass through Hall
+## for reverb. Music has its own volume bus and playback hold. VCR audio reaches
+## Master directly while the recording owns the screen.
 func _set_world_audio(on: bool) -> void:
 	var idx := AudioServer.get_bus_index(SoundBank.GAME_BUS)
 	if idx >= 0:
@@ -1973,6 +2041,12 @@ func _set_world_audio(on: bool) -> void:
 ## Shared buses: Game owns the mute boundary; Hall adds reverb to spatial
 ## emitters and then feeds Game.
 func _setup_audio_bus() -> void:
+	var music_idx := AudioServer.get_bus_index(MUSIC_BUS)
+	if music_idx < 0:
+		music_idx = AudioServer.bus_count
+		AudioServer.add_bus(music_idx)
+		AudioServer.set_bus_name(music_idx, MUSIC_BUS)
+	AudioServer.set_bus_send(music_idx, "Master")
 	var game_idx := AudioServer.get_bus_index(SoundBank.GAME_BUS)
 	if game_idx < 0:
 		game_idx = AudioServer.bus_count
@@ -2225,6 +2299,7 @@ func _build_title(force := false) -> void:
 			str(DescentRun.THEME_NAMES[checkpoint_theme]))
 	_title.descent_requested.connect(_on_descent_requested)
 	_title.started.connect(_on_start)
+	_title.settings_requested.connect(func(): _open_settings(true))
 	add_child(_title)
 	if descent:
 		_title.present_descent(true)
@@ -2351,9 +2426,9 @@ func _set_mode_hint() -> void:
 	if _hint == null:
 		return
 	if descent:
-		_hint.text = "WASD move  ·  Shift sprint  ·  E use  ·  F torch  ·  C camera + Space photo  ·  B mode  ·  Q title"
+		_hint.text = "WASD move  ·  Shift sprint  ·  E use  ·  F torch  ·  C camera + Space photo  ·  B mode  ·  Esc pause  ·  Q title"
 	else:
-		_hint.text = "WASD move  ·  Shift run  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  V filter  ·  B mode  ·  Q title"
+		_hint.text = "WASD move  ·  Shift run  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  V filter  ·  B mode  ·  Esc pause  ·  Q title"
 
 
 ## The Poolrooms are the only floor with standing water. Everywhere else the

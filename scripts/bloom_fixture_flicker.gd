@@ -24,6 +24,17 @@ func _ready() -> void:
 
 
 func _process(dt: float) -> void:
+	if GameSettings.flashing_reduced():
+		_target = 1.0
+		for i in lights.size():
+			if is_instance_valid(lights[i]):
+				lights[i].light_energy = base_energies[i]
+		for mat in mats:
+			if is_instance_valid(mat):
+				mat.emission_energy_multiplier = 2.7
+		if buzz != null:
+			buzz.volume_db = -26.0
+		return
 	_t -= dt
 	if _t <= 0.0:
 		if _rng.randf() < 0.75:

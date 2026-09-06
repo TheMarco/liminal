@@ -14,7 +14,7 @@ const SHORTCUT_CENTRE := 6.0
 const MUTATION_STATE_TARGET := 7 # base reality plus six alternatives
 ## Bump whenever candidate generation or state meaning changes. Saves resolve a
 ## stable signature inside this generation instead of trusting numeric order.
-const GENERATION_VERSION := 2
+const GENERATION_VERSION := 3
 const MUTATION_SEARCH_RADIUS := 3
 ## Match the resident streaming radius: a blackout may not spend work on a
 ## change outside the rooms currently present around the player.
@@ -550,6 +550,8 @@ func _protected_cells(route: DescentRoute) -> Dictionary:
 		route.target: true,
 		route.objective_ritual_cell(): true,
 	}
+	for at in route.casino_landmarks:
+		protected[at] = true
 	for at in route.optional_vhs_cells():
 		protected[at] = true
 	return protected

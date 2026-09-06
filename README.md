@@ -280,8 +280,21 @@ export templates installed):
 | V | Toggle the active video filter |
 | B | Switch between CRT and recovered-tape video modes |
 | Q | Ask to end the current mode and return to the title |
-| Esc | Release mouse |
+| Esc | Pause / settings; resume when already paused |
 | Click | Recapture mouse |
+| S (title screen) | Open settings |
+
+Settings persist between launches: mouse sensitivity, field of view, head bob,
+music and effects volume, VHS distortion, and reduced flashing. Pause freezes
+movement and Descent timers. Reduced flashing steadies fixtures and the low
+battery torch, removes the camera flash, and suppresses rapid signal glitches
+and slot-light pulses.
+
+The casino in Descent includes three fixed route landmarks: the mostly dark
+LAST CHANCE slot bank, the sunken Amber Lounge, and a ringing red telephone
+passage. Completed objective recordings are remembered when you retry or
+Continue in the same building; the television remains available for replay.
+Restart Descent and New Descent begin a fresh building and clear that progress.
 
 ## How it works
 

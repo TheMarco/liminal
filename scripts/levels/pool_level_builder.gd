@@ -25,7 +25,10 @@ const POOL_SQUARE_COPING_CORNER_RADIUS := 0.30
 # pair of quarter-circles forced the 34cm coping profile through an almost
 # zero-length throat, where its deck-side edge folded into a visible stub.
 const POOL_CONNECTED_COPING_MIN_RUN := 0.55
-const POOL_CONNECTED_COPING_MAX_RUN := 0.62
+# Cubic end curvature is 1.5 * width_change / run². A 40cm minimum
+# radius keeps the 28.5cm deck-side coping offset from folding over itself.
+const POOL_CONNECTED_COPING_MAX_RUN := 1.50
+const POOL_CONNECTED_COPING_GAP_EPS := 0.01
 # All channel cells share one centred lane section. Per-cell width rolls made
 # a long rectangular pool change width abruptly at every 12 m chunk seam.
 const POOL_CHANNEL_WIDTH := 3.65
@@ -33,6 +36,14 @@ const POOL_CHANNEL_WIDTH := 3.65
 # of running into the doorway's wall returns. The 60cm tiled landing is about
 # two feet deep: enough to separate coping, ladder and dry-room architecture.
 const POOL_DRY_BOUNDARY_SETBACK := 0.60
+# Furnish the water footprint, not the 12 m structural cell. A small pool is
+# open water; larger pools can carry a perimeter column while retaining a
+# clear crossing in both directions and room to swim around its outside.
+const POOL_PIER_MIN_AREA := 36.0
+const POOL_PIER_MIN_SPAN := 6.0
+const POOL_PIER_SHORE_GAP := 0.90
+const POOL_PIER_CROSSING_HALF_WIDTH := 0.80
+const POOL_PIER_PAIR_GAP := 1.40
 # The imported Bath mesh measures 2.655 x 2.088 m after scaling. Its authored
 # origin includes a separate step at one end, so the bath itself is offset
 # 0.326 m toward local -Z. The structural opening is smaller than the outer
@@ -53,6 +64,7 @@ static var _jacuzzi_water_mesh: PlaneMesh
 static func clear_runtime_cache() -> void:
 	_buoy_material_cache.clear()
 	_jacuzzi_water_mesh = null
+	PoolEquipment.clear_runtime_cache()
 	PoolCornerMesh.clear_runtime_cache()
 	PoolOpeningMesh.clear_runtime_cache()
 
@@ -203,6 +215,16 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 				WorldGen.r01(ctx.world_seed, c.x, c.y, 2221) * 4.0) % 4
 			corner_radius = lerpf(
 				1.05, 1.45, WorldGen.r01(ctx.world_seed, c.x, c.y, 2222))
+	var equipment_side := _pool_equipment_deck_side(c, pool_style, size, edge_links)
+	if equipment_side >= 0:
+		# A slide needs a real staging deck. Shift the basin toward the
+		# opposite wall instead of squeezing a ladder into the old narrow strip.
+		# Water dimensions and the minimum 1.55 m circulation deck stay intact.
+		match equipment_side:
+			0: center.x = WorldGen.CELL_SIZE - PoolEquipment.STAGING_DECK - size.x * 0.5
+			1: center.x = PoolEquipment.STAGING_DECK + size.x * 0.5
+			2: center.y = WorldGen.CELL_SIZE - PoolEquipment.STAGING_DECK - size.y * 0.5
+			3: center.y = PoolEquipment.STAGING_DECK + size.y * 0.5
 	return {
 		"center": center,
 		"size": size,
@@ -211,7 +233,29 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 		"edge_links": edge_links,
 		"rounded_corner": rounded_corner,
 		"corner_radius": corner_radius,
+		"equipment_side": equipment_side,
 	}
+
+
+func _pool_equipment_deck_side(c: Vector2i, pool_style: int,
+		size: Vector2, edge_links: Array[int]) -> int:
+	if pool_style not in [WorldGen.POOL_BASIN, WorldGen.POOL_CISTERN] \
+			or WorldGen.room_id(ctx.world_seed, c) != c \
+			or WorldGen.pool_equipment_kind(ctx.world_seed, c) not in [1, 2]:
+		return -1
+	var first := int(WorldGen.r01(ctx.world_seed, c.x, c.y, 2472) * 4.0) % 4
+	for i in 4:
+		var dir := (first + i) % 4
+		# Move only perpendicular to a connected water lane, preserving both
+		# boundary links and the full width of its centred channel opening.
+		if not edge_links.is_empty() and (dir < 2) == (edge_links[0] < 2):
+			continue
+		var span := size.x if dir < 2 else size.y
+		if WorldGen.CELL_SIZE - span < PoolEquipment.STAGING_DECK + 1.55:
+			continue
+		if bool(scene.edge_info(c, dir)["wall"]):
+			return dir
+	return -1
 
 
 func _pool_water_layout() -> Dictionary:
@@ -269,11 +313,11 @@ func _pool_connection_runs(
 	var high_gap := absf(span.y - nb_span.y)
 	return Vector2(
 		minf(POOL_CONNECTED_COPING_MAX_RUN,
-			maxf(POOL_CONNECTED_COPING_MIN_RUN, low_gap * 0.90))
-			if low_gap > 0.18 else 0.0,
+			maxf(POOL_CONNECTED_COPING_MIN_RUN, sqrt(low_gap * 0.60)))
+			if low_gap > POOL_CONNECTED_COPING_GAP_EPS else 0.0,
 		minf(POOL_CONNECTED_COPING_MAX_RUN,
-			maxf(POOL_CONNECTED_COPING_MIN_RUN, high_gap * 0.90))
-			if high_gap > 0.18 else 0.0)
+			maxf(POOL_CONNECTED_COPING_MIN_RUN, sqrt(high_gap * 0.60)))
+			if high_gap > POOL_CONNECTED_COPING_GAP_EPS else 0.0)
 
 
 func _pool_floor_ceiling() -> void:
@@ -301,14 +345,21 @@ func _pool_floor_ceiling() -> void:
 	# It is exactly the compact basin footprint. Channels can meet at their
 	# ends; ordinary basins leave dry thresholds on all four sides.
 	var surf = PlaneMesh.new()
-	surf.size = size
+	# The curved basin/channel throat can extend beyond the channel's nominal
+	# rectangular lane. Cover the complete outline; opaque deck masks the rest.
+	var shores := _pool_shore_paths(layout)
+	var water_bounds := Rect2(center - size * 0.5, size)
+	for point: Vector2 in shores["low"]: water_bounds = water_bounds.expand(point)
+	for point: Vector2 in shores["high"]: water_bounds = water_bounds.expand(point)
+	surf.size = water_bounds.size
 	surf.subdivide_width = maxi(12, int(size.x * 2.4))
 	surf.subdivide_depth = maxi(12, int(size.y * 2.4))
 	var water = MeshInstance3D.new()
 	water.mesh = surf
 	water.material_override = Mats.pool_water()
 	water.layers = preload("res://scripts/pool_reflection_probe.gd").WATER_LAYER
-	water.position = Vector3(center.x, Chunk.POOL_WATER_Y, center.y)
+	var surface_center := water_bounds.get_center()
+	water.position = Vector3(surface_center.x, Chunk.POOL_WATER_Y, surface_center.y)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Keep the shader's small wave crests inside the render culling bounds.
 	water.extra_cull_margin = 0.03
@@ -319,11 +370,40 @@ func _pool_floor_ceiling() -> void:
 	water.set_meta("pool_water_connected", bool(layout["connected"]))
 	water.set_meta("pool_water_edge_links", layout.get("edge_links", []))
 	water.set_meta("pool_water_style", ctx.style)
+	var outline: PackedVector2Array = shores["low"].duplicate()
+	var return_shore: PackedVector2Array = shores["high"].duplicate()
+	return_shore.reverse()
+	outline.append_array(return_shore)
+	for i in outline.size(): outline[i] -= surface_center
+	water.set_meta("pool_water_outline", outline)
 	scene.add_node(water)
 	# Every generated basin gets exactly one usable exit. Room decoration no
 	# longer decides whether the player is allowed to climb out.
 	_pool_compact_ladder(2240)
+	if ctx.style == WorldGen.POOL_STAIRS:
+		_pool_walk_in_stairs(layout)
+	_pool_place_equipment(layout)
 	_pool_edge_steps()
+
+
+func _pool_place_equipment(layout: Dictionary) -> void:
+	var plan := PoolEquipment.plan(ctx, layout,
+		scene.chunk_meta("pool_access_lanes", []), scene.doorway_clearance_rects())
+	if plan.is_empty():
+		return
+	var prop := _pool_equipment(int(plan["kind"]), plan["at"], float(plan["yaw"]))
+	if prop == null:
+		return
+	var lanes: Array = scene.chunk_meta("pool_access_lanes", []).duplicate()
+	lanes.append(plan["occupied"])
+	scene.set_chunk_meta("pool_access_lanes", lanes)
+	scene.set_chunk_meta("pool_equipment_plan", plan)
+	prop.set_meta("pool_equipment_deck", plan["deck"])
+	prop.set_meta("pool_equipment_landing", plan["landing"])
+
+
+func _pool_equipment(kind: int, at: Vector3, yaw: float) -> Node3D:
+	return PoolEquipment.build(scene, kind, at, yaw)
 
 
 func _pool_basin_deck_and_coping(layout: Dictionary) -> void:
@@ -337,10 +417,23 @@ func _pool_basin_deck_and_coping(layout: Dictionary) -> void:
 		Vector2(x0, WorldGen.CELL_SIZE))
 	_pool_deck_piece(Vector2((x1 + WorldGen.CELL_SIZE) * 0.5, WorldGen.CELL_SIZE * 0.5),
 		Vector2(WorldGen.CELL_SIZE - x1, WorldGen.CELL_SIZE))
-	_pool_deck_piece(Vector2(center.x, z0 * 0.5),
-		Vector2(size.x, z0))
-	_pool_deck_piece(Vector2(center.x, (z1 + WorldGen.CELL_SIZE) * 0.5),
-		Vector2(size.x, WorldGen.CELL_SIZE - z1))
+	var shores := _pool_shore_paths(layout)
+	var low: PackedVector2Array = shores["low"]
+	var high: PackedVector2Array = shores["high"]
+	if low.size() == 2:
+		_pool_deck_piece(Vector2(center.x, z0 * 0.5), Vector2(size.x, z0))
+	else:
+		var polygon := PackedVector2Array([Vector2(x0, 0), Vector2(x1, 0)])
+		var edge := low.duplicate(); edge.reverse(); polygon.append_array(edge)
+		_pool_deck_polygon(polygon)
+	if high.size() == 2:
+		_pool_deck_piece(Vector2(center.x, (z1 + WorldGen.CELL_SIZE) * 0.5),
+			Vector2(size.x, WorldGen.CELL_SIZE - z1))
+	else:
+		var polygon := high.duplicate()
+		polygon.append_array(PackedVector2Array([Vector2(x1, WorldGen.CELL_SIZE),
+			Vector2(x0, WorldGen.CELL_SIZE)]))
+		_pool_deck_polygon(polygon)
 	var rounded_corner := int(layout.get("rounded_corner", -1))
 	var radius := float(layout.get("corner_radius", 0.0))
 	# A water edge on a chunk boundary is open only when the next chunk is wet.
@@ -452,7 +545,34 @@ func _pool_connected_coping_transition(
 func _pool_connected_coping_s_bend(
 		start: Vector2, end: Vector2, water_side: float,
 		dir: int, side: String, run: float) -> void:
+	var samples := _pool_seam_curve(start, end)
 	var path: Array[Vector2] = []
+	path.assign(samples)
+	var coping := MeshInstance3D.new()
+	coping.mesh = PoolCornerMesh.path_bullnose(
+		path, water_side,
+		POOL_COPING_WIDTH - POOL_COPING_WATER_OVERHANG,
+		POOL_COPING_WATER_OVERHANG,
+		Chunk.POOL_DECK_Y + POOL_COPING_TOP_OFFSET
+			- POOL_COPING_HEIGHT * 0.5,
+		POOL_COPING_HEIGHT, POOL_COPING_NOSE_SEGMENTS,
+		Vector2(signf(end.x - start.x), 0))
+	coping.material_override = Mats.pool_coping()
+	coping.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	coping.set_meta("pool_connected_coping_turn", true)
+	coping.set_meta("pool_connected_coping_continuous", true)
+	coping.set_meta("pool_connected_coping_start", start)
+	coping.set_meta("pool_connected_coping_end", end)
+	coping.set_meta("pool_connected_coping_dir", dir)
+	coping.set_meta("pool_connected_coping_side", side)
+	coping.set_meta("pool_connected_coping_run", run)
+	coping.set_meta("pool_connected_coping_path", samples)
+	coping.set_meta("pool_coping_bullnose", true)
+	scene.add_node(coping)
+
+
+func _pool_seam_curve(start: Vector2, end: Vector2) -> PackedVector2Array:
+	var path := PackedVector2Array()
 	var segment_count := 18
 	for i in range(segment_count + 1):
 		var t := float(i) / float(segment_count)
@@ -463,25 +583,69 @@ func _pool_connected_coping_s_bend(
 		path.append(Vector2(
 			lerpf(start.x, end.x, t),
 			lerpf(start.y, end.y, smooth_t)))
-	var coping := MeshInstance3D.new()
-	coping.mesh = PoolCornerMesh.path_bullnose(
-		path, water_side,
-		POOL_COPING_WIDTH - POOL_COPING_WATER_OVERHANG,
-		POOL_COPING_WATER_OVERHANG,
-		Chunk.POOL_DECK_Y + POOL_COPING_TOP_OFFSET
-			- POOL_COPING_HEIGHT * 0.5,
-		POOL_COPING_HEIGHT, POOL_COPING_NOSE_SEGMENTS)
-	coping.material_override = Mats.pool_coping()
-	coping.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	coping.set_meta("pool_connected_coping_turn", true)
-	coping.set_meta("pool_connected_coping_continuous", true)
-	coping.set_meta("pool_connected_coping_start", start)
-	coping.set_meta("pool_connected_coping_end", end)
-	coping.set_meta("pool_connected_coping_dir", dir)
-	coping.set_meta("pool_connected_coping_side", side)
-	coping.set_meta("pool_connected_coping_run", run)
-	coping.set_meta("pool_coping_bullnose", true)
-	scene.add_node(coping)
+	return path
+
+
+## Each chunk owns its half of the identical shared S curve. The solid deck,
+## collider and water coverage use these samples, rather than leaving a square
+## peninsula beneath an unrelated curved trim.
+func _pool_shore_paths(layout: Dictionary) -> Dictionary:
+	var center: Vector2 = layout["center"]
+	var size: Vector2 = layout["size"]
+	var x0 := center.x - size.x * 0.5
+	var x1 := center.x + size.x * 0.5
+	var result := {}
+	for side in 2:
+		var along := center.y + size.y * (-0.5 if side == 0 else 0.5)
+		var points: Array[Vector2] = []
+		for dir in [1, 0]:
+			var runs := _pool_connection_runs(ctx.cell, ctx.style, dir)
+			var run: float = runs[side]
+			if run <= 0.0:
+				points.append(Vector2(x0 if dir == 1 else x1, along))
+				continue
+			var nb := ctx.cell + Vector2i(WorldGen.DIRV[dir])
+			var span := _pool_water_span_at_edge(nb,
+				WorldGen.cell_style(ctx.world_seed, nb, ctx.theme), WorldGen.OPP[dir])
+			var sign_x := -1.0 if dir == 1 else 1.0
+			var seam := 0.0 if dir == 1 else WorldGen.CELL_SIZE
+			var curve := _pool_seam_curve(Vector2(seam - sign_x * run, along),
+				Vector2(seam + sign_x * run, span[side]))
+			for point in curve:
+				if point.x >= x0 - 0.001 and point.x <= x1 + 0.001:
+					points.append(Vector2(clampf(point.x, x0, x1), point.y))
+		points.sort_custom(func(a: Vector2, b: Vector2): return a.x < b.x)
+		result["low" if side == 0 else "high"] = PackedVector2Array(points)
+	return result
+
+
+func _pool_deck_polygon(polygon: PackedVector2Array) -> void:
+	var pieces: Array[PackedVector2Array] = [polygon]
+	for zone in scene.runtime_shortcut_clearance_rects():
+		var cut := PackedVector2Array([zone.position,
+			Vector2(zone.end.x, zone.position.y), zone.end,
+			Vector2(zone.position.x, zone.end.y)])
+		var next: Array[PackedVector2Array] = []
+		for piece in pieces: next.append_array(Geometry2D.clip_polygons(piece, cut))
+		pieces = next
+	for piece in pieces:
+		var deck := MeshInstance3D.new()
+		deck.mesh = PoolCornerMesh.deck_polygon(piece, -0.3, Chunk.POOL_DECK_Y)
+		deck.material_override = Mats.pool_tile()
+		deck.set_meta("pool_basin_deck", true)
+		deck.set_meta("pool_deck_outline", piece)
+		scene.add_node(deck)
+		for convex in Geometry2D.decompose_polygon_in_convex(piece):
+			var vertices := PackedVector3Array()
+			for point in convex:
+				vertices.append(Vector3(point.x, -0.3, point.y))
+				vertices.append(Vector3(point.x, Chunk.POOL_DECK_Y, point.y))
+			var shape := ConvexPolygonShape3D.new()
+			shape.points = vertices
+			var collider := CollisionShape3D.new()
+			collider.shape = shape
+			collider.set_meta("pool_deck_outline_collider", true)
+			scene.add_collision_shape(collider)
 
 
 func _pool_deck_piece(center: Vector2, size: Vector2) -> void:
@@ -595,6 +759,16 @@ func _pool_square_coping_corner_arc(corner: Vector2, id: int) -> void:
 			center += Vector2(radius, -radius)
 			radial_start = Vector2.DOWN
 			sweep = PI * 0.5
+	# The quarter-circle trim also needs a quarter-circle basin wall beneath
+	# it. Leaving the old rectangular hole here exposed water under the rim.
+	var fill := MeshInstance3D.new()
+	fill.mesh = PoolCornerMesh.quarter_cove(center, radial_start, sweep,
+		radius, corner, 0.0, Chunk.POOL_DECK_Y, Chunk.POOL_CORNER_SEGMENTS)
+	fill.material_override = Mats.pool_tile()
+	fill.set_meta("pool_square_basin_corner_fill", true)
+	scene.add_node(fill)
+	_pool_cove_colliders(center, radial_start, sweep, radius, corner,
+		Chunk.POOL_DECK_Y, "pool_square_basin_corner_collider")
 	_pool_arc_coping(
 		center, radial_start, sweep, radius, true, "pool_basin_coping")
 
@@ -887,10 +1061,13 @@ func _pool_pier(at: Vector3) -> void:
 	p.set_meta("pool_pier", true)
 
 
-func _pool_clear_of_runtime_doorway(at: Vector2, radius: float) -> bool:
+func _pool_clear_of_access(at: Vector2, radius: float) -> bool:
 	var footprint := Rect2(at - Vector2.ONE * radius,
 		Vector2.ONE * radius * 2.0)
-	for zone in scene.runtime_shortcut_clearance_rects():
+	for zone in scene.doorway_clearance_rects():
+		if footprint.intersects(zone):
+			return false
+	for zone in scene.chunk_meta("pool_access_lanes", []):
 		if footprint.intersects(zone):
 			return false
 	return true
@@ -906,7 +1083,7 @@ func _pool_clear_of_runtime_doorway(at: Vector2, radius: float) -> bool:
 
 
 func _pool_step_ramp(dir: int, at: float, width: float, edge: float,
-		drop: float, run: float, start = 0.0) -> void:
+		drop: float, run: float, start = 0.0) -> CollisionShape3D:
 	var ang = atan(drop / run)
 	var ln = sqrt(drop * drop + run * run)
 	var outward = 1.0 if (dir == 0 or dir == 2) else -1.0
@@ -920,6 +1097,7 @@ func _pool_step_ramp(dir: int, at: float, width: float, edge: float,
 		ramp = scene.collider_rotated_box(Vector3(at, y, mid),
 			Vector3(width, 0.12, ln), Vector3(outward * ang, 0, 0))
 	ramp.set_meta("walkable_ramp", true)
+	return ramp
 
 
 ## A dry walkway along one wall, its coping lip proud of the water, plus the
@@ -1344,7 +1522,7 @@ func _pool_piers(salt: int, count: int) -> Array[Vector3]:
 			continue
 		if has_strip and absf(gx - WorldGen.CELL_SIZE / 2.0) < 1.0:
 			continue
-		if not _pool_clear_of_runtime_doorway(
+		if not _pool_clear_of_access(
 				Vector2(gx, gz), Chunk.POOL_PIER * 0.62):
 			continue
 		if ctx.style == WorldGen.POOL_CISTERN and absf(gz - WorldGen.CELL_SIZE / 2.0) < 2.4:
@@ -1365,52 +1543,64 @@ func _pool_compact_piers(salt: int, count: int) -> Array[Vector3]:
 	var layout := _pool_water_layout()
 	var center: Vector2 = layout["center"]
 	var size: Vector2 = layout["size"]
-	var inset := 1.20
-	var x0 := center.x - size.x * 0.5 + inset
-	var x1 := center.x + size.x * 0.5 - inset
-	var z0 := center.y - size.y * 0.5 + inset
-	var z1 := center.y + size.y * 0.5 - inset
 	var positions: Array[Vector3] = []
-	if x1 <= x0 or z1 <= z0:
+	var area := size.x * size.y
+	if ctx.style in [WorldGen.POOL_CHANNEL, WorldGen.POOL_STAIRS] \
+			or area < POOL_PIER_MIN_AREA or minf(size.x, size.y) < POOL_PIER_MIN_SPAN:
 		return positions
-	var target := mini(
-		count, 3 if ctx.style == WorldGen.POOL_CISTERN else 2)
-	var has_portal := WorldGen.portal(
-		ctx.world_seed, ctx.cell, ctx.theme) >= 0
-	var fixture_points: Array = scene.chunk_meta(
-		"pool_ceiling_fixture_points", [])
-	for i in 18:
+	var radius := Chunk.POOL_PIER * 0.62
+	# Plan an island's entire footprint before choosing its pier. Adding a
+	# wider base afterwards used to leave only a sliver of water by the deck.
+	var island_radius := _pool_planned_island_radius(layout)
+	var footprint_radius := maxf(radius, island_radius)
+	var inset := footprint_radius + POOL_PIER_SHORE_GAP + 0.02
+	var reach := size * 0.5 - Vector2.ONE * inset
+	var crossing := footprint_radius + POOL_PIER_CROSSING_HALF_WIDTH
+	if minf(reach.x, reach.y) < crossing:
+		return positions
+	var target := mini(count, 2 if area >= 70.0 else 1)
+	if island_radius > 0.0:
+		target = mini(target, 1)
+	var has_portal := WorldGen.portal(ctx.world_seed, ctx.cell, ctx.theme) >= 0
+	var fixture_points: Array = scene.chunk_meta("pool_ceiling_fixture_points", [])
+	# Start in a seeded corner, then try the opposite one. Peripheral supports
+	# leave both centre lanes open, including any channel-to-basin connections.
+	var corners := [Vector2(-1, -1), Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1)]
+	var first := int(ctx.random01(salt) * 4.0) % 4
+	for i in 4:
 		if positions.size() >= target:
 			break
-		var gx := lerpf(x0, x1, ctx.random01(salt + i * 4))
-		var gz := lerpf(z0, z1, ctx.random01(salt + i * 4 + 1))
-		if ctx.random01(salt + i * 4 + 2) > 0.80:
+		var corner: Vector2 = corners[(first + i) % 4]
+		var point := center + corner * reach
+		if not _pool_clear_of_access(point, footprint_radius):
 			continue
-		var point := Vector2(gx, gz)
-		if not _pool_clear_of_runtime_doorway(
-				point, Chunk.POOL_PIER * 0.62):
-			continue
-		if has_portal and point.distance_to(
-				Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.5)) < 2.25:
+		if has_portal and point.distance_to(Vector2.ONE * WorldGen.CELL_SIZE * 0.5) < 2.25:
 			continue
 		var blocked := false
-		for fixture in fixture_points:
-			var fixture_point: Vector2 = fixture
-			if point.distance_to(fixture_point) < 0.95:
+		for fixture: Vector2 in fixture_points:
+			if point.distance_to(fixture) < 0.95:
 				blocked = true
 				break
-		if blocked:
-			continue
 		for prior in positions:
-			if point.distance_to(Vector2(prior.x, prior.z)) < 1.55:
+			if point.distance_to(Vector2(prior.x, prior.z)) < radius * 2.0 + POOL_PIER_PAIR_GAP:
 				blocked = true
 				break
 		if blocked:
 			continue
-		var at := Vector3(gx, 0.0, gz)
+		var at := Vector3(point.x, 0.0, point.y)
 		_pool_pier(at)
 		positions.append(at)
 	return positions
+
+
+func _pool_planned_island_radius(layout: Dictionary) -> float:
+	var size: Vector2 = layout["size"]
+	if ctx.style not in [WorldGen.POOL_BASIN, WorldGen.POOL_CISTERN] \
+			or size.x * size.y < 48.0 or minf(size.x, size.y) < 6.8 \
+			or int(layout.get("rounded_corner", -1)) >= 0 \
+			or ctx.random01(2388) >= 0.35:
+		return 0.0
+	return lerpf(0.78, 0.92, ctx.random01(2390))
 
 
 ## Round one corner of the compact pool itself.  This is the pool equivalent
@@ -1479,30 +1669,13 @@ func _pool_compact_rounded_basin_corner(layout: Dictionary) -> bool:
 
 ## Put a circular deck around an existing pier.  The water remains one
 ## continuous seam-free plane below it; the opaque deck hides that overlap.
-func _pool_pier_island(salt: int, piers: Array[Vector3]) -> bool:
-	var layout := _pool_water_layout()
-	if piers.is_empty() or int(layout.get("rounded_corner", -1)) >= 0 \
-			or ctx.random01(salt) >= 0.56:
+func _pool_pier_island(piers: Array[Vector3]) -> bool:
+	var radius := _pool_planned_island_radius(_pool_water_layout())
+	if piers.is_empty() or radius <= 0.0:
 		return false
-	var center: Vector2 = layout["center"]
-	var size: Vector2 = layout["size"]
-	var radius := lerpf(0.78, 1.12, ctx.random01(salt + 2))
-	var clearance := radius + 0.12
-	var x0 := center.x - size.x * 0.5 + clearance
-	var x1 := center.x + size.x * 0.5 - clearance
-	var z0 := center.y - size.y * 0.5 + clearance
-	var z1 := center.y + size.y * 0.5 - clearance
-	var eligible: Array[Vector3] = []
-	for at in piers:
-		if at.x >= x0 and at.x <= x1 \
-				and at.z >= z0 and at.z <= z1 \
-				and _pool_clear_of_runtime_doorway(
-					Vector2(at.x, at.z), radius):
-			eligible.append(at)
-	if eligible.is_empty():
-		return false
-	var at: Vector3 = eligible[
-		int(ctx.random01(salt + 1) * float(eligible.size())) % eligible.size()]
+	# The pier planner already reserved shore, crossing and access clearances
+	# for this radius. Only one support is placed in an island basin.
+	var at := piers[0]
 	var island: MeshInstance3D = scene.cylinder(
 		Vector3(at.x, Chunk.POOL_DECK_Y * 0.5, at.z),
 		radius, Chunk.POOL_DECK_Y, Mats.pool_tile())
@@ -1639,6 +1812,9 @@ func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
 	pivot.set_meta("pool_ladder_edge", edge)
 	pivot.set_meta("pool_ladder_along", along)
 	scene.add_node(pivot)
+	if site == "ledge":
+		scene.set_chunk_meta("pool_entry_ladder_dir", dir)
+		_pool_reserve_access(dir, edge, along, 1.60, 1.60, 0.80)
 	# Water direction along the working axis is -inward; the pivot's own PI/2
 	# for dir >= 2 flips the sense, hence the sign split.
 	var model_yaw = (-inward if dir < 2 else inward) * PI / 2.0
@@ -1662,6 +1838,59 @@ func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
 	pivot.add_child(area)
 
 
+## Keep an approach in the water and a landing on the deck clear of supports.
+## `dir` identifies the deck side, so water lies in the opposite direction.
+func _pool_reserve_access(dir: int, edge: float, along: float,
+		width: float, water_run: float, deck_run: float) -> void:
+	var low := edge - (water_run if dir in [0, 2] else deck_run)
+	var zone := Rect2(low, along - width * 0.5, water_run + deck_run, width) \
+		if dir < 2 else Rect2(along - width * 0.5, low, width, water_run + deck_run)
+	var lanes: Array = scene.chunk_meta("pool_access_lanes", []).duplicate()
+	lanes.append(zone)
+	scene.set_chunk_meta("pool_access_lanes", lanes)
+
+
+func _pool_walk_in_stairs(layout: Dictionary) -> void:
+	var center: Vector2 = layout["center"]
+	var size: Vector2 = layout["size"]
+	var links: Array = layout.get("edge_links", [])
+	var ladder_dir := int(scene.chunk_meta("pool_entry_ladder_dir", 0))
+	var opposite := [1, 0, 3, 2]
+	var dir: int = opposite[ladder_dir]
+	# The opposite side usually works; an extended basin must leave its water
+	# connection open. Try the perpendicular deck sides before the ladder side.
+	for candidate: int in [opposite[ladder_dir], (ladder_dir + 2) % 4,
+			(ladder_dir + 3) % 4]:
+		if candidate != ladder_dir and not links.has(candidate):
+			dir = candidate
+			break
+	var outward := 1.0 if dir in [0, 2] else -1.0
+	var edge := (center.x + outward * size.x * 0.5) if dir < 2 \
+		else (center.y + outward * size.y * 0.5)
+	var along := center.y if dir < 2 else center.x
+	var width := 2.20
+	var tread_run := 0.30
+	var steps := 7
+	for i in steps:
+		var top := Chunk.POOL_DECK_Y * (1.0 - float(i) / float(steps))
+		var reach := tread_run * float(i + 1)
+		var axis := edge - outward * reach * 0.5
+		var at := Vector3(axis, top * 0.5, along) if dir < 2 \
+			else Vector3(along, top * 0.5, axis)
+		var dimensions := Vector3(reach, top, width) if dir < 2 \
+			else Vector3(width, top, reach)
+		var tread := scene.box(at, dimensions, Mats.pool_tile())
+		tread.set_meta("pool_walk_in_stairs", true)
+	var ramp := _pool_step_ramp(opposite[dir], along, width, edge,
+		Chunk.POOL_DECK_Y, tread_run * steps, tread_run)
+	ramp.set_meta("pool_entry_ramp", true)
+	ramp.set_meta("pool_entry_dir", dir)
+	ramp.set_meta("pool_entry_edge", edge)
+	ramp.set_meta("pool_entry_along", along)
+	_pool_reserve_access(dir, edge, along, width + 0.40,
+		tread_run * (steps + 1) + 0.60, 0.60)
+
+
 func _pool_ledge_ladder(dir: int, edge: float, along: float) -> void:
 	_pool_ladder_at(dir, edge, along,
 		1.0 if (dir == 0 or dir == 2) else -1.0, "ledge")
@@ -1677,6 +1906,8 @@ func _pool_compact_ladder(salt: int) -> void:
 	var available: Array[int] = []
 	for candidate in 4:
 		if links.has(candidate):
+			continue
+		if candidate == int(layout.get("equipment_side", -1)):
 			continue
 		# A channel can end directly against a solid wall while its water still
 		# reaches that cell edge. That is not a deck: placing the grab-rail
@@ -1723,7 +1954,7 @@ func _pool_compact_ladder(salt: int) -> void:
 func _pool_basin_room() -> void:
 	var piers := _pool_piers(
 		2300, 1 + int(ctx.random01(2301) * 1.99))
-	_pool_pier_island(2388, piers)
+	_pool_pier_island(piers)
 	if ctx.random01(2302) < 0.42:
 		_pool_window(
 			0 if ctx.random01(2303) < 0.5 else 1,
@@ -1738,8 +1969,6 @@ func _pool_channel_room() -> void:
 		_pool_window(
 			2 if along_x else 0,
 			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2311)))
-	if ctx.random01(2314) < 0.34:
-		_pool_piers(2315, 1)
 	_pool_float(2312)
 
 
@@ -1828,8 +2057,8 @@ func _pool_jacuzzi(at: Vector3, yaw: float) -> bool:
 func _pool_jacuzzi_exit_volume(at: Vector3) -> void:
 	# Four narrow climb strips hug the inside of the opening. Walking into any
 	# wall of the tub while holding forward lifts the player to deck height;
-	# the volume ends below the standing query point, so it cannot catch a
-	# player who is already safely on the deck.
+	# the volume reaches high enough for the feet to clear the deck. These
+	# strips stay inside the opening, so stepping onto dry tile releases them.
 	var hole_center := _pool_jacuzzi_center(at)
 	var area := Area3D.new()
 	area.name = "JacuzziExitVolume"
@@ -1842,7 +2071,10 @@ func _pool_jacuzzi_exit_volume(at: Vector3) -> void:
 	area.monitoring = false
 	var strip := 0.44
 	var inset := 0.18
-	var height := 2.60
+	# The player's ladder probe is 90cm above its feet. The former 2.05m
+	# volume top stopped climbing at feet=1.15m, below the 1.42m deck.
+	var query_top := Chunk.POOL_DECK_Y + 0.90 + 0.08
+	var height := (query_top - area.position.y) * 2.0
 	var shapes := [
 		[
 			Vector3(
@@ -1985,8 +2217,6 @@ func _pool_alcove_room() -> void:
 
 
 func _pool_stairs_room() -> void:
-	if ctx.random01(2354) < 0.42:
-		_pool_piers(2355, 1)
 	if ctx.random01(2356) < 0.40:
 		_pool_window(
 			int(ctx.random01(2357) * 4.0) % 4,
@@ -2003,7 +2233,8 @@ func _pool_gallery_room() -> void:
 
 
 func _pool_cistern_room() -> void:
-	_pool_piers(2370, 2 + int(ctx.random01(2372) * 1.99))
+	var piers := _pool_piers(2370, 2 + int(ctx.random01(2372) * 1.99))
+	_pool_pier_island(piers)
 	if ctx.random01(2373) < 0.55:
 		_pool_window(
 			int(ctx.random01(2374) * 4.0) % 4,

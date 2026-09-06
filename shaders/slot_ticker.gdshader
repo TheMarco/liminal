@@ -7,6 +7,7 @@ render_mode cull_disabled;
 
 varying vec3 wpos;
 varying vec2 suv;
+uniform bool reduced_flashing = false;
 
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -60,7 +61,7 @@ void fragment() {
 	}
 
 	float pulse = step(0.92, fract(TIME / 7.0 + mh));
-	em *= 1.0 + pulse * 0.8;
+	em *= reduced_flashing ? 1.0 : (1.0 + pulse * 0.8);
 	float b = 1.0 - smoothstep(0.008, 0.03, min(min(suv.x, 1.0 - suv.x), min(suv.y, 1.0 - suv.y)));
 	c = mix(c, vec3(0.90, 0.75, 0.30), b);
 	ALBEDO = c * 0.62;

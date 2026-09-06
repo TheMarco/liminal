@@ -21,7 +21,7 @@ extends Node3D
 ## director owns it, so a rebuilt cell cannot resurrect a spent photograph.
 
 enum Type { PLACEMENT, DUPLICATE, WRITING, BLEED, GIANT, RING, MISSING,
-	PRINT, PORTAL, TURNED }
+	PRINT, PORTAL, TURNED, NUMBERED_DOOR }
 
 ## Render layer bit reserved for photo-only geometry. Player cameras clear
 ## this bit; the snapshot camera sets it.
@@ -154,6 +154,8 @@ var next_theme := -1
 ## copy that tracks the camera. The eye pivot survives resolve() — turned.
 var _turned_eye: Node3D
 var _turned_lens: Node3D
+var _number_plate: Label3D
+var _number_print: Node3D
 
 
 func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
@@ -227,6 +229,8 @@ func facing_normal() -> Vector3:
 ## the cause.
 func count_caption() -> String:
 	match type:
+		Type.NUMBERED_DOOR:
+			return "THE FILM SAYS 106"
 		Type.MISSING:
 			return "THE CAMERA SAYS IT IS NOT THERE"
 		Type.PORTAL:
@@ -258,7 +262,7 @@ func occlusion_excludes() -> Array[RID]:
 
 
 func capture_distance() -> float:
-	return CAPTURE_DISTANCE_WRITING if type == Type.WRITING \
+	return CAPTURE_DISTANCE_WRITING if type in [Type.WRITING, Type.NUMBERED_DOOR] \
 		else CAPTURE_DISTANCE
 
 
@@ -424,6 +428,11 @@ static func _theme_furnished_walls(route: DescentRoute,
 ## rebuilds skip documented anomalies entirely, so the resolution holds.
 func resolve() -> void:
 	match type:
+		Type.NUMBERED_DOOR:
+			if is_instance_valid(_number_plate):
+				_number_plate.text = "106"
+			if is_instance_valid(_number_print):
+				_number_print.visible = false
 		Type.PLACEMENT:
 			_release_ceiling_furniture()
 		Type.GIANT:
@@ -445,7 +454,7 @@ func resolve() -> void:
 ## card, and TURNED's point is that the prop has moved WHILE the paper was
 ## up — the player lowers the print and it is facing them.
 func resolves_after_review() -> bool:
-	return type == Type.PLACEMENT or type == Type.TURNED
+	return type in [Type.PLACEMENT, Type.TURNED, Type.NUMBERED_DOOR]
 
 
 ## TURNED's resolve escalates instead of neutralizing: the lens copy goes,
@@ -1055,3 +1064,37 @@ func _set_layer(node: Node, layer: int, strip_collision := false) -> void:
 		return
 	for child in node.get_children():
 		_set_layer(child, layer, strip_collision)
+
+
+## The live eye and viewfinder both read 104. A matching opaque number plate
+## on PRINT_LAYER hides those digits only in the developed photograph.
+func configure_numbered_door(p_id: String, p_cell: Vector2i, plate: Label3D) -> void:
+	id = p_id
+	cell = p_cell
+	theme = 0
+	type = Type.NUMBERED_DOOR
+	_number_plate = plate
+	plate.text = "104"
+	set_process(false)
+	_facing = plate.global_basis.z.normalized()
+	for offset in [Vector3(-0.11, -0.055, 0.025), Vector3(0.11, 0.055, 0.025)]:
+		_points.append(to_local(plate.to_global(offset)))
+	_number_print = Node3D.new()
+	add_child(_number_print)
+	_number_print.global_transform = plate.global_transform
+	var backing := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.432, 0.202, 0.003)
+	backing.mesh = box
+	backing.material_override = Mats.darkwood()
+	backing.layers = PRINT_LAYER
+	backing.position.z = 0.006
+	backing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_number_print.add_child(backing)
+	var printed := plate.duplicate() as Label3D
+	printed.remove_meta("casino_number_plate")
+	printed.text = "106"
+	printed.position = Vector3(0, 0, 0.011)
+	printed.rotation = Vector3.ZERO
+	printed.layers = PRINT_LAYER
+	_number_print.add_child(printed)

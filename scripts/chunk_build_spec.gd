@@ -4,6 +4,7 @@ extends RefCounted
 ## production fields must be declared here. Focused tools may still pass a
 ## Dictionary, which Chunk converts through `from_dictionary()` immediately.
 
+var casino_landmark := ""
 var descent := false
 var target := false
 var target_wall := -1
@@ -33,6 +34,7 @@ var player: Player
 
 static func from_dictionary(config: Dictionary) -> ChunkBuildSpec:
 	var out := ChunkBuildSpec.new()
+	out.casino_landmark = str(config.get("casino_landmark", ""))
 	out.descent = bool(config.get("descent", false))
 	out.target = bool(config.get("target", false))
 	out.target_wall = int(config.get("target_wall", -1))

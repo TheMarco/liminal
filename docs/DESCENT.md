@@ -1,5 +1,17 @@
 # Descent — revised implementation plan
 
+> **Gameplay update (2026-09-05).** Casino routes now reserve three stable
+> landmarks: LAST CHANCE (eight cabinets, only the wheel powered), a warm
+> sunken lounge, and a ringing red telephone passage. These rooms are protected
+> from blackout topology/furniture changes. The telephone door reads 104, its
+> developed photograph reads 106, and lowering the print changes the physical
+> plate to 106. This photograph replaces one planned opportunity and uses the
+> existing evidence quota. Completed objective chapters survive death and
+> Continue in the same building, with optional replay at their televisions.
+> Escape now pauses play and opens persisted comfort/audio settings; Settings
+> is also available from the title. Implementation and verification details:
+> [Gameplay quality review](GAMEPLAY_QUALITY_REVIEW.md).
+
 > **Status update (2026-08-08).** The implementation has moved past this plan.
 > Current live structure: 11 floors in fixed order — Casino, Mall, Office,
 > Airport, School, Prison, Asylum, Poolrooms, Annex, Data Center, then
@@ -80,10 +92,11 @@ Descent order is not the Wander key order:
 | 10 | 10 | the Data Center |
 | 11 | 11 | Bloom/Upside Down |
 
-Continue resumes the deepest unlocked floor with the same saved seed/building.
-Restart Descent returns to floor 1 on that seed without lowering the deepest
-checkpoint. New Descent starts floor 1 with a new seed. Respawn uses the
-arrival elevator with clean state and a full flashlight.
+Continue resumes the deepest unlocked floor with the same saved seed/building,
+documented photographs, and completed objective recordings. Restart Descent
+and New Descent both return to floor 1 in a fresh building and clear the saved
+checkpoint. Respawn uses the arrival elevator with fresh transient run state
+and a full flashlight; same-building evidence and completed recordings remain.
 
 The sequence reads as a physical and psychological descent:
 

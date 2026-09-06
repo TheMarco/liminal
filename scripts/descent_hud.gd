@@ -92,7 +92,7 @@ func set_photo_proximity(value: float) -> void:
 
 
 func set_photo_progress(count: int, required: int) -> void:
-	_photo.text = "PHOTOS %d/%d" % [count, required]
+	_photo.text = "PHOTOS %d/%d" % [mini(count, required), required]
 	VhsOsd.set_ink(_photo, VhsOsd.INK if count >= required else VhsOsd.INK_DIM)
 
 

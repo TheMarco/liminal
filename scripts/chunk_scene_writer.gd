@@ -316,6 +316,10 @@ func runtime_shortcut_clearance_rects() -> Array[Rect2]:
 	return _host._runtime_shortcut_clearance_rects().duplicate()
 
 
+func doorway_clearance_rects() -> Array[Rect2]:
+	return _host._doorway_clearance_rects().duplicate()
+
+
 func rope_barrier(pos: Vector3, yaw: float, kind: String) -> Node3D:
 	return _host._rope_barrier(pos, yaw, kind)
 

@@ -99,6 +99,7 @@ var fallback_tier := 0
 var min_dist := MIN_DIST_FIRST
 var max_dist := MAX_DIST_FIRST
 var topology: DescentTopology
+var casino_landmarks: Dictionary = {}
 
 var _origin_distance := {}
 var _next := {}
@@ -116,6 +117,7 @@ static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 	route.theme = floor_theme
 	route.floor_idx = p_floor_idx
 	route._build()
+	route.casino_landmarks = CasinoLandmarks.plan(route)
 	return route
 
 
@@ -487,6 +489,8 @@ func _optional_vhs_candidates(path: Array[Vector2i], dry_pool_only: bool) \
 			continue
 		var room := WorldGen.annex_room_id(world_seed, c) if theme == 2 \
 			else WorldGen.room_id(world_seed, c)
+		if casino_landmarks.has(room):
+			continue
 		if seen_rooms.has(room):
 			continue
 		seen_rooms[room] = true

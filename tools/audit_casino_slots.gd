@@ -20,6 +20,33 @@ func local_transform(node: Node3D, ancestor: Node3D) -> Transform3D:
 	return xf
 
 
+func sign_support_checks(chunk: Chunk) -> int:
+	var signs := 0
+	for label in chunk.find_children("*", "Label3D", true, false):
+		if label.text != "S L O T S":
+			continue
+		signs += 1
+		var xf := local_transform(label, chunk)
+		# Probe behind both ends of the letters and their lower neon tube.
+		# Actual wall collision must support the complete sign, even when the
+		# room's cabinets have been shifted away from the furnishing anchor.
+		for x in [-0.9, 0.0, 0.9]:
+			for y in [0.0, -0.32]:
+				var point := xf * Vector3(x, y, -0.10)
+				var supported := false
+				for collider in chunk.body.get_children():
+					if not collider is CollisionShape3D or not collider.shape is BoxShape3D:
+						continue
+					var local: Vector3 = collider.transform.affine_inverse() * point
+					var half: Vector3 = collider.shape.size * 0.5
+					if absf(local.x) <= half.x and absf(local.y) <= half.y and absf(local.z) <= half.z:
+						supported = true
+						break
+				check(supported, "Floating SLOTS sign: seed=%d cell=%s room=%d point=%s" % [
+					chunk.wseed, chunk.cell, chunk.room_n, point])
+	return signs
+
+
 func _init() -> void:
 	call_deferred("run")
 
@@ -78,6 +105,7 @@ func run() -> void:
 	var rooms := 0
 	var machines := 0
 	var kinds := {}
+	var sign_rooms := {"single": 0, "merged": 0}
 	for si in 4:
 		ws = WorldGen.level_seed(WorldGen.h(920713, si * 43, si * 79, 2219) | 1, 0)
 		for x in range(-5, 6):
@@ -86,6 +114,9 @@ func run() -> void:
 				if WorldGen.room_id(ws, cell) != cell or WorldGen.cell_style(ws, cell, 0) != WorldGen.STYLE_SLOTS:
 					continue
 				var generated := Chunk.new(ws, cell, 0)
+				var sign_count := sign_support_checks(generated)
+				var room_kind := "single" if generated.room_n == 1 else "merged"
+				sign_rooms[room_kind] += sign_count
 				check(generated.doorway_clearance_violations() == 0, "Casino doorway blocked")
 				check(generated.slot_back_violations() == 0 and generated.slot_front_violations() == 0, "Missing cabinet volume")
 				for node in generated.get_children():
@@ -97,6 +128,8 @@ func run() -> void:
 				rooms += 1
 				generated.free()
 	check(rooms > 0 and machines > 0 and kinds.size() == 4, "Missing generated cabinet variety")
+	check(sign_rooms.single > 0 and sign_rooms.merged > 0, "Missing single/merged room sign coverage")
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	print("CASINO_SLOTS: triangles=%s, 16 orientation/ceiling cases, %d rooms, %d cabinets, variants=%s, failures=%d" % [totals, rooms, machines, kinds, failures])
+	print("SLOTS wall support: %s" % sign_rooms)
 	quit(1 if failures else 0)

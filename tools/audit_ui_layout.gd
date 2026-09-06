@@ -33,7 +33,7 @@ func run() -> void:
 	view.add_child(intro)
 	intro._video.stop()
 	var buttons: Array[Node] = title._pages[TitleScreen.Page.MAIN].find_children("*", "Button", true, false)
-	expect(buttons.size() == 7, "Saved title lost an action")
+	expect(buttons.size() == 8, "Saved title lost an action")
 	for size in [Vector2i(1280,720), Vector2i(1920,1080), Vector2i(1024,768),
 			Vector2i(720,1280), Vector2i(3840,2160), Vector2i(1280,720)]:
 		view.size = size
@@ -53,6 +53,6 @@ func run() -> void:
 					"Saved title buttons overlap")
 	view.free()
 	await process_frame
-	print("UI layout: %s (six live resize states, seven saved-run actions)" %
+	print("UI layout: %s (six live resize states, eight saved-run actions)" %
 		("PASS" if failures == 0 else "FAIL"))
 	quit(0 if failures == 0 else 1)

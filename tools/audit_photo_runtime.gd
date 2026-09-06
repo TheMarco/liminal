@@ -52,6 +52,7 @@ func run() -> void:
 			at = cell
 			break
 	expect(at.x != 1 << 30, "plan has no required cell")
+	game.cm.stream_focus = Vector3(at.x * 12.0 + 6, 0.0, at.y * 12.0 + 6)
 	game.cm.warm_up(at)
 	var spawned := await await_until(func() -> bool:
 		return director._live.has(at) \

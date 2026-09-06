@@ -251,9 +251,9 @@ func _check_connected_coping(ws: int, cell: Vector2i, chunk: Chunk,
 			var own_span := _transverse_span(waters[0], dir)
 			var nb_span := _transverse_span(
 				nb_waters[0], WorldGen.OPP[dir])
-			if absf(own_span.x - nb_span.x) > 0.18:
+			if absf(own_span.x - nb_span.x) > 0.01:
 				expected_sides["low"] = true
-			if absf(own_span.y - nb_span.y) > 0.18:
+			if absf(own_span.y - nb_span.y) > 0.01:
 				expected_sides["high"] = true
 		nb_chunk.free()
 		if matching.size() != expected_sides.size():

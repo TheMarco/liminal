@@ -96,6 +96,13 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 	var used_types := {}
 	var slot := 0
 	var spine := spine_count_for(p_route.floor_idx, p_route.theme)
+	for at in p_route.casino_landmarks:
+		if p_route.casino_landmarks[at] == CasinoLandmarks.PHONE:
+			out[at] = {"id": "casino_number:%d:%d" % [at.x, at.y],
+				"type": PhotoAnomaly.Type.NUMBERED_DOOR, "wall_dir": -1,
+				"wall_along": 6.0, "required": true}
+			spine -= 1
+			break
 	for fraction in route_fractions(spine):
 		var idx := clampi(int(float(path.size()) * float(fraction)),
 			1, path.size() - 2)
@@ -278,6 +285,11 @@ func capturable() -> Array[PhotoAnomaly]:
 	# (owner rule 2026-08-19). The undocumented ones stay in the world as
 	# set dressing for whoever notices.
 	if requirement_met():
+		var live: Array[PhotoAnomaly] = []
+		_collect_capturable(_live, live)
+		for node in live:
+			if node.type == PhotoAnomaly.Type.NUMBERED_DOOR:
+				out.append(node)
 		return out
 	_collect_capturable(_live, out)
 	# Bleed marks: one counted credit per floor while the hunt is open, but
@@ -337,6 +349,20 @@ func _on_chunk_built(chunk: Chunk) -> void:
 	# Target and arrival rooms never carry evidence; the plan already avoids
 	# them, and the arrival flag guards a respawned arrival reality too.
 	if chunk.descent_target or chunk.descent_arrival:
+		return
+	if int(spec["type"]) == PhotoAnomaly.Type.NUMBERED_DOOR:
+		for plate in chunk.find_children("NumberPlate", "Label3D", true, false):
+			if not plate.has_meta("casino_number_plate"):
+				continue
+			if _documented.has(str(spec["id"])):
+				plate.text = "106"
+				return
+			var number := PhotoAnomaly.new()
+			chunk.add_child(number)
+			number.configure_numbered_door(str(spec["id"]), chunk.cell, plate)
+			_live[chunk.cell] = number
+			return
+		push_error("Numbered photo door missing in landmark %s" % chunk.cell)
 		return
 	# A documented anomaly stays resolved: a rebuilt cell returns to normal
 	# instead of resurrecting the wrongness the photograph settled.

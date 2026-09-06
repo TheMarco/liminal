@@ -97,6 +97,11 @@ func surface_height(at: Vector3, exclude: Array[RID] = []) -> float:
 	for surface in _surfaces:
 		if not is_instance_valid(surface) or not surface.is_inside_tree(): continue
 		if distance_to_surface(surface, at) > 0.001: continue
+		if surface.has_meta("pool_water_outline"):
+			var local := surface.to_local(at)
+			if not Geometry2D.is_point_in_polygon(Vector2(local.x, local.z),
+					surface.get_meta("pool_water_outline")):
+				continue
 		height = maxf(height, surface.global_position.y)
 	if height == DRY: return DRY
 	var point := Vector3(at.x, height, at.z)

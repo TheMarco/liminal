@@ -3,6 +3,9 @@ extends RefCounted
 
 static func cases() -> Array:
 	return [
+		{"name":"pool-diving-board", "theme":9, "method":"_pool_equipment", "args":[0, Vector3(6, 0, 6), 0.0]},
+		{"name":"pool-slide-straight", "theme":9, "method":"_pool_equipment", "args":[1, Vector3(6, 0, 6), 0.0]},
+		{"name":"pool-slide-spiral", "theme":9, "method":"_pool_equipment", "args":[2, Vector3(6, 0, 6), 0.0]},
 		{"name":"airport-column", "theme":4, "method":"_air_column", "args":[Vector2(6, 6)]},
 		{"name":"airport-trolley", "theme":4, "method":"_air_trolley", "args":[Vector3(6, 0, 6), 0.0, 7, 1]},
 		{"name":"airport-stanchions", "theme":4, "method":"_stanchion_line", "args":[Vector3(3, 0, 6), Vector3(9, 0, 6), 4]},

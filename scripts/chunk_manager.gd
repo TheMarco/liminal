@@ -287,6 +287,8 @@ func _build_spec(c: Vector2i, topology_state_override := -1) -> ChunkBuildSpec:
 	if descent and descent_route != null:
 		var optional_vhs := _is_optional_vhs_cell(c)
 		spec.descent = true
+		spec.casino_landmark = str(descent_route.casino_landmarks.get(
+			WorldGen.room_id(world_seed, c), ""))
 		spec.target = c == descent_route.target
 		spec.target_wall = descent_route.target_wall
 		spec.final = descent_floor_idx >= DescentRun.FLOOR_COUNT - 1

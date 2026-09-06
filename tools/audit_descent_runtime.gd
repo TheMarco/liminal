@@ -92,9 +92,26 @@ func run() -> void:
 		AudioServer.set_bus_mute(game_bus, was_muted)
 	expect(game.player._walk_p.bus == SoundBank.GAME_BUS \
 			and game.player._wade_p.bus == SoundBank.GAME_BUS \
-			and game.ambience.bus == SoundBank.GAME_BUS \
-			and game._music.bus == SoundBank.GAME_BUS,
-		"a persistent background/movement source bypasses the Game bus")
+			and game.ambience.bus == SoundBank.GAME_BUS,
+		"a persistent world-effect source bypasses the Game bus")
+	var music_bus := AudioServer.get_bus_index(game.MUSIC_BUS)
+	expect(music_bus >= 0 and game._music.bus == game.MUSIC_BUS,
+		"music does not use its independent volume bus")
+	if music_bus >= 0:
+		expect(AudioServer.get_bus_send(music_bus) == "Master",
+			"music is affected by the world-effects volume bus")
+	# Headless startup can reach this check before the soundtrack fade-in
+	# tween starts playback. A stopped stream has no paused playback state.
+	if not game._music.playing:
+		game._music.stream = load(game._music_track_for(game.active_level))
+		game._music.play()
+	expect(game._music.playing, "soundtrack could not start for the playback check")
+	game.descent_tape_watch(true)
+	expect(game._music.stream_paused,
+		"VCR watch did not pause the independently routed music")
+	game.descent_tape_watch(false)
+	expect(not game._music.stream_paused,
+		"VCR release did not resume the music")
 	# Exercise entry selection against an isolated checkpoint file. The CLI run
 	# itself keeps persistence disabled and never touches the player's save.
 	var test_progress := DescentProgress.new(

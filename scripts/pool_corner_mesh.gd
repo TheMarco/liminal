@@ -14,6 +14,32 @@ static func clear_runtime_cache() -> void:
 	_mesh_cache_order.clear()
 	_straight_bullnose_cache.clear()
 
+
+## Solid deck extrusion from the same plan boundary used by its coping.
+## Convex collision pieces are built separately from this exact polygon.
+static func deck_polygon(polygon: PackedVector2Array, y0: float, y1: float) -> ArrayMesh:
+	var indices := Geometry2D.triangulate_polygon(polygon)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(0, indices.size(), 3):
+		var a := polygon[indices[i]]
+		var b := polygon[indices[i + 1]]
+		var c := polygon[indices[i + 2]]
+		_tri(st, Vector3(a.x,y1,a.y), Vector3(b.x,y1,b.y), Vector3(c.x,y1,c.y),
+			Vector3.UP, Vector3.UP, Vector3.UP)
+		_tri(st, Vector3(a.x,y0,a.y), Vector3(b.x,y0,b.y), Vector3(c.x,y0,c.y),
+			Vector3.DOWN, Vector3.DOWN, Vector3.DOWN)
+	var clockwise := Geometry2D.is_polygon_clockwise(polygon)
+	for i in polygon.size():
+		var a := polygon[i]
+		var b := polygon[(i + 1) % polygon.size()]
+		var edge := b - a
+		var out := Vector2(-edge.y, edge.x).normalized() * (1.0 if clockwise else -1.0)
+		var normal := Vector3(out.x, 0, out.y)
+		_quad(st, Vector3(a.x,y0,a.y), Vector3(b.x,y0,b.y),
+			Vector3(b.x,y1,b.y), Vector3(a.x,y1,a.y), normal, normal, normal, normal)
+	return st.commit()
+
 static func _cached(key_args: Array, builder: Callable) -> ArrayMesh:
 	var key := var_to_bytes(key_args).hex_encode()
 	if _mesh_cache.has(key):
@@ -219,17 +245,19 @@ static func _annular_bullnose_build(center: Vector2, radial_start: Vector2,
 ## an S bend. `water_side` selects which perpendicular to the path faces water.
 static func path_bullnose(path: Array[Vector2], water_side: float,
 		deck_span: float, water_overhang: float,
-		y_mid: float, height: float, nose_segments: int = 8) -> ArrayMesh:
+		y_mid: float, height: float, nose_segments: int = 8,
+		endpoint_tangent := Vector2.ZERO) -> ArrayMesh:
 	return _cached(
 		["path_bullnose", path, water_side, deck_span, water_overhang,
-		y_mid, height, nose_segments],
+			y_mid, height, nose_segments, endpoint_tangent],
 		func(): return _path_bullnose_build(
 			path, water_side, deck_span, water_overhang, y_mid, height,
-			nose_segments))
+				nose_segments, endpoint_tangent))
 
 static func _path_bullnose_build(path: Array[Vector2], water_side: float,
 		deck_span: float, water_overhang: float,
-		y_mid: float, height: float, nose_segments: int = 8) -> ArrayMesh:
+		y_mid: float, height: float, nose_segments: int = 8,
+		endpoint_tangent := Vector2.ZERO) -> ArrayMesh:
 	if path.size() < 2:
 		return ArrayMesh.new()
 	var profile := _bullnose_profile(
@@ -241,6 +269,8 @@ static func _path_bullnose_build(path: Array[Vector2], water_side: float,
 		var prev: Vector2 = path[maxi(0, i - 1)]
 		var next: Vector2 = path[mini(path.size() - 1, i + 1)]
 		var tangent := (next - prev).normalized()
+		if endpoint_tangent != Vector2.ZERO and (i == 0 or i == path.size() - 1):
+			tangent = endpoint_tangent.normalized()
 		if tangent == Vector2.ZERO:
 			tangent = Vector2.RIGHT
 		tangents.append(tangent)

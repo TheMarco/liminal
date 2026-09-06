@@ -30,6 +30,10 @@ func _run() -> void:
 	progress.record_short_tape(randoms[0])
 	progress.record_short_tape(randoms[0])
 	progress.record_short_tape(randoms[1])
+	progress.record_objective_tape(0)
+	progress.record_objective_tape(0)
+	progress.record_objective_tape(-1)
+	progress.record_objective_tape(DescentRun.FLOOR_COUNT - 1)
 	progress.record_beginning_tapes_completed(3)
 	progress.record_mutation_state(6, 4, [0, 1, 4], "state-four",
 		["base", "state-one", "state-four"])
@@ -44,6 +48,10 @@ func _run() -> void:
 		"optional tape history did not de-duplicate")
 	_expect(progress.completed_beginning_tapes == 3,
 		"ordered beginning progress did not advance")
+	_expect(progress.objective_tape_completed(0),
+		"completed objective recording was not recognized")
+	_expect(progress.objective_tapes.size() == 1,
+		"objective recording did not de-duplicate or reject invalid floors")
 	_expect(int(progress.mutation_state_for_floor(6).get("state", -1)) == 4,
 		"floor reality state did not record")
 
@@ -56,6 +64,11 @@ func _run() -> void:
 		"optional tape cycle did not survive relaunch")
 	_expect(loaded.completed_beginning_tapes == 3,
 		"ordered beginning progress did not survive relaunch")
+	_expect(loaded.objective_tape_completed(0),
+		"completed objective recording did not survive relaunch")
+	_expect(not loaded.objective_tape_completed(-1) \
+		and not loaded.objective_tape_completed(DescentRun.FLOOR_COUNT - 1),
+		"invalid objective floor was accepted")
 	var restored_mutation := loaded.mutation_state_for_floor(6)
 	_expect(int(restored_mutation.get("state", -1)) == 4 \
 		and restored_mutation.get("visited", []) == [0, 1, 4] \
@@ -92,6 +105,8 @@ func _run() -> void:
 	loaded.reach_floor(111, 0)
 	_expect(loaded.deepest_floor == 6,
 		"same-seed floor revisit erased the deeper unlock")
+	_expect(loaded.objective_tape_completed(0),
+		"same-seed floor revisit erased objective completion")
 	loaded.start_new(222)
 	_expect(loaded.run_seed == 222 and loaded.deepest_floor == 0,
 		"New Descent did not establish a fresh floor-one checkpoint")
@@ -103,6 +118,36 @@ func _run() -> void:
 		"New Descent inherited the old building realities")
 	_expect(loaded.runtime_states.is_empty(),
 		"New Descent inherited the old runtime object state")
+	_expect(loaded.objective_tapes.is_empty(),
+		"New Descent inherited completed objective recordings")
+
+	# A new seed reached directly through the floor transition also replaces
+	# the checkpoint and does not inherit objective recordings.
+	loaded.start_new(333)
+	loaded.record_objective_tape(0)
+	loaded.reach_floor(444, 1)
+	_expect(loaded.run_seed == 444 and loaded.objective_tapes.is_empty(),
+		"new-seed floor reach inherited objective recordings")
+
+	# Legacy version three files preserve runtime state but have no invented
+	# objective completions; an obsolete chapter string is rejected as well.
+	var legacy := ConfigFile.new()
+	legacy.set_value("descent", "version", 3)
+	legacy.set_value("descent", "run_seed", 555)
+	legacy.set_value("descent", "deepest_floor", 2)
+	legacy.set_value("descent", "runtime_states", {
+		"2": {"schema": 1, "objects": {door_key: {
+			"kind": "swing_door", "payload": {"open": true}}}}})
+	legacy.set_value("descent", "objective_tapes", {
+		"0": "obsolete-objective-chapter"})
+	legacy.save(TEST_PATH)
+	var legacy_loaded := DescentProgress.new(TEST_PATH)
+	_expect(legacy_loaded.run_seed == 555 \
+		and not legacy_loaded.objective_tape_completed(0),
+		"version three migration invented or accepted an obsolete objective")
+	_expect(legacy_loaded.runtime_state_for_floor(2).kind_for(door_key)
+		== "swing_door",
+		"version three migration discarded runtime door data")
 
 	# Restoring exclusions into a recreated run must deal an unseen short.
 	if randoms.size() >= 3 and not beginnings.is_empty():

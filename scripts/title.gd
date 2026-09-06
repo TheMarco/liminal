@@ -7,6 +7,7 @@ extends CanvasLayer
 
 signal mode_selected(descent: bool)
 signal started(descent: bool)
+signal settings_requested
 signal descent_requested(entry: int)
 
 enum DescentEntry {
@@ -37,7 +38,7 @@ const INSTRUCTION_ROWS := [
 	["V", "Toggle the video filter"],
 	["B", "Switch CRT / recovered-tape video mode"],
 	["Q", "Ask to leave the current mode"],
-	["ESC", "Release the mouse"],
+	["ESC", "Pause / settings"],
 ]
 ## Every attributed creator named in THIRD_PARTY_ASSETS.md appears here. The
 ## canonical record carries individual model titles, links and modifications.
@@ -187,12 +188,14 @@ func _build_main() -> void:
 		_footer_button(menu, "ENTER  DESCENT",
 			func(): _select_descent(DescentEntry.NEW))
 	# Keep saved-run actions together and the reference pages on their own row.
-	# Seven full-size buttons cannot fit in one title-safe 16:9 footer.
+	# Keep the full action set within the title-safe footer.
 	var info := HBoxContainer.new()
 	info.alignment = BoxContainer.ALIGNMENT_CENTER
 	info.add_theme_constant_override("separation", 8)
 	info.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_main_dock.add_child(info)
+	_footer_button(info, "S  SETTINGS",
+		func(): settings_requested.emit())
 	_footer_button(info, "I  INSTRUCTIONS",
 		func(): _set_page(Page.INSTRUCTIONS))
 	_footer_button(info, "A  ABOUT",
@@ -569,6 +572,8 @@ func _input(event: InputEvent) -> void:
 			KEY_N:
 				if _has_descent_progress:
 					_select_descent(DescentEntry.NEW)
+			KEY_S:
+				settings_requested.emit()
 			KEY_I:
 				_set_page(Page.INSTRUCTIONS)
 			KEY_A:
