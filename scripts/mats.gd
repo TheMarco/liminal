@@ -1962,8 +1962,7 @@ static func bloom_spore() -> StandardMaterial3D:
 
 # --- the Poolrooms ------------------------------------------------------------
 
-## Seamless ripple normal map for the water. The spec asks for a 2048 OpenGL
-## normal map; generating it rather than shipping one keeps the floor free of
+## Seamless 1024px ripple normal map for the water. Generating it keeps the floor free of
 ## another downloaded dependency and lets the ripple be tuned in code. Low
 ## frequency and many octaves is what makes it read as calm water rather than
 ## as hammered metal.
@@ -2046,13 +2045,11 @@ static func pool_water() -> ShaderMaterial:
 	return m
 
 
-## The Mall fountain uses the Poolrooms' exact water shader and ripple normal,
-## but owns a separate material instance. The live Poolrooms tuning panel
-## mutates `pool_water()`; a distinct cache entry keeps that dev control from
-## unexpectedly recolouring a Mall that happens to be streamed at the time.
+## The Mall keeps its existing fountain treatment. Poolrooms absorption and
+## reflection tuning must not change this much shallower decorative basin.
 static func mall_fountain_water() -> ShaderMaterial:
 	var m := _shader(
-		"mall_fountain_water", "res://shaders/pool_water.gdshader")
+		"mall_fountain_water", "res://shaders/fountain_water.gdshader")
 	m.set_shader_parameter("normal_tex", pool_ripple_normal())
 	return m
 

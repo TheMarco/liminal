@@ -167,5 +167,11 @@ jobs:
       - name: Audit Pool Rooms scale
         run: godot --headless --path . --script tools/audit_pool_scale.gd
 
+      - name: Audit Pool Rooms water and reflection lifecycle
+        run: godot --headless --path . --script tools/audit_pool_water.gd
+
+      - name: Audit Pool Rooms player water interaction
+        run: godot --headless --path . --script tools/audit_pool_water_interaction.gd
+
       - name: Build distributable resource pack
         run: godot --headless --quiet --path . --export-pack "macOS" "$RUNNER_TEMP/It wants you to stay-ci.pck"

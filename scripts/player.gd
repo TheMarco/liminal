@@ -56,6 +56,7 @@ const WADE_ACCEL := 0.45
 ## game has to grow a collision shape it did not need.
 const LADDER_LAYER := 8
 const CLIMB_SPEED := 2.1
+const WaterInteraction = preload("res://scripts/pool_water_interaction.gd")
 
 signal interaction_prompt_changed(text: String)
 
@@ -71,8 +72,10 @@ var _charge_session_active := false
 var water_y := -1.0e9
 var _on_ladder := false
 var _was_submerged := false
+var _water_audio_primed := false
 var _wade_p: AudioStreamPlayer
 var _splash_p: AudioStreamPlayer
+var _water_fx: WaterInteraction
 var _flash_t := 0.0
 var _bob := 0.0
 ## 0..1. A sealed lift car gives the eye nothing to move against, so the ride
@@ -174,6 +177,9 @@ func _ready() -> void:
 ## Move without the camera sweeping across the world to catch up — the
 ## interpolation would otherwise smear from the old position for a tick.
 func teleport(to: Vector3) -> void:
+	if _water_fx != null: _water_fx.reset()
+	_was_submerged = false
+	_water_audio_primed = false
 	global_position = to
 	velocity = Vector3.ZERO
 	_prev_pos = to
@@ -371,8 +377,10 @@ func _physics_process(dt: float) -> void:
 	if photo_aim:
 		speed *= 0.6
 
-	# Chest deep in water you do not stride, and you certainly do not sprint.
-	var submerged := global_position.y + 0.55 < water_y
+	# Actual basin/spa footprint and surface height; dry decking and islands
+	# must not generate a wake, and the inset spas sit above the pool basins.
+	var local_water := _water_surface_here()
+	var submerged := global_position.y + 0.55 < local_water
 	if submerged:
 		speed *= WADE_SPEED
 
@@ -411,7 +419,11 @@ func _physics_process(dt: float) -> void:
 	if is_on_floor() and not _was_floor:
 		_land = clampf(-vy_before * 0.02, 0.0, 0.15)
 
-	_update_water_audio(dt, submerged)
+	if _water_fx != null:
+		local_water = _water_fx.surface_height(global_position, [get_rid()])
+		_water_fx.sample_motion(dt, global_position,
+			Vector2(velocity.x, velocity.z), vy_before, local_water)
+	_update_water_audio(dt, _water_fx != null and _water_fx._wet)
 	_was_floor = is_on_floor()
 	_land = lerpf(_land, 0.0, minf(1.0, dt * 6.0))
 	_strafe = input.x
@@ -543,6 +555,7 @@ func _update_walk(dt: float) -> void:
 ## loop cannot observe the zeroed velocity. Cut movement loops explicitly at
 ## that boundary; normal physics restarts them only if movement resumes.
 func stop_motion_audio() -> void:
+	if _water_fx != null: _water_fx.reset()
 	_walk_vol = -60.0
 	if _walk_p != null:
 		_walk_p.volume_db = -60.0
@@ -550,6 +563,19 @@ func stop_motion_audio() -> void:
 	if _wade_p != null:
 		_wade_p.volume_db = -60.0
 		_wade_p.stop()
+
+
+func _water_surface_here() -> float:
+	if water_y < -1.0e8:
+		if _water_fx != null:
+			_water_fx.reset()
+			_water_fx.queue_free()
+			_water_fx = null
+		return -1.0e9
+	if _water_fx == null:
+		_water_fx = WaterInteraction.new()
+		add_child(_water_fx)
+	return _water_fx.surface_height(global_position, [get_rid()])
 
 
 ## Is the player standing in a pool ladder's climbable volume?
@@ -573,6 +599,9 @@ func _ladder_here() -> bool:
 func _update_water_audio(dt: float, submerged: bool) -> void:
 	if _wade_p == null:
 		return
+	if not _water_audio_primed:
+		_was_submerged = submerged
+		_water_audio_primed = true
 	if submerged != _was_submerged:
 		_was_submerged = submerged
 		if water_y > -1.0e8 and _splash_p != null:

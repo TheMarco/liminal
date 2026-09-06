@@ -807,6 +807,7 @@ var _descent_arrival_rig := {}
 var _blackout := false
 var _blackout_lights := {}
 var _blackout_meshes := {}
+var _pool_reflection: ReflectionProbe
 var _furnishing_group_serial := 0
 ## Stable semantic identities for objects whose generated node instances may
 ## disappear during streaming or a reality rebuild. Kept outside scene metadata
@@ -1759,6 +1760,9 @@ func _maybe_probe() -> void:
 		# Annex member-cell architecture is built before its lighting, above,
 		# so fixtures can reserve an unobstructed ceiling tile.
 		return
+	if theme == 9:
+		_maybe_pool_probe()
+		return
 	var want := false
 	if theme == 0:
 		want = style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_SLOTS \
@@ -1790,6 +1794,49 @@ func _maybe_probe() -> void:
 	probe.box_projection = true
 	probe.interior = true
 	probe.max_distance = 24.0
+	add_child(probe)
+
+
+func _maybe_pool_probe() -> void:
+	var wet := not pool_style_dry(style)
+	var surface: MeshInstance3D
+	for node in find_children("*", "MeshInstance3D", true, false):
+		if node.has_meta("pool_water_surface") or node.has_meta("pool_jacuzzi_water"):
+			surface = node
+			wet = true
+			break
+	if not wet:
+		return
+	var members := _room_members()
+	var lo := Vector2i(1 << 20, 1 << 20)
+	var hi := -lo
+	var required: Array[Vector2i] = []
+	for member in members:
+		lo = lo.min(member)
+		hi = hi.max(member)
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				var neighbour := member + Vector2i(dx, dz)
+				if neighbour not in required:
+					required.append(neighbour)
+	var probe = preload("res://scripts/pool_reflection_probe.gd").new()
+	probe.required_cells = required
+	probe.cull_mask &= ~(PhotoAnomaly.PHOTO_LAYER | PhotoAnomaly.PRINT_LAYER \
+		| probe.WATER_LAYER)
+	var centre := (Vector2(lo) + Vector2(hi) + Vector2.ONE) * S * 0.5
+	probe.position = Vector3(centre.x - cell.x * S, ceil_h * 0.5,
+		centre.y - cell.y * S)
+	probe.size = Vector3((hi.x - lo.x + 1) * S + 1.0, ceil_h + 0.6,
+		(hi.y - lo.y + 1) * S + 1.0)
+	if surface != null:
+		# Room centres often contain a full-height pier. Capture just above an
+		# open quarter of the basin instead of from inside that solid column.
+		var water_size: Vector2 = surface.mesh.size
+		probe.origin_offset = surface.position + Vector3(water_size.x * 0.28,
+			0.24, water_size.y * 0.24) - probe.position
+	probe.max_distance = maxf(24.0, probe.size.length())
+	probe.set_blackout(_blackout)
+	_pool_reflection = probe
 	add_child(probe)
 
 
@@ -6148,6 +6195,8 @@ func _descent_finish(actor: Node, finish: Area3D, approach: Area3D) -> void:
 ## Blackout is a reversible overlay. Snapshot each light's exact visible and
 ## energy state; restoring never resurrects a fixture that was already dead.
 func set_blackout(on: bool) -> void:
+	if is_instance_valid(_pool_reflection):
+		_pool_reflection.set_blackout(on)
 	if on:
 		if _blackout or not _blackout_lights.is_empty() \
 				or not _blackout_meshes.is_empty():

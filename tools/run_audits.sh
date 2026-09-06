@@ -119,6 +119,8 @@ AUDITS=(
 	"pool_scale|tools/audit_pool_scale.gd|"
 	"pool_crossings|tools/audit_pool_crossings.gd|"
 	"pool_environment|tools/audit_pool_environment.gd|"
+	"pool_water|tools/audit_pool_water.gd|"
+	"pool_water_interaction|tools/audit_pool_water_interaction.gd|"
 	"pool_heights|tools/audit_pool_heights.gd|"
 	"pool_jacuzzi|tools/audit_pool_jacuzzi.gd|"
 	"pool_minerals|tools/audit_pool_minerals.gd|"

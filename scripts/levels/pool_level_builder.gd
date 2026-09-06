@@ -307,9 +307,13 @@ func _pool_floor_ceiling() -> void:
 	var water = MeshInstance3D.new()
 	water.mesh = surf
 	water.material_override = Mats.pool_water()
+	water.layers = preload("res://scripts/pool_reflection_probe.gd").WATER_LAYER
 	water.position = Vector3(center.x, Chunk.POOL_WATER_Y, center.y)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Keep the shader's small wave crests inside the render culling bounds.
+	water.extra_cull_margin = 0.03
 	water.set_meta("pool_water_surface", true)
+	water.add_to_group("pool_water_surfaces")
 	water.set_meta("pool_water_size", size)
 	water.set_meta("pool_water_center", center)
 	water.set_meta("pool_water_connected", bool(layout["connected"]))
@@ -1806,12 +1810,16 @@ func _pool_jacuzzi(at: Vector3, yaw: float) -> bool:
 	var water := MeshInstance3D.new()
 	water.mesh = water_mesh
 	water.material_override = Mats.pool_water()
+	water.layers = preload("res://scripts/pool_reflection_probe.gd").WATER_LAYER
 	water.position = Vector3(
 		POOL_JACUZZI_CENTRE_OFFSET.x,
 		Chunk.POOL_DRY_Y - POOL_JACUZZI_WATER_INSET - pivot.position.y,
 		POOL_JACUZZI_CENTRE_OFFSET.y)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Keep the shader's small wave crests inside the render culling bounds.
+	water.extra_cull_margin = 0.03
 	water.set_meta("pool_jacuzzi_water", true)
+	water.add_to_group("pool_water_surfaces")
 	pivot.add_child(water)
 	_pool_jacuzzi_exit_volume(at)
 	return true
