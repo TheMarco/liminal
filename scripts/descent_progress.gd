@@ -6,13 +6,15 @@ extends RefCounted
 
 const SAVE_PATH := "user://descent_progress.cfg"
 const SECTION := "descent"
-const VERSION := 4
-const LEGACY_VERSIONS := [1, 2, 3]
+const VERSION := 6
+const LEGACY_VERSIONS := [1, 2, 3, 4, 5]
 
 var run_seed := 0
 var deepest_floor := -1
 var seen_short_tapes: Array[String] = []
 var completed_beginning_tapes := 0
+var emergency_flash_held := false
+var emergency_flash_photo_id := ""
 ## Current generated reality per floor. State ids are deterministic for a
 ## seed/theme/floor; visited ids keep mutation-back pacing coherent after a
 ## Continue without serializing geometry or compromising WorldGen purity.
@@ -27,6 +29,9 @@ var photo_states := {}
 ## Completed objective chapters, keyed by floor and identified by the actual
 ## recording. An updated chapter still gets its first viewing.
 var objective_tapes := {}
+## Realm excursions already consumed, keyed by source floor. A visit is a
+## one-shot campaign event even if the player reloads the checkpoint.
+var realm_visits := {}
 var _save_path := SAVE_PATH
 
 
@@ -45,10 +50,13 @@ func start_new(seed: int) -> void:
 	deepest_floor = 0
 	seen_short_tapes.clear()
 	completed_beginning_tapes = 0
+	emergency_flash_held = false
+	emergency_flash_photo_id = ""
 	mutation_states.clear()
 	runtime_states.clear()
 	photo_states.clear()
 	objective_tapes.clear()
+	realm_visits.clear()
 	save_to_disk()
 
 
@@ -63,12 +71,49 @@ func reach_floor(seed: int, floor_idx: int) -> void:
 		deepest_floor = floor
 		seen_short_tapes.clear()
 		completed_beginning_tapes = 0
+		emergency_flash_held = false
+		emergency_flash_photo_id = ""
 		mutation_states.clear()
 		runtime_states.clear()
 		photo_states.clear()
 		objective_tapes.clear()
+		realm_visits.clear()
 	else:
 		deepest_floor = maxi(deepest_floor, floor)
+	save_to_disk()
+
+
+func record_emergency_flash(held: bool, photo_id: String = "") -> void:
+	if not has_checkpoint():
+		return
+	emergency_flash_held = held
+	emergency_flash_photo_id = photo_id if held else ""
+	save_to_disk()
+
+
+func realm_visit_used(floor_idx: int) -> bool:
+	if not has_checkpoint() or floor_idx < 0 or floor_idx >= DescentRun.FLOOR_COUNT - 1:
+		return false
+	return realm_visits.get(str(floor_idx), false) == true
+
+
+func mark_realm_visit_used(floor_idx: int) -> void:
+	if not has_checkpoint() or floor_idx < 0 or floor_idx >= DescentRun.FLOOR_COUNT - 1 \
+			or realm_visit_used(floor_idx):
+		return
+	realm_visits[str(floor_idx)] = true
+	save_to_disk()
+
+
+## Failed realm visits may be attempted again. Only the current floor's
+## checkpoint marker is cleared; visits on every other floor remain consumed.
+func allow_realm_visit_retry(floor_idx: int) -> void:
+	if not has_checkpoint() or floor_idx < 0 or floor_idx >= DescentRun.FLOOR_COUNT - 1:
+		return
+	var key := str(floor_idx)
+	if not realm_visits.has(key):
+		return
+	realm_visits.erase(key)
 	save_to_disk()
 
 
@@ -194,6 +239,9 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, "runtime_states", runtime_states)
 	config.set_value(SECTION, "photo_states", photo_states)
 	config.set_value(SECTION, "objective_tapes", objective_tapes)
+	config.set_value(SECTION, "realm_visits", realm_visits)
+	config.set_value(SECTION, "emergency_flash_held", emergency_flash_held)
+	config.set_value(SECTION, "emergency_flash_photo_id", emergency_flash_photo_id)
 	return config.save(_save_path)
 
 
@@ -202,10 +250,13 @@ func load_from_disk() -> bool:
 	deepest_floor = -1
 	seen_short_tapes.clear()
 	completed_beginning_tapes = 0
+	emergency_flash_held = false
+	emergency_flash_photo_id = ""
 	mutation_states.clear()
 	runtime_states.clear()
 	photo_states.clear()
 	objective_tapes.clear()
+	realm_visits.clear()
 	var config := ConfigFile.new()
 	if config.load(_save_path) != OK:
 		return false
@@ -219,6 +270,11 @@ func load_from_disk() -> bool:
 		return false
 	run_seed = saved_seed
 	deepest_floor = saved_floor
+	# Older checkpoints have no stored flash. Only a real boolean grants one.
+	var saved_flash: Variant = config.get_value(SECTION, "emergency_flash_held", false)
+	emergency_flash_held = saved_flash is bool and saved_flash
+	emergency_flash_photo_id = str(config.get_value(SECTION, "emergency_flash_photo_id", "")) \
+		if emergency_flash_held else ""
 	var paths: Variant = config.get_value(SECTION, "seen_short_tapes",
 		PackedStringArray())
 	var random_library := VhsTapeLibrary.random_paths()
@@ -304,6 +360,17 @@ func load_from_disk() -> bool:
 			if floor >= 0 and floor < DescentRun.FLOOR_COUNT - 1 \
 					and str(saved_objectives[key]) == VhsTapeLibrary.objective_chapter(floor):
 				objective_tapes[str(floor)] = str(saved_objectives[key])
+	var saved_realm_visits: Variant = config.get_value(SECTION, "realm_visits", {})
+	if saved_realm_visits is Dictionary:
+		for raw_key in saved_realm_visits:
+			var key := str(raw_key)
+			if not key.is_valid_int():
+				continue
+			var floor := int(key)
+			if floor < 0 or floor >= DescentRun.FLOOR_COUNT - 1:
+				continue
+			if saved_realm_visits[raw_key] is bool and saved_realm_visits[raw_key] == true:
+				realm_visits[str(floor)] = true
 	return true
 
 
@@ -316,7 +383,10 @@ func clear_from_disk() -> void:
 	deepest_floor = -1
 	seen_short_tapes.clear()
 	completed_beginning_tapes = 0
+	emergency_flash_held = false
+	emergency_flash_photo_id = ""
 	mutation_states.clear()
 	runtime_states.clear()
 	photo_states.clear()
 	objective_tapes.clear()
+	realm_visits.clear()

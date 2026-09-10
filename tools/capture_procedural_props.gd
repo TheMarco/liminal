@@ -101,8 +101,13 @@ func run() -> void:
 			catalog.append_array(load(path).cases())
 	var manifest: Array = []
 	for entry in catalog:
-		if not filter.is_empty() and not filter in entry.name:
-			continue
+		if not filter.is_empty():
+			var requested := false
+			for pattern in filter.split(","):
+				if pattern.strip_edges() in entry.name:
+					requested = true
+			if not requested:
+				continue
 		var view := SubViewport.new()
 		view.size = Vector2i(960, 720)
 		view.own_world_3d = true
@@ -147,6 +152,10 @@ func run() -> void:
 				node.position += shift
 		bounds.position += shift
 		stage._stage(bounds)
+		if entry.has("camera_position"):
+			for node in stage.get_children():
+				if node is Camera3D:
+					node.look_at_from_position(entry.camera_position, entry.get("camera_target", bounds.get_center()))
 		if entry.has("camera_fov"):
 			for node in stage.get_children():
 				if node is Camera3D:

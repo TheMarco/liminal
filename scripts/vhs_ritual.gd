@@ -5,8 +5,9 @@ extends Node3D
 ## the same playback ritual without changing floor progress.
 ##
 ## Playing the tape is a commitment: the camera dollies in until the tube
-## fills the view, the player is held for the running time, and the rules go
-## passive for exactly that long. Backing out early (E or Esc) rewinds it.
+## sits inside its visible cabinet, the player is held for the running time, and the rules go
+## passive for exactly that long. E or Esc rewinds an unknown recording and
+## skips one already watched to completion.
 ## Assignment and finished state leave this node via the `descent_listener`
 ## group, so optional and objective sets survive chunk streaming.
 
@@ -26,9 +27,11 @@ const CRT_SCREEN_SIZE := Vector2(0.578, 0.404)
 ## The old 550x384 target left only ~1.6 output pixels per scan line, which
 ## resampled into broad moire bands on high-DPI displays.
 const VIDEO_VIEWPORT_SIZE := Vector2i(1280, 894)
-const WATCH_SCREEN_HEIGHT := 0.93
-## The cabinet is wider on its control side. Aim slightly right of the glass so
-## the complete set shifts left in-frame and covers the last strip of room.
+## Leave enough space above and below the glass to see the physical cabinet.
+## At 93% the top/bottom bezel was almost entirely cropped during playback.
+const WATCH_SCREEN_HEIGHT := 0.72
+## The cabinet is wider on its control side. Aim slightly right of the glass
+## to center the complete television, including its speaker and controls.
 const WATCH_CAMERA_RIGHT_OFFSET := 0.065
 ## The playback camera renders only this set. A clearance bug or neighbouring
 ## streamed chunk can no longer put a wall/prop between the lens and the tube;
@@ -59,9 +62,8 @@ var _hiss: AudioStreamPlayer3D
 var _video: VideoStreamPlayer
 var _video_vp: SubViewport
 var _video_aspect: AspectRatioContainer
-var _video_post: ColorRect
-var _video_crt: Control
 var _cam: Camera3D
+var _watch_fill: OmniLight3D
 var _prev_cam: Camera3D
 var _viewer: Player
 var _discovery_light: OmniLight3D
@@ -70,6 +72,9 @@ var _playing := false
 var _watching := false
 var _tape_time := 0.0
 var _done := false
+var _playback_state: IntroPlaybackState
+var _playback_identity := ""
+var _watch_hint: CanvasLayer
 
 static var _scenes := {}
 
@@ -205,9 +210,8 @@ func _build_discovery_cue() -> void:
 	add_child(_discovery_light)
 
 
-## The video decodes into an off-screen viewport, then the shared recovered-
-## footage shader processes it at high output resolution with a 240-line signal
-## grid. That finished texture is clipped to the physical TV glass only.
+## Decode and aspect-fit only. The full-game post-process treats this raw video
+## and the physical TV cabinet together, once, after the 3D scene is rendered.
 func _ensure_video() -> bool:
 	if _tape_path.is_empty():
 		return false
@@ -243,15 +247,6 @@ func _ensure_video() -> bool:
 	_video.volume_db = 2.0
 	_video.finished.connect(_on_video_finished)
 	_video_aspect.add_child(_video)
-	_video_post = ColorRect.new()
-	_video_post.name = "RecoveredFootagePass"
-	_video_post.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_video_post.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_video_post.material = PostProcessController.make_found_footage_material(
-		PostProcessController.TV_TAPE_RESOLUTION)
-	_video_vp.add_child(_video_post)
-	_video_crt = PostProcessController.add_crt_display_pass(
-		_video_vp, PostProcessController.TV_TAPE_RESOLUTION)
 	_screen_mat.set_shader_parameter("tape_tex", _video_vp.get_texture())
 	return true
 
@@ -295,12 +290,15 @@ func _on_activated(actor: Node) -> void:
 	_screen_mat.set_shader_parameter("playing", 1.0)
 	_hiss.volume_db = -40.0
 	if _ensure_video():
+		_playback_identity = _tape_path
 		_screen_mat.set_shader_parameter("use_footage", 1.0)
 		_video_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		_video.play()
 		_refresh_video_aspect.call_deferred(_tape_path)
 	else:
 		_screen_mat.set_shader_parameter("use_footage", 0.0)
+		_playback_identity = "procedural-vhs:%d" % posmod(
+			WorldGen.h(world_seed, floor_idx, 7, 9301), 8)
 		_next_voice()
 	_begin_watch(actor as Player)
 
@@ -310,6 +308,11 @@ func _on_activated(actor: Node) -> void:
 ## also be a moment it punishes.
 func _begin_watch(viewer: Player) -> void:
 	_watching = true
+	if _playback_state == null:
+		_playback_state = IntroPlaybackState.new()
+	else:
+		_playback_state.load_from_disk()
+	_show_watch_hint()
 	_viewer = viewer
 	set_process_unhandled_input(true)
 	get_tree().call_group("descent_listener", "descent_tape_watch", true)
@@ -326,11 +329,27 @@ func _begin_watch(viewer: Player) -> void:
 		_cam = Camera3D.new()
 		_cam.fov = 50.0
 		add_child(_cam)
+		# A soft viewing light keeps the black bezel readable in dark rooms.
+		# It follows the lens and affects only the physical TV setup; the
+		# unshaded footage retains its own exposure before the shared scene pass.
+		_watch_fill = OmniLight3D.new()
+		_watch_fill.name = "PlaybackCabinetFill"
+		_watch_fill.position = Vector3(-0.25, 0.3, 0.15)
+		_watch_fill.light_color = Color(0.80, 0.87, 1.0)
+		_watch_fill.light_energy = 0.7
+		_watch_fill.light_specular = 0.25
+		_watch_fill.omni_range = 2.0
+		_watch_fill.layers = WATCH_LAYER
+		_watch_fill.light_cull_mask = WATCH_LAYER
+		_watch_fill.shadow_enabled = false
+		_watch_fill.light_volumetric_fog_energy = 0.0
+		_cam.add_child(_watch_fill)
+	_watch_fill.visible = true
 	_cam.cull_mask = WATCH_LAYER
 	_cam.global_transform = _prev_cam.global_transform
 	_cam.make_current()
-	# Fit the full tube vertically instead of zooming until its 4:3 content is
-	# cropped into the widescreen viewport. The bezel remains visible and the
+	# Frame the tube with room for the cabinet instead of filling the viewport
+	# with glass. The bezel remains visible and the
 	# footage keeps its authored pillar/letterboxing.
 	var distance := (CRT_SCREEN_SIZE.y * 0.5) \
 		/ (tan(deg_to_rad(_cam.fov * 0.5)) * WATCH_SCREEN_HEIGHT)
@@ -368,6 +387,7 @@ func _refresh_video_aspect(expected_path: String) -> void:
 
 
 func _end_watch() -> void:
+	_clear_watch_hint()
 	if not _watching:
 		return
 	_watching = false
@@ -386,6 +406,8 @@ func _end_watch() -> void:
 
 
 func _restore_viewer() -> void:
+	if is_instance_valid(_watch_fill):
+		_watch_fill.visible = false
 	if _viewer != null and is_instance_valid(_viewer):
 		_viewer.set_physics_process(true)
 		_viewer.set_process_unhandled_input(true)
@@ -396,25 +418,90 @@ func _restore_viewer() -> void:
 	_viewer = null
 
 
-## Backing out mid-tape is an interruption: the tape rewinds. The intro
-## console differs: its first viewing is mandatory (E/Esc do nothing), and
-## once the tutorial has ever been watched to the end, E/Esc SKIP it —
-## completing it, never rewinding, or the seize radius would immediately
-## restart what the player just declined.
+## Unknown ordinary recordings can be rewound; a completed recording can
+## be skipped. The arrival tutorial still requires its first full viewing.
+func _skip_available() -> bool:
+	if _done or already_watched:
+		return true
+	if _playback_state != null and _playback_state.has_viewed_video(_playback_identity):
+		return true
+	if intro:
+		var listener := _listener()
+		return (_playback_state != null and _playback_state.has_viewed_tutorial()) \
+			or (listener != null and listener.has_method("descent_intro_tape_skippable") \
+			and listener.descent_intro_tape_skippable())
+	return false
+
+
+func _show_watch_hint() -> void:
+	_clear_watch_hint()
+	var can_skip := _skip_available()
+	if intro and not can_skip:
+		return
+	_watch_hint = CanvasLayer.new()
+	_watch_hint.name = "TapePlaybackHint"
+	# Playback controls stay crisp above the tape/CRT passes (layer 100).
+	_watch_hint.layer = 110
+	add_child(_watch_hint)
+	var panel := PanelContainer.new()
+	panel.name = "Backing"
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var backing := StyleBoxFlat.new()
+	backing.bg_color = Color(0.025, 0.035, 0.03, 0.92)
+	backing.content_margin_left = 20.0
+	backing.content_margin_right = 20.0
+	backing.content_margin_top = 12.0
+	backing.content_margin_bottom = 12.0
+	panel.add_theme_stylebox_override("panel", backing)
+	_watch_hint.add_child(panel)
+	var label := Label.new()
+	label.name = "Controls"
+	label.text = "E / ESC — SKIP RECORDING" if can_skip else "E / ESC — STOP AND REWIND"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label.add_theme_font_size_override("font_size", 28)
+	label.add_theme_color_override("font_color", Color(0.88, 0.91, 0.88))
+	label.add_theme_color_override("font_shadow_color", Color.BLACK)
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(label)
+	get_viewport().size_changed.connect(_layout_watch_hint)
+	_layout_watch_hint()
+	# Containers settle their child sizes at the end of the frame.
+	_layout_watch_hint.call_deferred()
+
+
+func _layout_watch_hint() -> void:
+	if not is_instance_valid(_watch_hint):
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var ui_scale := minf(viewport_size.x / 1280.0, viewport_size.y / 720.0)
+	var panel := _watch_hint.get_node("Backing") as PanelContainer
+	panel.size = panel.get_combined_minimum_size()
+	panel.scale = Vector2.ONE * ui_scale
+	panel.position = viewport_size - (panel.size + Vector2(32.0, 32.0)) * ui_scale
+
+
+func _clear_watch_hint() -> void:
+	if get_viewport() != null and get_viewport().size_changed.is_connected(_layout_watch_hint):
+		get_viewport().size_changed.disconnect(_layout_watch_hint)
+	if is_instance_valid(_watch_hint):
+		_watch_hint.hide()
+		_watch_hint.queue_free()
+	_watch_hint = null
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not _watching or not _playing:
 		return
-	if intro:
-		var listener := _listener()
-		if listener == null \
-				or not listener.has_method("descent_intro_tape_skippable") \
-				or not listener.descent_intro_tape_skippable():
-			return
+	var can_skip := _skip_available()
+	if intro and not can_skip:
+		return
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo \
 			and (key.physical_keycode == KEY_E or key.physical_keycode == KEY_ESCAPE):
 		get_viewport().set_input_as_handled()
-		if intro:
+		if can_skip:
 			_finish_tape()
 		else:
 			reset_tape()
@@ -432,7 +519,7 @@ func _next_voice() -> void:
 
 func _on_video_finished() -> void:
 	if _playing:
-		_finish_tape()
+		_finish_tape(true)
 
 
 ## Walking out on the tape rewinds it. The recording plays for a person in
@@ -454,7 +541,12 @@ func reset_tape() -> void:
 	_present_idle()
 
 
-func _finish_tape() -> void:
+func _finish_tape(watched_to_end := false) -> void:
+	if watched_to_end:
+		if _playback_state == null:
+			_playback_state = IntroPlaybackState.new()
+		_playback_state.mark_video_viewed(_playback_identity)
+	var was_done := _done
 	_playing = false
 	_done = true
 	if _video != null:
@@ -466,12 +558,13 @@ func _finish_tape() -> void:
 			chunk = chunk.get_parent()
 		if chunk != null:
 			chunk.descent_tape_watched = true
-	if intro:
-		get_tree().call_group("descent_listener",
-			"descent_intro_tape_finished", setup_key)
-	else:
-		get_tree().call_group("descent_listener",
-			"descent_setup_tape_finished", setup_key, objective)
+	if not was_done:
+		if intro:
+			get_tree().call_group("descent_listener",
+				"descent_intro_tape_finished", setup_key)
+		else:
+			get_tree().call_group("descent_listener",
+				"descent_setup_tape_finished", setup_key, objective)
 	_end_watch()
 	_present_idle()
 
@@ -500,6 +593,7 @@ func _listener() -> Node:
 ## Restore control immediately rather than leaving the player frozen with a
 ## dead current camera and paused threats.
 func _exit_tree() -> void:
+	_clear_watch_hint()
 	if _video != null:
 		_video.stop()
 	if not _watching:
@@ -555,7 +649,7 @@ func _process(dt: float) -> void:
 			reset_tape()
 			return
 		if _tape_time >= TAPE_SECONDS:
-			_finish_tape()
+			_finish_tape(true)
 
 
 ## Seize radius for the mandatory console: the set stands in the exit path,

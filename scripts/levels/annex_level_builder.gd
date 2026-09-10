@@ -338,12 +338,12 @@ func _annex_footprint_free(p: Vector3, yaw: float, width: float,
 ## a light-leak gap beside the jamb — an "indented doorway". The route
 ## clearance system only protects the walk path, not the sightline, so test
 ## the slab's footprint against a zone projected into the room from every
-## opening on this cell's edges and refuse to stand there. Columns are exempt:
-## a small pier near a doorway reads as architecture, not as a broken frame.
+## opening on this cell's edges and refuse to stand there. Columns are exempt
+## at ordinary doors, but must respect the longer photographic approach lane.
 
 
 func _annex_blocks_doorway(p: Vector3, yaw: float,
-		width: float, depth: float) -> bool:
+		width: float, depth: float, photo_only := false) -> bool:
 	const ZONE_DEPTH = 3.2
 	const ZONE_MARGIN = 0.5
 	var cs = absf(cos(yaw))
@@ -356,23 +356,27 @@ func _annex_blocks_doorway(p: Vector3, yaw: float,
 		var info = scene.edge_info(ctx.cell, dir)
 		if bool(info["wall"]):
 			continue
+		var photo_door := bool(info.get("photo_intro", false))
+		if photo_only and not photo_door:
+			continue
+		var zone_depth := 6.7 if photo_door else ZONE_DEPTH
 		var a = float(info["t"]) - float(info["w"]) * 0.5 - ZONE_MARGIN
 		var b = float(info["t"]) + float(info["w"]) * 0.5 + ZONE_MARGIN
 		var zone_lo: Vector2
 		var zone_hi: Vector2
 		match dir:
 			0:
-				zone_lo = Vector2(WorldGen.CELL_SIZE - ZONE_DEPTH, a)
+				zone_lo = Vector2(WorldGen.CELL_SIZE - zone_depth, a)
 				zone_hi = Vector2(WorldGen.CELL_SIZE, b)
 			1:
 				zone_lo = Vector2(0.0, a)
-				zone_hi = Vector2(ZONE_DEPTH, b)
+				zone_hi = Vector2(zone_depth, b)
 			2:
-				zone_lo = Vector2(a, WorldGen.CELL_SIZE - ZONE_DEPTH)
+				zone_lo = Vector2(a, WorldGen.CELL_SIZE - zone_depth)
 				zone_hi = Vector2(b, WorldGen.CELL_SIZE)
 			3:
 				zone_lo = Vector2(a, 0.0)
-				zone_hi = Vector2(b, ZONE_DEPTH)
+				zone_hi = Vector2(b, zone_depth)
 		if lo.x < zone_hi.x and hi.x > zone_lo.x \
 				and lo.y < zone_hi.y and hi.y > zone_lo.y:
 			return true
@@ -389,9 +393,9 @@ func _annex_block(p: Vector3, yaw: float, width: float, depth: float,
 		visual_owner = "self", attached_local_end = 0) -> Node3D:
 	if kind == "annex_wall" or kind == "annex_half_wall":
 		depth = maxf(depth, Chunk.ANNEX_WALL_T)
-	if kind != "annex_column" and _annex_blocks_doorway(p, yaw, width, depth):
+	if _annex_blocks_doorway(p, yaw, width, depth, kind == "annex_column"):
 		return null
-	# Columns are exempt from the doorway rule above by design, but not from this
+	# Columns are exempt from the ordinary doorway rule, but not from this
 	# one: interpenetrating architecture is a fault on any piece, and it is the
 	# same test audit_prop_overlap.gd applies afterwards, so only a piece that
 	# would fail the build is refused here.

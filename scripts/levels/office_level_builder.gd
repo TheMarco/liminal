@@ -14,7 +14,19 @@ func _office_door_decor(dir: int, plane: float) -> void:
 		scene.cylinder(Vector3(along + 0.36, 1.05, fc + n * 0.03), 0.02, 0.12, Mats.chrome(), false)
 
 
-## Plain wall clock — the kind that makes time feel slower.
+func _office_ceiling_center(at: Vector3, panels: Vector2i) -> Vector3:
+	# Snap in world space, matching the world-triplanar ceiling material even
+	# across streamed chunks and negative cell coordinates.
+	var origin := Vector2(ctx.cell) * WorldGen.CELL_SIZE
+	var snapped := OfficeCeilingGrid.center(Vector2(at.x, at.z) + origin, panels) - origin
+	return Vector3(snapped.x, at.y, snapped.y)
+
+
+func _office_troffer(at: Vector3, panels: Vector2i, pmat: Material) -> void:
+	at = _office_ceiling_center(at, panels)
+	var lens := scene.troffer(at, OfficeCeilingGrid.lens_size(panels), pmat, Mats.metal_gray())
+	lens.set_meta("office_ceiling_fixture", "light")
+	lens.set_meta("office_ceiling_panels", panels)
 
 
 func _office_lighting() -> void:
@@ -34,13 +46,16 @@ func _office_lighting() -> void:
 	# dense, even grid of fluorescent troffers — shadowless corporate daylight
 	for gx in [3.0, 9.0]:
 		for gz in [2.1, 4.7, 7.3, 9.9]:
-			scene.troffer(Vector3(gx, 0, gz), Vector2(1.15, 0.55), pmat, Mats.metal_gray())
+			_office_troffer(Vector3(gx, 0, gz), Vector2i(2, 1), pmat)
 	# AC diffuser grilles between the light rows
 	for vp in [Vector2(6.0, 3.4), Vector2(6.0, 8.6)]:
-		scene.box(Vector3(vp.x, ctx.ceiling_height - 0.015, vp.y), Vector3(0.62, 0.03, 0.62), Mats.metal_gray(), false)
+		var at := _office_ceiling_center(Vector3(vp.x, ctx.ceiling_height - 0.015, vp.y), Vector2i.ONE)
+		var grille := scene.box(at, Vector3(OfficeCeilingGrid.PITCH, 0.03, OfficeCeilingGrid.PITCH), Mats.metal_gray(), false)
+		grille.set_meta("office_ceiling_fixture", "vent")
+		grille.set_meta("office_ceiling_panels", Vector2i.ONE)
 		for si in 4:
-			scene.box(Vector3(vp.x, ctx.ceiling_height - 0.035, vp.y - 0.21 + 0.14 * float(si)),
-				Vector3(0.54, 0.012, 0.05), Mats.charcoal(), false)
+			scene.box(Vector3(at.x, ctx.ceiling_height - 0.035, at.z - 0.225 + 0.15 * float(si)),
+				Vector3(0.60, 0.012, 0.05), Mats.charcoal(), false)
 	if dead:
 		return
 	var light = scene.main_light(flicker, pmat, 1.0)
@@ -75,14 +90,16 @@ func _office_corridor_lighting() -> void:
 		pmat = Mats.office_panel()
 	for t in [-4.5, -1.5, 1.5, 4.5]:
 		var at = scene.world_point(o, Vector3(t, 0, 0), yw)
-		scene.troffer(at, Vector2(1.15, 0.5) if along_x else Vector2(0.5, 1.15),
-			pmat, Mats.metal_gray())
+		_office_troffer(at, Vector2i(2, 1) if along_x else Vector2i(1, 2), pmat)
 	# One supply and one return grille, both kept over the corridor rather than
 	# in the inaccessible office strips.
 	for t in [-3.0, 3.0]:
 		var vp = scene.world_point(o, Vector3(t, ctx.ceiling_height - 0.018, 0.88 if t < 0.0 else -0.88), yw)
-		var grille = scene.model_box(null, vp, Vector3(0.58, 0.032, 0.58), Mats.metal_gray())
+		vp = _office_ceiling_center(vp, Vector2i.ONE)
+		var grille = scene.model_box(null, vp, Vector3(OfficeCeilingGrid.PITCH, 0.032, OfficeCeilingGrid.PITCH), Mats.metal_gray())
 		grille.rotation.y = yw
+		grille.set_meta("office_ceiling_fixture", "vent")
+		grille.set_meta("office_ceiling_panels", Vector2i.ONE)
 	if dead:
 		return
 	var light = scene.main_light(flicker, pmat, 0.82)

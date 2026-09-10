@@ -1,0 +1,20 @@
+{
+  "triangles": 3090,
+  "meshes": 2,
+  "surfaces": 2,
+  "bounds_godot_m": {
+    "min": [
+      -0.7289999723434448,
+      0.0,
+      -0.4699999988079071
+    ],
+    "max": [
+      0.731499969959259,
+      2.052500009536743,
+      0.48899999260902405
+    ]
+  },
+  "front_axis": "+Z",
+  "description": "Walk-in orange-curtain photo booth with checker floor and seated interior",
+  "texture_resolution": 1024
+}

@@ -14,7 +14,11 @@ const SHORTCUT_CENTRE := 6.0
 const MUTATION_STATE_TARGET := 7 # base reality plus six alternatives
 ## Bump whenever candidate generation or state meaning changes. Saves resolve a
 ## stable signature inside this generation instead of trusting numeric order.
-const GENERATION_VERSION := 3
+const GENERATION_VERSION := 9
+const PHOTO_DOOR_COUNT := 2
+const PHOTO_DOOR_MIN_SAVING := 4
+const INTRO_DOOR_MAX_ROOM_STEPS := 4
+const INTRO_DOOR_MAX_PATH_STEPS := 8
 const MUTATION_SEARCH_RADIUS := 3
 ## Match the resident streaming radius: a blackout may not spend work on a
 ## change outside the rooms currently present around the player.
@@ -32,6 +36,11 @@ var theme := 0
 ## blackout realities live in `_states`; this manual layer remains useful for
 ## isolated geometry probes and is applied only when a state has no opinion.
 var _shortcuts := {}
+## Reserved apertures have a physical, eye-only seal until photographed.
+## This independent layer wins over EVERY blackout reality. Saved evidence
+## IDs reconstruct it before chunks build, including a quit during photo review.
+var _photo_doors: Dictionary = {} # canonical edge key -> opening record
+var _photo_open: Dictionary = {}  # evidence id -> true
 
 ## State 0 is always the seed-authored base.  Every later state is a complete
 ## snapshot, never a delta from the previous state, which makes arbitrary
@@ -81,6 +90,8 @@ static func edge_dir(edge: Dictionary) -> int:
 
 
 func _reset_states() -> void:
+	_photo_doors.clear()
+	_photo_open.clear()
 	_states = [TopologyState.new()]
 	_current_state = 0
 	_previous_state = -1
@@ -102,6 +113,9 @@ func plan_floor(route: DescentRoute) -> void:
 	_reset_states()
 	if route == null or route.world_seed != world_seed or route.theme != theme:
 		return
+	_plan_photo_doors(route)
+	if not route.realm_door_hint.is_empty():
+		_photo_doors[str(route.realm_door_hint["key"])] = route.realm_door_hint.duplicate(true)
 	var cache_key := "%d:%d:%d:%d:%d:%d" % [GENERATION_VERSION,
 		world_seed, theme, route.floor_idx, route.origin.x * 4099 + route.origin.y,
 		route.target.x * 4099 + route.target.y]
@@ -259,6 +273,8 @@ func furniture_variant_for_state(room_root: Vector2i, state_id: int) -> int:
 
 func has_shortcut(cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
+	if _photo_doors.has(key):
+		return photo_door_open(str(_photo_doors[key]["id"]))
 	var override := _current_edges().get(key, {}) as Dictionary
 	if not override.is_empty():
 		return str(override.get("kind", "")) != "wall"
@@ -267,6 +283,7 @@ func has_shortcut(cell: Vector2i, dir: int) -> bool:
 
 func add_shortcut(cell: Vector2i, dir: int) -> bool:
 	if dir < 0 or dir >= 4 or has_shortcut(cell, dir) \
+			or _photo_doors.has(edge_key(cell, dir)) \
 			or not WorldGen.is_wall(world_seed, cell, dir, theme):
 		return false
 	var edge := canonical_edge(cell, dir)
@@ -287,6 +304,8 @@ func edge_info_for_state(cell: Vector2i, dir: int, state_id: int) -> Dictionary:
 
 func is_wall(cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
+	if _photo_doors.has(key):
+		return not photo_door_open(str(_photo_doors[key]["id"]))
 	var record: Dictionary = _current_edges().get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -296,7 +315,7 @@ func is_wall(cell: Vector2i, dir: int) -> bool:
 
 
 func shortcut_count() -> int:
-	var count := _shortcuts.size()
+	var count := _shortcuts.size() + _photo_open.size()
 	for value in _current_edges().values():
 		if str((value as Dictionary).get("kind", "")) != "wall":
 			count += 1
@@ -305,6 +324,9 @@ func shortcut_count() -> int:
 
 func shortcuts() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
+	for value in _photo_doors.values():
+		if photo_door_open(str(value["id"])):
+			out.append((value as Dictionary).duplicate())
 	for value in _shortcuts.values():
 		out.append((value as Dictionary).duplicate())
 	for value in _current_edges().values():
@@ -328,6 +350,8 @@ func state_delta(from_state: int, to_state: int) -> TopologyDelta:
 	var changed_edges: Array[Dictionary] = []
 	var cells := {}
 	for key in edge_keys:
+		if _photo_doors.has(key):
+			continue
 		var before: Dictionary = before_edges.get(key, {})
 		var after: Dictionary = after_edges.get(key, {})
 		if _record_signature(before) == _record_signature(after):
@@ -481,6 +505,10 @@ func _current_edges() -> Dictionary:
 
 func _edge_info_with(edges: Dictionary, cell: Vector2i, dir: int) -> Dictionary:
 	var key := edge_key(cell, dir)
+	if _photo_doors.has(key):
+		if photo_door_open(str(_photo_doors[key]["id"])):
+			return photo_geometry_edge(cell, dir)
+		return WorldGen.edge_info(world_seed, cell, dir, theme)
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -520,6 +548,390 @@ func _opening_record(edge: Dictionary, door: bool) -> Dictionary:
 		"t": SHORTCUT_CENTRE,
 		"w": DOOR_WIDTH if door else SHORTCUT_WIDTH,
 	}
+
+
+func photo_doorways() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for record in _photo_doors.values():
+		out.append((record as Dictionary).duplicate(true))
+	return out
+
+
+func photo_door_open(id: String) -> bool:
+	return _photo_open.has(id)
+
+
+func open_photo_door(id: String) -> bool:
+	if photo_door_open(id):
+		return false
+	for record in _photo_doors.values():
+		if str(record["id"]) == id:
+			_photo_open[id] = true
+			return true
+	return false
+
+
+## Only construction sees the aperture before the photograph. The route and
+## hostile navigation still see the closed wall. Furniture reserves both
+## approaches from the start, so opening it never deletes props in view.
+func photo_geometry_edge(at: Vector2i, dir: int) -> Dictionary:
+	var record: Dictionary = _photo_doors.get(edge_key(at, dir), {})
+	if record.is_empty():
+		return {}
+	return {"wall": false, "full_open": false,
+		"t": float(record["t"]), "w": float(record["w"]),
+		"exit_sign": false, "runtime_shortcut": true,
+		"runtime_door": false, "photo_door_id": str(record["id"]),
+		"photo_door_open": photo_door_open(str(record["id"])),
+		"photo_intro": bool(record.get("intro", false)) or bool(record.get("realm", false)),
+		"photo_obstruction": bool(record.get("obstruction", false))}
+
+
+func _photo_room(at: Vector2i) -> Vector2i:
+	return WorldGen.annex_room_id(world_seed, at) if theme == 2 \
+		else WorldGen.room_id(world_seed, at)
+
+
+## Room transitions, not grid steps: crossing a merged hall is free here.
+## A distance difference of five proves that the new single transition saves
+## at least four room transitions on the route to the objective.
+func _photo_room_graph(route: DescentRoute) -> Dictionary:
+	if not route._photo_graph_cache.is_empty():
+		return route._photo_graph_cache
+	var neighbours := {}
+	for at in route.scanned_cells():
+		var room := _photo_room(at)
+		if not neighbours.has(room):
+			neighbours[room] = {}
+		for dir in 4:
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if not route.scanned_contains(other) or route.base_is_wall(at, dir):
+				continue
+			var next_room := _photo_room(other)
+			if room != next_room:
+				neighbours[room][next_room] = true
+	route._photo_graph_cache = neighbours
+	return neighbours
+
+
+func _photo_room_distances(route: DescentRoute, graph: Dictionary,
+		openings: Array = []) -> Dictionary:
+	var neighbours := graph.duplicate()
+	for record: Dictionary in openings:
+		var at: Vector2i = record["cell"]
+		var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
+		var a := _photo_room(at)
+		var b := _photo_room(other)
+		neighbours[a] = (neighbours[a] as Dictionary).duplicate()
+		neighbours[b] = (neighbours[b] as Dictionary).duplicate()
+		neighbours[a][b] = true
+		neighbours[b][a] = true
+	var start := _photo_room(route.target)
+	var distances := {start: 0}
+	var queue: Array[Vector2i] = [start]
+	var head := 0
+	while head < queue.size():
+		var room := queue[head]
+		head += 1
+		for next_room in neighbours.get(room, {}):
+			if not distances.has(next_room):
+				distances[next_room] = int(distances[room]) + 1
+				queue.append(next_room)
+	return distances
+
+
+func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_only := false) -> void:
+	if not obstruction_only and not intro_only and not route.obstruction_hint.is_empty():
+		for hint in [route.intro_door_hint, route.obstruction_hint, route.realm_door_hint]:
+			if not hint.is_empty():
+				_photo_doors[str(hint["key"])] = hint.duplicate(true)
+		return
+	var protected := {route.origin: true, route.target: true} if intro_only or obstruction_only else _protected_cells(route)
+	var optional: Array[Vector2i] = []
+	if not intro_only and not obstruction_only:
+		optional = route.optional_vhs_cells()
+	if obstruction_only and not route.intro_door_hint.is_empty():
+		var first: Dictionary = route.intro_door_hint
+		_photo_doors[str(first["key"])] = first.duplicate(true)
+		var first_at: Vector2i = first["cell"]
+		for endpoint in [first_at, first_at + WorldGen.DIRV[edge_dir(first)]]:
+			for member in _owning_room_members(endpoint):
+				protected[member] = true
+	var graph := _photo_room_graph(route)
+	var distances := _photo_room_distances(route, graph)
+	var near_path := {}
+	var path := route.path_from_origin()
+	var path_rooms := {}
+	for at in path:
+		path_rooms[_photo_room(at)] = true
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				near_path[at + Vector2i(dx, dz)] = true
+	var seen := {}
+	var candidates: Array[Dictionary] = []
+	for at: Vector2i in near_path:
+		if not _photo_cell_safe(route, at, protected, optional, obstruction_only and theme == 7):
+			continue
+		for dir in 4:
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			var key := edge_key(at, dir)
+			if seen.has(key) or not route.base_is_wall(at, dir):
+				continue
+			seen[key] = true
+			if not _photo_cell_safe(route, other, protected, optional, obstruction_only and theme == 7) \
+					or not is_equal_approx(Chunk.cell_floor_h(world_seed, at, theme),
+						Chunk.cell_floor_h(world_seed, other, theme)):
+				continue
+			var room := _photo_room(at)
+			var far_room := _photo_room(other)
+			if room == far_room or not distances.has(room) or not distances.has(far_room):
+				continue
+			var saving := absi(int(distances[room]) - int(distances[far_room])) - 1
+			if saving < PHOTO_DOOR_MIN_SAVING:
+				continue
+			var record := _opening_record(canonical_edge(at, dir), false)
+			record["id"] = ("photo_obstruction:%s" if obstruction_only else "photo_door:%s") % key
+			record["obstruction"] = obstruction_only
+			record["saving"] = saving
+			record["on_route"] = path_rooms.has(room) or path_rooms.has(far_room)
+			if not obstruction_only and route.floor_idx == 0 and theme == 0:
+				record.merge(_photo_intro_approach(route, record, distances, path, intro_only))
+			if obstruction_only:
+				var approach := _photo_obstruction_approach(record, distances, path)
+				if approach.is_empty():
+					continue
+				record.merge(approach)
+			if intro_only and not bool(record.get("intro", false)):
+				continue
+			candidates.append(record)
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary):
+		if bool(a.get("intro", false)) != bool(b.get("intro", false)):
+			return bool(a.get("intro", false))
+		if bool(a.get("intro", false)) and a["approach_path_index"] != b["approach_path_index"]:
+			return int(a["approach_path_index"]) < int(b["approach_path_index"])
+		if bool(a["on_route"]) != bool(b["on_route"]):
+			return bool(a["on_route"])
+		var ac: Vector2i = a["cell"]
+		var bc: Vector2i = b["cell"]
+		return WorldGen.h(world_seed, ac.x, ac.y, 9473 + int(a["axis"])) \
+			< WorldGen.h(world_seed, bc.x, bc.y, 9473 + int(b["axis"])))
+	var used_rooms := {}
+	var remaining_distances := _photo_room_distances(route, graph, _photo_doors.values()) \
+		if not _photo_doors.is_empty() else distances
+	for record in candidates:
+		var at: Vector2i = record["cell"]
+		var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
+		var room := _photo_room(at)
+		var far_room := _photo_room(other)
+		if used_rooms.has(room) or used_rooms.has(far_room):
+			continue
+		var minimum := absi(int(remaining_distances[room]) \
+			- int(remaining_distances[far_room])) - 1
+		if minimum < PHOTO_DOOR_MIN_SAVING:
+			continue
+		# Two shortcuts must remain useful in either discovery order. Otherwise
+		# photographing the first can make the second an elaborate non-reward.
+		if not _photo_doors.is_empty():
+			var after_candidate := _photo_room_distances(route, graph, [record])
+			var first: Dictionary = _photo_doors.values()[0]
+			var first_at: Vector2i = first["cell"]
+			var first_other: Vector2i = first_at + WorldGen.DIRV[edge_dir(first)]
+			var first_min := absi(int(after_candidate[_photo_room(first_at)]) \
+				- int(after_candidate[_photo_room(first_other)])) - 1
+			# The early teaching door already saves four or more on its own.
+			# On the short casino floor it must still help if the later obstruction
+			# was found first, without demanding two independent four-room detours.
+			var first_required := 1 if obstruction_only and bool(first.get("intro", false)) else PHOTO_DOOR_MIN_SAVING
+			if first_min < first_required:
+				continue
+			first["minimum_saving"] = first_min
+		record["minimum_saving"] = minimum
+		_photo_doors[str(record["key"])] = record
+		used_rooms[room] = true
+		used_rooms[far_room] = true
+		if obstruction_only or bool(record.get("intro", false)) or _photo_doors.size() >= PHOTO_DOOR_COUNT:
+			break
+		remaining_distances = _photo_room_distances(route, graph, _photo_doors.values())
+
+
+## A teaching opportunity is an ordinary shortcut encountered on the actual
+## route, approached from its useful side before any optional recording.
+## Repeated cells inside a merged room do not consume the four-room budget.
+func _photo_intro_approach(route: DescentRoute, record: Dictionary,
+		distances: Dictionary, path: Array[Vector2i], ignore_tapes := false) -> Dictionary:
+	var at: Vector2i = record["cell"]
+	var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
+	var approach := at if int(distances[_photo_room(at)]) > int(distances[_photo_room(other)]) else other
+	var tape_rooms := {}
+	if not ignore_tapes:
+		for tape in route.optional_vhs_cells():
+			tape_rooms[_photo_room(tape)] = true
+	var room_steps := 0
+	var previous := _photo_room(route.origin)
+	for idx in mini(path.size(), INTRO_DOOR_MAX_PATH_STEPS + 1):
+		var room := _photo_room(path[idx])
+		if room != previous:
+			room_steps += 1
+			previous = room
+		if room_steps > INTRO_DOOR_MAX_ROOM_STEPS or tape_rooms.has(room):
+			break
+		if room == _photo_room(approach) and room_steps > 0 \
+				and maxi(absi(path[idx].x - approach.x), absi(path[idx].y - approach.y)) <= 1:
+			return {"intro": true, "approach_cell": approach,
+				"approach_path_index": idx, "approach_room_steps": room_steps}
+	return {}
+
+
+func _photo_obstruction_approach(record: Dictionary, distances: Dictionary,
+		path: Array[Vector2i]) -> Dictionary:
+	var at: Vector2i = record["cell"]
+	var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
+	var approach := at if int(distances[_photo_room(at)]) > int(distances[_photo_room(other)]) else other
+	for idx in path.size():
+		if _photo_room(path[idx]) == _photo_room(approach) \
+				and maxi(absi(path[idx].x - approach.x), absi(path[idx].y - approach.y)) <= 1:
+			return {"approach_cell": approach, "approach_path_index": idx}
+	return {}
+
+
+## A temporary visit needs an early, visible approach, not a minimum shortcut
+## saving. Reserve its ordinary rooms before recordings or furniture are dealt.
+func plan_realm_door(route: DescentRoute, allow_station_cells := false) -> Dictionary:
+	if route.floor_idx >= DescentRun.FLOOR_COUNT - 1:
+		return {}
+	if not route.intro_door_hint.is_empty():
+		var first := route.intro_door_hint.duplicate(true)
+		first["realm"] = true
+		return first
+	var protected := {route.origin: true, route.target: true}
+	for hint in [route.intro_door_hint, route.obstruction_hint]:
+		if hint.is_empty():
+			continue
+		var near: Vector2i = hint["cell"]
+		for endpoint in [near, near + WorldGen.DIRV[edge_dir(hint)]]:
+			for member in _owning_room_members(endpoint):
+				protected[member] = true
+	var path := route.path_from_origin()
+	var candidates: Array[Dictionary] = []
+	var seen := {}
+	for idx in range(1, (path.size() - 1) / 2 + 1):
+		# Include adjacent cells of the same room: a merged room's usable wall
+		# need not sit on the exact sequence of lattice cells in the route.
+		for at in _owning_room_members(path[idx]):
+			if maxi(absi(at.x - path[idx].x), absi(at.y - path[idx].y)) > 1:
+				continue
+			if not _realm_cell_safe(route, at, protected, allow_station_cells):
+				continue
+			for dir in 4:
+				var other: Vector2i = at + WorldGen.DIRV[dir]
+				var key := edge_key(at, dir)
+				if seen.has(key) or not route.base_is_wall(at, dir):
+					continue
+				if not _realm_cell_safe(route, other, protected, allow_station_cells) \
+						or _photo_room(at) == _photo_room(other) \
+						or not is_equal_approx(Chunk.cell_floor_h(world_seed, at, theme),
+							Chunk.cell_floor_h(world_seed, other, theme)):
+					continue
+				seen[key] = true
+				var record := _opening_record(canonical_edge(at, dir), false)
+				record.merge({"id": "realm_door:" + key, "realm": true,
+					"approach_cell": at, "approach_path_index": idx})
+				record.merge(_realm_discovery_approach(path, idx, at, dir))
+				candidates.append(record)
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary):
+		# A forward-facing wall on entry gets priority over the exact 30% mark.
+		# Merely sharing a route room allowed the old site to sit behind a turn.
+		var a_forward := float(a["discovery_facing"]) >= 0.85
+		var b_forward := float(b["discovery_facing"]) >= 0.85
+		if a_forward != b_forward:
+			return a_forward
+		if not a_forward and not is_equal_approx(float(a["discovery_facing"]), float(b["discovery_facing"])):
+			return float(a["discovery_facing"]) > float(b["discovery_facing"])
+		var ideal := float(path.size() - 1) * 0.3
+		var da := absf(float(a["approach_path_index"]) - ideal)
+		var db := absf(float(b["approach_path_index"]) - ideal)
+		if da != db:
+			return da < db
+		var ac: Vector2i = a["cell"]
+		var bc: Vector2i = b["cell"]
+		return WorldGen.h(world_seed, ac.x, ac.y, 9831 + int(a["axis"])) \
+			< WorldGen.h(world_seed, bc.x, bc.y, 9831 + int(b["axis"])))
+	if candidates.is_empty() and not allow_station_cells:
+		return plan_realm_door(route, true)
+	return candidates[0] if not candidates.is_empty() else {}
+
+
+func _realm_discovery_approach(path: Array[Vector2i], idx: int, at: Vector2i, dir: int) -> Dictionary:
+	# Reconstruct the ordinary entrance into this merged room, including the
+	# actual offset of its existing doorway rather than assuming cell centres.
+	var room := _photo_room(at)
+	while idx > 1 and _photo_room(path[idx - 1]) == room:
+		idx -= 1
+	var previous := path[idx - 1]
+	var incoming := WorldGen.DIRV.find(path[idx] - previous)
+	var edge := WorldGen.edge_info(world_seed, previous, incoming, theme)
+	var forward := Vector3(WorldGen.DIRV[incoming].x, 0, WorldGen.DIRV[incoming].y)
+	var eye := Vector3(previous.x * 12.0 + (12.0 if incoming == 0 else (0.0 if incoming == 1 else float(edge["t"]))),
+		Chunk.cell_floor_h(world_seed, path[idx], theme) + 1.55,
+		previous.y * 12.0 + (12.0 if incoming == 2 else (0.0 if incoming == 3 else float(edge["t"])))) + forward * 1.2
+	var centre := Vector3(at.x * 12.0 + (12.0 if dir == 0 else (0.0 if dir == 1 else SHORTCUT_CENTRE)),
+		eye.y, at.y * 12.0 + (12.0 if dir == 2 else (0.0 if dir == 3 else SHORTCUT_CENTRE)))
+	var bearing := (centre - eye).normalized()
+	var wall_forward := Vector3(WorldGen.DIRV[dir].x, 0, WorldGen.DIRV[dir].y)
+	var facing := minf(bearing.dot(forward), wall_forward.dot(forward))
+	if centre.distance_to(eye) > 18.0:
+		facing -= 1.0
+	return {"discovery_origin": eye, "discovery_forward": forward, "discovery_facing": facing}
+
+
+func _realm_cell_safe(route: DescentRoute, at: Vector2i, protected: Dictionary,
+		allow_station_cells: bool) -> bool:
+	if not allow_station_cells:
+		return _photo_cell_safe(route, at, protected, [], theme == 7)
+	# ChargingStationPlacement now respects reserved doorway lanes. It is safe
+	# to share a room with a pod, provided all other architecture rules hold.
+	if not route.scanned_contains(at):
+		return false
+	for member in _owning_room_members(at):
+		if protected.has(member) or WorldGen.portal(world_seed, member, theme) >= 0 \
+				or WorldGen.elevator_cell(world_seed, member, theme):
+			return false
+	var corridor := WorldGen.annex_corridor_axis(world_seed, at) if theme == 2 else WorldGen.corridor(world_seed, at)
+	if theme != 7 and corridor != 0:
+		return false
+	if theme != 2 and not WorldGen.room_split(world_seed, WorldGen.room_id(world_seed, at), theme).is_empty():
+		return false
+	var style := WorldGen.cell_style(world_seed, at, theme)
+	return (theme != 2 or style != WorldGen.ANNEX_PASSAGE) and (theme != 9 or Chunk.pool_style_dry(style))
+
+
+func realm_door() -> Dictionary:
+	for record in _photo_doors.values():
+		if bool(record.get("realm", false)):
+			return (record as Dictionary).duplicate(true)
+	return {}
+
+
+func intro_photo_door() -> Dictionary:
+	for record in _photo_doors.values():
+		if bool(record.get("intro", false)):
+			return (record as Dictionary).duplicate(true)
+	return {}
+
+
+func _photo_cell_safe(route: DescentRoute, at: Vector2i,
+		protected: Dictionary, optional: Array[Vector2i], allow_corridor := false) -> bool:
+	if not _mutation_cell_safe(route, at, protected, optional):
+		return false
+	# Corridor shells, split rooms and submerged pools can hide an edge behind
+	# another architectural barrier. Only reserve ordinary, dry room boundaries.
+	if not allow_corridor and (WorldGen.annex_corridor_axis(world_seed, at) if theme == 2 \
+			else WorldGen.corridor(world_seed, at)) != 0:
+		return false
+	var style := WorldGen.cell_style(world_seed, at, theme)
+	if theme == 2 and style == WorldGen.ANNEX_PASSAGE:
+		return false
+	return theme != 9 or Chunk.pool_style_dry(style)
 
 
 func _closure_record(edge: Dictionary) -> Dictionary:
@@ -633,7 +1045,7 @@ func _pick_opening(route: DescentRoute, centre: Vector2i,
 				continue
 			var edge := canonical_edge(at, dir)
 			var key := edge_key(at, dir)
-			if seen.has(key):
+			if seen.has(key) or _photo_doors.has(key):
 				continue
 			seen[key] = true
 			var record := _opening_record(edge, posmod(slot, 2) == 1)
@@ -810,6 +1222,8 @@ func _state_connects(route: DescentRoute, edges: Dictionary,
 
 func _is_wall_with(edges: Dictionary, cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
+	if _photo_doors.has(key):
+		return not photo_door_open(str(_photo_doors[key]["id"]))
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -821,6 +1235,8 @@ func _is_wall_with(edges: Dictionary, cell: Vector2i, dir: int) -> bool:
 func _is_wall_for_route(route: DescentRoute, edges: Dictionary,
 		cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
+	if _photo_doors.has(key):
+		return not photo_door_open(str(_photo_doors[key]["id"]))
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})

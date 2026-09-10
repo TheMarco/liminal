@@ -161,77 +161,25 @@ func _asy_gurney(p: Vector3, yaw: float, salt: int) -> void:
 
 
 func _asy_restraint_table(p: Vector3, yaw: float) -> void:
-	var v = Node3D.new()
-	v.position = p
-	v.rotation.y = yaw
-	scene.add_node(v)
-	scene.model_rounded_box(v, Vector3(0, 0.72, 0), Vector3(0.85, 0.09, 2.0), Mats.asy_metal(), 0.02)
-	scene.model_rounded_box(v, Vector3(0, 0.8, 0.04), Vector3(0.74, 0.08, 1.82), Mats.asy_canvas(), 0.04)
-	scene.model_rounded_box(v, Vector3(0, 0.86, -0.78), Vector3(0.4, 0.07, 0.26), Mats.asy_canvas(), 0.03)
-	for sz in [-0.42, 0.08, 0.56]:
-		scene.model_box(v, Vector3(0, 0.85, sz), Vector3(0.92, 0.02, 0.1), Mats.charcoal())
-		scene.model_box(v, Vector3(0.42, 0.85, sz), Vector3(0.06, 0.03, 0.05), Mats.steel())
-	for sx in [-0.44, 0.44]:
-		var strap = scene.model_box(v, Vector3(sx, 0.6, 0.28), Vector3(0.025, 0.34, 0.09), Mats.charcoal())
-		strap.rotation.x = (0.2 if sx > 0.0 else -0.15)
-	ProceduralDetails.attach(v, "asy_restraint_supports_v2", func(d: ProceduralDetails) -> void:
-		# Four planted legs and cross braces replace the monolithic pedestal.
-		for sx in [-0.31, 0.31]:
-			for sz in [-0.70, 0.70]:
-				d.tube(Vector3(sx, 0.68, sz), Vector3(sx, 0.035, sz), 0.035, Mats.asy_metal())
-				d.box(Vector3(sx, 0.018, sz), Vector3(0.12, 0.035, 0.12),
-					Mats.asy_metal(), 0.015)
-			d.tube(Vector3(sx, 0.25, -0.70), Vector3(sx, 0.25, 0.70), 0.025, Mats.asy_metal())
-		d.tube(Vector3(-0.31, 0.25, 0), Vector3(0.31, 0.25, 0), 0.025, Mats.asy_metal())
-		# Buckles sit proud of the straps; a second pad gives the headrest a
-		# readable raised edge rather than merging into the mattress.
-		for sz in [-0.42, 0.08, 0.56]:
-			d.box(Vector3(0.39, 0.873, sz), Vector3(0.10, 0.022, 0.075), Mats.steel(), 0.01)
-		d.box(Vector3(0, 0.895, -0.78), Vector3(0.34, 0.035, 0.21), Mats.asy_canvas(), 0.025)
-	)
-	scene.collider_yaw_box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 2.0), yaw)
+	var mark = scene.collider_mark()
+	var v = scene.attributed_floor_prop(Chunk.ASY_RESTRAINT_PATH, p, yaw, 1.0,
+		Vector3.ZERO, "asylum_restraint_table", null, true)
+	if v != null:
+		scene.collider_yaw_box(p + Vector3(0, 0.47, 0), Vector3(0.9, 0.94, 2.0), yaw)
+		scene.bind_furnishing_colliders(v, mark)
 
 
 ## Electroshock station: instrument cart, dial box, two paddles on a wire.
 
 
 func _asy_ect(p: Vector3, yaw: float, salt: int) -> void:
-	var v = Node3D.new()
-	v.position = p
-	v.rotation.y = yaw
-	scene.add_node(v)
-	for sy in [0.34, 0.72]:
-		scene.model_rounded_box(v, Vector3(0, sy, 0), Vector3(0.56, 0.03, 0.42), Mats.steel(), 0.01)
-	for lx in [-0.25, 0.25]:
-		for lz in [-0.17, 0.17]:
-			scene.model_cylinder(v, Vector3(lx, 0.37, lz), 0.015, 0.7, Mats.chrome())
-			var wheel = scene.model_cylinder(v, Vector3(lx, 0.05, lz),
-				0.05, 0.032, Mats.charcoal())
-			wheel.rotation.z = PI / 2.0
-	# the machine itself: a grey box, a white gauge, red pilot, bakelite dials
-	scene.model_rounded_box(v, Vector3(0, 0.87, 0), Vector3(0.5, 0.26, 0.34), Mats.metal_gray(), 0.02)
-	var gauge = scene.model_cylinder(v, Vector3(-0.12, 0.9, 0.176), 0.06, 0.015, Mats.paint_white())
-	gauge.rotation.x = PI / 2.0
-	scene.model_quad(v, Vector3(-0.12, 0.9, 0.185),
-		Vector2(0.116, 0.116), Mats.instrument_dial())
-	for di in 3:
-		# All three controls sit on the fascia; the former last centre (0.28)
-		# was outside the 0.25m half-width and visibly floated off the side.
-		var knob = scene.model_cylinder(v, Vector3(-0.01 + 0.10 * float(di),
-			0.84, 0.176), 0.025, 0.03, Mats.charcoal())
-		knob.rotation.x = PI / 2.0
-	scene.model_sphere(v, Vector3(0.18, 0.95, 0.17), 0.014, Mats.lamp_red())
-	# Paddles resting on the lower shelf, with shaped grips and metal faces.
-	ProceduralDetails.attach(v, "asy_ect_paddles_v2", func(d: ProceduralDetails) -> void:
-		for px in [-0.12, 0.10]:
-			d.box(Vector3(px, 0.385, 0.05), Vector3(0.10, 0.025, 0.085), Mats.steel(), 0.025)
-			d.tube(Vector3(px, 0.41, 0.05), Vector3(px, 0.49, 0.015), 0.018, Mats.charcoal())
-			d.box(Vector3(px, 0.485, 0.012), Vector3(0.055, 0.055, 0.11), Mats.charcoal(), 0.02)
-	)
-	# leads sagging from the paddles back up into the box
-	_asy_wire(v, Vector3(-0.12, 0.46, 0.05), Vector3(-0.2, 0.87, -0.1))
-	_asy_wire(v, Vector3(0.1, 0.46, 0.05), Vector3(0.2, 0.87, -0.1))
-	scene.collider_yaw_box(p + Vector3(0, 0.5, 0), Vector3(0.62, 1.0, 0.5), yaw)
+	var mark = scene.collider_mark()
+	var v = scene.attributed_floor_prop(Chunk.ASY_ECT_PATH, p, yaw, 1.0,
+		Vector3.ZERO, "asylum_ect", null, true)
+	if v != null:
+		v.set_meta("equipment_variant", salt)
+		scene.collider_yaw_box(p + Vector3(0, 0.6, 0), Vector3(0.62, 1.2, 0.56), yaw)
+		scene.bind_furnishing_colliders(v, mark)
 
 
 ## Sagging cable between two local points, baked into one rubber mesh.

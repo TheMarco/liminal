@@ -1,14 +1,14 @@
 shader_type spatial;
 render_mode unshaded, cull_back;
-// The spatial face of the ritual television. Authored footage arrives already
-// processed by the shared found-footage pass and is presented without another
-// signal simulation. Idle snow and the procedural no-file fallback stay here.
+// The spatial face of the ritual television. Authored footage is decoded raw;
+// the full-game shader processes the video and cabinet together after rendering.
+// Idle snow and the procedural no-file fallback stay here.
 
 uniform float playing : hint_range(0.0, 1.0) = 0.0;
 uniform float progress : hint_range(0.0, 1.0) = 0.0;
 uniform float variant = 0.0;
 uniform float watched : hint_range(0.0, 1.0) = 0.0;
-// Authored footage: the high-resolution, post-processed SubViewport texture.
+// Authored footage: the raw, aspect-fitted SubViewport texture.
 uniform sampler2D tape_tex : source_color, filter_linear;
 uniform float use_footage = 0.0;
 // Fade the luminous raster into the tube's dark glass. Keeping this as a
@@ -82,9 +82,8 @@ vec3 tape_frame(vec2 uv, float t) {
 
 void fragment() {
 	vec2 uv = UV;
-	// Authored footage arrives already processed by the game's recovered-tape
-	// shader. Idle snow and the procedural fallback retain the tube's local
-	// warp; applying it to authored video would bend and degrade the signal twice.
+	// Authored video receives no local CRT warp; the scene-wide game shader
+	// handles it together with the cabinet. Idle/fallback snow retains its warp.
 	if (use_footage <= 0.5) {
 		vec2 c = uv - 0.5;
 		uv = c * (1.0 + dot(c, c) * 0.18) + 0.5;
@@ -104,8 +103,8 @@ void fragment() {
 		recording = tape_frame(uv, t);
 	}
 	vec3 col = mix(idle, recording, playing);
-	// Procedural material keeps its own tube scan. Authored video already carries
-	// the shared found-footage shader's field and scan-line treatment.
+	// Only the procedural idle/fallback gets a local tube scan. Actual videos
+	// are processed once by the full-screen game shader.
 	float scan = 0.76 + 0.24 * sin(uv.y * 240.0 * TAU);
 	col *= mix(scan * tube_aperture, 1.0, use_footage);
 	ALBEDO = col * 0.9;

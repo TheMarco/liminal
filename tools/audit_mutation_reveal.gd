@@ -24,6 +24,13 @@ func _collect(node: Node, type_name: StringName) -> Array[Node]:
 	return found
 
 
+func _portal_trace_height(effect: Node3D) -> float:
+	for child in effect.get_children():
+		if child is Node3D and _collect(child, &"MeshInstance3D").size() == 4:
+			return (child as Node3D).position.y
+	return -1.0
+
+
 func _run() -> void:
 	var target := Node3D.new()
 	root.add_child(target)
@@ -36,10 +43,13 @@ func _run() -> void:
 	ghost.add_child(ghost_mesh)
 	var effect := EFFECT.new()
 	root.add_child(effect)
+	if EFFECT.LIFE_SECONDS < 2.0 or EFFECT.LIFE_SECONDS > 3.0:
+		_fail("mutation reveal lifetime is outside the requested two-to-three second window")
 	effect.configure({
 		"kind": "door",
 		"position": Vector3.ZERO,
 		"edge_center": Vector3.ZERO,
+		"opening_height": 3.4,
 		"edge": {
 			"dir": 0,
 			"before": {},
@@ -63,6 +73,17 @@ func _run() -> void:
 	var effect_meshes := _collect(effect, &"MeshInstance3D")
 	if effect_meshes.size() != 5:
 		_fail("door mutation lacks its exact four-sided boundary trace")
+	if not is_equal_approx(_portal_trace_height(effect), 1.7):
+		_fail("door mutation trace does not center its custom opening height")
+	var custom_height_found := false
+	for mesh_node in effect_meshes:
+		var mesh_instance := mesh_node as MeshInstance3D
+		if mesh_instance.mesh is BoxMesh \
+				and is_equal_approx((mesh_instance.mesh as BoxMesh).size.y, 3.4):
+			custom_height_found = true
+			break
+	if not custom_height_found:
+		_fail("door mutation trace does not respect its custom opening height")
 	for mesh_node in effect_meshes:
 		var mesh_instance := mesh_node as MeshInstance3D
 		if mesh_instance.mesh is QuadMesh:

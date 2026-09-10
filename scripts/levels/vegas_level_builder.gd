@@ -474,14 +474,24 @@ func _change_machine(dir: int, plane: float) -> void:
 	var n = -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner = plane + n * (Chunk.T * 0.5)
 	var along = 2.4 + 7.2 * ctx.random01(58 + dir)
-	var v = Node3D.new()
+	var at: Vector3
+	var yaw: float
 	if dir < 2:
-		v.position = Vector3(inner + n * 0.30, 0, along)
-		v.rotation.y = PI / 2.0 if n > 0.0 else -PI / 2.0
+		at = Vector3(inner + n * 0.36, 0, along)
+		yaw = PI / 2.0 if n > 0.0 else -PI / 2.0
 	else:
-		v.position = Vector3(along, 0, inner + n * 0.30)
-		v.rotation.y = 0.0 if n > 0.0 else PI
+		at = Vector3(along, 0, inner + n * 0.36)
+		yaw = 0.0 if n > 0.0 else PI
+	_change_machine_at(at, yaw)
+
+
+func _change_machine_at(at: Vector3, yaw: float) -> void:
+	var v := Node3D.new()
+	v.position = at
+	v.rotation.y = yaw
 	scene.add_node(v)
+	scene.claim_furnishing_group(v, "casino_change_machine", true)
+	var collider_start := scene.collider_mark()
 	# The authored cabinet carries its own CHANGE branding, coin tray and bill
 	# slot, so the generated panel stack and Label3D marquee are gone with it.
 	var unit = scene.attributed_prop_local(v, Chunk.CHANGE_MACHINE_PATH,
@@ -501,8 +511,10 @@ func _change_machine(dir: int, plane: float) -> void:
 		v.add_child(lb)
 	else:
 		v.set_meta("attributed_furnishing", "casino_change_machine")
-	scene.collider_yaw_box(v.position + Vector3(0, 0.88, 0),
-		Vector3(1.0, 1.76, 0.52), v.rotation.y)
+	scene.collider_yaw_box(v.position + Vector3(0, 0.87, 0.0135).rotated(Vector3.UP, v.rotation.y),
+		Vector3(1.08, 1.74, 0.68), v.rotation.y)
+
+	scene.bind_furnishing_colliders(v, collider_start)
 
 
 ## Blackjack table nobody deals anymore: baize, shoe, chips, three stools.
@@ -784,6 +796,7 @@ func _hall_wall_run(o: Vector3, yw: float, side: float, a: float, b: float) -> v
 	var wl = scene.model_box(null, wc, Vector3(ln, ctx.ceiling_height, 0.16),
 		Mats.hall_wallpaper_variant(scene.finish_variant()))
 	wl.rotation.y = yw
+	wl.set_meta("fixture_backing_wall", true)
 	scene.collider_yaw_box(wc, Vector3(ln, ctx.ceiling_height, 0.16), yw)
 	var inn = side - signf(side) * 0.11
 	for spec in [[0.075, 0.15, 0.055, Mats.darkwood()],

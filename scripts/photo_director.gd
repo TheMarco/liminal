@@ -59,10 +59,15 @@ var theme := 0
 var floor_idx := 0
 var route: DescentRoute
 var debug_visible := false
+var realm_preview_ready := true
+var realm_destination := ""
 var plan: Dictionary = {}   # Vector2i -> {id, type, wall_dir, wall_along, required}
 var _documented: Dictionary = {}  # id -> true
 var _live: Dictionary = {}        # Vector2i -> PhotoAnomaly
 var _live_bleed: Dictionary = {}  # Vector2i -> PhotoAnomaly (BLEED marks)
+var _live_doors: Dictionary = {}  # edge id + side -> PhotoAnomaly
+var _chunk_manager: ChunkManager
+var _door_ready_cache: Dictionary = {}
 
 
 func configure(p_route: DescentRoute, p_floor_idx: int, cm: ChunkManager,
@@ -71,12 +76,23 @@ func configure(p_route: DescentRoute, p_floor_idx: int, cm: ChunkManager,
 	world_seed = route.world_seed
 	theme = route.theme
 	floor_idx = p_floor_idx
+	realm_preview_ready = true
+	realm_destination = ""
 	plan = build_plan(route)
 	_documented.clear()
 	_live.clear()
 	_live_bleed.clear()
+	_live_doors.clear()
+	_door_ready_cache.clear()
+	_chunk_manager = cm
 	for known in known_ids:
 		_documented[str(known)] = true
+		if route.topology != null:
+			route.topology.open_photo_door(str(known))
+	# A saved photograph is also the durable source of the opening. This runs
+	# before warm_up, including after death or a quit while reviewing the print.
+	if route.topology != null:
+		route.refresh_topology()
 	if cm != null and not cm.chunk_built.is_connected(_on_chunk_built):
 		cm.chunk_built.connect(_on_chunk_built)
 	documented_changed.emit(documented_count(), required_count())
@@ -109,7 +125,7 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 		var placed := false
 		for step in path.size():
 			var at: Vector2i = path[(idx + step) % path.size()]
-			if reserved.has(at) or out.has(at):
+			if reserved.has(at) or out.has(at) or p_route.is_intro_door_room(at):
 				continue
 			var spec := _spec_for(p_route, at, true, used_types, slot)
 			if spec.is_empty():
@@ -121,7 +137,9 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 		slot += 1
 		if not placed:
 			return {}
-	var extras := 0
+	var before_supplement := out.size()
+	_add_intro_route_evidence(p_route, out, reserved)
+	var extras := out.size() - before_supplement
 	var scanned := p_route.scanned_cells()
 	var start := WorldGen.h(p_route.world_seed, p_route.floor_idx,
 		scanned.size(), 9301) % maxi(1, scanned.size())
@@ -129,7 +147,8 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 		if extras >= EXTRA:
 			break
 		var at: Vector2i = scanned[(start + step) % scanned.size()]
-		if reserved.has(at) or out.has(at) or p_route.is_path_cell(at):
+		if reserved.has(at) or out.has(at) or p_route.is_path_cell(at) \
+				or p_route.is_intro_door_room(at):
 			continue
 		var spec := _spec_for(p_route, at, false, {}, -1)
 		if spec.is_empty():
@@ -137,6 +156,52 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 		out[at] = spec
 		extras += 1
 	return out
+
+
+## Taking the first shortcut must not require returning to the skipped maze
+## solely to fill the photo quota. Spend part of the existing extra pool on
+## the shortened route; the doorway itself supplies one photograph.
+static func _add_intro_route_evidence(p_route: DescentRoute, out: Dictionary,
+		reserved: Dictionary) -> void:
+	if p_route.photo_discovery_hint().is_empty():
+		return
+	var path := p_route.path_after_intro_door()
+	var count := intro_route_evidence_count(p_route, out)
+	for at in path:
+		if count >= required_for(p_route.floor_idx, p_route.theme):
+			return
+		if reserved.has(at) or out.has(at) or p_route.is_intro_door_room(at):
+			continue
+		var spec := _spec_for(p_route, at, false, {}, -1)
+		if not spec.is_empty():
+			out[at] = spec
+			count += 1
+
+
+static func intro_route_evidence_count(p_route: DescentRoute, evidence: Dictionary) -> int:
+	var rooms := {}
+	var path := p_route.path_after_intro_door()
+	var crossed := {}
+	var opening_keys := {}
+	for hint in [p_route.intro_door_hint, p_route.obstruction_hint]:
+		if not hint.is_empty():
+			opening_keys[str(hint["key"])] = true
+	for idx in path.size():
+		var at := path[idx]
+		var room := WorldGen.annex_room_id(p_route.world_seed, at) if p_route.theme == 2 else WorldGen.room_id(p_route.world_seed, at)
+		rooms[room] = true
+		if idx > 0:
+			var dir := WorldGen.DIRV.find(at - path[idx - 1])
+			var key := DescentTopology.edge_key(path[idx - 1], dir)
+			if opening_keys.has(key):
+				crossed[key] = true
+	var count := crossed.size()
+	for at: Vector2i in evidence:
+		var room := WorldGen.annex_room_id(p_route.world_seed, at) if p_route.theme == 2 else WorldGen.room_id(p_route.world_seed, at)
+		if rooms.has(room):
+			count += 1
+	return count
+
 
 
 ## The types this cell can host. Props are the floor's own signature object;
@@ -274,30 +339,27 @@ func documented_ids() -> Array:
 	return _documented.keys()
 
 
-## Live, still-undocumented anomalies for the camera to test against. Bleed
-## marks join the pool until their one floor credit is spent — the theme
-## bleeding up through the building is itself something wrong, and it is
-## guaranteed to occur near the lift where the planned pool may not reach.
+## New discoveries remain active after the progression minimum. The early
+## bleed-credit rule prevents one cluster from replacing the initial hunt;
+## after the minimum, every distinct discovery can be documented.
 func capturable() -> Array[PhotoAnomaly]:
 	var out: Array[PhotoAnomaly] = []
-	# The hunt ends at the requirement: once the tape is satisfied the
-	# detector goes quiet and no further anomaly pings, focuses or counts
-	# (owner rule 2026-08-19). The undocumented ones stay in the world as
-	# set dressing for whoever notices.
-	if requirement_met():
-		var live: Array[PhotoAnomaly] = []
-		_collect_capturable(_live, live)
-		for node in live:
-			if node.type == PhotoAnomaly.Type.NUMBERED_DOOR:
-				out.append(node)
-		return out
+	_collect_capturable(_live_doors, out)
 	_collect_capturable(_live, out)
-	# Bleed marks: one counted credit per floor while the hunt is open, but
-	# ANY bleed item may serve as the LAST photograph (owner rule
-	# 2026-08-19) — the lift area is thick with them, so the floor is
-	# always completable there.
-	if not bleed_credit_used() or documented_count() == required_count() - 1:
+	if requirement_met() or not bleed_credit_used() \
+			or documented_count() == required_count() - 1:
 		_collect_capturable(_live_bleed, out)
+	return out
+
+
+## Caption candidates include previously documented evidence. They use the
+## same framing/occlusion checks as rewards, but never change credit or focus.
+func album_subjects() -> Array[PhotoAnomaly]:
+	var out: Array[PhotoAnomaly] = []
+	for pool in [_live, _live_bleed, _live_doors]:
+		for raw: Variant in pool.values():
+			if is_instance_valid(raw) and raw is PhotoAnomaly and raw.is_inside_tree():
+				out.append(raw)
 	return out
 
 
@@ -342,6 +404,7 @@ func mark_documented(anomaly_id: String) -> bool:
 
 
 func _on_chunk_built(chunk: Chunk) -> void:
+	_register_photo_doors()
 	_register_bleed_props(chunk)
 	if not plan.has(chunk.cell):
 		return
@@ -354,20 +417,16 @@ func _on_chunk_built(chunk: Chunk) -> void:
 		for plate in chunk.find_children("NumberPlate", "Label3D", true, false):
 			if not plate.has_meta("casino_number_plate"):
 				continue
-			if _documented.has(str(spec["id"])):
-				plate.text = "106"
-				return
 			var number := PhotoAnomaly.new()
 			chunk.add_child(number)
 			number.configure_numbered_door(str(spec["id"]), chunk.cell, plate)
+			if _documented.has(number.id):
+				number.resolve(true)
 			_live[chunk.cell] = number
 			return
 		push_error("Numbered photo door missing in landmark %s" % chunk.cell)
 		return
-	# A documented anomaly stays resolved: a rebuilt cell returns to normal
-	# instead of resurrecting the wrongness the photograph settled.
-	if _documented.has(str(spec["id"])):
-		return
+	# Documented anomalies remain visible when rooms stream back in.
 	var wall_dir := int(spec["wall_dir"])
 	var wall_along := float(spec["wall_along"])
 	var spawn_type := int(spec["type"])
@@ -403,6 +462,136 @@ func _on_chunk_built(chunk: Chunk) -> void:
 	node.configure(str(spec["id"]), spawn_type, chunk.cell,
 		world_seed, theme, wall_dir, wall_along)
 	_live[chunk.cell] = node
+	if _documented.has(node.id):
+		node.resolve(true)
+
+
+func _register_photo_doors() -> void:
+	if route == null or route.topology == null or not is_instance_valid(_chunk_manager):
+		return
+	for record in route.topology.photo_doorways():
+		var at: Vector2i = record["cell"]
+		var dir := DescentTopology.edge_dir(record)
+		var other: Vector2i = at + WorldGen.DIRV[dir]
+		var id := str(record["id"])
+		var opened := route.topology.photo_door_open(id)
+		var complete := true
+		var chunks: Array[Chunk] = []
+		var instances := PackedInt64Array()
+		for endpoint in [at, other]:
+			for member in WorldGen.owning_room_members(world_seed, endpoint, theme):
+				var part := _chunk_manager.chunk_at(member)
+				if part == null:
+					complete = false
+				elif not chunks.has(part):
+					chunks.append(part)
+					instances.append(part.get_instance_id())
+		var ready := false
+		if complete and not opened:
+			var cached: Dictionary = _door_ready_cache.get(id, {})
+			if cached.get("instances", PackedInt64Array()) == instances:
+				ready = bool(cached["ready"])
+			else:
+				ready = _photo_door_approach_clear(record, chunks)
+				_door_ready_cache[id] = {"instances": instances, "ready": ready}
+		if bool(record.get("realm", false)) and not realm_preview_ready:
+			ready = false
+		for endpoint in [at, other]:
+			var chunk := _chunk_manager.chunk_at(endpoint)
+			if chunk == null:
+				continue
+			for seal in chunk.photo_door_seals():
+				if seal.photo_id != id:
+					continue
+				if opened:
+					seal.open()
+					continue
+				seal.set_preview_ready(ready)
+				var live_key := "%s:%s" % [id, endpoint]
+				if not ready or _documented.has(id):
+					if _live_doors.has(live_key) and is_instance_valid(_live_doors[live_key]):
+						(_live_doors[live_key] as Node).queue_free()
+					_live_doors.erase(live_key)
+					continue
+				if _live_doors.has(live_key) and is_instance_valid(_live_doors[live_key]):
+					continue
+				var anomaly := PhotoAnomaly.new()
+				chunk.add_child(anomaly)
+				anomaly.configure_doorway(seal, endpoint,
+					_resolve_photo_door.bind(id, endpoint, route))
+				if bool(record.get("realm", false)) and not realm_destination.is_empty():
+					anomaly.configure_realm_destination(realm_destination, seal)
+				_live_doors[live_key] = anomaly
+
+
+## A second structural barrier or authored prop can veto a candidate. Only
+## expose the lens opening when both complete rooms prove a capsule-wide lane.
+## The normal evidence plan is untouched, so a rejected site cannot gate a floor.
+func _photo_door_approach_clear(record: Dictionary, chunks: Array[Chunk]) -> bool:
+	var at: Vector2i = record["cell"]
+	var dir := DescentTopology.edge_dir(record)
+	var d: Vector2i = WorldGen.DIRV[dir]
+	var forward := Vector3(d.x, 0.0, d.y)
+	var along := float(record["t"])
+	var centre := Vector3(at.x * WorldGen.CELL_SIZE \
+		+ (WorldGen.CELL_SIZE if dir == 0 else along),
+		Chunk.cell_floor_h(world_seed, at, theme),
+		at.y * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE if dir == 2 else along))
+	var intro := bool(record.get("intro", false)) or bool(record.get("obstruction", false)) or bool(record.get("realm", false))
+	var extent := forward.abs() * (6.4 if intro else 2.92) \
+		+ Vector3(absf(forward.z), 0.0, absf(forward.x)) * (1.45 if intro else 0.72)
+	var passage := AABB(centre - extent + Vector3.UP * 0.03,
+		extent * 2.0 + Vector3.UP * (2.32 if intro else 1.77))
+	for chunk in chunks:
+		if _photo_passage_obstructed(chunk, Transform3D.IDENTITY, passage):
+			return false
+	return true
+
+
+## Check the whole swept lane, including nested imported solids and convex
+## shapes. Point samples against only Chunk.body can miss a thin partition or
+## a collider parented under a prop. Conservative world bounds fail closed.
+func _photo_passage_obstructed(node: Node, parent: Transform3D, passage: AABB) -> bool:
+	if node is PhotoDoorSeal or node is Area3D:
+		return false
+	if node is CollisionObject3D and ((node as CollisionObject3D).collision_layer & 1) == 0:
+		return false
+	var transform := parent
+	if node is Node3D:
+		transform = parent * (node as Node3D).transform
+	if node is CollisionShape3D:
+		var shape := node as CollisionShape3D
+		if not shape.disabled and shape.shape != null:
+			var bounds := transform * shape.shape.get_debug_mesh().get_aabb()
+			if passage.intersects(bounds):
+				return true
+	for child in node.get_children():
+		if _photo_passage_obstructed(child, transform, passage):
+			return true
+	return false
+
+
+func _resolve_photo_door(id: String, witness_cell: Vector2i,
+		expected_route: DescentRoute) -> void:
+	if route == null or route != expected_route or route.topology == null \
+			or not _documented.has(id) \
+			or not is_instance_valid(_chunk_manager) \
+			or not route.topology.open_photo_door(id):
+		return
+	# Every live half opens in this same frame. Pending or unloaded chunks
+	# reconcile against the same resolver when installed; no rebuild is needed.
+	_register_photo_doors()
+	route.refresh_topology()
+	var witness := _chunk_manager.chunk_at(witness_cell)
+	if witness == null:
+		return
+	for seal in witness.photo_door_seals():
+		if seal.photo_id != id:
+			continue
+		var effect := MutationRevealEffect.new()
+		_chunk_manager.add_child(effect)
+		effect.configure(seal.reveal_descriptor())
+		break
 
 
 ## Any bleed prop the dressing placed in this cell becomes a photographable

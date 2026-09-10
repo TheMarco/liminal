@@ -177,7 +177,7 @@ static func refresh_comfort() -> void:
 
 
 ## Second pass: copy the decoded tape signal before reconstructing the tube.
-## Both gameplay and in-world recordings use the same ordered pair of passes.
+## Final full-screen display pass; decoded TV footage must not add its own copy.
 static func add_crt_display_pass(parent: Node,
 		signal_resolution := FOUND_FOOTAGE_RESOLUTION) -> Control:
 	var display := Control.new()
@@ -218,7 +218,7 @@ func setup(host: Node, found_footage := false, enabled := true) -> void:
 	_crt_material.set_shader_parameter("bright_boost", 1.4)
 	_found_footage_material = make_live_found_footage_material()
 	_overlay.material = _material_for_mode()
-	_overlay.visible = _enabled and not _tape_hold
+	_overlay.visible = (_enabled or _tape_hold)
 	layer.add_child(_overlay)
 	_tube_display = add_crt_display_pass(layer)
 	host.add_child(layer)
@@ -237,15 +237,17 @@ func set_enabled(value: bool) -> void:
 
 
 func set_tape_playback(on: bool) -> void:
+	# Playback temporarily enables the same whole-scene presentation, including
+	# the video and cabinet. Preserve the player's normal enabled preference.
 	_tape_hold = on
 	_sync_visible()
 
 
 func _sync_visible() -> void:
 	if _overlay != null:
-		_overlay.visible = _enabled and not _tape_hold
+		_overlay.visible = (_enabled or _tape_hold)
 	if _tube_display != null:
-		_tube_display.visible = _enabled and not _tape_hold and _mode == Mode.FOUND_FOOTAGE
+		_tube_display.visible = (_enabled or _tape_hold) and _mode == Mode.FOUND_FOOTAGE
 
 
 func toggle_enabled() -> bool:
@@ -344,7 +346,7 @@ func update() -> void:
 		changed = true
 	if _glitch_active:
 		changed = true
-	if _mode == Mode.FOUND_FOOTAGE and _enabled and not _tape_hold:
+	if _mode == Mode.FOUND_FOOTAGE and (_enabled or _tape_hold):
 		if _minor_at <= 0.0 or _major_at <= 0.0:
 			_schedule_glitches(now)
 		if not _glitch_active:

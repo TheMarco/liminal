@@ -1,0 +1,20 @@
+{
+  "triangles": 3290,
+  "meshes": 1,
+  "surfaces": 1,
+  "bounds_godot_m": {
+    "min": [
+      -0.586866021156311,
+      0.0,
+      -0.7350000143051147
+    ],
+    "max": [
+      0.586866021156311,
+      1.4570000171661377,
+      0.7350000143051147
+    ]
+  },
+  "front_axis": "+Z",
+  "description": "Molded fiberglass rocket kiddie ride with actual open red cockpit and mechanical base",
+  "texture_resolution": 1024
+}

@@ -15,7 +15,7 @@ func _init() -> void:
 	var root := Node3D.new()
 	get_root().add_child(root)
 	var floor_body := _static_box(Vector3(18.0, -0.10, 6.0),
-		Vector3(48.0, 0.20, 24.0))
+		Vector3(48.0, 0.20, 48.0))
 	root.add_child(floor_body)
 	var player := Player.new()
 	root.add_child(player)
@@ -24,6 +24,8 @@ func _init() -> void:
 	player.position = Vector3(8.0, 0.0, 3.0)
 	await process_frame
 	await physics_frame
+	player.set_process(false)
+	player.set_physics_process(false)
 
 	var failures := 0
 
@@ -50,6 +52,81 @@ func _init() -> void:
 		print("FAIL — unobstructed figure closed only %.2fm in two seconds"
 			% (open_start - open_end))
 	open_fig.queue_free()
+
+	# Finite obstacles must be navigable without letting the movement capsule
+	# clip through them. Freeze automatic processing so these checks are driven
+	# entirely by the fixed-step advance below; keep the torch visible so the
+	# warding state cannot be mistaken for a close-range seizure.
+	player.set_process(false)
+	player.set_physics_process(false)
+	player.flashlight.visible = true
+	var box := _static_box(Vector3(6.0, 1.4, 6.0), Vector3(5.0, 2.8, 4.0))
+	root.add_child(box)
+	player.global_position = Vector3(10.0, 0.0, 6.0)
+	var finite := _figure(root, player, Vector3(2.0, 0.0, 6.0))
+	finite.set_process(false)
+	finite.set_physics_process(false)
+	await physics_frame
+	var finite_penetrated := false
+	for i in 1800:
+		finite._advance(STEP, true)
+		if not _capsule_clear(player, finite.global_position):
+			finite_penetrated = true
+			break
+	var finite_reach := _flat_gap(finite.global_position, player.global_position)
+	if finite_reach > 1.1 or finite_penetrated:
+		failures += 1
+		print("FAIL — finite box route ended %.2fm away (penetrated=%s)" % [finite_reach, finite_penetrated])
+	finite.queue_free()
+	box.queue_free()
+	await physics_frame
+
+	# A U opening facing away from the player requires an initial detour away
+	# from the direct line before the figure can round an arm.
+	var back_wall := _static_box(Vector3(6.5, 1.4, 6.0), Vector3(0.4, 2.8, 4.0))
+	var arm_low := _static_box(Vector3(5.0, 1.4, 4.0), Vector3(3.4, 2.8, 0.4))
+	var arm_high := _static_box(Vector3(5.0, 1.4, 8.0), Vector3(3.4, 2.8, 0.4))
+	root.add_child(back_wall)
+	root.add_child(arm_low)
+	root.add_child(arm_high)
+	player.global_position = Vector3(10.0, 0.0, 6.0)
+	var u_open := _figure(root, player, Vector3(5.5, 0.0, 6.0))
+	u_open.set_process(false)
+	u_open.set_physics_process(false)
+	await physics_frame
+	var u_penetrated := false
+	var u_away := false
+	for i in 1800:
+		u_open._advance(STEP, true)
+		if u_open.global_position.x < 3.3 - ShadowFigure.MOVE_RADIUS:
+			u_away = true
+		if not _capsule_clear(player, u_open.global_position):
+			u_penetrated = true
+			break
+	var u_reach := _flat_gap(u_open.global_position, player.global_position)
+	if u_reach > 1.1 or u_penetrated or not u_away:
+		failures += 1
+		print("FAIL — away-facing U route ended %.2fm away (detour=%s penetrated=%s)" % [u_reach, u_away, u_penetrated])
+	u_open.queue_free()
+	back_wall.queue_free()
+	arm_low.queue_free()
+	arm_high.queue_free()
+	await physics_frame
+	# The player's narrower body can stand closer to a wall. Failure to fit
+	# the ghost at that exact target must not stop its approach at arm's length.
+	var wall_near_player := _static_box(Vector3(10.7, 1.4, 6.0), Vector3(0.4, 2.8, 6.0))
+	root.add_child(wall_near_player)
+	player.global_position = Vector3(10.15, 0.0, 6.0)
+	var near_wall := _figure(root, player, Vector3(2.0, 0.0, 6.0))
+	await physics_frame
+	for i in 900:
+		near_wall._advance(STEP)
+	if _flat_gap(near_wall.global_position, player.global_position) > 1.1:
+		failures += 1
+		print("FAIL — player beside wall made ghost stop at %s" % near_wall.global_position)
+	near_wall.queue_free()
+	wall_near_player.queue_free()
+	await physics_frame
 
 	# This wall spans the full width of cell (0, 0), so there is deliberately
 	# no legal path around it without leaving the encounter room.
@@ -204,9 +281,9 @@ func _init() -> void:
 		print("FAIL — waiting figure stayed dormant with the player in its room")
 	waiting.queue_free()
 
-	print("ghost room audit: open close %.2fm | wall stop x=%.2f | watched %.2fm vs unwatched %.2fm | failures=%d"
-		% [open_start - open_end, wall_stop,
-			watched, unwatched, failures])
+	print("ghost room audit: open close %.2fm | finite reach %.2fm | U reach %.2fm detour=%s | wall stop x=%.2f | watched %.2fm vs unwatched %.2fm | failures=%d"
+		% [open_start - open_end, finite_reach, u_reach, u_away,
+			wall_stop, watched, unwatched, failures])
 	if failures == 0:
 		print("  PASS — walls block, offset doors traverse, and escape takes three rooms")
 	root.free()
@@ -222,6 +299,8 @@ func _figure(root: Node3D, player: Player, at: Vector3) -> ShadowFigure:
 	f.origin_room = ShadowFigure.room_for(player, player.global_position)
 	f.position = at
 	root.add_child(f)
+	f.set_process(false)
+	f.set_physics_process(false)
 	return f
 
 
@@ -258,3 +337,16 @@ func _cell_center(cell: Vector2i) -> Vector3:
 
 func _flat_gap(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
+func _capsule_clear(player: Player, ground: Vector3) -> bool:
+	var shape := CapsuleShape3D.new()
+	shape.radius = ShadowFigure.MOVE_RADIUS
+	shape.height = ShadowFigure.MOVE_HEIGHT
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.transform = Transform3D(Basis.IDENTITY,
+		ground + Vector3(0.0, ShadowFigure.MOVE_HEIGHT * 0.5 + 0.04, 0.0))
+	query.exclude = [player.get_rid()]
+	query.collision_mask = 1
+	return player.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty()

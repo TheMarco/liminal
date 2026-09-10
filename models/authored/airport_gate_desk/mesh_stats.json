@@ -1,0 +1,22 @@
+{
+  "triangles": 3904,
+  "meshes": 2,
+  "surfaces": 2,
+  "bounds_godot_m": {
+    "min": [
+      -1.2200000286102295,
+      0.0,
+      -0.5299999713897705
+    ],
+    "max": [
+      1.2200000286102295,
+      1.4175000190734863,
+      0.6299999952316284
+    ]
+  },
+  "front_axis": "+Z",
+  "passenger_front_axis": "-Z",
+  "staff_screen_axis": "+Z",
+  "worktop_height_m": 0.957,
+  "counter_height_m": 1.16
+}

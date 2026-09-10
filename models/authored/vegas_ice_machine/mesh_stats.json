@@ -1,0 +1,19 @@
+{
+  "triangles": 2561,
+  "meshes": 2,
+  "surfaces": 2,
+  "bounds_godot_m": {
+    "min": [
+      -0.39500001072883606,
+      0.0,
+      -0.35999998450279236
+    ],
+    "max": [
+      0.39500001072883606,
+      1.940000057220459,
+      0.3775000274181366
+    ]
+  },
+  "front_axis": "+Z",
+  "description": "Aged ivory ice dispenser with louvred compressor and open drain well"
+}

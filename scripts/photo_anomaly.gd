@@ -21,10 +21,10 @@ extends Node3D
 ## director owns it, so a rebuilt cell cannot resurrect a spent photograph.
 
 enum Type { PLACEMENT, DUPLICATE, WRITING, BLEED, GIANT, RING, MISSING,
-	PRINT, PORTAL, TURNED, NUMBERED_DOOR }
+	PRINT, PORTAL, TURNED, NUMBERED_DOOR, DOORWAY, OBSTRUCTION, BOUNTY }
 
 ## Render layer bit reserved for photo-only geometry. Player cameras clear
-## this bit; the snapshot camera sets it.
+## this bit; the raised viewfinder and snapshot camera both set it.
 const PHOTO_LAYER_BIT := 19
 const PHOTO_LAYER := 1 << PHOTO_LAYER_BIT
 ## Eye-only geometry: visible to the bare eye, cleared by the RAISED camera.
@@ -143,7 +143,7 @@ var _points: Array[Vector3] = []   # chunk-local sample points
 ## its own body otherwise occludes it from every stance (found 2026-08-19:
 ## a required GIANT was uncapturable from 16/16 stances).
 var _body_rids: Array[RID] = []
-## Nodes a resolve() removes, plus the giant/placement glow and floor height.
+## Anomaly visual roots remain present after documentation.
 var _resolvables: Array[Node] = []
 var _glow: OmniLight3D
 var _floor_y := 0.0
@@ -156,6 +156,12 @@ var _turned_eye: Node3D
 var _turned_lens: Node3D
 var _number_plate: Label3D
 var _number_print: Node3D
+var _doorway_resolve := Callable()
+## Observational name supplied by an experimental cross-realm doorway.
+var realm_destination := ""
+var _realm_centre := Vector3.ZERO
+var _realm_width := 0.0
+var _realm_height := 0.0
 
 
 func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
@@ -172,10 +178,10 @@ func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
 	match type:
 		Type.TURNED:
 			_build_turned(floor_h)
-		Type.WRITING:
-			_build_writing(floor_h, wall_dir, wall_along, false)
-		Type.PRINT:
-			_build_writing(floor_h, wall_dir, wall_along, true)
+		Type.WRITING, Type.PRINT:
+			# Keep the legacy PRINT type/id for deterministic plans and saves.
+			# All writing must be discoverable before spending a photograph.
+			_build_writing(floor_h, wall_dir, wall_along)
 		Type.DUPLICATE:
 			_build_props(floor_h, 2)
 		Type.GIANT:
@@ -201,6 +207,39 @@ func photo_points() -> Array[Vector3]:
 	return out
 
 
+func configure_realm_destination(destination: String, seal: PhotoDoorSeal) -> void:
+	realm_destination = destination
+	_realm_centre = to_local(seal.to_global(seal.centre))
+	_realm_width = seal.width
+	_realm_height = seal.height
+
+
+## A live realm window can fill the entire viewfinder at close range. Its
+## frame corners need not fit: a clear aim into its aperture is sufficient.
+## Other anomalies retain their existing whole-subject framing requirement.
+func framing_points(cam: Camera3D) -> Array[Vector3]:
+	if _realm_width <= 0.0:
+		return photo_points()
+	var points: Array[Vector3] = []
+	var normal := global_basis * _facing
+	var centre := to_global(_realm_centre + _facing * 0.20)
+	var forward := -cam.global_basis.z
+	var denominator := forward.dot(normal)
+	if denominator >= -0.001:
+		return points
+	var distance := (centre - cam.global_position).dot(normal) / denominator
+	if distance <= 0.0 or distance > capture_distance():
+		return points
+	var hit := cam.global_position + forward * distance
+	var local_hit := to_local(hit) - _realm_centre
+	var across := Vector3.FORWARD if absf(_facing.x) > 0.5 else Vector3.RIGHT
+	if absf(local_hit.dot(across)) > _realm_width * 0.5 - 0.06 \
+			or local_hit.y < 0.08 or local_hit.y > _realm_height - 0.08:
+		return points
+	points.append(hit)
+	return points
+
+
 ## A bleed prop the dressing already placed becomes photographable evidence:
 ## no visuals of its own, just sample points over the existing prop. One
 ## documentation credit per floor is enforced by the director, not here.
@@ -210,6 +249,26 @@ func configure_bleed(p_id: String, p_cell: Vector2i,
 	type = Type.BLEED
 	cell = p_cell
 	_points = points
+
+
+func configure_doorway(seal: PhotoDoorSeal, at: Vector2i,
+		when_resolved: Callable) -> void:
+	id = seal.photo_id
+	type = Type.OBSTRUCTION if seal.obstruction else Type.DOORWAY
+	theme = seal.theme
+	cell = at
+	_doorway_resolve = when_resolved
+	var direction: Vector2i = WorldGen.DIRV[seal.dir]
+	_facing = -Vector3(direction.x, 0.0, direction.y)
+	# Points sit just in front of the still-solid wall. Other walls/furniture
+	# continue to occlude the shot; never exclude an entire chunk's physics.
+	var surface_depth := seal.obstruction_depth + 0.08 if seal.obstruction else 0.4
+	var centre := seal.centre + _facing * surface_depth
+	var across := Vector3.FORWARD if seal.dir < 2 else Vector3.RIGHT
+	for side in [-1.0, 1.0]:
+		for y in [0.4, seal.height - 0.25]:
+			_points.append(centre + across * seal.width * 0.38 * side \
+				+ Vector3.UP * float(y))
 
 
 ## Room-side normal for WRITING (the label faces back into its room), zero
@@ -228,7 +287,13 @@ func facing_normal() -> Vector3:
 ## says where, this says what. Ambiguity-safe — names the wrongness, never
 ## the cause.
 func count_caption() -> String:
+	if not realm_destination.is_empty():
+		return "THAT ROOM DOES NOT BELONG HERE"
 	match type:
+		Type.OBSTRUCTION:
+			return PhotoObstruction.caption(theme)
+		Type.DOORWAY:
+			return "THERE WAS NO DOOR HERE"
 		Type.NUMBERED_DOOR:
 			return "THE FILM SAYS 106"
 		Type.MISSING:
@@ -236,7 +301,7 @@ func count_caption() -> String:
 		Type.PORTAL:
 			return "THAT IS NOT WHAT'S BEHIND THIS WALL"
 		Type.PRINT:
-			return "\"%s\" — ONLY THE FILM SEES IT" % phrase_for(
+			return "\"%s\" — ONLY THE CAMERA SEES IT" % phrase_for(
 				world_seed, cell)
 		Type.PLACEMENT:
 			return "THE CEILING IS HOLDING IT"
@@ -255,6 +320,41 @@ func count_caption() -> String:
 		Type.BLEED:
 			return "IT BELONGS TO THE FLOOR BELOW"
 	return ""
+
+
+## Observational album notes, frozen at shutter time rather than regenerated
+## from a room that may later change. These do not grant evidence credit.
+func album_description(documented := false) -> String:
+	if not realm_destination.is_empty():
+		return "A doorway into %s, inside another floor." % realm_destination
+	match type:
+		Type.OBSTRUCTION:
+			return PhotoObstruction.description(theme, documented)
+		Type.WRITING, Type.PRINT:
+			return 'Writing visible only through the camera: "%s".' % phrase_for(world_seed, cell)
+		Type.NUMBERED_DOOR:
+			return "Door 106. It read 104 before the first photograph." if documented \
+				else "The camera shows 106; the door reads 104."
+		Type.DOORWAY:
+			return "A passage opened by an earlier photograph." if documented \
+				else "A doorway visible only through the camera."
+		Type.PLACEMENT:
+			return "An object lodged in the ceiling, still visible through the camera."
+		Type.DUPLICATE:
+			return "Two identical objects in a space that looks empty without the camera."
+		Type.TURNED:
+			return "An object that turns to face the camera."
+		Type.GIANT:
+			return "A piece of furniture far larger than it should be."
+		Type.RING:
+			return "A circle of objects visible only through the camera."
+		Type.MISSING:
+			return "An object visible to the eye is missing from this photograph."
+		Type.PORTAL:
+			return "A view through the wall into another place."
+		Type.BLEED:
+			return "An object from the floor below, out of place here."
+	return "An unusual detail in the building."
 
 
 func occlusion_excludes() -> Array[RID]:
@@ -323,6 +423,8 @@ static func writing_spot_for_chunk(route: DescentRoute, at: Vector2i,
 		return writing_spot_for(route, at)
 	for spot in _writing_spot_candidates(route, at):
 		var dir := int(spot["dir"])
+		if chunk._edge_info(at, dir).has("photo_door_id"):
+			continue # writing must not float across the lens-only aperture
 		var along := float(spot["along"])
 		if _writing_approach_clear(chunk, dir, along):
 			return spot
@@ -426,26 +528,21 @@ static func _theme_furnished_walls(route: DescentRoute,
 ## gone afterwards, writings leave the wall, the giant's glow dies — and the
 ## TURNED prop alone escalates: the real one now faces the player. Chunk
 ## rebuilds skip documented anomalies entirely, so the resolution holds.
-func resolve() -> void:
+func resolve(restoring := false) -> void:
 	match type:
+		Type.DOORWAY, Type.OBSTRUCTION:
+			if _doorway_resolve.is_valid():
+				_doorway_resolve.call()
+				_doorway_resolve = Callable()
 		Type.NUMBERED_DOOR:
 			if is_instance_valid(_number_plate):
 				_number_plate.text = "106"
-			if is_instance_valid(_number_print):
-				_number_print.visible = false
 		Type.PLACEMENT:
-			_release_ceiling_furniture()
-		Type.GIANT:
-			if _glow != null and is_instance_valid(_glow):
-				_glow.queue_free()
-				_glow = null
+			_release_ceiling_furniture(restoring)
 		Type.TURNED:
 			_turn_real_prop()
 		_:
-			for node in _resolvables:
-				if is_instance_valid(node):
-					node.queue_free()
-			_resolvables.clear()
+			pass # Documentation awards proof; it does not erase the anomaly.
 
 
 ## PLACEMENT and TURNED are the anomalies whose resolution is a visible
@@ -454,18 +551,11 @@ func resolve() -> void:
 ## card, and TURNED's point is that the prop has moved WHILE the paper was
 ## up — the player lowers the print and it is facing them.
 func resolves_after_review() -> bool:
-	return type in [Type.PLACEMENT, Type.TURNED, Type.NUMBERED_DOOR]
+	return type in [Type.PLACEMENT, Type.TURNED, Type.NUMBERED_DOOR, Type.DOORWAY, Type.OBSTRUCTION]
 
 
-## TURNED's resolve escalates instead of neutralizing: the lens copy goes,
-## and the real, eye-visible prop snaps to face wherever the player stands
-## now — on every layer, so raising the camera again changes nothing. No
-## tween: it did not turn, it was always facing you.
+## The real prop turns after review; the lens copy keeps following the viewer.
 func _turn_real_prop() -> void:
-	set_process(false)
-	if _turned_lens != null and is_instance_valid(_turned_lens):
-		_turned_lens.queue_free()
-		_turned_lens = null
 	if _turned_eye == null or not is_instance_valid(_turned_eye):
 		return
 	var cam := get_viewport().get_camera_3d()
@@ -473,20 +563,29 @@ func _turn_real_prop() -> void:
 		var to_cam := cam.global_position - _turned_eye.global_position
 		if Vector2(to_cam.x, to_cam.z).length_squared() > 0.04:
 			_turned_eye.rotation.y = atan2(to_cam.x, to_cam.z)
-	_set_layer(_turned_eye, 1)
+	_set_layer(_turned_eye, EYE_ONLY_LAYER)
 
 
-func _release_ceiling_furniture() -> void:
+func _release_ceiling_furniture(restoring := false) -> void:
 	if _placement_pivot == null or not is_instance_valid(_placement_pivot):
 		return
 	var pivot := _placement_pivot
 	_placement_pivot = null
-	if _glow != null and is_instance_valid(_glow):
-		var dying_glow := _glow
-		_glow = null
-		var fade := create_tween()
-		fade.tween_property(dying_glow, "light_energy", 0.0, 0.12)
-		fade.tween_callback(dying_glow.queue_free)
+	# Keep the impossible ceiling pose in the lens while the physical prop falls.
+	var lens_pose := pivot.duplicate() as Node3D
+	lens_pose.name = "DocumentedCeilingPose"
+	add_child(lens_pose)
+	_set_photo_only(lens_pose)
+	_set_layer(pivot, EYE_ONLY_LAYER)
+	if is_instance_valid(_glow):
+		_glow.light_cull_mask = PHOTO_LAYER
+	if restoring:
+		pivot.position.y = _placement_rest_y
+		var sign_value := -1.0 \
+			if WorldGen.h(world_seed, cell.x, cell.y, 9383) % 2 == 0 else 1.0
+		pivot.rotation.x = sign_value * 0.06
+		pivot.rotation.z = -sign_value * 0.04
+		return
 	var distance := maxf(0.1, pivot.position.y - _placement_rest_y)
 	var duration := clampf(sqrt(2.0 * distance / 9.8), 0.32, 0.62)
 	var tilt_sign := -1.0 \
@@ -695,8 +794,7 @@ func _build_missing(floor_h: float) -> void:
 		spot + Vector3(0, maxf(extents.y, 1.0) * 0.85, 0)]
 
 
-func _build_writing(floor_h: float, wall_dir: int, wall_along: float,
-		print_only := false) -> void:
+func _build_writing(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	var dir := maxi(wall_dir, 0)
 	var half := WorldGen.CELL_SIZE * 0.5
 	var dirv3 := Vector3(WorldGen.DIRV[dir].x, 0.0, WorldGen.DIRV[dir].y)
@@ -710,8 +808,7 @@ func _build_writing(floor_h: float, wall_dir: int, wall_along: float,
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.modulate = Color(0.88, 0.84, 0.76, 0.95)
 	label.outline_size = 0
-	var layer := PRINT_LAYER if print_only else PHOTO_LAYER
-	label.layers = (1 | layer) if debug_visible else layer
+	label.layers = (1 | PHOTO_LAYER) if debug_visible else PHOTO_LAYER
 	label.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	# Walls carry their thickness inward from the canonical edge, so the
 	# writing floats a hand's width proud of the paper, never inside it.
@@ -1066,8 +1163,8 @@ func _set_layer(node: Node, layer: int, strip_collision := false) -> void:
 		_set_layer(child, layer, strip_collision)
 
 
-## The live eye and viewfinder both read 104. A matching opaque number plate
-## on PRINT_LAYER hides those digits only in the developed photograph.
+## The eye reads 104; the viewfinder and developed photograph reveal 106.
+## Photographing the discrepancy makes 106 real after review.
 func configure_numbered_door(p_id: String, p_cell: Vector2i, plate: Label3D) -> void:
 	id = p_id
 	cell = p_cell
@@ -1075,6 +1172,7 @@ func configure_numbered_door(p_id: String, p_cell: Vector2i, plate: Label3D) -> 
 	type = Type.NUMBERED_DOOR
 	_number_plate = plate
 	plate.text = "104"
+	plate.layers = EYE_ONLY_LAYER
 	set_process(false)
 	_facing = plate.global_basis.z.normalized()
 	for offset in [Vector3(-0.11, -0.055, 0.025), Vector3(0.11, 0.055, 0.025)]:
@@ -1087,7 +1185,7 @@ func configure_numbered_door(p_id: String, p_cell: Vector2i, plate: Label3D) -> 
 	box.size = Vector3(0.432, 0.202, 0.003)
 	backing.mesh = box
 	backing.material_override = Mats.darkwood()
-	backing.layers = PRINT_LAYER
+	backing.layers = PHOTO_LAYER
 	backing.position.z = 0.006
 	backing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_number_print.add_child(backing)
@@ -1096,5 +1194,5 @@ func configure_numbered_door(p_id: String, p_cell: Vector2i, plate: Label3D) -> 
 	printed.text = "106"
 	printed.position = Vector3(0, 0, 0.011)
 	printed.rotation = Vector3.ZERO
-	printed.layers = PRINT_LAYER
+	printed.layers = PHOTO_LAYER
 	_number_print.add_child(printed)

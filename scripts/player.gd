@@ -62,12 +62,16 @@ const CLIMB_SPEED := 2.1
 const WaterInteraction = preload("res://scripts/pool_water_interaction.gd")
 
 signal interaction_prompt_changed(text: String)
+signal emergency_flash_changed(held: bool)
+signal emergency_flash_used()
 
 var cam: Camera3D
 var flashlight: SpotLight3D
 var world_seed := 0   # set by main; used to pick footstep surface per cell
 var level_theme := 0  # set by main on level switch
 var _flash_charge := FLASH_MAX
+## A separate one-use escape resource, independent of the flashlight battery.
+var emergency_flash_held := false
 var _charging_station: Node3D
 var _charge_session_active := false
 ## World height of the water surface on this floor, or far below everything if
@@ -264,6 +268,24 @@ func flashlight_charge() -> float:
 ## Sprint reserve left, 0..1, for the HUD meter.
 func stamina() -> float:
 	return _stamina / STAMINA_MAX
+
+
+func grant_emergency_flash() -> bool:
+	if emergency_flash_held:
+		return false
+	emergency_flash_held = true
+	emergency_flash_changed.emit(true)
+	return true
+
+
+func try_emergency_flash() -> bool:
+	if not emergency_flash_held:
+		return false
+	# Clear before notifying listeners so a reaction cannot consume it twice.
+	emergency_flash_held = false
+	emergency_flash_changed.emit(false)
+	emergency_flash_used.emit()
+	return true
 
 
 ## True during the post-depletion lockout, so the meter can flash a refusal
@@ -569,7 +591,7 @@ func _scan_interaction() -> void:
 	var next: Interactable
 	if not hit.is_empty() and hit["collider"] is Interactable:
 		var candidate := hit["collider"] as Interactable
-		if candidate.enabled:
+		if candidate.can_interact(self):
 			next = candidate
 	if next != _focused:
 		if is_instance_valid(_focused):

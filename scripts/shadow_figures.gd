@@ -51,6 +51,7 @@ var player: Player
 var topology: DescentTopology
 var horror_director: HorrorDirector
 var suspended := false
+var directed_only := false
 ## The rules have the player pinned — a blackout they must stand still through,
 ## or the arrival caption. Nothing new arrives and nothing already out there
 ## closes the distance; the torch still works, so the player keeps an answer.
@@ -78,6 +79,7 @@ var _prev_yaw := NAN
 var _turn_acc := 0.0
 var _turn_cd := 8.0
 var _pending := 0.0
+var _new_spawn_hold := 0.0
 ## Dev haunt settings, assigned by main from CliOptions before this enters the
 ## tree. Previously read straight off the command line here.
 var dev_haunt := false
@@ -109,6 +111,42 @@ func _ready() -> void:
 		_force_variant = dev_haunt_variant
 
 
+## Try to place a short-lived realm-encounter figure in a visible, clear area.
+## This is an explicit encounter request; it does not alter the normal timer.
+func try_realm_encounter(front_first: bool = false) -> bool:
+	if suspended or passive or _new_spawn_hold > 0.0 or player == null or not player.is_inside_tree():
+		return false
+	if active_figures().size() >= MAX_FIGS:
+		return false
+	var fwd := _flat_fwd()
+	if fwd == Vector3.ZERO:
+		return false
+	for i in 32:
+		var angle: float
+		if front_first and i < 16:
+			angle = deg_to_rad(randf_range(-50.0, 50.0))
+		else:
+			angle = randf_range(-PI, PI)
+		var ground := _floor_at(player.global_position
+			+ fwd.rotated(Vector3.UP, angle) * randf_range(7.0, 12.0))
+		if ground == Vector3.INF:
+			continue
+		if not _figure_volume_clear(ground):
+			continue
+		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
+			continue
+		var too_close := false
+		for figure in active_figures():
+			if figure.global_position.distance_to(ground) < 2.0:
+				too_close = true
+				break
+		if too_close:
+			continue
+		_spawn_at(ground, true, 2.0)
+		return true
+	return false
+
+
 ## An authored encounter: something arrives shortly, behind the player when
 ## the room allows it. Descent calls this when the objective tape ends and
 ## when a dead charging station has just taken the torch. It deliberately
@@ -120,7 +158,15 @@ func force_encounter(delay := 1.6) -> void:
 	_forced_tries = 6
 
 
+## A brief discovery beat delays fresh arrivals, preserving pending encounters
+## and leaving every figure already in the world free to move and burn.
+func hold_new_spawns(seconds: float) -> void:
+	_new_spawn_hold = maxf(_new_spawn_hold, seconds)
+
+
 func _forced_spawn() -> bool:
+	if _new_spawn_hold > 0.0:
+		return false
 	if _figs.size() >= MAX_FIGS:
 		return true  # the room is already occupied; the beat exists
 	var fwd := _flat_fwd()
@@ -168,8 +214,10 @@ func adopt(f: ShadowFigure) -> void:
 	spawned.emit()
 
 
-## Level switch: whatever was standing there stays behind.
-func despawn() -> void:
+## Level switch: whatever was standing there stays behind. A temporary realm
+## visit only removes the figures; its source encounter clock stays paused.
+func despawn(reset_encounters := true) -> void:
+	_new_spawn_hold = 0.0
 	for f in _figs:
 		if is_instance_valid(f):
 			f.queue_free()
@@ -183,8 +231,10 @@ func despawn() -> void:
 	for child in get_children():
 		if child is AudioStreamPlayer3D:
 			child.queue_free()
-	_t = randf_range(4.0, 11.0)
 	_prev_yaw = NAN
+	if not reset_encounters:
+		return
+	_t = randf_range(4.0, 11.0)
 	# A beat owed on this floor does not follow the player to the next one.
 	_forced_left = 0.0
 	_forced_tries = 0
@@ -202,6 +252,13 @@ func _physics_process(dt: float) -> void:
 			_figs.remove_at(i)
 	_sync_director_count()
 	if passive:
+		_prev_yaw = NAN
+		return
+	if _new_spawn_hold > 0.0:
+		_new_spawn_hold = maxf(0.0, _new_spawn_hold - dt)
+		_prev_yaw = NAN
+		return
+	if directed_only:
 		_prev_yaw = NAN
 		return
 	# The countdown to an authored encounter only runs while the player is
@@ -255,6 +312,8 @@ func _track_turn(dt: float) -> void:
 
 
 func _turn_spawn() -> bool:
+	if _new_spawn_hold > 0.0:
+		return false
 	if horror_director != null and not horror_director.can_start_hostile():
 		return false
 	var fwd := _flat_fwd()
@@ -278,6 +337,8 @@ func _turn_spawn() -> bool:
 
 
 func _try_spawn() -> bool:
+	if _new_spawn_hold > 0.0:
+		return false
 	if horror_director != null and not horror_director.can_start_hostile():
 		return false
 	if _force_at != Vector3.INF:

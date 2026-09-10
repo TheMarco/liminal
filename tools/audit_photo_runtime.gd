@@ -23,7 +23,7 @@ func run() -> void:
 	# closed. The caption must then retain a full readable hold instead of
 	# spending its lifetime behind the camera layer.
 	var before_caption: String = game._event_hint.text
-	var evidence_caption := "PHOTOGRAPH 1 / 3 — THE CLOCK HAS TOO MANY HANDS"
+	var evidence_caption := "PHOTOGRAPH 1 — THE CLOCK HAS TOO MANY HANDS"
 	game._on_photo_documented("audit-caption", 1, 3,
 		"THE CLOCK HAS TOO MANY HANDS")
 	expect(game._pending_photo_message == evidence_caption,
@@ -79,7 +79,14 @@ func run() -> void:
 	# Documenting to the requirement opens the gate; ids never double-count.
 	var ids := []
 	for cell in director.plan:
-		ids.append(str(director.plan[cell]["id"]))
+		# Leave the real, framed anomaly unphotographed until after the minimum.
+		if cell != at:
+			ids.append(str(director.plan[cell]["id"]))
+	expect(ids.size() >= 3, "plan has no additional evidence beyond the minimum")
+	if ids.size() < 3:
+		await teardown_game(game)
+		finish()
+		return
 	expect(director.mark_documented(str(ids[0])),
 		"first documentation was rejected")
 	expect(not director.mark_documented(str(ids[0])),
@@ -92,16 +99,71 @@ func run() -> void:
 		"gate closed with the requirement met")
 	expect(director.documented_count() == 3, "documented count drifted")
 
+	# Documentation must survive a room rebuild without erasing its visuals or
+	# making its evidence eligible for a second reward.
+	if spawned:
+		var documented: PhotoAnomaly = director._live[at]
+		var documented_id := documented.id
+		expect(director.capturable().has(documented),
+			"reaching the minimum retired an ordinary unphotographed anomaly")
+		expect(await _frame_from_legal_stance(game, director, camera, documented),
+			"the camera could not capture new ordinary evidence after the minimum")
+		expect(director.mark_documented(documented_id),
+			"new ordinary evidence was rejected after the minimum")
+		documented.resolve(true)
+		var total := director.documented_count()
+		expect(total == 4 and game.descent_photo_requirement_met(),
+			"a fourth discovery did not increase the count while keeping the lift unlocked")
+		expect(game._descent_hud._photo.text == "PHOTOS 4 · MIN 3",
+			"the evidence HUD clamped the count to the floor minimum")
+		game._on_photo_documented(documented_id, total, 3, "EXTRA DISCOVERY")
+		expect(game._pending_photo_message == "PHOTOGRAPH 4 — EXTRA DISCOVERY",
+			"extra discovery caption did not show its actual photograph count")
+		expect(not director.capturable().has(documented),
+			"documented anomaly is still eligible for a reward")
+		documented.free()
+		director._on_chunk_built(game.cm.chunk_at(at))
+		var rebuilt: PhotoAnomaly = director._live.get(at)
+		expect(is_instance_valid(rebuilt) and rebuilt.id == documented_id,
+			"documented anomaly disappeared when its room rebuilt")
+		expect(not director.mark_documented(documented_id)
+			and director.documented_count() == total,
+			"rebuilt anomaly awarded repeat credit")
+		# Directly exercise the former deletion path with writing geometry.
+		var writing := PhotoAnomaly.new()
+		writing.type = PhotoAnomaly.Type.WRITING
+		var lettering := MeshInstance3D.new()
+		lettering.mesh = QuadMesh.new()
+		lettering.layers = PhotoAnomaly.PHOTO_LAYER
+		writing.add_child(lettering)
+		writing._resolvables.append(lettering)
+		game.level_root.add_child(writing)
+		writing.resolve()
+		expect(not lettering.is_queued_for_deletion() and lettering.visible,
+			"photographing erased camera-only writing")
+		writing.free()
+
 	# Ceiling furniture is the one anomaly whose resolution must be seen after
 	# the developed print leaves, never completed behind the review card.
 	var delayed := PhotoAnomaly.new()
+	delayed.id = "audit:post-minimum-placement"
 	delayed.type = PhotoAnomaly.Type.PLACEMENT
 	delayed.world_seed = SEED
 	delayed._placement_rest_y = 0.5
 	delayed._placement_pivot = Node3D.new()
 	delayed._placement_pivot.position.y = 2.5
+	var ceiling_mesh := MeshInstance3D.new()
+	ceiling_mesh.mesh = BoxMesh.new()
+	delayed._placement_pivot.add_child(ceiling_mesh)
 	delayed.add_child(delayed._placement_pivot)
 	game.level_root.add_child(delayed)
+	var fixture_cell := Vector2i(1 << 29, 1 << 29)
+	director._live[fixture_cell] = delayed
+	var before_extra := director.documented_count()
+	expect(director.requirement_met() and director.capturable().has(delayed),
+		"world-altering ordinary evidence was unavailable after the minimum")
+	expect(director.mark_documented(delayed.id),
+		"world-altering evidence could not be documented after the minimum")
 	var lodged_y := delayed._placement_pivot.position.y
 	expect(delayed.resolves_after_review(),
 		"ceiling furniture did not opt into post-review resolution")
@@ -112,10 +174,22 @@ func run() -> void:
 	expect(delayed._placement_pivot == null \
 		and camera._review_resolves.is_empty(),
 		"closing the photo review did not release the ceiling furniture")
+	var lens_pose := delayed.get_node_or_null("DocumentedCeilingPose") as Node3D
+	expect(lens_pose != null and is_equal_approx(lens_pose.position.y, lodged_y),
+		"falling furniture lost its impossible pose in the viewfinder")
+	if lens_pose != null:
+		expect(lens_pose.get_child(0).layers == PhotoAnomaly.PHOTO_LAYER
+			and ceiling_mesh.layers == PhotoAnomaly.EYE_ONLY_LAYER,
+			"ceiling anomaly did not separate the persistent lens and physical poses")
+	expect(not director.capturable().has(delayed)
+		and not director.mark_documented(delayed.id)
+		and director.documented_count() == before_extra + 1,
+		"a repeat post-minimum photograph awarded additional evidence credit")
+	director._live.erase(fixture_cell)
 	delayed.queue_free()
 
 	await teardown_game(game)
-	finish("photo runtime: spawn, framing, gate, delayed ceiling drop")
+	finish("photo runtime: spawn, framing, minimum gate, extra evidence, delayed ceiling drop")
 
 
 func _frame_from_legal_stance(game: Node, director: PhotoDirector,

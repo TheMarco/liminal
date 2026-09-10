@@ -32,6 +32,11 @@ const EARLY_SHORTEN := [0.62, 0.78, 0.9]
 ## is almost never wall-backed — every edge is a guaranteed doorway — so the
 ## arrival car needs a nearby room that owns a solid wall.
 const ARRIVAL_RADIUS := 4
+const INTRO_TARGET_ATTEMPTS := 12
+const OBSTRUCTION_TARGET_ATTEMPTS := 16
+const OBSTRUCTION_DISTRICTS := 16
+const REALM_DISTRICTS := 64
+static var _intro_target_cache := {}
 const TARGET_SALT := 1817
 const TARGET_WALL_SALT := 1770
 const ARRIVAL_SALT := 1904
@@ -91,6 +96,7 @@ var world_seed := 0
 var theme := 0
 var floor_idx := 0
 var origin := Vector2i.ZERO
+var arrival_search_center := Vector2i.ZERO
 var origin_wall := -1
 var target := Vector2i.ZERO
 var target_wall := -1
@@ -100,8 +106,16 @@ var min_dist := MIN_DIST_FIRST
 var max_dist := MAX_DIST_FIRST
 var topology: DescentTopology
 var casino_landmarks: Dictionary = {}
+## Reserve the first discovery before landmarks and optional recordings claim rooms.
+var intro_door_hint: Dictionary = {}
+var obstruction_hint: Dictionary = {}
+var realm_door_hint: Dictionary = {}
+static var _obstruction_target_cache := {}
+var _obstruction_district := 0
+static var _realm_district_cache := {}
 
 var _origin_distance := {}
+var _photo_graph_cache: Dictionary = {}
 var _next := {}
 var _target_distance := {}
 var _optional_vhs_ready := false
@@ -112,17 +126,46 @@ var _ritual_cell := Vector2i(1 << 30, 1 << 30)
 var _base_wall_cache := {}
 
 static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
-	var route := DescentRoute.new()
-	route.world_seed = ws
-	route.theme = floor_theme
-	route.floor_idx = p_floor_idx
-	route._build()
+	var cache_key := "%d:%d:%d" % [ws, floor_theme, p_floor_idx]
+	var district := int(_realm_district_cache.get(cache_key, 0))
+	var route: DescentRoute
+	while district < REALM_DISTRICTS:
+		route = DescentRoute.new()
+		route.world_seed = ws
+		route.theme = floor_theme
+		route.floor_idx = p_floor_idx
+		route._obstruction_district = district
+		route._build()
+		var realm_plan := DescentTopology.new(ws, floor_theme)
+		route.realm_door_hint = realm_plan.plan_realm_door(route)
+		if not route.realm_door_hint.is_empty() or p_floor_idx == 0 or p_floor_idx >= DescentRun.FLOOR_COUNT - 1:
+			_realm_district_cache[cache_key] = route._obstruction_district
+			break
+		district = route._obstruction_district + 1
 	route.casino_landmarks = CasinoLandmarks.plan(route)
 	return route
 
 
-## 0.0 on the casino, 1.0 in the Annex. Every depth ramp on the route reads
-## from this rather than from the raw index.
+## Keep other discoveries out of the first photographic doorway's two rooms.
+func photo_discovery_hint() -> Dictionary:
+	return intro_door_hint if not intro_door_hint.is_empty() else obstruction_hint
+
+
+func is_intro_door_room(at: Vector2i) -> bool:
+	var room := WorldGen.annex_room_id(world_seed, at) if theme == 2 else WorldGen.room_id(world_seed, at)
+	for hint in [intro_door_hint, obstruction_hint, realm_door_hint]:
+		if hint.is_empty():
+			continue
+		var near: Vector2i = hint["cell"]
+		var far: Vector2i = near + WorldGen.DIRV[DescentTopology.edge_dir(hint)]
+		for endpoint in [near, far]:
+			var owner := WorldGen.annex_room_id(world_seed, endpoint) if theme == 2 else WorldGen.room_id(world_seed, endpoint)
+			if room == owner:
+				return true
+	return false
+
+
+## Normalized floor depth for route length and other ramps.
 static func depth_of(p_floor_idx: int) -> float:
 	return clampf(float(p_floor_idx) / float(DescentRun.FLOOR_COUNT - 1),
 		0.0, 1.0)
@@ -420,6 +463,35 @@ func path_from_origin() -> Array[Vector2i]:
 	return path
 
 
+## Hypothetical base route after photographing the introductory doorway.
+## Used for evidence coverage without opening the live wall or changing guidance.
+func path_after_intro_door() -> Array[Vector2i]:
+	var hint := photo_discovery_hint()
+	if hint.is_empty():
+		return path_from_origin()
+	var next := {target: target}
+	var queue: Array[Vector2i] = [target]
+	var head := 0
+	while head < queue.size():
+		var at := queue[head]
+		head += 1
+		for dir in 4:
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if not scanned_contains(other) or next.has(other):
+				continue
+			if base_is_wall(at, dir) and DescentTopology.edge_key(at, dir) != str(hint["key"]) \
+					and DescentTopology.edge_key(at, dir) != str(obstruction_hint.get("key", "")):
+				continue
+			next[other] = at
+			queue.append(other)
+	var path: Array[Vector2i] = [origin]
+	var at := origin
+	while at != target and next.has(at) and path.size() <= next.size():
+		at = next[at]
+		path.append(at)
+	return path
+
+
 func optional_vhs_cells() -> Array[Vector2i]:
 	_build_optional_vhs_cells()
 	return _optional_vhs.duplicate()
@@ -481,6 +553,11 @@ func _optional_vhs_candidates(path: Array[Vector2i], dry_pool_only: bool) \
 		-> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var seen_rooms := {}
+	var first_seen := {}
+	for i in path.size():
+		var root := WorldGen.annex_room_id(world_seed, path[i]) if theme == 2 else WorldGen.room_id(world_seed, path[i])
+		if not first_seen.has(root):
+			first_seen[root] = i
 	for idx in range(4, path.size() - 4):
 		var c := path[idx]
 		# The remote objective altar owns its cell outright; an optional set
@@ -489,7 +566,9 @@ func _optional_vhs_candidates(path: Array[Vector2i], dry_pool_only: bool) \
 			continue
 		var room := WorldGen.annex_room_id(world_seed, c) if theme == 2 \
 			else WorldGen.room_id(world_seed, c)
-		if casino_landmarks.has(room):
+		if casino_landmarks.has(room) or is_intro_door_room(c):
+			continue
+		if not intro_door_hint.is_empty() and int(first_seen[room]) <= int(intro_door_hint["approach_path_index"]):
 			continue
 		if seen_rooms.has(room):
 			continue
@@ -562,6 +641,71 @@ func _build() -> void:
 		return
 
 	target = _ranked_pick(candidates, TARGET_SALT)
+	if floor_idx == 0 and theme == 0:
+		if _intro_target_cache.has(world_seed):
+			var cached: Dictionary = _intro_target_cache[world_seed]
+			target = cached["target"]
+			intro_door_hint = cached["door"].duplicate(true)
+			obstruction_hint = cached.get("obstruction", {}).duplicate(true)
+		else:
+			var original := target
+			var fallback: Dictionary = {}
+			candidates.sort_custom(func(a: Vector2i, b: Vector2i):
+				return WorldGen.h(world_seed, a.x, a.y, TARGET_SALT) < WorldGen.h(world_seed, b.x, b.y, TARGET_SALT))
+			for candidate in candidates.slice(0, INTRO_TARGET_ATTEMPTS):
+				target = candidate
+				_build_reverse_map()
+				var discovery := DescentTopology.new(world_seed, theme)
+				discovery._plan_photo_doors(self, true)
+				intro_door_hint = discovery.intro_photo_door()
+				if intro_door_hint.is_empty():
+					continue
+				if fallback.is_empty():
+					fallback = {"target": target, "door": intro_door_hint.duplicate(true)}
+				var obstruction_plan := DescentTopology.new(world_seed, theme)
+				obstruction_plan._plan_photo_doors(self, false, true)
+				for record in obstruction_plan.photo_doorways():
+					if bool(record.get("intro", false)):
+						intro_door_hint = record.duplicate(true)
+					if bool(record.get("obstruction", false)):
+						obstruction_hint = record.duplicate(true)
+						break
+				if not obstruction_hint.is_empty():
+					break
+			if obstruction_hint.is_empty():
+				target = fallback.get("target", original)
+				intro_door_hint = fallback.get("door", {}).duplicate(true)
+			_intro_target_cache[world_seed] = {"target": target,
+				"door": intro_door_hint.duplicate(true), "obstruction": obstruction_hint.duplicate(true)}
+
+	if floor_idx != 0:
+		var cache_key := "%d:%d:%d:%d" % [world_seed, theme, floor_idx, _obstruction_district]
+		if _obstruction_target_cache.has(cache_key):
+			var cached: Dictionary = _obstruction_target_cache[cache_key]
+			target = cached["target"]
+			obstruction_hint = cached["obstruction"].duplicate(true)
+		else:
+			var original := target
+			candidates.sort_custom(func(a: Vector2i, b: Vector2i):
+				return WorldGen.h(world_seed, a.x, a.y, TARGET_SALT) < WorldGen.h(world_seed, b.x, b.y, TARGET_SALT))
+			for candidate in candidates.slice(0, OBSTRUCTION_TARGET_ATTEMPTS):
+				target = candidate
+				_build_reverse_map()
+				var discovery := DescentTopology.new(world_seed, theme)
+				discovery._plan_photo_doors(self, false, true)
+				var options := discovery.photo_doorways()
+				if not options.is_empty():
+					obstruction_hint = options[0].duplicate(true)
+					break
+			if obstruction_hint.is_empty():
+				target = original
+			_obstruction_target_cache[cache_key] = {"target": target, "obstruction": obstruction_hint.duplicate(true)}
+		if obstruction_hint.is_empty():
+			if _obstruction_district + 1 < OBSTRUCTION_DISTRICTS:
+				_obstruction_district += 1
+				_build()
+				return
+			push_warning("No safe photographic obstruction for seed %d theme %d" % [world_seed, theme])
 	target_wall = WorldGen.anchor_wall(world_seed, target, TARGET_WALL_SALT, theme)
 	graph_distance = int(_origin_distance[target])
 	_build_reverse_map()
@@ -582,13 +726,19 @@ func _collect(low: int, high: int, styled: bool) -> Array[Vector2i]:
 	return out
 
 
-## The arrival room. Nearest wall-backed candidate to the world origin, so the
-## floor still begins where every existing arrival audit expects it to, and so
-## the ride out of the car opens onto a real room rather than a corridor.
+## Nearest wall-backed room to the search centre. Later floors keep their
+## central arrival when it supports a useful obstruction, otherwise try districts.
 func _pick_origin() -> void:
 	origin = Vector2i.ZERO
+	if floor_idx <= 1 or _obstruction_district > 0:
+		# The world's central hub has many short existing connections. Start
+		# this discovery floor in a seeded district where a hidden connection
+		# can remove a real detour, while keeping an ordinary wall-backed car.
+		origin = Vector2i(24 + WorldGen.h(world_seed, 0, 0, 1973 + _obstruction_district * 101) % 32,
+			24 + WorldGen.h(world_seed, 0, 0, 1979 + _obstruction_district * 107) % 32)
+	arrival_search_center = origin
 	origin_wall = -1
-	_scan(Vector2i.ZERO, ARRIVAL_RADIUS)
+	_scan(origin, ARRIVAL_RADIUS)
 	var preferred: Array[Vector2i] = []
 	var eligible: Array[Vector2i] = []
 	for key in _origin_distance:
@@ -619,6 +769,7 @@ func _pick_origin() -> void:
 
 
 func _scan(from: Vector2i, radius: int) -> void:
+	_photo_graph_cache.clear()
 	_origin_distance.clear()
 	var queue: Array[Vector2i] = [from]
 	_origin_distance[from] = 0

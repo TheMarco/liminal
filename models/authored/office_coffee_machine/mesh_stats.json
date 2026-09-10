@@ -1,0 +1,19 @@
+{
+  "triangles": 2764,
+  "meshes": 2,
+  "surfaces": 2,
+  "bounds_godot_m": {
+    "min": [
+      -0.4724999964237213,
+      0.0,
+      -0.3019999861717224
+    ],
+    "max": [
+      0.4724999964237213,
+      1.8345000743865967,
+      0.38600000739097595
+    ]
+  },
+  "front_axis": "+Z",
+  "description": "Period walnut coffee vendor with original coffee harvest illustration, sloped eight-button panel and deep cup dispensing recess"
+}

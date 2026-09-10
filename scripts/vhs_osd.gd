@@ -165,6 +165,50 @@ class Meter extends Control:
 				draw_rect(r, VhsOsd.INK_DIM, false, 1.0)
 
 
+## Small drawn lightning icon used by the OSD without relying on a font glyph.
+class FlashIcon extends Control:
+	var held := false:
+		set(value):
+			if held == value:
+				return
+			held = value
+			queue_redraw()
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var s := size
+		var points := PackedVector2Array([
+			Vector2(0.58, 0.06) * s,
+			Vector2(0.17, 0.55) * s,
+			Vector2(0.46, 0.55) * s,
+			Vector2(0.33, 0.94) * s,
+			Vector2(0.85, 0.40) * s,
+			Vector2(0.55, 0.40) * s,
+		])
+		var closed := PackedVector2Array(points)
+		closed.append(points[0])
+		var stroke := maxf(2.0, s.y / 30.0)
+		var shadow := PackedVector2Array()
+		for point in points:
+			shadow.append(point + Vector2(VhsOsd.SHADOW_OFFSET,
+				VhsOsd.SHADOW_OFFSET))
+		var shadow_closed := PackedVector2Array(shadow)
+		shadow_closed.append(shadow[0])
+		if held:
+			draw_colored_polygon(shadow, VhsOsd.SHADOW)
+			draw_colored_polygon(points, VhsOsd.INK)
+			draw_polyline(closed, VhsOsd.INK, stroke, false)
+		else:
+			draw_polyline(shadow_closed, VhsOsd.SHADOW, stroke, false)
+			draw_polyline(closed, VhsOsd.INK_DIM, stroke, false)
+
+
 ## Recovered-tape playback metadata. This is intentionally not a camera
 ## viewfinder: the still camera owns that language while raised. Normal play
 ## reads as footage already being watched, with transport state, tape counter,
@@ -172,9 +216,9 @@ class Meter extends Control:
 class Frame extends Control:
 	var font_size := 22
 	var inset := Vector2(24.0, 24.0)
-	## 0..1: something photographable is near. Tracking bars crawl through the
-	## footage — the tape picks up what the eye does not, growing with
-	## proximity. Set by PhotoCamera; purely presentational here.
+	## 0..1: something photographable is near. One faint tracking sweep hints
+	## at proximity; the camera's sound and focus provide the stronger cues.
+	## Set by PhotoCamera; purely presentational here.
 	var interference := 0.0
 	var _t := 0.0
 
@@ -189,19 +233,14 @@ class Frame extends Control:
 
 	func _draw() -> void:
 		var s := size
-		# Interference: 1-3 translucent tracking bars, thicker and brighter
-		# the nearer the thing is, drifting down the frame at uneven speeds.
+		# Proximity must never stack bright full-screen bars over the CRT.
+		# Keep a single thin sweep even at maximum detector strength, without
+		# the old dark trailing edge that made each bar look like two lines.
 		if interference > 0.01:
 			var k := clampf(interference, 0.0, 1.0)
-			var bars := 1 + int(k * 2.99)
-			for i in bars:
-				var speed := 0.16 + 0.11 * float(i)
-				var y := fposmod(_t * speed * s.y + float(i) * s.y * 0.37, s.y)
-				var thick := (3.0 + 9.0 * k) * (1.0 + 0.5 * float(i % 2))
-				var a := 0.06 + 0.16 * k
-				draw_rect(Rect2(0.0, y, s.x, thick), Color(1, 1, 1, a))
-				draw_rect(Rect2(0.0, y + thick, s.x, 1.5),
-					Color(0, 0, 0, a * 0.8))
+			var y := fposmod(_t * 0.075, 1.0) * s.y
+			var thick := maxf(1.0, s.y / 720.0)
+			draw_rect(Rect2(0.0, y, s.x, thick), Color(1, 1, 1, k * 0.045))
 		var f: Font = VhsOsd.FONT
 		var top_y := inset.y + f.get_ascent(font_size)
 		var play_at := Vector2(inset.x, top_y)

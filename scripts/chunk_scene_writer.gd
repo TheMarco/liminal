@@ -308,8 +308,8 @@ func wall_clock(dir: int, plane: float) -> void:
 
 
 func troffer(at: Vector3, lens: Vector2, panel_material: Material,
-		frame_material: Material) -> void:
-	_host._troffer(at, lens, panel_material, frame_material)
+		frame_material: Material) -> MeshInstance3D:
+	return _host._troffer(at, lens, panel_material, frame_material)
 
 
 func runtime_shortcut_clearance_rects() -> Array[Rect2]:

@@ -660,31 +660,17 @@ func _bloom_classroom() -> void:
 
 
 func _incubator_pod(pos: Vector3, scale: Vector3, phase: float) -> void:
-	var pulse := BLOOM_PULSE_SCRIPT.new() as Node3D
-	pulse.position = pos
-	pulse.scale = scale
-	pulse.rate = 1.35 + phase * 0.17
-	pulse.amplitude = 0.035
-	pulse.phase = phase
-	pulse.set_meta("bloom_incubator", true)
-	scene.add_node(pulse)
-	# The membrane fills its cage and tapers at both ends rather than looking
-	# like a small egg suspended halfway up five disconnected poles.
-	scene.model_ellipsoid(pulse, Vector3(0, 0.88, 0), Vector3(0.92, 1.58, 0.88),
-		Mats.bloom_flesh())
-	scene.model_ellipsoid(pulse, Vector3(0, 0.93, 0), Vector3(0.34, 0.61, 0.34),
-		Mats.bloom_red())
-	ProceduralDetails.attach(pulse, "incubator_cradle", func(d: ProceduralDetails):
-		d.ring(Vector3(0, 0.09, 0), 0.43, 0.025, Mats.bloom_metal())
-		d.ring(Vector3(0, 1.55, 0), 0.32, 0.018, Mats.bloom_metal())
-		for i in 5:
-			var a := float(i) * TAU / 5.0
-			var lower := Vector3(cos(a) * 0.43, 0.10, sin(a) * 0.43)
-			var middle := Vector3(cos(a) * 0.49, 0.86, sin(a) * 0.47)
-			var upper := Vector3(cos(a) * 0.32, 1.55, sin(a) * 0.32)
-			d.tube(lower, middle, 0.013, Mats.bloom_metal())
-			d.tube(middle, upper, 0.013, Mats.bloom_metal())
-			d.box(Vector3(lower.x, 0.035, lower.z), Vector3(0.10, 0.05, 0.10), Mats.bloom_metal(), 0.012))
+	var mark = scene.collider_mark()
+	var vessel = scene.attributed_floor_prop(Chunk.BLOOM_INCUBATOR_PATH, pos, 0.0,
+		1.0, Vector3.ZERO, "bloom_incubator", null, true)
+	if vessel == null:
+		return
+	vessel.scale = scale
+	vessel.set_meta("bloom_incubator", true)
+	preload("res://scripts/incubator_visual.gd").configure(vessel.get_child(0), phase)
+	scene.collider_yaw_box(pos + Vector3(-0.045, 1.14, 0.025) * scale,
+		Vector3(1.45, 2.28, 1.03) * scale, 0.0)
+	scene.bind_furnishing_colliders(vessel, mark)
 
 
 func _bloom_incubator() -> void:

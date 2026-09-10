@@ -75,8 +75,7 @@ func _showcase_loop() -> void:
 func _show_vhs() -> void:
 	_set_stage(_tv_stage)
 	_set_caption("1 / 3   VHS DISTORTION",
-		"Production video through the TV-glass-only 240-line footage pass: tracking, tearing, " \
-		+ "chroma bleed, grain and scanlines")
+		"Raw video on the physical TV; use the Main playback capture to review the shared game shader")
 	_place_camera(Vector3(-0.42, 1.02, 2.35),
 		Vector3(-0.42, 0.68, 0.25))
 	await get_tree().create_timer(0.7).timeout

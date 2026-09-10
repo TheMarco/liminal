@@ -425,36 +425,16 @@ func _prison_cells() -> void:
 
 
 func _prison_mess_table(p: Vector3, yaw: float) -> void:
-	var b0 = scene.collider_mark()
-	var v = scene.furnishing_pivot(p, yaw, "prison_mess_table")
-	scene.model_rounded_box(v, Vector3(0, 0.78, 0), Vector3(3.5, 0.10, 0.82), Mats.prison_green(), 0.025)
-	for z in [-0.88, 0.88]:
-		scene.model_box(v, Vector3(0, 0.48, z), Vector3(3.2, 0.09, 0.35), Mats.prison_green())
-		for x in [-1.35, 1.35]:
-			scene.model_box(v, Vector3(x, 0.27, z), Vector3(0.08, 0.54, 0.08), Mats.prison_iron())
-	ProceduralDetails.attach(v, "prison_mess_table_frame_l3.5", func(d: ProceduralDetails):
-		for x in [-1.35, 1.35]:
-			d.tube(Vector3(x, 0.08, -0.88), Vector3(x, 0.70, -0.34), 0.025, Mats.prison_iron())
-			d.tube(Vector3(x, 0.08, 0.88), Vector3(x, 0.70, 0.34), 0.025, Mats.prison_iron())
-			for z in [-0.88, 0.88]:
-				d.box(Vector3(x, 0.025, z), Vector3(0.22, 0.05, 0.25), Mats.prison_iron(), 0.008)
-				d.box(Vector3(x, 0.51, z), Vector3(0.18, 0.24, 0.05), Mats.iron_dark(), 0.006)
-		d.tube(Vector3(-1.35, 0.36, 0), Vector3(1.35, 0.36, 0), 0.03, Mats.prison_iron())
-	)
-	# A few abandoned stainless trays, cups and one dented food tin stop the
-	# room reading as four pristine geometry blocks.
-	for ti in 2:
-		var tx = -0.82 + float(ti) * 1.55
-		var tz = -0.14 if ti == 0 else 0.16
-		scene.model_rounded_box(v, Vector3(tx, 0.86, tz), Vector3(0.48, 0.035, 0.30),
-			Mats.steel(), 0.02)
-		scene.model_cylinder(v, Vector3(tx + 0.16, 0.96, tz - 0.05), 0.045, 0.18,
-			Mats.prison_iron())
-	if ctx.random01(1880 + int(p.x + p.z)) < 0.48:
-		scene.cc0_prop_local(v, "can_rusted", Vector3(0.28, 0.84, 0.0),
-			ctx.random01(1881 + int(p.x)) * TAU, 0.85)
-	scene.collider_yaw_box(p + Vector3(0, 0.5, 0), Vector3(3.5, 1.0, 2.0), yaw)
+	var b0 := scene.collider_mark()
+	var v := scene.furnishing_pivot(p, yaw, "prison_mess_table")
+	scene.attributed_prop_local(v, Chunk.PRISON_MESS_TABLE_PATH, Vector3.ZERO, 0.0)
+	# Four fixed round seats replace the old long benches. Keep their actual
+	# square footprint instead of retaining the obsolete 3.5m obstruction.
+	scene.collider_yaw_box(p + Vector3(0, 0.41, 0), Vector3(1.98, 0.82, 1.98), yaw)
 	scene.bind_furnishing_colliders(v, b0)
+	if ctx.random01(1880 + int(p.x + p.z)) < 0.48:
+		scene.cc0_prop_local(v, "can_rusted", Vector3(0.20, 0.82, 0.12),
+			ctx.random01(1881 + int(p.x)) * TAU, 0.85)
 
 
 func _prison_mess() -> void:
@@ -517,63 +497,15 @@ func _prison_mess() -> void:
 
 
 func _prison_shower_station(wall: int, along: float) -> void:
-	var mount = _wall_pt(wall, along, 0.02)
-	var v = scene.furnishing_pivot(mount, scene.yaw_for(wall),
-		"prison_shower_fixture", false)
+	var mount := _wall_pt(wall, along, 0.02)
+	var yaw := scene.yaw_for(wall)
+	var b0 := scene.collider_mark()
+	var v := scene.furnishing_pivot(mount, yaw, "prison_shower_fixture", false)
 	v.set_meta("enrichment_prop", "detention_shower_head")
-	# Exposed riser, wall flange and vandal-resistant cross valve.
-	var pipe_bottom = 1.24
-	var pipe_top = ctx.ceiling_height - 0.42
-	scene.model_cylinder(v, Vector3(0, (pipe_bottom + pipe_top) * 0.5, 0),
-		0.0225, pipe_top - pipe_bottom, Mats.pipe_rust())
-	var flange = MeshInstance3D.new()
-	flange.mesh = Chunk.TOR
-	flange.material_override = Mats.prison_iron()
-	flange.position = Vector3(0, 1.25, -0.035)
-	flange.rotation.x = PI / 2.0
-	flange.scale = Vector3(0.09, 0.035, 0.09)
-	v.add_child(flange)
-	scene.model_box(v, Vector3(0, 1.25, -0.07), Vector3(0.30, 0.035, 0.035),
-		Mats.prison_green())
-	scene.model_box(v, Vector3(0, 1.25, -0.07), Vector3(0.035, 0.30, 0.035),
-		Mats.prison_green())
-	scene.model_cylinder(v, Vector3(0, 1.25, -0.11), 0.035, 0.04, Mats.chrome()).rotation.x = PI / 2.0
-	ProceduralDetails.attach(v, "prison_shower_valve_hardware_v1", func(d: ProceduralDetails):
-		d.ring(Vector3(0, 1.25, -0.105), 0.105, 0.012, Mats.prison_iron(), Vector3.FORWARD)
-		for yy in [1.58, 1.96]:
-			d.box(Vector3(0, yy, -0.012), Vector3(0.11, 0.045, 0.05), Mats.prison_iron(), 0.008)
-	)
-	# Bent arm and a thick shower rose aimed down into the room.
-	# Plumbing stays at human height even in a double-height washroom.
-	var arm_y = minf(2.36, ctx.ceiling_height - 0.35)
-	for segment in [[Vector3(0, arm_y, 0), Vector3(0, arm_y, -0.52)],
-			[Vector3(0, arm_y, -0.52), Vector3(0, arm_y - 0.13, -0.66)]]:
-		var a: Vector3 = segment[0]
-		var b: Vector3 = segment[1]
-		var arm = scene.model_cylinder(v, (a + b) * 0.5, 0.019,
-			a.distance_to(b), Mats.pipe_rust())
-		arm.quaternion = Quaternion(Vector3.UP, (b - a).normalized())
-	var rose = scene.model_cylinder(v, Vector3(0, arm_y - 0.18, -0.70), 0.17, 0.09,
-		Mats.prison_iron())
-	rose.rotation.x = 0.60
-	var face = scene.model_cylinder(v, Vector3(0, arm_y - 0.215, -0.725), 0.135, 0.012,
-		Mats.charcoal())
-	face.rotation.x = 0.60
-	var perforations = Node3D.new()
-	perforations.position = Vector3(0, arm_y - 0.222, -0.730)
-	perforations.rotation.x = 0.60
-	v.add_child(perforations)
-	ProceduralDetails.attach(perforations, "prison_shower_face_perforations_r0.135_13", func(d: ProceduralDetails):
-		for hole in [Vector2.ZERO, Vector2(-0.055, 0), Vector2(0.055, 0),
-				Vector2(0, -0.055), Vector2(0, 0.055), Vector2(-0.04, -0.04),
-				Vector2(0.04, -0.04), Vector2(-0.04, 0.04), Vector2(0.04, 0.04)]:
-			d.box(Vector3(hole.x, -0.008, hole.y), Vector3(0.012, 0.004, 0.012), Mats.prison_iron(), 0.004)
-	)
-	# Soap dish and drain-cleaning hose hook at waist height.
-	scene.model_rounded_box(v, Vector3(0.28, 0.92, -0.10), Vector3(0.34, 0.045, 0.24),
-		Mats.prison_iron(), 0.018)
-	scene.model_box(v, Vector3(0.28, 1.02, 0), Vector3(0.04, 0.22, 0.04),
-		Mats.prison_iron())
+	scene.attributed_prop_local(v, Chunk.PRISON_SHOWER_PATH, Vector3(0, 0.9, 0), 0.0)
+	scene.collider_yaw_box(scene.world_point(mount, Vector3(0, 1.65, -0.115), yaw),
+		Vector3(0.32, 1.5, 0.23), yaw)
+	scene.bind_furnishing_colliders(v, b0)
 
 
 func _prison_shower() -> void:

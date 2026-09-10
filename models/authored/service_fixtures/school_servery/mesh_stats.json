@@ -1,0 +1,20 @@
+{
+  "triangles": 3908,
+  "meshes": 2,
+  "surfaces": 2,
+  "bounds_godot_m": {
+    "min": [
+      -2.5,
+      0.0,
+      -0.4859069287776947
+    ],
+    "max": [
+      2.500000476837158,
+      1.8069281578063965,
+      0.6200000047683716
+    ]
+  },
+  "front_axis": "+Z",
+  "counter_height_m": 0.96,
+  "customer_side": "+Z"
+}

@@ -1,0 +1,22 @@
+{
+  "triangles": 552,
+  "meshes": 1,
+  "surfaces": 1,
+  "bounds_godot_m": {
+    "min": [
+      -0.5,
+      0.0,
+      -0.23000000417232513
+    ],
+    "max": [
+      0.5,
+      1.9500000476837158,
+      0.3499999940395355
+    ]
+  },
+  "front_axis": "+Z",
+  "height_m": 1.95,
+  "width_m": 1.0,
+  "depth_m": 0.46,
+  "door_count": 2
+}

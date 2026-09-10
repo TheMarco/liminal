@@ -12,6 +12,7 @@ extends Node3D
 ## Theme 11: the organic civic nightmare of the Bloom.
 ## All geometry is local; the ChunkManager places the node at the cell origin.
 
+const NOSTALGIA_PROPS := preload("res://scripts/nostalgia_props.gd")
 const CHARGING_STATION_SCRIPT := preload("res://scripts/charging_station.gd")
 const VHS_RITUAL_SCRIPT := preload("res://scripts/vhs_ritual.gd")
 
@@ -297,6 +298,26 @@ const AIRPORT_DEPARTURE_BOARD_UNITS := Vector3(18.1539, 12.3137, 1.1244)
 # The source origin is at floor level, so centre it vertically before mounting.
 const AIRPORT_DEPARTURE_BOARD_CENTRE := Vector3(-0.0715, 6.1565, 0.0)
 const AIRPORT_LUGGAGE_PATH := "res://models/cc_by/luggage/luggage.glb"
+const AIRPORT_CAROUSEL_PATH := "res://models/authored/airport_carousel/airport_carousel.glb"
+const AIRPORT_WALKWAY_PATH := "res://models/authored/airport_walkway/standard/airport_walkway.glb"
+const AIRPORT_WALKWAY_LONG_PATH := "res://models/authored/airport_walkway/long/airport_walkway_long.glb"
+const AIRPORT_ESCALATOR_PATH := "res://models/authored/airport_escalator/airport_escalator.glb"
+const SCH_TROPHY_CASE_PATH := "res://models/authored/school_trophy_case/school_trophy_case.glb"
+const SCH_BLEACHERS_PATH := "res://models/authored/school_furniture/bleachers/school_bleachers.glb"
+const SCH_CAF_TABLE_PATH := "res://models/authored/school_furniture/cafeteria_table/school_cafeteria_table.glb"
+const SCH_CUPBOARD_PATH := "res://models/authored/school_furniture/cupboard/school_cupboard.glb"
+const SCH_SERVERY_PATH := "res://models/authored/service_fixtures/school_servery/school_servery.glb"
+const PRISON_SHOWER_PATH := "res://models/authored/service_fixtures/prison_shower/prison_shower.glb"
+const PRISON_MESS_TABLE_PATH := "res://models/authored/service_fixtures/prison_mess_table/prison_mess_table.glb"
+const AIRPORT_GATE_DESK_PATH := "res://models/authored/airport_gate_desk/airport_gate_desk.glb"
+const ASY_ECT_PATH := "res://models/authored/asylum_medical/ect_machine.glb"
+const ASY_RESTRAINT_PATH := "res://models/authored/asylum_medical/restraint_table.glb"
+const VT100_MONITOR_PATH := "res://models/authored/vt100/vt100_monitor.glb"
+const VT100_KEYBOARD_PATH := "res://models/authored/vt100/vt100_keyboard.glb"
+const VT100_DESK_HEIGHT := 0.7875 # measured top of the guard desk model
+const MALL_MERCHANDISE_PATH := "res://models/authored/mall_merchandise/mall_merchandise_station.glb"
+const MALL_DISPLAY_PATH := "res://models/authored/mall_merchandise/mall_merchandise_display.glb"
+const BLOOM_INCUBATOR_PATH := "res://models/authored/bloom_incubator/bloom_incubator.glb"
 const AIRPORT_TROLLEY_PATH := "res://models/authored/airport_trolley/airport_trolley.glb"
 const AIRPORT_JETWAY_PATH := "res://models/authored/airport_jetway/airport_jetway.glb"
 const AIRPORT_PLANE_PATH := "res://models/authored/airport_plane/airport_plane.glb"
@@ -414,9 +435,9 @@ const SLOT_ALT_SCALE := 0.81064
 const SLOT_ALT_CENTRE := Vector3(0.0, -0.1019, 0.0539)
 
 const CHANGE_MACHINE_PATH := \
-	"res://models/cc_by/change_machine/change_machine.glb"
-const CHANGE_MACHINE_SCALE := 0.61738
-const CHANGE_MACHINE_CENTRE := Vector3(0.0, 0.0, 0.0432)
+	"res://models/authored/vegas_change_machine/vegas_change_machine.glb"
+const CHANGE_MACHINE_SCALE := 1.0
+const CHANGE_MACHINE_CENTRE := Vector3.ZERO
 
 ## Two brass stanchions and the swag between them, as one unit. Posts sit
 ## 1.891m apart at this scale, which is what the queue lines are laid out on
@@ -854,6 +875,8 @@ static func request_prop_preloads() -> void:
 
 static func _prop_preload_paths() -> Array[String]:
 	var paths: Array[String] = []
+	paths.append_array([AIRPORT_WALKWAY_PATH, AIRPORT_WALKWAY_LONG_PATH, AIRPORT_ESCALATOR_PATH, SCH_TROPHY_CASE_PATH, SCH_BLEACHERS_PATH,
+		SCH_CAF_TABLE_PATH, SCH_CUPBOARD_PATH, SCH_SERVERY_PATH, PRISON_SHOWER_PATH, PRISON_MESS_TABLE_PATH])
 	for mname in ASY_PROP_NAMES:
 		paths.append("res://models/asylum/%s/%s_1k.gltf" % [mname, mname])
 	for mname in CC0_PROP_NAMES:
@@ -871,7 +894,7 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(ASY_BATH_PATH)
 	paths.append(ASY_SCRUB_SINK_PATH)
 	paths.append(ASY_NOTICES_PATH)
-	paths.append(ASY_STRAITJACKET_PATH)
+	paths.append_array([ASY_STRAITJACKET_PATH, ASY_ECT_PATH, ASY_RESTRAINT_PATH])
 	for door_path in ASY_DOOR_PATHS:
 		paths.append(door_path)
 	paths.append(OFFICE_TERMINAL_PATH)
@@ -912,6 +935,8 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(AIRPORT_SEATS_PATH)
 	paths.append(AIRPORT_DEPARTURE_BOARD_PATH)
 	paths.append(AIRPORT_LUGGAGE_PATH)
+	paths.append_array([AIRPORT_CAROUSEL_PATH, AIRPORT_GATE_DESK_PATH,
+		VT100_MONITOR_PATH, VT100_KEYBOARD_PATH, MALL_MERCHANDISE_PATH, MALL_DISPLAY_PATH, BLOOM_INCUBATOR_PATH])
 	paths.append(AIRPORT_TROLLEY_PATH)
 	paths.append(AIRPORT_JETWAY_PATH)
 	paths.append(AIRPORT_PLANE_PATH)
@@ -921,6 +946,7 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(OFFICE_PHONE_PATH)
 	paths.append(SLOT_ALT_PATH)
 	paths.append(CHANGE_MACHINE_PATH)
+	paths.append_array(NOSTALGIA_PROPS.paths())
 	paths.append(ROPE_BARRIER_PATH)
 	paths.append(CHECKIN_DESK_PATH)
 	paths.append(GARBAGE_BIN_PATH)
@@ -979,15 +1005,15 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
 		4:
 			paths.append_array([AIRPORT_SEATS_PATH, AIRPORT_DEPARTURE_BOARD_PATH, AIRPORT_LUGGAGE_PATH,
-				AIRPORT_TROLLEY_PATH, AIRPORT_JETWAY_PATH, AIRPORT_PLANE_PATH])
-			paths.append_array([CHECKIN_DESK_PATH])
+				AIRPORT_TROLLEY_PATH, AIRPORT_JETWAY_PATH, AIRPORT_PLANE_PATH, AIRPORT_CAROUSEL_PATH, AIRPORT_GATE_DESK_PATH])
+			paths.append_array([CHECKIN_DESK_PATH, AIRPORT_ESCALATOR_PATH, AIRPORT_WALKWAY_PATH, AIRPORT_WALKWAY_LONG_PATH])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/wooden_picnic_table/wooden_picnic_table_1k.gltf")
 			paths.append("res://models/cc0/CoffeeCart_01/CoffeeCart_01_1k.gltf")
 		5:
 			paths.append_array([ASY_BED_PATH, ASY_GURNEY_PATH, ASY_TROLLEY_PATH])
 			paths.append_array([ASY_BATH_PATH, ASY_SCRUB_SINK_PATH, ASY_NOTICES_PATH])
-			paths.append(ASY_STRAITJACKET_PATH)
+			paths.append_array([ASY_STRAITJACKET_PATH, ASY_ECT_PATH, ASY_RESTRAINT_PATH])
 			paths.append_array([ASY_AUTOPSY_PATH, IV_DRIP_PATH, CHEMISTRY_GLASSWARE_PATH])
 			paths.append_array(ASY_DOOR_PATHS)
 			paths.append("res://models/asylum/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf")
@@ -1002,13 +1028,14 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array([LOCKERS_PATH, GYM_LOCKER_PATH, SCH_CLEANING_CART_PATH])
 			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH, CHEMISTRY_GLASSWARE_PATH])
 			paths.append_array([SCH_TOILET_PATH, SCH_SINK_PATH, SCH_URINAL_PATH])
-			paths.append_array([SCH_FOUNTAIN_PATH])
+			paths.append_array([SCH_FOUNTAIN_PATH, SCH_TROPHY_CASE_PATH, SCH_BLEACHERS_PATH,
+				SCH_CAF_TABLE_PATH, SCH_CUPBOARD_PATH, SCH_SERVERY_PATH])
 			paths.append("res://models/cc0/stationery_supplies/stationery_supplies_1k.gltf")
 			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
 		7:
 			paths.append_array([MALL_PAYPHONE_PATH, MALL_DIRECTORY_PATH, MALL_SHOPPING_CART_PATH,
-				MALL_GARMENT_RACK_PATH])
+				MALL_GARMENT_RACK_PATH, MALL_MERCHANDISE_PATH, MALL_DISPLAY_PATH])
 			paths.append_array([CITY_BENCH_PATH, FOOD_COURT_SET_PATH, MALL_HOTDOG_PATH])
 			paths.append_array([ROPE_BARRIER_PATH])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
@@ -1021,8 +1048,9 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/cc0/plastic_crate_03/plastic_crate_03_1k.gltf")
 			paths.append("res://models/cc0/trashbag/trashbag_1k.gltf")
 		8:
-			paths.append_array([PRISON_DOOR_OLD_PATH, PRISON_BUNK_PATH, PRISON_TOILET_PATH])
-			paths.append_array([PRISON_WALL_PHONE_PATH, DESK_PHONE_PATH])
+			paths.append_array([PRISON_DOOR_OLD_PATH, PRISON_BUNK_PATH, PRISON_TOILET_PATH,
+				PRISON_SHOWER_PATH, PRISON_MESS_TABLE_PATH])
+			paths.append_array([PRISON_WALL_PHONE_PATH, DESK_PHONE_PATH, VT100_MONITOR_PATH, VT100_KEYBOARD_PATH])
 			paths.append("res://models/cc0/book_encyclopedia_set_01/book_encyclopedia_set_01_1k.gltf")
 			paths.append("res://models/cc0/can_rusted/can_rusted_1k.gltf")
 			paths.append("res://models/cc0/wooden_crate_02/wooden_crate_02_1k.gltf")
@@ -1043,11 +1071,13 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array([ANNEX_EXIT_DOOR_PATH])
 			paths.append_array(DATA_CENTER_AC_PATHS)
 		11:
+			paths.append(BLOOM_INCUBATOR_PATH)
 			paths.append_array([BLOOM_ROOT_PATH, BLOOM_VINES_PATH, BLOOM_FLESH_BLOB_PATH])
 			paths.append_array([BRUTAL_LIGHT_PATH, ANNEX_EXIT_DOOR_PATH, LOCKERS_PATH])
 			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH])
 	if p_theme != 7:
 		paths.append(ALARM_PATH)
+	paths.append_array(NOSTALGIA_PROPS.paths(p_theme))
 	return paths
 
 
@@ -1257,7 +1287,6 @@ func build_next_stage() -> bool:
 			_profile_stage("lighting" if theme == 2 else "props", started)
 		4:
 			_build_optional_vhs_set()
-			_build_charging_station()
 			_build_bleed_dressing()
 			_build_interactions()
 			_profile_stage("gameplay", started)
@@ -1265,6 +1294,9 @@ func build_next_stage() -> bool:
 			if mutation_furniture_variant > 0:
 				_apply_furniture_variant(mutation_furniture_variant)
 				_profile_stage("furniture_mutation", started)
+			_ensure_slot_room_change_machine()
+			NOSTALGIA_PROPS.dress(self)
+			_build_charging_station()
 		6:
 			SurfaceWear.apply(self, _build_context)
 			_profile_stage("surface_wear", started)
@@ -1300,6 +1332,8 @@ func prepare_runtime_rendering() -> void:
 	for mesh in _occluder_walls:
 		if not is_instance_valid(mesh) or mesh.get_parent() == null:
 			continue
+		if mesh.has_meta("photo_door_fill"):
+			continue # the viewfinder must see the actual adjoining room
 		var occluder := OccluderInstance3D.new()
 		occluder.name = "StructuralOccluder"
 		var box := BoxOccluder3D.new()
@@ -1321,7 +1355,7 @@ func _profile_stage(label: String, started_usec: int) -> void:
 
 ## One station per 3x3 macro-cell, on a fixed lattice rather than a random
 ## roll. A player is therefore normally within roughly 25m as the crow flies
-## and no unlucky seed can produce a charger desert.
+## with a clearance-aware search inside each selected cell.
 func _build_charging_station() -> void:
 	if descent_arrival:
 		return
@@ -1333,29 +1367,78 @@ func _build_charging_station() -> void:
 		return
 	if not _is_charging_station_cell():
 		return
-	var candidates: Array[Vector3] = []
-	# Try the perimeter and then the interior. Twenty-five deterministic sites
-	# keep a dense authored room from silently deleting its macro-cell station.
-	for x in [2.0, 4.0, 6.0, 8.0, 10.0]:
-		for z in [2.0, 4.0, 6.0, 8.0, 10.0]:
-			candidates.append(Vector3(x, _floor_h(), z))
-	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 8801), candidates.size())
-	for i in candidates.size():
-		var at: Vector3 = candidates[(start + i) % candidates.size()]
-		if not _floor_spot_clear(at, 0.52, 1.8):
-			continue
-		var station := CHARGING_STATION_SCRIPT.new() as Node3D
-		station.position = at
-		station.rotation.y = float((start + i) % 4) * PI * 0.5
-		# Config-driven so the tree-less audits and streamed rebuilds agree:
-		# the run's one dead unit is dead from construction, and stays sprung.
-		# set() because the station variable is typed as its Node3D base.
-		station.set("broken", descent_broken_station)
-		station.set("broken_tried", descent_broken_station_tried)
-		station.set_meta("charging_station", true)
-		station.set_meta("station_cell", cell)
-		add_child(station)
+	var site := _pick_charging_station_site()
+	if not site.is_empty():
+		_add_charging_station(site)
+
+
+## Search the finished room, including non-colliding model details and nested
+## props. Never force an occupied fallback just to preserve the lattice.
+## Place after furniture shifts/culling/mutations so every surviving slot bank
+## has a usable change machine. Charging stations then avoid this cabinet too.
+func _nostalgia_prop(id: int, at := Vector3(6, 0, 6), yaw := 0.0) -> Node3D:
+	return NOSTALGIA_PROPS.add(_scene_writer, id, at, yaw)
+
+
+func _ensure_slot_room_change_machine() -> void:
+	if theme != 0 or slot_machine_count() == 0:
 		return
+	var geometry := ChargingStationPlacement.new(self)
+	var doors := _doorway_clearance_rects()
+	var cabinet := AABB(Vector3(-0.56, 0.06, -0.34), Vector3(1.12, 1.70, 0.72))
+	var approach := AABB(Vector3(-0.56, 0.06, 0.38), Vector3(1.12, 1.70, 0.90))
+	# Prefer perimeter bays, then a free-standing position beside the banks.
+	var sites: Array[Dictionary] = []
+	for dir in 4:
+		for along in range(2, 23):
+			sites.append({"at": _wall_pt(dir, float(along) * 0.5, 0.65, 0.0),
+				"yaw": _wall_facing(dir)})
+	for x in range(2, 23):
+		for z in range(2, 23):
+			for turn in 4:
+				sites.append({"at": Vector3(float(x) * 0.5, 0, float(z) * 0.5),
+					"yaw": float(turn) * PI * 0.5})
+	for site in sites:
+		if geometry.clear(site.at, site.yaw, false, doors, cabinet, approach):
+			_level_builder._change_machine_at(site.at, site.yaw)
+			return
+	push_error("No clear change-machine site in slot room %s seed %d" % [cell, wseed])
+
+
+func _pick_charging_station_site(preferred: Dictionary = {}) -> Dictionary:
+	var geometry := ChargingStationPlacement.new(self)
+	var doors := _doorway_clearance_rects()
+	var sites: Array[Dictionary] = []
+	if not preferred.is_empty():
+		sites.append({"at": preferred["pos"], "yaw": preferred["yaw"]})
+	var floor_y := POOL_DRY_Y if theme == 9 else _floor_h()
+	# Fine perimeter sampling finds dry wall bays between authored furniture.
+	for dir in 4:
+		for along in range(1, 12):
+			sites.append({"at": _wall_pt(dir, float(along), 0.50, floor_y),
+				"yaw": _wall_facing(dir)})
+	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 8801), 100)
+	for i in 100:
+		var index := (start + i) % 100
+		var at := Vector3(1.5 + float(index % 10), floor_y,
+			1.5 + float(index / 10))
+		for turn in 4:
+			sites.append({"at": at, "yaw": float((start + turn) % 4) * PI * 0.5})
+	for site in sites:
+		if geometry.clear(site["at"], site["yaw"], theme == 9, doors):
+			return site
+	return {}
+
+
+func _add_charging_station(site: Dictionary) -> void:
+	var station := CHARGING_STATION_SCRIPT.new() as Node3D
+	station.position = site["at"]
+	station.rotation.y = float(site["yaw"])
+	station.set("broken", descent_broken_station and not descent_target)
+	station.set("broken_tried", descent_broken_station_tried and not descent_target)
+	station.set_meta("charging_station", true)
+	station.set_meta("station_cell", cell)
+	add_child(station)
 
 
 ## What each theme leaves behind when it starts leaking upward: one signature
@@ -1540,24 +1623,12 @@ func _descent_wall_point(dir: int, along: float, out: float) -> Dictionary:
 
 
 func _build_descent_target_station() -> void:
-	var dir := _descent_ritual_wall()
-	var spot := _descent_wall_point(dir, S / 2.0 - 2.4, 0.42)
-	var at: Vector3 = spot["pos"]
-	if not _floor_spot_clear(at, 0.52, 1.8):
-		# The authored room got in the way; fall back to the ordinary lattice
-		# scan so the ritual room can never be left without power.
-		for x in [2.0, 4.0, 6.0, 8.0, 10.0]:
-			for z in [2.0, 4.0, 6.0, 8.0, 10.0]:
-				var candidate := Vector3(x, _floor_h(), z)
-				if _floor_spot_clear(candidate, 0.52, 1.8):
-					at = candidate
-					break
-	var station := CHARGING_STATION_SCRIPT.new() as Node3D
-	station.position = at
-	station.rotation.y = float(spot["yaw"])
-	station.set_meta("charging_station", true)
-	station.set_meta("station_cell", cell)
-	add_child(station)
+	var spot := _descent_wall_point(_descent_ritual_wall(), S / 2.0 - 2.4, 0.50)
+	if theme == 9:
+		spot["pos"].y = POOL_DRY_Y
+	var site := _pick_charging_station_site(spot)
+	if not site.is_empty():
+		_add_charging_station(site)
 
 
 ## The media altar itself: table, CRT, VCR, on the ritual wall.
@@ -2463,6 +2534,9 @@ func _build_walls() -> void:
 		if theme == 9:
 			wtop = maxf(wtop, cell_ceil_h(
 				wseed, cell + WorldGen.DIRV[dir], theme))
+		if info.has("photo_door_id"):
+			_build_photo_door_wall(dir, plane, wtop, owns_annex_wall, info)
+			continue
 		if info["wall"]:
 			if owns_annex_wall:
 				if theme == 9 \
@@ -2531,11 +2605,90 @@ func _build_walls() -> void:
 
 func _edge_info(at: Vector2i, dir: int) -> Dictionary:
 	if descent_topology != null:
+		var photo_edge := descent_topology.photo_geometry_edge(at, dir)
+		if not photo_edge.is_empty():
+			return photo_edge
 		return descent_topology.edge_info_for_state(
 			at, dir, descent_topology_state_override) \
 			if descent_topology_state_override >= 0 else \
 			descent_topology.edge_info(at, dir)
 	return WorldGen.edge_info(wseed, at, dir, theme)
+
+
+## Build the opening once, then fill it with a separately owned visual and
+## collider. All theme furnishing/clearance code already queries _edge_info,
+## so both rooms reserve the real passage even while the wall is still solid.
+func _build_photo_door_wall(dir: int, plane: float, top: float,
+		owns_wall: bool, info: Dictionary) -> void:
+	var seal := PhotoDoorSeal.new()
+	seal.name = "PhotographicDoorway%d" % dir
+	seal.photo_id = str(info["photo_door_id"])
+	seal.obstruction = bool(info.get("photo_obstruction", false))
+	seal.theme = theme
+	seal.dir = dir
+	seal.width = float(info["w"])
+	var floor_y := _floor_h()
+	seal.height = minf(2.55, top - floor_y)
+	var along := float(info["t"])
+	seal.centre = Vector3(S if dir == 0 else 0.0, floor_y, along) if dir < 2 \
+		else Vector3(along, floor_y, S if dir == 2 else 0.0)
+	seal.fill = Node3D.new()
+	seal.fill.name = "EyeOnlyWall"
+	seal.add_child(seal.fill)
+	seal.barrier = StaticBody3D.new()
+	seal.barrier.name = "UnphotographedWall"
+	seal.add_child(seal.barrier)
+	var a := along - seal.width * 0.5
+	var b := along + seal.width * 0.5
+	if owns_wall:
+		_wall_seg(dir, plane, 0.0, a, 0.0, top)
+		_wall_seg(dir, plane, b, S, 0.0, top)
+		_wall_seg(dir, plane, a, b, floor_y + seal.height, top)
+		if not seal.obstruction:
+			# The fill uses the same wall kernel/material/trim as its neighbours.
+			var first_visual := get_child_count()
+			var first_shape := body.get_child_count()
+			_wall_seg(dir, plane, a, b, 0.0, floor_y + seal.height)
+			var fill_nodes := get_children().slice(first_visual)
+			for node in fill_nodes:
+				node.set_meta("photo_door_fill", true)
+				remove_child(node)
+				seal.fill.add_child(node)
+			var shapes := body.get_children().slice(first_shape)
+			for shape in shapes:
+				body.remove_child(shape)
+				seal.barrier.add_child(shape)
+	if seal.obstruction:
+		seal.obstruction_depth = PhotoObstruction.build(seal.fill, seal.barrier, seal.centre, dir,
+			seal.width, seal.height, hash(seal.photo_id), theme)
+	# A slim inset frame reads through the lens without advertising a door to
+	# bare eyes. Its own reveal outline uses the shared blackout effect.
+	var frame_start := get_child_count()
+	var frame_plane := plane - (0.11 if dir in [0, 2] else -0.11)
+	var side := Vector3(0.065, seal.height, 0.065)
+	var lintel := Vector3(0.065, 0.065, seal.width) if dir < 2 \
+		else Vector3(seal.width, 0.065, 0.065)
+	var center := Vector3(frame_plane, floor_y + seal.height * 0.5, along) \
+		if dir < 2 else Vector3(along, floor_y + seal.height * 0.5, frame_plane)
+	var across := Vector3.FORWARD if dir < 2 else Vector3.RIGHT
+	for sign_value in [-1.0, 1.0]:
+		_box(center + across * seal.width * 0.5 * sign_value, side,
+			_wall_material(), false)
+	_box(center + Vector3.UP * seal.height * 0.5, lintel, _wall_material(), false)
+	for node in get_children().slice(frame_start):
+		seal.frame.append(node as Node3D)
+	add_child(seal)
+	seal.set_preview_ready(false)
+	if bool(info.get("photo_door_open", false)):
+		seal.open()
+
+
+func photo_door_seals() -> Array[PhotoDoorSeal]:
+	var out: Array[PhotoDoorSeal] = []
+	for child in get_children():
+		if child is PhotoDoorSeal:
+			out.append(child)
+	return out
 
 
 func _tag_mutation_edge_visuals(first_child: int, dir: int) -> void:
@@ -3660,6 +3813,8 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		if theme == 2:
 			_level_builder._annex_register_ceiling_obstruction(
 				Vector3(c, 0.0, plane), ln, wall_t, 0.0, y1)
+	if theme in [0, 7]:
+		wall_mesh.set_meta("fixture_backing_wall", true)
 	record_occluder_wall(wall_mesh)
 	if theme == 9:
 		# Final extents let the audit verify the topology contract: true L ends
@@ -4469,8 +4624,7 @@ func _wall_decor(dir: int, plane: float) -> void:
 		_sconces(dir, plane)
 	elif r < 0.62:
 		_level_builder._casino_neon(dir, plane)
-	elif r < 0.70:
-		_level_builder._change_machine(dir, plane)
+
 
 
 ## Building infrastructure shared by the office and Annex. Receptacles stay
@@ -4703,14 +4857,15 @@ func _build_lighting() -> void:
 	add_child(light)
 
 
-func _troffer(at: Vector3, lens: Vector2, pmat: Material, frame: Material) -> void:
-	_box(Vector3(at.x, ceil_h - 0.055, at.z), Vector3(lens.x, 0.05, lens.y), pmat, false)
+func _troffer(at: Vector3, lens: Vector2, pmat: Material, frame: Material) -> MeshInstance3D:
+	var lens_mesh := _box(Vector3(at.x, ceil_h - 0.055, at.z), Vector3(lens.x, 0.05, lens.y), pmat, false)
 	var fx := lens.x / 2.0 + 0.055
 	var fz := lens.y / 2.0 + 0.055
 	_box(Vector3(at.x, ceil_h - 0.02, at.z - fz), Vector3(lens.x + 0.18, 0.035, 0.07), frame, false)
 	_box(Vector3(at.x, ceil_h - 0.02, at.z + fz), Vector3(lens.x + 0.18, 0.035, 0.07), frame, false)
 	_box(Vector3(at.x - fx, ceil_h - 0.02, at.z), Vector3(0.07, 0.035, lens.y + 0.18), frame, false)
 	_box(Vector3(at.x + fx, ceil_h - 0.02, at.z), Vector3(0.07, 0.035, lens.y + 0.18), frame, false)
+	return lens_mesh
 
 
 func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float) -> OmniLight3D:
@@ -5089,30 +5244,38 @@ func _shift_props(off: Vector3, n0: int, b0: int) -> void:
 ## dense and awkward, but it may not occupy the first few metres of the path
 ## through that opening. Locked facade doors are not edge openings and are
 ## therefore deliberately unaffected.
-func _doorway_clearance_rects() -> Array[Rect2]:
+func _doorway_clearance_rects(photo_obstruction_only := false) -> Array[Rect2]:
 	var zones: Array[Rect2] = []
+	# Baggage claim circulates around its central conveyor. Its 7m deck leaves
+	# 2.5m end aisles in a 12m room; reserve 2.2m at each doorway so those aisles
+	# remain open without deleting the full-size conveyor as an obstruction.
+	var base_depth := 2.2 if theme == 4 and style == WorldGen.AIR_BAGGAGE else DOOR_CLEAR_DEPTH
 	for member in _room_members():
 		var base := Vector2(float(member.x - cell.x) * S,
 			float(member.y - cell.y) * S)
 		for dir in 4:
 			var info := _edge_info(member, dir)
+			if photo_obstruction_only and not bool(info.get("photo_obstruction", false)):
+				continue
 			if info["wall"] or info["full_open"]:
 				continue
+			# The first discovery needs room to stand back and frame the opening.
+			var depth := 6.7 if bool(info.get("photo_intro", false)) or bool(info.get("photo_obstruction", false)) else base_depth
 			var width := float(info["w"]) + DOOR_CLEAR_PAD * 2.0
 			var along := float(info["t"]) - width * 0.5
 			match dir:
 				0:
-					zones.append(Rect2(base.x + S - DOOR_CLEAR_DEPTH,
-						base.y + along, DOOR_CLEAR_DEPTH + 0.15, width))
+					zones.append(Rect2(base.x + S - depth,
+						base.y + along, depth + 0.15, width))
 				1:
 					zones.append(Rect2(base.x - 0.15, base.y + along,
-						DOOR_CLEAR_DEPTH + 0.15, width))
+						depth + 0.15, width))
 				2:
 					zones.append(Rect2(base.x + along,
-						base.y + S - DOOR_CLEAR_DEPTH, width, DOOR_CLEAR_DEPTH + 0.15))
+						base.y + S - depth, width, depth + 0.15))
 				3:
 					zones.append(Rect2(base.x + along, base.y - 0.15,
-						width, DOOR_CLEAR_DEPTH + 0.15))
+						width, depth + 0.15))
 	return zones
 
 
@@ -5226,9 +5389,11 @@ func _clear_furnishings_from_doorways(n0: int, b0: int) -> void:
 	# furniture. The neighbouring room still clears its side of the same door.
 	var is_corridor := WorldGen.annex_corridor_axis(wseed, cell) != 0 \
 		if theme == 2 else WorldGen.corridor(wseed, cell) != 0
-	if is_corridor:
+	if is_corridor and theme != 7:
 		return
-	var zones := _doorway_clearance_rects()
+	# Mall galleries furnish the existing shell with removable props. Reserve
+	# the photographic lane there too; other corridor architecture stays intact.
+	var zones := _doorway_clearance_rects(is_corridor)
 	if zones.is_empty():
 		return
 	var hit_groups := {}
@@ -5608,6 +5773,7 @@ func _descent_elevator(dir: int) -> void:
 	_descent_lift_rig = rig
 	var hit := Interactable.new()
 	hit.name = "DescentLiftCall"
+	hit.access_check = _descent_lift_accessible.bind(hit)
 	hit.prompt_text = "E — call lift"
 	# The whole car front is the target. A 0.5m plate on the right jamb was
 	# findable only if you already knew it was there, which reads in play as
@@ -5861,10 +6027,28 @@ func _descent_open(actor: Node, left: AnimatableBody3D,
 	_open_descent_doors(left, right, approach)
 
 
+## Area-only interaction rays can see through walls. The lift additionally
+## requires its owning room and an unobstructed aim ray, at focus AND press.
+func _descent_lift_accessible(actor: Node, hit: Interactable) -> bool:
+	if not actor is Player or not is_instance_valid(actor.cam):
+		return false
+	var player_cell := Vector2i(floori(actor.global_position.x / WorldGen.CELL_SIZE),
+		floori(actor.global_position.z / WorldGen.CELL_SIZE))
+	if not WorldGen.owning_room_members(wseed, cell, theme).has(player_cell):
+		return false
+	var from: Vector3 = actor.cam.global_position
+	var to: Vector3 = from - actor.cam.global_basis.z * Player.INTERACT_DIST
+	var query := PhysicsRayQueryParameters3D.create(from, to, 1 | 2, [actor.get_rid()])
+	query.collide_with_bodies = true
+	query.collide_with_areas = true
+	var result: Dictionary = actor.get_world_3d().direct_space_state.intersect_ray(query)
+	return not result.is_empty() and result.get("collider") == hit
+
+
 ## Pressing the plate does not open anything. It tells the run to start the
 ## car moving, and the run tells this chunk when the car is actually here.
-func _descent_call(_actor: Node, rig: Dictionary, hit: Interactable) -> void:
-	if not hit.enabled:
+func _descent_call(actor: Node, rig: Dictionary, hit: Interactable) -> void:
+	if not hit.can_interact(actor):
 		return
 	hit.enabled = false
 	hit.prompt_text = "LIFT ARRIVING"
@@ -6774,32 +6958,18 @@ func _vt100(pos: Vector3, yaw: float) -> Node3D:
 	p.position = Vector3(pos.x, 0, pos.z)
 	p.rotation.y = yaw
 	add_child(p)
-	var shell := Mats.crt_shell()
-	var dark := Mats.crt_dark()
-	# inset plinth, then the big beige housing (front face at z=0.10)
-	_mrbox(p, Vector3(0, 0.7725, -0.05), Vector3(0.36, 0.05, 0.30), shell, 0.012)
-	_mrbox(p, Vector3(0, 0.95, -0.08), Vector3(0.44, 0.30, 0.36), shell, 0.03)
-	# broad bezel frame overlapping the housing front, opening 0.30 x 0.225
-	_mrbox(p, Vector3(0, 1.0825, 0.125), Vector3(0.44, 0.035, 0.06), shell, 0.008)
-	_mrbox(p, Vector3(0, 0.82, 0.125), Vector3(0.44, 0.04, 0.06), shell, 0.008)
-	_mrbox(p, Vector3(-0.185, 0.9525, 0.125), Vector3(0.07, 0.225, 0.06), shell, 0.008)
-	_mrbox(p, Vector3(0.185, 0.9525, 0.125), Vector3(0.07, 0.225, 0.06), shell, 0.008)
-	# dark cavity behind the opening; the phosphor glass sits recessed in it
-	_mrbox(p, Vector3(0, 0.9525, 0.095), Vector3(0.34, 0.26, 0.05), dark, 0.012)
-	var screen := _mquad(p, Vector3(0, 0.9525, 0.121), TERMINAL_SCREEN_SIZE, Mats.crt())
+	var model := _attributed_prop_local(p, VT100_MONITOR_PATH, Vector3(0, VT100_DESK_HEIGHT, -0.04), 0.0)
+	if model == null:
+		p.queue_free()
+		return null
+	var screen := model.find_child("CRTScreen", true, false) as MeshInstance3D
+	if screen == null:
+		push_error("Authored VT100 is missing CRTScreen")
+		p.queue_free()
+		return null
+	screen.material_override = Mats.crt()
 	screen.set_meta("terminal_screen", true)
 	screen.set_instance_shader_parameter("queried", 0.0)
-	# dark trim strip across the top front, and a little model badge
-	_mrbox(p, Vector3(0, 1.103, 0.03), Vector3(0.36, 0.012, 0.12), dark, 0.004)
-	_mrbox(p, Vector3(0.13, 0.826, 0.155), Vector3(0.055, 0.016, 0.008), dark, 0.003)
-	ProceduralDetails.attach(p, "vt100_service_details", func(d: ProceduralDetails):
-		for side in [-1.0, 1.0]:
-			for i in 6:
-				d.box(Vector3(side * 0.2205, 0.94, -0.19 + i * 0.035),
-					Vector3(0.003, 0.12, 0.012), dark)
-		for x in [-0.165, 0.165]:
-			d.box(Vector3(x, 0.752, -0.03), Vector3(0.045, 0.01, 0.24), dark, 0.003)
-		d.box(Vector3(0.09, 0.867, 0.158), Vector3(0.035, 0.012, 0.006), dark, 0.003))
 	var readout := Label3D.new()
 	readout.set_meta("terminal_readout", true)
 	readout.text = TERMINAL_PAGES[WorldGen.h(wseed, cell.x, cell.y, 1801) % TERMINAL_PAGES.size()]
@@ -6819,7 +6989,7 @@ func _vt100(pos: Vector3, yaw: float) -> Node3D:
 	readout.outline_modulate = Color(0.0, 0.045, 0.075, 0.92)
 	readout.double_sided = false
 	readout.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	readout.position = Vector3(0, 0.952, 0.147)
+	readout.position = Vector3(-0.055, VT100_DESK_HEIGHT + 0.18, 0.180)
 	p.add_child(readout)
 	var hit := Interactable.new()
 	hit.prompt_text = "E — query terminal"
@@ -7024,16 +7194,7 @@ func _vt100_keyboard(pos: Vector3, yaw: float) -> Node3D:
 	p.position = Vector3(pos.x, 0, pos.z)
 	p.rotation.y = yaw
 	add_child(p)
-	_mrbox(p, Vector3(0, 0.766, 0), Vector3(0.42, 0.035, 0.17), Mats.crt_shell(), 0.01)
-	_mrbox(p, Vector3(0, 0.7855, -0.01), Vector3(0.38, 0.014, 0.125), Mats.crt_dark(), 0.004)
-	ProceduralDetails.attach(p, "terminal_keycaps", func(d: ProceduralDetails):
-		for row in 4:
-			var rz := -0.058 + 0.026 * row
-			var rx := row * 0.004 - 0.006
-			for col in 12:
-				d.box(Vector3(rx - 0.154 + 0.028 * col, 0.799, rz),
-					Vector3(0.024, 0.014, 0.02), Mats.charcoal(), 0.003)
-		d.box(Vector3(0, 0.799, 0.044), Vector3(0.13, 0.012, 0.018), Mats.charcoal(), 0.003))
+	_attributed_prop_local(p, VT100_KEYBOARD_PATH, Vector3(0, VT100_DESK_HEIGHT, 0), 0.0)
 	return p
 
 

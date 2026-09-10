@@ -9,6 +9,8 @@ signal focus_exited
 
 var prompt_text := "E — interact"
 var enabled := true
+## Optional spatial/access rule, checked both for focus and activation.
+var access_check: Callable
 
 
 func _init() -> void:
@@ -28,8 +30,12 @@ func add_box(size: Vector3, centre := Vector3.ZERO) -> CollisionShape3D:
 	return cs
 
 
+func can_interact(actor: Node) -> bool:
+	return enabled and (not access_check.is_valid() or bool(access_check.call(actor)))
+
+
 func interact(actor: Node) -> void:
-	if enabled:
+	if can_interact(actor):
 		activated.emit(actor)
 
 

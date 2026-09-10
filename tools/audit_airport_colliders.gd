@@ -19,9 +19,19 @@ func _mesh_bounds(node: Node, parent_xf: Transform3D, out: Array[AABB]) -> void:
 func _barrier_glass(node: Node, report: Dictionary) -> void:
 	if node.has_meta("airport_barrier_glass"):
 		report["panes"] = int(report["panes"]) + 1
-		# Anything subtler still disappears against the black apron at a shallow
-		# angle and functions as an invisible wall even when a mesh exists.
-		if float(node.get_meta("barrier_alpha", 0.0)) < 0.55:
+		# Unframed glazing needs tint against the black apron. Clear panes can
+		# instead be enclosed by visible opaque geometry (walkway handrails and
+		# housings); require the referenced mesh to really enclose the pane.
+		var visibly_framed := false
+		if node is MeshInstance3D and node.has_meta("barrier_frame_path"):
+			var frame := node.get_node_or_null(node.get_meta("barrier_frame_path")) as MeshInstance3D
+			if frame != null and frame.visible and frame.mesh != null and frame.get_parent() == node.get_parent():
+				var opaque := frame.mesh.surface_get_material(0) as BaseMaterial3D
+				var frame_box := frame.transform * frame.get_aabb()
+				var pane_box: AABB = node.transform * node.get_aabb()
+				visibly_framed = opaque != null and opaque.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED \
+					and frame_box.grow(0.005).encloses(pane_box)
+		if float(node.get_meta("barrier_alpha", 0.0)) < 0.55 and not visibly_framed:
 			report["violations"] = int(report["violations"]) + 1
 	for child in node.get_children():
 		_barrier_glass(child, report)

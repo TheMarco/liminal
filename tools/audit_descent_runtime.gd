@@ -107,6 +107,8 @@ func run() -> void:
 		game._music.play()
 	expect(game._music.playing, "soundtrack could not start for the playback check")
 	game.descent_tape_watch(true)
+	expect(game._post_process._overlay.visible,
+		"TV watch must retain the whole-scene post-processing overlay")
 	expect(game._music.stream_paused,
 		"VCR watch did not pause the independently routed music")
 	game.descent_tape_watch(false)
@@ -366,7 +368,12 @@ func run() -> void:
 	}
 	var target := Chunk.new(game._level_seed(game.active_level),
 		route.target, game.active_level, target_config)
-	get_root().add_child(target)
+	# Isolate this shell from already streamed geometry at the same cell.
+	var lift_world := SubViewport.new()
+	lift_world.own_world_3d = true
+	get_root().add_child(lift_world)
+	lift_world.add_child(target)
+	target.position = Vector3(route.target.x * WorldGen.CELL_SIZE, 0, route.target.y * WorldGen.CELL_SIZE)
 	expect(target.portal_dest < 0, "objective room built a portal")
 	expect(target.has_node("DescentElevator"),
 		"target did not build the Descent elevator")
@@ -384,7 +391,18 @@ func run() -> void:
 		# Calling the lift must NOT open it. The car is somewhere else and the
 		# wait is the floor's most exposed stretch; the run owns its clock so it
 		# survives the target room streaming out during it.
-		lift_call.interact(game.player)
+		# A direct test press must satisfy the same room/sight rules as E.
+		var caller := Player.new()
+		lift_world.add_child(caller)
+		caller.set_process(false)
+		caller.set_physics_process(false)
+		caller.global_position = lift_call.global_position + lift_call.global_basis.z * 2.0
+		caller.cam.global_position = caller.global_position
+		caller.cam.look_at(lift_call.global_position)
+		await physics_frame
+		await physics_frame
+		lift_call.interact(caller)
+		caller.free()
 		await create_timer(0.35).timeout
 		expect(not lift_call.enabled,
 			"call button did not lock after being pressed")
@@ -402,7 +420,7 @@ func run() -> void:
 		await create_timer(0.1).timeout
 		expect(target.get_node("DescentElevator").has_meta("opened"),
 			"arrival did not open the objective car")
-	target.queue_free()
+	lift_world.queue_free()
 	await process_frame
 
 	# The arrival car: the player rides in, so a floor's origin room owns a

@@ -1,0 +1,58 @@
+{
+  "ect": {
+    "triangles": 4918,
+    "meshes": 1,
+    "materials": 2,
+    "texture_resolution": 1024,
+    "dimensions_godot_m": [
+      0.5998149514198303,
+      1.1937627792358398,
+      0.49563074111938477
+    ],
+    "front_axis": "+Z",
+    "origin": "floor centre",
+    "label_surface": "original 1024x800 instrument panel",
+    "label_texture_resolution": [
+      1024,
+      800
+    ],
+    "bounds_godot_m": {
+      "min": [
+        -0.29990747570991516,
+        0.0,
+        -0.2466307431459427
+      ],
+      "max": [
+        0.29990747570991516,
+        1.1937627792358398,
+        0.24899999797344208
+      ]
+    }
+  },
+  "restraint": {
+    "triangles": 5980,
+    "meshes": 1,
+    "materials": 1,
+    "texture_resolution": 1024,
+    "dimensions_godot_m": [
+      0.8929889798164368,
+      0.9356000423431396,
+      1.9644947052001953
+    ],
+    "front_axis": "+Z",
+    "origin": "floor centre",
+    "mattress_top_m": 0.875,
+    "bounds_godot_m": {
+      "min": [
+        -0.4464944899082184,
+        0.0,
+        -0.9779999852180481
+      ],
+      "max": [
+        0.4464944899082184,
+        0.9356000423431396,
+        0.9864947199821472
+      ]
+    }
+  }
+}

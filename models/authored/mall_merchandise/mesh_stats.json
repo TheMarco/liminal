@@ -1,0 +1,44 @@
+{
+  "station": {
+    "triangles": 4886,
+    "meshes": 3,
+    "surfaces": 3,
+    "bounds_godot_m": {
+      "min": [
+        -1.4000000953674316,
+        0.0,
+        -0.8600000143051147
+      ],
+      "max": [
+        1.4000000953674316,
+        1.850000023841858,
+        0.8600000143051147
+      ]
+    },
+    "front_axis": "+Z",
+    "variant": "large U-shaped staff station",
+    "staff_well_width_m": 1.738,
+    "rear_access_open": true,
+    "counter_height_m": 1.15
+  },
+  "display": {
+    "triangles": 2844,
+    "meshes": 2,
+    "surfaces": 2,
+    "bounds_godot_m": {
+      "min": [
+        -1.100000023841858,
+        0.0,
+        -0.45000001788139343
+      ],
+      "max": [
+        1.100000023841858,
+        1.0399999618530273,
+        0.45000001788139343
+      ]
+    },
+    "front_axis": "+Z",
+    "variant": "compact double-sided merchandise display",
+    "counter_height_m": 1.04
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "monitor": {
+    "triangles": 1164,
+    "meshes": 2,
+    "materials": 2,
+    "housing_triangles": 780,
+    "screen_triangles": 384,
+    "dimensions_godot_m": [
+      0.52,
+      0.34,
+      0.4
+    ],
+    "screen_node": "CRTScreen",
+    "screen_center_godot_m": [
+      -0.055,
+      0.18,
+      0.211
+    ],
+    "screen_dimensions_m": [
+      0.3,
+      0.225
+    ],
+    "screen_z_range_m": [
+      0.204,
+      0.218
+    ],
+    "bezel_max_z_m": 0.23,
+    "screen_uv": "Exported glTF: U left-to-right, V top-to-bottom; rectangular 0\u20131 UVs"
+  },
+  "keyboard": {
+    "triangles": 1410,
+    "meshes": 1,
+    "materials": 1,
+    "keycaps": 75,
+    "dimensions_godot_m": [
+      0.52,
+      0.0425,
+      0.21
+    ]
+  },
+  "shared_texture_resolution": 1024,
+  "front_axis": "+Z",
+  "origin": "Tabletop floor at y=0; centered horizontally"
+}

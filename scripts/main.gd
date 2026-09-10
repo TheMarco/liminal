@@ -71,8 +71,11 @@ var _interact_hint: Label
 var _event_panel: PanelContainer
 var _event_hint: Label
 var _event_tween: Tween
+var _flash_notice_left := 0.0
 var _vf_frame: VhsOsd.Frame
 var _battery_meter: VhsOsd.Meter
+var _flash_icon: VhsOsd.FlashIcon
+var _emergency_flash_photo_id := ""
 var _stamina_meter: VhsOsd.Meter
 var _charging_panel: VBoxContainer
 var _charging_label: Label
@@ -80,8 +83,12 @@ var _charging_meter: VhsOsd.Meter
 var _events: EnvironmentEvents
 var _photo_director: PhotoDirector
 var _photo_camera: PhotoCamera
+var _photo_album: PhotoAlbum
+var _photo_album_store := PhotoAlbumStore.new()
 var _photo_debug := false
 var _photo_sweep_hinted := false
+var _realm_visit: RealmExcursion
+var _realm_used: Dictionary = {}
 var _pending_photo_message := ""
 var _osd_layer: CanvasLayer
 ## Two independent reasons hide the OSD; the layer shows only when neither
@@ -184,6 +191,14 @@ func _ready() -> void:
 	if world_seed == 0:
 		world_seed = (randi() & 0x7FFFFFFF) | 1
 	if descent:
+		if opts.descent_floor <= 1:
+			var requested_seed := world_seed
+			world_seed = FirstDoorStart.select_seed(world_seed)
+			if world_seed == 0:
+				get_tree().quit(1)
+				return
+			if requested_seed != world_seed:
+				print("First-floor discovery: requested seed %d -> run seed %d" % [requested_seed, world_seed])
 		run = DescentRun.new()
 		# The seed varies rooms and routes inside the fixed story order.
 		run.world_seed = world_seed
@@ -198,6 +213,21 @@ func _ready() -> void:
 		add_child(run)
 		descent_route = _create_descent_route(active_level, run.floor_idx)
 		_print_descent_route()
+		if opts.first_door or opts.first_obstruction:
+			var door := descent_route.obstruction_hint if opts.first_obstruction else descent_route.topology.intro_photo_door()
+			if not door.is_empty():
+				var at: Vector2i = door["cell"]
+				var direction := DescentTopology.edge_dir(door)
+				var face := Vector3(WorldGen.DIRV[direction].x, 0, WorldGen.DIRV[direction].y)
+				var centre := Vector3(at.x * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE if direction == 0 else float(door["t"])),
+					Chunk.cell_floor_h(descent_route.world_seed, at, active_level) + 0.15,
+					at.y * WorldGen.CELL_SIZE + (WorldGen.CELL_SIZE if direction == 2 else float(door["t"])))
+				if door["approach_cell"] != at:
+					face = -face
+				spawn = centre - face * 5.8
+				yaw = atan2(-face.x, -face.z)
+				pos_given = true
+				yaw_given = true
 	if not pos_given:
 		if descent:
 			var arrival := _descent_arrival(active_level)
@@ -276,6 +306,8 @@ func _ready() -> void:
 		ChunkManager._dev_timing = true
 	if opts.bench:
 		_dev_tools.start_benchmark(player)
+	elif opts.perf_log:
+		_dev_tools.start_benchmark(player, false)
 	ambience = Ambience.new(active_level)
 	add_child(ambience)
 	_director = HorrorDirector.new()
@@ -357,6 +389,7 @@ func _ready() -> void:
 	add_child(_photo_camera)
 	_photo_camera.photo_documented.connect(_on_photo_documented)
 	_photo_camera.review_finished.connect(_on_photo_review_finished)
+	_photo_camera.photograph_taken.connect(_on_album_photograph)
 	_photo_camera.first_raise.connect(
 		func(): _show_event_message("PHOTOGRAPH WHAT IS WRONG"))
 	_music = AudioStreamPlayer.new()
@@ -370,6 +403,8 @@ func _ready() -> void:
 		_set_world_audio(false)
 	_switch_music(active_level)
 	_build_ui()
+	player.emergency_flash_changed.connect(_on_emergency_flash_changed)
+	player.emergency_flash_used.connect(_on_emergency_flash_used)
 	_apply_game_settings()
 	_configure_level_transitions()
 	player.interaction_prompt_changed.connect(_on_interaction_prompt)
@@ -612,6 +647,13 @@ func _apply_game_settings() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(_photo_album):
+		return
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.physical_keycode == KEY_P:
+		if _open_photo_album():
+			get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("ui_cancel") and not is_instance_valid(_pause_menu) \
 			and not is_instance_valid(_title) and not _switching and not _dying \
 			and not is_instance_valid(_return_prompt) \
@@ -619,6 +661,36 @@ func _input(event: InputEvent) -> void:
 			and not is_instance_valid(_descent_intro):
 		get_viewport().set_input_as_handled()
 		_open_settings(false)
+
+
+func _on_album_photograph(image: Image, metadata: Dictionary) -> void:
+	_photo_album_store.configure(world_seed, _progress_enabled)
+	var error := _photo_album_store.add_photo(image, metadata)
+	if error != OK:
+		push_warning("Could not save photograph to album: %s" % error_string(error))
+		_show_event_message("PHOTOGRAPH COULD NOT BE SAVED TO ALBUM")
+
+
+func _open_photo_album() -> bool:
+	if not descent or is_instance_valid(_photo_album) or get_tree().paused \
+			or is_instance_valid(_title) or _switching or _dying \
+			or is_instance_valid(_return_prompt) or is_instance_valid(_descent_summary) \
+			or is_instance_valid(_descent_intro) or _photo_camera == null:
+		return false
+	if not _photo_camera._allowed() or _photo_camera._capturing \
+			or _photo_camera._review_left > 0.0 or _photo_camera.doorway_reveal_active():
+		return false
+	_photo_camera._lower()
+	player.stop_motion_audio()
+	_photo_album_store.configure(world_seed, _progress_enabled)
+	_photo_album = PhotoAlbum.new()
+	add_child(_photo_album)
+	_photo_album.closed.connect(func():
+		_photo_album = null
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			player.grab_look())
+	_photo_album.open(_photo_album_store)
+	return true
 
 
 func _open_settings(only_options := false) -> void:
@@ -675,6 +747,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _show_return_prompt() -> void:
+	if is_instance_valid(_realm_visit):
+		_realm_visit.set_prompt_hold(true)
 	_return_prompt = ReturnPrompt.new()
 	_return_prompt.descent = descent
 	_return_prompt.confirmed.connect(_confirm_return_to_title)
@@ -696,6 +770,9 @@ func _cancel_return_to_title() -> void:
 	_return_prompt = null
 	player.set_process_unhandled_input(true)
 	player.grab_look()
+	if is_instance_valid(_realm_visit) and _realm_visit.phase == RealmExcursion.Phase.VISITING:
+		_realm_visit.set_prompt_hold(false)
+		return
 	if descent and run != null and not run.ended:
 		run.resume_rules()
 		_set_presence(Presence.DESCENT)
@@ -706,6 +783,8 @@ func _cancel_return_to_title() -> void:
 
 
 func _confirm_return_to_title() -> void:
+	if is_instance_valid(_realm_visit) and _realm_visit.phase == RealmExcursion.Phase.VISITING:
+		await _realm_visit.collapse()
 	if is_instance_valid(_return_prompt):
 		_return_prompt.queue_free()
 	_return_prompt = null
@@ -795,8 +874,8 @@ func descent_tape_watch(on: bool) -> void:
 	# REC, meters, captions) leaves with the viewfinder, not just the needle.
 	_osd_hidden_tape = on
 	_sync_osd_visible()
-	# Playback owns a high-resolution shared footage pass clipped to the TV
-	# glass. Hide the normal full-screen pass so the bezel and room stay clean.
+	# The normal whole-scene shader processes the video and TV cabinet
+	# together. The decoded video itself has no separate CRT/footage pass.
 	if _post_process != null:
 		_post_process.set_tape_playback(on)
 	# The tape also owns the soundtrack: score and room tone hold their
@@ -944,14 +1023,16 @@ func descent_photo_refusal_caption() -> String:
 
 func _on_photo_documented(_anomaly_id: String, count: int,
 		required: int, caption: String) -> void:
+	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
+		_pending_photo_message = caption
+		return # Foreign bounty photographs never change source-floor evidence.
 	# The circle on the print says where; the caption names the wrongness —
 	# without it a counted shot of something subtle read as arbitrary. Queue it
 	# until the opaque print review lowers the camera and reveals the HUD again.
 	if caption.is_empty():
-		_pending_photo_message = "PHOTOGRAPH %d / %d" % [mini(count, required), required]
+		_pending_photo_message = "PHOTOGRAPH %d" % count
 	else:
-		_pending_photo_message = "PHOTOGRAPH %d / %d — %s" % [
-			mini(count, required), required, caption]
+		_pending_photo_message = "PHOTOGRAPH %d — %s" % [count, caption]
 	# The last photograph gets a heading without waiting for a tape refusal:
 	# at REQUIRED-1 the EVIDENCE counter comes up on its own (2026-08-19 —
 	# hunting the final anomaly blind was the feature's last frustration).
@@ -974,7 +1055,11 @@ func _on_photo_documented(_anomaly_id: String, count: int,
 func _on_photo_review_finished() -> void:
 	if _pending_photo_message.is_empty():
 		return
-	_show_event_message(_pending_photo_message, false, 4.0)
+	# Let the player see the entire new opening and its short glow before the
+	# large evidence caption takes the centre of the screen.
+	var delay := MutationRevealEffect.LIFE_SECONDS \
+		if _photo_camera != null and not _photo_camera._review_callbacks.is_empty() else 0.0
+	_show_event_message(_pending_photo_message, false, 4.0, delay)
 	_pending_photo_message = ""
 
 
@@ -987,6 +1072,9 @@ func _on_photo_raised(on: bool) -> void:
 	_osd_hidden_camera = on
 	_sync_osd_visible()
 	if is_instance_valid(_descent_hud):
+		if is_instance_valid(_realm_visit) and _realm_visit.is_away():
+			_realm_visit.sync_flash_hud()
+			return
 		_descent_hud.set_active(not on and descent \
 			and run != null and not run.ended)
 
@@ -999,6 +1087,8 @@ func _sync_osd_visible() -> void:
 func _on_photo_proximity(value: float, los: float) -> void:
 	if _vf_frame != null:
 		_vf_frame.interference = value
+	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
+		return
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_photo_proximity(los)
 	# The first time the warning lands, say how the hunt works — the nearest
@@ -1104,6 +1194,8 @@ func _reveal_arrival() -> void:
 
 
 func _finish_reveal_arrival(floor_name: String) -> void:
+	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
+		return
 	if not descent or run == null or run.ended or cm == null:
 		return
 	var chunk := cm.chunk_at(descent_route.origin)
@@ -1133,6 +1225,8 @@ func _queue_photo_brief() -> void:
 
 
 func _show_photo_brief() -> void:
+	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
+		return
 	if not descent or run == null or run.ended or _photo_director == null \
 			or _photo_director.requirement_met():
 		return
@@ -1140,10 +1234,10 @@ func _show_photo_brief() -> void:
 	var required := _photo_director.required_count()
 	if run.floor_idx == 0 and count == 0:
 		_show_event_message(
-			"THE TAPE WANTS PROOF — PHOTOGRAPH %d THINGS THAT ARE WRONG"
+			"THE TAPE WANTS PROOF — PHOTOGRAPH AT LEAST %d THINGS THAT ARE WRONG"
 			% required)
 	else:
-		_show_event_message("PHOTOGRAPH WHAT IS WRONG — %d/%d"
+		_show_event_message("PHOTOGRAPH WHAT IS WRONG — %d TAKEN · MIN %d"
 			% [count, required])
 
 
@@ -1222,6 +1316,7 @@ func _begin_descent_floor() -> void:
 	_sync_descent_chunk_state()
 	_prepare_bleed()
 	_reveal_arrival()
+	_prepare_realm_visit()
 	if opts.play_tape:
 		_dev_play_tape()
 	if opts.photo_shoot and _photo_camera != null:
@@ -1236,6 +1331,43 @@ func _begin_descent_floor() -> void:
 			_photo_camera._raise(true))
 		shoot.tween_interval(0.7)
 		shoot.tween_callback(func(): _photo_camera._take_photo())
+
+
+func _dispose_realm_visit() -> void:
+	if is_instance_valid(_realm_visit):
+		assert(not _realm_visit.is_away(), "Return from the realm before replacing the source floor")
+		_realm_visit.free()
+	_realm_visit = null
+
+
+func _realm_visit_used(floor_idx: int) -> bool:
+	return _realm_used.has("%d:%d" % [world_seed, floor_idx]) or (
+		_progress_enabled and _descent_progress.run_seed == world_seed
+		and _descent_progress.realm_visit_used(floor_idx))
+
+
+func _consume_realm_visit(floor_idx: int) -> void:
+	_realm_used["%d:%d" % [world_seed, floor_idx]] = true
+	if _progress_enabled and _descent_progress.run_seed == world_seed:
+		_descent_progress.mark_realm_visit_used(floor_idx)
+
+
+func _allow_realm_visit_retry(floor_idx: int) -> void:
+	_realm_used.erase("%d:%d" % [world_seed, floor_idx])
+	if _progress_enabled and _descent_progress.run_seed == world_seed:
+		_descent_progress.allow_realm_visit_retry(floor_idx)
+
+
+func _prepare_realm_visit() -> void:
+	_dispose_realm_visit()
+	if not descent or run == null or run.is_last_floor() or _realm_visit_used(run.floor_idx):
+		return
+	if descent_route == null or descent_route.realm_door_hint.is_empty():
+		push_warning("No realm entrance reserved on floor %d" % run.floor_idx)
+		return
+	_realm_visit = RealmExcursion.new()
+	add_child(_realm_visit)
+	_realm_visit.prepare(self)
 
 
 ## Screenshot-run helper for `--play-tape`: walk into the objective room and
@@ -1341,6 +1473,7 @@ func _on_descent_lift() -> void:
 		return
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_active(false)
+	_dispose_realm_visit()
 	_persist_current_runtime_state()
 	run.suspend_rules()
 	run.floor_idx += 1
@@ -1360,10 +1493,12 @@ func _on_descent_exit() -> void:
 ## One of them reached you during Descent. Wander deliberately keeps the figure
 ## system suspended; the guard below also makes a stale signal harmless.
 ##
-## Nothing here is recoverable on purpose. The flashlight is the answer, it is
-## on a ten-second cell, and letting one close the distance while you decide is
-## the mistake being punished.
+## An earned emergency flash intercepts the exact figure's _seize() before
+## this signal. Reaching here still means an unprotected, fatal catch.
 func _on_figure_reached_player() -> void:
+	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
+		_realm_visit.collapse(true)
+		return
 	if not descent:
 		_figures.despawn()
 		return
@@ -1396,6 +1531,7 @@ func _play_player_death() -> void:
 ## then black, then the title. The fade runs slower than a floor change: a lift
 ## is a transition, this is an ending.
 func _die_to_title() -> void:
+	_dispose_realm_visit()
 	_switching = true
 	player.set_process_unhandled_input(false)
 	player.velocity = Vector3.ZERO
@@ -1602,12 +1738,13 @@ func _on_blackout_ambush() -> void:
 ## briefing lists the building's rules; it does not say what the figures are or
 ## what answers them, and finding that out by dying is not a fair lesson.
 func _check_torch_hint() -> void:
+	var figures := _current_figures()
 	if _torch_hint_shown or _switching or _dying or player == null \
-			or _figures == null or _figures.suspended:
+			or figures == null or figures.suspended:
 		return
 	if _title != null or not player.is_inside_tree():
 		return
-	if _figures.nearest_distance() > TORCH_HINT_D:
+	if figures.nearest_distance() > TORCH_HINT_D:
 		return
 	_torch_hint_shown = true
 	_show_event_message("IT IS COMING — F TO BURN IT", true)
@@ -1660,7 +1797,8 @@ func _on_blackout_mutation(proposal: TopologyDelta,
 
 
 func _mutation_mode_ready() -> bool:
-	return descent and not _switching and not _dying
+	return descent and not _switching and not _dying \
+		and (_photo_camera == null or not _photo_camera.doorway_reveal_active())
 
 
 func _persist_committed_mutation(topology: DescentTopology) -> void:
@@ -1767,11 +1905,15 @@ func _continue_descent() -> void:
 
 func _restart_descent() -> void:
 	_reset_descent_checkpoint()
+	if world_seed == 0:
+		return
 	await _resume_descent_at(0)
 
 
 func _new_descent() -> void:
 	world_seed = _fresh_descent_seed()
+	if world_seed == 0:
+		return
 	await _play_descent_intro()
 	_commit_new_descent_checkpoint()
 	# This entry comes from the results screen rather than `_on_start`, so it
@@ -1784,6 +1926,7 @@ func _new_descent() -> void:
 func _resume_descent_at(floor_idx: int) -> void:
 	if _switching:
 		return
+	_dispose_realm_visit()
 	if is_instance_valid(_descent_summary):
 		_descent_summary.queue_free()
 	_descent_summary = null
@@ -1798,6 +1941,7 @@ func _resume_descent_at(floor_idx: int) -> void:
 	add_child(run)
 	run.player = player
 	player.reset_descent_resources()
+	_restore_emergency_flash()
 	_dying = false
 	_blackout_locate_cue = 0
 	descent_route = null
@@ -1810,6 +1954,7 @@ func _resume_descent_at(floor_idx: int) -> void:
 func _leave_descent() -> void:
 	if _switching:
 		return
+	_dispose_realm_visit()
 	player.set_flashlight(false)
 	if is_instance_valid(_descent_summary):
 		_descent_summary.queue_free()
@@ -1820,6 +1965,8 @@ func _leave_descent() -> void:
 		run.queue_free()
 	run = null
 	descent = false
+	player.emergency_flash_held = false
+	_emergency_flash_photo_id = ""
 	descent_route = null
 	if _photo_camera != null:
 		_photo_camera.enabled = false
@@ -1872,10 +2019,13 @@ func _settle_initial_arrival() -> void:
 
 
 func _process(dt: float) -> void:
+	_flash_notice_left = maxf(0.0, _flash_notice_left - dt)
 	_check_torch_hint()
 	_post_process.update()
 	_update_entity_halo(dt)
 	_update_flashlight_hud()
+	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
+		return
 	_update_bleed()
 	# Once the mercy system has proven a stall, the whispers stop being
 	# uniformly random and lean toward where the route actually continues.
@@ -1999,6 +2149,8 @@ func _apply_hud_scaling() -> void:
 		viewport_size.x - inset.x - counter_width - battery_gap
 			- _battery_meter.size.x,
 		inset.y + (counter_height - _battery_meter.size.y) * 0.48)
+	_flash_icon.size = Vector2(30.0, 34.0) * scale
+	_flash_icon.position = _battery_meter.position - Vector2(40.0, 3.0) * scale
 
 	_stamina_meter.font_size = roundi(34.0 * scale)
 	_stamina_meter.size = Vector2(280.0, 74.0) * scale
@@ -2140,6 +2292,8 @@ func _build_ui() -> void:
 	_battery_meter.channel_alpha = 0.72
 	_battery_meter.right_align = true
 	cl.add_child(_battery_meter)
+	_flash_icon = VhsOsd.FlashIcon.new()
+	cl.add_child(_flash_icon)
 
 	_stamina_meter = VhsOsd.Meter.new()
 	_stamina_meter.text = "SPRINT"
@@ -2178,6 +2332,13 @@ func _build_ui() -> void:
 ## The recording breaks around the thing it cannot hold: project the nearest
 ## live figure into screen space and hand the post pass an interference halo.
 ## Rises fast, decays slow, so a figure crossing a doorway leaves a wake.
+func _current_figures() -> ShadowFigures:
+	if is_instance_valid(_realm_visit) and _realm_visit.phase == RealmExcursion.Phase.VISITING \
+			and is_instance_valid(_realm_visit.threats):
+		return _realm_visit.threats
+	return _figures
+
+
 func _update_entity_halo(dt: float) -> void:
 	if _post_process == null or player == null:
 		return
@@ -2187,10 +2348,11 @@ func _update_entity_halo(dt: float) -> void:
 	# Presence is distance only: the nearest hostile figure, in frame or at
 	# your back, feeds the tape's corruption ladder.
 	var presence := 0.0
-	if descent and _figures != null and not _dying:
+	var figures := _current_figures()
+	if descent and figures != null and not _dying:
 		var cam := player.cam
 		var viewport_size := Vector2(get_viewport().size)
-		for figure in _figures.active_figures():
+		for figure in figures.active_figures():
 			var head: Vector3 = figure.global_position + Vector3(0, 1.2, 0)
 			var d := cam.global_position.distance_to(head)
 			presence = maxf(presence, clampf(1.0 - (d - 2.0) / 18.0, 0.0, 1.0))
@@ -2212,6 +2374,8 @@ func _update_entity_halo(dt: float) -> void:
 
 
 func _update_flashlight_hud() -> void:
+	if _flash_icon != null and player != null:
+		_flash_icon.held = player.emergency_flash_held
 	if player == null or _battery_meter == null:
 		return
 	var level := player.flashlight_charge()
@@ -2219,6 +2383,45 @@ func _update_flashlight_hud() -> void:
 	_charging_meter.value = level
 	_charging_panel.visible = player.is_charging()
 	_stamina_meter.value = player.stamina()
+
+
+func award_emergency_flash(photo_id: String) -> bool:
+	if player.emergency_flash_held:
+		return false
+	_emergency_flash_photo_id = photo_id
+	player.grant_emergency_flash()
+	_photo_album_store.set_flash_status(photo_id, "FLASH READY")
+	return true
+
+
+func _restore_emergency_flash() -> void:
+	player.emergency_flash_held = _progress_enabled and _descent_progress != null \
+		and _descent_progress.run_seed == world_seed and _descent_progress.emergency_flash_held
+	_emergency_flash_photo_id = _descent_progress.emergency_flash_photo_id \
+		if player.emergency_flash_held else ""
+
+
+func _on_emergency_flash_changed(held: bool) -> void:
+	if _flash_icon != null:
+		_flash_icon.held = held
+	if not held:
+		_photo_album_store.set_flash_status(_emergency_flash_photo_id, "FLASH SPENT — SAVED YOU FROM AN ATTACKER")
+		_emergency_flash_photo_id = ""
+	if _progress_enabled and _descent_progress != null \
+			and _descent_progress.run_seed == world_seed:
+		_descent_progress.record_emergency_flash(held, _emergency_flash_photo_id)
+
+
+func _on_emergency_flash_used() -> void:
+	# Close a raised viewfinder/print so the save and its message can be seen.
+	# An in-flight snapshot completes first, keeping album metadata intact.
+	await _photo_camera.emergency_flash_feedback()
+	if _dying:
+		return
+	_pending_photo_message = ""
+	_heart.bump(Heartbeat.BUMP_BURNED)
+	_flash_notice_left = 3.0
+	_show_event_message("SAVED BY THE FLASH", false, 3.0)
 
 
 func _on_interaction_prompt(text: String) -> void:
@@ -2232,7 +2435,9 @@ func _on_interaction_prompt(text: String) -> void:
 
 
 func _show_event_message(text: String, alert := false,
-		hold_seconds := 2.2) -> void:
+		hold_seconds := 2.2, delay_seconds := 0.0) -> void:
+	if _flash_notice_left > 0.0 and text != "SAVED BY THE FLASH":
+		return
 	if _event_hint == null or _event_panel == null:
 		return
 	VhsOsd.set_ink(_event_hint, VhsOsd.RED if alert else VhsOsd.INK)
@@ -2241,6 +2446,8 @@ func _show_event_message(text: String, alert := false,
 		_event_tween.kill()
 	_event_panel.modulate.a = 0.0
 	_event_tween = create_tween()
+	if delay_seconds > 0.0:
+		_event_tween.tween_interval(delay_seconds)
 	_event_tween.tween_property(_event_panel, "modulate:a", 0.96, 0.18)
 	_event_tween.tween_interval(hold_seconds)
 	_event_tween.tween_property(_event_panel, "modulate:a", 0.0, 0.7)
@@ -2315,15 +2522,22 @@ func _prepare_descent(entry: int) -> void:
 			_title.set_descent_ready()
 		return
 	_descent_preparing = true
+	# Paint the existing preparation card before bounded seed/geometry work.
+	await get_tree().process_frame
 	descent = true
 	# New and Restart both open on the intro movie — Restart means the whole
 	# experience over, not floor one in silence. Once the movie has ever been
 	# watched to the end the Skip button is offered (IntroPlaybackState).
 	_pending_new_descent_intro = entry != TitleScreen.DescentEntry.CONTINUE
 	var floor_idx := _apply_descent_entry(entry)
+	if world_seed == 0:
+		_descent_preparing = false
+		descent = false
+		return
 	player.allow_sprint = true
 	player.set_process_unhandled_input(false)
 	player.reset_descent_resources()
+	_restore_emergency_flash()
 	_transitions.clear_saved_positions()
 	run = DescentRun.new()
 	run.floor_idx = floor_idx
@@ -2360,6 +2574,8 @@ func _apply_descent_entry(entry: int) -> int:
 ## restore old photographs, mutations, opened objects or tape history.
 func _reset_descent_checkpoint() -> void:
 	world_seed = _fresh_descent_seed()
+	if world_seed == 0:
+		return
 	_commit_new_descent_checkpoint()
 
 
@@ -2369,7 +2585,7 @@ func _fresh_descent_seed() -> int:
 	var candidate := (randi() & 0x7FFFFFFF) | 1
 	while candidate == previous:
 		candidate = (randi() & 0x7FFFFFFF) | 1
-	return candidate
+	return FirstDoorStart.select_seed(candidate, previous)
 
 
 func _on_start(selected_descent: bool) -> void:
@@ -2418,6 +2634,7 @@ func _play_descent_intro() -> void:
 
 
 func _commit_new_descent_checkpoint() -> void:
+	_realm_used.clear()
 	if _progress_enabled:
 		_descent_progress.start_new(world_seed)
 
@@ -2426,7 +2643,7 @@ func _set_mode_hint() -> void:
 	if _hint == null:
 		return
 	if descent:
-		_hint.text = "WASD move  ·  Shift sprint  ·  E use  ·  F torch  ·  C camera + Space photo  ·  B mode  ·  Esc pause  ·  Q title"
+		_hint.text = "WASD move  ·  Shift sprint  ·  E use  ·  F torch  ·  C camera + Space photo  ·  P album  ·  B mode  ·  Esc pause  ·  Q title"
 	else:
 		_hint.text = "WASD move  ·  Shift run  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  V filter  ·  B mode  ·  Esc pause  ·  Q title"
 

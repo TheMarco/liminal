@@ -24,13 +24,14 @@ var _resources_start := 0
 var _vram_max := 0
 
 
-func start_benchmark(player: Player) -> void:
+func start_benchmark(player: Player, auto_move := true) -> void:
 	_player = player
 	_enabled = player != null
 	if not _enabled:
 		return
-	_player.dev_spin = true
-	_player.dev_walk = true
+	if auto_move:
+		_player.dev_spin = true
+		_player.dev_walk = true
 	_previous_camera = _player.cam.global_position
 	_reset_monitors()
 

@@ -94,8 +94,9 @@ func _run() -> void:
 		failures.append("shared recovered-footage shader lost tracking damage")
 	var tube_shader_source := FileAccess.get_file_as_string(
 		"res://shaders/vhs_tape.gdshader")
-	if not tube_shader_source.contains("Authored footage arrives already processed"):
-		failures.append("TV tube is no longer treating authored footage as preprocessed")
+	if not tube_shader_source.contains("if (use_footage <= 0.5)") \
+			or not tube_shader_source.contains("mix(scan * tube_aperture, 1.0, use_footage)"):
+		failures.append("Authored video must bypass local CRT warp and scanlines")
 	if not is_equal_approx(VhsRitual.display_aspect_for_size(
 			Vector2i(512, 410)), 4.0 / 3.0) \
 			or not is_equal_approx(VhsRitual.display_aspect_for_size(
@@ -318,26 +319,13 @@ func _audit_playback_modes(shorts: Array[String], longs: Array[String],
 			failures.append("decoded recording was not bound to the CRT shader")
 	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
 	if not main_source.contains("_post_process.set_tape_playback(on)"):
-		failures.append("TV watch no longer isolates playback from the main pass")
-	var tv_signal := PostProcessController.make_found_footage_material(
-		PostProcessController.TV_TAPE_RESOLUTION)
-	if tv_signal.get_shader_parameter("resolution") != Vector2(344.0, 240.0):
-		failures.append("TV recovered-footage pass is not a 240-line signal")
-	if optional._video_post == null \
-			or not optional._video_post.material is ShaderMaterial \
-			or (optional._video_post.material as ShaderMaterial).shader.resource_path \
-				!= "res://shaders/post.gdshader":
-		failures.append("TV glass did not receive the shared footage shader")
-	if optional._video_crt == null:
-		failures.append("TV glass is missing the CRT display pass")
-	else:
-		var display := optional._video_crt.get_node("Display") as ColorRect
-		var display_material := display.material as ShaderMaterial
-		if display_material.shader != PostProcessController.CRT_DISPLAY_SHADER:
-			failures.append("TV glass did not use the shared CRT display shader")
-		if display_material.get_shader_parameter("signal_resolution") \
-				!= PostProcessController.TV_TAPE_RESOLUTION:
-			failures.append("TV signal and CRT display resolutions differ")
+		failures.append("TV watch no longer enables the full-game pass")
+	for item in optional._video_vp.find_children("*", "CanvasItem", true, false):
+		if item.material is ShaderMaterial:
+			failures.append("Decoded video has an unwanted local post-process shader")
+	if optional._video_vp.find_child("CRTDisplayPass", true, false) != null \
+			or optional._video_vp.find_child("RecoveredFootagePass", true, false) != null:
+		failures.append("Decoded video has a duplicate CRT/footage pass")
 	var interrupted_tape := optional._tape_path
 	optional.reset_tape()
 	if not optional._tape_path.is_empty():

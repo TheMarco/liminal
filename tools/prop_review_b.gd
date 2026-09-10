@@ -12,7 +12,7 @@ static func cases() -> Array:
 		{"name":"airport-plane", "theme":4, "method":"_air_docked_plane", "parent":true, "args":[]},
 		{"name":"airport-jetway", "theme":4, "method":"_air_jetway", "parent":true, "args":[]},
 		{"name":"airport-gate-desk", "theme":4, "method":"_air_gate_desk", "args":[Vector3(6, 0, 6), 0.0, "B12"]},
-		{"name":"airport-travelator", "theme":4, "method":"_travelator", "args":[Vector3(6, 0, 6), 0.0, 1.0, 7, 8.4]},
+		{"name":"airport-travelator", "theme":4, "method":"_travelator", "args":[Vector3(6, 0, 6), 0.0, 1.0, 7, 8.4], "camera_position":Vector3(-7, 4.8, 7), "camera_target":Vector3(0, .45, 0)},
 		{"name":"airport-baggage", "theme":4, "method":"_air_baggage", "args":[]},
 		{"name":"airport-escalator-flight", "theme":4, "method":"_escalator_flight", "args":[Vector3(6, 0, 6), 0.0, 0.0]},
 		{"name":"asylum-restraint", "theme":5, "method":"_asy_restraint_table", "args":[Vector3(6, 0, 6), 0.0]},

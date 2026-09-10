@@ -28,6 +28,10 @@ var _label: Label
 var _distance: Label
 var _photo: Label
 var _photo_warn: Label
+var _evidence_row: HBoxContainer
+## The visit temporarily replaces the source-floor objectives. Keep the
+## subject after capture so its hidden readout cannot revert to the lift.
+var flash_bounty: RealmFlashBounty
 ## Counts metres to the nearest undocumented anomaly. Distance only, like
 ## LIFT — the maze stays the maze, but required evidence can never masquerade
 ## as missing content. Cleared per floor by configure().
@@ -68,14 +72,14 @@ func _ready() -> void:
 	lift_row.add_child(_distance)
 	# The floor's other objective sits under the first so the pair reads as
 	# one instrument: how far to the lift, how much proof the tape still wants.
-	var evidence_row := HBoxContainer.new()
-	evidence_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	evidence_row.add_theme_constant_override("separation", 34)
-	box.add_child(evidence_row)
+	_evidence_row = HBoxContainer.new()
+	_evidence_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_evidence_row.add_theme_constant_override("separation", 34)
+	box.add_child(_evidence_row)
 	_photo = VhsOsd.make_label(31, VhsOsd.INK_DIM)
 	_photo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_photo.text = "PHOTOS 0/%d" % PhotoDirector.REQUIRED
-	evidence_row.add_child(_photo)
+	_photo.text = "PHOTOS 0 · MIN %d" % PhotoDirector.REQUIRED
+	_evidence_row.add_child(_photo)
 	# Evidence warning: blinks while an undocumented anomaly is near, faster
 	# the nearer. The one readout in the hunt that cannot be mistaken for
 	# tape noise.
@@ -83,7 +87,7 @@ func _ready() -> void:
 	_photo_warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_photo_warn.text = "SOMETHING HERE IS WRONG"
 	_photo_warn.visible = false
-	evidence_row.add_child(_photo_warn)
+	_evidence_row.add_child(_photo_warn)
 	_panel.visible = false
 
 
@@ -92,7 +96,7 @@ func set_photo_proximity(value: float) -> void:
 
 
 func set_photo_progress(count: int, required: int) -> void:
-	_photo.text = "PHOTOS %d/%d" % [mini(count, required), required]
+	_photo.text = "PHOTOS %d · MIN %d" % [count, required]
 	VhsOsd.set_ink(_photo, VhsOsd.INK if count >= required else VhsOsd.INK_DIM)
 
 
@@ -107,6 +111,7 @@ func configure(p_player: Player, p_route: DescentRoute, p_run: DescentRun,
 	# with it rather than following the player out of the lift.
 	_true_left = 0.0
 	evidence_target = Vector3.INF
+	flash_bounty = null
 
 
 func set_active(value: bool) -> void:
@@ -138,24 +143,35 @@ func _rooms_left() -> int:
 
 
 func _process(dt: float) -> void:
-	if not _active or not is_instance_valid(player) or route == null \
-			or not is_instance_valid(run) or run.suspended or run.ended:
+	var showing_flash := is_instance_valid(flash_bounty)
+	if not _active or not is_instance_valid(player):
+		_panel.visible = false
+		return
+	if showing_flash:
+		if flash_bounty.documented or not flash_bounty.is_inside_tree():
+			_panel.visible = false
+			return
+	elif route == null or not is_instance_valid(run) or run.suspended or run.ended:
 		_panel.visible = false
 		return
 	# Walking off the route mid-window shows metres again, but does not refund
 	# the seconds: the recording bought a stretch of time, not a stretch of map.
-	if _true_left > 0.0:
+	if not showing_flash and _true_left > 0.0:
 		_true_left = maxf(0.0, _true_left - dt)
-	var rooms := _rooms_left() if _true_left > 0.0 else -1
+	var rooms := _rooms_left() if not showing_flash and _true_left > 0.0 else -1
 	var wide := rooms >= 0
-	var label_text := "ROOMS TO LIFT" if wide else "LIFT"
+	var label_text := "FLASH" if showing_flash else ("ROOMS TO LIFT" if wide else "LIFT")
 	var distance_text := ""
 	if wide:
 		distance_text = "%d" % rooms
 	else:
-		var target_world := Vector3(
-			float(route.target.x) * CELL + CELL * 0.5, 0.0,
-			float(route.target.y) * CELL + CELL * 0.5)
+		var target_world: Vector3
+		if showing_flash:
+			target_world = flash_bounty.to_global(flash_bounty.bounds.get_center())
+		else:
+			target_world = Vector3(
+				float(route.target.x) * CELL + CELL * 0.5, 0.0,
+				float(route.target.y) * CELL + CELL * 0.5)
 		var delta := target_world - player.global_position
 		distance_text = "%dm" % maxi(1,
 			roundi(Vector2(delta.x, delta.z).length()))
@@ -178,6 +194,9 @@ func _process(dt: float) -> void:
 			VhsOsd.safe_inset(viewport_size).y - 8.0 * scale)
 	if not _panel.visible:
 		_panel.visible = true
+	_evidence_row.visible = not showing_flash
+	if showing_flash:
+		return
 	# Warning blink: 0.9s period far out, 0.3s close in. Two honest tiers —
 	# a long sight-line through a doorway is NEARBY, not HERE; calling
 	# everything "here" sent players searching the wrong room (2026-08-19).

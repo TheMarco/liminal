@@ -31,7 +31,7 @@ const INSTRUCTION_ROWS := [
 	["SHIFT", "Run  ·  Draws attention in Descent"],
 	["E", "Use terminals, lifts, doors and charging stations"],
 	["F", "Toggle the flashlight"],
-	["C  /  SPACE", "Raise camera  /  Take photograph"],
+	["C  /  SPACE  /  P", "Raise camera  /  Take photograph  /  Photo album"],
 	["1  —  9", "Move between the original floors  ·  Wander only"],
 	["0", "Enter the Data Center  ·  Wander only"],
 	["−", "Enter the Bloom  ·  Wander only"],

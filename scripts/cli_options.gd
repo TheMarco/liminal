@@ -41,6 +41,7 @@ var shot_delay := 2.5
 # --- dev ---
 var audit := false
 var bench := false
+var perf_log := false           # benchmark counters without automatic movement
 var chunktime := false
 var spin := false
 var flashlight := false
@@ -58,6 +59,13 @@ var photo_debug := false
 ## Dev: after the arrival hold, auto-raise the camera and fire the shutter
 ## 0.7s later so screenshot runs can verify both camera presentation states.
 var photo_shoot := false
+## QA: start directly facing the selected first-floor photographic doorway.
+var first_door := false
+var first_obstruction := false
+## QA: jump to the Casino -> Mall visit; never touches normal saves.
+var realm_visit := false
+## Dev: collapse presentation style for the realm excursion.
+var realm_collapse_style := "wireframe"
 var haunt_variant := -1
 var whispers := false
 var heartbeat := false
@@ -108,6 +116,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.audit = true
 		elif arg == "--bench":
 			o.bench = true
+		elif arg == "--perf-log":
+			o.perf_log = true
 		elif arg == "--chunktime":
 			o.chunktime = true
 		elif arg == "--spin":
@@ -126,6 +136,24 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.passer = true
 		elif arg == "--photo-debug":
 			o.photo_debug = true
+		elif arg == "--first-obstruction" or arg.begins_with("--first-obstruction="):
+			o.first_obstruction = true
+			o.descent = true
+			o.descent_floor = clampi(int(arg.get_slice("=", 1)), 1, DescentRun.FLOOR_COUNT) if "=" in arg else 2
+			o.nologo = true
+		elif arg == "--first-door":
+			o.first_door = true
+			o.descent = true
+			o.descent_floor = 1
+			o.nologo = true
+		elif arg == "--realm-visit":
+			o.realm_visit = true
+			o.first_door = true
+			o.descent = true
+			o.descent_floor = 1
+			o.nologo = true
+		elif arg == "--realm-collapse=wireframe" or arg == "--realm-collapse=fracture":
+			o.realm_collapse_style = arg.get_slice("=", 1)
 		elif arg == "--photo-shoot":
 			o.photo_shoot = true
 		elif arg.begins_with("--haunt-at="):

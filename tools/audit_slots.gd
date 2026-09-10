@@ -19,6 +19,7 @@ func run() -> void:
 	var missing_fronts := 0
 	var checked_rooms := 0
 	var mixed_rooms := 0
+	var missing_change := 0
 	var misplaced_slots := 0
 	var table_counts := {"blackjack_table": 0, "roulette_table": 0}
 	for si in seed_count:
@@ -45,6 +46,10 @@ func run() -> void:
 					for kind in table_counts:
 						table_counts[kind] += int(furnishings.get(kind, 0))
 				if count > 0:
+					var change_count := int(furnishings.get("casino_change_machine", 0))
+					if change_count != 1:
+						missing_change += 1
+						print("FAIL seed=%d cell=%s: %d change machines" % [base, cell, change_count])
 					rooms += 1
 					machines += count
 					missing_backs += chunk.slot_back_violations()
@@ -56,7 +61,8 @@ func run() -> void:
 	print("  missing closed front shells: %d" % missing_fronts)
 	print("  %d casino rooms checked; mixed slot/table rooms: %d; non-slot rooms with slots: %d" % [checked_rooms, mixed_rooms, misplaced_slots])
 	print("  table games retained outside slot rooms: %s" % table_counts)
-	var failures := missing_backs + missing_fronts + mixed_rooms + misplaced_slots
+	print("  slot rooms without exactly one change machine: %d" % missing_change)
+	var failures := missing_backs + missing_fronts + mixed_rooms + misplaced_slots + missing_change
 	for kind in table_counts:
 		if table_counts[kind] == 0:
 			failures += 1

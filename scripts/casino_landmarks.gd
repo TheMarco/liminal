@@ -16,7 +16,8 @@ static func plan(route: DescentRoute) -> Dictionary:
 	var seen := {}
 	for at in route.path_from_origin():
 		var room := WorldGen.room_id(route.world_seed, at)
-		if seen.has(room) or room == route.origin or room == route.target:
+		if seen.has(room) or room == route.origin or room == route.target \
+				or route.is_intro_door_room(at):
 			continue
 		seen[room] = true
 		if WorldGen.corridor(route.world_seed, room) != 0:

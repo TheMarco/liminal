@@ -140,11 +140,11 @@ func _validate(ws: int, theme: int, route: DescentRoute,
 			return "arrival room is a corridor"
 		if not WorldGen.is_wall(ws, route.origin, route.origin_wall, theme):
 			return "arrival car is not backed by a solid wall"
-		var reach := _reachable_from_world_origin(ws, theme, route.origin)
+		var reach := _reachable_from(ws, theme, route.arrival_search_center, route.origin)
 		if reach < 0:
-			return "arrival room is unreachable from the world origin"
+			return "arrival room is unreachable from the arrival search centre"
 		if reach > DescentRoute.ARRIVAL_RADIUS:
-			return "arrival room is %d cells from the world origin" % reach
+			return "arrival room is %d cells from the arrival search centre" % reach
 	# A depth-scaled band is the whole point of the length ramp; only a
 	# documented fallback tier is allowed outside it.
 	if route.fallback_tier == 0:
@@ -180,9 +180,9 @@ func _validate(ws: int, theme: int, route: DescentRoute,
 	return ""
 
 
-func _reachable_from_world_origin(ws: int, theme: int, goal: Vector2i) -> int:
-	var dist := {Vector2i.ZERO: 0}
-	var queue: Array[Vector2i] = [Vector2i.ZERO]
+func _reachable_from(ws: int, theme: int, start: Vector2i, goal: Vector2i) -> int:
+	var dist := {start: 0}
+	var queue: Array[Vector2i] = [start]
 	var head := 0
 	while head < queue.size():
 		var c := queue[head]

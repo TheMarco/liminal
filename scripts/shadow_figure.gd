@@ -43,7 +43,6 @@ const MOVE_RADIUS := 0.52
 ## At 2.55m the capsule hit the header even when perfectly centred in the
 ## opening, so doorway-aware routing alone could never make it cross.
 const MOVE_HEIGHT := 2.08
-const MOVE_LOOKAHEAD := 0.18
 const ROUTE_REPATH_TIME := 0.5
 const ROUTE_SEARCH_RADIUS := 32
 const DOORWAY_CROSS_INSET := 0.28
@@ -267,8 +266,7 @@ var _reveal := 0.0
 ## it creeps; unseen, it lunges.
 var _observed := false
 var _lost_dist := INF
-var _avoid_sign := 0.0
-var _avoid_angle := 0.0
+var _local_path := GhostLocalPath.new()
 var _route_left := 0.0
 var _route_from := NO_ROOM
 var _route_goal := NO_ROOM
@@ -679,8 +677,7 @@ func is_pressing() -> bool:
 
 ## One step closer, never through a wall and never past arm's length. A capsule
 ## reserves the figure's grounded movement body. When the direct route is
-## blocked, a stable left/right preference makes it skirt the obstruction
-## instead of vibrating between two equally valid directions.
+## blocked, a bounded local path reserves the whole route around furniture.
 func _advance(dt: float, observed := true) -> void:
 	var player_to := player.global_position - global_position
 	player_to.y = 0.0
@@ -714,6 +711,9 @@ func _advance(dt: float, observed := true) -> void:
 	# open edges and aim beyond the next doorway so the capsule commits through
 	# the opening before resuming its chase.
 	var target := _route_target(dt)
+	target.y = global_position.y
+	var reach := ADVANCE_MIN if _cell_for(global_position) == _cell_for(player.global_position) else 0.0
+	target = _local_path.waypoint(global_position, target, dt, _clear_travel, reach)
 	var to := target - global_position
 	to.y = 0.0
 	var d := to.length()
@@ -723,31 +723,10 @@ func _advance(dt: float, observed := true) -> void:
 	var direct := to / d
 	if _can_move(direct, step):
 		global_position += direct * step
-		_avoid_sign = 0.0
-		_avoid_angle = 0.0
 		return
-	# Commit to the last detour that worked before re-scanning. Re-choosing
-	# from scratch every frame ping-ponged between mirror-image angles at a
-	# doorway, which read as the figure shivering against the frame.
-	if _avoid_angle != 0.0:
-		var held := direct.rotated(Vector3.UP,
-			deg_to_rad(_avoid_angle) * _avoid_sign)
-		if _can_move(held, step):
-			global_position += held * step
-			return
-	var signs := [_avoid_sign, -_avoid_sign] if _avoid_sign != 0.0 else [-1.0, 1.0]
-	# Shallow angles preserve forward pressure; the final wider choices let it
-	# follow a long partition until a doorway or wall end becomes available.
-	for angle_deg in [28.0, 52.0, 76.0, 92.0, 112.0, 138.0]:
-		for side: float in signs:
-			var dirv := direct.rotated(Vector3.UP, deg_to_rad(angle_deg) * side)
-			if _can_move(dirv, step):
-				global_position += dirv * step
-				_avoid_sign = side
-				_avoid_angle = angle_deg
-				return
-	# Boxed in: hold the ground rather than shiver against the geometry.
-	_avoid_angle = 0.0
+	# Geometry can change during a blackout. Replan from this real position
+	# instead of pushing into a waypoint whose route has just closed.
+	_local_path.invalidate()
 
 
 func _route_target(dt: float) -> Vector3:
@@ -837,12 +816,31 @@ static func _cell_for(at: Vector3) -> Vector2i:
 
 
 func _can_move(dirv: Vector3, step: float) -> bool:
-	var probe := maxf(step, MOVE_LOOKAHEAD)
-	var candidate := global_position + dirv * probe
+	return _clear_travel(global_position, global_position + dirv * step)
+
+
+func _clear_travel(from: Vector3, to: Vector3) -> bool:
+	var space := player.get_world_3d().direct_space_state
 	_move_query.transform = Transform3D(Basis.IDENTITY,
-		candidate + Vector3(0, MOVE_HEIGHT * 0.5 + 0.04, 0))
-	return player.get_world_3d().direct_space_state \
-		.intersect_shape(_move_query, 1).is_empty()
+		to + Vector3(0, MOVE_HEIGHT * 0.5 + 0.04, 0))
+	_move_query.motion = Vector3.ZERO
+	if not space.intersect_shape(_move_query, 1).is_empty():
+		return false
+	_move_query.transform.origin = from + Vector3(0, MOVE_HEIGHT * 0.5 + 0.04, 0)
+	_move_query.motion = to - from
+	if space.cast_motion(_move_query)[0] < 1.0:
+		return false
+	# Sample support along the segment too: a clear capsule above a hole is
+	# not a walkable detour, and smoothing must not jump over that hole.
+	var samples := maxi(1, ceili(from.distance_to(to) / GhostLocalPath.GRID))
+	for index in range(1, samples + 1):
+		var foot := from.lerp(to, float(index) / samples)
+		var query := PhysicsRayQueryParameters3D.create(foot + Vector3.UP * 0.2,
+			foot - Vector3.UP * 0.6, 1, [player.get_rid()])
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() or (hit.normal as Vector3).y < 0.72:
+			return false
+	return true
 
 
 static func room_for(p: Player, at: Vector3) -> Vector2i:
@@ -888,7 +886,7 @@ func _in_beam(cam: Camera3D, aim: float, sighted: bool) -> bool:
 ## Burned out by the beam. This is the loud one: the silhouette tears apart from
 ## a bright front rather than quietly thinning, throws light on the walls around
 ## it, and screams on the way out.
-func _ignite() -> void:
+func _ignite(refund_torch := true) -> void:
 	_fade = BURN_FADE
 	_fade_len = BURN_FADE
 	_burning = false
@@ -896,7 +894,8 @@ func _ignite() -> void:
 	# fighting it; from here the exit is driven by the one-way fade.
 	_quad.set_instance_shader_parameter("burn", 0.0)
 	_quad.set_instance_shader_parameter("ignite", 1.0)
-	burned_away.emit()
+	if refund_torch:
+		burned_away.emit()
 	# The room should be lit by the thing burning, which means the light has to
 	# follow the front rather than announce the kill: it comes up as the flame
 	# crosses the body and falls away with it. A cold flash at full energy on
@@ -932,6 +931,10 @@ func _ignite() -> void:
 ## It got to you. The owning game mode decides the outcome.
 func _seize() -> void:
 	if _fade >= 0.0:
+		return
+	# Consume the save here: only this exact catching figure is destroyed.
+	if is_instance_valid(player) and player.try_emergency_flash():
+		_ignite(false)
 		return
 	_fade = 0.45
 	_fade_len = 0.45

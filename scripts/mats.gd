@@ -600,11 +600,11 @@ static func office_ceiling() -> Material:
 		m.metallic = 1.0
 		m.metallic_texture = orm
 		m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
-		# The square source image contains a 2 x 2 tile repeat. A tighter repeat
-		# keeps the grid from making the three-metre office ceiling feel low.
+		# One central T-bar cross per repeat; edges join inside a tile. Fixtures
+		# use the same pitch and half-repeat seam phase in OfficeCeilingGrid.
 		m.uv1_triplanar = true
 		m.uv1_world_triplanar = true
-		m.uv1_scale = Vector3.ONE / 0.75
+		m.uv1_scale = Vector3.ONE / OfficeCeilingGrid.PITCH
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
 
 

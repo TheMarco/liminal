@@ -108,8 +108,17 @@ func _photo_runtime_check(route: DescentRoute, root: Node) -> void:
 	_expect(node != null and node.type == PhotoAnomaly.Type.NUMBERED_DOOR,
 		"numbered-door photo anomaly was not spawned")
 	if node != null:
+		_expect(node._number_plate.text == "104"
+			and node._number_plate.layers == PhotoAnomaly.EYE_ONLY_LAYER,
+			"unphotographed door must read 104 to the eye only")
+		var lens_labels: Array[Node] = node._number_print.find_children("*", "Label3D", true, false)
+		_expect(lens_labels.size() == 1 and lens_labels[0].text == "106"
+			and lens_labels[0].layers == PhotoAnomaly.PHOTO_LAYER,
+			"106 must be visible in the live viewfinder before photographing")
 		director.mark_documented(str(node.id))
 		node.resolve()
+		_expect(node._number_print.visible, "documenting hid the lens number")
+		_expect(not director.mark_documented(str(node.id)), "repeat number photo rewarded")
 		var plate := chunk.find_child("NumberPlate", true, false) as Label3D
 		_expect(plate != null and plate.text == "106",
 			"numbered-door resolution did not change the plate to 106")

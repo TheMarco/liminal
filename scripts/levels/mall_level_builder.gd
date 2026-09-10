@@ -498,29 +498,13 @@ func _mall_corridor() -> void:
 
 
 func _mall_display_table(p: Vector3, yaw: float, salt: int) -> void:
-	var v = Node3D.new()
-	v.position = p
-	v.rotation.y = yaw
-	scene.add_node(v)
-	scene.model_rounded_box(v, Vector3(0, 0.76, 0), Vector3(2.2, 0.12, 0.9), Mats.sch_white(), 0.035)
-	for x in [-0.87, 0.87]:
-		scene.model_box(v, Vector3(x, 0.36, 0), Vector3(0.10, 0.72, 0.72), Mats.mall_trim())
-	for i in 4:
-		var x = -0.72 + float(i) * 0.48
-		var col = Mats.sch_chair(WorldGen.r01(ctx.world_seed, ctx.cell.x + i, ctx.cell.y, salt))
-		scene.model_rounded_box(v, Vector3(x, 0.88, 0), Vector3(0.30, 0.11, 0.48), col, 0.03)
-	ProceduralDetails.attach(v, "mall_display_table_apron_edges_layers_220_090_s" + str(salt), func(d: ProceduralDetails):
-		d.box(Vector3(0, 0.64, -0.39), Vector3(1.92, 0.22, 0.055), Mats.mall_trim(), 0.012)
-		d.box(Vector3(0, 0.64, 0.39), Vector3(1.92, 0.22, 0.055), Mats.mall_trim(), 0.012)
-		for z in [-0.445, 0.445]:
-			d.box(Vector3(0, 0.815, z), Vector3(2.16, 0.035, 0.025), Mats.mall_trim(), 0.006)
-		for i in 4:
-			var x = -0.72 + float(i) * 0.48
-			d.box(Vector3(x, 0.945, 0.02), Vector3(0.27, 0.018, 0.42), Mats.sch_white(),
-				0.004, Vector3(0, (float(i) - 1.5) * 0.025, 0))
-			d.box(Vector3(x, 0.958, -0.11), Vector3(0.25, 0.014, 0.12), Mats.sch_white(), 0.003)
-	)
-	scene.collider_yaw_box(p + Vector3(0, 0.52, 0), Vector3(2.2, 1.04, 0.92), yaw)
+	var mark = scene.collider_mark()
+	var v = scene.attributed_floor_prop(Chunk.MALL_DISPLAY_PATH, p, yaw, 1.0,
+		Vector3.ZERO, "mall_merchandise_display", null, true)
+	if v != null:
+		v.set_meta("merchandise_variant", salt)
+		scene.collider_yaw_box(p + Vector3(0, 0.52, 0), Vector3(2.2, 1.04, 0.92), yaw)
+		scene.bind_furnishing_colliders(v, mark)
 
 
 func _solid_wall(dir: int) -> bool:
@@ -944,41 +928,18 @@ func _mall_service() -> void:
 
 func _mall_kiosk(p: Vector3, yaw: float, salt: int) -> void:
 	var b0 = scene.collider_mark()
-	var v = scene.furnishing_pivot(p, yaw, "mall_kiosk")
-	scene.model_rounded_box(v, Vector3(0, 0.62, 0), Vector3(2.6, 1.24, 1.5), Mats.mall_trim(), 0.08)
-	scene.model_rounded_box(v, Vector3(0, 1.28, 0), Vector3(2.85, 0.12, 1.75), Mats.sch_white(), 0.035)
-	ProceduralDetails.attach(v, "mall_kiosk260_124_150_panels_toe_lip_v1", func(d: ProceduralDetails):
-		for x in [-0.72, 0.72]:
-			for z in [-0.755, 0.755]:
-				d.box(Vector3(x, 0.64, z), Vector3(1.10, 0.82, 0.025), Mats.mall_trim(), 0.025)
-		for side in [-1.0, 1.0]:
-			d.box(Vector3(side * 1.305, 0.64, 0), Vector3(0.025, 0.82, 1.22), Mats.mall_trim(), 0.025)
-		d.box(Vector3(0, 0.10, -0.76), Vector3(2.38, 0.20, 0.055), Mats.charcoal(), 0.012)
-		d.box(Vector3(0, 1.33, -0.91), Vector3(2.80, 0.045, 0.10), Mats.sch_white(), 0.008)
-	)
-	for cx in [-1.25, 1.25]:
-		for cz in [-0.72, 0.72]:
-			scene.model_cylinder(v, Vector3(cx, 2.0, cz), 0.03, 1.5, Mats.brass())
-	scene.model_rounded_box(v, Vector3(0, 2.82, 0), Vector3(3.1, 0.28, 2.0), Mats.mall_trim(), 0.06)
-	var nm: String = Chunk.MALL_NAMES[WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt) % Chunk.MALL_NAMES.size()]
-	for sside in [-1.0, 1.0]:
-		var lab = Label3D.new()
-		lab.text = nm
-		lab.font_size = 56
-		lab.pixel_size = 0.0022
-		lab.modulate = Color(0.34, 0.30, 0.25)
-		lab.position = Vector3(0, 2.82, sside * 1.02)
-		lab.rotation.y = 0.0 if sside > 0.0 else PI
-		v.add_child(lab)
-	scene.cc0_prop_local(v, "CashRegister_01", Vector3(0.68, 1.34, -0.18),
-		PI, 0.66)
-	v.set_meta("enrichment_prop", "CashRegister_01")
-	# A handful of boxed impulse items beneath the dead canopy.
-	for pi in 4:
-		var px = -0.82 + float(pi) * 0.42
-		scene.model_rounded_box(v, Vector3(px, 1.43, 0.34), Vector3(0.26, 0.22, 0.18),
-			Mats.sch_chair(ctx.random01(salt + 10 + pi)), 0.025)
-	scene.collider_yaw_box(p + Vector3(0, 0.72, 0), Vector3(2.9, 1.44, 1.8), yaw)
+	var v = scene.attributed_floor_prop(Chunk.MALL_MERCHANDISE_PATH, p, yaw, 1.0,
+		Vector3.ZERO, "mall_kiosk", null, true)
+	if v == null:
+		return
+	v.set_meta("merchandise_variant", salt)
+	# U-shaped shop island: preserve an accessible staff well through the rear.
+	var basis = Basis(Vector3.UP, yaw)
+	scene.collider_yaw_box(p + basis * Vector3(0, 0.575, 0.5945), Vector3(2.8, 1.15, 0.531), yaw)
+	for sx in [-1.1345, 1.1345]:
+		scene.collider_yaw_box(p + basis * Vector3(sx, 0.575, -0.2655), Vector3(0.531, 1.15, 1.189), yaw)
+	scene.collider_yaw_box(p + basis * Vector3(-1.121, 0.925, -0.749), Vector3(0.44, 1.85, 0.07), yaw)
+	scene.collider_yaw_box(p + basis * Vector3(0.9965, 1.345, -0.422), Vector3(0.31, 0.39, 0.34), yaw)
 	scene.bind_furnishing_colliders(v, b0)
 
 

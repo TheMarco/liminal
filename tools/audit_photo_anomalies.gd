@@ -11,7 +11,7 @@ extends SceneTree
 ##   - prop-based types only appear on themes whose own signature prop is
 ##     portable (PhotoAnomaly.PROP_THEMES).
 
-const SEEDS := [7, 1234577]
+const SEEDS := [7, 102, 1234577]
 const FLOORS := [0, 2, 4, 6, 8, 9]
 
 
@@ -33,6 +33,7 @@ func _run() -> void:
 			or PhotoDirector.required_for(4, 0) != 4:
 		failures.append("required_for ladder drifted from 3/4/5 with "
 			+ "prop-less floors pinned at 3")
+	await _check_writing_visibility(failures)
 	var plans := 0
 	for world_seed in SEEDS:
 		for floor_idx in FLOORS:
@@ -94,3 +95,37 @@ func _run() -> void:
 		quit()
 	else:
 		quit(1)
+
+
+## Seed 102 regression: the former PRINT variant must reveal its writing
+## before the shutter, and documenting it must not remove that writing.
+func _check_writing_visibility(failures: Array[String]) -> void:
+	var at := Vector2i.ZERO
+	var found := false
+	for x in 64:
+		for z in 64:
+			if PhotoAnomaly.phrase_for(102, Vector2i(x, z)) == "WE COUNTED YOU":
+				at = Vector2i(x, z)
+				found = true
+				break
+		if found:
+			break
+	if not found:
+		failures.append("seed 102 regression phrase not found")
+		return
+	for kind in [PhotoAnomaly.Type.WRITING, PhotoAnomaly.Type.PRINT]:
+		var anomaly := PhotoAnomaly.new()
+		root.add_child(anomaly)
+		anomaly.configure("writing-regression", kind, at, 102, 0, 0, 6.0)
+		var labels := anomaly.find_children("*", "Label3D", true, false)
+		if labels.size() != 1:
+			failures.append("writing variant %d did not create a label" % kind)
+		else:
+			var label := labels[0] as Label3D
+			if label.text != "WE COUNTED YOU" or label.layers != PhotoAnomaly.PHOTO_LAYER:
+				failures.append("writing variant %d not visible in live viewfinder" % kind)
+			anomaly.resolve()
+			await process_frame
+			if not is_instance_valid(label) or not label.visible:
+				failures.append("writing variant %d disappeared after photo" % kind)
+		anomaly.free()

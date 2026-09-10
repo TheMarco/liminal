@@ -1,4 +1,5 @@
 extends SceneTree
+const MOTION := preload("res://scripts/airport_carousel_motion.gd")
 ## Verifies that airport luggage uses only the three isolated authored pieces,
 ## stays floor-centred, retains its hardware materials and exercises several
 ## deterministic shell/fabric color variants.
@@ -82,30 +83,61 @@ func _inspect(node: Node, report: Dictionary) -> void:
 func _inspect_carousel(chunk: Chunk, pivot: Node3D,
 		report: Dictionary) -> void:
 	report["carousels"] += 1
-	var siding := 0
-	var lips := 0
-	var slats := 0
+	var shells := 0
 	var belts := 0
-	for found in pivot.find_children("*", "Node3D", true, false):
-		if bool(found.get_meta("airport_carousel_siding", false)):
-			siding += 1
-		if bool(found.get_meta("airport_carousel_lip", false)):
-			lips += 1
-		if bool(found.get_meta("airport_carousel_slat", false)):
-			slats += 1
+	var feed_vertices := 0
+	var backing_vertices := 0
+	var side_screen_vertices := 0
+	var room_min := Vector2(INF, INF)
+	var room_max := Vector2(-INF, -INF)
+	for member in chunk._room_members():
+		var origin := Vector2(member - chunk.cell) * WorldGen.CELL_SIZE
+		room_min = room_min.min(origin)
+		room_max = room_max.max(origin + Vector2.ONE * WorldGen.CELL_SIZE)
+	for found in pivot.find_children("*", "MeshInstance3D", true, false):
+		if found.name == "airport_carousel_Body":
+			shells += 1
+			# Independent of the doorway-cull depth: a single-cell baggage room
+			# must retain a generous walking aisle around the physical shell.
+			var footprint: AABB = pivot.transform * found.mesh.get_aabb()
+			if footprint.position.z < room_min.y + 2.4 or footprint.end.z > room_max.y - 2.4 \
+					or footprint.position.x < room_min.x + 2.4 or footprint.end.x > room_max.x - 2.4:
+				report["violations"] += 1
+				print("FAIL carousel does not leave 2.4m circulation aisles: %s" % footprint)
+			for surface in found.mesh.get_surface_count():
+				for vertex: Vector3 in found.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]:
+					if absf(vertex.x) < 0.34 and vertex.z < -0.8 - MOTION.END_SHIFT and vertex.y > 0.55 + MOTION.FIXTURE_LIFT:
+						feed_vertices += 1
+					if absf(vertex.x) < 0.30 and vertex.z > 1.17 + MOTION.END_SHIFT and vertex.z < 1.36 + MOTION.END_SHIFT and vertex.y > 0.60 + MOTION.FIXTURE_LIFT:
+						backing_vertices += 1
+		if found.name == "PrintedGraphics":
+			for surface in found.mesh.get_surface_count():
+				var arrays: Array = found.mesh.surface_get_arrays(surface)
+				for vi in arrays[Mesh.ARRAY_VERTEX].size():
+					var vertex: Vector3 = arrays[Mesh.ARRAY_VERTEX][vi]
+					var normal: Vector3 = arrays[Mesh.ARRAY_NORMAL][vi]
+					if absf(vertex.x - 0.031) < 0.001 and vertex.y > 1.05 + MOTION.FIXTURE_LIFT and normal.x > 0.99:
+						side_screen_vertices += 1
 		if bool(found.get_meta("airport_carousel_belt", false)):
 			belts += 1
+			var bounds: AABB = found.mesh.get_aabb()
+			if not is_equal_approx(bounds.position.y, 0.665) \
+					or bounds.size.x < 2.80 or bounds.size.z < 6.80:
+				report["violations"] += 1
+				print("FAIL carousel belt is not full-size: %s" % bounds)
 	var group := int(pivot.get_meta("furnishing_group", -1))
 	var colliders := 0
 	for child in chunk.body.get_children():
 		if child is CollisionShape3D \
 				and int(child.get_meta("furnishing_group", -2)) == group:
 			colliders += 1
-	if siding != 18 or lips != 18 or slats != 28 \
-			or belts != 1 or colliders != 9:
+	if shells != 1 or belts != 1 or colliders != 6 or feed_vertices < 20 or backing_vertices < 20 or side_screen_vertices < 4:
 		report["violations"] += 1
-		print("FAIL incomplete baggage carousel: siding=%d lips=%d slats=%d belts=%d colliders=%d" % [
-			siding, lips, slats, belts, colliders])
+		print("FAIL incomplete authored carousel: shells=%d belts=%d colliders=%d feed_vertices=%d backing=%d side_screen=%d" % [
+			shells, belts, colliders, feed_vertices, backing_vertices, side_screen_vertices])
+	else:
+		report["chutes"] += 1
+	_inspect_number_totem(pivot, report)
 	if chunk.doorway_clearance_violations() != 0:
 		report["violations"] += 1
 		print("FAIL baggage carousel room retains a doorway overlap")
@@ -120,22 +152,6 @@ func _inspect_number_totem(pivot: Node3D, report: Dictionary) -> void:
 		report["violations"] += 1
 		print("FAIL incomplete baggage number totem: labels=%d meshes=%d" % [
 			labels.size(), meshes.size()])
-
-
-func _inspect_chute(chunk: Chunk, pivot: Node3D,
-		report: Dictionary) -> void:
-	report["chutes"] += 1
-	var meshes := pivot.find_children("*", "MeshInstance3D", true, false)
-	var group := int(pivot.get_meta("furnishing_group", -1))
-	var colliders := 0
-	for child in chunk.body.get_children():
-		if child is CollisionShape3D \
-				and int(child.get_meta("furnishing_group", -2)) == group:
-			colliders += 1
-	if meshes.size() < 3 or colliders != 1:
-		report["violations"] += 1
-		print("FAIL incomplete baggage chute: meshes=%d colliders=%d" % [
-			meshes.size(), colliders])
 
 
 func _init() -> void:
@@ -169,8 +185,6 @@ func _init() -> void:
 							_inspect_carousel(chunk, pivot, report)
 						"airport_baggage_number_totem":
 							_inspect_number_totem(pivot, report)
-						"airport_baggage_chute":
-							_inspect_chute(chunk, pivot, report)
 				# Chunk generation resolves room splits and portals before
 				# deciding whether baggage props are furnished. The marker is
 				# the exact intent signal and survives doorway cleanup.
@@ -202,7 +216,7 @@ func _init() -> void:
 	print("airport luggage audit: %d authored pieces, variants=%s, colors=%d, complete carousels=%d" % [
 		report["count"], report["pieces"], report["colors"].size(),
 		report["carousels"]])
-	print("  supported number totems: %d | atomic feed chutes: %d" % [
+	print("  supported number totems: %d | integrated feed hoods: %d" % [
 		report["totems"], report["chutes"]])
 	if int(report["violations"]) == 0:
 		print("  PASS — luggage is isolated and every baggage carousel is complete")

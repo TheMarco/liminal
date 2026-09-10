@@ -13,8 +13,7 @@ extends CanvasLayer
 ## the hunt stays a search.
 ##
 ## The snapshot renders through a private SubViewport whose camera carries the
-## photo-only layer, so hidden writing exists in the print and never on the
-## screen. After a successful photograph the room answers: usually nothing,
+## photo layer, preserving the writing seen through the live viewfinder. After a successful photograph the room answers: usually nothing,
 ## sometimes the environment, sometimes the thing itself — the same forced
 ## encounter the tape's ending already uses, which spawns with line of sight
 ## in the arc behind you. You lower the camera and look around to find out.
@@ -54,6 +53,10 @@ var _review_left := 0.0
 ## Counted anomalies with a visible resolution beat. They remain frozen while
 ## the opaque developed print is up, then resolve as the bare-eyed view returns.
 var _review_resolves: Array[PhotoAnomaly] = []
+## Doorways belong to the floor, not a streamed anomaly node. Keep their
+## resolver alive even if the player backs out of the room during review.
+var _review_callbacks: Array[Callable] = []
+var _doorway_reveal_left := 0.0
 var _pending_risk := false
 var _hinted := false
 var _snap_viewport: SubViewport
@@ -84,6 +87,7 @@ signal photo_documented(anomaly_id: String, count: int, required: int,
 ## Emitted only after the opaque developed-print review has closed and Main's
 ## HUD is visible again, so evidence captions never expire behind the photo.
 signal review_finished()
+signal photograph_taken(image: Image, metadata: Dictionary)
 signal first_raise()
 ## True while the camera is up — main hides the whole HUD so only the
 ## viewfinder exists (owner, 2026-08-20).
@@ -204,6 +208,7 @@ func _can_shoot() -> bool:
 
 
 func _process(dt: float) -> void:
+	_doorway_reveal_left = maxf(0.0, _doorway_reveal_left - dt)
 	if _raised and not _allowed():
 		_lower()
 	# Autofocus: the viewfinder knows when something wrong is framed. With the
@@ -407,6 +412,16 @@ func _lower() -> void:
 	raised_changed.emit(false)
 
 
+func emergency_flash_feedback() -> void:
+	while _capturing:
+		await get_tree().process_frame
+	finish_for_transition()
+	_shutter.pitch_scale = 0.85
+	_shutter.play()
+	_flash.color = Color(0.72, 0.83, 1.0, 0.10 if GameSettings.flashing_reduced() else 0.72)
+	create_tween().tween_property(_flash, "color:a", 0.0, 0.25)
+
+
 func _take_photo() -> void:
 	if not _raised:
 		return
@@ -441,9 +456,26 @@ func _take_photo() -> void:
 		var centre := (lo + hi) * 0.5
 		var radius := maxf(70.0, (hi - lo).length() * 0.8 + 60.0)
 		marks.append(Rect2(centre, Vector2(radius, radius * 0.78)))
+	var descriptions: Array[String] = []
+	var ids: Array[String] = []
+	for anomaly in _captured_anomalies(true):
+		if ids.has(anomaly.id):
+			continue
+		ids.append(anomaly.id)
+		if descriptions.size() < 2:
+			descriptions.append(anomaly.album_description(director._documented.has(anomaly.id)))
+	if descriptions.is_empty():
+		descriptions.append("A view of %s." % str(DescentRun.THEME_NAMES[director.theme]) \
+			if director != null else "A view of the building.")
+	var metadata := {
+		"floor": director.floor_idx + 1 if director != null else 1,
+		"theme": str(DescentRun.THEME_NAMES[director.theme]) if director != null else "",
+		"caption": " · ".join(descriptions), "anomaly_ids": ids,
+	}
 	var image := await _render_snapshot()
 	_capturing = false
 	if image != null:
+		photograph_taken.emit(image, metadata)
 		_photo.texture = ImageTexture.create_from_image(image)
 		# Black card, centred print at exactly the live viewfinder's size; the
 		# viewfinder chrome leaves with it. The same covered-image transform maps
@@ -470,7 +502,9 @@ func _take_photo() -> void:
 	for anomaly in captured:
 		if director != null and director.mark_documented(anomaly.id):
 			counted = true
-			if anomaly.resolves_after_review():
+			if anomaly.type in [PhotoAnomaly.Type.DOORWAY, PhotoAnomaly.Type.OBSTRUCTION]:
+				_review_callbacks.append(anomaly._doorway_resolve)
+			elif anomaly.resolves_after_review():
 				_review_resolves.append(anomaly)
 			else:
 				anomaly.resolve()
@@ -487,14 +521,44 @@ func _take_photo() -> void:
 	for anomaly in captured:
 		if anomaly.type == PhotoAnomaly.Type.NUMBERED_DOOR:
 			number_reveal = true
-	_pending_risk = counted and not number_reveal
+	# The timed realm encounter already supplies the bounty's danger.
+	var bounty_photo := false
+	for anomaly in captured:
+		bounty_photo = bounty_photo or anomaly.type == PhotoAnomaly.Type.BOUNTY
+	_pending_risk = counted and not number_reveal and not bounty_photo
 
 
 func _release_review_resolutions() -> void:
+	if not _review_callbacks.is_empty():
+		_doorway_reveal_left = MutationRevealEffect.LIFE_SECONDS
+	for callback in _review_callbacks:
+		if callback.is_valid():
+			callback.call()
+	_review_callbacks.clear()
 	for anomaly in _review_resolves:
 		if is_instance_valid(anomaly):
 			anomaly.resolve()
 	_review_resolves.clear()
+
+
+## The shutter/door reveal owns a short visible beat. A scheduled blackout
+## retries after it, so the new opening never spends its glow in darkness.
+## Merely holding the camera up does not defer blackouts.
+func doorway_reveal_active() -> bool:
+	return _capturing or not _review_callbacks.is_empty() or _doorway_reveal_left > 0.0
+
+
+## Finish opaque review before its rendered world is removed by a transition.
+## Callers must first wait for any in-flight shutter render to complete.
+func finish_for_transition() -> void:
+	_review_left = 0.0
+	_pending_risk = false
+	_review_back.visible = false
+	_paper.visible = false
+	_photo.visible = false
+	_marks.visible = false
+	_release_review_resolutions()
+	_lower()
 
 
 ## The developed print occupies the same window the player framed. Deriving
@@ -507,15 +571,16 @@ func _review_rect() -> Rect2:
 	return Rect2((viewport_size - window_size) * 0.5, window_size)
 
 
-func _captured_anomalies() -> Array[PhotoAnomaly]:
+func _captured_anomalies(for_album := false) -> Array[PhotoAnomaly]:
 	var out: Array[PhotoAnomaly] = []
 	if director == null or player == null:
 		return out
 	var cam := player.cam
 	var space := player.get_world_3d().direct_space_state
 	var forward := -cam.global_transform.basis.z
-	for anomaly in director.capturable():
-		var points := anomaly.photo_points()
+	var candidates := director.album_subjects() if for_album else director.capturable()
+	for anomaly in candidates:
+		var points := anomaly.framing_points(cam)
 		if points.is_empty():
 			continue
 		if not _on_facing_side(anomaly, cam.global_position):
@@ -543,7 +608,7 @@ func _captured_anomalies() -> Array[PhotoAnomaly]:
 
 
 ## One off-screen render with the photo layer enabled. The print sees the
-## writing; the screen never does.
+## same writing as the raised viewfinder.
 func _render_snapshot() -> Image:
 	var viewport := get_viewport()
 	if _snap_viewport == null:

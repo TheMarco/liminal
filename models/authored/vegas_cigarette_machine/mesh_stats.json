@@ -1,0 +1,19 @@
+{
+  "triangles": 3486,
+  "meshes": 2,
+  "surfaces": 2,
+  "bounds_godot_m": {
+    "min": [
+      -0.4650000035762787,
+      0.0,
+      -0.3109999895095825
+    ],
+    "max": [
+      0.4650000035762787,
+      1.8125,
+      0.4300000071525574
+    ]
+  },
+  "front_axis": "+Z",
+  "description": "Vintage cigarette vending cabinet with original Alpine print, twenty pull rods, dual slanted selection panels and recessed delivery trough"
+}

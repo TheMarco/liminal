@@ -1,0 +1,26 @@
+{
+  "triangles": 3524,
+  "meshes": 3,
+  "surfaces": 3,
+  "bounds_godot_m": {
+    "min": [
+      -1.5072115659713745,
+      0.0721084326505661,
+      -3.5
+    ],
+    "max": [
+      1.5072115659713745,
+      2.0378313064575195,
+      3.5
+    ]
+  },
+  "front_axis": "+Z",
+  "belt_half_straight_m": 2.0,
+  "belt_path_radius_m": 0.9865384615384616,
+  "belt_height_m": 0.665,
+  "number_position": [
+    0,
+    1.6078313253012049,
+    2.183
+  ]
+}

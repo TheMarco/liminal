@@ -1,0 +1,20 @@
+{
+  "triangles": 736,
+  "meshes": 1,
+  "surfaces": 1,
+  "bounds_godot_m": {
+    "min": [
+      -0.15000000596046448,
+      0.0,
+      -0.20999999344348907
+    ],
+    "max": [
+      0.15000000596046448,
+      1.5,
+      -0.0
+    ]
+  },
+  "front_axis": "+Z",
+  "mount_base_height_m": 0.9,
+  "front_note": "-Z; back plane zero"
+}

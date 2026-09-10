@@ -1986,6 +1986,15 @@ func _pool_dry_prop_spot(salt: int, radius: float,
 
 
 func _pool_lounge_chair(at: Vector3, yaw: float) -> bool:
+	# Pool architecture deliberately skips the general furniture cull. Reserve
+	# the photograph's standing lane before adding a lounger and its collider.
+	var xf := Transform3D(Basis(Vector3.UP, yaw), at)
+	var bounds := xf * AABB(Vector3(-0.95, 0, -0.59), Vector3(1.90, 0.92, 1.18))
+	var footprint := Rect2(Vector2(bounds.position.x, bounds.position.z),
+		Vector2(bounds.size.x, bounds.size.z)).grow(0.1)
+	for zone in scene.doorway_clearance_rects():
+		if footprint.intersects(zone):
+			return false
 	if not scene.floor_spot_clear(at, 1.05, 1.05):
 		return false
 	var b0 := scene.collider_mark()
@@ -2187,7 +2196,8 @@ func _pool_lone_chair(salt: int) -> void:
 		WorldGen.CELL_SIZE / 2.0 + (ctx.random01(salt + 2) - 0.5) * 3.0)
 	# The chair must not stand inside a pier or any other solid; alone means
 	# alone in open floor, and it is rare enough to simply not appear here.
-	if not scene.floor_spot_clear(Vector3(at.x, Chunk.POOL_DRY_Y, at.z), 0.55, 0.9):
+	if not _pool_clear_of_access(Vector2(at.x, at.z), 0.55) \
+			or not scene.floor_spot_clear(Vector3(at.x, Chunk.POOL_DRY_Y, at.z), 0.55, 0.9):
 		return
 	var b0 := scene.collider_mark()
 	var pivot = scene.furnishing_pivot(at, ctx.random01(salt + 3) * TAU, "pool_chair")

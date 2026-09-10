@@ -1,0 +1,19 @@
+{
+  "triangles": 3484,
+  "meshes": 1,
+  "surfaces": 1,
+  "bounds_godot_m": {
+    "min": [
+      -0.20649999380111694,
+      0.0,
+      -0.22550000250339508
+    ],
+    "max": [
+      0.2900000214576721,
+      0.7654641270637512,
+      0.2449999898672104
+    ]
+  },
+  "front_axis": "+Z",
+  "description": "Tabletop overhead projector with Fresnel stage, focus rack and open mirror head"
+}

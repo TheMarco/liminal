@@ -1,0 +1,19 @@
+{
+  "triangles": 1946,
+  "meshes": 2,
+  "surfaces": 2,
+  "bounds_godot_m": {
+    "min": [
+      -0.5360000133514404,
+      0.0,
+      -0.3150000274181366
+    ],
+    "max": [
+      0.5360000133514404,
+      1.7360000610351562,
+      0.3529999852180481
+    ]
+  },
+  "front_axis": "+Z",
+  "description": "Raked vintage change cabinet, sloped walnut base, one left payout bowl and small rectangular reject tray and large CHANGE fascia"
+}

@@ -2,6 +2,14 @@ extends RefCounted
 
 static func cases() -> Array:
 	return [
+		{"name":"photo-booth", "theme":7, "method":"_nostalgia_prop", "args":[0,Vector3(6,0,6),0.0]},
+		{"name":"rocket-ride", "theme":7, "method":"_nostalgia_prop", "args":[1,Vector3(6,0,6),0.0]},
+		{"name":"ice-machine", "theme":0, "method":"_nostalgia_prop", "args":[2,Vector3(6,0,6),0.0]},
+		{"name":"bellhop-cart", "theme":0, "method":"_nostalgia_prop", "args":[3,Vector3(6,0,6),0.0]},
+		{"name":"cigarette-machine", "theme":0, "method":"_nostalgia_prop", "args":[4,Vector3(6,0,6),0.0]},
+		{"name":"coffee-machine", "theme":1, "method":"_nostalgia_prop", "args":[5,Vector3(6,0,6),0.0]},
+		{"name":"overhead-projector", "theme":6, "method":"_nostalgia_prop", "args":[6,Vector3(6,0,6),0.0]},
+		{"name":"vegas-change", "theme":0, "method":"_change_machine", "args":[3,0.075]},
 		{"camera_fov":34.0, "name":"vegas-slot-classic", "theme":0, "method":"_authored_slot_machine", "args":[6.0,6.0,1.0,0,0], "baseline_method":"_slot_machine", "baseline_args":[6.0,6.0,1.0,0]},
 		{"camera_fov":34.0, "name":"vegas-slot-wheel", "theme":0, "method":"_authored_slot_machine", "args":[6.0,6.0,1.0,0,1], "baseline_method":"_slot_machine", "baseline_args":[6.0,6.0,1.0,0]},
 		{"camera_fov":34.0, "name":"vegas-slot-dual", "theme":0, "method":"_authored_slot_machine", "args":[6.0,6.0,1.0,0,2], "baseline_method":"_slot_machine_alt", "baseline_args":[6.0,6.0,1.0,0]},

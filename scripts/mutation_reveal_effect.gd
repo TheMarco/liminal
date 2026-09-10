@@ -7,9 +7,8 @@ extends Node3D
 ## architectural edges get a fitted doorway trace. There is deliberately no
 ## camera-facing locator circle.
 
-## Long enough to be found: at 3.2s the glow was gone before a player who
-## froze through the blackout even looked up ("I almost never see the glow").
-const LIFE_SECONDS := 10.0
+## The complete reveal, including its fade, fits a brief 2.5-second beat.
+const LIFE_SECONDS := 2.5
 const OUTLINE_SHADER := preload("res://shaders/mutation_outline.gdshader")
 const CORE_COLOR := Color(0.58, 1.0, 1.0)
 const FRINGE_COLOR := Color(0.32, 0.12, 1.0)
@@ -98,7 +97,7 @@ func _build_portal_trace(descriptor: Dictionary) -> void:
 	if record.is_empty():
 		record = edge.get("before", {})
 	var width := clampf(float(record.get("w", 3.0)), 1.2, 4.6)
-	var height := 2.55
+	var height := maxf(1.0, float(descriptor.get("opening_height", 2.55)))
 	var edge_centre: Vector3 = descriptor.get("edge_center",
 		descriptor.get("position", global_position))
 	var dir := int(edge.get("dir", 0))

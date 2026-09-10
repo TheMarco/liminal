@@ -36,9 +36,17 @@ Two models from that batch were measured and rejected rather than forced:
   and the model's own lens is baked — so the model would only ever contribute
   a frame around a quad five boxes already draw.
 
-Largest remaining generated props, by primitive count: `_vt100` (10),
-`_prison_shower_station` (10), `_asy_ect` (9),
-`_sch_servery` (8), `_air_gate_desk` (7), `_asy_restraint_table` (7).
+The September 6 Blender pass replaces the baggage carousel, ECT station,
+restraint table, interactive VT100 and keyboard, mall merchandise stations and
+displays, and Bloom incubators. See `AUTHORED_HERO_PROPS.md` for measured budgets,
+source files, behavior and validation. The numeric inventory above is historical.
+
+The September 7 pass replaces escalators, cafeteria serving counters and tables,
+trophy cases, bleachers, steel cupboards, prison shower panels and prison dining
+tables with original Blender models. The airport gate desk uses the authored
+white counter with fluted aluminium cladding and a complete staff workstation.
+Airport moving walkways now also use original Blender housings, glass and smooth
+handrails, with the animated belt and player movement preserved.
 
 ## Highest-value replacements by level
 

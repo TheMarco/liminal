@@ -1,0 +1,19 @@
+{
+  "triangles": 4324,
+  "meshes": 1,
+  "surfaces": 1,
+  "bounds_godot_m": {
+    "min": [
+      -0.6159989833831787,
+      0.0009999871253967285,
+      -0.40099966526031494
+    ],
+    "max": [
+      0.6159999966621399,
+      1.9320000410079956,
+      0.40099966526031494
+    ]
+  },
+  "front_axis": "+Z",
+  "description": "Twin brass birdcage arches, carpet deck, rounded bumper and four casters"
+}
