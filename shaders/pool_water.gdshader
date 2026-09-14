@@ -1,5 +1,5 @@
 shader_type spatial;
-// Quiet indoor water with the lingering movement of a recently used pool.
+// Indoor water with visible rolling ripples and a lingering swimmer's wake.
 // Opaque scene colour already contains lighting
 // and fog, so transmit it once through EMISSION instead of lighting it again
 // as albedo and alpha-blending a second copy of the basin into it.
@@ -13,7 +13,7 @@ uniform sampler2D normal_tex : hint_normal, filter_linear_mipmap, repeat_enable;
 
 // Centimetre-scale swell. Wavelengths are metres; speeds are cycles/second.
 // World-space phases keep both height and lighting continuous at cell joins.
-uniform float wave_height = 0.012;
+uniform float wave_height = 0.024;
 uniform float wave_speed_a = 0.58;
 uniform float wave_speed_b = 0.47;
 uniform float wave_length_a = 2.6;
@@ -21,9 +21,9 @@ uniform float wave_length_b = 1.7;
 
 uniform float normal_scale_a = 0.12;
 uniform float normal_scale_b = 0.29;
-uniform float normal_speed_a = -0.017;
-uniform float normal_speed_b = 0.020;
-uniform float normal_strength : hint_range(0.0, 2.0) = 1.05;
+uniform float normal_speed_a = -0.028;
+uniform float normal_speed_b = 0.033;
+uniform float normal_strength : hint_range(0.0, 2.0) = 1.50;
 
 uniform vec3 shallow_colour : source_color = vec3(0.08, 0.32, 0.29);
 uniform vec3 deep_colour : source_color = vec3(0.022, 0.105, 0.095);
@@ -39,11 +39,13 @@ uniform vec3 foam_colour : source_color = vec3(0.90, 0.94, 0.92);
 uniform float foam_distance = 0.02;
 uniform float foam_softness = 0.55;
 uniform float foam_amount : hint_range(0.0, 1.0) = 0.0;
-uniform float water_roughness : hint_range(0.0, 1.0) = 0.12;
-uniform float water_specular : hint_range(0.0, 1.0) = 0.25;
+// Sharper moving room highlights make the rolling surface visibly shimmer.
+uniform float water_roughness : hint_range(0.0, 1.0) = 0.085;
+uniform float water_specular : hint_range(0.0, 1.0) = 0.40;
 
 // Assigned only to nearby disturbed surfaces. All other basins keep zero
 // events on their shared material and skip the loop entirely.
+uniform float wake_strength : hint_range(0.0, 3.0) = 2.20;
 uniform float fx_clock = 0.0;
 uniform int fx_count = 0;
 uniform vec4 fx_events[12]; // world XZ, birth, strength
@@ -113,7 +115,9 @@ vec3 disturbance(vec3 p) {
 			froth += bow * amount * front * 0.09;
 		}
 	}
-	return vec3(slope, min(froth, 0.28));
+	// Strengthen entry rings, the bow and the trailing steps together. Froth
+	// stays capped so overlapping footsteps still read as disturbed water.
+	return vec3(slope * wake_strength, min(froth * wake_strength, 0.28));
 }
 
 void vertex() {

@@ -8,26 +8,31 @@ static func clear_runtime_cache() -> void:
 	_fountain_meshes.clear()
 
 
-func _mall_payphone_bank(dir: int, count: int) -> void:
+func _mall_payphone_bank(dir: int, count: int) -> bool:
 	var facing = scene.wall_facing(dir)
-	# Wall art mounts on the centre of a run, so a bank placed there ends up
-	# shoulder to shoulder with a poster. Sit it well off to one side.
-	var along = 3.3 if ctx.random01(1641 + dir) < 0.5 else 8.7
+	# Retail wall decoration was built before room props. A storefront occupies
+	# the run and leaves no honest place for a phone bank, so try another wall.
+	var wall_fixture_roll := ctx.random01(40 + dir)
+	if wall_fixture_roll < 0.52:
+		return false
+	# Poster cases use this exact deterministic position. Put the bank at the
+	# farther endpoint, guaranteeing that the two fixtures never intersect.
+	var along := 3.3 if ctx.random01(1641 + dir) < 0.5 else 8.7
+	if wall_fixture_roll < 0.96:
+		var poster_along := lerpf(3.3, 8.7, ctx.random01(1610 + dir))
+		along = 3.3 if absf(poster_along - 3.3) > absf(poster_along - 8.7) else 8.7
 	var origin = scene.wall_point(dir, along, 0.0)
 	var pv = Node3D.new()
 	pv.position = origin
 	pv.rotation.y = facing
+	pv.set_meta("mall_payphone_dir", dir)
+	pv.set_meta("mall_payphone_along", along)
 	scene.add_node(pv)
-	# The authored housing is 0.74m tall about its own mounting plane, so a
-	# 1.38m mount cut it in half on the mall's 1.21m brass rail — the same
-	# fault the wall art was moved for. Lift it so the bottom of the housing
-	# clears the rail by the shared margin instead of straddling it.
-	var mount = 1.38
-	var band = scene.wall_band_top()
-	if band > 0.0:
-		mount = maxf(mount,
-			band + Chunk.WALL_BAND_CLEAR + Chunk.MALL_PAYPHONE_DROP * Chunk.MALL_PAYPHONE_SCALE)
-	var span = 1.0
+	# The cabinet overlays the brass rail like an installed wall fixture. This
+	# puts the handset's visual centre just below the player's natural eye line.
+	var mount := Chunk.MALL_PAYPHONE_MOUNT
+	var span := 1.45
+	pv.set_meta("mall_payphone_span", span)
 	for ph in count:
 		var px = (float(ph) - float(count - 1) * 0.5) * span
 		var authored = scene.attributed_prop_local(pv, Chunk.MALL_PAYPHONE_PATH,
@@ -44,12 +49,13 @@ func _mall_payphone_bank(dir: int, count: int) -> void:
 				Mats.metal_gray())
 			scene.model_box(pv, Vector3(px - 0.11, 1.38, 0.15),
 				Vector3(0.05, 0.24, 0.05), Mats.charcoal())
-	# The authored housing stands 0.16m off the wall, not the half metre the
-	# generated boxes needed; a deeper collider would stop the player short of
-	# a wall they can see is flat.
+	# The rebuilt handset and armored cord project 0.378m from the mounting
+	# plane. Follow that visible depth instead of letting the player clip through
+	# the new silhouette; the bank remains a single conservative wall collider.
 	var forward = Vector3(sin(facing), 0, cos(facing))
-	scene.collider_yaw_box(origin + forward * 0.09 + Vector3(0, mount, 0),
-		Vector3(span * float(count) - 0.1, 0.78, 0.20), facing)
+	scene.collider_yaw_box(origin + forward * 0.19 + Vector3(0, mount + 0.258, 0),
+		Vector3(span * float(maxi(count - 1, 0)) + 0.32, 0.80, 0.40), facing)
+	return true
 
 
 ## Freestanding concourse directory. The authored board is a readable front face
@@ -250,13 +256,8 @@ func _mall_unit(dir: int, plane: float, uc: float, w: float, salt: int) -> void:
 		scene.collider_box(Vector3(uc, top / 2.0, p), Vector3(w, top, 0.60))
 
 
-## A painted fascia sign cropped from the CC BY-NC mall source, fitted to the
-## generated fascia at the artwork's own aspect so it is never stretched.
-##
-## This is the single point where that noncommercial dependency enters the game.
-## Delete this function and the `_mall_painted_sign` call in `_mall_unit_sign`
-## and every storefront falls back to the generated MALL_NAMES lettering, with
-## nothing else to unpick.
+## An original painted sign face, fitted to the generated fascia at its authored
+## aspect so it is never stretched. Missing artwork falls back to MALL_NAMES.
 ## Which painted fascia this unit gets, or -1 for generated lettering. Decided
 ## before the fascia is built, because the two want different backing — and the
 ## texture is confirmed present here so the dark board can never end up hosting
@@ -487,13 +488,12 @@ func _mall_corridor() -> void:
 			else Vector3(2.3, 0, 8.8)
 		_mall_shopping_cart(cart_p, yaw + (ctx.random01(1637) - 0.5) * 0.55,
 			ctx.random01(1638) < 0.28)
-	# A pair of payphones on a solid concourse wall. Atriums are barely 2% of
-	# mall cells, so a bank placed only there was effectively never seen; the
-	# gallery is where anyone actually walks past one.
-	if ctx.random01(1639) < 0.42:
+	# One payphone on a solid concourse wall. Keep the fixture common enough to
+	# encounter while exploring, but never form the implausible side-by-side
+	# banks that made an otherwise sparse prop feel duplicated.
+	if ctx.random01(1639) < 0.85:
 		for dir in 4:
-			if _solid_wall(dir):
-				_mall_payphone_bank(dir, 2)
+			if _solid_wall(dir) and _mall_payphone_bank(dir, 1):
 				break
 
 
@@ -859,8 +859,9 @@ func _mall_atrium() -> void:
 	_mall_bench(Vector3(3.2, 0, 3.0), PI / 4.0)
 	_mall_bench(Vector3(8.25, 0, 5.3), PI)
 	_mall_directory_pylon(Vector3(3.6, 0, 6.4), ctx.random01(1710) * TAU)
-	if _solid_wall(1):
-		_mall_payphone_bank(1, 3)
+	for phone_dir in [1, 3, 0, 2]:
+		if _solid_wall(phone_dir) and _mall_payphone_bank(phone_dir, 1):
+			break
 	if ctx.ceiling_height > 5.5:
 		# False mezzanine: visible high above, deliberately not traversable.
 		for side in [-1.0, 1.0]:

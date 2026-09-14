@@ -688,6 +688,38 @@ static func annex_vertical_width(ws: int, column: int) -> float:
 	return 6.4
 
 
+## Two turning bays between each pair of major crossings. Never occupy the
+## crossing itself; offsets vary by corridor line, but no straight run between
+## bays exceeds three cells (36m), including at negative coordinates.
+static func annex_corridor_bend(ws: int, cell: Vector2i) -> bool:
+	var axis := annex_corridor_axis(ws, cell)
+	if axis == 1:
+		var offset := h(ws, 0, cell.y, 28901) % 2
+		return posmod(cell.x, ANNEX_CORRIDOR_X) in [1 + offset, 4 + offset]
+	if axis == 2:
+		var offset := h(ws, cell.x, 0, 28903) % 2
+		return posmod(cell.y, ANNEX_CORRIDOR_Z) in [1 + offset, 3 + offset]
+	return false
+
+
+## Separate rooms should reveal one another obliquely, not form an accidental
+## runway. Keep the graph's open/closed decision and genuine merged rooms;
+## alternate low/high jambs in two-cell bands so both 12m and 24m rooms vary.
+## Canonical edge ownership makes neighbouring chunks agree exactly.
+static func _stagger_room_opening(ws: int, cell: Vector2i, dir: int,
+		width: float) -> Dictionary:
+	var edge := _edge(cell, dir)
+	var owner: Vector2i = edge[0]
+	var along := owner.x if int(edge[1]) == 0 else owner.y
+	var transverse := owner.y if int(edge[1]) == 0 else owner.x
+	var phase := h(ws, transverse, int(edge[1]), 28907) % 4
+	var high := posmod(along + phase, 4) >= 2
+	var w := minf(width, 4.4)
+	var margin := 0.8 + w * 0.5
+	return {"wall": false, "full_open": false,
+		"t": CELL_SIZE - margin if high else margin, "w": w, "exit_sign": false}
+
+
 ## Theme-local room identity. This graph is intentionally unrelated to the
 ## generic Vegas/office rooms: most spaces are one cell, some are paired, and
 ## a controlled minority become 2x2 chambers. That produces a noticeable jump
@@ -823,14 +855,8 @@ static func _annex_edge_info(ws: int, cell: Vector2i, dir: int) -> Dictionary:
 			"wall": true, "full_open": false,
 			"t": 6.0, "w": 0.0, "exit_sign": false,
 		}
-	var completely_open := hr01(eh, 88) < 0.16
 	var width := lerpf(4.2, 7.2, hr01(eh, 89))
-	var margin := width * 0.5 + 0.55
-	var offset := lerpf(margin, 12.0 - margin, hr01(eh, 90))
-	return {
-		"wall": false, "full_open": completely_open,
-		"t": offset, "w": width, "exit_sign": false,
-	}
+	return _stagger_room_opening(ws, cell, dir, width)
 
 
 ## Two cells in the same room have no wall between them. Two cells in
@@ -1063,6 +1089,10 @@ static func edge_info(ws: int, cell: Vector2i, dir: int, theme := 0) -> Dictiona
 			else:
 				w = 10.4 if theme == 4 or theme == 7 else \
 					(minf(w, 3.2) if theme == 11 else minf(w, 2.4))
+	if not wall and not is_corr:
+		var opening := _stagger_room_opening(ws, cell, dir, w)
+		opening["exit_sign"] = has_sign
+		return opening
 	return {"wall": wall, "full_open": full_open, "t": t, "w": w, "exit_sign": has_sign}
 
 

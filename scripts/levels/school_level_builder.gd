@@ -241,6 +241,7 @@ func _sch_corridor_bay_light(o: Vector3, yw: float, side: float, t: float) -> vo
 	bl.distance_fade_begin = 18.0
 	bl.distance_fade_length = 6.0
 	bl.position = scene.world_point(o, Vector3(t, ctx.ceiling_height - 0.5, dc), yw)
+	bl.set_meta("stream_room_light", true)
 	scene.add_node(bl)
 
 

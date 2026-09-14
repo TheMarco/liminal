@@ -99,15 +99,22 @@ var _halo_amt := 0.0
 var descent := false
 var run: DescentRun
 var descent_route: DescentRoute
-var _descent_progress: DescentProgress
+var _descent_progress: DescentProgress:
+	set(value):
+		if _descent_progress != null:
+			_descent_progress.save_failed.disconnect(_on_progress_save_failed)
+			_descent_progress.saved.disconnect(_on_progress_saved)
+		_descent_progress = value
+		if value != null:
+			value.save_failed.connect(_on_progress_save_failed)
+			value.saved.connect(_on_progress_saved)
 var _intro_state: IntroPlaybackState
 var _descent_intro: DescentIntro
 var _progress_enabled := false
 var _descent_preparing := false
 var _pending_new_descent_intro := false
 var _attention_override := -1.0
-var _blackout_ambient := -1.0
-var _blackout_office_environment := {}
+var _blackout_environment := preload("res://scripts/blackout_environment.gd").new()
 var _blackout_locate_cue := 0
 var _pending_mutation_reveal := false
 var _pending_mutation_reveal_at := Vector3.INF
@@ -138,7 +145,20 @@ var _music_target := ""
 var _descent_summary: DescentSummary
 var _descent_hud: DescentHUD
 var _return_prompt: ReturnPrompt
-var _settings: GameSettings
+var _settings: GameSettings:
+	set(value):
+		if _settings != null:
+			_settings.save_failed.disconnect(_on_settings_save_failed)
+			_settings.saved.disconnect(_on_settings_saved)
+		_settings = value
+		if value != null:
+			value.save_failed.connect(_on_settings_save_failed)
+			value.saved.connect(_on_settings_saved)
+const SaveFailureNotice = preload("res://scripts/save_failure_notice.gd")
+var _save_notice: CanvasLayer
+var _applied_fullscreen: Variant = null
+var _quitting := false
+var _quit_prompt: ReturnPrompt
 var _pause_menu: PauseMenu
 var _pause_mouse_mode := Input.MOUSE_MODE_VISIBLE
 const MUSIC_BUS := "Music"
@@ -170,10 +190,15 @@ func _ready() -> void:
 	opts = CliOptions.parse()
 	# Command-line starts are isolated QA/dev worlds. Only a normal title-screen
 	# session may read or write the player's real Descent checkpoint.
-	_progress_enabled = not opts.descent and not opts.skips_title() \
+	_progress_enabled = not opts.test_mode and not opts.descent and not opts.skips_title() \
 		and not opts.quick_exit()
 	_descent_progress = DescentProgress.new()
+	IntroPlaybackState.default_save_path = IntroPlaybackState.TEST_SAVE_PATH \
+		if opts.test_mode else IntroPlaybackState.SAVE_PATH
 	_intro_state = IntroPlaybackState.new()
+	IntroPlaybackState.save_events.failed.connect(_on_recording_save_failed)
+	IntroPlaybackState.save_events.saved.connect(_on_recording_saved)
+	get_tree().auto_accept_quit = false
 	var spawn := opts.spawn if opts.spawn_given else DEFAULT_SPAWN
 	var pos_given := opts.spawn_given
 	var yaw := opts.yaw
@@ -377,7 +402,7 @@ func _ready() -> void:
 	_events.player = player
 	_events.horror_director = _director
 	_events.descent_mode = descent
-	_events.set_level(level_root)
+	_events.set_level(level_root, active_level)
 	add_child(_events)
 	_photo_camera = PhotoCamera.new()
 	_photo_camera.player = player
@@ -617,7 +642,7 @@ func _prepare_transition_destination(level: int, pos: Vector3,
 
 
 func _finish_transition_build(level: int) -> void:
-	_events.set_level(level_root)
+	_events.set_level(level_root, level)
 	player.world_seed = _level_seed(level)
 	player.level_theme = level
 	player.water_y = _water_level_for(level)
@@ -632,11 +657,21 @@ func _finish_transition_build(level: int) -> void:
 func _apply_game_settings() -> void:
 	if _settings == null:
 		return
+	var fullscreen := bool(_settings.get_value("fullscreen"))
+	if _applied_fullscreen != fullscreen:
+		_applied_fullscreen = fullscreen
+		if DisplayServer.get_name() != "headless":
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen \
+				else DisplayServer.WINDOW_MODE_WINDOWED)
 	if is_instance_valid(player):
 		player.sensitivity_multiplier = float(_settings.values.sensitivity)
 		player.base_fov = float(_settings.values.field_of_view)
 		player.head_bob_strength = float(_settings.values.head_bob)
-	for pair in [[MUSIC_BUS, "music_volume"], [SoundBank.GAME_BUS, "effects_volume"]]:
+		player.invert_y = bool(_settings.values.invert_y)
+		player.toggle_sprint = bool(_settings.values.toggle_sprint)
+	_set_mode_hint()
+	for pair in [[MUSIC_BUS, "music_volume"], [SoundBank.GAME_BUS, "effects_volume"],
+			[SoundBank.DIALOGUE_BUS, "dialogue_volume"]]:
 		var idx := AudioServer.get_bus_index(pair[0])
 		if idx >= 0:
 			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(0.0001, float(_settings.values[pair[1]]))))
@@ -644,6 +679,107 @@ func _apply_game_settings() -> void:
 	for mat in [Mats.casino_slot_lights(), Mats.ticker()]:
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("reduced_flashing", GameSettings.flashing_reduced())
+
+
+func _on_progress_save_failed(error: Error) -> void:
+	if _progress_enabled:
+		_report_save_failure("Progress", error)
+
+
+func _on_progress_saved() -> void:
+	if is_instance_valid(_save_notice):
+		_save_notice.clear_failure("Progress")
+
+
+func _on_settings_save_failed(error: Error) -> void:
+	_report_save_failure("Settings", error)
+
+
+func _on_settings_saved() -> void:
+	if is_instance_valid(_save_notice):
+		_save_notice.clear_failure("Settings")
+
+
+func _on_recording_save_failed(error: Error) -> void:
+	_report_save_failure("Recordings", error)
+
+
+func _on_recording_saved() -> void:
+	if is_instance_valid(_save_notice) and not IntroPlaybackState.has_pending():
+		_save_notice.clear_failure("Recordings")
+
+
+func _report_save_failure(category: String, error: Error) -> void:
+	if not is_instance_valid(_save_notice):
+		_save_notice = SaveFailureNotice.new()
+		add_child(_save_notice)
+	_save_notice.report_failure(category, error)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and is_inside_tree():
+		_request_quit()
+		return
+	if what != NOTIFICATION_WM_WINDOW_FOCUS_OUT or not is_inside_tree():
+		return
+	if is_instance_valid(player):
+		player.clear_sprint_toggle()
+	if not is_instance_valid(player) or get_tree().paused or is_instance_valid(_pause_menu):
+		return
+	# Menus already protect the player. A prologue may sit above the results
+	# screen, however, and should pause too without unlocking its first viewing.
+	if not is_instance_valid(_descent_intro) and (is_instance_valid(_title) \
+			or is_instance_valid(_descent_summary) or is_instance_valid(_return_prompt) or _dying):
+		return
+	_open_settings(false)
+
+
+func _save_before_exit() -> Error:
+	# During a floor transition the outgoing snapshot was already captured;
+	# never write an outgoing room under the incoming floor's index.
+	var error := OK
+	if descent and not _switching:
+		error = _persist_current_runtime_state()
+	if _settings != null:
+		var settings_error := _settings.save_to_disk()
+		if settings_error != OK:
+			error = settings_error
+	var history_error := IntroPlaybackState.retry_pending()
+	return history_error if history_error != OK else error
+
+
+func _request_quit() -> void:
+	if _quitting:
+		return
+	_quitting = true
+	get_tree().paused = true
+	# Finish a shutter already in flight, so its image/evidence signal is not
+	# abandoned between the GPU readback and the checkpoint write.
+	while is_instance_valid(_photo_camera) and _photo_camera._capturing:
+		await get_tree().process_frame
+	if _save_before_exit() == OK:
+		_finish_quit()
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	_quit_prompt = ReturnPrompt.new()
+	_quit_prompt.heading_text = "QUIT WITHOUT SAVING?"
+	_quit_prompt.warning_text = "THE LATEST CHANGES COULD NOT BE SAVED.\nQUIT ANYWAY, OR RETURN AND TRY AGAIN?"
+	_quit_prompt.process_mode = Node.PROCESS_MODE_ALWAYS
+	_quit_prompt.ready.connect(func(): _quit_prompt.layer = 125)
+	_quit_prompt.confirmed.connect(_finish_quit)
+	_quit_prompt.cancelled.connect(func():
+		_quit_prompt.queue_free()
+		_quit_prompt = null
+		_quitting = false
+		if is_instance_valid(_pause_menu):
+			_pause_menu.open()
+		else:
+			_open_settings(is_instance_valid(_title)))
+	add_child(_quit_prompt)
+
+
+func _finish_quit() -> void:
+	get_tree().quit()
 
 
 func _input(event: InputEvent) -> void:
@@ -667,8 +803,9 @@ func _on_album_photograph(image: Image, metadata: Dictionary) -> void:
 	_photo_album_store.configure(world_seed, _progress_enabled)
 	var error := _photo_album_store.add_photo(image, metadata)
 	if error != OK:
-		push_warning("Could not save photograph to album: %s" % error_string(error))
-		_show_event_message("PHOTOGRAPH COULD NOT BE SAVED TO ALBUM")
+		_report_save_failure("Photograph", error)
+	elif is_instance_valid(_save_notice):
+		_save_notice.clear_failure("Photograph")
 
 
 func _open_photo_album() -> bool:
@@ -697,10 +834,15 @@ func _open_settings(only_options := false) -> void:
 	if is_instance_valid(_pause_menu):
 		return
 	_pause_mouse_mode = Input.mouse_mode
+	if is_instance_valid(player):
+		player.clear_sprint_toggle()
 	_pause_menu = PauseMenu.new()
+	_pause_menu.allow_return_to_title = not is_instance_valid(_descent_intro)
+	_pause_menu.allow_quit = not is_instance_valid(_descent_intro)
 	add_child(_pause_menu)
 	_pause_menu.setup(_settings, only_options)
 	_pause_menu.resumed.connect(_close_settings)
+	_pause_menu.quit_requested.connect(_request_quit)
 	_pause_menu.return_to_title.connect(func():
 		_close_settings()
 		_confirm_return_to_title())
@@ -710,6 +852,7 @@ func _open_settings(only_options := false) -> void:
 
 
 func _close_settings() -> void:
+	IntroPlaybackState.retry_pending()
 	if is_instance_valid(_pause_menu):
 		_pause_menu.queue_free()
 	_pause_menu = null
@@ -730,16 +873,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			_show_return_prompt()
 			return
-		# keys 1..N select the Nth live theme — no gap where the park used to be
-		var idx: int = event.physical_keycode - KEY_1
-		if not descent and event.physical_keycode == KEY_0:
-			_switch_level(10)
-		elif not descent and (event.physical_keycode == KEY_MINUS \
-				or event.physical_keycode == KEY_KP_SUBTRACT):
-			_switch_level(11)
-		elif not descent and idx >= 0 and idx < mini(9, WorldGen.THEMES.size()):
-			_switch_level(WorldGen.THEMES[idx])
-		elif event.physical_keycode == KEY_V:
+		var floor_theme := _floor_theme_for_key(event.physical_keycode)
+		if floor_theme >= 0:
+			if descent and opts.test_mode:
+				get_viewport().set_input_as_handled()
+				_jump_test_floor(floor_theme)
+			elif not descent:
+				_switch_level(floor_theme)
+			return
+		if event.physical_keycode == KEY_V:
 			_post_enabled = _post_process.toggle_enabled()
 			_apply_scaling()
 		elif event.physical_keycode == KEY_B:
@@ -803,6 +945,56 @@ func _confirm_return_to_title() -> void:
 
 func _switch_level(level: int) -> void:
 	_transitions.switch_wander(level)
+
+
+## Match Wander's theme keys, NOT the campaign's differently ordered floor indices.
+static func _floor_theme_for_key(key: Key) -> int:
+	if key == KEY_0:
+		return 10
+	if key in [KEY_MINUS, KEY_KP_SUBTRACT]:
+		return 11
+	var index := int(key) - KEY_1
+	return WorldGen.THEMES[index] if index >= 0 and index < mini(9, WorldGen.THEMES.size()) else -1
+
+
+func _test_floor_jump_allowed() -> bool:
+	if not opts.test_mode or not descent or not is_instance_valid(run) \
+			or run.ended or run.watching or _switching or _dying or _quitting \
+			or _descent_preparing or get_tree().paused:
+		return false
+	for modal in [_title, _pause_menu, _return_prompt, _descent_summary, _descent_intro, _photo_album]:
+		if is_instance_valid(modal):
+			return false
+	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
+		return false
+	if _photo_camera != null and (_photo_camera._capturing \
+			or _photo_camera._review_left > 0.0 or _photo_camera.doorway_reveal_active()):
+		return false
+	# An off-tree reality rebuild still owns callbacks to the current run.
+	return cm != null and cm._staged_cells.is_empty()
+
+
+func _jump_test_floor(theme: int) -> void:
+	if not _test_floor_jump_allowed():
+		return
+	var floor_idx := DescentRun.FIXED_ORDER.find(theme)
+	if floor_idx < 0:
+		return
+	# Reuse the real Descent retry lifecycle: route, threats, evidence, lift,
+	# arrival and resources all agree on the destination's campaign depth.
+	# Selecting the current floor deliberately restarts it for another take.
+	run.suspend_rules()
+	_set_presence(Presence.SILENT)
+	player.set_process_unhandled_input(false)
+	player.velocity = Vector3.ZERO
+	if _photo_camera != null:
+		_photo_camera.finish_for_transition()
+	if is_instance_valid(_descent_hud):
+		_descent_hud.set_active(false)
+	_allow_realm_visit_retry(floor_idx)
+	await _resume_descent_at(floor_idx)
+	print("TEST MODE: %s (Descent floor %d); campaign saving disabled" % [
+		run.floor_name(), run.floor_idx + 1])
 
 
 ## Called by physical lift panels built into selected generated rooms.
@@ -932,7 +1124,10 @@ func descent_intro_tape_finished(setup_key: String) -> void:
 		"PRESS C TO USE YOUR CAMERA. PRESS SPACE TO TAKE A PHOTO.")
 	var brief := create_tween()
 	brief.tween_interval(4.5)
-	brief.tween_callback(_show_photo_brief)
+	var brief_run_id := run.get_instance_id()
+	brief.tween_callback(func():
+		if is_instance_valid(run) and run.get_instance_id() == brief_run_id:
+			_show_photo_brief())
 
 
 ## The console is only escapable mid-play once its tape has ever run to the
@@ -1019,6 +1214,13 @@ func descent_photo_refusal_caption() -> String:
 		if _photo_director != null else PhotoDirector.REQUIRED
 	return "THE TAPE WANTS PROOF — PHOTOGRAPH WHAT IS WRONG — %d/%d" % [
 		count, required]
+
+
+func descent_photo_requirement_prompt() -> String:
+	if descent_photo_requirement_met():
+		return "E — play the tape"
+	return "PHOTOGRAPHS %d/%d — TAPE LOCKED" % [
+		_photo_director.documented_count(), _photo_director.required_count()]
 
 
 func _on_photo_documented(_anomaly_id: String, count: int,
@@ -1190,7 +1392,11 @@ func _reveal_arrival() -> void:
 	settle.tween_method(func(v: float): player.set_rumble(v), 0.22, 0.0, 1.1)
 	var reveal_delay := create_tween()
 	reveal_delay.tween_interval(0.85)
-	reveal_delay.tween_callback(_finish_reveal_arrival.bind(floor_name))
+	# A test jump may replace this run before the arrival delay expires.
+	var arrival_run_id := run.get_instance_id()
+	reveal_delay.tween_callback(func():
+		if is_instance_valid(run) and run.get_instance_id() == arrival_run_id:
+			_finish_reveal_arrival(floor_name))
 
 
 func _finish_reveal_arrival(floor_name: String) -> void:
@@ -1221,7 +1427,10 @@ func _queue_photo_brief() -> void:
 		return
 	var brief := create_tween()
 	brief.tween_interval(3.3)
-	brief.tween_callback(_show_photo_brief)
+	var brief_run_id := run.get_instance_id()
+	brief.tween_callback(func():
+		if is_instance_valid(run) and run.get_instance_id() == brief_run_id:
+			_show_photo_brief())
 
 
 func _show_photo_brief() -> void:
@@ -1507,7 +1716,7 @@ func _on_figure_reached_player() -> void:
 	_dying = true
 	_play_player_death()
 	if descent and run != null and not run.ended:
-		run.finish(false)
+		run.finish(false, DescentRun.DeathCause.FIGURE)
 		return
 	_die_to_title()
 
@@ -1622,37 +1831,11 @@ func _on_descent_blackout(on: bool) -> void:
 	if is_instance_valid(ambience):
 		ambience.set_powered(not on)
 	if on:
-		if _blackout_ambient < 0.0:
-			_blackout_ambient = we.environment.ambient_light_energy
-		we.environment.ambient_light_energy = 0.003
-		# Office lighting leans heavily on bright SDFGI bounce, pale distance fog
-		# and its background fill. Hiding the fixtures alone leaves those three
-		# sources looking like live power, so suppress them for this floor while
-		# preserving the exact authored values for restoration.
-		if active_level == 1 and _blackout_office_environment.is_empty():
-			_blackout_office_environment = {
-				"sdfgi_energy": we.environment.sdfgi_energy,
-				"fog_light_energy": we.environment.fog_light_energy,
-				"background_energy_multiplier": \
-					we.environment.background_energy_multiplier,
-			}
-			we.environment.sdfgi_energy = 0.0
-			we.environment.fog_light_energy = 0.01
-			we.environment.background_energy_multiplier = 0.01
+		_blackout_environment.apply(we.environment)
 		_play_descent_cue(SoundBank.thud(), -7.0)
 		_show_event_message("BLACKOUT — STAND STILL · THE TORCH STILL WORKS", true)
 	else:
-		if _blackout_ambient >= 0.0:
-			we.environment.ambient_light_energy = _blackout_ambient
-			_blackout_ambient = -1.0
-		if not _blackout_office_environment.is_empty():
-			we.environment.sdfgi_energy = float(
-				_blackout_office_environment["sdfgi_energy"])
-			we.environment.fog_light_energy = float(
-				_blackout_office_environment["fog_light_energy"])
-			we.environment.background_energy_multiplier = float(
-				_blackout_office_environment["background_energy_multiplier"])
-			_blackout_office_environment.clear()
+		_blackout_environment.restore()
 		_blackout_locate_cue = 0
 		if _pending_mutation_reveal:
 			_pending_mutation_reveal = false
@@ -1729,7 +1912,7 @@ func _on_blackout_ambush() -> void:
 	_play_descent_cue(pick[0], -2.0)
 	_post_process.damage_hit(1.0)
 	_play_player_death()
-	run.finish(false)
+	run.finish(false, DescentRun.DeathCause.BLACKOUT_MOVEMENT)
 
 
 ## The rules have the player pinned. Nothing arrives and nothing closes until
@@ -1813,12 +1996,12 @@ func _persist_committed_mutation(topology: DescentTopology) -> void:
 	_persist_current_runtime_state()
 
 
-func _persist_current_runtime_state() -> void:
+func _persist_current_runtime_state() -> Error:
 	if not _progress_enabled or _descent_progress == null \
 			or _descent_progress.run_seed != world_seed \
 			or run == null or cm == null:
-		return
-	_descent_progress.record_runtime_state(
+		return OK
+	return _descent_progress.record_runtime_state(
 		run.floor_idx, cm.runtime_state_snapshot())
 
 
@@ -1881,6 +2064,8 @@ func _show_descent_summary(won: bool) -> void:
 	_descent_summary.floor_display = run.floor_name()
 	_descent_summary.elapsed = run.elapsed
 	_descent_summary.violations = run.violations
+	_descent_summary.death_cause = run.death_cause
+	_descent_summary.show_death_hint = _settings == null or bool(_settings.get_value("death_hints"))
 	_descent_summary.world_seed = world_seed
 	_descent_summary.continue_floor_idx = _continue_floor_idx()
 	_descent_summary.continue_run.connect(_continue_descent)
@@ -1954,6 +2139,8 @@ func _resume_descent_at(floor_idx: int) -> void:
 func _leave_descent() -> void:
 	if _switching:
 		return
+	_persist_current_runtime_state()
+	IntroPlaybackState.retry_pending()
 	_dispose_realm_visit()
 	player.set_flashlight(false)
 	if is_instance_valid(_descent_summary):
@@ -2105,7 +2292,7 @@ func _apply_hud_scaling() -> void:
 	if _hint == null:
 		return
 	var viewport_size := Vector2(get_viewport().size)
-	var scale := VhsOsd.hud_scale(viewport_size)
+	var scale := maxf(1.0, minf(viewport_size.y / 720.0, viewport_size.x / 960.0))
 	var inset := VhsOsd.safe_inset(viewport_size)
 	# Every size here assumes the OSD is read THROUGH the tube: the post pass
 	# emulates a 320-row signal, so no text may drop under ~5% of the
@@ -2122,11 +2309,13 @@ func _apply_hud_scaling() -> void:
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint.add_theme_font_size_override("font_size", roundi(32.0 * scale))
 
-	_interact_panel.custom_minimum_size = Vector2(760.0, 80.0) * scale
-	_interact_panel.position = Vector2(
-		(viewport_size.x - _interact_panel.custom_minimum_size.x) * 0.5,
-		viewport_size.y - inset.y - 100.0 * scale)
-	_interact_hint.add_theme_font_size_override("font_size", roundi(50.0 * scale))
+	var interaction_width := minf(760.0 * scale, viewport_size.x - inset.x * 2.0)
+	_interact_hint.custom_minimum_size.x = interaction_width
+	_interact_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_interact_hint.add_theme_font_size_override("font_size", roundi((36.0 if viewport_size.x < 960.0 else 50.0) * scale))
+	_interact_panel.custom_minimum_size = Vector2(interaction_width, 80.0 * scale)
+	_interact_panel.set_deferred("size", _interact_panel.custom_minimum_size)
+	call_deferred("_position_interaction_prompt")
 
 	_event_panel.custom_minimum_size = Vector2(
 		viewport_size.x - inset.x * 2.0, 88.0 * scale)
@@ -2158,11 +2347,20 @@ func _apply_hud_scaling() -> void:
 		viewport_size.y - inset.y - 6.0 * scale - _stamina_meter.size.y)
 
 	_charging_label.add_theme_font_size_override("font_size", roundi(44.0 * scale))
-	_charging_meter.custom_minimum_size = Vector2(640.0, 40.0) * scale
-	_charging_panel.custom_minimum_size = Vector2(640.0 * scale, 0.0)
+	var charging_width := minf(640.0 * scale, viewport_size.x - inset.x * 2.0)
+	_charging_meter.custom_minimum_size = Vector2(charging_width, 40.0 * scale)
+	_charging_panel.custom_minimum_size = Vector2(charging_width, 0.0)
 	_charging_panel.position = Vector2(
-		(viewport_size.x - 640.0 * scale) * 0.5,
+		(viewport_size.x - charging_width) * 0.5,
 		viewport_size.y - inset.y - 220.0 * scale)
+
+
+func _position_interaction_prompt() -> void:
+	var extent := Vector2(get_viewport().size)
+	var scale := maxf(1.0, minf(extent.y / 720.0, extent.x / 960.0))
+	# Anchor the final wrapped height, including after a large-to-small resize.
+	_interact_panel.position = Vector2((extent.x - _interact_panel.size.x) * 0.5,
+		extent.y - VhsOsd.safe_inset(extent).y - 20.0 * scale - _interact_panel.size.y)
 
 
 func _toggle_post_mode() -> void:
@@ -2193,6 +2391,7 @@ func _set_world_audio(on: bool) -> void:
 ## Shared buses: Game owns the mute boundary; Hall adds reverb to spatial
 ## emitters and then feeds Game.
 func _setup_audio_bus() -> void:
+	SoundBank.ensure_dialogue_bus()
 	var music_idx := AudioServer.get_bus_index(MUSIC_BUS)
 	if music_idx < 0:
 		music_idx = AudioServer.bus_count
@@ -2269,6 +2468,7 @@ func _build_ui() -> void:
 	_interact_panel.visible = false
 	_interact_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	cl.add_child(_interact_panel)
+	_interact_panel.resized.connect(_position_interaction_prompt)
 	_interact_hint = VhsOsd.make_label(28)
 	_interact_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_interact_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -2507,6 +2707,7 @@ func _build_title(force := false) -> void:
 	_title.descent_requested.connect(_on_descent_requested)
 	_title.started.connect(_on_start)
 	_title.settings_requested.connect(func(): _open_settings(true))
+	_title.quit_requested.connect(_request_quit)
 	add_child(_title)
 	if descent:
 		_title.present_descent(true)
@@ -2617,13 +2818,14 @@ func _play_descent_intro() -> void:
 		return
 	_set_presence(Presence.SILENT)
 	_set_world_audio(false)
-	# Score lives on Master beside the movie. Pause it explicitly while the
+	# Score and dialogue independently feed Master. Pause the score while the
 	# Hall bus and ambience are silent, leaving the intro's own audio untouched.
 	_music.stream_paused = true
 	player.velocity = Vector3.ZERO
 	player.set_process_unhandled_input(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_descent_intro = DescentIntro.new(_intro_state.has_viewed())
+	_descent_intro.pause_requested.connect(func(): _open_settings(false))
 	add_child(_descent_intro)
 	var watched_to_end: bool = await _descent_intro.completed
 	_descent_intro = null
@@ -2642,10 +2844,13 @@ func _commit_new_descent_checkpoint() -> void:
 func _set_mode_hint() -> void:
 	if _hint == null:
 		return
+	var sprint_hint := "Shift toggle sprint" if _settings != null and bool(_settings.get_value("toggle_sprint")) else "Shift sprint"
 	if descent:
-		_hint.text = "WASD move  ·  Shift sprint  ·  E use  ·  F torch  ·  C camera + Space photo  ·  P album  ·  B mode  ·  Esc pause  ·  Q title"
+		_hint.text = "WASD move  ·  %s  ·  E use  ·  F torch  ·  C camera + Space photo  ·  P album  ·  B mode  ·  Esc pause  ·  Q title" % sprint_hint
+		if opts.test_mode:
+			_hint.text = "TEST MODE · 1–9 / 0 / − jump floors · campaign not saved\n" + _hint.text
 	else:
-		_hint.text = "WASD move  ·  Shift run  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  V filter  ·  B mode  ·  Esc pause  ·  Q title"
+		_hint.text = "WASD move  ·  %s  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  V filter  ·  B mode  ·  Esc pause  ·  Q title" % sprint_hint
 
 
 ## The Poolrooms are the only floor with standing water. Everywhere else the

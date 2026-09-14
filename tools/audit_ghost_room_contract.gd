@@ -164,12 +164,17 @@ func _init() -> void:
 	blocked.queue_free()
 	wall.queue_free()
 	await physics_frame
-	# Seed 3's school edge (0, 1) east is a genuine 1.84m cased opening at
-	# z=12+7.285. Match that topology so the production route targets this door.
+	# Match the procedural opening rather than an old baked-in offset: the
+	# production router and the physical fixture must target the same doorway.
 	player.world_seed = 3
 	player.level_theme = 6
-	var doorway_along := 12.0 + 7.2847698
-	var doorway_width := 1.8384756
+	var door_info := WorldGen.edge_info(player.world_seed, Vector2i(0, 1), 0, player.level_theme)
+	var doorway_along := 12.0 + float(door_info.t)
+	var doorway_width := float(door_info.w)
+	var chase_z := 22.0 if float(door_info.t) < 6.0 else 14.0
+	if door_info.wall or door_info.full_open or absf(doorway_along - chase_z) < 2.0:
+		failures += 1
+		print("FAIL — offset doorway fixture no longer exercises a narrow off-axis opening")
 	var doorway_min := doorway_along - doorway_width * 0.5
 	var doorway_max := doorway_along + doorway_width * 0.5
 	var door_low := _static_box(Vector3(12.0, 1.4, (12.0 + doorway_min) * 0.5),
@@ -181,8 +186,8 @@ func _init() -> void:
 	root.add_child(door_low)
 	root.add_child(door_high)
 	root.add_child(door_header)
-	player.global_position = Vector3(15.5, 0.0, 14.0)
-	var crossing := _figure(root, player, Vector3(8.5, 0.0, 14.0))
+	player.global_position = Vector3(15.5, 0.0, chase_z)
+	var crossing := _figure(root, player, Vector3(8.5, 0.0, chase_z))
 	await physics_frame
 	for i in 1800:
 		crossing._advance(STEP)

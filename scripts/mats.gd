@@ -738,7 +738,8 @@ static func annex_trim() -> StandardMaterial3D:
 		m.roughness = 0.8)
 
 
-## User-supplied hardwood used only on the Annex's half-height wall caps.
+## User-supplied hardwood on the Annex's half-height wall caps (also reused
+## by the Airport's grand ceiling with separate world-mapped materials).
 ## The source grain runs vertically, so the stored texture is losslessly
 ## quarter-turned: native BoxMesh U now follows the cap's local X/long axis,
 ## including when the complete half-wall assembly is yawed ninety degrees.
@@ -1002,14 +1003,65 @@ static func airport_wall_variant(idx: int) -> Material:
 static func airport_ceiling() -> Material:
 	if _c.has("airport_ceiling"):
 		return _c["airport_ceiling"]
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/ceiling.gdshader")
-	m.set_shader_parameter("col", Color(0.68, 0.70, 0.73))
-	m.set_shader_parameter("stain_amount", 0.08)
-	m.set_shader_parameter("tile", 1.2)
+	# Reuse the office's authored mineral-fibre PBR maps, not its material:
+	# Airport has its own cooler finish, panel pitch and restrained bounce fill.
+	var m := office_ceiling().duplicate() as StandardMaterial3D
+	m.albedo_color = Color(0.95, 0.97, 1.0)
+	m.emission = Color(0.21, 0.23, 0.25)
+	m.emission_energy_multiplier = 0.48
+	m.normal_scale = 0.55
+	m.uv1_scale = Vector3.ONE / AirportCeilingGrid.PITCH
 	m.resource_name = "airport_ceiling"
 	_c["airport_ceiling"] = m
 	return m
+
+
+static func air_coffer_shell() -> StandardMaterial3D:
+	return _std("air_coffer_shell", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.70, 0.72, 0.70)
+		m.roughness = 0.88
+		m.emission_enabled = true
+		m.emission = Color(0.035, 0.038, 0.04))
+
+
+static func air_coffer_rib() -> StandardMaterial3D:
+	return _std("air_coffer_rib", func(m: StandardMaterial3D):
+		_air_coffer_wood(m)
+		m.albedo_color = Color(0.86, 0.78, 0.67)
+		m.emission = Color(0.28, 0.25, 0.20))
+
+
+static func air_coffer_inset() -> StandardMaterial3D:
+	return _std("air_coffer_inset", func(m: StandardMaterial3D):
+		_air_coffer_wood(m)
+		m.albedo_color = Color.WHITE
+		m.emission = Color(0.50, 0.44, 0.34))
+
+
+static func _air_coffer_wood(m: StandardMaterial3D) -> void:
+	# Reuse the supplied hardwood grain without changing its Annex material.
+	# World projection also covers the batched coffers, which have no UVs.
+	m.albedo_texture = load("res://textures/annex/half_wall_cap_wood.png")
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / AirportGrandCeiling.BAY
+	m.roughness = 0.64
+	m.metallic = 0.0
+	m.metallic_specular = 0.28
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	# Modest textured bounce from the surrounding cove: grain stays legible
+	# inside the deep recess without adding lights or flattening the wood.
+	m.emission_enabled = true
+	m.emission_texture = m.albedo_texture
+
+
+static func air_coffer_light() -> StandardMaterial3D:
+	return _std("air_coffer_light", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.98, 0.94, 0.83)
+		m.roughness = 0.85
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.90, 0.72)
+		m.emission_energy_multiplier = 2.0)
 
 
 ## Blue-grey gate-lounge carpet tiles, reusing the office heather weave.
@@ -1059,10 +1111,11 @@ static func sign_navy() -> StandardMaterial3D:
 
 static func air_panel() -> StandardMaterial3D:
 	return _std("air_panel", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.93, 0.96, 1.0)
+		m.albedo_color = Color(0.96, 0.97, 1.0)
 		m.emission_enabled = true
-		m.emission = Color(0.85, 0.92, 1.0)
-		m.emission_energy_multiplier = 2.5)
+		m.emission = Color(0.93, 0.96, 1.0)
+		m.emission_energy_multiplier = 1.65
+		m.roughness = 0.82)
 
 
 ## Dead monitor / FIDS glass — near-black, glossy.

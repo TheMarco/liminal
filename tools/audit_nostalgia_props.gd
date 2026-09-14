@@ -71,7 +71,7 @@ func sweep() -> void:
 							check(is_equal_approx(node.position.y, .7875), "projector not on measured desk top")
 							check(node.get_parent().get_meta("atomic_furnishing", "") == "school_teacher_station", "projector detached from teacher station")
 							continue
-						if id in [0, 2]:
+						if id in [0, 2, 4, 5]:
 							check(wall_behind(chunk, node, id), "fixture %s lacks full solid wall behind its back" % NostalgiaProps.IDS[id])
 						var parent := node.get_parent()
 						parent.remove_child(node)
@@ -82,11 +82,13 @@ func sweep() -> void:
 								(collider as CollisionShape3D).disabled = true
 								disabled.append(collider as CollisionShape3D)
 						var geometry := ChargingStationPlacement.new(chunk)
-						var b: AABB = NostalgiaProps.BOUNDS[id].grow(.035)
-						b.size.y -= .095
-						b.position.y = .06
+						var b: AABB = NostalgiaProps.machine_clearance_bounds(NostalgiaProps.BOUNDS[id]) if id in [4, 5] else NostalgiaProps.BOUNDS[id].grow(.035)
+						if id not in [4, 5]:
+							b.size.y -= .095
+							b.position.y = .06
 						var approach := AABB(Vector3(b.position.x,.06,b.end.z), Vector3(b.size.x,minf(1.8,b.size.y),.90))
-						check(geometry.clear(node.position, node.rotation.y, false, chunk._doorway_clearance_rects(), b, approach), "fixture %s overlaps" % NostalgiaProps.IDS[id])
+						var cell_inset := 0.0 if id in [4, 5] else .30
+						check(geometry.clear(node.position, node.rotation.y, false, chunk._doorway_clearance_rects(), b, approach, cell_inset), "fixture %s overlaps seed=%d cell=%s" % [NostalgiaProps.IDS[id], ws, chunk.cell])
 						for collider in disabled: collider.disabled = false
 						parent.add_child(node)
 					chunk.free()
@@ -106,12 +108,13 @@ func run() -> void:
 func wall_behind(chunk: Chunk, node: Node3D, id: int) -> bool:
 	var bounds: AABB = NostalgiaProps.BOUNDS[id]
 	var normal := node.basis.z.normalized()
+	var max_steps := 8 if id in [4, 5] else 30
 	for x in [bounds.position.x + .01, bounds.end.x - .01]:
 		for y in [.10, bounds.end.y - .02]:
 			var back: Vector3 = node.transform * Vector3(x, y, bounds.position.z)
 			var found := false
 			for wall in NostalgiaProps.backing_walls(chunk):
-				for step in range(1, 31):
+				for step in range(1, max_steps + 1):
 					if wall.has_point(back - normal * float(step) * .01):
 						found = true
 						break

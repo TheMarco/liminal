@@ -6,7 +6,7 @@
 - **Local file:** `ceiling_tiles_texture.glb`
 - **Modifications:** Godot extracts the embedded albedo,
   metallic-roughness and normal textures. Those maps are applied with
-  world-space triplanar mapping and a tightened acoustic-tile repeat appropriate
-  to the three-metre office rooms. The 12-triangle source demonstration slab is
-  retained for provenance but is not instantiated at runtime; office ceiling
-  geometry, collision and fluorescent fixtures are unchanged.
+  world-space triplanar mapping at 0.75m in Office and 0.6m in lower Airport rooms. Airport
+  uses recessed one- and two-panel lights and matching vent housings. The
+  12-triangle source demonstration slab is retained for provenance but is not
+  instantiated at runtime; ceiling collision is unchanged.

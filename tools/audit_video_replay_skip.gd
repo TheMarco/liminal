@@ -1,5 +1,5 @@
 extends SceneTree
-## Isolated completion history and actual E/Esc dispatch; no player profile writes.
+## Isolated completion history and E controls; Escape belongs to Main's pause.
 const TEST_PATH := "/tmp/liminal_audit_video_replay.cfg"
 var failures: Array[String] = []
 
@@ -26,7 +26,7 @@ func check(ok: bool, message: String) -> void:
 	if not ok:
 		failures.append(message)
 
-func press(ritual: VhsRitual, code: Key = KEY_ESCAPE) -> void:
+func press(ritual: VhsRitual, code: Key = KEY_E) -> void:
 	var event := InputEventKey.new()
 	event.physical_keycode = code
 	event.pressed = true
@@ -68,11 +68,13 @@ func _run() -> void:
 	var hint_label := hint_panel.get_node("Controls") as Label
 	check(ritual._watch_hint.layer > 100, "playback controls blurred by CRT post processing")
 	check(hint_label.get_theme_font_size("font_size") == 28, "playback controls too small")
-	check(hint_label.text == "E / ESC — STOP AND REWIND", "first-watch control wording changed")
+	check(hint_label.text == "E — STOP AND REWIND  ·  ESC — PAUSE", "first-watch control wording changed")
 	check((hint_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color.a >= 0.9,
 		"playback controls missing contrast backing")
 	var hint_bounds := Rect2(hint_panel.position, hint_panel.size * hint_panel.scale)
 	check(root.get_visible_rect().encloses(hint_bounds), "playback controls extend beyond viewport")
+	press(ritual, KEY_ESCAPE)
+	check(ritual._playing, "ritual consumed Escape instead of leaving it for pause")
 	press(ritual)
 	check(not ritual._playing and not ritual._done, "ordinary first watch did not abort")
 	check(not state.has_viewed_video("first.ogv"), "abort unlocked skip")

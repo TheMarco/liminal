@@ -67,6 +67,7 @@ func _hall_lighting() -> void:
 		light.distance_fade_begin = 20.0
 		light.distance_fade_length = 7.0
 		light.distance_fade_shadow = 15.0
+		light.set_meta("stream_room_light", true)
 		scene.add_node(light)
 
 
@@ -961,45 +962,19 @@ func _sofa(center: Vector3, face: float) -> void:
 
 
 func _casino_service_cart(p: Vector3, salt: int) -> void:
-	var v = Node3D.new()
-	v.position = p
-	v.rotation.y = ctx.random01(salt) * TAU
-	scene.add_node(v)
-	scene.model_rounded_box(v, Vector3(0, 0.76, 0), Vector3(1.05, 0.07, 0.56), Mats.darkwood(), 0.025)
-	scene.model_rounded_box(v, Vector3(0, 0.28, 0), Vector3(0.92, 0.045, 0.46), Mats.darkwood(), 0.018)
-	ProceduralDetails.attach(v, "casino_service_cart_rims_handle_caster_yokes_105_056_v1", func(d: ProceduralDetails):
-		for y in [0.315, 0.795]:
-			d.box(Vector3(0, y, -0.285), Vector3(1.05, 0.035, 0.025), Mats.brass(), 0.008)
-			d.box(Vector3(0, y, 0.285), Vector3(1.05, 0.035, 0.025), Mats.brass(), 0.008)
-			d.box(Vector3(-0.525, y, 0), Vector3(0.025, 0.035, 0.56), Mats.brass(), 0.008)
-			d.box(Vector3(0.525, y, 0), Vector3(0.025, 0.035, 0.56), Mats.brass(), 0.008)
-		d.tube(Vector3(-0.50, 0.76, 0.24), Vector3(-0.50, 1.12, 0.24), 0.018, Mats.brass())
-		d.tube(Vector3(-0.50, 1.12, 0.24), Vector3(-0.25, 1.20, 0.24), 0.018, Mats.brass())
-		for sx in [-0.44, 0.44]:
-			for sz in [-0.20, 0.20]:
-				d.box(Vector3(sx, 0.10, sz), Vector3(0.095, 0.11, 0.035), Mats.brass(), 0.012)
-		d.tube(Vector3(0.32, 0.99, 0.08), Vector3(0.32, 1.08, 0.08),
-			0.026, Mats.glass_tint())
-		d.box(Vector3(0.32, 1.087, 0.08), Vector3(0.055, 0.018, 0.055),
-			Mats.brass(), 0.008)
-	)
-	for sx in [-0.44, 0.44]:
-		for sz in [-0.20, 0.20]:
-			scene.model_cylinder(v, Vector3(sx, 0.40, sz), 0.018, 0.72, Mats.brass())
-			var wheel = scene.model_cylinder(v, Vector3(sx, 0.055, sz), 0.055, 0.05, Mats.charcoal())
-			wheel.rotation.x = PI / 2.0
-	# Two glasses, one bottle, and a plate left slightly off square.
-	for gx in [-0.22, 0.10]:
-		scene.model_cylinder(v, Vector3(gx, 0.93, -0.06), 0.060, 0.10, Mats.glass_tint())
-	ProceduralDetails.attach(v, "casino_cart_stemware_pair_xm022_x010_v1", func(d: ProceduralDetails):
-		for gx in [-0.22, 0.10]:
-			d.tube(Vector3(gx, 0.805, -0.06), Vector3(gx, 0.88, -0.06), 0.009, Mats.glass_tint())
-			d.ring(Vector3(gx, 0.80, -0.06), 0.05, 0.008, Mats.glass_tint())
-			d.ring(Vector3(gx, 0.985, -0.06), 0.06, 0.007, Mats.glass_tint())
-	)
-	scene.model_cylinder(v, Vector3(0.32, 0.89, 0.08), 0.052, 0.24, Mats.glass_tint())
-	scene.model_cylinder(v, Vector3(-0.08, 0.805, 0.12), 0.18, 0.025, Mats.crown())
-	scene.collider_yaw_box(p + Vector3(0, 0.42, 0), Vector3(1.08, 0.84, 0.6), v.rotation.y)
+	var yaw := ctx.random01(salt) * TAU
+	var first := scene.collider_mark()
+	var cart := scene.attributed_floor_prop(Chunk.CASINO_SERVICE_CART_PATH, p, yaw,
+		Chunk.CASINO_SERVICE_CART_SCALE, Chunk.CASINO_SERVICE_CART_CENTRE,
+		"casino_service_cart", null, true)
+	if cart == null:
+		push_error("Casino service cart asset failed to load: %s" %
+			Chunk.CASINO_SERVICE_CART_PATH)
+		return
+	# Keep the established gameplay footprint: the imported body occupies the
+	# same metre-scale space as the procedural cart it replaces.
+	scene.collider_yaw_box(p + Vector3(0, 0.42, 0), Vector3(1.08, 0.84, 0.6), yaw)
+	scene.bind_furnishing_colliders(cart, first)
 
 
 ## Archive boxes and loose forms occupy a corner of some otherwise empty

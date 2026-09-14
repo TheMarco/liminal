@@ -31,6 +31,7 @@ const WATER := [
 	["normal_speed_a", -0.15, 0.15],
 	["normal_speed_b", -0.15, 0.15],
 	["normal_strength", 0.0, 2.0],
+	["wake_strength", 0.0, 3.0],
 	["depth_fade", 0.2, 8.0],
 	["opacity_min", 0.0, 1.0],
 	["opacity_max", 0.0, 1.0],

@@ -1,9 +1,10 @@
 class_name DescentIntro
 extends CanvasLayer
 ## Full-screen Descent prologue. A first-ever viewing has no escape hatch;
-## later new runs still present the film, but add a mouse-clickable Skip.
+## later new runs offer a clickable and keyboard-accessible Skip.
 
 signal completed(watched_to_end: bool)
+signal pause_requested
 
 const INTRO_STREAM: VideoStream = preload(
 	"res://videos/intro/liminal_intro.ogv")
@@ -12,6 +13,7 @@ const UI_FONT: Font = preload("res://fonts/VT323-Regular.ttf")
 var _skip_allowed := false
 var _video: VideoStreamPlayer
 var _skip_button: Button
+var _pause_button: Button
 var _done := false
 
 
@@ -30,6 +32,8 @@ func _ready() -> void:
 	add_child(back)
 
 	_video = VideoStreamPlayer.new()
+	SoundBank.ensure_dialogue_bus()
+	_video.bus = SoundBank.DIALOGUE_BUS
 	_video.stream = INTRO_STREAM
 	_video.expand = true
 	_video.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -41,7 +45,7 @@ func _ready() -> void:
 		_skip_button = Button.new()
 		var skip := _skip_button
 		skip.name = "SkipIntro"
-		skip.text = "SKIP INTRO"
+		skip.text = "E — SKIP INTRO"
 		skip.add_theme_font_override("font", UI_FONT)
 		skip.add_theme_font_size_override("font_size", 22)
 		skip.add_theme_color_override("font_color", Color(0.92, 0.88, 0.78))
@@ -54,7 +58,7 @@ func _ready() -> void:
 		skip.offset_top = -78.0
 		skip.offset_right = -30.0
 		skip.offset_bottom = -30.0
-		skip.focus_mode = Control.FOCUS_NONE
+		skip.focus_mode = Control.FOCUS_ALL
 		var normal := StyleBoxFlat.new()
 		normal.bg_color = Color(0.01, 0.01, 0.01, 0.72)
 		normal.border_width_left = 1
@@ -68,22 +72,35 @@ func _ready() -> void:
 		skip.add_theme_stylebox_override("normal", normal)
 		skip.add_theme_stylebox_override("hover", hover)
 		skip.add_theme_stylebox_override("pressed", hover)
+		var focus := hover.duplicate() as StyleBoxFlat
+		focus.set_border_width_all(3)
+		focus.border_color = Color(1.0, 0.82, 0.35, 1.0)
+		skip.add_theme_stylebox_override("focus", focus)
 		skip.pressed.connect(func(): _finish(false))
 		add_child(skip)
-		get_viewport().size_changed.connect(_layout_skip_button)
-		_layout_skip_button()
+		skip.grab_focus()
 
+	_pause_button = Button.new()
+	_pause_button.text = "ESC — PAUSE"
+	VhsOsd.style_button(_pause_button, 22)
+	_pause_button.pressed.connect(func(): pause_requested.emit())
+	add_child(_pause_button)
+	get_viewport().size_changed.connect(_layout_skip_button)
+	_layout_skip_button()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_video.play()
 
 
 func _layout_skip_button() -> void:
-	if _skip_button == null or not is_instance_valid(_skip_button):
-		return
 	var viewport_size := Vector2(get_viewport().size)
-	var scale := VhsOsd.hud_scale(viewport_size)
+	var scale := maxf(0.85, minf(viewport_size.y / 720.0, viewport_size.x / 960.0))
 	var inset := VhsOsd.safe_inset(viewport_size)
-	var button_size := Vector2(190.0, 48.0) * scale
+	var button_size := Vector2(190.0 * scale, maxf(44.0, 48.0 * scale))
+	_pause_button.add_theme_font_size_override("font_size", maxi(22, roundi(22.0 * scale)))
+	_pause_button.position = Vector2(inset.x, viewport_size.y - inset.y - button_size.y)
+	_pause_button.size = button_size
+	if not is_instance_valid(_skip_button):
+		return
 	_skip_button.add_theme_font_size_override("font_size", roundi(22.0 * scale))
 	_skip_button.scale = Vector2.ONE
 	_skip_button.offset_left = -inset.x - button_size.x
@@ -97,10 +114,29 @@ func skip_available() -> bool:
 
 
 ## Consume keyboard input so a key cannot operate the world or a summary below
-## the prologue. Skip intentionally remains a visible mouse-only action.
+## the prologue. Only a previously watched intro accepts the Skip shortcuts.
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey:
+	if not event is InputEventKey:
+		return
+	var key := event as InputEventKey
+	if key.physical_keycode in [KEY_TAB, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN]:
+		return # GUI focus navigation gets first refusal.
+	if key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
+		pause_requested.emit()
+		return
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused in [_pause_button, _skip_button] and key.physical_keycode in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]:
+		return
+	get_viewport().set_input_as_handled()
+	if not _skip_allowed or not key.pressed or key.echo:
+		return
+	if key.physical_keycode == KEY_E:
+		_finish(false)
+
+
+func _unhandled_input(_event: InputEvent) -> void:
+	get_viewport().set_input_as_handled()
 
 
 func _finish(watched_to_end: bool) -> void:

@@ -470,14 +470,132 @@ authored 480-line image. Each scenario walked and turned continuously at a
   real Wander portal transition into Bloom, not Poolrooms streaming; it occurs
   under the transition fade and the destination then returns to 60 FPS.
 
-The streamer now renders a fog-bounded 5×5 square and retains only an invisible
-one-cell hysteresis ring for collision/rebuild stability. Godot's Metal backend
+At the time of these measurements, the streamer rendered a fog-bounded 5×5
+square with an invisible one-cell hysteresis ring. The September 13 draw-distance
+update expands the core to 7×7 and also renders completed prefetch/retained rooms;
+the earlier FPS figures above are not measurements of that expanded range.
+Godot's Metal backend
 reported `0.0 ms` for `--gpu-profile`, so a trustworthy numeric GPU-frame time
 is not available from this engine/backend combination. The capture therefore
 records rendered FPS, process/physics worst frame, draw calls, primitives,
 collision pairs, object/resource deltas and video memory. The project raises
 the timestamp-query capacity so supported backends can produce a detailed GPU
 profile without overflowing the default 256 entries.
+
+### September 13 draw-distance follow-up
+
+The core now covers 7×7 cells instead of 5×5: another 12 m in each direction.
+Completed predicted rooms are visible immediately, and already-built rooms in
+the one-cell retention ring stay visible when turning or crossing a cell edge.
+Owning anchors remain with retained merged rooms. The ring is not fully queued;
+ordinary generation still completes at most one chunk per frame with the same
+3 ms stage budget. Safe arrivals still synchronously warm only 3×3 cells, and
+camera-doorway previews still prepare a 5×5 area before entry.
+
+`tools/profile_draw_distance.gd`, seed 240721, real game/CRT/fog at 1440×900 on
+Apple M3 Max/Metal, 240-frame matching camera sweeps after settling:
+
+| Scene | Old mean frame | Expanded mean frame | Median draws, old → expanded |
+| --- | ---: | ---: | ---: |
+| Airport | 16.66 ms | 16.65 ms | 2,265 → 2,726 |
+| Poolrooms, poolside | 16.65 ms | 16.65 ms | 284 → 489 |
+
+Both held the 60 FPS cap in these samples; this does not establish GPU headroom
+or guarantee performance on other hardware. Airport's warmed streaming CPU
+profile averaged 0.314 → 0.422 ms/update, with p99 4.023 → 4.102 ms and resident
+chunks 35 → 63. More residency and rendering work are the expected trade-off.
+Incremental streaming, safe Descent transition/blackout, Pool fog coverage and
+all ten realm destination checks passed. Godot's headless renderer emitted
+material-null warnings during teardown; the rendered Pool capture reported
+seven texture RIDs at process exit. Neither produced a failed audit assertion.
+
+The first playtest exposed a second cutoff: Airport room lights still faded
+from 24–32 m even with their geometry present. Architectural lights are now
+tagged explicitly and receive a radius-derived fade start at installation
+(68 m for the 7×7 core, covering diagonals). The existing fade length and
+effective shadow range are preserved; small prop glows, fixture energy,
+intentional darkness and unfaded Pool/Bloom lights are untouched. Blackout
+replacement chunks use the same policy. Godot shares the fade length between
+light and shadow, so preserving it matters for the shadow budget.
+[Light3D reference](https://docs.godotengine.org/en/stable/classes/class_light3d.html#class-light3d-property-distance-fade-length).
+
+The new headless contract passed across 33 chunks/11 floors: 32 architectural
+lights extended, 24 other/unfaded lights unchanged. A GPU pixel test using the
+actual Airport fixture reproduced the old failure and held the same wall patch
+at 0.385 luminance at 20, 36, 48 and 60 m after the fix (old far value: 0.047).
+Blackout restoration, Descent transitions and incremental streaming also pass.
+Repeating the Airport rendered profile with corrected lighting held the 60 FPS
+cap: expanded view mean 16.66 ms, p95 16.78 ms, max 16.98 ms at 1440×900.
+
+### September 13 blackout-presentation overhaul
+
+The old blackout hid entire emissive meshes, including the Airport's structural
+wood/coffer ceiling, while only the Office suppressed indirect lighting and
+glowing fog. Cached reflection probes could also keep lighting a dark room.
+
+Blackouts now apply a reversible, world-local power overlay on every floor:
+local material variants disable emission/unshaded rendering without removing
+geometry or mutating shared materials; electrically powered display shaders
+expose `mains_power`; world signs respond to the remaining light. Ambient,
+SDFGI, fog emission/GI and background energy are suppressed together. Generic
+room probes are hidden as well as dimmed (intensity alone left diffuse cached
+lighting visible in the Airport/Mall). The Pool's deferred capture contract is
+preserved. Newly streamed probes cannot capture an unpowered room. Exact
+light/material/sign/probe/environment states restore; pre-existing dead lamps
+stay dead. Torch exposure, blackout timing/rules, and supernatural effects are
+unchanged.
+
+`tools/audit_blackout_presentation.gd` passes 34 chunks across all 11 floors,
+including 3,382 preserved meshes, imported per-surface materials, seven probes,
+all seven powered shader contracts, initial-dark streaming and freed-node
+restoration. Existing blackout-lighting, Pool water, incremental streaming and
+Descent-runtime checks pass as well.
+
+`tools/capture_blackout_presentation.gd` renders normal/off/torch/restored views
+with production geometry, environments and Player torch on Metal at 1280×800.
+All 12 scenes (11 floors plus the grand Airport ceiling) pass: the Airport gate
+sample drops from 0.433 to 0.0005 mean luminance, and the grand ceiling from
+0.395 to below 0.0001; the torch brings those to 0.138 and 0.120 respectively.
+The wood remains visible in the beam. Captures are in `build/blackout-review/`.
+These are representative fixed views, not an exhaustive visual survey of every
+seed. Headless teardown still emits existing material-null warnings, and the
+render capture reports seven texture RIDs at exit; neither fails assertions.
+
+### September 13 sightline generation
+
+The Annex's deterministic corridor grid previously permitted indefinitely long
+axial views. Two widened turning bays between each pair of major crossings now
+interrupt those spines at 24–36 m intervals. Each bay has a full-height central
+wall mass, the original centred entrances, 1.46 m clear bypasses on both sides,
+and the existing side-room passages. Shoulders close the inaccessible backing
+space beside narrower neighbouring halls. The bays keep the one-light budget,
+with fixtures over both mouths rather than inside the wall mass.
+
+Across all floors, ordinary openings between separate rooms now use staggered
+low/high positions and retain a cased boundary, rather than dissolving into
+chains of full-width openings. Real merged rooms remain open; corridor
+terminals, photo-door overrides and graph connectivity are preserved. This
+targets extreme sightlines, not all possible pop-in or every oblique view.
+Generation version is 11; exported binaries have not been rebuilt for this
+change.
+
+`tools/audit_sightlines.gd` checks 16 bays across both axes, all four corridor
+widths and negative coordinates: 55 traversable entrances, 32 successful ghost
+paths through generated collision, opaque axial blockers, fixture clearance,
+36 m maximum bay spacing, and 2,569 reciprocal staggered room edges across all
+11 floors. The Annex audit passes 324 built chunks; corridor and doorway
+clearance audits also pass. `tools/capture_sightlines.gd` renders seven bay
+variants with production environment and VHS processing; inspected captures
+are in `build/sightline-review/`.
+
+Fresh integration checks pass for all 77 photographic-obstruction room states,
+ghost-room traversal (the fixture now reads the generated doorway offset),
+chunk construction, routes, Descent runtime, progress, ritual and summary.
+All eleven live test-mode jumps pass their behavioral assertions, but that
+headless audit still fails its shutdown resource-leak gate. The broader
+mutation-graph audit also reports no Office furniture reality for its fixed
+seed; these two remaining audit failures are not waived. Some route seeds
+still report the planner's `No safe photographic obstruction` warning.
 
 ## Automated-test confidence and gaps
 

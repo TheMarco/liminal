@@ -25,6 +25,14 @@ const SENS := 0.0022
 var sensitivity_multiplier := 1.0
 var base_fov := 77.0
 var head_bob_strength := 1.0
+var invert_y := false
+var toggle_sprint := false:
+	set(value):
+		if toggle_sprint != value:
+			clear_sprint_toggle()
+		toggle_sprint = value
+var _sprint_toggle_active := false
+var _sprint_toggle_moved := false
 ## Lowered 15% from the original 1.62m eye line. The collision capsule remains
 ## a full 1.8m tall; only the viewpoint changes, so clearance and movement stay
 ## identical while the player no longer reads as unusually tall.
@@ -191,6 +199,7 @@ func _ready() -> void:
 ## Move without the camera sweeping across the world to catch up — the
 ## interpolation would otherwise smear from the old position for a tick.
 func teleport(to: Vector3) -> void:
+	clear_sprint_toggle()
 	_cancel_pool_slide()
 	if _water_fx != null: _water_fx.reset()
 	_was_submerged = false
@@ -214,6 +223,7 @@ func set_rumble(amount: float) -> void:
 ## the mouse claims to have done for a moment afterwards, or pressing start
 ## flings your head at the ceiling.
 func grab_look() -> void:
+	clear_sprint_toggle()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_grabbed = Time.get_ticks_msec()
 
@@ -222,20 +232,54 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		if Time.get_ticks_msec() - _grabbed < GRAB_SETTLE_MS:
 			return
-		var look_sens := SENS * sensitivity_multiplier
-		rotate_y(-event.relative.x * look_sens)
-		_pitch = clampf(_pitch - event.relative.y * look_sens, -1.45, 1.45)
+		_apply_mouse_look(event.relative)
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		grab_look()
 	elif event is InputEventKey and event.pressed and not event.echo \
 			and event.physical_keycode == KEY_E:
-		if is_instance_valid(_focused):
+		if is_charging():
+			stop_charging()
+		elif is_instance_valid(_focused):
 			_focused.interact(self)
+	elif event is InputEventKey and event.pressed and not event.echo \
+			and event.physical_keycode == KEY_SHIFT and toggle_sprint:
+		if allow_sprint and not _sprint_spent and _stamina > 0.0:
+			_sprint_toggle_active = not _sprint_toggle_active
+			_sprint_toggle_moved = false
 	elif event is InputEventKey and event.pressed and not event.echo \
 			and event.physical_keycode == KEY_F:
 		set_flashlight(not flashlight.visible)
 	elif event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func clear_sprint_toggle() -> void:
+	_sprint_toggle_active = false
+	_sprint_toggle_moved = false
+
+
+func _apply_mouse_look(relative: Vector2) -> void:
+	var look_sens := SENS * sensitivity_multiplier
+	rotate_y(-relative.x * look_sens)
+	_pitch = clampf(_pitch + relative.y * look_sens * (1.0 if invert_y else -1.0), -1.45, 1.45)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PAUSED or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		clear_sprint_toggle()
+
+
+func _sprint_requested(moving: bool, shift_held: bool) -> bool:
+	if not allow_sprint or _sprint_spent or _stamina <= 0.0 or is_pool_sliding():
+		clear_sprint_toggle()
+		return false
+	if not toggle_sprint:
+		return moving and shift_held
+	if not moving and _sprint_toggle_moved:
+		clear_sprint_toggle()
+	if moving and _sprint_toggle_active:
+		_sprint_toggle_moved = true
+	return moving and _sprint_toggle_active
 
 
 func set_flashlight(on: bool) -> void:
@@ -297,6 +341,7 @@ func sprint_spent() -> bool:
 ## A checkpoint restores the player at an arrival elevator, not in the exact
 ## state of the death. Resource and motion state therefore reset together.
 func reset_descent_resources() -> void:
+	clear_sprint_toggle()
 	_cancel_pool_slide()
 	if is_charging():
 		stop_charging()
@@ -397,15 +442,16 @@ func _physics_process(dt: float) -> void:
 		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN): input.y += 1.0
 		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT): input.x -= 1.0
 		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT): input.x += 1.0
+	else:
+		clear_sprint_toggle()
 	if _sprint_spent and _stamina >= STAMINA_REARM:
 		_sprint_spent = false
-	var sprinting := allow_sprint and not _sprint_spent and _stamina > 0.0 \
-		and not is_pool_sliding() \
-		and Input.is_physical_key_pressed(KEY_SHIFT) and input != Vector2.ZERO
+	var sprinting := _sprint_requested(input != Vector2.ZERO, Input.is_physical_key_pressed(KEY_SHIFT))
 	if sprinting:
 		_stamina = maxf(0.0, _stamina - dt)
 		if _stamina <= 0.0:
 			_sprint_spent = true
+			clear_sprint_toggle()
 			sprinting = false
 	else:
 		_stamina = minf(STAMINA_MAX, _stamina + STAMINA_REGEN_RATE * dt)
@@ -599,7 +645,7 @@ func _scan_interaction() -> void:
 		_focused = next
 		if is_instance_valid(_focused):
 			_focused.set_focused(true)
-	var text := _focused.prompt_text if is_instance_valid(_focused) else ""
+	var text := _focused.get_prompt() if is_instance_valid(_focused) else ""
 	if text != _focus_text:
 		_focus_text = text
 		interaction_prompt_changed.emit(text)

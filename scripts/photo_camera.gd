@@ -221,7 +221,9 @@ func _process(dt: float) -> void:
 		_focus_scan_left -= dt
 		if _focus_scan_left <= 0.0:
 			_focus_scan_left = 0.12
-			var found := not _captured_anomalies().is_empty()
+			var feedback := viewfinder_feedback()
+			var found := bool(feedback.focused)
+			_reticle.feedback = str(feedback.text)
 			if found and not _reticle.focused:
 				_focus_tick.pitch_scale = 1.9
 				_focus_tick.volume_db = -9.0
@@ -238,6 +240,7 @@ func _process(dt: float) -> void:
 	elif _reticle.focused or _reticle.warmth > 0.0:
 		_reticle.focused = false
 		_reticle.warmth = 0.0
+		_reticle.feedback = ""
 	if _review_left > 0.0:
 		_review_left -= dt
 		if _review_left <= 0.0:
@@ -350,7 +353,7 @@ func _aim_warmth() -> float:
 			continue
 		var point: Vector3 = points[0]
 		var to_point := point - cam.global_position
-		if to_point.length() > anomaly.capture_distance():
+		if to_point.length() > minf(cam.far, anomaly.capture_distance()):
 			continue
 		var excludes: Array[RID] = [player.get_rid()]
 		excludes.append_array(anomaly.occlusion_excludes())
@@ -409,6 +412,7 @@ func _lower() -> void:
 		player.cam.cull_mask |= PhotoAnomaly.EYE_ONLY_LAYER
 	_mask.visible = false
 	_reticle.visible = false
+	_reticle.feedback = ""
 	raised_changed.emit(false)
 
 
@@ -442,20 +446,9 @@ func _take_photo() -> void:
 	for anomaly in captured:
 		if director == null or director._documented.has(anomaly.id):
 			continue
-		var pts := anomaly.photo_points()
-		var lo := Vector2.INF
-		var hi := -Vector2.INF
-		for point in pts:
-			if cam.is_position_behind(point):
-				continue
-			var sp := cam.unproject_position(point)
-			lo = lo.min(sp)
-			hi = hi.max(sp)
-		if lo.x > hi.x:
-			continue
-		var centre := (lo + hi) * 0.5
-		var radius := maxf(70.0, (hi - lo).length() * 0.8 + 60.0)
-		marks.append(Rect2(centre, Vector2(radius, radius * 0.78)))
+		var bounds := evidence_screen_bounds(anomaly, cam)
+		if bounds.has_area():
+			marks.append(evidence_ellipse(bounds, Vector2(get_viewport().size)))
 	var descriptions: Array[String] = []
 	var ids: Array[String] = []
 	for anomaly in _captured_anomalies(true):
@@ -590,7 +583,7 @@ func _captured_anomalies(for_album := false) -> Array[PhotoAnomaly]:
 		var all_good := true
 		for point in points:
 			var to_point: Vector3 = point - cam.global_position
-			if to_point.length() > anomaly.capture_distance() \
+			if to_point.length() > minf(cam.far, anomaly.capture_distance()) \
 					or not cam.is_position_in_frustum(point) \
 					or forward.dot(to_point.normalized()) < FRAME_DOT:
 				all_good = false
@@ -605,6 +598,91 @@ func _captured_anomalies(for_album := false) -> Array[PhotoAnomaly]:
 		if all_good:
 			out.append(anomaly)
 	return out
+
+
+## Hints are earned by a visible subject close to the centre of the lens.
+## A fully occluded object, its back face, or an off-screen clue stays silent.
+func viewfinder_feedback() -> Dictionary:
+	if not _captured_anomalies().is_empty():
+		return {"focused": true, "text": "FOCUS"}
+	if director == null or player == null:
+		return {"focused": false, "text": ""}
+	var cam := player.cam
+	var space := player.get_world_3d().direct_space_state
+	var best_dot := 0.94
+	var message := ""
+	var framed := _captured_anomalies(true)
+	for anomaly in director.album_subjects():
+		if not _on_facing_side(anomaly, cam.global_position):
+			continue
+		# Realm apertures use a deliberately different framing contract: looking
+		# through the opening is valid even when the entire doorway cannot fit.
+		if not anomaly.realm_destination.is_empty():
+			continue
+		var points := anomaly.photo_points()
+		if points.is_empty():
+			continue
+		var centre := Vector3.ZERO
+		for point in points: centre += point
+		centre /= points.size()
+		var alignment := (-cam.global_basis.z).dot((centre - cam.global_position).normalized())
+		if alignment < best_dot or centre.distance_to(cam.global_position) > cam.far:
+			continue
+		var visible_count := 0
+		var blocked := false
+		var excludes: Array[RID] = [player.get_rid()]
+		excludes.append_array(anomaly.occlusion_excludes())
+		# The centre catches a partly cropped phrase whose corners are outside
+		# the frame. It is only a visibility probe, never evidence credit.
+		var probes := points.duplicate()
+		probes.append(centre)
+		for point in probes:
+			if not cam.is_position_in_frustum(point):
+				continue
+			var query := PhysicsRayQueryParameters3D.create(cam.global_position, point, 1, excludes)
+			var hit := space.intersect_ray(query)
+			if hit.is_empty() or Vector3(hit.position).distance_to(point) <= OCCLUSION_TOLERANCE:
+				visible_count += 1
+			else:
+				blocked = true
+		if visible_count == 0:
+			continue
+		best_dot = alignment
+		if framed.has(anomaly) and director._documented.has(anomaly.id):
+			message = "ALREADY DOCUMENTED"
+		elif framed.has(anomaly):
+			# A second bleed subject before the minimum can be visible but is
+			# intentionally not another credit. Never call that a framing error.
+			message = "NO NEW EVIDENCE"
+		elif blocked:
+			message = "VIEW PARTLY BLOCKED"
+		else:
+			message = "FRAME THE WHOLE SUBJECT"
+	return {"focused": false, "text": message}
+
+
+static func evidence_screen_bounds(anomaly: PhotoAnomaly, cam: Camera3D) -> Rect2:
+	var lo := Vector2.INF
+	var hi := -Vector2.INF
+	for point in anomaly.evidence_points():
+		if cam.is_position_behind(point):
+			continue
+		var pixel := cam.unproject_position(point)
+		lo = lo.min(pixel)
+		hi = hi.max(pixel)
+	if not lo.is_finite() or not hi.is_finite():
+		return Rect2()
+	return Rect2(lo, hi - lo)
+
+
+static func evidence_ellipse(bounds: Rect2, extent: Vector2) -> Rect2:
+	# An ellipse tangent to a rectangle's edges misses its corners. sqrt(2)
+	# encloses the entire subject; padding also absorbs the hand-drawn wobble.
+	var scale := minf(extent.x / 1280.0, extent.y / 720.0)
+	var padding := maxf(6.0, 10.0 * scale)
+	var radii := (bounds.size * 0.5 + Vector2.ONE * padding) * sqrt(2.0) * 1.10
+	radii = radii.max(Vector2.ONE * maxf(16.0, 24.0 * scale))
+	return Rect2(bounds.get_center(), radii)
 
 
 ## One off-screen render with the photo layer enabled. The print sees the
@@ -755,6 +833,11 @@ class EvidenceMarks extends Control:
 ## Viewfinder framing marks while aiming — thin OSD brackets around the
 ## centre third, in the HUD's phosphor ink.
 class PhotoReticle extends Control:
+	var feedback := "":
+		set(value):
+			if feedback != value:
+				feedback = value
+				queue_redraw()
 	var focused := false:
 		set(value):
 			if focused != value:
@@ -781,14 +864,14 @@ class PhotoReticle extends Control:
 		var arm := minf(s.x, s.y) * 0.035
 		var cx := s.x * 0.5
 		var cy := s.y * 0.5
-		if focused:
+		if not feedback.is_empty():
 			var f: Font = VhsOsd.FONT
-			var fs := roundi(30.0 * scale)
-			var tw := f.get_string_size("FOCUS", HORIZONTAL_ALIGNMENT_LEFT,
+			var fs := roundi(30.0 * maxf(1.0, minf(s.x / 960.0, s.y / 720.0)))
+			var tw := f.get_string_size(feedback, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, fs).x
 			VhsOsd.draw_osd_string(self, f,
 				Vector2(cx - tw * 0.5, cy + h * 0.5 + fs * 1.2),
-				"FOCUS", fs, VhsOsd.INK)
+				feedback, fs, VhsOsd.INK if focused else VhsOsd.INK_DIM)
 		for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1),
 				Vector2(-1, 1), Vector2(1, 1)]:
 			var px := cx + w * 0.5 * corner.x

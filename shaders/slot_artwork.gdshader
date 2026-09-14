@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled;
+uniform float mains_power : hint_range(0.0, 1.0) = 1.0;
 
 // Original fictional cabinet artwork. The image remains physically lit so the
 // printed glass picks up room light and reflections; only the bright portions
@@ -35,7 +36,7 @@ void fragment() {
 	float attract = 0.96 + 0.04 * sin(TIME * 0.43 + hashf(floor(wpos.xz * 2.0)) * 6.2831);
 	float luminous = smoothstep(0.16, 0.78, luma) * glow_strength * attract;
 	ALBEDO = aged * 0.72;
-	EMISSION = aged * luminous;
+	EMISSION = aged * luminous * mains_power;
 	ROUGHNESS = 0.23;
 	METALLIC = 0.0;
 	SPECULAR = 0.68;

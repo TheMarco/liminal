@@ -8,6 +8,10 @@ func _init() -> void:
 
 func _run() -> void:
 	var failures: Array[String] = []
+	if ChunkManager.LOAD_R != 3 or ChunkManager.UNLOAD_R != ChunkManager.LOAD_R + 1 \
+			or ChunkManager.BUDGET != 1 or ChunkManager.WARM_R != 1:
+		failures.append("expanded range changed the one-chunk budget or safe 3x3 warmup")
+	_audit_visible_rings(failures)
 	var deferred := Chunk.new(99173, Vector2i(0, 0), 2, null, true)
 	var stages := 0
 	while not deferred.build_next_stage():
@@ -42,10 +46,13 @@ func _run() -> void:
 	player.velocity = Vector3(18.0, 0.0, 0.0)
 	manager._process(1.0 / 60.0)
 	for _frame in 12:
+		var before: int = signals.count
 		manager._process(1.0 / 60.0)
+		if signals.count - before > 1:
+			failures.append("streaming installed more than one completed chunk per frame")
 	var expected_ahead := Vector2i(1, 0)
 	if manager._last_ahead != expected_ahead or not manager._ahead.has(expected_ahead) \
-			or not manager._ahead.has(Vector2i(3, 0)):
+			or not manager._ahead.has(expected_ahead + Vector2i(ChunkManager.LOAD_R, 0)):
 		failures.append("directional prefetch did not cover predicted cell")
 	var old_pending_id := manager._pending_chunk.get_instance_id() if manager._pending_chunk != null else 0
 	player.position = Vector3(60.0, 1.0, 6.0)
@@ -108,3 +115,76 @@ func _run() -> void:
 	Chunk.clear_runtime_caches()
 	Mats.clear_runtime_caches()
 	quit(0)
+
+
+func _audit_visible_rings(failures: Array[String]) -> void:
+	var manager := ChunkManager.new()
+	manager.world_seed = 99173
+	manager.theme = 4
+	root.add_child(manager)
+	manager.set_process(false)
+	var player := CharacterBody3D.new()
+	manager.add_child(player)
+	manager.player = player
+	player.position = Vector3(6, 1.7, 6)
+	player.velocity = Vector3(6, 0, 0)
+	manager._process(1.0 / 60.0)
+	for z in range(-3, 4):
+		for x in range(-3, 4):
+			if not manager._wanted.has(Vector2i(x, z)):
+				failures.append("7x7 core is missing %s" % Vector2i(x, z))
+	# A completed predicted room must be visible BEFORE entering the next cell.
+	var ahead_cell := Vector2i(ChunkManager.LOAD_R + 1, 0)
+	var ahead := manager._build(ahead_cell)
+	ahead.visible = false
+	manager._process(1.0 / 60.0)
+	if manager._wanted.has(ahead_cell) or not manager._ahead.has(ahead_cell) or not ahead.visible:
+		failures.append("completed prefetch room is not visible beyond the core")
+	# Stopping invalidates the prediction, not the scenery already in memory.
+	player.velocity = Vector3.ZERO
+	manager._process(1.0 / 60.0)
+	if manager._ahead.has(ahead_cell) or not ahead.visible or not manager.chunks.has(ahead_cell):
+		failures.append("stopping hid or discarded a resident outer room")
+	var retention_only := Vector2i(ChunkManager.UNLOAD_R, ChunkManager.UNLOAD_R)
+	if not manager._retained.has(retention_only) or manager.queued.has(retention_only):
+		failures.append("retention ring was queued for construction instead of only retained")
+	var outer_anchor := ChunkManager.NO_BROKEN_STATION
+	for cell in manager._retained:
+		if WorldGen.corridor(manager.world_seed, cell) == 0 \
+				and not manager._retained.has(WorldGen.room_id(manager.world_seed, cell)):
+			failures.append("retained room lost its owning anchor")
+		if manager._cheb(cell, Vector2i.ZERO) > ChunkManager.UNLOAD_R:
+			outer_anchor = cell
+	if outer_anchor == ChunkManager.NO_BROKEN_STATION:
+		failures.append("test seed no longer exercises a merged-room anchor outside the retention square")
+	else:
+		var anchor := manager._build(outer_anchor)
+		anchor.visible = false
+		manager._process(1.0 / 60.0)
+		if not manager.chunks.has(outer_anchor) or not anchor.visible:
+			failures.append("merged-room furniture anchor was hidden/freed before its retained members")
+	var old_edge := Vector2i(ChunkManager.LOAD_R, 0)
+	var edge := manager._build(old_edge)
+	player.position.x = -6.0
+	manager._process(1.0 / 60.0)
+	if manager._wanted.has(old_edge) or not edge.visible:
+		failures.append("crossing a boundary hid a loaded outer room")
+	player.position.x = -120.0
+	manager._process(1.0 / 60.0)
+	if manager.chunks.has(old_edge) or manager.chunks.has(ahead_cell):
+		failures.append("distant scenery was not unloaded after leaving the retained ring")
+	# An enlarged view must not prematurely release the arrival collision focus.
+	manager.stream_focus = Vector3(6, 0, 6)
+	player.position.x = 30.0
+	manager._process(1.0 / 60.0)
+	if manager.stream_focus == Vector3.INF or manager._last_center != Vector2i.ZERO:
+		failures.append("floor focus released before the player reached the safe warmup ring")
+	player.position.x = 6.0
+	manager._process(1.0 / 60.0)
+	if manager.stream_focus != Vector3.INF:
+		failures.append("arrival focus did not release after landing")
+	# Doorway previews keep their cheaper preparation radius and complete anchors.
+	var preview_cells := manager._room_complete_cells(Vector2i.ZERO, RealmExcursion.PREVIEW_LOAD_R)
+	if RealmExcursion.PREVIEW_LOAD_R != 2 or preview_cells.has(Vector2i(3, 3)):
+		failures.append("doorway preview inherited the full gameplay build radius")
+	manager.free()

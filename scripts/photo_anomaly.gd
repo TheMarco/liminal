@@ -36,11 +36,16 @@ const EYE_ONLY_LAYER := 1 << EYE_ONLY_LAYER_BIT
 const PRINT_LAYER_BIT := 16
 const PRINT_LAYER := 1 << PRINT_LAYER_BIT
 
-## How far a photograph carries. Writing must be read, not glimpsed.
-const CAPTURE_DISTANCE := 15.0
-const CAPTURE_DISTANCE_WRITING := 9.5
+## Ordinary evidence has no invisible metre cutoff: if it is rendered,
+## framed and unobstructed, the photograph can document it.
+const CAPTURE_DISTANCE := INF
+const CAPTURE_DISTANCE_WRITING := INF
 
 const WRITING_FONT := preload("res://fonts/RazorKeen-Regular.otf")
+const WRITING_MAX_WIDTH := 2.78 # fits every reserved 3m wall run
+const WRITING_MAX_HEIGHT := 2.35
+const WRITING_FLOOR_MARGIN := 0.38
+const WRITING_CEILING_MARGIN := 0.25
 const PORTAL_SHADER := preload("res://shaders/portal_glimpse.gdshader")
 const PORTAL_GLOW_SHADER := preload("res://shaders/portal_glow.gdshader")
 ## CC0 Poly Haven panoramas the tear looks out into (SOURCE.md alongside).
@@ -63,7 +68,6 @@ const CEILING_EMBED_MAX := 0.38
 ## GIANT: the prop at wrong scale, capped so it still fits under the cell's
 ## ceiling with a hand's width to spare.
 const GIANT_SCALE_MAX := 2.6
-const GIANT_SCALE_MIN := 1.5
 ## RING: lens-only circle of the room's own prop, all facing the centre.
 const RING_COUNT := 5
 const RING_RADIUS := 2.2
@@ -138,6 +142,9 @@ var debug_visible := false
 var _placement_pivot: Node3D
 var _placement_rest_y := 0.0
 var _points: Array[Vector3] = []   # chunk-local sample points
+var _evidence_roots: Array[Node3D] = []
+var _evidence_corners: Array[Vector3] = []
+var _writing_label: Label3D
 ## Colliders the anomaly itself carries (GIANT's walk-blocker). The camera's
 ## occlusion rays must ignore them — sample points sit inside the prop, so
 ## its own body otherwise occludes it from every stance (found 2026-08-19:
@@ -202,9 +209,52 @@ func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
 ## frustum-and-sight checks for the shot to count.
 func photo_points() -> Array[Vector3]:
 	var out: Array[Vector3] = []
+	if is_instance_valid(_writing_label):
+		# Test the whole phrase, not just its centre. Label3D's bounds include
+		# wrapping and the actual font, so long/tall writing stays photographable.
+		var box := _writing_label.get_aabb()
+		if box.size.length_squared() > 0.00001:
+			for i in 8:
+				out.append(_writing_label.to_global(box.get_endpoint(i)))
+			return out
 	for p in _points:
 		out.append(to_global(p))
 	return out
+
+
+## Geometry for the evidence mark is intentionally separate from the sparse
+## visibility probes. Use every visible mesh/text bound, including both copies
+## of a duplicate, all ring members, and the footprint of an absent prop.
+func evidence_points() -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	if not _evidence_corners.is_empty():
+		for point in _evidence_corners:
+			out.append(to_global(point))
+	elif not _evidence_roots.is_empty():
+		for visual in _evidence_roots:
+			if is_instance_valid(visual):
+				_append_evidence_geometry(visual, out, true)
+	else:
+		_append_evidence_geometry(self, out, type == Type.MISSING)
+	return photo_points() if out.is_empty() else out
+
+
+func _append_evidence_geometry(node: Node, out: Array[Vector3], include_eye: bool) -> void:
+	if node is Node3D and not (node as Node3D).visible:
+		return
+	if node is MeshInstance3D or node is Label3D:
+		var visual := node as VisualInstance3D
+		var mask := 1 | PHOTO_LAYER | PRINT_LAYER | (EYE_ONLY_LAYER if include_eye else 0)
+		if visual.layers & mask:
+			var box: AABB = visual.get_aabb()
+			for i in 8:
+				var point := visual.to_global(box.get_endpoint(i))
+				# The buried top of ceiling furniture is not part of the evidence.
+				if type == Type.PLACEMENT and is_instance_valid(_placement_pivot):
+					point.y = minf(point.y, global_position.y + Chunk.cell_ceil_h(world_seed, cell, theme))
+				out.append(point)
+	for child in node.get_children():
+		_append_evidence_geometry(child, out, include_eye)
 
 
 func configure_realm_destination(destination: String, seal: PhotoDoorSeal) -> void:
@@ -244,11 +294,12 @@ func framing_points(cam: Camera3D) -> Array[Vector3]:
 ## no visuals of its own, just sample points over the existing prop. One
 ## documentation credit per floor is enforced by the director, not here.
 func configure_bleed(p_id: String, p_cell: Vector2i,
-		points: Array[Vector3]) -> void:
+		points: Array[Vector3], visuals: Array[Node3D] = []) -> void:
 	id = p_id
 	type = Type.BLEED
 	cell = p_cell
 	_points = points
+	_evidence_roots = visuals
 
 
 func configure_doorway(seal: PhotoDoorSeal, at: Vector2i,
@@ -265,6 +316,12 @@ func configure_doorway(seal: PhotoDoorSeal, at: Vector2i,
 	var surface_depth := seal.obstruction_depth + 0.08 if seal.obstruction else 0.4
 	var centre := seal.centre + _facing * surface_depth
 	var across := Vector3.FORWARD if seal.dir < 2 else Vector3.RIGHT
+	if seal.obstruction and is_instance_valid(seal.fill):
+		_evidence_roots = [seal.fill]
+	else:
+		for side in [-1.0, 1.0]:
+			for y in [0.0, seal.height]:
+				_evidence_corners.append(centre + across * seal.width * 0.5 * side + Vector3.UP * float(y))
 	for side in [-1.0, 1.0]:
 		for y in [0.4, seal.height - 0.25]:
 			_points.append(centre + across * seal.width * 0.38 * side \
@@ -362,8 +419,7 @@ func occlusion_excludes() -> Array[RID]:
 
 
 func capture_distance() -> float:
-	return CAPTURE_DISTANCE_WRITING if type in [Type.WRITING, Type.NUMBERED_DOOR] \
-		else CAPTURE_DISTANCE
+	return CAPTURE_DISTANCE
 
 
 static func phrase_for(ws: int, at: Vector2i) -> String:
@@ -799,6 +855,7 @@ func _build_writing(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	var half := WorldGen.CELL_SIZE * 0.5
 	var dirv3 := Vector3(WorldGen.DIRV[dir].x, 0.0, WorldGen.DIRV[dir].y)
 	var label := Label3D.new()
+	_writing_label = label
 	label.text = phrase_for(world_seed, cell)
 	label.font = WRITING_FONT
 	label.font_size = 220
@@ -818,9 +875,36 @@ func _build_writing(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	# Face back into the room.
 	label.rotation.y = atan2(dirv3.x, dirv3.z) + PI
 	add_child(label)
+	# Label3D shapes/wraps its glyphs on the deferred queue. Wait for those
+	# actual bounds before fitting, and never display the oversized first pose.
+	label.hide()
+	_fit_writing_to_wall.call_deferred()
 	_resolvables.append(label)
 	_points = [label.position]
 	_facing = -dirv3
+
+
+func _fit_writing_to_wall() -> void:
+	if not is_instance_valid(_writing_label):
+		return
+	var label := _writing_label
+	var bounds := label.get_aabb()
+	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+	var floor_y := _floor_y + WRITING_FLOOR_MARGIN
+	var ceiling_y := Chunk.cell_ceil_h(world_seed, cell, theme) \
+		- WRITING_CEILING_MARGIN
+	var available_height := minf(WRITING_MAX_HEIGHT, ceiling_y - floor_y)
+	var fit := minf(1.0, minf(WRITING_MAX_WIDTH / bounds.size.x,
+		available_height / bounds.size.y))
+	# Scale the shaped geometry, not pixel_size: bounds/framing are correct
+	# immediately, without needing another deferred glyph rebuild.
+	label.scale = Vector3.ONE * fit
+	var bottom := bounds.position.y * fit
+	var top := bounds.end.y * fit
+	label.position.y = clampf(_floor_y + 1.52, floor_y - bottom, ceiling_y - top)
+	_points = [label.position]
+	label.show()
 
 
 func _build_props(floor_h: float, count: int) -> void:
@@ -837,8 +921,9 @@ func _build_props(floor_h: float, count: int) -> void:
 	# Search the built room, not just six lucky random points. The exhaustive
 	# lattice and doorway-lane fallback share the same collision bookkeeping as
 	# authored furniture, so a planned prop cannot exist inside the set dressing.
+	var spacing := maxf(0.72, extents.x + 0.10)
 	var footprint := maxf(1.0, maxf(extents.x, extents.z) * 0.5
-		+ (0.45 if count > 1 else 0.10))
+		+ (spacing * 0.5 if count > 1 else 0.10))
 	var spot := _find_spot(floor_h, footprint, maxf(extents.y, 2.1))
 	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25
@@ -894,7 +979,7 @@ func _build_props(floor_h: float, count: int) -> void:
 		var side := Vector3(cos(yaw), 0.0, -sin(yaw))
 		for i in count:
 			var pivot := Node3D.new()
-			pivot.position = spot + side * (float(i) - 0.5) * 0.72
+			pivot.position = spot + side * (float(i) - 0.5) * spacing
 			pivot.rotation.y = yaw
 			add_child(pivot)
 			var inst := scene.instantiate() as Node3D
@@ -971,8 +1056,9 @@ func _build_giant(floor_h: float) -> void:
 	var extents: Vector3 = row[3]
 	var ceil_h := Chunk.cell_ceil_h(world_seed, cell, theme)
 	var base_h := maxf(extents.y, 0.6)
-	var factor := clampf((ceil_h - floor_h - 0.25) / base_h,
-		GIANT_SCALE_MIN, GIANT_SCALE_MAX)
+	# The ceiling cap wins even when a full-size replacement cabinet leaves
+	# less than the preferred 1.5x enlargement. Never bury its top in the slab.
+	var factor := minf((ceil_h - floor_h - 0.25) / base_h, GIANT_SCALE_MAX)
 	var spot := _find_spot(floor_h, 1.5, base_h * factor)
 	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25

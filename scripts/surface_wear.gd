@@ -761,6 +761,15 @@ func _prop_overlay(prop: Dictionary, profile: int, limit: int) -> void:
 			continue
 		var overlay := ShaderMaterial.new()
 		overlay.shader = PROP_SHADER
+		# MeshInstance releases per-surface overrides before GeometryInstance
+		# releases its overlay. Node metadata outlives BOTH destructors; metadata
+		# on the overlay itself is too short-lived during that release sequence.
+		var surface_materials: Array[Material] = []
+		for surface in mesh.mesh.get_surface_count():
+			var source := mesh.get_active_material(surface)
+			if source != null:
+				surface_materials.append(source)
+		mesh.set_meta("surface_wear_dependencies", surface_materials)
 		overlay.resource_name = "surface_wear_prop_%d" % profile
 		overlay.set_shader_parameter("mesh_to_prop", anchor_inverse * entry.transform)
 		overlay.set_shader_parameter("bounds_min", bounds.position)

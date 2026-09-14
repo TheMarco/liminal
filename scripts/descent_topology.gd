@@ -14,14 +14,14 @@ const SHORTCUT_CENTRE := 6.0
 const MUTATION_STATE_TARGET := 7 # base reality plus six alternatives
 ## Bump whenever candidate generation or state meaning changes. Saves resolve a
 ## stable signature inside this generation instead of trusting numeric order.
-const GENERATION_VERSION := 9
+const GENERATION_VERSION := 11 # staggered room apertures and Annex turning bays
 const PHOTO_DOOR_COUNT := 2
 const PHOTO_DOOR_MIN_SAVING := 4
 const INTRO_DOOR_MAX_ROOM_STEPS := 4
 const INTRO_DOOR_MAX_PATH_STEPS := 8
 const MUTATION_SEARCH_RADIUS := 3
-## Match the resident streaming radius: a blackout may not spend work on a
-## change outside the rooms currently present around the player.
+## Bound reveals to the core streaming radius; the outer retention/prefetch
+## fringe is not guaranteed to be built and must not attract mutation work.
 const MUTATION_REVEAL_RADIUS := 3
 ## Entering the adjoining cell establishes a room/doorway as seen. Requiring an
 ## exact grid-cell visit starved mutations beside a perfectly valid guided path,
@@ -963,6 +963,10 @@ func _protected_cells(route: DescentRoute) -> Dictionary:
 		route.objective_ritual_cell(): true,
 	}
 	for at in route.casino_landmarks:
+		protected[at] = true
+	for at in route.landmark_rooms:
+		protected[at] = true
+	for at in route.discovery_rooms:
 		protected[at] = true
 	for at in route.optional_vhs_cells():
 		protected[at] = true

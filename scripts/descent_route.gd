@@ -106,6 +106,8 @@ var min_dist := MIN_DIST_FIRST
 var max_dist := MAX_DIST_FIRST
 var topology: DescentTopology
 var casino_landmarks: Dictionary = {}
+var landmark_rooms: Dictionary = {}
+var discovery_rooms: Array[Vector2i] = []
 ## Reserve the first discovery before landmarks and optional recordings claim rooms.
 var intro_door_hint: Dictionary = {}
 var obstruction_hint: Dictionary = {}
@@ -143,6 +145,8 @@ static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 			break
 		district = route._obstruction_district + 1
 	route.casino_landmarks = CasinoLandmarks.plan(route)
+	route.landmark_rooms = RouteSetpieces.plan_landmarks(route)
+	route.discovery_rooms = RouteSetpieces.plan_discoveries(route)
 	return route
 
 

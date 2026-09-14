@@ -101,6 +101,19 @@ func image_at(index: int) -> Image:
 	return image
 
 
+## Export is an explicit copy, separate from the run's image and manifest.
+## Only the save dialog may authorize replacing an existing chosen file.
+func export_photo(index: int, path: String, overwrite_confirmed := false) -> Error:
+	if not path.is_absolute_path() or path.get_extension().to_lower() != "png":
+		return ERR_INVALID_PARAMETER
+	if FileAccess.file_exists(path) and not overwrite_confirmed:
+		return ERR_ALREADY_EXISTS
+	var photo := image_at(index)
+	if photo == null or photo.is_empty():
+		return ERR_FILE_NOT_FOUND
+	return photo.save_png(path)
+
+
 func _save_manifest(next_entries: Array) -> Error:
 	var destination := _directory.path_join("manifest.json")
 	var temporary := _directory.path_join("manifest.json.tmp")

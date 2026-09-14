@@ -9,6 +9,7 @@ signal mode_selected(descent: bool)
 signal started(descent: bool)
 signal settings_requested
 signal descent_requested(entry: int)
+signal quit_requested
 
 enum DescentEntry {
 	CONTINUE,
@@ -40,37 +41,35 @@ const INSTRUCTION_ROWS := [
 	["Q", "Ask to leave the current mode"],
 	["ESC", "Pause / settings"],
 ]
-## Every attributed creator named in THIRD_PARTY_ASSETS.md appears here. The
-## canonical record carries individual model titles, links and modifications.
+## Creators of the third-party models and surfaces used by the current game.
+## The canonical record carries individual titles, links and modifications.
 const CREDIT_SECTIONS := [
 	["3D MODEL CREATORS",
 		[
 			"Poly Haven  ·  CC0     nisu / 3DModelsCC0  ·  CC0     WillowBoxArt",
-			"CASINO   morrrtu1o · Audrey Gonçalves · nermin · Dudzy · juliegraham178",
+			"CASINO   nermin · Dudzy",
 			"OFFICE   Red Fox / nokillnando · NotAnotherApocalypticCo. · AquaEquinox",
 			"    Rylae Shylna · maxdragonn · dannaki_",
-			"ANNEX   carlcapu9 · Avot · Drake · jimbogies · Doverlock · Archer Sterling",
+		"ANNEX   carlcapu9 · Avot · Drake · jimbogies · varrocharlie · Archer Sterling",
 			"AIRPORT   Bucks / Its_Bucks · Ellis Fossett · n.philipsen · assetfactory",
-			"ASYLUM   Veterock · loxfear · Ellie · creative_beast · Mehdi Shahsavan",
-			"    Matt LeMoine",
+			"ASYLUM   Veterock · loxfear · Ellie · creative_beast · Mehdi Shahsavan · Matt LeMoine",
 			"SCHOOL   Jawahar Yokesh · dercruz926 · barism09 · neverfollow81 · CAL21",
 			"    Osian CG · HippoStance · Dun · FLUXIUM3D · ap-school",
-			"MALL   AdrianXY · mtaesiri · kapookkt · shirlanne · matejbiskup97 · Katydid",
+			"MALL   AdrianXY · kapookkt · shirlanne · matejbiskup97",
 			"    Some Random Mall Modeller · MaX3Dd",
-			"PRISON   neverfollow81 · Mark Peters · Mehdi Shahsavan / adventurer",
-			"    dudecon",
-			"POOLROOMS   NXTLVLPLY · CadmiumCoffee (bsishir) · JackFarrand",
+			"PRISON   neverfollow81 · Mark Peters · Mehdi Shahsavan / adventurer · dudecon",
+			"POOLROOMS   NXTLVLPLY · CadmiumCoffee (bsishir)",
+			"    SadiqKhan911 · ApprenticeRaccoon",
+			"SHARED PROPS   William Burke · Tom Seddon · Parth · 5CNG5",
 			"DATA CENTER   Mark Peters · carlcapu9 · FlevasGR · JamieDTran",
 			"    EntropyNine · Khoa Nguyen · Lora · wpanayides · JmPrsh153 · Network manager",
 			"BLOOM   Somersby · ChopperManiac · Mark Peters",
-			"CC BY 4.0 except  Katydid  ·  CC BY-NC 4.0",
-			"and  dannaki_, assetfactory, MaX3Dd  ·  Sketchfab Standard",
+			"CC BY 4.0 except  dannaki_, assetfactory, MaX3Dd  ·  Sketchfab Standard",
 		]],
-	["SURFACES, TYPE & FIGURES",
+	["SURFACES & TYPE",
 		[
 			"ambientCG + Poly Haven + TextureCan  ·  CC0     Peter Hull / VT323  ·  SIL Open Font License",
-			"Mette Aumala · Madeleine Price Ball · OpenClipart-Vectors  ·  CC0",
-			"Phil Bronnery / Beao  —  walking woman silhouette  ·  CC BY 2.0",
+			"Kless Gyzen  —  Poolrooms tile textures  ·  CC BY 4.0",
 		]],
 ]
 
@@ -95,6 +94,8 @@ var _has_descent_progress := false
 var _checkpoint_floor := 0
 var _checkpoint_name := ""
 var _descent_entry := DescentEntry.NEW
+var _entry_confirmation: ReturnPrompt
+var _page_trigger: Control
 
 
 func _ready() -> void:
@@ -202,6 +203,7 @@ func _build_main() -> void:
 		func(): _set_page(Page.ABOUT))
 	_footer_button(info, "C  CREDITS",
 		func(): _set_page(Page.CREDITS))
+	_footer_button(info, "QUIT", func(): quit_requested.emit())
 
 
 func _build_instructions() -> void:
@@ -391,7 +393,7 @@ func _footer_button(parent: HBoxContainer, text: String,
 	var button := Button.new()
 	button.text = text
 	button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	button.focus_mode = Control.FOCUS_NONE
+	button.focus_mode = Control.FOCUS_ALL
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	# 30pt at the 720p base — the 20pt footer was unreadable through the
@@ -408,6 +410,8 @@ func _footer_button(parent: HBoxContainer, text: String,
 			Color(0.72, 0.68, 0.51, 0.78)))
 	button.add_theme_stylebox_override("pressed",
 		_footer_button_box(Color(0.08, 0.075, 0.06, 0.92), CREAM))
+	button.add_theme_stylebox_override("focus",
+		_footer_button_box(Color(0.08, 0.075, 0.06, 0.95), CREAM))
 	button.pressed.connect(action)
 	parent.add_child(button)
 
@@ -433,7 +437,7 @@ func _button(text: String, action: Callable, width: float,
 	button.text = text
 	button.alignment = HORIZONTAL_ALIGNMENT_CENTER if centered \
 		else HORIZONTAL_ALIGNMENT_LEFT
-	button.focus_mode = Control.FOCUS_NONE
+	button.focus_mode = Control.FOCUS_ALL
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_style(button, 19, CREAM, width, height)
@@ -445,6 +449,8 @@ func _button(text: String, action: Callable, width: float,
 		Color(0.08, 0.075, 0.06, 0.95), GOLD))
 	button.add_theme_stylebox_override("pressed", _button_box(
 		Color(0.12, 0.105, 0.075, 1.0), CREAM))
+	button.add_theme_stylebox_override("focus", _button_box(
+		Color(0.08, 0.075, 0.06, 0.95), CREAM))
 	button.pressed.connect(action)
 	return button
 
@@ -465,6 +471,7 @@ func _rule(width: float) -> ColorRect:
 	var rule := ColorRect.new()
 	rule.color = Color(0.32, 0.29, 0.23, 0.75)
 	rule.custom_minimum_size = Vector2(width, 1)
+	_scaled.append([rule, 0.0, width, 1.0])
 	rule.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return rule
@@ -528,8 +535,9 @@ func _relayout() -> void:
 		var control: Control = entry[0]
 		if not is_instance_valid(control):
 			continue
-		control.add_theme_font_size_override("font_size",
-			maxi(9, roundi(float(entry[1]) * scale)))
+		if float(entry[1]) > 0.0:
+			control.add_theme_font_size_override("font_size",
+				maxi(9, roundi(float(entry[1]) * scale)))
 		var width := float(entry[2]) * scale
 		var height := float(entry[3]) * scale
 		if width > 0.0 or height > 0.0:
@@ -551,10 +559,21 @@ func _process(dt: float) -> void:
 ## The title consumes every key so the already-built world cannot move behind
 ## it. Main-menu shortcuts remain the original SPACE/ENTER contract.
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(_entry_confirmation):
+		return  # The confirmation owns keyboard and mouse input until dismissed.
 	if _gone or not event is InputEventKey \
 			or not event.pressed or event.echo:
 		return
 	var key: int = event.physical_keycode
+	var focused := get_viewport().gui_get_focus_owner()
+	if key in [KEY_TAB, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN]:
+		if not (focused is Button and is_ancestor_of(focused) and focused.is_visible_in_tree()):
+			_focus_page_control(_current_page)
+			get_viewport().set_input_as_handled()
+		return
+	if key in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER] and focused is Button \
+			and is_ancestor_of(focused) and focused.is_visible_in_tree():
+		return
 	if _current_page == Page.DESCENT:
 		if key == KEY_SPACE and _descent_ready:
 			_start(true)
@@ -591,15 +610,40 @@ func _input(event: InputEvent) -> void:
 			_set_page(Page.CREDITS)
 	get_viewport().set_input_as_handled()
 
+func _unhandled_input(_event: InputEvent) -> void:
+	if not _gone and not is_instance_valid(_entry_confirmation):
+		get_viewport().set_input_as_handled()
+
 
 func _set_page(page: Page) -> void:
 	if _descent_selected and page != Page.DESCENT:
 		return
+	var focused := get_viewport().gui_get_focus_owner()
+	var restore_focus := focused != null and is_ancestor_of(focused)
+	if restore_focus:
+		focused.release_focus()
 	_current_page = page
 	if is_instance_valid(_page_shade):
 		_page_shade.visible = page != Page.MAIN
 	for key in _pages:
 		(_pages[key] as Control).visible = int(key) == int(page)
+	if restore_focus:
+		call_deferred("_focus_page_control", page)
+
+func _focus_page_control(page: Page) -> void:
+	var root: Node = _pages.get(page)
+	if not root:
+		return
+	var controls := root.find_children("*", "Control", true, false)
+	for node in controls:
+		if node is Control and node is Button and node.is_visible_in_tree():
+			if page == Page.MAIN and "ENTER" in (node as Button).text:
+				(node as Control).grab_focus()
+				return
+	for node in controls:
+		if node is Control and node is Button and node.is_visible_in_tree():
+			(node as Control).grab_focus()
+			return
 
 
 func _select_wander() -> void:
@@ -610,13 +654,39 @@ func _select_wander() -> void:
 
 
 func _select_descent(entry := -1) -> void:
-	if _gone or _descent_selected or _current_page != Page.MAIN:
+	if _gone or _descent_selected or _current_page != Page.MAIN \
+			or is_instance_valid(_entry_confirmation):
 		return
 	if entry < 0:
-		_descent_entry = DescentEntry.CONTINUE if _has_descent_progress \
+		entry = DescentEntry.CONTINUE if _has_descent_progress \
 			else DescentEntry.NEW
-	else:
-		_descent_entry = entry
+	if _has_descent_progress and entry != DescentEntry.CONTINUE:
+		_entry_confirmation = ReturnPrompt.new()
+		_entry_confirmation.heading_text = "REPLACE THIS DESCENT?"
+		_entry_confirmation.warning_text = \
+			"YOUR FLOOR %02d CHECKPOINT AND RUN PROGRESS WILL BE REPLACED.\n%s" % [
+				_checkpoint_floor + 1, "START AGAIN IN A NEW BUILDING?" if entry == DescentEntry.NEW
+				else "START AGAIN FROM FLOOR 01?"]
+		_entry_confirmation.confirmed.connect(func():
+			_cancel_descent_entry()
+			_begin_descent(entry))
+		_entry_confirmation.cancelled.connect(_cancel_descent_entry)
+		add_child(_entry_confirmation)
+		_entry_confirmation.layer = 112
+		return
+	_begin_descent(entry)
+
+
+func _cancel_descent_entry() -> void:
+	if is_instance_valid(_entry_confirmation):
+		_entry_confirmation.queue_free()
+	_entry_confirmation = null
+	call_deferred("_focus_page_control", _current_page)
+
+
+## No world preparation or checkpoint writes are requested until confirmation.
+func _begin_descent(entry: int) -> void:
+	_descent_entry = entry
 	_descent_selected = true
 	if not _pages.has(Page.DESCENT):
 		_build_descent()

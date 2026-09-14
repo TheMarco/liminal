@@ -12,6 +12,9 @@ const WIREFRAME_COLLAPSE_SECONDS := 2.5
 const REASSEMBLY_SECONDS := 1.3
 const WINDOW_SHADER := preload("res://shaders/realm_window.gdshader")
 const PREVIEW_BUILD_BUDGET_USEC := 2000
+## The small doorway view doesn't need the full gameplay streaming radius.
+## Normal streaming expands this neighbourhood after the player enters it.
+const PREVIEW_LOAD_R := 2
 
 var phase := Phase.PREPARING
 var elapsed := 0.0
@@ -176,7 +179,7 @@ func _build_preview() -> void:
 	pocket.set_process(false)
 	# Reuse normal streaming's staged builder. A whole furnished chunk can
 	# monopolize a frame; yield between stages while the player approaches.
-	var cells := pocket._room_complete_cells(Vector2i.ZERO)
+	var cells := pocket._room_complete_cells(Vector2i.ZERO, PREVIEW_LOAD_R)
 	for cell in cells:
 		_preview_chunk = Chunk.new(pocket.world_seed, cell, destination_theme,
 			pocket._build_spec(cell), true)

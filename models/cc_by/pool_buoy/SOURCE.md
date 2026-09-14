@@ -1,5 +1,6 @@
 # Inflatable buoy
 
+- **Creator:** [ApprenticeRaccoon](https://sketchfab.com/ApprenticeRaccoon)
 - **Source:** <https://sketchfab.com/3d-models/inflatable-buoy-281e203b2b3a4461ba2661c82cd75a44>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - **Local file:** `pool_buoy.glb`

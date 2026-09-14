@@ -76,6 +76,8 @@ func _audit_case(chunk: Chunk, length: float, yaw: float, flow: float) -> void:
 	check(travelators.size() > 0, "missing Travelator area")
 	if travelators.size() > 0:
 		var tv := travelators[travelators.size() - 1] as Travelator
+		check(int(tv.get_meta("furnishing_group", -1)) == group,
+			"walkway drive must be removed with its model/colliders")
 		var expected := Vector3(flow, 0, 0).rotated(Vector3.UP, yaw)
 		check(tv.dirv.is_equal_approx(expected), "travel direction mismatch")
 		check(is_equal_approx(tv.speed, 0.75), "travel speed mismatch")

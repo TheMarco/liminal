@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://models/cc_by/backrooms_ladderback_chair/backrooms_ladderback_chair.glb" id="1_chair"]
+
+[node name="BackroomsLadderbackChair" type="Node3D"]
+
+[node name="Chair" parent="." instance=ExtResource("1_chair")]
+rotation = Vector3(0, 1.5707963267948966, 0)

@@ -24,9 +24,10 @@ const BEDS := {
 	1: ["sound-office", -40.9],
 	2: ["ambient-annex", -54.6],
 	6: ["sound-office", -40.9],
-	4: ["sound-airport", -43.3],
+	# Separate user-supplied 30-second room tones, independently RMS-matched.
+	4: ["sound-airport", -42.4],
 	5: ["sound-asylum", -12.7],
-	7: ["sound-airport", -43.3],
+	7: ["sound-mall", -46.1],
 	8: ["sound-asylum", -12.7],
 	# User-supplied Poolrooms ambience, layered beneath the original lim3 score.
 	9: ["poolrooms-calm-tranquil", -39.0],

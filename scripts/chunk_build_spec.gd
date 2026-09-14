@@ -5,6 +5,8 @@ extends RefCounted
 ## Dictionary, which Chunk converts through `from_dictionary()` immediately.
 
 var casino_landmark := ""
+var route_landmark := ""
+var optional_discovery := false
 var descent := false
 var target := false
 var target_wall := -1
@@ -35,6 +37,8 @@ var player: Player
 static func from_dictionary(config: Dictionary) -> ChunkBuildSpec:
 	var out := ChunkBuildSpec.new()
 	out.casino_landmark = str(config.get("casino_landmark", ""))
+	out.route_landmark = str(config.get("route_landmark", ""))
+	out.optional_discovery = bool(config.get("optional_discovery", false))
 	out.descent = bool(config.get("descent", false))
 	out.target = bool(config.get("target", false))
 	out.target_wall = int(config.get("target_wall", -1))

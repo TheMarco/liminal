@@ -18,7 +18,7 @@ func run() -> void:
 		visit.pocket.chunk_built.connect(visit._configure_interactions)
 		visit.preview.add_child(visit.pocket)
 		visit.pocket.set_process(false)
-		for cell in visit.pocket._room_complete_cells(Vector2i.ZERO):
+		for cell in visit.pocket._room_complete_cells(Vector2i.ZERO, RealmExcursion.PREVIEW_LOAD_R):
 			visit.pocket._build(cell)
 			await process_frame
 		await physics_frame

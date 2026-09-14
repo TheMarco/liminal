@@ -20,6 +20,11 @@ const MODEL_ALBEDO := preload(
 const MODEL_EMISSION := preload(
 	"res://models/cc_by/hovercar_charging_station/charging_station_emissive.png")
 const MODEL_SCALE := 2.5
+const IDLE_HUM_DB := -28.0
+# At normal interaction distance the previous -14dB emitter gain left the
+# supplied buzz around -36dBFS, beneath the music and close to the room bed.
+# Boost only a connected charger, not every ballast/idle hum.
+const CHARGING_HUM_DB := -6.0
 
 ## Assigned by the chunk before this enters the tree; config-driven so a
 ## streamed-out trap rebuilds in the same state.
@@ -65,7 +70,7 @@ func _ready() -> void:
 	_hum.position = Vector3(0, 1.0, 0)
 	_hum.unit_size = 2.0
 	_hum.max_distance = 12.0
-	_hum.volume_db = -28.0
+	_hum.volume_db = IDLE_HUM_DB
 	_hum.pitch_scale = 0.72
 	_hum.autoplay = true
 	add_child(_hum)
@@ -75,6 +80,8 @@ func _ready() -> void:
 		# skip happens in _apply_authored_textures).
 		_hum.pitch_scale = 0.68
 		if broken_tried:
+			_hum.stop()
+			_hum.volume_db = -60.0
 			_present_out_of_order()
 
 
@@ -121,8 +128,9 @@ func _break_sequence(player: Player) -> void:
 	_breaking = true
 	player.set_flashlight(false)
 	_hit.prompt_text = ""
-	_hum.volume_db = -14.0
+	_hum.volume_db = CHARGING_HUM_DB
 	_hum.pitch_scale = 1.08
+	_ensure_hum_playing()
 	var tw := create_tween()
 	tw.tween_interval(1.2)
 	tw.tween_callback(_collapse)
@@ -136,6 +144,7 @@ func _collapse() -> void:
 	var tw := create_tween()
 	tw.tween_property(_hum, "pitch_scale", 0.5, 0.9)
 	tw.parallel().tween_property(_hum, "volume_db", -60.0, 0.9)
+	tw.tween_callback(_hum.stop)
 	_present_out_of_order()
 	# Main captions the death and sends what the dark owes for it; the run
 	# records the spring so a rebuilt chunk stays sprung.
@@ -150,9 +159,12 @@ func _present_out_of_order() -> void:
 
 
 func _process(_dt: float) -> void:
+	# A connection changes the existing idle loop, so a stopped emitter must
+	# recover too. Honor realm-preview/audio holds; never wake a dead station.
+	_ensure_hum_playing()
 	if broken:
 		# The pre-press presentation is the honest prompt (the lie), the
-		# breaking window is silent, and afterwards the label is the record.
+		# breaking window hides the prompt; afterwards the label is the record.
 		if broken_tried:
 			_hit.prompt_text = "OUT OF ORDER"
 		elif _breaking:
@@ -163,5 +175,11 @@ func _process(_dt: float) -> void:
 		and _actor.flashlight_charge() >= 0.999
 	_hit.prompt_text = "E — STOP CHARGING" if connected else (
 		"FLASHLIGHT FULL" if full else "E — CHARGE FLASHLIGHT")
-	_hum.volume_db = -14.0 if connected else -28.0
+	_hum.volume_db = CHARGING_HUM_DB if connected else IDLE_HUM_DB
 	_hum.pitch_scale = 1.08 if connected else 0.72
+
+
+func _ensure_hum_playing() -> void:
+	if is_instance_valid(_hum) and not broken_tried \
+			and not _hum.stream_paused and not _hum.playing:
+		_hum.play()

@@ -604,13 +604,15 @@ func _register_bleed_props(chunk: Chunk) -> void:
 			and (_live_bleed[chunk.cell] as Node).is_inside_tree():
 		return
 	var points: Array[Vector3] = []
+	var visuals: Array[Node3D] = []
 	for child in chunk.get_children():
 		if child is Node3D and child.has_meta("bleed_prop"):
 			points.append((child as Node3D).position + Vector3(0, 0.9, 0))
+			visuals.append(child)
 	if points.is_empty():
 		return
 	var node := PhotoAnomaly.new()
 	node.configure_bleed("bleed:%d:%d" % [chunk.cell.x, chunk.cell.y],
-		chunk.cell, points)
+		chunk.cell, points, visuals)
 	chunk.add_child(node)
 	_live_bleed[chunk.cell] = node

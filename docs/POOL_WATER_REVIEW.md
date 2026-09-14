@@ -42,3 +42,24 @@ Effects are bounded to 12 wave packets lasting 2.8 seconds, 96 reusable droplets
 Validation: all 12 Poolrooms audits pass. The interaction audit covers transformed/raised footprints, solid islands, entry and wading, stationary/teleport suppression, bounded storage, natural decay, private-material restoration, stream-out, and the actual Player's teleport/floor-change hooks. Deterministic eight-second captures drive the real Player on physics ticks through entry, wading, turning and stopping; first-person, poolside and blackout views were inspected. `build/water-review/player-water-effects.mp4` and `player-water-effects-poolside.mp4` are 1280 × 720, 30 fps previews.
 
 The capture's optional `--measure` switches disturbances on/off at an identical camera and frozen water phase. This Metal backend returned zero for every viewport GPU timing sample, so no quantitative FPS or GPU-cost claim is made. The captured walking sequence used one disturbed surface, reached the 12-event cap and returned to zero events/private materials after stopping. The existing seven Texture RID shutdown warnings remain in GPU diagnostics; the focused headless lifecycle audit exits cleanly. Only Poolrooms rows were refreshed in the structural golden file; unrelated ongoing model edits affect other themes.
+
+## Wake and shimmer tuning (2026-09-12)
+
+Entry rings, footstep ripples and the bow wave now use `wake_strength = 1.45`,
+also available in the live water tuner. Froth retains its existing upper cap.
+Fine-ripple normals increase from 1.05 to 1.18, their drift speeds increase to
+−0.021 / 0.025, and roughness/specular change to 0.105 / 0.30 for slightly
+brighter, sharper moving reflections. The 12 mm swell, event lifetime and
+capacity, absorption, surface footprints and rendering passes are unchanged.
+
+Both focused water audits pass. Deterministic before/after first-person
+captures cover entry, wading, turning and stopping; a poolside blackout capture
+also passes. Reviewed frames show clearer disturbances and highlights without
+bright froth during blackout. All captures end with zero active events and
+private materials. The existing seven Texture RID shutdown warnings remain.
+
+The second tuning pass raises wake strength to 2.20 and doubles the surface
+swell to 24 mm, within the existing 30 mm culling margin. Fine-ripple normal
+strength is now 1.50 with drift speeds −0.028 / 0.033, roughness 0.085 and
+specular 0.40. The stronger setting was checked in another deterministic
+first-person entry/wading/stopping capture, and both focused water audits pass.

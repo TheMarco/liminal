@@ -582,6 +582,10 @@ func _want_end(at_max: bool, kind: String) -> float:
 func _has_dry_slab(chunk: Chunk) -> bool:
 	var slab_pieces := 0
 	var has_jacuzzi_bottom := false
+	var jacuzzi_count := 0
+	for node in chunk.find_children("*", "Node3D", true, false):
+		if node.has_meta("pool_jacuzzi"):
+			jacuzzi_count += 1
 	for m in chunk.find_children("*", "MeshInstance3D", true, false):
 		if m.has_meta("pool_dry_slab_piece"):
 			slab_pieces += 1
@@ -595,6 +599,7 @@ func _has_dry_slab(chunk: Chunk) -> bool:
 					bb.position.y + bb.size.y - Chunk.POOL_DRY_Y) < 0.05:
 			return true
 	# An in-ground jacuzzi deliberately cuts one rectangular opening from the
-	# otherwise full slab. Four tagged surround pieces plus its basin floor are
-	# the equivalent complete, walkable structure.
-	return slab_pieces == 4 and has_jacuzzi_bottom
+	# otherwise full slab. That structure is valid only when the authored tub was
+	# also instantiated; accepting the basin floor alone hid orphan cutouts in
+	# merged non-anchor cells.
+	return slab_pieces == 4 and has_jacuzzi_bottom and jacuzzi_count == 1

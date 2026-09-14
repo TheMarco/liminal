@@ -232,6 +232,7 @@ func _brutalist_lighting() -> void:
 		shaft.distance_fade_enabled = true
 		shaft.distance_fade_begin = 30.0
 		shaft.distance_fade_length = 12.0
+		shaft.set_meta("stream_room_light", true)
 		scene.add_node(shaft)
 
 
@@ -520,6 +521,7 @@ func _machine_room_light(at: Vector3, energy := 2.0) -> void:
 	light.distance_fade_begin = 22.0
 	light.distance_fade_length = 8.0
 	light.set_meta("data_center_aisle_light", true)
+	light.set_meta("stream_room_light", true)
 	scene.add_node(light)
 
 

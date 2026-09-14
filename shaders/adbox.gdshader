@@ -1,4 +1,5 @@
 shader_type spatial;
+uniform float mains_power : hint_range(0.0, 1.0) = 1.0;
 
 // Backlit advertising lightbox: a soft duotone photograph-shaped glow with a
 // pale headline bar and a few lines of unreadable body text. Reads perfectly
@@ -52,7 +53,7 @@ void fragment() {
 		* smoothstep(0.0, 0.06, uv.y) * smoothstep(1.0, 0.94, uv.y);
 
 	ALBEDO = c * 0.25;
-	EMISSION = c * glow * (0.55 + 0.45 * edge);
+	EMISSION = c * glow * (0.55 + 0.45 * edge) * mains_power;
 	ROUGHNESS = 0.2;
 	SPECULAR = 0.4;
 }

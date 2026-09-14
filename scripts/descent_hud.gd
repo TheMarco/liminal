@@ -28,7 +28,7 @@ var _label: Label
 var _distance: Label
 var _photo: Label
 var _photo_warn: Label
-var _evidence_row: HBoxContainer
+var _evidence_row: GridContainer
 ## The visit temporarily replaces the source-floor objectives. Keep the
 ## subject after capture so its hidden readout cannot revert to the lift.
 var flash_bounty: RealmFlashBounty
@@ -72,9 +72,11 @@ func _ready() -> void:
 	lift_row.add_child(_distance)
 	# The floor's other objective sits under the first so the pair reads as
 	# one instrument: how far to the lift, how much proof the tape still wants.
-	_evidence_row = HBoxContainer.new()
-	_evidence_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_evidence_row.add_theme_constant_override("separation", 34)
+	_evidence_row = GridContainer.new()
+	_evidence_row.columns = 2
+	_evidence_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_evidence_row.add_theme_constant_override("h_separation", 34)
+	_evidence_row.add_theme_constant_override("v_separation", 8)
 	box.add_child(_evidence_row)
 	_photo = VhsOsd.make_label(31, VhsOsd.INK_DIM)
 	_photo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -185,10 +187,12 @@ func _process(dt: float) -> void:
 	if viewport_size != _last_viewport_size or wide != _last_wide:
 		_last_viewport_size = viewport_size
 		_last_wide = wide
-		var scale := VhsOsd.hud_scale(viewport_size)
-		var width := 680.0
+		var scale := maxf(1.0, minf(viewport_size.y / 720.0, viewport_size.x / 960.0))
+		var width := minf(680.0, (viewport_size.x - 2.0 * VhsOsd.safe_inset(viewport_size).x) / scale)
+		_evidence_row.columns = 1 if width < 680.0 else 2
 		_panel.scale = Vector2.ONE * scale
-		_panel.size = Vector2(width, 142)
+		_panel.size = Vector2(width, 0)
+		_panel.set_deferred("size", Vector2(width, 0))
 		_panel.position = Vector2(
 			viewport_size.x * 0.5 - width * 0.5 * scale,
 			VhsOsd.safe_inset(viewport_size).y - 8.0 * scale)

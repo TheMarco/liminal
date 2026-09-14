@@ -99,7 +99,7 @@ func run() -> void:
 			director.free()
 			cm.free()
 			await process_frame
-	Chunk.clear_runtime_caches()
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	finish("all-floor photographic obstruction: %d full-room state checks, %d missing plans" % [checked, missing])
 
 

@@ -198,6 +198,11 @@ Set price after measuring representative campaign length, variation, completion,
 
 **Release issue that must be resolved**
 
+Update after this review: the nine sign faces have been replaced with original
+generated artwork in `textures/authored/mall_signs/`. The old NC files have been
+deleted; both export presets retain NC exclusions as a safeguard. The paragraph
+below records the issue as it stood on the review date.
+
 The repository identifies the mall storefront textures as **CC BY-NC 4.0**, explicitly marks commercial use as not permitted, and still loads them in the mall builder. The current export presets include all resources and do not exclude that directory. Replace or remove the sign textures and ensure they are absent from the actual commercial package; merely ceasing to display them is insufficient for a clean release inventory. The project already has generated-lettering fallbacks. [Asset record](/Users/marcovhv/projects/GIT/liminal/THIRD_PARTY_ASSETS.md:486), [runtime use](/Users/marcovhv/projects/GIT/liminal/scripts/levels/mall_level_builder.gd:253), [license terms](https://creativecommons.org/licenses/by-nc/4.0/).
 
 Other release work should support the experience:

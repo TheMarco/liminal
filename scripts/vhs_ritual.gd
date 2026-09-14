@@ -6,8 +6,8 @@ extends Node3D
 ##
 ## Playing the tape is a commitment: the camera dollies in until the tube
 ## sits inside its visible cabinet, the player is held for the running time, and the rules go
-## passive for exactly that long. E or Esc rewinds an unknown recording and
-## skips one already watched to completion.
+## passive for exactly that long. E rewinds an unknown recording and skips
+## one already watched to completion. Escape opens the pause menu.
 ## Assignment and finished state leave this node via the `descent_listener`
 ## group, so optional and objective sets survive chunk streaming.
 
@@ -239,11 +239,11 @@ func _ensure_video() -> bool:
 	_video_vp.add_child(_video_aspect)
 	_video = VideoStreamPlayer.new()
 	_video.stream = stream
-	_video.bus = "Master"
+	SoundBank.ensure_dialogue_bus()
+	_video.bus = SoundBank.DIALOGUE_BUS
 	_video.expand = true
 	_video.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# Straight to the master bus: the hall reverb send swallowed the voice,
-	# and while the camera holds the tube the tape IS the scene's audio.
+	# Dry dialogue feeds Master, independently of the muted world and score.
 	_video.volume_db = 2.0
 	_video.finished.connect(_on_video_finished)
 	_video_aspect.add_child(_video)
@@ -456,7 +456,8 @@ func _show_watch_hint() -> void:
 	_watch_hint.add_child(panel)
 	var label := Label.new()
 	label.name = "Controls"
-	label.text = "E / ESC — SKIP RECORDING" if can_skip else "E / ESC — STOP AND REWIND"
+	label.text = "E — SKIP RECORDING  ·  ESC — PAUSE" if can_skip \
+		else "E — STOP AND REWIND  ·  ESC — PAUSE"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	label.add_theme_font_size_override("font_size", 28)
 	label.add_theme_color_override("font_color", Color(0.88, 0.91, 0.88))
@@ -499,7 +500,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo \
-			and (key.physical_keycode == KEY_E or key.physical_keycode == KEY_ESCAPE):
+			and key.physical_keycode == KEY_E:
 		get_viewport().set_input_as_handled()
 		if can_skip:
 			_finish_tape()
@@ -626,6 +627,15 @@ func _present_idle() -> void:
 	else:
 		_hit.prompt_text = "E — play the tape"
 		_hit.enabled = true
+	_hit.prompt_provider = _interaction_prompt
+
+
+func _interaction_prompt() -> String:
+	if objective and not intro and not _done and not _playing:
+		var listener := _listener()
+		if listener != null and listener.has_method("descent_photo_requirement_prompt"):
+			return str(listener.descent_photo_requirement_prompt())
+	return _hit.prompt_text
 
 
 func _process(dt: float) -> void:

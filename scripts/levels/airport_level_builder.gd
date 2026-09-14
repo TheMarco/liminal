@@ -2,6 +2,10 @@ extends "res://scripts/levels/chunk_level_builder.gd"
 static var _carousel_belt_material: ShaderMaterial
 static var _walkway_fitted_meshes: Dictionary = {}
 static var _walkway_glass_material: StandardMaterial3D
+# Authored ramps project 56cm past each nominal belt end. Leave a full 1.24m
+# floor cross-aisle beyond them (over 1.1m clear even beside a boundary wall).
+const WALKWAY_RAMP_OVERHANG := 0.56
+const WALKWAY_END_AISLE := 1.24
 
 
 func _air_zone_sign(salt: int) -> String:
@@ -22,30 +26,74 @@ func _gate_code() -> String:
 	return "%s%d" % [letters[int(ctx.random01(300) * 4.99)], 1 + int(ctx.random01(301) * 27.99)]
 
 
+func _air_ceiling_fixture(desired: Vector3, panels: Vector2i,
+		material: Material, ceiling_y: float, vent := false) -> Node3D:
+	var origin := Vector2(ctx.cell) * WorldGen.CELL_SIZE
+	var snapped := AirportCeilingGrid.center(Vector2(desired.x, desired.z) + origin, panels) - origin
+	var fixture := Node3D.new()
+	fixture.position = Vector3(snapped.x, ceiling_y, snapped.y)
+	fixture.set_meta("airport_ceiling_fixture", "vent" if vent else "light")
+	fixture.set_meta("airport_ceiling_panels", panels)
+	scene.add_node(fixture)
+	var size := AirportCeilingGrid.outer_size(panels)
+	var rim := AirportCeilingGrid.FRAME
+	# The diffuser is recessed above a slim painted T-bar frame. Every outer
+	# edge, including the frame, lands exactly on the acoustic panel lattice.
+	scene.model_box(fixture, Vector3(0, -0.028, 0),
+		Vector3(size.x - rim * 2.0, 0.025, size.y - rim * 2.0), material)
+	for sign in [-1.0, 1.0]:
+		scene.model_box(fixture, Vector3(0, -0.052, sign * (size.y - rim) * 0.5),
+			Vector3(size.x, 0.045, rim), Mats.paint_white())
+		scene.model_box(fixture, Vector3(sign * (size.x - rim) * 0.5, -0.052, 0),
+			Vector3(rim, 0.045, size.y - rim * 2.0), Mats.paint_white())
+	if vent:
+		for i in 6:
+			scene.model_box(fixture, Vector3(0, -0.047, (float(i) - 2.5) * 0.074),
+				Vector3(size.x - 0.10, 0.016, 0.035), Mats.metal_gray())
+	return fixture
+
+
 func _air_lighting() -> void:
 	if ctx.style == WorldGen.AIR_TRANSIT:
 		return  # transit corridors light themselves under the dropped bulkhead
 	var is_spawn = ctx.cell == Vector2i.ZERO
 	var dead = (not is_spawn) and ctx.random01(8) < 0.04
 	var flicker = (not is_spawn) and (not dead) and ctx.random01(9) < 0.11
+	var grand := AirportGrandCeiling.applies(ctx.ceiling_height, ctx.style)
+	var lit_material := Mats.air_coffer_light() if grand else Mats.air_panel()
 	var pmat: StandardMaterial3D
 	if dead:
 		pmat = Mats.panel_dead()
 	elif flicker:
-		pmat = Mats.air_panel().duplicate()
+		pmat = lit_material.duplicate()
 	else:
-		pmat = Mats.air_panel()
-	# long recessed light lines running the hall
-	for gx in [3.0, 9.0]:
-		for gz in [2.5, 6.0, 9.5]:
-			scene.troffer(Vector3(gx, 0, gz), Vector2(2.6, 0.22), pmat, Mats.metal_gray())
+		pmat = lit_material
+	# Two-panel rectangular diffusers on a regular grid. Narrower gate rooms
+	# use single-panel squares; both share the exact same seams and trim.
+	if grand:
+		var ceiling := Node3D.new()
+		ceiling.name = "GrandTerminalCeiling"
+		AirportGrandCeiling.attach(ceiling, ctx.ceiling_height, ctx.style, pmat)
+		scene.add_node(ceiling)
+	else:
+		var panels := Vector2i.ONE if ctx.style == WorldGen.AIR_GATE else Vector2i(2, 1)
+		for gx in [3.0, 9.0]:
+			for gz in [2.5, 6.0, 9.5]:
+				_air_ceiling_fixture(Vector3(gx, 0, gz), panels, pmat, ctx.ceiling_height)
+		for z in [3.6, 8.4]:
+			_air_ceiling_fixture(Vector3(6, 0, z), Vector2i.ONE,
+				Mats.charcoal(), ctx.ceiling_height, true)
 	if dead:
 		return
-	var light = scene.main_light(flicker, pmat, 1.7)
-	light.light_color = Color(0.85, 0.91, 1.0)
+	var energy := lerpf(1.35, 1.9, clampf((ctx.ceiling_height - 3.2) / 3.0, 0.0, 1.0))
+	var light = scene.main_light(flicker, pmat, energy)
+	light.light_color = Color(1.0, 0.95, 0.84) if grand else Color(0.94, 0.97, 1.0)
+	light.omni_attenuation = 0.85
 	light.omni_range = 14.5
-	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.6, WorldGen.CELL_SIZE / 2.0)
+	var light_drop := AirportGrandCeiling.depth(ctx.ceiling_height, ctx.style) + 0.30 if grand else 0.6
+	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - light_drop, WorldGen.CELL_SIZE / 2.0)
 	light.shadow_enabled = true
+	light.shadow_blur = 2.0
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 24.0
 	light.distance_fade_length = 8.0
@@ -58,9 +106,13 @@ func _air_lighting() -> void:
 
 
 func _hang_sign(pos: Vector3, yaw: float, text: String, top = 0.0) -> void:
+	if top <= 0.0 and AirportGrandCeiling.applies(ctx.ceiling_height, ctx.style):
+		var soffit := ctx.ceiling_height - AirportGrandCeiling.depth(ctx.ceiling_height, ctx.style)
+		pos.y = minf(pos.y, soffit - 0.43)
 	var v = Node3D.new()
 	v.position = pos
 	v.rotation.y = yaw
+	v.set_meta("airport_sign_body_height", 0.55)
 	scene.add_node(v)
 	var w = maxf(1.6, 0.115 * float(text.length()) + 0.55)
 	var rod_h = maxf(0.1, (top if top > 0.0 else ctx.ceiling_height) - pos.y - 0.275)
@@ -106,11 +158,22 @@ func _fids(parent: Node3D, lpos: Vector3, lyaw: float, big: bool, hang: bool) ->
 		scene.add_node(v)
 	else:
 		parent.add_child(v)
-	var model_scale = Chunk.AIRPORT_DEPARTURE_BOARD_BIG_SCALE if big \
+	var model_scale: float = Chunk.AIRPORT_DEPARTURE_BOARD_BIG_SCALE if big \
 		else Chunk.AIRPORT_DEPARTURE_BOARD_SMALL_SCALE
+	var original_scale: float = model_scale
+	if hang and AirportGrandCeiling.applies(ctx.ceiling_height, ctx.style):
+		# The board must fit BETWEEN passenger headroom and the new soffit,
+		# rather than burying its header in a coffer or lowering it into heads.
+		var soffit := ctx.ceiling_height - AirportGrandCeiling.depth(ctx.ceiling_height, ctx.style)
+		var max_top := soffit - 0.18
+		model_scale = minf(model_scale, (max_top - 2.25) / Chunk.AIRPORT_DEPARTURE_BOARD_UNITS.y)
+		var half_h := Chunk.AIRPORT_DEPARTURE_BOARD_UNITS.y * model_scale * 0.5
+		lpos.y = clampf(lpos.y, 2.25 + half_h, max_top - half_h)
+		v.position = lpos
 	var w = Chunk.AIRPORT_DEPARTURE_BOARD_UNITS.x * model_scale
 	var h = Chunk.AIRPORT_DEPARTURE_BOARD_UNITS.y * model_scale
 	if hang:
+		v.set_meta("airport_hanging_board_height", h)
 		var rod_h = maxf(0.1, ctx.ceiling_height - lpos.y - h / 2.0)
 		for sx in [-w * 0.36, w * 0.36]:
 			scene.model_cylinder(v, Vector3(sx, h / 2.0 + rod_h / 2.0, -0.04),
@@ -131,7 +194,7 @@ func _fids(parent: Node3D, lpos: Vector3, lyaw: float, big: bool, hang: bool) ->
 		var hd = Label3D.new()
 		hd.text = "DEPARTURES"
 		hd.font_size = 54 if big else 36
-		hd.pixel_size = 0.0022 if big else 0.0018
+		hd.pixel_size = (0.0022 if big else 0.0018) * model_scale / original_scale
 		hd.modulate = Color(0.93, 0.96, 1.0)
 		hd.position = Vector3(0, h / 2.0 - 0.17, 0.03)
 		v.add_child(hd)
@@ -155,7 +218,7 @@ func _fids(parent: Node3D, lpos: Vector3, lyaw: float, big: bool, hang: bool) ->
 		var lb = Label3D.new()
 		lb.text = texts[ci]
 		lb.font_size = 40 if big else 24
-		lb.pixel_size = 0.0018 if big else 0.0016
+		lb.pixel_size = (0.0018 if big else 0.0016) * model_scale / original_scale
 		lb.modulate = Color(1.0, 0.72, 0.18)
 		lb.outline_modulate = Color(0.16, 0.08, 0.0, 0.8)
 		lb.outline_size = 0
@@ -631,7 +694,7 @@ func _air_concourse() -> void:
 	var span = scene.room_span()
 	var along_x = span.x >= span.y
 	var yw = 0.0 if along_x else PI / 2.0
-	var run = (span.x if along_x else span.y) - 2.6
+	var run := _walkway_run_for_span(span.x if along_x else span.y)
 	var lat = span.y if along_x else span.x
 	if run < 6.0:
 		_air_hall()   # too short for a walkway; furnish it as a plain hall
@@ -642,7 +705,7 @@ func _air_concourse() -> void:
 	var flow0 = 1.0 if ctx.random01(322) < 0.5 else -1.0
 	for i in offs.size():
 		_travelator(scene.world_point(o, Vector3(0, 0, offs[i]), yw), yw,
-			flow0 * (1.0 if i == 0 else -1.0), 323 + i, minf(10.4, run))
+			flow0 * (1.0 if i == 0 else -1.0), 323 + i, run)
 		_hang_sign(o + Vector3(0, 3.55, 0), yw + PI / 2.0,
 			_air_zone_sign(326))
 	# a seat row parked against the quiet side, only if there is room beside
@@ -671,6 +734,10 @@ func _air_concourse() -> void:
 
 ## One moving walkway: deck, animated belt, glass balustrades, and an Area3D
 ## that actually carries whoever stands on it.
+
+
+func _walkway_run_for_span(span: float) -> float:
+	return minf(10.4, span - 2.0 * (WALKWAY_RAMP_OVERHANG + WALKWAY_END_AISLE))
 
 
 func _walkway_fit_length(model: Node3D, length: float, source_length: float) -> void:
@@ -743,6 +810,8 @@ func _travelator(p: Vector3, yaw: float, flow: float, _salt: int, L = 8.4) -> vo
 		ramp_collider.set_meta("walkable_ramp", true)
 	scene.bind_furnishing_colliders(v, b0)
 	var tv = Travelator.new()
+	# Doorway culling must also retire the drive when it removes this walkway.
+	tv.set_meta("furnishing_group", v.get_meta("furnishing_group"))
 	tv.dirv = Vector3(flow, 0, 0).rotated(Vector3.UP, yaw)
 	tv.speed = 0.75
 	var cs = CollisionShape3D.new()
@@ -774,7 +843,8 @@ func _air_transit() -> void:
 	for k in 3:
 		var off = (float(k) - 1.0) * 3.4
 		var flow = 1.0 if k % 2 == 0 else -1.0
-		_travelator(scene.world_point(o, Vector3(0, 0, off), yw), yw, flow, 512 + k, 10.4)
+		_travelator(scene.world_point(o, Vector3(0, 0, off), yw), yw, flow, 512 + k,
+			_walkway_run_for_span(WorldGen.CELL_SIZE))
 
 	# A single architectural contract drives wall cuts, returns and dressing.
 	for si in 2:
@@ -793,16 +863,16 @@ func _air_transit() -> void:
 	var sof = scene.model_box(null, scene.world_point(o, Vector3(0, wh + 0.06, 0), yw),
 		Vector3(WorldGen.CELL_SIZE, 0.12, wall_half * 2.0 + Chunk.T), Mats.airport_ceiling())
 	sof.rotation.y = yw
-	# Low light lines under the bulkhead — the tall terminal above stays dark.
+	# The dropped transit lid shares the terminal grid. Its fixtures use the
+	# local 3.5m datum, never the unused high ceiling above it.
 	var pmat = Mats.air_panel()
 	for li in 2:
 		var lane = -1.7 if li == 0 else 1.7
 		for t in [-3.0, 0.0, 3.0]:
-			var st = scene.model_box(null, scene.world_point(o, Vector3(t, wh - 0.03, lane), yw),
-				Vector3(2.2, 0.05, 0.16), pmat)
-			st.rotation.y = yw
+			_air_ceiling_fixture(scene.world_point(o, Vector3(t, 0, lane), yw),
+				Vector2i(2, 1) if along_x else Vector2i(1, 2), pmat, wh)
 	var l = OmniLight3D.new()
-	l.light_color = Color(0.85, 0.91, 1.0)
+	l.light_color = Color(0.94, 0.97, 1.0)
 	l.light_energy = 1.2
 	l.omni_range = 11.0
 	l.position = o + Vector3(0, wh - 0.5, 0)
@@ -810,6 +880,7 @@ func _air_transit() -> void:
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = 22.0
 	l.distance_fade_length = 8.0
+	l.set_meta("stream_room_light", true)
 	scene.add_node(l)
 	# Wayfinding over the two genuine walking lanes, tucked under the lid.
 	for ki in 2:
@@ -946,6 +1017,7 @@ func _air_transit_bay_returns(o: Vector3, yw: float, side: float,
 	bl.distance_fade_enabled = true
 	bl.distance_fade_begin = 18.0
 	bl.distance_fade_length = 6.0
+	bl.set_meta("stream_room_light", true)
 	scene.add_node(bl)
 
 
@@ -1287,21 +1359,7 @@ func _air_foodcourt() -> void:
 	for i in 3:
 		var x = -6.6 + 6.6 * float(i)
 		var kp = c + Vector3(x, 0, -8.5)
-		scene.rounded_box(kp + Vector3(0, 0.65, 0), Vector3(5.4, 1.3, 1.35), Mats.jetway_body(), 0.03)
-		# Corrugated shutter, counter and a black menu strip.
-		for sl in 8:
-			scene.box(kp + Vector3(0, 1.22 + 0.22 * float(sl), 0.69),
-				Vector3(5.0, 0.12, 0.04), Mats.metal_gray(), false)
-		scene.rounded_box(kp + Vector3(0, 1.0, 1.0), Vector3(5.2, 0.12, 0.78), Mats.steel(), 0.025)
-		scene.box(kp + Vector3(0, 3.45, 0.72), Vector3(4.7, 0.65, 0.08), Mats.charcoal(), false)
-		var sign = Label3D.new()
-		sign.text = names[i]
-		sign.font_size = 96
-		sign.pixel_size = 0.0025
-		sign.modulate = Color(0.72, 0.88, 1.0) if i != 1 else Color(1.0, 0.72, 0.34)
-		sign.position = kp + Vector3(0, 3.46, 0.78)
-		scene.add_node(sign)
-		scene.collider_box(kp + Vector3(0, 1.3, 0), Vector3(5.5, 2.6, 1.5))
+		_air_foodcourt_booth(kp, names[i], i == 1)
 	# Four battered public tables, deliberately asymmetrical around the aisle.
 	var table_offsets: Array[Vector3] = [Vector3(-5.4, 0, -1.8), Vector3(4.8, 0, -2.0),
 		Vector3(-4.5, 0, 4.4), Vector3(5.6, 0, 4.0)]
@@ -1318,6 +1376,41 @@ func _air_foodcourt() -> void:
 	scene.cc0_prop("WetFloorSign_01", wetp, ctx.random01(438) * TAU)
 	scene.collider_box(wetp + Vector3(0, 0.3, 0), Vector3(0.32, 0.62, 0.36))
 	_hang_sign(c + Vector3(0, 3.7, 6.4), 0.0, "FOOD COURT")
+
+
+func _air_foodcourt_booth(pos: Vector3, title: String, coffee: bool) -> void:
+	# Clearance must retire the WHOLE concession, including high slats/signs
+	# and physics, never shave away its base and leave floating accessories.
+	var booth := scene.furnishing_pivot(pos, 0.0, "airport_foodcourt_booth")
+	booth.set_meta("fixed_furnishing", true)
+	var b0 := scene.collider_mark()
+	scene.model_rounded_box(booth, Vector3(0, 0.5, 0),
+		Vector3(5.4, 1.0, 1.35), Mats.jetway_body(), 0.03)
+	# Full-height jambs and an opaque shutter backing join the slats/menu to
+	# the floor-supported housing, even when viewed away from a room wall.
+	for side in [-1.0, 1.0]:
+		scene.model_box(booth, Vector3(side * 2.62, 1.9, 0),
+			Vector3(0.16, 3.8, 1.35), Mats.jetway_body())
+	scene.model_box(booth, Vector3(0, 2.4, 0.62),
+		Vector3(5.08, 2.8, 0.1), Mats.metal_gray())
+	# Corrugated shutter, counter and a black menu strip.
+	for sl in 8:
+		scene.model_box(booth, Vector3(0, 1.22 + 0.22 * float(sl), 0.69),
+			Vector3(5.0, 0.12, 0.04), Mats.metal_gray())
+	scene.model_rounded_box(booth, Vector3(0, 1.06, 1.0),
+		Vector3(5.2, 0.12, 0.78), Mats.steel(), 0.025)
+	scene.model_box(booth, Vector3(0, 3.45, 0.72),
+		Vector3(4.7, 0.65, 0.08), Mats.charcoal())
+	var sign := Label3D.new()
+	sign.text = title
+	sign.font_size = 96
+	sign.pixel_size = 0.0025
+	sign.modulate = Color(1.0, 0.72, 0.34) if coffee else Color(0.72, 0.88, 1.0)
+	sign.position = Vector3(0, 3.46, 0.78)
+	booth.add_child(sign)
+	scene.collider_box(pos + Vector3(0, 1.9, 0), Vector3(5.4, 3.8, 1.35))
+	scene.collider_box(pos + Vector3(0, 1.06, 1.0), Vector3(5.2, 0.12, 0.78))
+	scene.bind_furnishing_colliders(booth, b0)
 
 
 func _air_common() -> void:

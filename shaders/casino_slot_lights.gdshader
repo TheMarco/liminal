@@ -1,4 +1,5 @@
 shader_type spatial;
+uniform float mains_power : hint_range(0.0, 1.0) = 1.0;
 
 // Preserve the authored per-vertex RGB colours: glTF cannot express an
 // emission colour driven by Blender's vertex-colour node. One shared material
@@ -14,7 +15,7 @@ void vertex() {
 void fragment() {
 	float attract = reduced_flashing ? 1.0 : (0.88 + 0.12 * sin(TIME * 2.2 + phase));
 	ALBEDO = COLOR.rgb * 0.4;
-	EMISSION = COLOR.rgb * (2.7 * attract);
+	EMISSION = COLOR.rgb * (2.7 * attract) * mains_power;
 	ROUGHNESS = 0.25;
 	METALLIC = 0.0;
 }

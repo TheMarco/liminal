@@ -822,13 +822,15 @@ func _init() -> void:
 			runtime["bad_attached_half_walls"]])
 	if int(runtime["boundary_wall_endpoints"]) == 0 \
 			or int(runtime["bad_boundary_wall_caps"]) > 0 \
-			or int(runtime["boundary_endpoint_kinds"].get("free", 0)) == 0 \
 			or int(runtime["boundary_endpoint_kinds"].get("l_corner", 0)) == 0:
 		failures.append(
 			"Annex boundary wall end-cap contract failed: ends=%d bad=%d kinds=%s" % [
 				runtime["boundary_wall_endpoints"],
 				runtime["bad_boundary_wall_caps"],
 				runtime["boundary_endpoint_kinds"]])
+	# Separate rooms now retain their boundary instead of dropping entire walls
+	# for long views. Free-standing boundary ends need not occur in this sample;
+	# every end that does occur must still have the correct physical cap above.
 	var tunnel_ratio := float(runtime["wall_mass_tunnels"]) / float(maxi(
 		int(runtime["kinds"].get("annex_wall_mass", 0)), 1))
 	if tunnel_ratio < 0.25:

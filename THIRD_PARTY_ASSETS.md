@@ -26,6 +26,31 @@ and remove it from the distributed build.
 
 ## Attributed work
 
+### `pool_ladder.glb`
+
+- **Title:** `Pool Ladder 3-Step`
+- **Creator/source:** Created by Marco and supplied directly by the project
+  owner on 2026-09-12. The embedded generator record identifies it as
+  `Reference-matched procedural game asset; Marco pool ladder`.
+- **License:** Project-owned asset supplied for use as embedded game content;
+  no third-party credit is required.
+- **Modifications:** The GLB is retained unchanged at native metre scale.
+  Runtime aligns its deck flanges with the Poolrooms lip and preserves the
+  existing independent climbing volume and clearance reservation.
+- **Local record:** [`models/provided/pool_ladder/SOURCE.md`](models/provided/pool_ladder/SOURCE.md)
+
+### `room_service_trolley.glb`
+
+- **Title:** `Room service trolley (game optimized)`
+- **Creator/source:** Supplied directly by the project owner on 2026-09-11;
+  the originating asset record is retained outside this repository.
+- **License:** Project-owner supplied for use as embedded game content; retain
+  the external source/license record with release paperwork.
+- **Modifications:** The optimized GLB and embedded PBR textures are unchanged.
+  Runtime recentres its footprint and replaces the generated Vegas room-service
+  cart while preserving the previous randomized placement and collider.
+- **Local record:** [`models/provided/room_service_trolley/SOURCE.md`](models/provided/room_service_trolley/SOURCE.md)
+
 ### `server_v2_console.glb`
 
 - **Title:** `Server V2 +console`
@@ -221,15 +246,17 @@ and remove it from the distributed build.
   supported shelves. Source staging camera nodes are not used.
 - **Local record:** [`models/cc_by/stainless_steel_shelving/SOURCE.md`](models/cc_by/stainless_steel_shelving/SOURCE.md)
 
-### `wood_dining_chair.glb`
+### `backrooms_ladderback_chair.glb`
 
-- **Title:** `Wood Dining Chair`
-- **Creator:** [Doverlock](https://sketchfab.com/Doverlock)
-- **Source:** <https://sketchfab.com/3d-models/wood-dining-chair-dd63d6eb1d8d452786b9afd4555a8d2e>
+- **Title:** `Backrooms Movie Ladderback Restaurant Chair`
+- **Creator:** [varrocharlie](https://sketchfab.com/varrocharlie)
+- **Source:** <https://sketchfab.com/3d-models/backrooms-movie-ladderback-restaurant-chair-1ce6e2e3f9914fa49e6b20264b52438f>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** Uniformly scaled and floor-centred into isolated chairs,
-  small groups, and rare supported chair piles in large Annex spaces.
-- **Local record:** [`models/cc_by/wood_dining_chair/SOURCE.md`](models/cc_by/wood_dining_chair/SOURCE.md)
+- **Modifications:** Original GLB unchanged; a scene wrapper turns its front to
+  +Z. Floor-centred at its authored metre scale for isolated chairs, small groups,
+  and rare chair piles in large Annex spaces. Also reused as the Annex's Descent
+  bleed/photo-anomaly prop, with collision boxes fitted to the replacement model.
+- **Local record:** [`models/cc_by/backrooms_ladderback_chair/SOURCE.md`](models/cc_by/backrooms_ladderback_chair/SOURCE.md)
 
 ### `chemistry_lab_table.glb`
 
@@ -305,11 +332,10 @@ and remove it from the distributed build.
 - **Source:** <https://sketchfab.com/3d-models/ceiling-tiles-texture-d56374c2680e44af9849f43f6ae3206e>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - **Modifications:** The embedded albedo, metallic-roughness and normal maps are
-  extracted by Godot and mapped world-space across the existing office ceiling
-  with a tightened acoustic-tile repeat appropriate to the three-metre rooms.
-  The source demonstration slab is not instantiated; existing ceiling geometry,
-  collision and fluorescent fixtures remain unchanged. No other level uses
-  these maps.
+  extracted by Godot and mapped world-space across the Office and lower Airport
+  ceilings, at 0.75m and 0.6m panel pitches respectively. Airport adds recessed
+  one- and two-panel light housings and matching vents. The source demonstration
+  slab is not instantiated; existing ceiling collision is unchanged.
 - **Local record:** [`models/cc_by/ceiling_tiles_texture/SOURCE.md`](models/cc_by/ceiling_tiles_texture/SOURCE.md)
 
 ### `airport_departure_board.glb`
@@ -372,18 +398,6 @@ and remove it from the distributed build.
   given conservative gameplay collision. Mesh and embedded materials are
   otherwise unchanged.
 - **Local record:** [`models/sketchfab/water_cooler/SOURCE.md`](models/sketchfab/water_cooler/SOURCE.md)
-
-### `slot_machine.glb`
-
-- **Title:** `Slot_machine`
-- **Creator:** [morrrtu1o](https://sketchfab.com/morrrtu1o)
-- **Source:** <https://sketchfab.com/3d-models/slot-machine-d58181162e154af2ab73e8667db2e81d>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** The 1K GLB is scaled and floor-aligned in Godot, receives
-  conservative gameplay collision and a small live status lamp, and is mixed
-  with a minority of original procedural cabinets for visual variety. Its
-  embedded PBR mesh and textures are otherwise unchanged.
-- **Local record:** [`models/cc_by/slot_machine/SOURCE.md`](models/cc_by/slot_machine/SOURCE.md)
 
 ### Abandoned hospital — extracted props
 
@@ -448,17 +462,17 @@ and remove it from the distributed build.
   authoring scene is removed at instantiation.
 - **Local record:** [`models/cc_by/ibm_3278_terminal/SOURCE.md`](models/cc_by/ibm_3278_terminal/SOURCE.md)
 
-### `payphone.glb`
+### `mall_payphone.glb`
 
-- **Title:** `Payphone`
-- **Creator:** [mtaesiri](https://sketchfab.com/mtaesiri)
-- **Source:** <https://sketchfab.com/3d-models/payphone-ec3a176820074776a3632c6feb0b8327>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** The source scans the payphone together with the tiled wall
-  behind it. The mesh is clipped to the phone housing alone — 88,025 triangles
-  down to 19,716 — and re-origined so its open back sits on the wall contact
-  plane. Its material and baked texture are otherwise unchanged.
-- **Local record:** [`models/cc_by/payphone/SOURCE.md`](models/cc_by/payphone/SOURCE.md)
+- **Title:** `Reference-reconstructed payphone for Marco`
+- **Creator:** Created for Marco from project-owner supplied reference images;
+  supplied directly by the project owner on 2026-09-11.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The static optimized GLB remains unchanged. It replaces
+  the previous CC BY mall payphone at native metre scale while preserving bank
+  placement, wall orientation and fixture metadata. Collision now follows its
+  deeper handset and armored-cord silhouette.
+- **Local record:** [`models/provided/mall_payphone/SOURCE.md`](models/provided/mall_payphone/SOURCE.md)
 
 ### `mall_directories.glb`
 
@@ -483,23 +497,20 @@ and remove it from the distributed build.
   wall handsets.
 - **Local record:** [`models/cc_by/corded_phone/SOURCE.md`](models/cc_by/corded_phone/SOURCE.md)
 
-### Mall storefront signs — noncommercial
+### Original mall storefront signs
 
-- **Title:** `Abandoned shopping mall`
-- **Creator:** [Katydid](https://sketchfab.com/Katydid.)
-- **Source:** <https://sketchfab.com/3d-models/abandoned-shopping-mall-e23793e82dec4d779268229d4a0429a9>
-- **License:** [Creative Commons Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/)
-- **Commercial-use status:** **Not permitted.** Builds containing these textures
-  are noncommercial and must not be sold or monetized.
-- **Modifications:** The source geometry is a three-storey octagonal atrium and
-  is not used — its storey height and bay spacing do not fit this project's grid,
-  and its surfaces are batched across the whole ring. Only the painted fascia
-  signs are taken: nine cropped, unaltered, from its storefront atlas and mounted
-  on the project's own generated fascias at the artwork's authored aspect. Every
-  use goes through one function in `scripts/chunk.gd`, so the dependency can be
-  removed in a single edit, and the generated lettering it replaces remains as
-  the fallback.
-- **Local record:** [`textures/cc_by_nc/mall_signs/SOURCE.md`](textures/cc_by_nc/mall_signs/SOURCE.md)
+- **Title:** Nine original mall storefront sign faces.
+- **Creator/source:** Generated for Marco's project with the built-in OpenAI
+  image-generation tool from written briefs; no third-party image, texture or
+  logo was supplied as a reference.
+- **Attribution status:** No inherited Creative Commons attribution or
+  noncommercial restriction from the retired mall sign atlas.
+- **Preparation:** The generated master images are cropped to 6:1 sign faces
+  and resized to 1536 × 256 WebP textures. Original shop names, deterministic
+  placements, fascia fit limits and generated-lettering fallbacks are retained.
+- **Local record:** [`textures/authored/mall_signs/SOURCE.md`](textures/authored/mall_signs/SOURCE.md)
+- The former NC sign files have been removed from the repository. Both export
+  presets retain explicit NC exclusions as a safeguard against reintroduction.
 
 ### `blackjack_table.glb`
 
@@ -547,16 +558,6 @@ and remove it from the distributed build.
   suggests, so it is restricted to asylum treatment rooms.
 - **Local record:** [`models/cc_by/medical_table/SOURCE.md`](models/cc_by/medical_table/SOURCE.md)
 
-### `mfp_office_printer.glb`
-
-- **Title:** `MFP office printer`
-- **Creator:** [Red Fox / nokillnando](https://sketchfab.com/nokillnando)
-- **Source:** <https://sketchfab.com/3d-models/mfp-office-printer-d55f6fca7c3d45c883bbff770672970d>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** Scaled from centimetres, re-origined to its own footprint
-  and turned to face the room from the first solid storage wall.
-- **Local record:** [`models/cc_by/mfp_office_printer/SOURCE.md`](models/cc_by/mfp_office_printer/SOURCE.md)
-
 ### `school_desk.glb`
 
 - **Title:** `School desk`
@@ -570,17 +571,16 @@ and remove it from the distributed build.
   student station throughout classroom rows.
 - **Local record:** [`models/cc_by/school_desk/SOURCE.md`](models/cc_by/school_desk/SOURCE.md)
 
-### `office_phone.glb`
+### `vintage_desk_phone.glb`
 
-- **Title:** `Office Phone`
-- **Creator:** [maxdragonn](https://sketchfab.com/maxdragon)
-- **Source:** <https://sketchfab.com/3d-models/office-phone-4176a01b6d0b4d13ad165c0df278a6b5>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **NoAI notice:** Used only as embedded game content, never as generative-AI
-  training data or input.
-- **Modifications:** Scaled, centred and floor-aligned on office desktops from
-  measured imported bounds. Geometry and embedded texture are unchanged.
-- **Local record:** [`models/cc_by/office_phone/SOURCE.md`](models/cc_by/office_phone/SOURCE.md)
+- **Title:** `Yellowed desk telephone, reference-inspired rebuild`
+- **Creator:** Created for Marco; supplied directly by the project owner on
+  2026-09-11.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The game-optimized GLB remains unchanged. It replaces the
+  former CC BY Office desk-phone model at native metre scale while retaining
+  the existing seeded placement and authored-furnishing metadata.
+- **Local record:** [`models/provided/vintage_desk_phone/SOURCE.md`](models/provided/vintage_desk_phone/SOURCE.md)
 
 ### `bunk_bed.glb`
 
@@ -625,31 +625,9 @@ and remove it from the distributed build.
 
 ### Authored replacements for generated furniture
 
-Sixteen models that each took over a function which used to assemble the same
+Fifteen models that each took over a function which used to assemble the same
 object out of boxes and cylinders. The two Sketchfab Standard assets were
 supplied by the project owner and are used only as embedded game content.
-
-#### `slot_machine_alt.glb`
-
-- **Title:** `Slot Machine With Abstract Design`
-- **Creator:** [Audrey Gonçalves](https://sketchfab.com/audreyfv10)
-- **Source:** <https://sketchfab.com/3d-models/slot-machine-with-abstract-design-29e199a16098408abb48b3e04d243af6>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** The 5.2 m ground plane baked into the source scene is
-  removed. Scaled to a 1.75 m cabinet and placed as the one-in-five casino
-  machine that used to be assembled from forty-two primitives.
-- **Local record:** [`models/cc_by/slot_machine_alt/SOURCE.md`](models/cc_by/slot_machine_alt/SOURCE.md)
-
-#### `change_machine.glb`
-
-- **Title:** `change machine`
-- **Creator:** [juliegraham178](https://sketchfab.com/juliegraham178)
-- **Source:** <https://sketchfab.com/3d-models/change-machine-68f395358c8d43c2b94e816d1c68a70d>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** Scaled to 1.75 m and stood against a casino wall. It
-  carries its own branding, coin tray and bill slot, replacing a generated
-  panel stack and a Label3D marquee.
-- **Local record:** [`models/cc_by/change_machine/SOURCE.md`](models/cc_by/change_machine/SOURCE.md)
 
 #### `city_bench.glb`
 
@@ -792,11 +770,6 @@ supplied by the project owner and are used only as embedded game content.
   removed.
 - **Local record:** [`models/sketchfab/checkin_desk/SOURCE.md`](models/sketchfab/checkin_desk/SOURCE.md)
 
-## Public-domain and attribution-optional work
-
-These sources do not require attribution, but are included for provenance and
-to recognize the artists.
-
 ### `soulmate_jacuzzi.glb`
 
 - **Title:** `Soulmate Jacuzzi`
@@ -817,16 +790,6 @@ to recognize the artists.
   controlled by the Poolrooms scene.
 - **Local record:** [`models/cc_by/pool_lounge_chair/SOURCE.md`](models/cc_by/pool_lounge_chair/SOURCE.md)
 
-### `alarm.glb`
-
-- **Title:** `Alarm`
-- **Creator:** [JackFarrand](https://sketchfab.com/JackFarrand)
-- **Source:** <https://sketchfab.com/3d-models/alarm-c9e3be8efe5e4b0da4e9526b71822441>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** Embedded model retained as supplied; placement and scale are
-  controlled by the scene.
-- **Local record:** [`models/cc_by/alarm/SOURCE.md`](models/cc_by/alarm/SOURCE.md)
-
 ### `alarm_light.glb`
 
 - **Title:** `Alarm Light`
@@ -837,6 +800,41 @@ to recognize the artists.
   centres and wall-aligns the imported hierarchy and explicitly enables the
   red lamp material's emissive factor.
 - **Local record:** [`models/cc_by/alarm_light/SOURCE.md`](models/cc_by/alarm_light/SOURCE.md)
+
+### `plastic_chair.glb`
+
+- **Title:** `Plastic_Chair`
+- **Creator:** [SadiqKhan911](https://sketchfab.com/SadiqKhan911)
+- **Source:** <https://sketchfab.com/3d-models/plastic-chair-38ed70a7e2914f7f834edc59b2ee0f10>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** The chair mesh is selected from the source collection,
+  centred and placed in dry Poolrooms alcoves with a separate collider.
+- **Local record:** [`models/cc_by/plastic_chair/SOURCE.md`](models/cc_by/plastic_chair/SOURCE.md)
+
+### `pool_buoy.glb`
+
+- **Title:** `Inflatable Buoy`
+- **Creator:** [ApprenticeRaccoon](https://sketchfab.com/ApprenticeRaccoon)
+- **Source:** <https://sketchfab.com/3d-models/inflatable-buoy-281e203b2b3a4461ba2661c82cd75a44>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Scaled, floated at the Poolrooms water surface and
+  recoloured per instance while retaining the source geometry.
+- **Local record:** [`models/cc_by/pool_buoy/SOURCE.md`](models/cc_by/pool_buoy/SOURCE.md)
+
+### White tiles — extracted PBR textures
+
+- **Title:** `Freebie Game Art White Tiles`
+- **Creator:** [Kless Gyzen](https://sketchfab.com/kless.gyzen)
+- **Source:** <https://sketchfab.com/3d-models/freebie-game-art-white-tiles-3c9fe794746847d8bf634eb61870e4e7>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Modifications:** Albedo, normal and packed ORM maps are extracted from the
+  source GLB. The Poolrooms shader applies world-space mapping, waterline
+  darkening and caustics; the original model is retained as the texture source.
+- **Local record:** [`models/cc_by/white_tiles/SOURCE.md`](models/cc_by/white_tiles/SOURCE.md)
+
+## Public-domain and attribution-optional work
+
+These sources are recorded for provenance and to acknowledge their creators.
 
 ### Poly Haven
 
@@ -893,12 +891,6 @@ third-party attribution requirement. Seven looping videos of dark hooded
 figures on white were converted into 24-frame sprite sheets by
 `tools/build_flipbook.py`; Godot 4's only video codec is Theora, which carries
 no alpha, so an animated silhouette has to be a flipbook rather than a video.
-
-The photo-traced Wikimedia silhouettes that were previously used here —
-`man_bald.png` (Mette Aumala, CC0), `man_shirt.png` (Madeleine Price Ball,
-CC0), `girl.png` (OpenClipart-Vectors, CC0) and `woman_walk.png` (Phil
-Bronnery, CC BY 2.0) — were retired along with the still painted cutouts when
-the roster became wholly animated. None of those files ship any more.
 
 Per-sheet provenance and the conversion settings are recorded in
 [`textures/ghosts/SOURCES.md`](textures/ghosts/SOURCES.md).

@@ -1,5 +1,7 @@
 class_name DescentProgress
 extends RefCounted
+signal save_failed(error: Error)
+signal saved
 ## The one persistent Descent checkpoint. It is deliberately small: the seed
 ## reproduces the building and route, deepest_floor chooses the arrival lift,
 ## and seen_short_tapes preserves the optional-video no-repeat cycle.
@@ -33,6 +35,8 @@ var objective_tapes := {}
 ## one-shot campaign event even if the player reloads the checkpoint.
 var realm_visits := {}
 var _save_path := SAVE_PATH
+var recovered_from_backup := false
+const AtomicConfig = preload("res://scripts/atomic_config.gd")
 
 
 func _init(custom_save_path := "") -> void:
@@ -186,12 +190,12 @@ func mutation_state_for_floor(floor_idx: int) -> Dictionary:
 	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 
-func record_runtime_state(floor_idx: int, state: ChunkRuntimeState) -> void:
+func record_runtime_state(floor_idx: int, state: ChunkRuntimeState) -> Error:
 	if not has_checkpoint() or state == null:
-		return
+		return ERR_UNCONFIGURED
 	var floor := clampi(floor_idx, 0, DescentRun.FLOOR_COUNT - 1)
 	runtime_states[str(floor)] = state.to_dictionary()
-	save_to_disk()
+	return save_to_disk()
 
 
 func runtime_state_for_floor(floor_idx: int) -> ChunkRuntimeState:
@@ -242,10 +246,18 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, "realm_visits", realm_visits)
 	config.set_value(SECTION, "emergency_flash_held", emergency_flash_held)
 	config.set_value(SECTION, "emergency_flash_photo_id", emergency_flash_photo_id)
-	return config.save(_save_path)
+	var previous := ConfigFile.new()
+	var backup_existing := previous.load(_save_path) == OK and _valid_checkpoint(previous)
+	var error := AtomicConfig.save_config(config, _save_path, backup_existing)
+	if error == OK:
+		saved.emit()
+	else:
+		save_failed.emit(error)
+	return error
 
 
 func load_from_disk() -> bool:
+	recovered_from_backup = false
 	run_seed = 0
 	deepest_floor = -1
 	seen_short_tapes.clear()
@@ -258,8 +270,11 @@ func load_from_disk() -> bool:
 	objective_tapes.clear()
 	realm_visits.clear()
 	var config := ConfigFile.new()
-	if config.load(_save_path) != OK:
-		return false
+	if config.load(_save_path) != OK or not _valid_checkpoint(config):
+		config = ConfigFile.new()
+		if config.load(_save_path + ".bak") != OK or not _valid_checkpoint(config):
+			return false
+		recovered_from_backup = true
 	var saved_version := int(config.get_value(SECTION, "version", 0))
 	if saved_version != VERSION and not LEGACY_VERSIONS.has(saved_version):
 		return false
@@ -374,11 +389,20 @@ func load_from_disk() -> bool:
 	return true
 
 
+static func _valid_checkpoint(config: ConfigFile) -> bool:
+	var version: Variant = config.get_value(SECTION, "version", 0)
+	var seed: Variant = config.get_value(SECTION, "run_seed", 0)
+	var floor: Variant = config.get_value(SECTION, "deepest_floor", -1)
+	return version is int and (version == VERSION or version in LEGACY_VERSIONS) \
+		and seed is int and seed > 0 and floor is int and floor >= 0 and floor < DescentRun.FLOOR_COUNT
+
 ## Test helper. Runtime starts overwrite checkpoints through start_new().
 func clear_from_disk() -> void:
 	var absolute := ProjectSettings.globalize_path(_save_path)
 	if FileAccess.file_exists(absolute):
 		DirAccess.remove_absolute(absolute)
+	if FileAccess.file_exists(absolute + ".bak"):
+		DirAccess.remove_absolute(absolute + ".bak")
 	run_seed = 0
 	deepest_floor = -1
 	seen_short_tapes.clear()

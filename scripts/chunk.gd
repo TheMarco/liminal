@@ -110,25 +110,20 @@ static var _cone_ready := false
 const ASY_PROP_NAMES := ["BarberShopChair_01", "Rockingchair_01", "SchoolChair_01",
 	"medical_box", "metal_office_desk", "mounted_fluorescent_lights",
 	"old_bed_frame", "vintage_crutches_01", "wheelchair_01"]
-const CC0_PROP_NAMES := ["ArmChair_01", "Barrel_01", "Chandelier_03", "CoffeeCart_01",
-	"CoffeeTable_01", "Lantern_01", "Ottoman_01", "WetFloorSign_01",
-	"SchoolDesk_01", "bar_chair_round_01", "barrel_03", "barrel_stove", "clipboard",
-	"coffee_table_round_01", "drawer_cabinet", "fancy_picture_frame_01",
-	"fancy_picture_frame_02", "hanging_industrial_lamp", "industrial_caged_sconce",
+const CC0_PROP_NAMES := ["ArmChair_01", "Chandelier_03", "CoffeeCart_01",
+	"CoffeeTable_01", "Ottoman_01", "WetFloorSign_01",
+	"bar_chair_round_01", "clipboard",
+	"coffee_table_round_01", "drawer_cabinet", "hanging_industrial_lamp",
 	"old_tyre", "plastic_crate_03", "potted_plant_01", "potted_plant_02",
-	"power_box_01", "rusted_wheel_rim_01", "rusted_wheel_rim_02", "sofa_03",
+	"power_box_01", "sofa_03",
 	"steel_frame_shelves_01", "television_02", "trashbag", "vintage_grandfather_clock_01",
 	"wall_clock", "wooden_crate_01", "wooden_crate_02",
-	"wooden_ladder", "wooden_picnic_table", "book_encyclopedia_set_01",
-	"office_notepads",
-	"old_military_compressor", "security_camera_01",
+	"wooden_picnic_table", "book_encyclopedia_set_01",
+	"office_notepads", "security_camera_01",
 	"stationery_supplies", "CashRegister_01", "hand_truck",
 	"industrial_storage_cart", "metal_trash_can", "long_life_food",
 	"plunger", "drain_cleaner", "can_rusted"]
 const OFFICE_CHAIR_PATH := "res://models/cc0/office_chair/Office_Chair.fbx"
-const SLOT_MACHINE_PATH := "res://models/cc_by/slot_machine/slot_machine.glb"
-const SLOT_MACHINE_SCALE := 1.30
-const SLOT_MACHINE_FLOOR_OFFSET := 0.548386
 const CASINO_SLOT_PATHS: Array[String] = [
 	"res://models/authored/casino_slots/slot_classic.glb",
 	"res://models/authored/casino_slots/slot_wheel.glb",
@@ -136,6 +131,13 @@ const CASINO_SLOT_PATHS: Array[String] = [
 	"res://models/authored/casino_slots/slot_triple.glb",
 ]
 const CASINO_SLOT_HEIGHTS: Array[float] = [2.25, 2.67, 2.40, 2.62]
+const CASINO_SERVICE_CART_PATH := \
+	"res://models/provided/room_service_trolley/room_service_trolley.glb"
+const CASINO_SERVICE_CART_SCALE := 1.0
+# Imported bounds are x -0.5878..0.4290, y 0.0004..1.1930 and
+# z -0.2580..0.2600. Re-centre the footprint and land its lowest point on the
+# generated floor while preserving the model's real-world metre scale.
+const CASINO_SERVICE_CART_CENTRE := Vector3(-0.0794, 0.0004, 0.0010)
 const PRISON_BUNK_PATH := \
 	"res://models/cc_by/bunk_bed/bunk_bed.glb"
 const PRISON_TOILET_PATH := \
@@ -204,16 +206,15 @@ const OFFICE_AIR_CONDITIONER_SCALE := 2.35
 const OFFICE_AIR_CONDITIONER_CENTRE := Vector3(0.354443, 0.093705, 0.000952)
 const DESK_PHONE_PATH := "res://models/cc_by/corded_phone/corded_phone.glb"
 const DESK_PHONE_SCALE := 5.25
-# The payphone is re-origined at export so its open back sits on the wall
-# contact plane, centred on its own face: placement supplies a wall point and a
-# yaw and nothing else. Scaling grows it away from that plane, so the back stays
-# flush. The authored 0.30 x 0.62m housing is accurate but reads undersized on a
-# 4m gallery wall beside 4.8m storefronts, so it is mounted a fifth over.
-const MALL_PAYPHONE_PATH := "res://models/cc_by/payphone/payphone.glb"
-const MALL_PAYPHONE_SCALE := 1.2
-## How far the housing hangs below its own mounting origin, in authored units.
-## The bank uses it to sit the housing clear of the concourse's brass rail.
-const MALL_PAYPHONE_DROP := 0.3083
+# The replacement is authored in metres with its rear mounting plane at z=0
+# and its visible face on +Z, matching the mall wall-facing convention without
+# a corrective turn. Its native 0.764m height already matches the old model's
+# displayed size, so it remains at 1:1 scale.
+const MALL_PAYPHONE_PATH := "res://models/provided/mall_payphone/mall_payphone.glb"
+const MALL_PAYPHONE_SCALE := 1.0
+## The cabinet intentionally crosses the 1.21m brass rail. Keeping the whole
+## model above it put the handset well above the player's 1.377m eye line.
+const MALL_PAYPHONE_MOUNT := 1.04
 const MALL_DIRECTORY_PATH := \
 	"res://models/cc_by/mall_directories/mall_directories.glb"
 const MALL_DIRECTORY_SCALE := 0.01
@@ -276,9 +277,12 @@ const ANNEX_SHELVING_CENTRE := Vector3(1.75, 0.0, 0.75)
 # not approximate visual offsets.
 const ANNEX_SHELVING_DECK_TOPS := [0.09375, 0.69375, 1.14375]
 const ANNEX_CHAIR_PATH := \
-	"res://models/cc_by/wood_dining_chair/wood_dining_chair.glb"
-const ANNEX_CHAIR_SCALE := 0.45
-const ANNEX_CHAIR_CENTRE := Vector3(0.0, -1.0, 0.0)
+	"res://models/cc_by/backrooms_ladderback_chair/backrooms_ladderback_chair.tscn"
+# The wrapper turns the source's -X front to +Z, including for photo anomalies.
+# Metre-scale bounds after that turn: 0.492939 x 0.902121 x 0.561025m.
+const ANNEX_CHAIR_SCALE := 1.0
+const ANNEX_CHAIR_CENTRE := Vector3(0.0, 0.0, 0.0044533)
+const ANNEX_CHAIR_COLLIDER_SIZE := Vector3(0.56, 0.94, 0.60)
 const ANNEX_EXIT_DOOR_PATH := \
 	"res://models/cc_by/backrooms_vr_exit_door/backrooms_exit_door.scn"
 const AIRPORT_SEATS_PATH := \
@@ -408,12 +412,13 @@ const SCH_CHEMISTRY_COUNTER_POINTS := [
 	Vector3(-1.90, 0.864, 1.04),
 ]
 
-## CC BY replacement for the former noncommercial desk phone. The downloaded
-## scene is authored in large units; these measured bounds restore a compact
-## 0.31 x 0.16 x 0.39m phone on the desk.
-const OFFICE_PHONE_PATH := "res://models/cc_by/office_phone/office_phone.glb"
-const OFFICE_PHONE_SCALE := 0.025
-const OFFICE_PHONE_CENTRE := Vector3(0.02702, -0.0063, -0.88795)
+## Project-owner supplied vintage desk phone, authored directly in metres with
+## its base on y=0 and front on +Z. Re-centre its intentionally asymmetric
+## handset/base footprint without changing its natural 0.354m desk scale.
+const OFFICE_PHONE_PATH := \
+	"res://models/provided/vintage_desk_phone/vintage_desk_phone.glb"
+const OFFICE_PHONE_SCALE := 1.0
+const OFFICE_PHONE_CENTRE := Vector3(-0.039803, 0.0, -0.0040)
 
 # --- authored replacements for generated furniture ---------------------------
 #
@@ -427,17 +432,11 @@ const OFFICE_PHONE_CENTRE := Vector3(0.02702, -0.0063, -0.88795)
 # baize — not to total height. Fitting a total is how the school desk, the
 # hydrotherapy bath and the roulette table each ended up short.
 
-## Third casino cabinet. The 1-in-5 machines that used to be assembled out of
-## 42 primitives are this instead; the generated cabinet stays as the fallback.
-## The source shipped a 5.2m ground plane baked into the scene, since removed.
-const SLOT_ALT_PATH := "res://models/cc_by/slot_machine_alt/slot_machine_alt.glb"
-const SLOT_ALT_SCALE := 0.81064
-const SLOT_ALT_CENTRE := Vector3(0.0, -0.1019, 0.0539)
-
 const CHANGE_MACHINE_PATH := \
 	"res://models/authored/vegas_change_machine/vegas_change_machine.glb"
 const CHANGE_MACHINE_SCALE := 1.0
 const CHANGE_MACHINE_CENTRE := Vector3.ZERO
+const CHANGE_MACHINE_BOUNDS := AABB(Vector3(-0.54, 0, -0.3265), Vector3(1.08, 1.74, 0.68))
 
 ## Two brass stanchions and the swag between them, as one unit. Posts sit
 ## 1.891m apart at this scale, which is what the queue lines are laid out on
@@ -526,20 +525,19 @@ const SCH_CLEANING_CART_PATH := \
 const SCH_CLEANING_CART_SCALE := 0.16
 const SCH_CLEANING_CART_CENTRE := Vector3(0.0, 0.000065, -0.831794)
 
-## Painted storefront fascias cropped from a CC BY-NC source. Every use of these
-## runs through `_mall_unit_sign`, so the noncommercial dependency can be lifted
-## out in one edit; the generated MALL_NAMES lettering is the fallback and stays.
-const MALL_SIGN_DIR := "res://textures/cc_by_nc/mall_signs/"
+## Original storefront artwork generated for this project. All nine faces use
+## the same 6:1 format; generated MALL_NAMES lettering remains the fallback.
+const MALL_SIGN_DIR := "res://textures/authored/mall_signs/"
 # Fit bounds for a painted board inside the 4.4 x 0.50m generated fascia. The
 # placement and its audit read the same two numbers, so widening one cannot
 # silently invalidate the other.
 const MALL_SIGN_MAX_W := 4.25
 const MALL_SIGN_MAX_H := 0.46
 const MALL_SIGN_FACES := [
-	["key_of_beauty", 7.71], ["purple_side", 6.15], ["natural_shop", 3.84],
-	["since_1977", 4.75], ["blue_marine", 6.20], ["royal_grill", 6.04],
-	["boutique_marguerite", 4.10], ["cafe_paradise_noon", 5.21],
-	["sunshine_princess", 5.75],
+	["key_of_beauty", 6.0], ["purple_side", 6.0], ["natural_shop", 6.0],
+	["since_1977", 6.0], ["blue_marine", 6.0], ["royal_grill", 6.0],
+	["boutique_marguerite", 6.0], ["cafe_paradise_noon", 6.0],
+	["sunshine_princess", 6.0],
 ]
 
 const ART_VEGAS := [
@@ -712,7 +710,7 @@ const POOL_PILLAR_RADIUS := POOL_PIER * 0.62
 const POOL_CORNER_SEGMENTS := 10
 const POOL_LANE := 2.9
 const POOL_LADDER_W := 0.52
-const POOL_LADDER_PATH := "res://models/cc_by/pool_ladder/pool_ladder.glb"
+const POOL_LADDER_PATH := "res://models/provided/pool_ladder/pool_ladder.glb"
 const POOL_CHAIR_PATH := "res://models/cc_by/plastic_chair/plastic_chair.glb"
 const POOL_CHAIR_MESH := "polySurface15_blinn6_0"
 const POOL_CHAIR_CENTRE := Vector3(1.664, 0.0, -0.025)
@@ -726,8 +724,6 @@ const POOL_JACUZZI_PATH := \
 # These are the combined, transformed bounds—not the raw mesh accessor bounds.
 const POOL_JACUZZI_SCALE := 0.0125
 const POOL_JACUZZI_CENTRE := Vector3(1.8269, -43.2387, 25.0056)
-const POOL_LIGHT_PATH := "res://models/cc_by/pool_light/pool_light.glb"
-const POOL_LIGHT_SCALE := 0.045
 const BRUTAL_LIGHT_PATH := \
 	"res://models/cc_by/fluorescent_light_fixtures/fluorescent_light_fixtures.glb"
 const DATA_CENTER_CONSOLE_PATH := \
@@ -762,7 +758,6 @@ const POOL_BUOY_TINTS := [
 ]
 
 static var _prop_preloads_requested := false
-static var _slot_scene: PackedScene
 static var _attributed_scenes := {}
 static var _scrawl_fonts := {}
 static var profile_build_stages := false
@@ -827,7 +822,9 @@ var _descent_lift_rig := {}
 var _descent_arrival_rig := {}
 var _blackout := false
 var _blackout_lights := {}
-var _blackout_meshes := {}
+var _blackout_probes := {}
+var _blackout_surfaces := preload("res://scripts/blackout_surfaces.gd").new()
+var _dead_surfaces := preload("res://scripts/blackout_surfaces.gd").new()
 var _pool_reflection: ReflectionProbe
 var _furnishing_group_serial := 0
 ## Stable semantic identities for objects whose generated node instances may
@@ -882,8 +879,8 @@ static func _prop_preload_paths() -> Array[String]:
 	for mname in CC0_PROP_NAMES:
 		paths.append("res://models/cc0/%s/%s_1k.gltf" % [mname, mname])
 	paths.append(OFFICE_CHAIR_PATH)
-	paths.append(SLOT_MACHINE_PATH)
 	paths.append_array(CASINO_SLOT_PATHS)
+	paths.append(CASINO_SERVICE_CART_PATH)
 	paths.append(PRISON_BUNK_PATH)
 	paths.append(PRISON_TOILET_PATH)
 	paths.append(PRISON_DOOR_OLD_PATH)
@@ -944,7 +941,6 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(SCH_CHEMISTRY_TABLE_PATH)
 	paths.append(CHEMISTRY_GLASSWARE_PATH)
 	paths.append(OFFICE_PHONE_PATH)
-	paths.append(SLOT_ALT_PATH)
 	paths.append(CHANGE_MACHINE_PATH)
 	paths.append_array(NOSTALGIA_PROPS.paths())
 	paths.append(ROPE_BARRIER_PATH)
@@ -972,9 +968,10 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 	var paths: Array[String] = []
 	match p_theme:
 		0:
-			paths.append_array([SLOT_MACHINE_PATH, SLOT_ALT_PATH, CHANGE_MACHINE_PATH])
+			paths.append(CHANGE_MACHINE_PATH)
 			paths.append_array(CASINO_SLOT_PATHS)
-			paths.append_array([CASINO_BLACKJACK_PATH, CASINO_ROULETTE_PATH, ROPE_BARRIER_PATH])
+			paths.append_array([CASINO_BLACKJACK_PATH, CASINO_ROULETTE_PATH,
+				CASINO_SERVICE_CART_PATH, ROPE_BARRIER_PATH])
 			paths.append("res://models/cc0/Chandelier_03/Chandelier_03_1k.gltf")
 			paths.append("res://models/cc0/bar_chair_round_01/bar_chair_round_01_1k.gltf")
 			paths.append("res://models/cc0/coffee_table_round_01/coffee_table_round_01_1k.gltf")
@@ -1062,7 +1059,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
 		9:
 			paths.append_array([POOL_BUOY_PATH, POOL_LADDER_PATH, POOL_CHAIR_PATH])
-			paths.append_array([POOL_LOUNGE_CHAIR_PATH, POOL_JACUZZI_PATH, POOL_LIGHT_PATH])
+			paths.append_array([POOL_LOUNGE_CHAIR_PATH, POOL_JACUZZI_PATH])
 			paths.append_array(PoolEquipment.PATHS)
 		10:
 			paths.append_array([DATA_CENTER_CONSOLE_PATH, DATA_CENTER_RACK_BANK_PATH, DATA_CENTER_RACK_PATH])
@@ -1137,11 +1134,12 @@ static func prewarm_theme_content(ws: int, p_theme: int) -> void:
 
 ## Audit/test teardown for process-lifetime scene/prototype caches.
 static func clear_runtime_caches() -> void:
+	preload("res://scripts/blackout_surfaces.gd").clear_cache()
 	ProceduralDetails.clear_runtime_cache()
+	AirportGrandCeiling.clear_runtime_cache()
 	finish_prop_preloads()
 	FloorResourcePreloader.finish()
 	_prop_preloads_requested = false
-	_slot_scene = null
 	_attributed_scenes.clear()
 	_scrawl_fonts.clear()
 	_asy_scenes.clear()
@@ -1156,12 +1154,6 @@ static func clear_runtime_caches() -> void:
 
 ## Named process-lifetime asset cache APIs used by the construction façade.
 ## Builders never receive the mutable dictionaries or PackedScene slots.
-static func cached_slot_machine_scene() -> PackedScene:
-	if _slot_scene == null:
-		_slot_scene = _prop_scene(SLOT_MACHINE_PATH)
-	return _slot_scene
-
-
 static func cached_asylum_scene(key: String, path: String) -> PackedScene:
 	var cached: PackedScene = _asy_scenes.get(key)
 	if cached == null:
@@ -1303,9 +1295,9 @@ func build_next_stage() -> bool:
 		7:
 			if anomaly_kind >= 0:
 				activate_anomaly(anomaly_kind)
+			_maybe_probe()
 			if _build_blackout:
 				set_blackout(true)
-			_maybe_probe()
 			_profile_stage("TOTAL", _build_started_usec)
 	_build_stage = mini(_build_stage + 1, 8)
 	return _build_stage == 8
@@ -1325,10 +1317,23 @@ func record_occluder_wall(mesh: MeshInstance3D) -> void:
 		_occluder_walls.append(mesh)
 
 
-func prepare_runtime_rendering() -> void:
+func prepare_runtime_rendering(room_light_fade_begin := 0.0) -> void:
 	if _rendering_prepared:
 		return
 	_rendering_prepared = true
+	# Builders keep their authored close-up illumination and short shadow budget.
+	# Extend only architectural lighting, not little indicators/prop glows. This
+	# is an installation policy shared by streaming and blackout replacements.
+	if room_light_fade_begin > 0.0:
+		for node in find_children("*", "Light3D", true, false):
+			var light := node as Light3D
+			if not light.get_meta("stream_room_light", false) or not light.distance_fade_enabled:
+				continue
+			# Light and shadow share a fade length. Preserve that length, and the
+			# original effective shadow horizon even when shadow fade was left at
+			# its default (previously the whole light disappeared before it).
+			light.distance_fade_shadow = minf(light.distance_fade_shadow, light.distance_fade_begin)
+			light.distance_fade_begin = maxf(light.distance_fade_begin, room_light_fade_begin)
 	for mesh in _occluder_walls:
 		if not is_instance_valid(mesh) or mesh.get_parent() == null:
 			continue
@@ -1374,8 +1379,9 @@ func _build_charging_station() -> void:
 
 ## Search the finished room, including non-colliding model details and nested
 ## props. Never force an occupied fallback just to preserve the lattice.
-## Place after furniture shifts/culling/mutations so every surviving slot bank
-## has a usable change machine. Charging stations then avoid this cabinet too.
+## Place after furniture shifts/culling/mutations so slot banks get a usable
+## wall-backed change machine wherever the room has a safe bay. Fully open
+## areas omit this optional fixture. Charging stations avoid the cabinet too.
 func _nostalgia_prop(id: int, at := Vector3(6, 0, 6), yaw := 0.0) -> Node3D:
 	return NOSTALGIA_PROPS.add(_scene_writer, id, at, yaw)
 
@@ -1383,26 +1389,9 @@ func _nostalgia_prop(id: int, at := Vector3(6, 0, 6), yaw := 0.0) -> Node3D:
 func _ensure_slot_room_change_machine() -> void:
 	if theme != 0 or slot_machine_count() == 0:
 		return
-	var geometry := ChargingStationPlacement.new(self)
-	var doors := _doorway_clearance_rects()
-	var cabinet := AABB(Vector3(-0.56, 0.06, -0.34), Vector3(1.12, 1.70, 0.72))
-	var approach := AABB(Vector3(-0.56, 0.06, 0.38), Vector3(1.12, 1.70, 0.90))
-	# Prefer perimeter bays, then a free-standing position beside the banks.
-	var sites: Array[Dictionary] = []
-	for dir in 4:
-		for along in range(2, 23):
-			sites.append({"at": _wall_pt(dir, float(along) * 0.5, 0.65, 0.0),
-				"yaw": _wall_facing(dir)})
-	for x in range(2, 23):
-		for z in range(2, 23):
-			for turn in 4:
-				sites.append({"at": Vector3(float(x) * 0.5, 0, float(z) * 0.5),
-					"yaw": float(turn) * PI * 0.5})
-	for site in sites:
-		if geometry.clear(site.at, site.yaw, false, doors, cabinet, approach):
-			_level_builder._change_machine_at(site.at, site.yaw)
-			return
-	push_error("No clear change-machine site in slot room %s seed %d" % [cell, wseed])
+	var site := NOSTALGIA_PROPS.machine_site(self, CHANGE_MACHINE_BOUNDS)
+	if not site.is_empty():
+		_level_builder._change_machine_at(site.at, site.yaw)
 
 
 func _pick_charging_station_site(preferred: Dictionary = {}) -> Dictionary:
@@ -1445,11 +1434,14 @@ func _add_charging_station(site: Dictionary) -> void:
 ## object, placed with the same authored-centre convention as its home floor.
 ## `size` is the approximate collider footprint; zero means walk-through.
 const BLEED_PROPS := {
-	0: [SLOT_ALT_PATH, SLOT_ALT_SCALE, SLOT_ALT_CENTRE, Vector3(0.6, 1.8, 0.6)],
+	# Same Royal Sevens cabinet as the casino floor, centred on its measured
+	# footprint. Anomalies/bleed must not resurrect the retired slot asset.
+	0: [CASINO_SLOT_PATHS[0], 1.0, Vector3(0.0385, 0.0, 0.092),
+		Vector3(0.847, 2.239, 0.856)],
 	1: [OFFICE_WATER_COOLER_PATH, OFFICE_WATER_COOLER_SCALE,
 		OFFICE_WATER_COOLER_CENTRE, Vector3(0.42, 1.3, 0.42)],
 	2: [ANNEX_CHAIR_PATH, ANNEX_CHAIR_SCALE, ANNEX_CHAIR_CENTRE,
-		Vector3(0.55, 0.9, 0.55)],
+		ANNEX_CHAIR_COLLIDER_SIZE],
 	4: [AIRPORT_LUGGAGE_PATH, AIRPORT_LUGGAGE_SCALE, Vector3.ZERO,
 		Vector3.ZERO],
 	5: [ASY_BED_PATH, ASY_BED_SCALE, ASY_BED_CENTRE, Vector3(1.0, 0.9, 2.0)],
@@ -2434,7 +2426,9 @@ func _build_floor_ceiling() -> void:
 		return
 	if theme == 4:
 		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.terrazzo_photo())
-		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.airport_ceiling())
+		var ceiling_material := Mats.air_coffer_inset() \
+			if AirportGrandCeiling.applies(ceil_h, style) else Mats.airport_ceiling()
+		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), ceiling_material)
 		return
 	if theme == 5:
 		var fmat: Material = Mats.asy_floor()
@@ -3203,6 +3197,7 @@ func _furniture_mutation_eligible(pivot: Node3D) -> bool:
 	if pivot == null or not pivot.has_meta("furnishing_group"):
 		return false
 	if pivot.has_meta("annex_architecture") \
+			or bool(pivot.get_meta("fixed_furnishing", false)) \
 			or pivot.has_meta("wall_utility_dir") \
 			or pivot.has_meta("annex_ac_mount") \
 			or pivot.has_meta("annex_attached_half_wall"):
@@ -3813,7 +3808,7 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		if theme == 2:
 			_level_builder._annex_register_ceiling_obstruction(
 				Vector3(c, 0.0, plane), ln, wall_t, 0.0, y1)
-	if theme in [0, 7]:
+	if theme in [0, 1, 7]:
 		wall_mesh.set_meta("fixture_backing_wall", true)
 	record_occluder_wall(wall_mesh)
 	if theme == 9:
@@ -4871,9 +4866,11 @@ func _troffer(at: Vector3, lens: Vector2, pmat: Material, frame: Material) -> Me
 func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float) -> OmniLight3D:
 	if not flicker:
 		var l := OmniLight3D.new()
+		l.set_meta("stream_room_light", true)
 		l.light_energy = energy
 		return l
 	var fl := FlickerLight.new()
+	fl.set_meta("stream_room_light", true)
 	fl.base_energy = energy
 	fl.mats = [pmat]
 	fl.rng_seed = WorldGen.h(wseed, cell.x, cell.y, 10)
@@ -4938,6 +4935,21 @@ func _build_props() -> void:
 	if descent_target or descent_arrival:
 		return
 	var split := _resolved_room_split()
+	if _build_context.optional_discovery and theme != 9:
+		# Reserve a quiet side room for the actual, optional tape encounter.
+		set_meta("optional_discovery", true)
+		return
+	if _build_context.route_landmark == RouteSetpieces.CLOCK_NAME and theme != 9:
+		RouteSetpieces.new(_build_context, _scene_writer).build_landmark(true)
+	elif not _build_context.route_landmark.is_empty() and theme != 9:
+		var setpiece := RouteSetpieces.new(_build_context, _scene_writer)
+		set_meta("route_landmark", _build_context.route_landmark)
+		if not setpiece.is_native():
+			var mark := get_child_count()
+			var collider_mark := body.get_child_count()
+			setpiece.build_landmark()
+			_clear_furnishings_from_doorways(mark, collider_mark)
+			return
 	if theme == 1 and style != WorldGen.OFFICE_CORRIDOR:
 		_level_builder._office_air_conditioners(split)
 	if not split.is_empty():
@@ -5216,6 +5228,10 @@ func _build_props() -> void:
 		# on a multi-cell room shears it off those walls — stranding ledge
 		# ladders over open water, sometimes outside the cell — and the
 		# doorway cull then deletes the very decks a door steps onto.
+		if not _build_context.route_landmark.is_empty():
+			set_meta("route_landmark", _build_context.route_landmark)
+			var setpiece := RouteSetpieces.new(_build_context, _scene_writer)
+			if not setpiece.is_native(): setpiece.build_landmark()
 		return
 	_shift_props(off, n0, b0)
 	if style == WorldGen.STYLE_SLOTS:
@@ -5775,6 +5791,9 @@ func _descent_elevator(dir: int) -> void:
 	hit.name = "DescentLiftCall"
 	hit.access_check = _descent_lift_accessible.bind(hit)
 	hit.prompt_text = "E — call lift"
+	hit.prompt_provider = func() -> String:
+		return "E — call lift" if descent_lift_ready() \
+			else "E — call lift · WATCH THE TAPE TO LEAVE"
 	# The whole car front is the target. A 0.5m plate on the right jamb was
 	# findable only if you already knew it was there, which reads in play as
 	# "the elevator will not open".
@@ -6404,34 +6423,42 @@ func set_blackout(on: bool) -> void:
 	if is_instance_valid(_pool_reflection):
 		_pool_reflection.set_blackout(on)
 	if on:
-		if _blackout or not _blackout_lights.is_empty() \
-				or not _blackout_meshes.is_empty():
+		if _blackout:
 			return
 		for node in find_children("*", "Light3D", true, false):
 			var light := node as Light3D
 			_blackout_lights[light] = [light.visible, light.light_energy]
 			light.visible = false
-		for node in find_children("*", "MeshInstance3D", true, false):
-			var mesh := node as MeshInstance3D
-			if _mesh_is_emissive(mesh):
-				_blackout_meshes[mesh] = mesh.visible
-				mesh.visible = false
+		for node in find_children("*", "ReflectionProbe", true, false):
+			var probe := node as ReflectionProbe
+			if probe == _pool_reflection:
+				continue # its capture scheduling has its own blackout contract
+			_blackout_probes[probe] = [probe.intensity, probe.visible]
+			probe.intensity = 0.0
+			# Intensity only removes specular reflection: a cached probe can still
+			# supply diffuse room lighting. Disable the entire probe, and prevent
+			# freshly streamed UPDATE_ONCE probes capturing the unpowered room.
+			probe.visible = false
+		_blackout_surfaces.apply(self)
 		_blackout = true
 		return
-	if _blackout_lights.is_empty() and _blackout_meshes.is_empty():
-		_blackout = false
+	if not _blackout:
 		return
 	for light in _blackout_lights:
 		if is_instance_valid(light):
 			var state: Array = _blackout_lights[light]
 			light.visible = bool(state[0])
 			light.light_energy = float(state[1])
-	for mesh in _blackout_meshes:
-		if is_instance_valid(mesh):
-			mesh.visible = bool(_blackout_meshes[mesh])
+	for probe in _blackout_probes:
+		if is_instance_valid(probe):
+			probe.intensity = float(_blackout_probes[probe][0])
+			probe.visible = bool(_blackout_probes[probe][1])
+	_blackout_surfaces.restore()
 	_blackout_lights.clear()
-	_blackout_meshes.clear()
+	_blackout_probes.clear()
 	_blackout = false
+	if anomaly_kind == 0:
+		_dead_surfaces.apply(self)
 
 
 ## Presentation-only mutations never touch walls, floors or connectivity.
@@ -6447,13 +6474,8 @@ func activate_anomaly(kind: int) -> void:
 				_blackout_lights[light] = state
 			light.visible = false
 			light.light_energy = 0.0
-		for node in find_children("*", "MeshInstance3D", true, false):
-			var mesh := node as MeshInstance3D
-			if not _mesh_is_emissive(mesh):
-				continue
-			if _blackout_meshes.has(mesh):
-				_blackout_meshes[mesh] = false
-			mesh.visible = false
+		if not _blackout:
+			_dead_surfaces.apply(self)
 	elif kind == 1 and (WorldGen.corridor(wseed, cell) != 0 \
 			or not WorldGen.room_split(wseed, room_root, theme).is_empty() \
 			or anomaly_player == null):
@@ -6762,13 +6784,6 @@ func mutation_rebuild_valid() -> bool:
 	return mutation_furniture_changed_groups > 0 \
 		and mutation_furniture_clearance_violations() == 0 \
 		and doorway_clearance_violations() == 0
-
-
-func _mesh_is_emissive(mesh: MeshInstance3D) -> bool:
-	var mat := mesh.material_override
-	if mat is StandardMaterial3D:
-		return (mat as StandardMaterial3D).emission_enabled
-	return false
 
 
 func _has_slot_rear(node: Node) -> bool:
@@ -8590,6 +8605,14 @@ func asylum_authored_audit() -> Dictionary:
 			report["facade_doors"] += 1
 			if not bool(node.get_meta("locked_facade", false)):
 				report["violations"] += 1
+			var dir := int(node.get_meta("asylum_wall_dir", -1))
+			if dir < 0 or dir > 3:
+				report["violations"] += 1
+			else:
+				var inward := -Vector3(WorldGen.DIRV[dir].x, 0,
+					WorldGen.DIRV[dir].y)
+				if (node as Node3D).basis.z.dot(inward) < 0.999:
+					report["violations"] += 1
 		if not node.has_meta("asylum_authored_leaf"):
 			continue
 		report["casing_leaves"] += 1

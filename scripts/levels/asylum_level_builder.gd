@@ -380,8 +380,9 @@ func _asy_locked_door_wall(dir: int, plane: float) -> void:
 	var n = -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner = plane + n * (Chunk.T * 0.5)
 	var along = lerpf(3.2, 8.8, ctx.random01(1190 + dir))
-	var yaw = (PI if dir == 0 else 0.0) if dir < 2 \
-		else (PI / 2.0 if dir == 2 else -PI / 2.0)
+	# ASY_DOOR_FACE_YAW normalizes every leaf to local +Z. Use the shared
+	# room-facing wall yaw; the old X-facing convention turned it edge-on.
+	var yaw = scene.wall_facing(dir)
 	var pos = Vector3(inner + n * 0.03, 0, along) if dir < 2 \
 		else Vector3(along, 0, inner + n * 0.03)
 	var pick = WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, 1194 + dir) % Chunk.ASY_DOOR_PATHS.size()
@@ -396,6 +397,7 @@ func _asy_locked_door_wall(dir: int, plane: float) -> void:
 		pivot.free()
 		return
 	pivot.set_meta("wall_mounted_asylum_door", true)
+	pivot.set_meta("asylum_wall_dir", dir)
 	pivot.set_meta("locked_facade", true)
 	inst.set_meta("asylum_authored_leaf", pick)
 
@@ -727,6 +729,7 @@ func _asy_treatment() -> void:
 	sp.distance_fade_enabled = true
 	sp.distance_fade_begin = 20.0
 	sp.distance_fade_length = 8.0
+	sp.set_meta("stream_room_light", true)
 	scene.add_node(sp)
 	# the barber chair in the corner is somehow worse than the table
 	if ctx.random01(923) < 0.6:

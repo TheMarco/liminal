@@ -11,6 +11,13 @@ var prompt_text := "E — interact"
 var enabled := true
 ## Optional spatial/access rule, checked both for focus and activation.
 var access_check: Callable
+## Evaluated only while the player is aiming here, so prerequisites can change
+## without ticking every interactable or requiring the player to look away.
+var prompt_provider: Callable
+
+
+func get_prompt() -> String:
+	return str(prompt_provider.call()) if prompt_provider.is_valid() else prompt_text
 
 
 func _init() -> void:

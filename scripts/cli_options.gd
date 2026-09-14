@@ -21,6 +21,8 @@ var yaw_given := false
 
 # --- mode ---
 var descent := false
+## Interactive Descent sandbox: real rules, freely selectable floors, no campaign saves.
+var test_mode := false
 var descent_floor := -1          # 1-based on the command line, -1 when absent
 var attention := -1.0            # -1 when not overridden
 
@@ -94,6 +96,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.active_level = lv if WorldGen.THEMES.has(lv) else 0
 		elif arg == "--mode=descent":
 			o.descent = true
+		elif arg == "--test-mode":
+			o.test_mode = true
 		elif arg.begins_with("--descent-floor="):
 			o.descent_floor = int(arg.substr(16))
 		elif arg.begins_with("--attention="):
@@ -167,6 +171,9 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.whispers = true
 		elif arg == "--heartbeat":
 			o.heartbeat = true
+	if o.test_mode:
+		o.descent = true
+		o.nologo = true
 	return o
 
 

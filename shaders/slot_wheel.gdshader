@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled;
+uniform float mains_power : hint_range(0.0, 1.0) = 1.0;
 
 // Wheel-of-fortune style bonus wheel topper: colored wedges with white
 // separators and number blocks, a black rim with chasing lamps, and a gold
@@ -68,7 +69,7 @@ void fragment() {
 		if (r < 0.1) c = vec3(0.9, 0.15, 0.2);
 	}
 	ALBEDO = c * 0.82;
-	EMISSION = c * max(em - 0.86, 0.0) * 0.74;
+	EMISSION = c * max(em - 0.86, 0.0) * 0.74 * mains_power;
 	ROUGHNESS = 0.3;
 	METALLIC = 0.06;
 	SPECULAR = 0.56;

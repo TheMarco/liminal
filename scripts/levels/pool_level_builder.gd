@@ -830,6 +830,11 @@ func _pool_dry_slab_piece(center: Vector2, size: Vector2) -> void:
 
 
 func _pool_planned_jacuzzi_site() -> Vector3:
+	# Floors are built cell-by-cell, but a merged room's props are built only by
+	# its anchor. A non-anchor used to cut this opening during the floor pass and
+	# then skip the later prop pass, leaving an empty tiled jacuzzi pit.
+	if not ctx.is_room_anchor:
+		return Vector3.INF
 	if ctx.style == WorldGen.POOL_DECK:
 		if ctx.cell == Vector2i.ZERO:
 			return Vector3(8.4, Chunk.POOL_DRY_Y, 8.2)
@@ -1789,14 +1794,13 @@ func _pool_handrail(dir: int, inset: float) -> void:
 func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
 		site = "wall") -> void:
 	along = clampf(along, 1.1, WorldGen.CELL_SIZE - 1.1)
-	# Placement computed from the model's measured anatomy, not guessed. In its
+	# Placement computed from the replacement model's measured anatomy. In its
 	# own space: the deck flanges sit at y ≈ 0 and z ≈ 0, the grab rails arch
-	# to +0.79 ABOVE that plane, and the treads hang to −0.46 BELOW it at
-	# z 0.47–0.58. So y = 0 is the DECK PLANE and +Z is the WATER direction.
-	# Seating it is therefore exact: origin a hand's width onto the dry side of
-	# the lip, raised to POOL_DRY_Y, +Z yawed toward the water. The flanges
-	# land on tile, the rails stand over the deck, and the treads overhang the
-	# edge and descend through the waterline — the reference photo, verbatim.
+	# to +0.65 ABOVE that plane, and the three treads hang to −0.73 BELOW it.
+	# The lower wall standoffs turn back toward the deck and end at z ≈ −0.49.
+	# So y = 0 is the DECK PLANE and -Z is the WATER direction. The gameplay visual
+	# must sit 0.49 m behind the lip for those standoffs to meet the basin wall;
+	# the gameplay pivot keeps its established 0.15 m setback.
 	var setback = 0.15
 	var pivot = Node3D.new()
 	var off = inward * setback
@@ -1816,10 +1820,15 @@ func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
 		scene.set_chunk_meta("pool_entry_ladder_dir", dir)
 		_pool_reserve_access(dir, edge, along, 1.60, 1.60, 0.80)
 	# Water direction along the working axis is -inward; the pivot's own PI/2
-	# for dir >= 2 flips the sense, hence the sign split.
-	var model_yaw = (-inward if dir < 2 else inward) * PI / 2.0
+	# for dir >= 2 flips the sense, hence the sign split. The extra half-turn
+	# accounts for this model facing -Z instead of the previous asset's +Z.
+	var model_yaw = (-inward if dir < 2 else inward) * PI / 2.0 + PI
+	var contact_setback := 0.49
+	var dry_axis := Vector3(inward if dir < 2 else -inward, 0.0, 0.0)
+	var model_at: Vector3 = Vector3(0.0, Chunk.POOL_DRY_Y, 0.0) \
+		+ dry_axis * (contact_setback - setback)
 	var inst = scene.attributed_prop_local(pivot, Chunk.POOL_LADDER_PATH,
-		Vector3(0.0, Chunk.POOL_DRY_Y, 0.0), model_yaw,
+		model_at, model_yaw,
 		Vector3.ONE * Chunk.POOL_LADDER_SCALE)
 	if inst != null:
 		inst.set_meta("pool_ladder_model", true)

@@ -7,7 +7,7 @@ const GLYPH_SHADER := preload("res://shaders/realm_bounty.gdshader")
 const STEP := 0.85
 const MAX_WALK := 36.0
 const MAX_NODES := 2800
-const RANGE := 4.5
+const RANGE := 4.5 # Placement must offer a nearby stance; this is not a shutter cutoff.
 const BOLT_HEIGHT := 2.05
 const SEARCH_BUDGET_USEC := 2000
 signal photographed()
@@ -310,10 +310,6 @@ func framing_points(cam: Camera3D) -> Array[Vector3]:
 func set_hold(on: bool) -> void:
 	_hum.stream_paused = on
 	set_process(not on)
-
-
-func capture_distance() -> float:
-	return RANGE
 
 
 func count_caption() -> String:

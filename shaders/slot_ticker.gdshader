@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled;
+uniform float mains_power : hint_range(0.0, 1.0) = 1.0;
 
 // LED jackpot ticker: valid, stable seven-segment numbers on a deep blue
 // panel. The old shader lit random segments independently, producing
@@ -65,7 +66,7 @@ void fragment() {
 	float b = 1.0 - smoothstep(0.008, 0.03, min(min(suv.x, 1.0 - suv.x), min(suv.y, 1.0 - suv.y)));
 	c = mix(c, vec3(0.90, 0.75, 0.30), b);
 	ALBEDO = c * 0.62;
-	EMISSION = c * max(em - 0.42, 0.0) * 0.72;
+	EMISSION = c * max(em - 0.42, 0.0) * 0.72 * mains_power;
 	ROUGHNESS = 0.27;
 	METALLIC = 0.0;
 	SPECULAR = 0.6;

@@ -26,7 +26,10 @@ func _collect(node: Node, parent: Transform3D, shown := true) -> void:
 		var bounds: AABB = xf * node.mesh.get_aabb()
 		if node.has_meta("pool_water_surface") or node.has_meta("pool_jacuzzi_water"):
 			water.append(bounds)
-		elif shown:
+		elif shown and not node.get_meta("surface_wear_patch", false):
+			# Stains/repaint are zero-thickness visual overlays, offset a few
+			# millimetres from their supporting wall to prevent z-fighting.
+			# They must not reject a cabinet seated against that same wall.
 			obstacles.append(bounds)
 	if node is CollisionShape3D and node.shape != null and not node.disabled:
 		var bounds: AABB = xf * node.shape.get_debug_mesh().get_aabb()
@@ -38,14 +41,15 @@ func _collect(node: Node, parent: Transform3D, shown := true) -> void:
 
 func clear(at: Vector3, yaw: float, pool: bool, doors: Array[Rect2],
 		cabinet_bounds := AABB(Vector3(-0.43, 0.06, -0.36), Vector3(0.86, 1.78, 0.72)),
-		approach_bounds := AABB(Vector3(-0.43, 0.06, 0.36), Vector3(0.86, 1.78, 0.90))) -> bool:
+		approach_bounds := AABB(Vector3(-0.43, 0.06, 0.36), Vector3(0.86, 1.78, 0.90)),
+		cell_inset := 0.30) -> bool:
 	var xf := Transform3D(Basis(Vector3.UP, yaw), at)
 	# Cabinet including trim, plus a standing space facing its +Z front.
 	var cabinet := xf * cabinet_bounds
 	var approach := xf * approach_bounds
 	for volume in [cabinet, approach]:
-		if volume.position.x < 0.30 or volume.end.x > 11.70 \
-				or volume.position.z < 0.30 or volume.end.z > 11.70:
+		if volume.position.x < cell_inset or volume.end.x > WorldGen.CELL_SIZE - cell_inset \
+				or volume.position.z < cell_inset or volume.end.z > WorldGen.CELL_SIZE - cell_inset:
 			return false
 		for obstacle in obstacles:
 			if volume.intersects(obstacle):

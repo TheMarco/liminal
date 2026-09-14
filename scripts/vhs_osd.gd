@@ -79,6 +79,41 @@ static func make_label(size: int, color := INK) -> Label:
 	return label
 
 
+## Shared archive/confirmation controls: quiet until hovered or focused.
+static func style_button(button: Button, size: int) -> void:
+	button.focus_mode = Control.FOCUS_ALL
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.add_theme_font_override("font", FONT)
+	button.add_theme_font_size_override("font_size", size)
+	button.add_theme_color_override("font_color", INK)
+	button.add_theme_color_override("font_hover_color", Color(1.0, 0.96, 0.83))
+	button.add_theme_color_override("font_focus_color", Color(1.0, 0.96, 0.83))
+	button.add_theme_color_override("font_disabled_color", Color(0.44, 0.44, 0.40))
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.045, 0.039, 0.031, 0.94)
+	normal.border_color = Color(0.38, 0.35, 0.28)
+	normal.set_border_width_all(1)
+	normal.content_margin_left = 16
+	normal.content_margin_right = 16
+	normal.content_margin_top = 8
+	normal.content_margin_bottom = 8
+	button.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.11, 0.095, 0.065, 0.98)
+	hover.border_color = Color(0.81, 0.74, 0.55)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", hover)
+	var focus := StyleBoxFlat.new()
+	focus.bg_color = Color.TRANSPARENT
+	focus.border_color = Color(0.93, 0.86, 0.65)
+	focus.set_border_width_all(2)
+	button.add_theme_stylebox_override("focus", focus)
+	var disabled := normal.duplicate() as StyleBoxFlat
+	disabled.bg_color.a = 0.45
+	disabled.border_color.a = 0.45
+	button.add_theme_stylebox_override("disabled", disabled)
+
+
 ## Segmented block gauge in viewfinder idiom: a caption above a row of solid
 ## cells that empty right-to-left. `battery_glyph` wraps the cells in a battery
 ## outline with a terminal nub. Below `low_threshold` the fill turns red and,

@@ -82,6 +82,8 @@ static func dress(chunk) -> void:
             add(chunk._scene_writer, id, site.at, site.yaw)
 
 static func find_site(chunk, id: int) -> Dictionary:
+    if id in [4, 5]:
+        return machine_site(chunk, BOUNDS[id])
     var geometry := ChargingStationPlacement.new(chunk)
     var doors: Array[Rect2] = chunk._doorway_clearance_rects()
     var box: AABB = BOUNDS[id].grow(.035)
@@ -113,6 +115,26 @@ static func find_site(chunk, id: int) -> Dictionary:
                         return {"at":at, "yaw":yaw}
     return {}
 
+## Cabinets have a +Z customer-facing front. Keep their actual rear against
+## structural geometry, not a nominal cell edge which may be an open doorway.
+static func machine_clearance_bounds(bounds: AABB) -> AABB:
+    var box := bounds.grow(.035)
+    # Side/front clearance is useful, but rear padding would force an air gap.
+    box.size.z -= .035
+    box.position.z = bounds.position.z
+    box.size.y -= .095
+    box.position.y = .06
+    return box
+
+static func machine_site(chunk, bounds: AABB) -> Dictionary:
+    var box := machine_clearance_bounds(bounds)
+    var approach := AABB(Vector3(box.position.x, .06, box.end.z),
+        Vector3(box.size.x, minf(1.8, box.size.y), .90))
+    # Casino skirting projects 5.55cm; office walls have no baseboard.
+    var rear_gap := .057 if chunk.theme == 0 else .002
+    return wall_site(chunk, ChargingStationPlacement.new(chunk),
+        chunk._doorway_clearance_rects(), box, approach, rear_gap, 0.0)
+
 # Explicit architectural tags prevent cabinets, glass storefronts, doors and
 # tall furniture from being mistaken for a wall. Door headers fail the height test.
 static func backing_walls(chunk) -> Array[AABB]:
@@ -128,7 +150,7 @@ static func backing_walls(chunk) -> Array[AABB]:
     return walls
 
 static func wall_site(chunk, geometry: ChargingStationPlacement, doors: Array[Rect2],
-        box: AABB, approach: AABB) -> Dictionary:
+        box: AABB, approach: AABB, rear_gap := .09, cell_inset := .30) -> Dictionary:
     for wall in backing_walls(chunk):
         if wall.position.y > .06 or wall.end.y < box.end.y: continue
         var thin_x := wall.size.x < wall.size.z
@@ -144,10 +166,11 @@ static func wall_site(chunk, geometry: ChargingStationPlacement, doors: Array[Re
             while along <= hi - half_width - .05:
                 var at := Vector3(face, 0, along) if thin_x else Vector3(along, 0, face)
                 # Clear baseboards/trim, while keeping the rear close to the wall.
-                at += normal * (.09 - box.position.z)
-                if thin_x: at.x = clampf(at.x, .30 - box.position.z, 11.70 + box.position.z)
-                else: at.z = clampf(at.z, .30 - box.position.z, 11.70 + box.position.z)
-                if geometry.clear(at, yaw, false, doors, box, approach):
+                at += normal * (rear_gap - box.position.z)
+                if cell_inset > 0.0:
+                    if thin_x: at.x = clampf(at.x, cell_inset - box.position.z, WorldGen.CELL_SIZE - cell_inset + box.position.z)
+                    else: at.z = clampf(at.z, cell_inset - box.position.z, WorldGen.CELL_SIZE - cell_inset + box.position.z)
+                if geometry.clear(at, yaw, false, doors, box, approach, cell_inset):
                     return {"at": at, "yaw": yaw}
                 along += .25
     return {}

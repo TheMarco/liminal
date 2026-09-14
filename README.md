@@ -240,6 +240,12 @@ furniture have stable identities; blackout reality changes are staged,
 transactional, persistent, reversible, and roll back exactly if construction
 cannot complete safely.
 
+Blackouts remove artificial lighting across every floor, including emissive
+surfaces, cached room reflections, indirect light and glowing fog. Ceilings and
+fixtures remain physical geometry: the torch reveals their actual materials
+instead of holes or missing panels. Normal lighting/material states restore
+exactly, and rooms streamed during the outage start unpowered too.
+
 1. Install [Godot 4.6+](https://godotengine.org/download) (Forward+ / desktop).
 2. Open this folder in the Godot project manager (Import → select `project.godot`).
 3. Press **F5** (Run Project).
@@ -249,6 +255,30 @@ Or from the command line:
 ```sh
 godot --path .
 ```
+
+### Descent test mode
+
+Launch with `godot --path . -- --test-mode` to go directly into real Descent
+with free floor selection. In an exported build, pass `-- --test-mode` to the
+game executable (on macOS, `open -n "It wants you to stay.app" --args -- --test-mode`).
+Without this explicit flag, Descent's floor keys remain disabled.
+
+- **1** Casino, **2** Office, **3** Annex, **4** Airport, **5** Asylum.
+- **6** School, **7** Mall, **8** Prison, **9** Poolrooms, **0** Data Center,
+  **−** Bloom / Upside Down. Keypad minus also works.
+- Jumps restart the chosen floor at its normal arrival with fresh resources,
+  evidence and objectives; pressing the current floor's key restarts it too.
+  Each theme uses its real campaign depth, threats, blackouts, camera and lift
+  rules. This is not Wander or invincibility mode.
+- Keys are ignored during menus, recordings, photo reviews, while inside a
+  realm excursion, or during another transition. Finish that interaction
+  before jumping.
+- Your normal campaign checkpoint and photo album are untouched. Test photos
+  stay in memory but can still be exported as PNGs. Watch history uses the
+  separate `user://test_mode_intro_playback.cfg`; settings remain shared.
+- Combine with `--seed=12345` for repeatable rooms or `--descent-floor=8` to
+  start at a particular **campaign floor** (8 is Poolrooms). The brief test-mode
+  controls hint fades away normally, leaving footage free of a debug watermark.
 
 ## Building
 
@@ -273,6 +303,10 @@ export templates installed):
 | Mouse | Look |
 | Shift | Sprint |
 | E | Use a focused terminal, elevator panel or working door |
+| C / Space (Descent) | Raise the camera / take a photograph |
+| P (Descent) | Open or close the photograph album |
+| Wheel / + / − (album) | Zoom the selected photograph |
+| Drag / WASD / 0 (album) | Pan / pan / fit the photograph |
 | F | Toggle the handheld flashlight |
 | 1–9 | Switch floor (casino / office / Annex / airport / asylum / school / mall / prison / Poolrooms) |
 | 0 | Enter the Data Center |
@@ -283,9 +317,13 @@ export templates installed):
 | Esc | Pause / settings; resume when already paused |
 | Click | Recapture mouse |
 | S (title screen) | Open settings |
+| Tab / arrows, Enter (title screen) | Navigate and activate menu buttons |
+| Esc (opening movie) | Pause without skipping the first viewing |
+| E (opening movie, after watching once) | Skip the replay |
 
 Settings persist between launches: mouse sensitivity, field of view, head bob,
-music and effects volume, VHS distortion, and reduced flashing. Pause freezes
+invert Y, toggle sprint, fullscreen, music/effects/dialogue volume, VHS distortion,
+reduced flashing, and optional cause-of-death explanations. Reset Defaults asks for confirmation. Pause freezes
 movement and Descent timers. Reduced flashing steadies fixtures and the low
 battery torch, removes the camera flash, and suppresses rapid signal glitches
 and slot-light pulses.
@@ -295,6 +333,32 @@ LAST CHANCE slot bank, the sunken Amber Lounge, and a ringing red telephone
 passage. Completed objective recordings are remembered when you retry or
 Continue in the same building; the television remains available for replay.
 Restart Descent and New Descent begin a fresh building and clear that progress.
+
+Later floors reserve a themed landmark along the main route, reusing a natural
+landmark room where one exists and a compact furniture composition otherwise.
+A nearby off-route room (preferably a dead end) also offers an optional recording;
+neither discovery adds to the photograph quota or the lift's requirements.
+Sparse environmental sounds vary by floor and avoid immediate repeats. They
+respect horror pacing and do not simulate a blackout or lift arrival.
+The nine new room-event sources use the supplied MP3s in `sounds/room_events/`:
+trolley, vent, printer, ticking, ballast, metal, pipes, drips and organic.
+They are finite, non-looping events with meter-matched playback gains;
+`knocks` and `creak` remain shared procedural sources.
+Shared buzz, drip, moan, PA voice and shiver now use volume-balanced supplied
+recordings from `sounds/shared/`. Only buzz loops; shiver remains dormant until
+an explicit playback trigger is added. The original MP3s and preparation recipe
+are retained outside the shipped resources.
+
+The camera gives near-miss hints only for visible, near-centre subjects: partial
+framing, partial obstruction, and already-documented evidence. The album supports
+pinning a reference beside another photo. Wheel or +/− zooms the active pane,
+dragging or WASD pans, and 0/FIT resets it; each pane keeps its own view.
+The stored and exported photographs remain unmodified.
+
+For listening/replacement review, run `godot --headless --path . --log-file
+/tmp/liminal-sound-previews.log --script tools/export_sound_previews.gd` and open
+`deliverables/sound-preview/index.html`. Preview WAVs are ignored by Godot and
+are not replacements for the game's source audio.
 
 ## How it works
 
@@ -310,6 +374,14 @@ neighbouring cells always agree. A cell that would be sealed on all four
 sides deterministically force-opens its lowest-hash edge. Open edges are
 either full open (rooms merge into halls) or a cased doorway, sometimes with
 a glowing EXIT sign.
+
+Separate rooms use staggered, cased openings to break up long room-to-room
+views; genuinely merged rooms stay open. The Annex's corridor grid adds widened
+turning bays every 24–36 m, with full-height wall masses and 1.46 m clear routes
+around both sides. Connections, side-room entrances and the original corridor
+widths are preserved. This reduces views into the streaming fringe without
+shrinking the draw distance; it does not guarantee that every possible oblique
+sightline is hidden.
 
 Room styles per floor range from empty halls to set pieces: slot rows,
 lounges and grand halls in the casino; corridors, cubicle clusters, storage
@@ -394,9 +466,14 @@ near-absence of props is enforced as part of its generation contract.
 - `WorldGen.WALL_P` — wall density (default 0.45).
 - `ChunkManager.LOAD_R` / `BUDGET` — stream radius and per-frame build budget.
 - Level changes synchronously build only a safe 3x3 neighbourhood; the rest of
-  the fog-bounded 5x5 view streams closest-first, one chunk per frame. glTF props begin
-  loading on worker threads behind the title card, and multi-cell rooms share a
-  single reflection probe.
+  the 7x7 view streams closest-first, at most one completed chunk per frame.
+  Prefetched rooms and the already-built outer retention ring stay visible to
+  reduce pop-in when moving or turning. Architectural lights use the same
+  streaming range (including diagonals), while short-range shadow and prop-glow
+  budgets stay unchanged. The small camera-doorway preview keeps
+  its 5x5 preparation area and expands when entered. glTF props begin loading
+  on worker threads behind the title card, and multi-cell rooms share a single
+  reflection probe.
 - Performance: the biggest costs are SDFGI, TAA, volumetric fog and omni
   shadows — set in `scripts/main.gd::_build_env`, `project.godot` and
   `chunk.gd::_build_lighting` if you need to trade fidelity for FPS.
@@ -497,9 +574,15 @@ near-absence of props is enforced as part of its generation contract.
 The rendering performance changes and measured limits are documented in
 [`docs/RENDERING_PERFORMANCE_AUDIT.md`](docs/RENDERING_PERFORMANCE_AUDIT.md).
 `tools/profile_streaming.gd` measures main-thread streaming work along a warmed
-out-and-back route. The GPU-only `audit_vhs_exposure_render.gd` and
+out-and-back route. `tools/profile_draw_distance.gd` compares the old 5x5 and
+expanded 7x7 visibility with the same rendered camera sweep; run with
+`-- --test-mode --descent-floor=4 --seed=240721 --nologo` (floor 8 checks water).
+The GPU-only `audit_vhs_exposure_render.gd` and
 `audit_occlusion_render.gd` compare actual rendered pixels; run them separately
 with a GPU rather than adding them to the headless suite.
+`tools/audit_light_distance_render.gd` checks a real Airport fixture's illumination
+at 36/48/60 metres; `tools/audit_light_distance.gd` covers the installed lighting
+policy across all floors, including unchanged accents and shadow distances.
 
 GitHub Actions runs the headless checks configured in
 `.github/workflows/audits.yml` on pushes to `main` and on pull requests.
@@ -515,31 +598,30 @@ artists; the canonical record is
 [`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md).
 
 The accepted-license policy and level-by-level high-value replacement list are
-in [`docs/ASSET_OPPORTUNITIES.md`](docs/ASSET_OPPORTUNITIES.md). Clearly
-documented CC BY-NC work is permitted for this explicitly noncommercial game;
-any future commercial build must replace those assets first. No-derivatives,
-editorial-only, personal-use-only and unclear licenses remain out of scope.
+in [`docs/ASSET_OPPORTUNITIES.md`](docs/ASSET_OPPORTUNITIES.md). Any CC BY-NC
+material must be replaced or excluded from commercial builds. The last active
+NC dependency, the mall sign faces, has been replaced with original generated
+artwork. No-derivatives, editorial-only, personal-use-only and unclear licenses
+remain out of scope.
 
-Attributed models are stored separately by license: `models/cc_by/` contains
-redistributable attribution-required work, while `models/cc_by_nc/` and
-`textures/cc_by_nc/` contain assets that make the resulting build
-noncommercial. Every such asset has a local `SOURCE.md` in addition to the
-canonical record above.
+Attributed models live in `models/cc_by/` and `models/sketchfab/`; consult each
+`SOURCE.md` for its license. Project-owned replacements supplied by the author
+live in `models/provided/`. The old NC mall textures have been deleted. Both
+export presets retain exclusions for
+`models/cc_by_nc/` and `textures/cc_by_nc/` as a safeguard.
 
 Where a download is a whole scene rather than a prop — an abandoned hospital, a
 shopping mall — only its separately-modelled objects are extracted, re-origined
 and redistributed; the building itself is not. Those extractions are listed
 individually in the asset's `SOURCE.md` with their source node names.
 
-The sole remaining CC BY-NC dependency is deliberately confined to one function,
-so it lifts out in one edit and leaves generated lettering behind:
-
-| Asset | Entry point | Falls back to |
-| --- | --- | --- |
-| Mall storefront sign faces | `mall_level_builder._mall_painted_sign` | generated `MALL_NAMES` lettering |
-
-A commercial build replaces or removes those mall sign faces. The office phone,
-prison bunk and school cleaning cart are now CC BY 4.0 replacements.
+The nine original mall sign faces are in `textures/authored/mall_signs/`, with
+generated masters and prompts in `art/mall_signs/`. Rebuild their 6:1 runtime
+textures using `bash tools/build_mall_signs.sh`. They enter the world through
+`mall_level_builder._mall_painted_sign`; missing images fall back to generated
+`MALL_NAMES` lettering. The old NC sign crops have been removed; export
+exclusions remain as a safeguard. The prison bunk and school cleaning cart are
+CC BY 4.0 replacements; the Office desk phone is now a project-owned model.
 
 Dev tools for adding content:
 

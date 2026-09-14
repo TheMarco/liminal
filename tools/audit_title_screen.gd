@@ -38,6 +38,7 @@ func _only_page_visible(title: TitleScreen, page: int) -> bool:
 
 func _key(code: Key) -> InputEventKey:
 	var event := InputEventKey.new()
+	event.keycode = code
 	event.physical_keycode = code
 	event.pressed = true
 	return event
@@ -145,9 +146,27 @@ func _run() -> void:
 		var action_entries: Array[int] = []
 		action_title.descent_requested.connect(
 			func(value: int): action_entries.append(value))
-		action_title._input(_key(request[0]))
+		root.push_input(_key(request[0]))
+		_expect(action_entries.is_empty() and not action_title._descent_selected,
+			"destructive action prepared a run before confirmation")
+		_expect(is_instance_valid(action_title._entry_confirmation),
+			"destructive action has no confirmation")
+		if is_instance_valid(action_title._entry_confirmation):
+			var expected_copy := "NEW BUILDING" if request[1] == TitleScreen.DescentEntry.NEW else "FLOOR 01"
+			_expect(action_title._entry_confirmation.warning_text.contains(expected_copy),
+				"confirmation does not distinguish restart from new building")
+			root.push_input(_key(KEY_ESCAPE))
+		await process_frame
+		_expect(action_entries.is_empty() and not action_title._descent_selected
+			and action_title._current_page == TitleScreen.Page.MAIN,
+			"cancel changed checkpoint entry or left main menu")
+		action_title._select_descent(request[1])
+		if is_instance_valid(action_title._entry_confirmation):
+			var dialog := action_title._entry_confirmation
+			dialog._yes.pressed.emit()
+			dialog._yes.pressed.emit()
 		_expect(action_entries == [request[1]],
-			"%s did not request the expected saved-run action" % request[0])
+			"confirmed action did not request exactly one saved-run entry")
 		action_title.free()
 
 	var wander_title := TitleScreen.new()

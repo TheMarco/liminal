@@ -15,6 +15,9 @@ func run() -> void:
 	settings.set_value("sensitivity", 2.0)
 	settings.set_value("field_of_view", 90.0)
 	settings.set_value("head_bob", 0.0)
+	settings.set_value("invert_y", true)
+	settings.set_value("toggle_sprint", true)
+	expect(game.player.invert_y and game.player.toggle_sprint, "comfort input toggles not applied live")
 	expect(is_equal_approx(game.player.sensitivity_multiplier, 2.0), "sensitivity not applied")
 	expect(is_equal_approx(game.player.base_fov, 90.0), "FOV not applied")
 	expect(is_equal_approx(game.player.head_bob_strength, 0.0), "head bob not applied")
@@ -52,14 +55,26 @@ func run() -> void:
 
 	var music_bus := AudioServer.get_bus_index("Music")
 	var game_bus := AudioServer.get_bus_index(SoundBank.GAME_BUS)
+	var dialogue_bus := AudioServer.get_bus_index(SoundBank.DIALOGUE_BUS)
+	expect(dialogue_bus >= 0, "dialogue bus missing")
+	expect(AudioServer.get_bus_send(dialogue_bus) == "Master"
+		and AudioServer.get_bus_effect_count(dialogue_bus) == 0, "dialogue is not dry/direct")
 	var was_muted := AudioServer.is_bus_mute(game_bus)
 	settings.set_value("music_volume", 0.3)
 	settings.set_value("effects_volume", 0.6)
+	settings.set_value("dialogue_volume", 0.25)
+	expect(is_equal_approx(AudioServer.get_bus_volume_db(dialogue_bus), linear_to_db(0.25)), "dialogue volume not applied")
 	expect(is_equal_approx(AudioServer.get_bus_volume_db(music_bus), linear_to_db(0.3)), "music volume not applied")
 	expect(is_equal_approx(AudioServer.get_bus_volume_db(game_bus), linear_to_db(0.6)), "effects volume not applied")
 	AudioServer.set_bus_mute(game_bus, true)
 	settings.set_value("effects_volume", 0.4)
 	expect(AudioServer.is_bus_mute(game_bus), "effects setting overrode existing mute")
+	settings.set_value("dialogue_volume", 0.0)
+	expect(AudioServer.get_bus_volume_db(dialogue_bus) <= -80.0,
+		"dialogue zero is not effectively silent")
+	settings.set_value("dialogue_volume", 0.5)
+	expect(AudioServer.is_bus_mute(game_bus) and not AudioServer.is_bus_mute(dialogue_bus),
+		"dialogue setting disturbed world mute or remained muted")
 	AudioServer.set_bus_mute(game_bus, was_muted)
 
 	var material: ShaderMaterial = game._post_process._found_footage_material
@@ -99,6 +114,12 @@ func _exercise_menu_inputs(game: Node) -> void:
 		await process_frame
 		await process_frame
 		var menu: PauseMenu = game._pause_menu
+		expect(menu._controls.has("dialogue_volume"), "dialogue slider missing from menu")
+		for option in ["invert_y", "toggle_sprint"]:
+			var toggle: CheckButton = menu._controls[option]
+			var before_toggle: bool = bool(game._settings.get_value(option))
+			toggle.button_pressed = not before_toggle
+			expect(game._settings.get_value(option) == not before_toggle, "checkbox failed: " + option)
 		var rect := menu._panel.get_global_rect()
 		expect(rect.position.x >= 20 and rect.end.x <= extent.x - 20 and rect.position.y >= 20 and rect.end.y <= extent.y - 20,
 			"pause panel exceeds viewport at %s: %s" % [extent, rect])

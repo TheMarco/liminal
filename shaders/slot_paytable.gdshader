@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled;
+uniform float mains_power : hint_range(0.0, 1.0) = 1.0;
 
 // Backlit pay-table glass: purple-to-blue gradient with a radial glow, an
 // arched gold title band, rows of gold/white dashed "text" with a symbol
@@ -53,7 +54,7 @@ void fragment() {
 	c = mix(c, vec3(1.0, 0.85, 0.40), b);
 	em *= 0.92 + 0.08 * sin(TIME * 1.3 + mh * 9.0);
 	ALBEDO = c * 0.68;
-	EMISSION = c * max(em - 0.42, 0.0) * 0.58;
+	EMISSION = c * max(em - 0.42, 0.0) * 0.58 * mains_power;
 	ROUGHNESS = 0.24;
 	METALLIC = 0.0;
 	SPECULAR = 0.62;

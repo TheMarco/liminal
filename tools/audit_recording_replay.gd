@@ -7,7 +7,8 @@ const PATH := "/tmp/liminal-recording-replay.cfg"
 func run() -> void:
 	var game := await boot_game(7)
 	var progress := DescentProgress.new(PATH)
-	progress.start_new(7)
+	# First-floor discovery can remap the requested seed to a viable building.
+	progress.start_new(game.world_seed)
 	game._descent_progress = progress
 	game._progress_enabled = true
 	game._set_presence(game.Presence.SILENT)
@@ -43,6 +44,8 @@ func run() -> void:
 		expect(ritual._done and game.run.tape_watched and loaded.objective_tape_completed(0),
 			"interrupting replay erased objective completion")
 		game.player.set_physics_process(false)
+	for frame in 6:
+		await process_frame
 	game._progress_enabled = false
 	loaded.clear_from_disk()
 	await teardown_game(game)

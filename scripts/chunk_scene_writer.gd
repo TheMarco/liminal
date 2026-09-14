@@ -399,10 +399,6 @@ func security_camera_wall(dir: int, plane: float) -> void:
 	_host._security_camera_wall(dir, plane)
 
 
-func slot_machine_scene() -> PackedScene:
-	return Chunk.cached_slot_machine_scene()
-
-
 func asylum_scene(key: String, path: String) -> PackedScene:
 	return Chunk.cached_asylum_scene(key, path)
 

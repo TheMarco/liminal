@@ -1,9 +1,15 @@
 class_name SoundBank
-## Procedurally synthesized audio, generated once at first use and cached.
-## Everything is math — sines, noise, envelopes — rendered into AudioStreamWAV
-## buffers, so the project still ships zero binary assets.
+## Hybrid procedural/cached supplied recordings, generated or loaded once at
+## first use and cached.
 
 const RATE := 22050.0
+const RECORDINGS := {
+	"buzz": preload("res://sounds/shared/buzz.wav"),
+	"drip": preload("res://sounds/shared/drip.wav"),
+	"moan": preload("res://sounds/shared/moan.wav"),
+	"pa_voice": preload("res://sounds/shared/pa_voice.wav"),
+	"shiver": preload("res://sounds/shared/shiver.wav"),
+}
 
 ## The reverberant bus every world sound plays on, created in
 ## main.gd::_setup_audio_bus and muted wholesale while a title card is up. It was
@@ -12,8 +18,30 @@ const RATE := 22050.0
 ## the building.
 const GAME_BUS := "Game"
 const HALL_BUS := "Hall"
+const DIALOGUE_BUS := "Dialogue"
 
 static var _c := {}
+
+static func _recording(key: String) -> AudioStreamWAV:
+	if _c.has(key):
+		return _c[key]
+	var wav: AudioStreamWAV = RECORDINGS[key]
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD if key == "buzz" else AudioStreamWAV.LOOP_DISABLED
+	wav.loop_begin = 0
+	wav.loop_end = roundi(wav.get_length() * wav.mix_rate) if key == "buzz" else 0
+	_c[key] = wav
+	return wav
+
+
+## Recordings bypass the world's reverb/mute, but still have a player volume.
+## Standalone playback scenes and previews use the same bus as the main game.
+static func ensure_dialogue_bus() -> void:
+	var idx := AudioServer.get_bus_index(DIALOGUE_BUS)
+	if idx < 0:
+		idx = AudioServer.bus_count
+		AudioServer.add_bus(idx)
+		AudioServer.set_bus_name(idx, DIALOGUE_BUS)
+	AudioServer.set_bus_send(idx, "Master")
 
 
 static func _wav(samples: PackedFloat32Array, loop := false) -> AudioStreamWAV:
@@ -69,22 +97,7 @@ static func ding() -> AudioStreamWAV:
 
 ## Looping fluorescent ballast buzz.
 static func buzz() -> AudioStreamWAV:
-	if _c.has("buzz"):
-		return _c["buzz"]
-	var n := int(RATE * 0.5)
-	var s := PackedFloat32Array()
-	s.resize(n)
-	var lp := 0.0
-	for i in n:
-		var t := float(i) / RATE
-		var v := 0.16 * sin(TAU * 120.0 * t)
-		v += 0.08 * sin(TAU * 240.0 * t + 0.7)
-		v += 0.05 * sin(TAU * 360.0 * t + 1.9)
-		lp = lerpf(lp, randf() * 2.0 - 1.0, 0.2)
-		v += 0.06 * lp
-		s[i] = v
-	_c["buzz"] = _wav(_loop_blend(s, 1100), true)
-	return _c["buzz"]
+	return _recording("buzz")
 
 
 ## 12-second loop of muffled hotel-PA organ muzak: four soft minor-seventh
@@ -220,19 +233,7 @@ static func water_rush() -> AudioStreamWAV:
 
 ## Single drip: a wet pitch-falling plink.
 static func drip() -> AudioStreamWAV:
-	if _c.has("drip"):
-		return _c["drip"]
-	var n := int(RATE * 0.28)
-	var s := PackedFloat32Array()
-	s.resize(n)
-	for i in n:
-		var t := float(i) / RATE
-		var f := 640.0 + 900.0 * exp(-34.0 * t)
-		var v := 0.5 * sin(TAU * f * t) * exp(-22.0 * t)
-		v += 0.12 * (randf() * 2.0 - 1.0) * exp(-260.0 * t)
-		s[i] = v * minf(1.0, t * 900.0)
-	_c["drip"] = _wav(s)
-	return _c["drip"]
+	return _recording("drip")
 
 
 ## Slow metal groan — old steel remembering the wind.
@@ -275,25 +276,7 @@ static func clang() -> AudioStreamWAV:
 
 ## A low human moan from rooms away — worn to almost nothing by the walls.
 static func moan() -> AudioStreamWAV:
-	if _c.has("moan"):
-		return _c["moan"]
-	var n := int(RATE * 2.4)
-	var s := PackedFloat32Array()
-	s.resize(n)
-	var lp := 0.0
-	for i in n:
-		var t := float(i) / RATE
-		var f := 168.0 - 42.0 * (t / 2.4) + 5.0 * sin(TAU * 4.7 * t)
-		var env := pow(sin(PI * t / 2.4), 1.6)
-		var v := 0.3 * sin(TAU * f * t)
-		v += 0.14 * sin(TAU * f * 2.0 * t + 0.9)
-		v += 0.07 * sin(TAU * f * 3.1 * t + 2.2)
-		# breath: slow noise, low-passed until it is only air
-		lp = lerpf(lp, randf() * 2.0 - 1.0, 0.045)
-		v += 0.12 * lp
-		s[i] = v * env
-	_c["moan"] = _wav(s)
-	return _c["moan"]
+	return _recording("moan")
 
 
 ## Three-tone descending airport PA chime — the sound before every departure
@@ -322,46 +305,7 @@ static func pa_chime() -> AudioStreamWAV:
 ## Muffled PA announcement: syllabic band-limited babble shaped like speech,
 ## smeared past intelligibility by distance and hall reverb.
 static func pa_voice() -> AudioStreamWAV:
-	if _c.has("pa_voice"):
-		return _c["pa_voice"]
-	var dur := 4.6
-	var n := int(RATE * dur)
-	var s := PackedFloat32Array()
-	s.resize(n)
-	var lp1 := 0.0
-	var lp2 := 0.0
-	var syl := 0.0        # current syllable amplitude
-	var syl_t := 0.0      # time left in current syllable/pause
-	var f0 := 118.0
-	var i := 0
-	while i < n:
-		if syl_t <= 0.0:
-			# next syllable, or a word gap
-			if randf() < 0.24:
-				syl = 0.0
-				syl_t = randf_range(0.10, 0.30)
-			else:
-				syl = randf_range(0.45, 1.0)
-				syl_t = randf_range(0.08, 0.20)
-				f0 = clampf(f0 + randf_range(-14.0, 14.0), 95.0, 150.0)
-		var t := float(i) / RATE
-		# glottal buzz: low harmonics only — a voice through too many walls
-		var v := 0.5 * sin(TAU * f0 * t) + 0.28 * sin(TAU * f0 * 2.0 * t + 0.8)
-		v += 0.14 * sin(TAU * f0 * 3.0 * t + 1.9)
-		# consonant hiss
-		lp1 = lerpf(lp1, randf() * 2.0 - 1.0, 0.3)
-		lp2 = lerpf(lp2, lp1, 0.35)
-		v = v * 0.16 + (lp1 - lp2) * 0.35
-		# syllable envelope with soft edges
-		var k := clampf(syl_t * 30.0, 0.0, 1.0)
-		v *= syl * k
-		# phrase fade in/out
-		v *= minf(1.0, t / 0.3) * minf(1.0, (dur - t) / 0.8)
-		s[i] = v * 0.75
-		syl_t -= 1.0 / RATE
-		i += 1
-	_c["pa_voice"] = _wav(s)
-	return _c["pa_voice"]
+	return _recording("pa_voice")
 
 
 ## Distant heavy jet spooling somewhere out on the field: a long low swell
@@ -442,25 +386,7 @@ static func warp() -> AudioStreamWAV:
 ## A cold exhale right at the edge of hearing — the sound of being noticed
 ## by something that was pretending to be a shadow.
 static func shiver() -> AudioStreamWAV:
-	if _c.has("shiver"):
-		return _c["shiver"]
-	var n := int(RATE * 0.8)
-	var s := PackedFloat32Array()
-	s.resize(n)
-	var lp1 := 0.0
-	var lp2 := 0.0
-	for i in n:
-		var t := float(i) / RATE
-		var k := t / 0.8
-		# breath that darkens as it fades
-		lp1 = lerpf(lp1, randf() * 2.0 - 1.0, 0.45 - 0.35 * k)
-		lp2 = lerpf(lp2, lp1, 0.3)
-		var env := pow(sin(PI * minf(k * 1.15, 1.0)), 1.6)
-		var v := (lp1 - lp2) * 0.9 * env
-		v += 0.06 * sin(TAU * 52.0 * t) * env
-		s[i] = v * 0.5
-	_c["shiver"] = _wav(s)
-	return _c["shiver"]
+	return _recording("shiver")
 
 
 ## Looping tape-head static: filtered hiss with sparse crackles. Played under

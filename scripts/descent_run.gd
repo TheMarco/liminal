@@ -1,5 +1,7 @@
 class_name DescentRun
 extends Node
+enum DeathCause { UNKNOWN, FIGURE, BLACKOUT_MOVEMENT }
+var death_cause := DeathCause.UNKNOWN
 ## State owned only by Descent. Wander never constructs this node.
 
 signal floor_reached(floor_idx: int)
@@ -287,12 +289,20 @@ func start_floor() -> void:
 	floor_reached.emit(floor_idx)
 
 
-func finish(won: bool) -> void:
+func finish(won: bool, cause := DeathCause.UNKNOWN) -> void:
 	if ended:
 		return
+	death_cause = DeathCause.UNKNOWN if won else cause
 	ended = true
 	suspended = true
 	run_ended.emit(won)
+
+
+static func death_explanation(cause: DeathCause) -> String:
+	match cause:
+		DeathCause.FIGURE: return "A FIGURE REACHED YOU. KEEP DISTANCE AND USE THE TORCH."
+		DeathCause.BLACKOUT_MOVEMENT: return "MOVEMENT DURING THE BLACKOUT GAVE YOU AWAY."
+	return ""
 
 
 ## Static so the objective chunk can present the wait without holding a

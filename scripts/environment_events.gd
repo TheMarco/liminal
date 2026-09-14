@@ -11,14 +11,25 @@ var horror_director: HorrorDirector
 var descent_mode := false
 var _time_left := 38.0
 var _busy := false
+var theme := 0
+var _bag: Array = []
+var _last_kind := ""
 
 
 func _ready() -> void:
 	_time_left = randf_range(32.0, 58.0)
 
 
-func set_level(root: Node3D) -> void:
+func set_level(root: Node3D, floor_theme := 0) -> void:
 	level_root = root
+	theme = floor_theme
+	_bag.clear()
+	_last_kind = ""
+	# Do not carry a sound from the previous floor through the transition.
+	for child in get_children():
+		if child is AudioStreamPlayer3D:
+			child.stop()
+			child.queue_free()
 	_busy = false
 	_time_left = randf_range(24.0, 46.0)
 
@@ -30,15 +41,12 @@ func _process(dt: float) -> void:
 	if _time_left > 0.0:
 		return
 	if descent_mode and horror_director != null \
-			and not horror_director.try_start_ambient(3.0):
+			and not horror_director.try_start_ambient(4.0):
 		_time_left = randf_range(4.0, 9.0)
 		return
 	_time_left = randf_range(38.0, 72.0)
 	if descent_mode:
-		# Rule-bearing darkness belongs exclusively to DescentRun. Keep the
-		# neutral knock, but never fake a blackout or a remote lift arrival.
-		_spatial_sound(SoundBank.thud(), 5.0, -8.0)
-		message.emit("THREE KNOCKS FROM BEHIND THE WALL")
+		_play_room_event()
 		return
 	var pick := randf()
 	if pick < 0.48:
@@ -64,6 +72,11 @@ func elevator_response() -> void:
 func photo_response() -> void:
 	if player == null:
 		return
+	if descent_mode:
+		# Photographs must not simulate the rule-bearing blackout either.
+		if horror_director == null or horror_director.try_start_ambient(4.0):
+			_play_room_event()
+		return
 	var pick := randf()
 	if pick < 0.4:
 		_power_sag(0.9, "")
@@ -75,6 +88,23 @@ func photo_response() -> void:
 
 func door_response() -> void:
 	_spatial_sound(SoundBank.creak(), 1.2, -13.0)
+
+
+func next_room_event() -> String:
+	if _bag.is_empty():
+		_bag = AmbientPalette.kinds(theme)
+		_bag.shuffle()
+		if _bag.size() > 1 and _bag.back() == _last_kind:
+			var first = _bag[0]
+			_bag[0] = _bag.back()
+			_bag[_bag.size() - 1] = first
+	_last_kind = str(_bag.pop_back())
+	return _last_kind
+
+
+func _play_room_event() -> void:
+	var kind := next_room_event()
+	_spatial_sound(AmbientPalette.stream(kind), randf_range(5, 9), -11.0 + AmbientPalette.gain_db(kind), true)
 
 
 func _power_sag(hold: float, caption: String) -> void:
@@ -105,7 +135,7 @@ func _power_sag(hold: float, caption: String) -> void:
 	_busy = false
 
 
-func _spatial_sound(stream: AudioStream, distance: float, volume: float) -> void:
+func _spatial_sound(stream: AudioStream, distance: float, volume: float, scatter := false) -> void:
 	if player == null:
 		return
 	var a := AudioStreamPlayer3D.new()
@@ -118,6 +148,9 @@ func _spatial_sound(stream: AudioStream, distance: float, volume: float) -> void
 	fwd.y = 0.0
 	if fwd.length_squared() < 0.01:
 		fwd = Vector3.FORWARD
+	if scatter:
+		fwd = fwd.rotated(Vector3.UP, randf_range(-PI, PI))
+		a.pitch_scale = randf_range(0.94, 1.06)
 	add_child(a)
 	a.global_position = player.global_position + fwd.normalized() * distance
 	a.finished.connect(a.queue_free)

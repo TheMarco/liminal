@@ -119,6 +119,8 @@ func _build(c: Chunk, n: String) -> bool:
 			_recipe(c, "_procedural_slot_machine").call("_procedural_slot_machine", 6.0, 6.0, 1.0, 0)
 		"_change_machine": _recipe(c, "_change_machine").call("_change_machine", 3, plane)
 		"_slot_machine_alt": _recipe(c, "_slot_machine_alt").call("_slot_machine_alt", 6.0, 6.0, 1.0, 4)
+		"_casino_service_cart": _recipe(c, "_casino_service_cart").call(
+			"_casino_service_cart", mid, 7)
 		"_rope_barrier": _recipe(c, "_rope_barrier").call("_rope_barrier", mid, 0.0, "preview")
 		"_velvet_ropes": _recipe(c, "_velvet_ropes").call("_velvet_ropes")
 		"_casino_ballroom": _recipe(c, "_casino_ballroom").call("_casino_ballroom")

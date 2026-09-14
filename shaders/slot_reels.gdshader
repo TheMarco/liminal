@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled;
+uniform float mains_power : hint_range(0.0, 1.0) = 1.0;
 
 // Main slot machine face: three reels behind glass that idle, then spin and
 // stop with a stagger; blinking credit display below, glowing title strip
@@ -107,7 +108,7 @@ void fragment() {
 	// backlight contribute emission; making the whole face unshaded was what
 	// gave the old bank its flat cardboard appearance.
 	ALBEDO = c * 0.78;
-	EMISSION = c * max(em - 0.38, 0.0) * 0.62;
+	EMISSION = c * max(em - 0.38, 0.0) * 0.62 * mains_power;
 	ROUGHNESS = 0.31;
 	METALLIC = 0.0;
 	SPECULAR = 0.58;

@@ -194,6 +194,7 @@ func _annex_lighting() -> void:
 	var axis = WorldGen.annex_corridor_axis(ctx.world_seed, ctx.cell)
 	var dim_zone = WorldGen.annex_dim_zone(ctx.world_seed, ctx.cell)
 	var light_gap = WorldGen.annex_light_gap(ctx.world_seed, ctx.cell)
+	var turning_bay = WorldGen.annex_corridor_bend(ctx.world_seed, ctx.cell)
 	# The Annex no longer draws switched-off fixtures. Every troffer that exists
 	# is steadily illuminated; darkness comes from sparse placement and weaker
 	# local throw instead.
@@ -206,6 +207,13 @@ func _annex_lighting() -> void:
 	var fixtures: Array[Vector2] = []
 	if light_gap:
 		fixtures = []
+	elif turning_bay:
+		# Keep both mouths legible. The ordinary centre fixture would sit inside
+		# the wall mass (and, in dim zones, leave the bay with no fixture at all).
+		if axis == 1:
+			fixtures = [Vector2(2.0, 6.0), Vector2(10.0, 6.0)]
+		else:
+			fixtures = [Vector2(6.0, 2.0), Vector2(6.0, 10.0)]
 	elif dim_zone:
 		if axis == 1 or axis == 2:
 			fixtures = [Vector2(6.0, 6.0)]
@@ -245,6 +253,11 @@ func _annex_lighting() -> void:
 	light.light_color = Color(1.0, 0.91, 0.64)
 	light.omni_range = 7.4 if dim_zone else 12.8
 	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.46, WorldGen.CELL_SIZE / 2.0)
+	if turning_bay:
+		# Retain the one-light budget, but place the fill in open circulation
+		# space rather than inside the opaque centre wall.
+		light.position.x = 2.0 if axis == 1 else 6.0
+		light.position.z = 6.0 if axis == 1 else 2.0
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 25.0
@@ -994,14 +1007,16 @@ func _annex_chair_cluster(count: int, salt: int, piled: bool) -> void:
 			* (0.34 if piled else 0.26)
 		var inst = scene.attributed_prop_local(
 			group, Chunk.ANNEX_CHAIR_PATH,
-			offsets[i] - Chunk.ANNEX_CHAIR_CENTRE * Chunk.ANNEX_CHAIR_SCALE,
+			offsets[i] - (Chunk.ANNEX_CHAIR_CENTRE * Chunk.ANNEX_CHAIR_SCALE) \
+				.rotated(Vector3.UP, local_yaw),
 			local_yaw, Vector3.ONE * Chunk.ANNEX_CHAIR_SCALE)
 		if inst == null:
 			continue
 		inst.set_meta("authored_model", "annex_dining_chair")
-		var cp = scene.world_point(p, offsets[i] + Vector3(0, 0.47, 0), base_yaw)
+		var cp = scene.world_point(p, offsets[i] + Vector3(
+			0, Chunk.ANNEX_CHAIR_COLLIDER_SIZE.y * 0.5, 0), base_yaw)
 		var chair_body_before := scene.collider_mark()
-		scene.collider_yaw_box(cp, Vector3(0.52, 0.94, 0.62),
+		scene.collider_yaw_box(cp, Chunk.ANNEX_CHAIR_COLLIDER_SIZE,
 			base_yaw + local_yaw)
 		var chair_collider := scene.collider_child(chair_body_before)
 		chair_collider.set_meta("annex_chair_piece", i)
@@ -1170,6 +1185,10 @@ func _annex_passage() -> void:
 	marker.set_meta("annex_vertical_width", vertical_width)
 	marker.set_meta("annex_corridor_finish", corridor_finish)
 	scene.add_node(marker)
+	if WorldGen.annex_corridor_bend(ctx.world_seed, ctx.cell):
+		_annex_turning_bay(axis == 1,
+			horizontal_width if axis == 1 else vertical_width, corridor_finish)
+		return
 	# Each corridor run owns one of four stable widths. At an intersection the
 	# four corner masses are sized independently, so a narrow hall can suddenly
 	# release into a broad cross-axis without gaps or backing voids.
@@ -1272,11 +1291,45 @@ func _annex_passage() -> void:
 					near_shell if camera_dir == 1 else far_shell)
 
 
+## A proper widened circulation bay, not a blocker dropped into a 2.2m hall.
+## The entrance/exit keep the original lane width and centre. A solid central
+## wall mass hides the opposite mouth; two >1.3m clear routes wrap around it.
+## Side-room passages retain their exact canonical openings and finish wraps.
+func _annex_turning_bay(along_x: bool, lane_width: float, finish_idx: int) -> void:
+	var bay_width := lane_width + 3.4
+	var near_shell := 6.0 - bay_width * 0.5 - Chunk.ANNEX_WALL_T * 0.5
+	var far_shell := 6.0 + bay_width * 0.5 + Chunk.ANNEX_WALL_T * 0.5
+	_annex_corridor_side(along_x, near_shell, 3 if along_x else 1, finish_idx)
+	_annex_corridor_side(along_x, far_shell, 2 if along_x else 0, finish_idx)
+	# Close the shoulders at both ends: otherwise a widened cell opens into
+	# the inaccessible space behind its narrow neighbour's corridor shell.
+	for end in [Chunk.ANNEX_WALL_T * 0.5, 12.0 - Chunk.ANNEX_WALL_T * 0.5]:
+		var toward := 1.0 if end < 6.0 else -1.0
+		_annex_corridor_segment(not along_x, end, 0.0, 6.0 - lane_width * 0.5,
+			0.0, ctx.ceiling_height, finish_idx, toward)
+		_annex_corridor_segment(not along_x, end, 6.0 + lane_width * 0.5, 12.0,
+			0.0, ctx.ceiling_height, finish_idx, toward)
+	var mass_width := lane_width + 0.4
+	var size := Vector3(2.0, ctx.ceiling_height, mass_width) if along_x \
+		else Vector3(mass_width, ctx.ceiling_height, 2.0)
+	var pivot := Node3D.new()
+	pivot.position = Vector3(6, 0, 6)
+	pivot.set_meta("annex_corridor_bend", true)
+	pivot.set_meta("annex_bend_axis", 1 if along_x else 2)
+	pivot.set_meta("annex_bend_lane_width", lane_width)
+	pivot.set_meta("annex_bend_clearance", (bay_width - mass_width) * 0.5 - Chunk.ANNEX_BASEBOARD_D * 2.0)
+	scene.add_node(pivot)
+	var mass := scene.model_box(pivot, Vector3(0, size.y * 0.5, 0), size, Mats.annex_wall_variant(finish_idx))
+	mass.set_meta("annex_architecture_wall", true)
+	scene.collider_yaw_box(Vector3(6, size.y * 0.5, 6), size, 0.0)
+	scene.annex_wrap_local_baseboards(pivot, size.x, size.z)
+	_annex_register_ceiling_obstruction(Vector3(6, 0, 6), size.x, size.z, 0.0, size.y)
+	_annex_register_footprint(Vector3(6, 0, 6), 0.0, size.x, size.z, size.y)
+
+
 ## Build one visible inner corridor wall. When its outer cell boundary opens
 ## into a room, the same opening is repeated here and connected with two return
 ## walls, creating a real short passage instead of exposing a fake backing bay.
-
-
 func _annex_corridor_side(along_x: bool, plane: float, outer_dir: int,
 		finish_idx: int) -> void:
 	var info = scene.edge_info(ctx.cell, outer_dir)

@@ -38,6 +38,7 @@ func _prison_lighting() -> void:
 		fill.distance_fade_enabled = true
 		fill.distance_fade_begin = 20.0
 		fill.distance_fade_length = 8.0
+		fill.set_meta("stream_room_light", true)
 		scene.add_node(fill)
 
 
@@ -828,6 +829,7 @@ func _prison_rotunda() -> void:
 	guard_light.distance_fade_enabled = true
 	guard_light.distance_fade_begin = 24.0
 	guard_light.distance_fade_length = 8.0
+	guard_light.set_meta("stream_room_light", true)
 	scene.add_node(guard_light)
 	# radial walkway lanes painted out from the hub to every branch
 	for i in 4:

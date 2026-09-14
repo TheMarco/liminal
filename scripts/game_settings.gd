@@ -2,6 +2,8 @@ class_name GameSettings
 extends RefCounted
 
 signal changed
+signal save_failed(error: Error)
+signal saved
 
 static var current: GameSettings
 
@@ -12,11 +14,18 @@ const DEFAULTS: Dictionary = {
 	"sensitivity": 1.0,
 	"field_of_view": 77.0,
 	"head_bob": 1.0,
+	"invert_y": false,
+	"toggle_sprint": false,
+	"fullscreen": false,
+	"death_hints": true,
 	"music_volume": 1.0,
 	"effects_volume": 1.0,
+	"dialogue_volume": 1.0,
 	"vhs_distortion": 1.0,
 	"reduced_flashing": false,
 }
+
+const BOOLEAN_KEYS := ["invert_y", "toggle_sprint", "fullscreen", "reduced_flashing", "death_hints"]
 
 const RANGES: Dictionary = {
 	"sensitivity": Vector2(0.2, 3.0),
@@ -24,6 +33,7 @@ const RANGES: Dictionary = {
 	"head_bob": Vector2(0.0, 1.0),
 	"music_volume": Vector2(0.0, 1.0),
 	"effects_volume": Vector2(0.0, 1.0),
+	"dialogue_volume": Vector2(0.0, 1.0),
 	"vhs_distortion": Vector2(0.0, 1.0),
 }
 
@@ -44,7 +54,7 @@ func load_from_disk() -> bool:
 		if not config.has_section_key("settings", key):
 			continue
 		var raw: Variant = config.get_value("settings", key)
-		if key == "reduced_flashing":
+		if key in BOOLEAN_KEYS:
 			if raw is bool:
 				values[key] = raw
 			continue
@@ -58,13 +68,18 @@ func save_to_disk() -> Error:
 	var config := ConfigFile.new()
 	for key: String in DEFAULTS:
 		config.set_value("settings", key, values.get(key, DEFAULTS[key]))
-	return config.save(_path)
+	var error := preload("res://scripts/atomic_config.gd").save_config(config, _path)
+	if error == OK:
+		saved.emit()
+	else:
+		save_failed.emit(error)
+	return error
 
 func set_value(key: String, value: Variant) -> void:
 	if not DEFAULTS.has(key):
 		return
 	var next: Variant = value
-	if key == "reduced_flashing":
+	if key in BOOLEAN_KEYS:
 		if not value is bool:
 			return
 	else:

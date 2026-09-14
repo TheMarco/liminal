@@ -20,6 +20,12 @@ var _furniture_variant: int
 var _portal_destination: int
 
 var _casino_landmark: String
+var _route_landmark: String
+var route_landmark: String:
+	get: return _route_landmark
+var _optional_discovery: bool
+var optional_discovery: bool:
+	get: return _optional_discovery
 var casino_landmark: String:
 	get:
 		return _casino_landmark
@@ -166,6 +172,8 @@ func _init(p_world_seed: int, p_cell: Vector2i, p_theme: int,
 	_portal_destination = -1
 
 	_casino_landmark = spec.casino_landmark
+	_route_landmark = spec.route_landmark
+	_optional_discovery = spec.optional_discovery
 	_descent = spec.descent
 	_target = spec.target
 	_target_wall = spec.target_wall

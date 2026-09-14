@@ -6,10 +6,13 @@ extends Node3D
 const CELL := WorldGen.CELL_SIZE
 ## Base visible neighbourhood. Owning room anchors are retained too, so a
 ## merged room never loses its furniture while one of its member cells remains.
-const LOAD_R := 2
-## One cell of hysteresis prevents boundary churn without retaining the former
-## 9x9 worst-case neighbourhood near long-route objectives.
-const UNLOAD_R := 3
+const LOAD_R := 3
+## Keep already-built outer rooms visible for one extra cell. This ring is
+## retention only, not another synchronous or fully queued neighbourhood.
+const UNLOAD_R := 4
+## Cover even a far core-cell corner diagonally from the player's cell.
+## Room illumination must not vanish before its streamed geometry does.
+const ROOM_LIGHT_FADE_BEGIN := ceilf(CELL * (LOAD_R + 1) * sqrt(2.0))
 ## A complete authored chunk can already consume the frame's build allowance.
 ## Building only one per frame prevents three individually legal rooms from
 ## stacking into a visible hitch; the 3x3 warm-up keeps collision ahead safe.
@@ -63,6 +66,7 @@ var chunks := {}
 var queued := {}
 var _wanted := {}
 var _ahead := {}
+var _retained := {}
 var _last_center := NO_BROKEN_STATION
 var _last_ahead := NO_BROKEN_STATION
 var _pending_chunk: Chunk
@@ -96,7 +100,7 @@ static var _dev_timing := false
 ## probes ran against an empty physics world and every landing fell back to
 ## the raw requested point (root-caused 2026-08-22 via --test-ride). Until
 ## the player is actually near this focus, streaming follows it instead of
-## the player; the first frame the player closes within LOAD_R it clears
+## the player; the first frame the player reaches the safe WARM_R ring it clears
 ## itself and normal player-centred streaming resumes.
 var stream_focus := Vector3.INF
 
@@ -104,7 +108,7 @@ var stream_focus := Vector3.INF
 func warm_up(center: Vector2i) -> void:
 	# Level changes happen behind a fade, but synchronously constructing 25
 	# dense chunks still held the main thread for too long. Build the safe 3x3
-	# neighbourhood now; the normal distance-sorted queue fills the 5x5 view.
+	# neighbourhood now; the normal distance-sorted queue fills the 7x7 view.
 	for dz in range(-WARM_R, WARM_R + 1):
 		for dx in range(-WARM_R, WARM_R + 1):
 			var c := center + Vector2i(dx, dz)
@@ -126,7 +130,7 @@ func _process(_dt: float) -> void:
 	if stream_focus != Vector3.INF:
 		var fc := Vector2i(floori(stream_focus.x / CELL),
 			floori(stream_focus.z / CELL))
-		if _cheb(pc, fc) <= LOAD_R:
+		if _cheb(pc, fc) <= WARM_R:
 			stream_focus = Vector3.INF
 		else:
 			pc = fc
@@ -140,6 +144,8 @@ func _process(_dt: float) -> void:
 		prediction += motion.limit_length(CELL * 0.9)
 	var ahead_cell := Vector2i(floori(prediction.x / CELL), floori(prediction.z / CELL))
 	if pc != _last_center or ahead_cell != _last_ahead:
+		if pc != _last_center:
+			_retained = _room_complete_cells(pc, UNLOAD_R)
 		_last_center = pc
 		_last_ahead = ahead_cell
 		_wanted = _room_complete_cells(pc)
@@ -203,10 +209,13 @@ func _process(_dt: float) -> void:
 
 	for c in chunks.keys():
 		var ch := chunks[c] as Chunk
-		var show: bool = _wanted.has(c)
+		# Prefetch is useful scenery as soon as it is complete. Likewise, don't
+		# hide a resident room just because we crossed a cell boundary or turned
+		# around. Retain its owning anchor too, keeping merged-room props intact.
+		var show: bool = _wanted.has(c) or _ahead.has(c) or _retained.has(c)
 		if ch.visible != show:
 			ch.visible = show
-		if _cheb(c, pc) > UNLOAD_R and not show and not _ahead.has(c):
+		if not show:
 			_capture_chunk_runtime(ch)
 			ch.queue_free()
 			chunks.erase(c)
@@ -218,10 +227,10 @@ func _process(_dt: float) -> void:
 		_chunks_since_prefetch = 0
 
 
-func _room_complete_cells(center: Vector2i) -> Dictionary:
+func _room_complete_cells(center: Vector2i, radius: int = LOAD_R) -> Dictionary:
 	var cells := {}
-	for dz in range(-LOAD_R, LOAD_R + 1):
-		for dx in range(-LOAD_R, LOAD_R + 1):
+	for dz in range(-radius, radius + 1):
+		for dx in range(-radius, radius + 1):
 			var at := center + Vector2i(dx, dz)
 			cells[at] = true
 			var corridor := WorldGen.annex_corridor_axis(world_seed, at) if theme == 2 \
@@ -254,7 +263,7 @@ func _install_chunk(c: Vector2i, chunk: Chunk) -> void:
 	chunk.set_blackout(blackout)
 	# Added only to complete live chunks: fingerprints of authored geometry
 	# stay comparable and PhotoDirector never observes half-built content.
-	chunk.prepare_runtime_rendering()
+	chunk.prepare_runtime_rendering(ROOM_LIGHT_FADE_BEGIN)
 	add_child(chunk)
 	chunks[c] = chunk
 	chunk_built.emit(chunk)
@@ -287,6 +296,9 @@ func _build_spec(c: Vector2i, topology_state_override := -1) -> ChunkBuildSpec:
 	if descent and descent_route != null:
 		var optional_vhs := _is_optional_vhs_cell(c)
 		spec.descent = true
+		var owner := RouteSetpieces.owner(descent_route, c)
+		spec.route_landmark = str(descent_route.landmark_rooms.get(owner, ""))
+		spec.optional_discovery = descent_route.discovery_rooms.has(owner)
 		spec.casino_landmark = str(descent_route.casino_landmarks.get(
 			WorldGen.room_id(world_seed, c), ""))
 		spec.target = c == descent_route.target
@@ -399,7 +411,7 @@ func _commit_staged_rebuild() -> bool:
 	for at in _staged_cells:
 		var replacement := _staged_replacements[at] as Chunk
 		replacement.descent_topology_state_override = -1
-		replacement.prepare_runtime_rendering()
+		replacement.prepare_runtime_rendering(ROOM_LIGHT_FADE_BEGIN)
 		add_child(replacement)
 		chunks[at] = replacement
 		var snapshot := _staged_snapshots.get(at, null) as ChunkRuntimeState
@@ -442,6 +454,8 @@ func _is_optional_vhs_cell(c: Vector2i) -> bool:
 			or c == descent_route.origin or c == descent_route.target:
 		return false
 	if descent_route.optional_vhs_cells().has(c):
+		return true
+	if descent_route.discovery_rooms.has(c):
 		return true
 	# Route frequency is explicitly authored above. Independent rolls here
 	# would make a lucky route contain six televisions and another contain none.
