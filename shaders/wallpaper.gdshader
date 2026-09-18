@@ -1,27 +1,28 @@
 shader_type spatial;
 
-// Hotel corridor wall: dark wood wainscot below the chair rail, flock damask
-// above. The damask is a real ogival trellis with a mirrored palmette inside
-// each cell, raised in velvet flock over a striped ground — not a dot grid.
-// The paper is hung in vertical drops, and every drop is very slightly off its
-// neighbour in tone and alignment, which is most of what sells it as paper
-// rather than texture. Coordinates are world-space (u = x + z works for all
-// axis-aligned walls) so adjoining chunks match perfectly.
+// Printed, time-faded damask above stained vertical timber boards. The ink
+// has NO relief: only paper fibres and shallow wood joints affect normals.
+// Heights are in metres, not arbitrary pattern-mask amplitudes. Coordinates
+// are world-space so both paper drops and planks continue across chunk joins.
 
-uniform vec3 col_a : source_color = vec3(0.50, 0.42, 0.33);
-uniform vec3 col_b : source_color = vec3(0.38, 0.24, 0.21);
-uniform vec3 col_flock : source_color = vec3(0.55, 0.40, 0.18);
-uniform vec3 col_wood : source_color = vec3(0.24, 0.13, 0.075);
+uniform vec3 col_a : source_color = vec3(0.43, 0.28, 0.265);
+uniform vec3 col_b : source_color = vec3(0.37, 0.225, 0.22);
+uniform vec3 col_ink : source_color = vec3(0.55, 0.435, 0.29);
+uniform vec3 col_wood : source_color = vec3(0.29, 0.16, 0.085);
 uniform vec3 col_trim : source_color = vec3(0.62, 0.45, 0.16);
 uniform vec3 col_plaster : source_color = vec3(0.42, 0.38, 0.33);
 uniform float rail_h = 1.0;
 uniform float ceil_h = 3.2;
-uniform float bump_strength = 0.22;
+uniform float paper_relief = 0.00012;
+uniform float wood_relief = 0.00018;
+uniform float board_width = 0.18;
+uniform float joint_depth = 0.0008;
 // width of one hung drop of paper, metres
 uniform float drop_w = 0.53;
 uniform vec2 motif = vec2(0.45, 0.62);
-uniform float peel_amount = 1.0;
+uniform float peel_amount = 0.35;
 uniform sampler2D detail_tex : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D wood_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 
 varying vec3 wpos;
 
@@ -60,36 +61,42 @@ float sd_seg(vec2 p, vec2 a, vec2 b) {
 	return length(pa - ba * h);
 }
 
-float sd_ell(vec2 p, vec2 r) {
-	return (length(p / r) - 1.0) * min(r.x, r.y);
+float printed_leaf(vec2 p, vec2 a, vec2 b, float width, float aa) {
+	vec2 axis = b - a;
+	float len = length(axis);
+	axis /= len;
+	vec2 delta = p - a;
+	float along = dot(delta, axis);
+	float across = abs(dot(delta, vec2(-axis.y, axis.x)));
+	float profile = sin(clamp(along / len, 0.0, 1.0) * 3.141593);
+	float d = max(across - width * profile, max(-along, along - len));
+	return 1.0 - smoothstep(-aa, aa, d);
 }
 
 // One damask cell, p in [-0.5,0.5]^2 of the motif rectangle. Mirrored about
 // the vertical axis, the way woven damask actually is.
 float damask(vec2 p) {
 	vec2 q = vec2(abs(p.x), p.y);
+	float aa = clamp(max(fwidth(p.x), fwidth(p.y)) * 0.65, 0.001, 0.018);
 
 	// ogival trellis: arcs struck from the cell corners, meeting in points at
 	// top and bottom — the lattice the ornament hangs inside
 	float arc = abs(length(q - vec2(0.5, 0.5)) - 0.5);
 	float arc2 = abs(length(q - vec2(0.5, -0.5)) - 0.5);
-	float trellis = smoothstep(0.045, 0.012, min(arc, arc2));
+	float trellis = 1.0 - smoothstep(0.014 - aa, 0.014 + aa, min(arc, arc2));
 
-	// central palmette: a stack of lobes down the axis
-	float body = smoothstep(0.10, 0.0, sd_ell(q - vec2(0.0, 0.02), vec2(0.13, 0.20)));
-	float crown = smoothstep(0.07, 0.0, sd_ell(q - vec2(0.0, 0.24), vec2(0.075, 0.10)));
-
-	// side leaves curling out and back toward the axis
-	float leaf = smoothstep(0.075, 0.0, sd_ell(
-		(q - vec2(0.17, 0.10)) * mat2(vec2(0.87, 0.5), vec2(-0.5, 0.87)),
-		vec2(0.135, 0.055)));
-	float leaf2 = smoothstep(0.065, 0.0, sd_ell(
-		(q - vec2(0.15, -0.14)) * mat2(vec2(0.87, -0.5), vec2(0.5, 0.87)),
-		vec2(0.115, 0.048)));
+	// Tapered botanical leaves instead of the old swollen ellipse stack. The
+	// fine negative-space vein makes this read as an engraved printing block.
+	float body = printed_leaf(q, vec2(0.0, -0.12), vec2(0.0, 0.37), 0.059, aa);
+	float vein = 1.0 - smoothstep(0.003, 0.003 + aa, sd_seg(q, vec2(0.0, -0.04), vec2(0.0, 0.29)));
+	body *= 1.0 - vein * 0.8;
+	float crown = printed_leaf(q, vec2(0.0, 0.03), vec2(0.16, 0.28), 0.033, aa);
+	float leaf = printed_leaf(q, vec2(0.0, -0.10), vec2(0.235, 0.10), 0.040, aa);
+	float leaf2 = printed_leaf(q, vec2(0.0, -0.23), vec2(0.205, -0.13), 0.028, aa);
 
 	// stems tying the ornament into the trellis points
-	float stem = smoothstep(0.030, 0.008, sd_seg(q, vec2(0.0, 0.30), vec2(0.0, 0.46)));
-	float stem2 = smoothstep(0.026, 0.006, sd_seg(q, vec2(0.0, -0.22), vec2(0.0, -0.46)));
+	float stem = 1.0 - smoothstep(0.009 - aa, 0.009 + aa, sd_seg(q, vec2(0.0, 0.30), vec2(0.0, 0.46)));
+	float stem2 = 1.0 - smoothstep(0.007 - aa, 0.007 + aa, sd_seg(q, vec2(0.0, -0.22), vec2(0.0, -0.46)));
 
 	float orn = max(max(max(body, crown), max(leaf, leaf2)), max(stem, stem2));
 	return clamp(max(orn, trellis * 0.75), 0.0, 1.0);
@@ -121,27 +128,40 @@ vec2 drop_at(vec2 uv) {
 	return vec2(idx, clamp(peel * peel_amount, 0.0, 1.0));
 }
 
-float surf_h(vec3 wp) {
-	float u = wp.x + wp.z;
-	float y = wp.y;
-	if (y < rail_h) {
-		return vnoise(vec2(u * 6.0, y * 1.5)) * 0.45;
-	}
-	vec2 uv = vec2(u, y);
-	vec2 dp = drop_at(uv);
-	// each drop hangs a hair off its neighbour
-	uv.y += hashf(vec2(dp.x, 7.0)) * 0.012;
-	float dm = damask_at(uv);
-	float ground = step(0.5, fract(u * 3.0)) * 0.12;
-	float fabric = texture(detail_tex, uv / 1.1).r;
-	// flock pile stands proud of the ground — but it is a few millimetres of
-	// velvet, so keep it shallow or the wall reads as carved panelling
-	float h = dm * 0.45 + ground + fabric * 0.18;
-	// a seam is a shallow ridge; peeled paper drops away to plaster
-	float seamf = fract(u / drop_w);
-	h += smoothstep(0.03, 0.0, min(seamf, 1.0 - seamf)) * 0.25;
-	h = mix(h, -0.5, dp.y);
-	return h;
+// Anti-aliased joint masks keep 1–3 mm features from sparkling at distance.
+float board_edge(float u) {
+	float local = fract(u / board_width) * board_width;
+	return min(local, board_width - local);
+}
+
+float fine_line(float distance_to_line, float width, float footprint) {
+	return 1.0 - smoothstep(max(0.0, width - footprint), width + footprint, distance_to_line);
+}
+
+// Reuse the supplied hardwood, turned so the grain runs up each board. Each
+// board samples a different strip, with no artificial horizontal end joints.
+float timber_grain(vec2 uv, float footprint) {
+	float board = floor(uv.x / board_width);
+	float seed = hashf(vec2(board, 43.0));
+	float x = fract(uv.x / board_width);
+	vec2 grain_uv = vec2(uv.y / 1.6 + seed * 0.71, x * 0.16 + seed * 0.79);
+	// A world-space footprint excludes per-board UV jumps from mip selection;
+	// otherwise the very edges of every board acquire blurry halos.
+	vec2 texel_density = vec2(textureSize(wood_tex, 0)) * vec2(1.0 / 1.6, 0.16 / board_width);
+	float lod = max(0.0, log2(max(footprint, 0.0001) * max(texel_density.x, texel_density.y)));
+	vec3 grain = textureLod(wood_tex, grain_uv, lod).rgb;
+	return clamp(sqrt(dot(grain, vec3(0.2126, 0.7152, 0.0722))) * 2.3, 0.08, 0.95);
+}
+
+float timber_height(vec2 uv, float footprint) {
+	float bevel = fine_line(board_edge(uv.x), 0.0018, max(0.001, footprint));
+	return timber_grain(uv, footprint) * wood_relief - bevel * joint_depth;
+}
+
+float paper_height(vec2 uv) {
+	// The printed ornament, hanging seams and stains deliberately do not enter
+	// the height field. A paper surface must never shade like carved plaster.
+	return texture(detail_tex, uv * 3.0).r * paper_relief;
 }
 
 void fragment() {
@@ -150,17 +170,30 @@ void fragment() {
 	vec3 c;
 	float rough = 0.85;
 	float metal = 0.0;
+	float specular = 0.24;
+	float footprint = max(length(dFdx(wpos)), length(dFdy(wpos)));
 
 	if (y < rail_h) {
-		// wainscot: quartered panels of dark stained wood
-		float grain = vnoise(vec2(u * 6.0, y * 1.5));
-		float grain2 = vnoise(vec2(u * 40.0, y * 3.0));
-		c = col_wood * (0.7 + 0.45 * grain) * (0.88 + 0.2 * grain2);
-		rough = 0.45;
+		float board = floor(u / board_width);
+		float tone = hashf(vec2(board, 19.0));
+		float grain = timber_grain(vec2(u, y), footprint);
+		c = col_wood * (0.85 + tone * 0.28) * (0.58 + grain * 0.90);
+		// Slight warm/cool stain variation, not alternating light/dark slats.
+		c *= mix(vec3(0.94, 0.97, 1.02), vec3(1.04, 1.0, 0.94), tone);
+		float joint = fine_line(board_edge(u), 0.00065, max(0.0003, footprint * 0.5));
+		float bevel = fine_line(board_edge(u), 0.0022, max(0.0006, footprint * 0.5));
+		// Subpixel seams fade to their actual coverage instead of widening into
+		// black bars when the camera moves away.
+		joint *= min(1.0, 0.0013 / max(footprint, 0.0013));
+		c *= 1.0 - joint * 0.40 - bevel * 0.07;
+		float polish = vnoise(vec2(u * 2.0, y * 4.0));
+		rough = 0.43 + tone * 0.07 + polish * 0.09;
+		specular = 0.34;
 	} else if (y < rail_h + 0.07) {
 		c = col_trim;
 		rough = 0.3;
 		metal = 0.6;
+		specular = 0.4;
 	} else {
 		vec2 uv = vec2(u, y);
 		vec2 dp = drop_at(uv);
@@ -168,16 +201,20 @@ void fragment() {
 		// per-drop: a hair of vertical slip, and a slightly different dye lot
 		uv.y += dropr * 0.012;
 
-		// striped ground under the ornament — the cheap part of the paper
-		float s = step(0.5, fract(u * 3.0));
-		c = mix(col_a, col_b, s * 0.75);
-		c *= 0.93 + 0.14 * dropr;             // dye lot drift between drops
+		// A restrained tonal ground; the old hard alternating stripes fought
+		// the ornament and made every drop look ribbed.
+		float s = 0.5 + 0.5 * cos(u * 6.283185 / drop_w);
+		c = mix(col_a, col_b, 0.3 + s * 0.15);
+		c *= 0.97 + 0.06 * dropr;
 
 		float dm = damask_at(uv);
-		// flock: matte velvet pile, so it goes DARKER and rougher than ground
-		vec3 fl = col_flock * (0.55 + 0.5 * vnoise(uv * 30.0));
-		c = mix(c, fl, dm * 0.85);
-		rough = mix(mix(0.9, 0.62, s), 0.98, dm);
+		// Antique-gold INK, not metal or raised flock. Ink and paper share the
+		// same matte finish so the pattern survives without specular embossing.
+		float fibre = texture(detail_tex, uv * 3.0).r;
+		vec3 ink = col_ink * (0.96 + fibre * 0.08);
+		c = mix(c, ink, dm * 0.68);
+		c *= 0.985 + fibre * 0.03;
+		rough = 0.91 + fibre * 0.035;
 
 		// sun-bleaching: the ornament fades faster than the ground
 		float bleach = smoothstep(0.4, 1.0, fbm(uv * 0.22 + 11.0));
@@ -185,13 +222,15 @@ void fragment() {
 
 		// seams between drops: a fine dark line, sometimes lifted and bright
 		float seamf = fract(u / drop_w);
-		float seam = smoothstep(0.022, 0.0, min(seamf, 1.0 - seamf));
-		c *= 1.0 - seam * 0.28;
+		float seam = fine_line(min(seamf, 1.0 - seamf) * drop_w,
+			0.0008, max(0.0004, footprint * 0.5));
+		seam *= min(1.0, 0.0016 / max(footprint, 0.0016));
+		c *= 1.0 - seam * 0.12;
 
 		// water damage running down from the ceiling in tongues
 		float run = fbm(vec2(u * 1.6, y * 0.35) + 5.0);
 		float tongue = smoothstep(0.55, 0.85, run) * smoothstep(ceil_h - 1.8, ceil_h, y);
-		c = mix(c, c * vec3(0.72, 0.62, 0.5), tongue * 0.7);
+		c = mix(c, c * vec3(0.82, 0.76, 0.66), tongue * 0.4);
 
 		// scuffs and trolley knocks at hip height
 		float scuff = smoothstep(0.55, 0.9, fbm(vec2(u * 3.0, y * 8.0) + 21.0));
@@ -211,20 +250,33 @@ void fragment() {
 	float gn2 = vnoise(vec2(u * 2.3, y * 2.3));
 	c *= 1.0 - grime * (0.35 + 0.4 * gn2);
 
-	// embossed bump
+	// Sub-millimetre material relief only. Sample the current material on both
+	// sides: crossing the chair rail must not create an artificial normal spike.
 	vec3 gn = normalize(mat3(INV_VIEW_MATRIX) * NORMAL);
 	vec3 axis = abs(gn.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
 	vec3 t1 = normalize(cross(axis, gn));
 	vec3 t2 = cross(gn, t1);
-	float e = 0.02;
-	float h0 = surf_h(wpos);
-	float d1 = (surf_h(wpos + t1 * e) - h0) / e;
-	float d2 = (surf_h(wpos + t2 * e) - h0) / e;
-	vec3 wn = normalize(gn - (t1 * d1 + t2 * d2) * bump_strength);
+	float e = clamp(footprint, 0.0025, 0.025);
+	vec2 uv0 = vec2(u, y);
+	vec2 uv1 = uv0 + vec2(t1.x + t1.z, t1.y) * e;
+	vec2 uv2 = uv0 + vec2(t2.x + t2.z, t2.y) * e;
+	float h0 = 0.0;
+	float h1 = 0.0;
+	float h2 = 0.0;
+	if (y < rail_h) {
+		h0 = timber_height(uv0, footprint);
+		h1 = timber_height(uv1, footprint);
+		h2 = timber_height(uv2, footprint);
+	} else if (y >= rail_h + 0.07) {
+		h0 = paper_height(uv0);
+		h1 = paper_height(uv1);
+		h2 = paper_height(uv2);
+	}
+	vec3 wn = normalize(gn - t1 * ((h1 - h0) / e) - t2 * ((h2 - h0) / e));
 	NORMAL = normalize(mat3(VIEW_MATRIX) * wn);
 
 	ALBEDO = c;
 	ROUGHNESS = rough;
 	METALLIC = metal;
-	SPECULAR = 0.4;
+	SPECULAR = specular;
 }

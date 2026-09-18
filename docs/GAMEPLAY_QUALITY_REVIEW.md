@@ -23,7 +23,7 @@
   the usual random post-photo encounter.
 - **Pause and comfort controls.** Escape pauses movement and Descent timers;
   Resume restores the previous mouse and playback state. Title Settings is
-  available by button or S. Sensitivity, FOV, bob, music, effects, VHS distortion
+  available by button or S. Sensitivity, FOV, bob, music, effects, VHS effect strength
   and reduced flashing persist in `user://settings.cfg`. Music and world effects
   have independent volume buses; changing volume preserves temporary TV mutes.
   Reduced flashing steadies fixtures, the low-battery torch and slot lighting,

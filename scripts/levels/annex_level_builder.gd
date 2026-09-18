@@ -249,15 +249,10 @@ func _annex_lighting() -> void:
 	_annex_moisture_damage(built_fixture_centers)
 	if effective_gap:
 		return
-	var light = scene.main_light(false, pmat, 0.24 if dim_zone else 1.42)
+	var source := Vector3(built_fixture_centers[0].x, ctx.ceiling_height - 0.46, built_fixture_centers[0].y)
+	var light = scene.fixture_light(false, pmat, 0.24 if dim_zone else 1.42, source)
 	light.light_color = Color(1.0, 0.91, 0.64)
 	light.omni_range = 7.4 if dim_zone else 12.8
-	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.46, WorldGen.CELL_SIZE / 2.0)
-	if turning_bay:
-		# Retain the one-light budget, but place the fill in open circulation
-		# space rather than inside the opaque centre wall.
-		light.position.x = 2.0 if axis == 1 else 6.0
-		light.position.z = 6.0 if axis == 1 else 2.0
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 25.0

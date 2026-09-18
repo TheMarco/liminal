@@ -58,14 +58,17 @@ func _sch_lighting() -> void:
 	else:
 		pmat = Mats.sch_panel()
 	var cdir = _sch_corridor_axis()
+	var source := Vector3(3.4, ctx.ceiling_height - 0.5, 3.0)
 	if cdir != 0:
 		# a single line of strips running the length of the passage, which is
 		# what makes a school corridor read as endless
 		var along_x = cdir == 1
+		source = Vector3(6.0, ctx.ceiling_height - 0.5, 6.0)
 		for t in [2.0, 6.0, 10.0]:
 			var at = Vector3(t, 0, WorldGen.CELL_SIZE / 2.0) if along_x else Vector3(WorldGen.CELL_SIZE / 2.0, 0, t)
 			_sch_strip(at, along_x, 2.6, pmat)
 	elif ctx.style == WorldGen.SCH_GYM:
+		source = Vector3(4.0, ctx.ceiling_height - 0.5, 4.0)
 		for gx in [4.0, 12.0, 20.0]:
 			for gz in [4.0, 12.0, 20.0]:
 				_sch_strip(Vector3(gx, 0, gz), true, 3.2, pmat)
@@ -76,10 +79,10 @@ func _sch_lighting() -> void:
 	if dead:
 		return
 	var tall = ctx.ceiling_height > 4.5
-	var light = scene.main_light(flicker, pmat, 2.1 if tall else 1.5)
+	var light = scene.fixture_light(flicker, pmat, 2.1 if tall else 1.5,
+		source, "school_ceiling_strip")
 	light.light_color = Color(0.94, 0.97, 1.0)
 	light.omni_range = 17.0 if tall else 12.0
-	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.5, WorldGen.CELL_SIZE / 2.0)
 	light.shadow_enabled = true
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 24.0
@@ -232,6 +235,9 @@ func _sch_corridor_bay_returns(o: Vector3, yw: float, side: float,
 func _sch_corridor_bay_light(o: Vector3, yw: float, side: float, t: float) -> void:
 	var outer = signf(side) * (WorldGen.CELL_SIZE * 0.5 - Chunk.T)
 	var dc = (outer + side) * 0.5
+	var source_pos = scene.world_point(o, Vector3(t, ctx.ceiling_height - 0.08, dc), yw)
+	var diffuser = scene.model_box(null, source_pos, Vector3(1.05, 0.045, 0.22), Mats.sch_panel())
+	diffuser.rotation.y = yw
 	var bl = OmniLight3D.new()
 	bl.light_color = Color(0.94, 0.97, 1.0)
 	bl.light_energy = 0.72
@@ -240,8 +246,9 @@ func _sch_corridor_bay_light(o: Vector3, yw: float, side: float, t: float) -> vo
 	bl.distance_fade_enabled = true
 	bl.distance_fade_begin = 18.0
 	bl.distance_fade_length = 6.0
-	bl.position = scene.world_point(o, Vector3(t, ctx.ceiling_height - 0.5, dc), yw)
+	bl.position = scene.world_point(o, Vector3(t, ctx.ceiling_height - 0.16, dc), yw)
 	bl.set_meta("stream_room_light", true)
+	bl.set_meta("visible_source", "corridor_bay_diffuser")
 	scene.add_node(bl)
 
 
@@ -740,7 +747,7 @@ func _sch_classroom() -> void:
 	for row in rows:
 		var back = 0.3 + Chunk.SCH_DESK_ROW_PITCH * float(row)
 		var origin = c + Vector3(fx, 0, fz) * (1.4 - back)
-		_sch_desk_row(origin, yaw, 5, 80 + row * 20)
+		_sch_desk_row(origin, yaw, 4, 80 + row * 20)
 	if has_board_wall and ctx.random01(74) < 0.5:
 		_sch_screen(fw)
 	# the stuff that accumulates down the side of every classroom
@@ -886,13 +893,15 @@ func _sch_cafeteria() -> void:
 	var yaw = 0.0 if along_x else PI / 2.0
 	var cols = 3 if big else 2
 	var rows = 3 if big else 2
-	var pitch = 3.4
+	var long_pitch = 4.15
+	var short_pitch = 3.0
 	var sw = _sch_front_wall(410)
 	for r in rows:
 		for cc in cols:
-			var u = (float(cc) - float(cols - 1) * 0.5) * pitch
-			var w = (float(r) - float(rows - 1) * 0.5) * (pitch * 0.85)
-			var p = Vector3(WorldGen.CELL_SIZE / 2.0 + u, 0, WorldGen.CELL_SIZE / 2.0 + w)
+			var u = (float(cc) - float(cols - 1) * 0.5) * long_pitch
+			var w = (float(r) - float(rows - 1) * 0.5) * short_pitch
+			var p = Vector3(u, 0, w).rotated(Vector3.UP, yaw) \
+				+ Vector3(6.0, 0, 6.0)
 			# Reserve the counter depth plus an aisle in front of its tray rails.
 			# Large-room grids used to place the outer table inside the servery.
 			if sw >= 0:
@@ -1286,6 +1295,19 @@ func _sch_stack(p: Vector3, yaw: float, salt: int) -> void:
 	var body0 = scene.collider_mark()
 	var v = scene.furnishing_pivot(p, yaw, "school_library_stack")
 	v.set_meta("school_library_stack", true)
+	if scene.prop_scene(Chunk.SCH_SHELF_PATH) != null:
+		# Two supplied single-sided units back to back, backs meeting in the
+		# middle so books face both aisles. The pair is 3.55m long, 2.12m
+		# tall and 0.93m deep.
+		for side in [-1.0, 1.0]:
+			var unit = scene.attributed_prop_local(v, Chunk.SCH_SHELF_PATH,
+				Vector3(0, 0, side * Chunk.SCH_SHELF_HALF_DEPTH),
+				0.0 if side > 0.0 else PI, Vector3.ONE)
+			if unit != null:
+				unit.set_meta("authored_model", "school_library_shelf")
+		scene.collider_yaw_box(p + Vector3(0, 1.06, 0), Vector3(3.55, 2.12, 0.95), yaw)
+		scene.bind_furnishing_colliders(v, body0)
+		return
 	var ln = 4.4
 	var hgt = 2.0
 	var real_side = -0.17 if ctx.random01(salt + 20) < 0.5 else 0.17
@@ -1566,10 +1588,13 @@ func _sch_case(dir: int, plane: float) -> void:
 	light.spot_angle = 55.0
 	light.shadow_enabled = false
 	light.light_volumetric_fog_energy = 0.0
+	var diffuser := scene.model_box(v, Vector3(0, 2.23, 0.22), Vector3(1.55, 0.045, 0.12), Mats.sch_panel())
+	diffuser.rotation.y = 0.0
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 12.0
 	light.distance_fade_length = 4.0
 	v.add_child(light)
+	light.set_meta("visible_source", "trophy_case_diffuser")
 	scene.collider_yaw_box(scene.world_point(p, Vector3(0, 1.205, 0.20), yaw),
 		Vector3(2.2, 2.41, 0.40), yaw)
 	scene.bind_furnishing_colliders(v, b0)

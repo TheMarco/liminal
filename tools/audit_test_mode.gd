@@ -104,6 +104,8 @@ func run() -> void:
 			"jump became Wander or chose wrong theme")
 		expect(game.run.floor_idx == DescentRun.FIXED_ORDER.find(THEMES[i]),
 			"theme uses wrong campaign depth")
+		expect(game._vf_frame.recording_day_offset == game.run.floor_idx,
+			"recovered-tape date did not advance with campaign depth")
 		expect(game.cm.descent and game.cm.descent_floor_idx == game.run.floor_idx,
 			"generated world lost Descent state")
 		expect(game.descent_route == game.run.route and game.descent_route.theme == THEMES[i],

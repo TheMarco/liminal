@@ -12,6 +12,9 @@ const SEED := 7
 func run() -> void:
 	var game := await boot_game(SEED)
 	expect(game.descent, "Descent CLI mode was not selected")
+	expect(game._reality_aftershock != null, "automatic perception effect missing without debug flag")
+	expect(game._reality_aftershock.debug_controls == game.opts.reality_aftershock,
+		"perception preview keys escaped their debug flag")
 	var director: PhotoDirector = game._photo_director
 	var camera: PhotoCamera = game._photo_camera
 	expect(director != null, "photo director was not constructed")

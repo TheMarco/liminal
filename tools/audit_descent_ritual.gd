@@ -31,8 +31,44 @@ func _has_enabled_gi(node: Node) -> bool:
 	return false
 
 
+func _has_attributed_asset(node: Node, path: String) -> bool:
+	if str(node.get_meta("attributed_asset", "")) == path:
+		return true
+	for child in node.get_children():
+		if _has_attributed_asset(child, path):
+			return true
+	return false
+
+
 func _run() -> void:
 	var failures: Array[String] = []
+	# Casino -> Mall carts are a late escape-lift cue, not ordinary Vegas
+	# furnishing. Exercise both the spatial and timing halves of that contract.
+	var casino_seed := WorldGen.level_seed(SEEDS[0], 0)
+	var escape := Vector2i(17, 17)
+	var early := Chunk.new(casino_seed, escape + Vector2i(1, 0), 0, {
+		"descent": true, "bleed": 0.0, "bleed_theme": 7,
+		"bleed_target": escape,
+	})
+	if _has_attributed_asset(early, Chunk.MALL_SHOPPING_CART_PATH):
+		failures.append("Casino -> Mall cart appeared before bleed began")
+	early.free()
+	var far := Chunk.new(casino_seed, escape + Vector2i(2, 0), 0, {
+		"descent": true, "bleed": 1.0, "bleed_theme": 7,
+		"bleed_target": escape,
+	})
+	far._place_bleed_prop(Vector3(6.0, 0.0, 6.0), 0.0)
+	if _has_attributed_asset(far, Chunk.MALL_SHOPPING_CART_PATH):
+		failures.append("Casino -> Mall cart escaped the lift neighbourhood")
+	far.free()
+	var near := Chunk.new(casino_seed, escape + Vector2i(1, 0), 0, {
+		"descent": true, "bleed": 1.0, "bleed_theme": 7,
+		"bleed_target": escape,
+	})
+	near._place_bleed_prop(Vector3(6.0, 0.0, 6.0), 0.0)
+	if not _has_attributed_asset(near, Chunk.MALL_SHOPPING_CART_PATH):
+		failures.append("Casino -> Mall cart missing beside the escape lift")
+	near.free()
 	for base in SEEDS:
 		var order := DescentRun.order_for(base)
 		if order.size() != DescentRun.FLOOR_COUNT:

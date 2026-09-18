@@ -300,7 +300,7 @@ func finish(won: bool, cause := DeathCause.UNKNOWN) -> void:
 
 static func death_explanation(cause: DeathCause) -> String:
 	match cause:
-		DeathCause.FIGURE: return "A FIGURE REACHED YOU. KEEP DISTANCE AND USE THE TORCH."
+		DeathCause.FIGURE: return "IT HAS YOU NOW.\nKEEP DISTANCE AND USE THE TORCH."
 		DeathCause.BLACKOUT_MOVEMENT: return "MOVEMENT DURING THE BLACKOUT GAVE YOU AWAY."
 	return ""
 
@@ -792,7 +792,7 @@ func _end_blackout() -> void:
 
 
 ## The topology/furniture transition is the guaranteed visible change. A rare
-## waiting figure may still occupy a suitable nearby room, but fixtures always
+## hostile encounter may also be queued, but fixtures always
 ## return with global power: an uncaptioned dead-light room was visually
 ## indistinguishable from a failed blackout restoration.
 func _post_blackout_changes() -> void:
@@ -812,7 +812,7 @@ func _post_blackout_changes() -> void:
 	if candidates.is_empty():
 		return
 	var pick := candidates[_rng.randi_range(0, candidates.size() - 1)]
-	# Kind 1 is the waiting figure. Unsuitable corridors decline it in Chunk;
-	# they no longer fall back to silently killing the hallway lights.
+	# Kind 1 is a hostile encounter request. Main routes it through the ordinary
+	# clearance-checked spawner; it is never installed as streamed room geometry.
 	anomalies[pick] = 1
 	anomaly_requested.emit(pick, 1)

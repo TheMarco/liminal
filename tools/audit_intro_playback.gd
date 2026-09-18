@@ -27,6 +27,7 @@ func _key(code: Key, pressed := true, echo := false) -> InputEventKey:
 
 
 func _run() -> void:
+	root.size = Vector2i(1280, 720)
 	var state := IntroPlaybackState.new(TEST_PATH)
 	state.clear_from_disk()
 	_expect(not state.has_viewed(), "cleared intro state was already viewed")
@@ -43,7 +44,7 @@ func _run() -> void:
 	first.pause_requested.connect(func(): pauses.append(true))
 	first.completed.connect(func(watched: bool): first_results.append(watched))
 	for code in [KEY_ESCAPE, KEY_SPACE, KEY_ENTER, KEY_E]:
-		first._input(_key(code))
+		root.push_input(_key(code))
 	_expect(pauses == [true], "Escape did not request pause on mandatory intro")
 	_expect(first_results.is_empty() and first._video.is_playing(), "first intro accepted keyboard skip")
 	_expect(first._video.bus == SoundBank.DIALOGUE_BUS, "intro bypasses dialogue volume")
@@ -59,22 +60,32 @@ func _run() -> void:
 	_expect(later.get_node_or_null("SkipIntro") != null,
 		"later intro did not render its clickable Skip control")
 	later.free()
-	for code in [KEY_E, KEY_SPACE, KEY_ENTER, KEY_KP_ENTER, KEY_NONE]:
+	for code in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER, KEY_NONE]:
 		var replay := DescentIntro.new(true)
 		root.add_child(replay)
-		await process_frame
+		for frame in 6:
+			await process_frame
 		var results: Array[bool] = []
 		replay.completed.connect(func(watched: bool): results.append(watched))
 		_expect(replay._skip_button.has_focus(), "Skip has no keyboard focus")
+		_expect(replay._skip_button.text == "SKIP INTRO" and replay._pause_button.text == "PAUSE", "intro still advertises action shortcuts")
 		replay._input(_key(KEY_ESCAPE, false))
 		replay._input(_key(KEY_ESCAPE, true, true))
 		_expect(results.is_empty(), "release/echo skipped replay")
+		root.push_input(_key(KEY_E))
+		root.push_input(_key(KEY_E, false))
+		_expect(results.is_empty(), "E unexpectedly skipped replay")
 		if code == KEY_NONE:
-			replay._skip_button.pressed.emit()
+			for down in [true, false]:
+				var click := InputEventMouseButton.new()
+				click.button_index = MOUSE_BUTTON_LEFT
+				click.position = replay._skip_button.get_global_rect().get_center()
+				click.pressed = down
+				root.push_input(click)
 		else:
+			replay._skip_button.grab_focus()
 			root.push_input(_key(code))
 			root.push_input(_key(code, false))
-		replay._input(_key(KEY_E))
 		_expect(results == [false], "replay skip emitted incorrectly: %s" % code)
 		await process_frame
 

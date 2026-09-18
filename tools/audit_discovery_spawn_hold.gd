@@ -56,7 +56,6 @@ func run_test() -> void:
 	figure = ShadowFigure.new()
 	figure.player = player
 	figure.variant = ShadowFigure.DROWNED
-	figure.mode = ShadowFigure.Mode.AMBIENT
 	figure.position = Vector3(2.0, 0.0, 6.0)
 	figure.set_physics_process(false)
 	figure.set_process(false)
@@ -98,13 +97,18 @@ func run_test() -> void:
 	if manager._new_spawn_hold > 0.0:
 		manager._physics_process(1.0 / 60.0)
 	manager._physics_process(1.0 / 60.0)
-	check(manager._t < initial_t and manager._forced_left < initial_forced_left, "timers did not resume after hold")
+	check(is_equal_approx(manager._t, initial_t)
+		and is_equal_approx(manager._forced_left, initial_forced_left),
+		"encounter clocks advanced behind an existing stalker")
 	manager.hold_new_spawns(3.0)
 	var remaining_t := manager._t
 	var remaining_forced := manager._forced_left
 	manager.despawn(false)
 	check(is_zero_approx(manager._new_spawn_hold), "despawn(false) did not clear hold")
 	check(manager._t == remaining_t and manager._forced_left == remaining_forced, "despawn(false) reset ordinary or forced timers")
+	manager._physics_process(1.0 / 60.0)
+	check(manager._t < remaining_t and manager._forced_left < remaining_forced,
+		"queued encounter clocks did not resume after the live stalker left")
 
 	world.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)

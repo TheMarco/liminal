@@ -26,6 +26,11 @@ func _run() -> void:
 	var player := Player.new()
 	root.add_child(player)
 	await process_frame
+	if player.flashlight.light_volumetric_fog_energy < 1.0:
+		_fail("flashlight beam is not visibly represented in volumetric fog")
+	if not is_equal_approx(player.flashlight.spot_range, 21.0) \
+			or not is_equal_approx(player.flashlight.spot_angle, 46.0):
+		_fail("presentation change altered the flashlight gameplay cone")
 	player.set_flashlight(true)
 	player._update_flashlight(20.0)
 	if player.flashlight_charge() > 0.001:
@@ -87,8 +92,9 @@ func _run() -> void:
 				if _has_station(chunk):
 					found += 1
 				chunk.free()
-		if found != 1:
-			_fail("theme %d macro-cell has %d stations, expected 1" % [theme, found])
+		var expected := 2 if theme == 10 else 1
+		if found != expected:
+			_fail("theme %d macro-cell has %d stations, expected %d" % [theme, found, expected])
 
 	if failures == 0:
 		print("flashlight charging audit pass")

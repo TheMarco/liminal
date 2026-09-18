@@ -4,8 +4,9 @@ extends Node3D
 ## the edge of the frame, and above all BEHIND you: whip around and there is
 ## a good chance one is already standing there. Each gets a moment's grace so
 ## you always register it, then stalks through several doorways until it is
-## destroyed, reaches you, or gives up at a safe room boundary. Up to MAX_FIGS
-## exist at once.
+## destroyed, reaches you, or gives up at a safe room boundary. Ordinary floors
+## stage one stalker at a time. Explicit combat spaces may opt into MAX_FIGS;
+## the room-boundary retirement keeps those slots from filling permanently.
 
 const MAX_FIGS := 3
 const TURN_TRIG := 1.9      # accumulated fast-turn radians that trigger a check
@@ -18,6 +19,10 @@ const TURN_OFF_MAX := 44.0
 # volume at spawn time so a camera-facing quad cannot straddle a wall edge.
 const FIGURE_CLEAR_RADIUS := 0.68
 const FIGURE_CLEAR_HEIGHT := 2.55
+## Encounters should read as separate threats, never as two bodies authored in
+## the same spot. This applies to every runtime spawn path, including directed
+## and developer encounters.
+const SPAWN_SEPARATION := 4.0
 
 # revenant, drowned, pilgrim, trailing, gaoler, reacher, drifter.
 # Seven animated wraiths, weighted close to evenly — none of them is a
@@ -43,6 +48,7 @@ signal seen_by_player
 ## A hostile figure just entered the world (spawned or adopted) — the
 ## recording's cue for a catastrophic frame or two.
 signal spawned
+signal approach_starting(figure: ShadowFigure)
 ## One of them closed the distance. The owning game mode decides the outcome;
 ## Wander keeps this manager suspended, while Descent treats contact as fatal.
 signal reached_player
@@ -50,8 +56,14 @@ signal reached_player
 var player: Player
 var topology: DescentTopology
 var horror_director: HorrorDirector
-var suspended := false
+var suspended := false:
+	set(value):
+		suspended = value
+		_sync_suppression()
 var directed_only := false
+## Normal campaign encounters are single-occupancy. The realm excursion opts
+## into reinforcements explicitly for its authored 1 -> 2 -> 3 escalation.
+var allow_reinforcements := false
 ## The rules have the player pinned — a blackout they must stand still through,
 ## or the arrival caption. Nothing new arrives and nothing already out there
 ## closes the distance; the torch still works, so the player keeps an answer.
@@ -59,14 +71,14 @@ var directed_only := false
 var passive := false:
 	set(value):
 		passive = value
-		for f in _figs:
-			if is_instance_valid(f):
-				f.suppressed = value
+		_sync_suppression()
 var interval_scale := 1.0
 ## Descent floor index, mirrored in by main on every level switch; gates the
 ## archetype debuts. The high default keeps the full roster in any context
 ## that never sets it (dev tools, focused audits).
 var floor_idx := 99
+var completed_levels := 0
+var chunk_manager: ChunkManager
 
 var _t := 0.0
 var _dev := false
@@ -75,6 +87,8 @@ var _forced_tries := 0
 var _force_at := Vector3.INF
 var _force_variant := -1
 var _figs: Array[ShadowFigure] = []
+## Exact source of the fatal contact, retained only until the caught beat ends.
+var catching_figure: ShadowFigure
 var _prev_yaw := NAN
 var _turn_acc := 0.0
 var _turn_cd := 8.0
@@ -86,14 +100,25 @@ var dev_haunt := false
 var dev_haunt_at := Vector3.ZERO
 var dev_haunt_at_given := false
 var dev_haunt_variant := -1
-
-
+## Presentation-only QA switch. Never enabled by normal spawning or settings.
+var use_walker_prototype := false
+var _walker_model_bag: Array[int] = []
 func active_figures() -> Array[ShadowFigure]:
 	var out: Array[ShadowFigure] = []
 	for figure in _figs:
-		if is_instance_valid(figure):
+		if is_instance_valid(figure) and not figure.is_queued_for_deletion():
 			out.append(figure)
 	return out
+
+
+func _can_add_figure() -> bool:
+	var limit := MAX_FIGS if allow_reinforcements else 1
+	return active_figures().size() < limit
+
+
+func _sync_suppression() -> void:
+	for figure in active_figures():
+		figure.suppressed = passive or suspended
 
 
 func _ready() -> void:
@@ -109,6 +134,9 @@ func _ready() -> void:
 		_dev = true
 	if dev_haunt_variant >= 0:
 		_force_variant = dev_haunt_variant
+	if use_walker_prototype:
+		ShadowFigure.prewarm_presence(true)
+		_refill_walker_model_bag()
 
 
 ## Try to place a short-lived realm-encounter figure in a visible, clear area.
@@ -116,7 +144,7 @@ func _ready() -> void:
 func try_realm_encounter(front_first: bool = false) -> bool:
 	if suspended or passive or _new_spawn_hold > 0.0 or player == null or not player.is_inside_tree():
 		return false
-	if active_figures().size() >= MAX_FIGS:
+	if not _can_add_figure():
 		return false
 	var fwd := _flat_fwd()
 	if fwd == Vector3.ZERO:
@@ -135,15 +163,9 @@ func try_realm_encounter(front_first: bool = false) -> bool:
 			continue
 		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
 			continue
-		var too_close := false
-		for figure in active_figures():
-			if figure.global_position.distance_to(ground) < 2.0:
-				too_close = true
-				break
-		if too_close:
+		if not _spawn_separated(ground):
 			continue
-		_spawn_at(ground, true, 2.0)
-		return true
+		return _spawn_at(ground, true, 2.0)
 	return false
 
 
@@ -167,8 +189,8 @@ func hold_new_spawns(seconds: float) -> void:
 func _forced_spawn() -> bool:
 	if _new_spawn_hold > 0.0:
 		return false
-	if _figs.size() >= MAX_FIGS:
-		return true  # the room is already occupied; the beat exists
+	if not _can_add_figure():
+		return false
 	var fwd := _flat_fwd()
 	if fwd == Vector3.ZERO:
 		return false
@@ -184,44 +206,50 @@ func _forced_spawn() -> bool:
 			continue
 		if not _figure_volume_clear(ground):
 			continue
+		if not _spawn_separated(ground):
+			continue
 		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
 			continue
-		_spawn_at(ground, behind, 1.2)
+		if not _spawn_at(ground, behind, 1.2):
+			continue
 		if _dev:
 			print("forced figure behind=%s" % behind)
 		return true
 	return false
 
 
-## Take ownership of a figure the world placed — the Descent anomaly already
-## standing in a corner when the player walks in. It stays parented to its
-## chunk so it streams out with the cell it belongs to, but from here it is
-## wired exactly like a spawned one: it burns and refunds the torch, a stare
-## costs attention, and contact ends the run. Before this existed such a figure
-## was INERT, which made it the one thing in the building that could be neither
-## killed nor escaped because it never did anything at all.
+## Take ownership of a figure the world placed. Reparent it out of its chunk
+## so unloading its birth room cannot delete an active pursuit. It is active
+## and wired exactly like a spawned one: it approaches, burns and refunds the
+## torch, costs attention when seen, and ends the run on contact.
 func adopt(f: ShadowFigure) -> void:
 	if f == null or not is_instance_valid(f) or _figs.has(f):
 		return
 	f.player = player
 	f.topology = topology
-	f.suppressed = passive
+	f.completed_levels = completed_levels
+	if f.is_inside_tree() and f.get_parent() != self:
+		f.reparent(self, true)
+	f.suppressed = passive or suspended
 	f.burned_away.connect(func(): burned_away.emit())
 	f.seen_by_player.connect(func(): seen_by_player.emit())
-	f.reached_player.connect(func(): reached_player.emit())
+	f.reached_player.connect(_on_figure_reached.bind(f))
+	f.approach_starting.connect(_on_figure_approach)
 	_figs.append(f)
+	_refresh_streaming()
 	_sync_director_count()
 	spawned.emit()
-
-
 ## Level switch: whatever was standing there stays behind. A temporary realm
 ## visit only removes the figures; its source encounter clock stays paused.
 func despawn(reset_encounters := true) -> void:
+	catching_figure = null
 	_new_spawn_hold = 0.0
 	for f in _figs:
 		if is_instance_valid(f):
 			f.queue_free()
 	_figs.clear()
+	if is_instance_valid(chunk_manager):
+		chunk_manager.set_hostile_cells([])
 	_sync_director_count(false)
 	# Stingers and death cries are deliberately hung on this node rather than on
 	# the figure, because the figure stops existing while they are still
@@ -241,6 +269,7 @@ func despawn(reset_encounters := true) -> void:
 
 
 func _physics_process(dt: float) -> void:
+	_refresh_streaming()
 	if suspended or player == null or not player.is_inside_tree():
 		# Forget where the player was facing. Coming back from a pause with a
 		# stale yaw turns however far they happened to turn while pinned into
@@ -264,19 +293,37 @@ func _physics_process(dt: float) -> void:
 	# The countdown to an authored encounter only runs while the player is
 	# free, so a beat queued during a tape lands after control returns, not
 	# under the dolly-back.
-	if _forced_left > 0.0:
+	# An authored beat remains pending behind the live stalker instead of
+	# creating a pair or silently spending all of its placement retries.
+	if _forced_left > 0.0 and _can_add_figure():
 		_forced_left -= dt
 		if _forced_left <= 0.0:
 			_forced_tries -= 1
 			if not _forced_spawn() and _forced_tries > 0:
 				_forced_left = 0.8
 	_track_turn(dt)
-	if _figs.size() >= MAX_FIGS:
+	if not _can_add_figure():
 		return
 	_t -= dt
 	if _t <= 0.0:
 		_t = (randf_range(7.0, 18.0) if _try_spawn() \
 			else randf_range(2.5, 6.0)) * interval_scale
+
+
+func _refresh_streaming() -> void:
+	if not is_instance_valid(chunk_manager):
+		return
+	var cells: Array[Vector2i] = []
+	for figure in active_figures():
+		for cell in figure.streaming_cells():
+			if not cells.has(cell):
+				cells.append(cell)
+	chunk_manager.set_hostile_cells(cells)
+
+
+func _exit_tree() -> void:
+	if is_instance_valid(chunk_manager):
+		chunk_manager.set_hostile_cells([])
 
 
 ## Whip around fast enough and it may already be there. It was following.
@@ -303,7 +350,7 @@ func _track_turn(dt: float) -> void:
 	if _turn_acc <= TURN_TRIG:
 		return
 	_turn_acc = 0.0
-	if _turn_cd > 0.0 or _figs.size() >= MAX_FIGS:
+	if _turn_cd > 0.0 or not _can_add_figure():
 		return
 	if randf() > TURN_CHANCE:
 		_turn_cd = randf_range(4.0, 9.0)
@@ -313,6 +360,8 @@ func _track_turn(dt: float) -> void:
 
 func _turn_spawn() -> bool:
 	if _new_spawn_hold > 0.0:
+		return false
+	if not _can_add_figure():
 		return false
 	if horror_director != null and not horror_director.can_start_hostile():
 		return false
@@ -327,9 +376,12 @@ func _turn_spawn() -> bool:
 			continue
 		if not _figure_volume_clear(ground):
 			continue
+		if not _spawn_separated(ground):
+			continue
 		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
 			continue
-		_spawn_at(ground, false, 1.7)
+		if not _spawn_at(ground, false, 1.7):
+			continue
 		if _dev:
 			print("turn-figure at %.0f deg off centre, %.1fm away" % [rad_to_deg(_flat_fwd().angle_to((ground - player.global_position).normalized())), ground.distance_to(player.global_position)])
 		return true
@@ -339,12 +391,15 @@ func _turn_spawn() -> bool:
 func _try_spawn() -> bool:
 	if _new_spawn_hold > 0.0:
 		return false
+	if not _can_add_figure():
+		return false
 	if horror_director != null and not horror_director.can_start_hostile():
 		return false
 	if _force_at != Vector3.INF:
-		_spawn_at(_force_at, false, 3.0)
-		_force_at = Vector3.INF
-		return true
+		if _spawn_at(_force_at, false, 3.0):
+			_force_at = Vector3.INF
+			return true
+		return false
 	var fwd := _flat_fwd()
 	if fwd == Vector3.ZERO:
 		return false
@@ -357,12 +412,15 @@ func _try_spawn() -> bool:
 			continue
 		if not _figure_volume_clear(ground):
 			continue
+		if not _spawn_separated(ground):
+			continue
 		# Every encounter starts on a route that is physically open — corridors
 		# included, which the old same-room gate made impossible: a corridor
 		# cell is 12m and spawns want 7-16m. Line of sight is the real test.
 		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
 			continue
-		_spawn_at(ground, behind, 0.9)
+		if not _spawn_at(ground, behind, 0.9):
+			continue
 		if _dev:
 			print("figure at t=%.1fs behind=%s alive=%d" % [Time.get_ticks_msec()/1000.0, behind, _figs.size()])
 		return true
@@ -371,26 +429,84 @@ func _try_spawn() -> bool:
 	return false
 
 
-func _spawn_at(ground: Vector3, announce: bool, grace: float) -> void:
+func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
+	# Keep the invariant at the creation boundary too (including debug and
+	# authored spawns), rather than relying on every caller remembering it.
+	if not _can_add_figure() or not _spawn_separated(ground):
+		return false
+	if not ShadowFigure.pool_deck_clear(player, ground, FIGURE_CLEAR_RADIUS):
+		return false
+	var walker_model := _next_walker_model() if use_walker_prototype else -1
+	if use_walker_prototype and walker_model < 0:
+		return false
 	var f := ShadowFigure.new()
 	f.player = player
 	f.topology = topology
+	f.completed_levels = completed_levels
+	f.use_walker_prototype = use_walker_prototype
+	if use_walker_prototype:
+		f.walker_model_index = walker_model
 	f.variant = _force_variant if _force_variant >= 0 else _pick_variant()
 	_force_variant = -1
 	f.grace = grace
 	f.announce = announce or randf() < 0.3
 	f.position = ground
-	f.origin_room = ShadowFigure.room_for(player, player.global_position)
-	f.suppressed = passive
+	f.suppressed = passive or suspended
 	add_child(f)
 	f.burned_away.connect(func(): burned_away.emit())
 	f.seen_by_player.connect(func(): seen_by_player.emit())
-	f.reached_player.connect(func(): reached_player.emit())
+	f.reached_player.connect(_on_figure_reached.bind(f))
+	f.approach_starting.connect(_on_figure_approach)
 	_figs.append(f)
+	_refresh_streaming()
 	_sync_director_count()
 	spawned.emit()
 	if _dev:
 		print("spawned variant %d at %s (player %s)" % [f.variant, ground, player.global_position])
+	return true
+
+
+## Shuffle-bag selection keeps a multi-model roster genuinely varied: every creature
+## appear once before any design can repeat, while their order stays surprising.
+## An unfinished decode defers the spawn without consuming its chosen design.
+func _next_walker_model() -> int:
+	if _walker_model_bag.is_empty():
+		_refill_walker_model_bag()
+	if not _walker_model_ready(_walker_model_bag.back()):
+		return -1
+	var selected: int = _walker_model_bag.pop_back()
+	if not _walker_model_bag.is_empty():
+		ShadowWalkerVisual.request_model(_walker_model_bag.back())
+	return selected
+
+
+func _walker_model_ready(index: int) -> bool:
+	return ShadowWalkerVisual.is_model_ready(index)
+
+
+func _refill_walker_model_bag() -> void:
+	for index in ShadowWalkerVisual.model_count():
+		_walker_model_bag.append(index)
+	_walker_model_bag.shuffle()
+	ShadowWalkerVisual.request_model(_walker_model_bag.back())
+
+
+func _spawn_separated(ground: Vector3) -> bool:
+	for figure in active_figures():
+		var delta := figure.global_position - ground
+		delta.y = 0.0
+		if delta.length_squared() < SPAWN_SEPARATION * SPAWN_SEPARATION:
+			return false
+	return true
+
+
+func _on_figure_approach(figure: ShadowFigure) -> void:
+	approach_starting.emit(figure)
+
+
+func _on_figure_reached(figure: ShadowFigure) -> void:
+	catching_figure = figure
+	reached_player.emit()
 
 
 func _sync_director_count(start_recovery := true) -> void:
@@ -398,9 +514,7 @@ func _sync_director_count(start_recovery := true) -> void:
 		return
 	var active := 0
 	for f in _figs:
-		# A waiting anomaly is scenery until the player enters its room. Counting
-		# streamed-but-dormant fixtures here could silence a floor indefinitely.
-		if is_instance_valid(f) and f.mode == ShadowFigure.Mode.AMBIENT:
+		if is_instance_valid(f):
 			active += 1
 	horror_director.set_hostile_count(active, start_recovery)
 
@@ -485,8 +599,12 @@ const FLOOR_PIERCE := 6
 ## to reject the spot properly instead of clearing the air above a table.
 func _floor_at(pos: Vector3) -> Vector3:
 	var space := player.get_world_3d().direct_space_state
-	var bottom := pos + Vector3(0, -2.0, 0)
-	var from := pos + Vector3(0, 2.6, 0)
+	var pool_level := player.level_theme == 9
+	var floor_y := Chunk.POOL_DRY_Y if pool_level else 0.0
+	# Probe the deck even while the player is wading down on the basin floor.
+	var probe := Vector3(pos.x, floor_y if pool_level else pos.y, pos.z)
+	var bottom := probe + Vector3(0, -2.0, 0)
+	var from := probe + Vector3(0, 2.6, 0)
 	for pierce in FLOOR_PIERCE:
 		var q := PhysicsRayQueryParameters3D.create(from, bottom)
 		q.exclude = [player.get_rid()]
@@ -494,7 +612,9 @@ func _floor_at(pos: Vector3) -> Vector3:
 		if hit.is_empty():
 			return Vector3.INF
 		var p: Vector3 = hit["position"]
-		if hit["normal"].y >= 0.8 and absf(p.y) <= FLOOR_TOL:
+		if hit["normal"].y >= 0.8 and absf(p.y - floor_y) <= FLOOR_TOL:
+			if not ShadowFigure.pool_deck_clear(player, p, FIGURE_CLEAR_RADIUS):
+				return Vector3.INF
 			return p
 		if p.y <= bottom.y + 0.01:
 			return Vector3.INF

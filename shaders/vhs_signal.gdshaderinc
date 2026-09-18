@@ -188,10 +188,10 @@ vec3 recovered_tape(vec2 screen_uv, vec2 screen_pixel_size, vec2 fragcoord) {
     iq = mat2(vec2(cos(phase), sin(phase)), vec2(-sin(phase), cos(phase))) * iq;
     iq *= saturation * (1.0 - chroma_loss) * (1.0 - track * 0.65);
 
-    // Signed noise follows the signal clock; dark picture retains fine luma
-    // noise, but colour falls away near black instead of flashing confetti.
+    // Signed noise follows the signal clock. Keep a trace in shadows, but
+    // never enough to lift unlit rooms into grey static.
     float grain = tape_hash(vec2(floor(pos.x * resolution.x), row) + frame * vec2(17, 31)) - 0.5;
-    float shadow_noise = mix(0.72, 1.0, smoothstep(0.03, 0.4, y));
+    float shadow_noise = mix(0.28, 1.0, smoothstep(0.06, 0.38, y));
     y += grain * noise_level * noise_amount * shadow_noise;
     y += line_jitter * line_noise;
     vec2 cn = vec2(tape_noise(vec2(pos.x * 75.0, row + frame * 7.0)),

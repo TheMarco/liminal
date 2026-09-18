@@ -215,6 +215,21 @@ func _brutalist_lighting() -> void:
 	light.omni_range = 10.5 if passage else (18.0 if huge else 14.0)
 	light.position = Vector3(6.0,
 		TUNNEL_HEIGHT - 0.62 if passage else ctx.ceiling_height - 1.15, 6.0)
+	# This central source used to float below four authored tubes. Give it a
+	# literal ceiling luminaire so the pool of light has a readable origin from
+	# anywhere in the room. The taller atria use this as the aperture for the
+	# downward shaft as well.
+	var source_y := TUNNEL_HEIGHT - 0.035 if passage else ctx.ceiling_height - 0.035
+	scene.box(Vector3(6.0, source_y + 0.035, 6.0),
+		Vector3(1.20 if passage else (1.45 if huge else 0.90), 0.10,
+			0.28 if passage else (1.45 if huge else 0.90)),
+		Mats.brutal_steel(), false)
+	var source_lens := scene.box(Vector3(6.0, source_y - 0.035, 6.0),
+		Vector3(1.02 if passage else (1.18 if huge else 0.68), 0.045,
+			0.16 if passage else (1.18 if huge else 0.68)),
+		Mats.brutal_panel(), false)
+	source_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	light.set_meta("visible_source", "central_brutalist_luminaire")
 	light.shadow_enabled = huge
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 28.0
@@ -233,6 +248,7 @@ func _brutalist_lighting() -> void:
 		shaft.distance_fade_begin = 30.0
 		shaft.distance_fade_length = 12.0
 		shaft.set_meta("stream_room_light", true)
+		shaft.set_meta("visible_source", "central_brutalist_luminaire")
 		scene.add_node(shaft)
 
 
@@ -513,6 +529,19 @@ func _machine_room_light(at: Vector3, energy := 2.0) -> void:
 	var light := OmniLight3D.new()
 	light.position = Vector3(at.x,
 		minf(ctx.ceiling_height - 1.05, 3.35), at.z)
+	# The aisle light is a suspended service strip, not a disembodied fill. Its
+	# diffuser sits immediately over the point source and the short steel drop
+	# makes the ceiling connection legible even above the racks.
+	var fixture_y := light.position.y + 0.18
+	scene.box(Vector3(at.x, fixture_y + 0.045, at.z),
+		Vector3(1.10, 0.10, 0.24), Mats.brutal_steel(), false)
+	var aisle_lens := scene.box(Vector3(at.x, fixture_y - 0.025, at.z),
+		Vector3(0.94, 0.035, 0.14), Mats.brutal_panel(), false)
+	aisle_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if ctx.ceiling_height > fixture_y + 0.10:
+		scene.beam(Vector3(at.x, fixture_y + 0.08, at.z),
+			Vector3(at.x, ctx.ceiling_height - 0.04, at.z),
+			0.018, Mats.brutal_steel())
 	light.light_color = Color(0.42, 0.72, 0.92)
 	light.light_energy = energy
 	light.omni_range = 10.5
@@ -522,6 +551,7 @@ func _machine_room_light(at: Vector3, energy := 2.0) -> void:
 	light.distance_fade_length = 8.0
 	light.set_meta("data_center_aisle_light", true)
 	light.set_meta("stream_room_light", true)
+	light.set_meta("visible_source", "suspended_data_center_strip")
 	scene.add_node(light)
 
 
@@ -531,15 +561,15 @@ func _rack_aisle(axis_x: bool) -> void:
 	var cross_span := span.y if axis_x else span.x
 	var rack_lanes: Array[float] = []
 	if cross_span > 18.0:
-		# A 24m hall is one machine floor, not two sparse 12m islands. Ten rows
-		# continue across the merge seam at an even 2m rhythm.
+		# A 24m hall is one machine floor, not two sparse 12m islands. Eight rows
+		# continue across the merge seam at a 2.5m rhythm.
 		var lane := 6.0 - cross_span * 0.5 + 2.70
 		var last := 6.0 + cross_span * 0.5 - 2.70
 		while lane <= last + 0.01:
 			rack_lanes.append(lane)
-			lane += 2.0
+			lane += 2.5
 	else:
-		rack_lanes.assign([2.70, 4.70, 7.30, 9.30])
+		rack_lanes.assign([2.25, 4.75, 7.25, 9.75])
 	for row_index in rack_lanes.size():
 		var lane: float = rack_lanes[row_index]
 		# Rows close to the four concrete hall columns begin beyond the column
@@ -549,7 +579,7 @@ func _rack_aisle(axis_x: bool) -> void:
 		_dense_rack_row(axis_x, lane, row_index % 2, long_span,
 			3.25 if near_column else 1.25)
 	# Guide and light every facing pair; the continuous transverse break through
-	# all rows remains the cross-route even in ten-row merged rooms.
+	# all rows remains the cross-route even in eight-row merged rooms.
 	for pair_start in range(0, rack_lanes.size() - 1, 2):
 		var aisle_lane: float = (rack_lanes[pair_start] \
 			+ rack_lanes[pair_start + 1]) * 0.5
@@ -605,13 +635,12 @@ func _compact_server_field() -> void:
 	# approach cull. Build a compact machine island in the protected centre
 	# instead. Its shared x=6 break is also the safe-arrival path on the zero cell,
 	# so the player materializes among racks without materializing in one.
-	var lanes := [4.10, 5.10, 6.10, 7.10, 8.10]
-	var positions := [4.25, 5.25, 6.75, 7.75]
+	var lanes := [3.8, 6.1, 8.4]
+	var positions := [4.05, 4.95, 7.05, 7.95]
 	for row_index in lanes.size():
 		var lane: float = float(lanes[row_index])
-		# Alternating pairs face their cold aisle. The fifth bank has no sixth
-		# partner, so face it back toward the interior guide instead of presenting
-		# four blank rear panels to the room.
+		# Alternating banks face their cold aisle; each bank contains two tight
+		# cabinet pairs with a deliberate inaccessible join inside each pair.
 		var yaw := PI if row_index % 2 == 1 \
 			or row_index == lanes.size() - 1 else 0.0
 		for position_index in positions.size():
@@ -626,12 +655,12 @@ func _compact_server_field() -> void:
 					_glass_server_rack(p, yaw)
 				_:
 					_azure_server_rack(p, yaw)
-	for guide_lane in [4.60, 6.60, 7.60]:
+	for guide_lane in [4.95, 7.25]:
 		_aisle_floor_guides(true, float(guide_lane), 5.6)
 	_overhead_busways(true, lanes,
 		minf(ctx.ceiling_height - 1.05, 3.55), 5.6)
-	_machine_room_light(Vector3(6.0, 0.0, 4.60), 2.35)
-	_machine_room_light(Vector3(6.0, 0.0, 7.60), 2.10)
+	_machine_room_light(Vector3(6.0, 0.0, 4.95), 2.35)
+	_machine_room_light(Vector3(6.0, 0.0, 7.25), 2.10)
 
 
 func _emergency_beacon(at: Vector3) -> void:
@@ -660,6 +689,7 @@ func _emergency_beacon(at: Vector3) -> void:
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 16.0
 	light.distance_fade_length = 6.0
+	light.set_meta("visible_source", "emergency_beacon_lens")
 	scene.add_node(light)
 
 
@@ -910,7 +940,7 @@ func _brutal_water_court() -> void:
 	_maybe_brutal_annex_door(2212, 0.38)
 	# The former reflecting court is now a server hall with cooling on its
 	# service spine, never a room made exclusively from condensers. The normal
-	# A compact room gets five rows; a merged hall gets ten full rack rows.
+	# A compact room gets three banks; a merged hall gets eight full rack rows.
 	var span := scene.room_span()
 	if span.x > 18.0 or span.y > 18.0:
 		_rack_aisle(true)

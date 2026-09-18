@@ -140,8 +140,11 @@ func _mall_lighting() -> void:
 		lens = Mats.mall_panel().duplicate()
 	var cor = ctx.style == WorldGen.MALL_CORRIDOR
 	var cdir = WorldGen.corridor(ctx.world_seed, ctx.cell)
+	var source := Vector3(3.0, ctx.ceiling_height - 0.65, 3.0)
 	if cor:
 		var along_x = cdir != 2
+		source = Vector3(4.6, ctx.ceiling_height - 0.65, 6.0) if along_x \
+			else Vector3(6.0, ctx.ceiling_height - 0.65, 4.6)
 		for t in [-4.2, -1.4, 1.4, 4.2]:
 			var p = Vector3(6.0 + t, 0, 6.0) if along_x else Vector3(6.0, 0, 6.0 + t)
 			scene.troffer(p, Vector2(1.65, 0.24) if along_x else Vector2(0.24, 1.65),
@@ -152,10 +155,10 @@ func _mall_lighting() -> void:
 			scene.troffer(Vector3(p.x, 0, p.y), Vector2(1.25, 0.3), lens, Mats.mall_trim())
 	if dead:
 		return
-	var light = scene.main_light(flicker, lens, 1.08 if cor else 1.22)
+	var light = scene.fixture_light(flicker, lens, 1.08 if cor else 1.22,
+		source, "mall_troffer")
 	light.light_color = Color(1.0, 0.74, 0.48)
 	light.omni_range = 13.5
-	light.position = Vector3(6, ctx.ceiling_height - 0.65, 6)
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 25.0
@@ -178,8 +181,11 @@ func _mall_poster_case(dir: int, plane: float) -> void:
 	var art_pos = paper_pos + out * 0.006
 	var yaw = (PI / 2.0 if n > 0.0 else -PI / 2.0) if dir < 2 \
 		else (0.0 if n > 0.0 else PI)
-	scene.wall_art_mount(art_pos, yaw, dir, scene.wall_art_path(1622 + dir * 9),
+	var cased := scene.wall_art_mount(art_pos, yaw, dir, scene.wall_art_path(1622 + dir * 9),
 		Vector2(0.91, 1.50), 0.0)
+	# The frame, paper and glass around this mount are intentional: the
+	# overlap audit must not read the case as a fixture collision.
+	cased.set_meta("wall_art_cased", true)
 	var glass_pos = paper_pos + out * 0.035
 	scene.box(glass_pos, paper_size, Mats.mall_glass(), false)
 
@@ -361,6 +367,7 @@ func _mall_unit_sign(dir: int, plane: float, uc: float, giv: int, y: float,
 		l.distance_fade_length = 8.0
 		l.position = lab.position + Vector3(n * 0.3, 0.1, 0) if dir < 2 \
 			else lab.position + Vector3(0, 0.1, n * 0.3)
+		l.set_meta("visible_source", "lit_store_sign")
 		scene.add_node(l)
 
 
@@ -394,10 +401,9 @@ func _mall_sign(pos: Vector3, yaw: float, text: String, size = 0.12,
 	return v
 
 
-## Authored wire shopping cart. The source handle is on local -Z while the old
-## generated cart's handle was on +Z, so the model turns inside the placement
-## pivot. Existing room yaws and loaded-cart contents therefore keep exactly
-## the same architectural facing.
+## Supplied shopping cart with the handle already on local +Z, matching the
+## placement pivot's facing convention, so no turn is needed. Existing room
+## yaws and loaded-cart contents therefore keep exactly the same facing.
 
 
 func _mall_shopping_cart(p: Vector3, yaw: float, loaded = false) -> void:
@@ -405,7 +411,7 @@ func _mall_shopping_cart(p: Vector3, yaw: float, loaded = false) -> void:
 	var v = scene.furnishing_pivot(p, yaw, "mall_shopping_cart")
 	v.set_meta("enrichment_prop", "shopping_cart")
 	v.set_meta("mall_cart_loaded", loaded)
-	var model_yaw = PI
+	var model_yaw = 0.0
 	var source_centre = Chunk.MALL_SHOPPING_CART_CENTRE.rotated(
 		Vector3.UP, model_yaw)
 	var authored = scene.attributed_prop_local(v, Chunk.MALL_SHOPPING_CART_PATH,
@@ -420,10 +426,10 @@ func _mall_shopping_cart(p: Vector3, yaw: float, loaded = false) -> void:
 	if loaded:
 		scene.cc0_prop_local(v, "long_life_food", Vector3(-0.10, 0.62, -0.04),
 			0.18, 1.0)
-		scene.model_rounded_box(v, Vector3(0.24, 0.68, 0.12), Vector3(0.26, 0.18, 0.32),
+		scene.model_rounded_box(v, Vector3(0.12, 0.68, 0.12), Vector3(0.26, 0.18, 0.32),
 			Mats.box_white(), 0.02)
 	scene.collider_yaw_box(scene.world_point(p, Vector3(0, 0.51, 0), yaw),
-		Vector3(0.68, 1.02, 1.05), yaw)
+		Vector3(0.58, 1.02, 1.05), yaw)
 	scene.bind_furnishing_colliders(v, b0)
 
 
@@ -810,8 +816,8 @@ func _mall_foodcourt() -> void:
 		var hyaw = ctx.random01(1697) * TAU
 		if scene.attributed_floor_prop(Chunk.MALL_HOTDOG_PATH, hp, hyaw,
 				Chunk.MALL_HOTDOG_SCALE, Chunk.MALL_HOTDOG_CENTRE, "hotdog_stand") != null:
-			scene.collider_yaw_box(hp + Vector3(0, 0.55, 0),
-				Vector3(1.95, 1.10, 0.85), hyaw)
+			scene.collider_yaw_box(hp + Vector3(0, 0.6, 0),
+				Vector3(1.8, 1.2, 1.05), hyaw)
 	if ctx.random01(1688) < 0.65:
 		scene.cc0_prop("CoffeeCart_01", Vector3(10.1, 0, 2.3), PI * 0.5, 1.0)
 		scene.collider_yaw_box(Vector3(10.1, 0.65, 2.3), Vector3(1.8, 1.3, 0.85), PI * 0.5)

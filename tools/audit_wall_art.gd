@@ -79,6 +79,7 @@ func _init() -> void:
 			missing += 1
 			print("FAIL — theme %d never generated wall art" % theme)
 	var allowed := {
+		0: Chunk.ART_VEGAS,
 		1: Chunk.POSTER_OFFICE,
 		2: Chunk.POSTER_ANNEX,
 		4: Chunk.POSTER_AIRPORT,

@@ -4,13 +4,14 @@ extends Node3D
 ## An isolated real 3D world supplies the doorway preview; its geometry moves
 ## into the main world for the excursion. Only the player crosses worlds.
 
-enum Phase { PREPARING, WAITING, ENTERING, VISITING, RETURNING, SPENT, FAILED }
+enum Phase { PREPARING, WAITING, ENTERING, VISITING, CAUGHT, RETURNING, SPENT, FAILED }
 const DURATION := 30.0
 const ORIENTATION_SECONDS := 5.0
 const COLLAPSE_SECONDS := 5.0
 const WIREFRAME_COLLAPSE_SECONDS := 2.5
 const REASSEMBLY_SECONDS := 1.3
 const WINDOW_SHADER := preload("res://shaders/realm_window.gdshader")
+const CAUGHT_SEQUENCE := preload("res://scripts/caught_sequence.gd")
 const PREVIEW_BUILD_BUDGET_USEC := 2000
 ## The small doorway view doesn't need the full gameplay streaming radius.
 ## Normal streaming expands this neighbourhood after the player enters it.
@@ -64,6 +65,7 @@ var _last_discovery_cell := Vector2i(1 << 30, 1 << 30)
 var _entrance_hum: AudioStreamPlayer3D
 var _door_leak: RealmDoorLeak
 var _prize: Dictionary = {}
+var _caught_sequence: CanvasLayer
 
 
 func collapse_seconds() -> float:
@@ -71,7 +73,12 @@ func collapse_seconds() -> float:
 
 
 func is_away() -> bool:
-	return phase in [Phase.ENTERING, Phase.VISITING, Phase.RETURNING]
+	return phase in [Phase.ENTERING, Phase.VISITING, Phase.CAUGHT, Phase.RETURNING]
+
+
+func allows_perception_effect() -> bool:
+	return phase == Phase.VISITING and not _prompt_hold \
+		and elapsed < DURATION - collapse_seconds()
 
 
 func sync_flash_hud() -> void:
@@ -165,6 +172,9 @@ func _build_preview() -> void:
 	preview = SubViewport.new()
 	preview.name = "NextRealmPreview"
 	preview.own_world_3d = true
+	# Keep emissive highlights above SDR white when this live view is composited
+	# into an HDR main window.
+	preview.use_hdr_2d = true
 	preview.size = Vector2i(960, 600)
 	preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(preview)
@@ -534,6 +544,12 @@ func enter() -> void:
 	threats = ShadowFigures.new()
 	threats.player = game.player
 	threats.floor_idx = destination_floor
+	threats.completed_levels = source_floor
+	threats.chunk_manager = pocket
+	threats.use_walker_prototype = game._figures.use_walker_prototype
+	# This is the one authored combat space whose pressure curve deliberately
+	# escalates from one pursuer to three. Ordinary floors stay single-stalker.
+	threats.allow_reinforcements = true
 	threats.directed_only = true
 	threats.suspended = true
 	game.add_child(threats)
@@ -543,6 +559,7 @@ func enter() -> void:
 		game._heart.bump(Heartbeat.BUMP_BURNED))
 	threats.seen_by_player.connect(func(): game._heart.bump(Heartbeat.BUMP_SEEN))
 	threats.spawned.connect(func(): game._post_process.glitch_burst())
+	threats.approach_starting.connect(game._reality_aftershock.before_approach)
 	game._photo_camera.figures = threats
 	game._heart.figures = threats
 	game._heart.suspended = false
@@ -570,7 +587,13 @@ func enter() -> void:
 
 
 func collapse(caught := false) -> void:
-	if phase != Phase.VISITING:
+	# A realm catch is a failed excursion, not a fatal source-floor catch. Play
+	# the existing first-person caught beat while the pocket world and the exact
+	# attacker still exist; only its black frame may hand off to the return.
+	if caught and phase == Phase.VISITING:
+		await _present_caught_in_realm()
+		return
+	if phase != Phase.VISITING and not (caught and phase == Phase.CAUGHT):
 		return
 	phase = Phase.RETURNING
 	sync_flash_hud()
@@ -631,6 +654,13 @@ func collapse(caught := false) -> void:
 	game.player._pitch = 0.0
 	game.player.cam.rotation.x = 0.0
 	game._post_process.set_corruption(game.run.threat())
+	# The caught sequence's curtain is opaque here and the ordinary transition
+	# fade is opaque behind it. Remove the former before revealing the retained
+	# source so no destination frame, source frame, or camera pose can flash.
+	if caught and is_instance_valid(_caught_sequence):
+		_caught_sequence.queue_free()
+		_caught_sequence = null
+		await get_tree().process_frame
 	if completed_collapse and collapse_style == "wireframe":
 		await _reassemble_source()
 	else:
@@ -653,12 +683,10 @@ func collapse(caught := false) -> void:
 	game.player.set_physics_process(bool(_source["player_physics"]))
 	print("REALM VISIT RETURNED: elapsed %.2f, spawns %d, caught %s" % [elapsed, total_spawned, caught])
 	if caught:
-		# A failed visit must be available on the next attempt at this floor.
-		# Successful/voluntarily ended visits still remain spent for the run.
-		game._allow_realm_visit_retry(source_floor)
 		if bounty_captured:
 			game._photo_album_store.set_flash_status(bounty_id, "FLASH LOST — DID NOT RETURN ALIVE")
-		game._on_figure_reached_player()
+		game._show_event_message("THE DOOR CLOSES — THE FLASH IS LOST" \
+			if bounty_captured else "THE DOOR CLOSES — ONE CHANCE", false, 4.0)
 	else:
 		if completed_collapse and bounty_captured and game.award_emergency_flash(bounty_id):
 			game._show_event_message("FLASH STORED — IT WILL KILL THE ATTACKER THAT CATCHES YOU", false, 5.0)
@@ -666,6 +694,35 @@ func collapse(caught := false) -> void:
 			if bounty_captured:
 				game._photo_album_store.set_flash_status(bounty_id, "FLASH ALREADY STORED" if game.player.emergency_flash_held else "FLASH LOST — LEFT TOO SOON")
 			game._show_event_message("ONLY THIS ROOM REMAINS", false, 4.0)
+
+
+func _present_caught_in_realm() -> void:
+	if phase != Phase.VISITING:
+		return
+	phase = Phase.CAUGHT
+	sync_flash_hud()
+	game._play_player_death()
+	threats.suspended = true
+	threats.passive = true
+	for figure in threats.active_figures():
+		figure.set_physics_process(false)
+	_caught_sequence = CAUGHT_SEQUENCE.new()
+	add_child(_caught_sequence)
+	_caught_sequence.begin(game.player, threats.catching_figure)
+	# Match normal Descent death handling: a shutter already in flight owns its
+	# render until it has produced the photograph, but cannot hide the catch.
+	_caught_sequence.set_process(false)
+	while game._photo_camera._capturing:
+		await get_tree().process_frame
+	game._photo_camera.finish_for_transition()
+	_caught_sequence.set_process(true)
+	await _caught_sequence.finished
+	if phase != Phase.CAUGHT:
+		return
+	# Restore the realm camera before its world is detached. The black curtain
+	# remains, and collapse immediately freezes input again before its first wait.
+	_caught_sequence.restore()
+	await collapse(true)
 
 
 func _reassemble_source() -> void:
@@ -703,6 +760,8 @@ func _fail(reason: String) -> void:
 
 
 func _exit_tree() -> void:
+	if is_instance_valid(_caught_sequence):
+		_caught_sequence.restore()
 	if not _preview_resource_pending.is_empty():
 		var status := ResourceLoader.load_threaded_get_status(_preview_resource_pending)
 		if status in [ResourceLoader.THREAD_LOAD_IN_PROGRESS, ResourceLoader.THREAD_LOAD_LOADED]:

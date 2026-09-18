@@ -21,11 +21,16 @@ const DEFAULTS: Dictionary = {
 	"music_volume": 1.0,
 	"effects_volume": 1.0,
 	"dialogue_volume": 1.0,
-	"vhs_distortion": 1.0,
+	"vhs_distortion": 0.5,
 	"reduced_flashing": false,
+	"vhs_enabled": true,
+	"crt_enabled": true,
+	"hdr_enabled": true,
+	"hdr_brightness": 1.0,
 }
 
-const BOOLEAN_KEYS := ["invert_y", "toggle_sprint", "fullscreen", "reduced_flashing", "death_hints"]
+const BOOLEAN_KEYS := ["invert_y", "toggle_sprint", "fullscreen",
+	"reduced_flashing", "death_hints", "vhs_enabled", "crt_enabled", "hdr_enabled"]
 
 const RANGES: Dictionary = {
 	"sensitivity": Vector2(0.2, 3.0),
@@ -35,6 +40,7 @@ const RANGES: Dictionary = {
 	"effects_volume": Vector2(0.0, 1.0),
 	"dialogue_volume": Vector2(0.0, 1.0),
 	"vhs_distortion": Vector2(0.0, 1.0),
+	"hdr_brightness": Vector2(0.60, 1.40),
 }
 
 var values: Dictionary = {}

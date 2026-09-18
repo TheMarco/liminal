@@ -1,6 +1,7 @@
 extends SceneTree
-## Ensures every mall shopping cart uses the attributed GLB, keeps its authored
-## three-mesh assembly floor-centred, and owns one matching gameplay collider.
+## Ensures every mall shopping cart uses the attributed GLB, keeps its supplied
+## multi-mesh assembly floor-centred at a 1.01m handle height, and owns one
+## matching gameplay collider.
 ## Run: godot --headless --path . --script tools/audit_mall_shopping_carts.gd -- [seeds] [radius]
 
 
@@ -26,19 +27,32 @@ func _inspect_cart(chunk: Chunk, pivot: Node3D, report: Dictionary) -> void:
 	if pivot.get_meta("attributed_furnishing", "") != "mall_shopping_cart":
 		report["violations"] += 1
 		print("FAIL shopping cart pivot is not marked as attributed")
-	var authored := pivot.find_child("Sketchfab_Scene", true, false) as Node3D
-	if authored == null \
-			or authored.get_meta("attributed_asset", "") != Chunk.MALL_SHOPPING_CART_PATH:
+	var authored: Node3D = null
+	for child in pivot.get_children():
+		if child is Node3D \
+				and str(child.get_meta("attributed_asset", "")) == Chunk.MALL_SHOPPING_CART_PATH:
+			authored = child
+			break
+	if authored == null:
 		report["violations"] += 1
 		print("FAIL shopping cart has no attributed source scene")
 		return
 	var mesh_names: Array[String] = []
 	for found in authored.find_children("*", "MeshInstance3D", true, false):
 		mesh_names.append(String(found.name))
-	mesh_names.sort()
-	if mesh_names != ["Object_4", "Object_5", "Object_6"]:
+	var has_basket := false
+	var has_handle := false
+	var has_wheel := false
+	for mesh_name in mesh_names:
+		if mesh_name.contains("Basket"):
+			has_basket = true
+		if mesh_name.contains("Handle"):
+			has_handle = true
+		if mesh_name.contains("Wheel") or mesh_name.contains("Caster"):
+			has_wheel = true
+	if mesh_names.is_empty() or not has_basket or not has_handle or not has_wheel:
 		report["violations"] += 1
-		print("FAIL shopping cart source meshes are incomplete: %s" % [mesh_names])
+		print("FAIL shopping cart source meshes are incomplete: %d meshes" % [mesh_names.size()])
 	var visual := {"has_bounds": false, "bounds": AABB()}
 	_bounds(authored, Transform3D.IDENTITY, visual)
 	if not visual["has_bounds"]:
@@ -48,7 +62,7 @@ func _inspect_cart(chunk: Chunk, pivot: Node3D, report: Dictionary) -> void:
 		if absf(bounds.position.y) > 0.008 \
 				or absf(bounds.get_center().x) > 0.008 \
 				or absf(bounds.get_center().z) > 0.008 \
-				or absf(bounds.size.y - 1.008) > 0.025:
+				or absf(bounds.size.y - 1.015) > 0.025:
 			report["violations"] += 1
 			print("FAIL shopping cart is not floor-centred/scaled: %s" % bounds)
 	var group := int(pivot.get_meta("furnishing_group", -1))
@@ -61,7 +75,7 @@ func _inspect_cart(chunk: Chunk, pivot: Node3D, report: Dictionary) -> void:
 		if box == null:
 			continue
 		matching += 1
-		if box.size.distance_to(Vector3(0.68, 1.02, 1.05)) > 0.005:
+		if box.size.distance_to(Vector3(0.58, 1.02, 1.05)) > 0.005:
 			report["violations"] += 1
 			print("FAIL shopping cart collider size is %s" % box.size)
 	if matching != 1:

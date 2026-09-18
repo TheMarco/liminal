@@ -26,10 +26,14 @@ func make_summary(cause := DescentRun.DeathCause.UNKNOWN, is_won := false, hint 
 	summary.floor_idx = 9
 	summary.floor_display = "THE DATA CENTER"
 	summary.continue_floor_idx = 9
+	summary.elapsed = 1062.75
 	summary.death_cause = cause
 	summary.won = is_won
 	summary.show_death_hint = hint
 	root.add_child(summary)
+	check(summary._labels[1][0].text == "17:42", "summary no longer shows elapsed time alone")
+	for entry in summary._labels:
+		check(not entry[0].text.to_lower().contains("rule break"), "summary still shows obsolete rule-break count")
 	return summary
 
 func finish_fade() -> void:
@@ -47,6 +51,9 @@ func click(button: Button) -> void:
 		root.push_input(event)
 
 func run() -> void:
+	check(DescentRun.death_explanation(DescentRun.DeathCause.FIGURE) ==
+		"IT HAS YOU NOW.\nKEEP DISTANCE AND USE THE TORCH.",
+		"figure catch lost its ominous message or separate survival advice")
 	var run_state := DescentRun.new()
 	run_state.finish(false, DescentRun.DeathCause.BLACKOUT_MOVEMENT)
 	run_state.finish(false, DescentRun.DeathCause.FIGURE)

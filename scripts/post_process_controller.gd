@@ -1,17 +1,20 @@
 class_name PostProcessController
 extends Node
-## Owns the recording-media overlay and its transient damage/glitch state.
-## Gameplay reports pressure and camera hits; it does not manipulate shaders.
+## Owns two independent presentation stages and transient VHS damage/glitches.
+## The VHS stage degrades the recorded signal; the optional CRT stage displays
+## that result (or the clean game image) on an emulated tube.
 
-enum Mode { CRT, FOUND_FOOTAGE }
 enum GlitchKind { TRACKING, COLOR_UNLOCK, DROPOUT, RF_STATIC, SYNC_SLIP }
 
 var _overlay: ColorRect
+var _scene_copy: BackBufferCopy
 var _tube_display: Control
-var _crt_material: ShaderMaterial
 var _found_footage_material: ShaderMaterial
-var _mode := Mode.CRT
-var _enabled := true
+var _vhs_enabled := true
+var _crt_enabled := true
+## Visual captures and transition tests sometimes need to suppress the complete
+## presentation temporarily. This gate never changes either saved preference.
+var _presentation_enabled := true
 ## While a ritual tape owns the camera, the main full-screen pass steps aside.
 ## Playback has its own high-resolution, TV-glass-only instance of the shared
 ## recovered-footage material.
@@ -75,7 +78,7 @@ static func make_found_footage_material(
 	# dark rooms readable without double-exposing bright interiors.
 	material.set_shader_parameter("bright_boost", 1.38)
 	material.set_shader_parameter("resolution", signal_resolution)
-	material.set_shader_parameter("noise_level", 0.026)
+	material.set_shader_parameter("noise_level", 0.016)
 	material.set_shader_parameter("interference_amount", 0.035)
 	material.set_shader_parameter("aberation_amount", 0.10)
 	material.set_shader_parameter("jitter_amount", 0.035)
@@ -109,11 +112,11 @@ static func make_found_footage_material(
 ## the existing factory preset and never receive these extra disturbances.
 static func make_live_found_footage_material() -> ShaderMaterial:
 	var material := make_found_footage_material()
-	_set_signal(material, "noise_level", 0.038)
-	_set_signal(material, "line_noise", 0.009)
+	_set_signal(material, "noise_level", 0.020)
+	_set_signal(material, "line_noise", 0.005)
 	_set_signal(material, "dropout_amount", 0.22)
 	_set_signal(material, "head_switch_amount", 0.5)
-	_set_signal(material, "tape_speckle", 0.22)
+	_set_signal(material, "tape_speckle", 0.12)
 	# Colour trails the brightness edge, with a gentle mismatch between its
 	# two components. The shader lets existing corruption/presence widen it.
 	_set_signal(material, "chroma_delay", 2.4)
@@ -123,10 +126,10 @@ static func make_live_found_footage_material() -> ShaderMaterial:
 
 
 static func _comfort_state() -> Dictionary:
-	var strength := 1.0
+	var strength := 0.5
 	var reduced := false
 	if GameSettings.current != null:
-		strength = clampf(float(GameSettings.current.values.get("vhs_distortion", 1.0)), 0.0, 1.0)
+		strength = clampf(float(GameSettings.current.values.get("vhs_distortion", 0.5)), 0.0, 1.0)
 		reduced = bool(GameSettings.current.values.get("reduced_flashing", false))
 	return {"strength": strength, "reduced": reduced}
 
@@ -201,9 +204,9 @@ static func add_crt_display_pass(parent: Node,
 	return display
 
 
-func setup(host: Node, found_footage := false, enabled := true) -> void:
-	_mode = Mode.FOUND_FOOTAGE if found_footage else Mode.CRT
-	_enabled = enabled
+func setup(host: Node, vhs_enabled := true, crt_enabled := true) -> void:
+	_vhs_enabled = vhs_enabled
+	_crt_enabled = crt_enabled
 	var layer := CanvasLayer.new()
 	# Above every UI layer (HUD 2, title 3): the tube is the last thing the
 	# signal passes through, so the OSD and menus are part of the recording.
@@ -211,14 +214,10 @@ func setup(host: Node, found_footage := false, enabled := true) -> void:
 	_overlay = ColorRect.new()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# Shared presentation shader, with a separate analog signal path for tape.
-	# The clean CRT retains its original beam and raster response.
-	_crt_material = ShaderMaterial.new()
-	_crt_material.shader = POST_SHADER
-	_crt_material.set_shader_parameter("bright_boost", 1.4)
+	# VHS is the signal stage. CRT is a separate display stage below, so either
+	# one can be enabled without silently enabling the other.
 	_found_footage_material = make_live_found_footage_material()
-	_overlay.material = _material_for_mode()
-	_overlay.visible = (_enabled or _tape_hold)
+	_overlay.material = _found_footage_material
 	layer.add_child(_overlay)
 	_tube_display = add_crt_display_pass(layer)
 	host.add_child(layer)
@@ -227,59 +226,65 @@ func setup(host: Node, found_footage := false, enabled := true) -> void:
 	_apply_found_footage_state()
 
 
-func is_enabled() -> bool:
-	return _enabled
-
-
-func set_enabled(value: bool) -> void:
-	_enabled = value
+## An earlier screen-reading effect needs a fresh copy here, after the HUD.
+## Installed by Main for perception beats, including normal non-debug gameplay.
+func ensure_scene_copy() -> void:
+	if _scene_copy != null:
+		return
+	_scene_copy = BackBufferCopy.new()
+	_scene_copy.name = "WorldAndHudCopy"
+	_scene_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	_overlay.get_parent().add_child(_scene_copy)
+	_overlay.get_parent().move_child(_scene_copy, 0)
 	_sync_visible()
 
 
+func is_vhs_enabled() -> bool:
+	return _vhs_enabled
+
+
+func is_crt_enabled() -> bool:
+	return _crt_enabled
+
+
+func set_effects(vhs_enabled: bool, crt_enabled: bool) -> void:
+	_vhs_enabled = vhs_enabled
+	_crt_enabled = crt_enabled
+	_sync_visible()
+
+
+## Compatibility gate for capture tools and cinematic transitions. Player-facing
+## code must use set_effects() so VHS and CRT remain independently configurable.
+func set_enabled(enabled: bool) -> void:
+	_presentation_enabled = enabled
+	_sync_visible()
+
+
+func is_enabled() -> bool:
+	return _presentation_enabled and (_vhs_enabled or _crt_enabled or _tape_hold)
+
+
 func set_tape_playback(on: bool) -> void:
-	# Playback temporarily enables the same whole-scene presentation, including
-	# the video and cabinet. Preserve the player's normal enabled preference.
+	# A ritual recording remains a VHS signal even when the ordinary gameplay
+	# effect is disabled. CRT remains the player's independent display choice.
 	_tape_hold = on
 	_sync_visible()
 
 
 func _sync_visible() -> void:
+	var show_vhs := _presentation_enabled and (_vhs_enabled or _tape_hold)
+	var show_crt := _presentation_enabled and _crt_enabled
+	if _scene_copy != null:
+		_scene_copy.visible = show_vhs or show_crt
 	if _overlay != null:
-		_overlay.visible = (_enabled or _tape_hold)
+		_overlay.visible = show_vhs
 	if _tube_display != null:
-		_tube_display.visible = (_enabled or _tape_hold) and _mode == Mode.FOUND_FOOTAGE
-
-
-func toggle_enabled() -> bool:
-	set_enabled(not _enabled)
-	return _enabled
-
-
-func toggle_mode() -> String:
-	if _overlay == null or _crt_material == null \
-			or _found_footage_material == null:
-		return mode_label()
-	_mode = Mode.FOUND_FOOTAGE if _mode == Mode.CRT else Mode.CRT
-	_overlay.material = _material_for_mode()
-	_sync_visible()
-	if _mode == Mode.FOUND_FOOTAGE:
-		_schedule_glitches(Time.get_ticks_msec() * 0.001)
-		_apply_found_footage_state()
-	return mode_label()
-
-
-func is_found_footage() -> bool:
-	return _mode == Mode.FOUND_FOOTAGE
-
-
-func mode_label() -> String:
-	return "RECOVERED TAPE" if _mode == Mode.FOUND_FOOTAGE else "CRT"
+		_tube_display.visible = show_crt
 
 
 func set_noise(value: float) -> void:
-	for material in [_crt_material, _found_footage_material]:
-		if material != null:
-			_set_signal(material, "noise_amount", value)
+	if _found_footage_material != null:
+		_set_signal(_found_footage_material, "noise_amount", value)
 
 
 func pulse_noise(high: float, baseline: float, duration: float) -> void:
@@ -295,8 +300,7 @@ func set_corruption(amount: float) -> void:
 
 
 ## Screen-space interference halo around the nearest visible figure. Fed
-## every frame from main. Found-footage mode only: the owner cut it from the
-## CRT mode on sight (2026-08-16) — the clean tube stays clean.
+## every frame from main. VHS stage only: CRT-only output stays clean.
 func set_entity_halo(pos: Vector2, radius: float, amount: float) -> void:
 	if _found_footage_material == null:
 		return
@@ -346,7 +350,7 @@ func update() -> void:
 		changed = true
 	if _glitch_active:
 		changed = true
-	if _mode == Mode.FOUND_FOOTAGE and (_enabled or _tape_hold):
+	if _vhs_enabled or _tape_hold:
 		if _minor_at <= 0.0 or _major_at <= 0.0:
 			_schedule_glitches(now)
 		if not _glitch_active:
@@ -358,11 +362,6 @@ func update() -> void:
 				return
 	if changed:
 		_apply_found_footage_state()
-
-
-func _material_for_mode() -> ShaderMaterial:
-	return _found_footage_material if _mode == Mode.FOUND_FOOTAGE \
-		else _crt_material
 
 
 func _schedule_glitches(now: float) -> void:
@@ -399,7 +398,7 @@ func _apply_found_footage_state() -> void:
 	if _found_footage_material == null:
 		return
 	var interference := lerpf(0.035, 0.32, _signal_corruption)
-	var noise := lerpf(0.038, 0.085, _signal_corruption)
+	var noise := lerpf(0.020, 0.065, _signal_corruption)
 	var aberration := lerpf(0.10, 0.65, _signal_corruption)
 	var jitter := lerpf(0.035, 0.28, _signal_corruption)
 	var wobble := lerpf(0.07, 0.4, _signal_corruption)
@@ -414,7 +413,7 @@ func _apply_found_footage_state() -> void:
 	var slip := 0.0
 	var rf_static := 0.0
 	var sync := 0.0
-	var speckle := lerpf(0.22, 0.65, _signal_corruption)
+	var speckle := lerpf(0.12, 0.50, _signal_corruption)
 	# Preserve the diegetic threat cue while keeping silhouettes readable.
 	if _presence > 0.0:
 		var near := clampf(_presence / 0.6, 0.0, 1.0)

@@ -1,5 +1,5 @@
 extends SceneTree
-## Headless state audit for the found-footage post-process controller.
+## Headless state audit for independent VHS-signal and CRT-display stages.
 
 const CONTROLLER := preload("res://scripts/post_process_controller.gd")
 
@@ -20,9 +20,13 @@ func _run() -> void:
 	root.add_child(host)
 	var controller := CONTROLLER.new()
 	host.add_child(controller)
-	controller.setup(host, true, true)
+	controller.setup(host)
+	controller.ensure_scene_copy()
 	var full_material: ShaderMaterial = controller._found_footage_material
-	expect(controller._tube_display != null and controller._tube_display.visible, "initial tape tube display is hidden")
+	expect(controller._overlay.visible, "default VHS stage is hidden")
+	expect(controller._tube_display != null and controller._tube_display.visible,
+		"default CRT stage is hidden")
+	expect(controller._scene_copy.visible, "default VHS stage did not retain its scene copy")
 	expect(controller._tube_display.get_child_count() == 2, "tube display pass has wrong child count")
 	var tube_copy: BackBufferCopy = controller._tube_display.get_child(0)
 	var tube_face: ColorRect = controller._tube_display.get_child(1)
@@ -35,36 +39,44 @@ func _run() -> void:
 	expect(tv_material.get_shader_parameter("tape_signal") == true, "TV tape_signal is not true")
 	expect(tv_material.get_shader_parameter("resolution") == CONTROLLER.TV_TAPE_RESOLUTION, "TV resolution mismatch")
 
-	var clean_noise = controller._crt_material.get_shader_parameter("noise_level")
-	expect(controller.toggle_mode() == "CRT", "initial tape mode did not toggle to CRT")
-	expect(not controller._tube_display.visible, "CRT mode did not hide tube display")
-	controller._apply_found_footage_state()
-	expect(controller._crt_material.get_shader_parameter("noise_level") == clean_noise, "clean CRT received tape noise state")
-	expect(controller._crt_material.get_shader_parameter("tape_signal") != true, "clean CRT tape_signal is enabled")
-	expect(controller.toggle_mode() == "RECOVERED TAPE", "toggle_mode did not enter tape mode")
-	expect(controller._tube_display.visible, "tape mode did not show tube display")
-	expect(controller.toggle_mode() == "CRT", "toggle_mode did not return to CRT")
-	expect(controller.toggle_mode() == "RECOVERED TAPE", "toggle_mode did not restore tape mode")
+	controller.set_effects(false, false)
+	expect(not controller._overlay.visible and not controller._tube_display.visible
+		and not controller._scene_copy.visible,
+		"both disabled did not reveal clean rendering")
+	controller.set_effects(false, true)
+	expect(not controller._overlay.visible and controller._tube_display.visible,
+		"CRT-only combination is not independent")
+	controller.set_effects(true, false)
+	expect(controller._overlay.visible and not controller._tube_display.visible,
+		"VHS-only combination is not independent")
+	controller.set_effects(true, true)
+	expect(controller._overlay.visible and controller._tube_display.visible,
+		"combined VHS + CRT pipeline is not stacked")
 	controller.set_enabled(false)
-	expect(not controller._overlay.visible, "disabled overlay remains visible")
-	expect(not controller._tube_display.visible, "disabled tube display remains visible")
+	expect(not controller.is_enabled() and not controller._overlay.visible
+		and not controller._tube_display.visible and not controller._scene_copy.visible,
+		"temporary presentation gate did not hide both stages")
+	expect(controller.is_vhs_enabled() and controller.is_crt_enabled(),
+		"temporary presentation gate overwrote stage preferences")
 	controller.set_enabled(true)
-	expect(controller._overlay.visible, "enabled overlay remains hidden")
-	expect(controller._tube_display.visible, "enabled tape tube remains hidden")
+	expect(controller._overlay.visible and controller._tube_display.visible,
+		"temporary presentation gate did not restore both stages")
 	controller.set_tape_playback(true)
-	expect(controller._overlay.visible, "tape playback hid the whole-scene overlay")
-	expect(controller._tube_display.visible, "tape playback hid the whole-scene display")
+	expect(controller._overlay.visible and controller._tube_display.visible,
+		"tape playback changed enabled stages")
 	controller.set_tape_playback(false)
-	expect(controller._overlay.visible, "tape playback release did not show overlay")
-	expect(controller._tube_display.visible, "tape playback release did not show tube display")
-	controller.set_enabled(false)
+	expect(controller._overlay.visible and controller._tube_display.visible,
+		"tape playback release changed enabled stages")
+	controller.set_effects(false, false)
 	controller.set_tape_playback(true)
-	expect(controller._overlay.visible and controller._tube_display.visible, "playback did not enable whole-game shader")
+	expect(controller._overlay.visible and not controller._tube_display.visible,
+		"playback should force VHS without overriding the CRT preference")
 	expect(controller._overlay.material == controller._found_footage_material, "playback replaced the game shader")
-	expect(not controller.is_enabled(), "playback overwrote the normal shader preference")
+	expect(not controller.is_vhs_enabled() and not controller.is_crt_enabled(),
+		"playback overwrote normal video preferences")
 	controller.set_tape_playback(false)
 	expect(not controller._overlay.visible and not controller._tube_display.visible, "playback did not restore disabled preference")
-	controller.set_enabled(true)
+	controller.set_effects(true, false)
 	var tv_parent := Control.new()
 	host.add_child(tv_parent)
 	var tv_display := CONTROLLER.add_crt_display_pass(tv_parent, CONTROLLER.TV_TAPE_RESOLUTION)
@@ -89,8 +101,6 @@ func _run() -> void:
 		expect(envelope == 0.0 if p == 0.0 or p == 1.0 else envelope > 0.0, "bad glitch envelope at %s" % p)
 	expect(CONTROLLER.glitch_envelope(0.12) > CONTROLLER.glitch_envelope(0.5), "glitch envelope does not decay")
 
-	controller._mode = CONTROLLER.Mode.FOUND_FOOTAGE
-	controller._overlay.material = full_material
 	var baseline_dropout := float(full_material.get_shader_parameter("dropout_amount"))
 	var glitch_parameters := {
 		CONTROLLER.GlitchKind.TRACKING: "tracking_error",
@@ -136,11 +146,6 @@ func _run() -> void:
 	expect(approx(controller._signal_corruption, 1.0), "corruption did not clamp high")
 	controller.set_corruption(-1.0)
 	expect(approx(controller._signal_corruption, 0.0), "corruption did not clamp low")
-	controller._mode = CONTROLLER.Mode.CRT
-	controller._apply_found_footage_state()
-	expect(controller._crt_material.get_shader_parameter("tape_signal") != true, "corruption altered clean CRT tape signal")
-	expect(controller._crt_material.get_shader_parameter("noise_level") == clean_noise, "tape events altered clean CRT noise")
-
 	var now := Time.get_ticks_msec() * 0.001
 	controller._start_glitch(true, now)
 	expect(controller._minor_at - now >= 5.0 and controller._minor_at - now <= 11.0, "major minor schedule out of bounds")

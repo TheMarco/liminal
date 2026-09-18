@@ -11,6 +11,8 @@ static func release(tree: SceneTree) -> void:
 	Chunk.clear_runtime_caches()
 	SoundBank._c.clear()
 	Sfx._c.clear()
+	ShadowFigure._presence_cache.clear()
+	ShadowWalkerVisual._walking_clips.clear()
 	Mats.clear_runtime_caches()
 	VhsRitual.clear_runtime_cache()
 	await tree.process_frame

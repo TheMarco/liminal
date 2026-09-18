@@ -161,9 +161,14 @@ func _init() -> void:
 	flashlight.spot_range = 21.0
 	flashlight.spot_angle = 46.0
 	flashlight.spot_attenuation = 1.15
-	flashlight.light_volumetric_fog_energy = 0.42
+	# The global fog is deliberately thin on several floors. Give the torch a
+	# stronger local scattering contribution so its shaft remains readable in
+	# air without raising surface exposure, changing the aim cone, or adding a
+	# transparent fake-volume mesh that would clip through walls.
+	flashlight.light_volumetric_fog_energy = 1.25
 	flashlight.shadow_enabled = true
 	flashlight.visible = false
+	flashlight.set_meta("visible_source", "player_held_flashlight")
 	cam.add_child(flashlight)
 
 

@@ -22,11 +22,13 @@ func _office_ceiling_center(at: Vector3, panels: Vector2i) -> Vector3:
 	return Vector3(snapped.x, at.y, snapped.y)
 
 
-func _office_troffer(at: Vector3, panels: Vector2i, pmat: Material) -> void:
+func _office_troffer(at: Vector3, panels: Vector2i,
+		pmat: Material) -> MeshInstance3D:
 	at = _office_ceiling_center(at, panels)
 	var lens := scene.troffer(at, OfficeCeilingGrid.lens_size(panels), pmat, Mats.metal_gray())
 	lens.set_meta("office_ceiling_fixture", "light")
 	lens.set_meta("office_ceiling_panels", panels)
+	return lens
 
 
 func _office_lighting() -> void:
@@ -36,17 +38,27 @@ func _office_lighting() -> void:
 	var is_spawn = ctx.cell == Vector2i.ZERO
 	var dead = (not is_spawn) and ctx.random01(8) < 0.02
 	var flicker = (not is_spawn) and (not dead) and ctx.random01(9) < 0.05
-	var pmat: StandardMaterial3D
-	if dead:
-		pmat = Mats.panel_dead()
-	elif flicker:
-		pmat = Mats.office_panel().duplicate()
-	else:
-		pmat = Mats.office_panel()
+	var steady_panel := Mats.office_panel()
+	var flicker_panel: StandardMaterial3D = steady_panel.duplicate() \
+		if flicker else null
+	var dead_index := clampi(int(ctx.random01(10) * 8.0), 0, 7)
+	var flicker_index := clampi(int(ctx.random01(11) * 8.0), 0, 7)
+	var flicker_source := Vector3.ZERO
 	# dense, even grid of fluorescent troffers — shadowless corporate daylight
+	var fixture_index := 0
 	for gx in [3.0, 9.0]:
 		for gz in [2.1, 4.7, 7.3, 9.9]:
-			_office_troffer(Vector3(gx, 0, gz), Vector2i(2, 1), pmat)
+			var selected_flicker := flicker and fixture_index == flicker_index
+			var fixture_material: Material = Mats.panel_dead() \
+				if dead and fixture_index == dead_index \
+				else (flicker_panel if selected_flicker else steady_panel)
+			var lens := _office_troffer(Vector3(gx, 0, gz),
+				Vector2i(2, 1), fixture_material)
+			if selected_flicker:
+				lens.set_meta("office_ceiling_flicker", true)
+				flicker_source = _office_ceiling_center(Vector3(
+					gx, ctx.ceiling_height - 0.5, gz), Vector2i(2, 1))
+			fixture_index += 1
 	# AC diffuser grilles between the light rows
 	for vp in [Vector2(6.0, 3.4), Vector2(6.0, 8.6)]:
 		var at := _office_ceiling_center(Vector3(vp.x, ctx.ceiling_height - 0.015, vp.y), Vector2i.ONE)
@@ -56,17 +68,32 @@ func _office_lighting() -> void:
 		for si in 4:
 			scene.box(Vector3(at.x, ctx.ceiling_height - 0.035, at.z - 0.225 + 0.15 * float(si)),
 				Vector3(0.60, 0.012, 0.05), Mats.charcoal(), false)
-	if dead:
-		return
-	var light = scene.main_light(flicker, pmat, 1.0)
+	# A failed or flickering tube removes only its own eighth of the grid. The
+	# former shared FlickerLight drove every lens and the room's only light,
+	# producing a hard 12m rectangle of darkness instead of one bad ballast.
+	var stable_share := 7.0 / 8.0 if dead or flicker else 1.0
+	var light = scene.fixture_light(false, steady_panel, stable_share,
+		_office_ceiling_center(Vector3(3.0,
+			ctx.ceiling_height - 0.5, 4.7), Vector2i(2, 1)),
+		"office_troffer_grid")
 	light.light_color = Color(0.93, 1.0, 0.95)
 	light.omni_range = 12.5
-	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.5, WorldGen.CELL_SIZE / 2.0)
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 24.0
 	light.distance_fade_length = 8.0
 	scene.add_node(light)
+	if flicker:
+		var flutter := scene.fixture_light(true, flicker_panel, 1.0 / 8.0,
+			flicker_source, "office_flickering_troffer")
+		flutter.light_energy = 1.0 / 8.0
+		flutter.light_color = Color(0.93, 1.0, 0.95)
+		flutter.omni_range = 4.5
+		flutter.shadow_enabled = false
+		flutter.distance_fade_enabled = true
+		flutter.distance_fade_begin = 18.0
+		flutter.distance_fade_length = 6.0
+		scene.add_node(flutter)
 
 
 ## Corridor fixtures follow the actual lane instead of filling the entire
@@ -81,16 +108,26 @@ func _office_corridor_lighting() -> void:
 	var o = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
 	var dead = ctx.random01(8) < 0.025
 	var flicker = not dead and ctx.random01(9) < 0.07
-	var pmat: StandardMaterial3D
-	if dead:
-		pmat = Mats.panel_dead()
-	elif flicker:
-		pmat = Mats.office_panel().duplicate()
-	else:
-		pmat = Mats.office_panel()
+	var steady_panel := Mats.office_panel()
+	var flicker_panel: StandardMaterial3D = steady_panel.duplicate() \
+		if flicker else null
+	var dead_index := clampi(int(ctx.random01(10) * 4.0), 0, 3)
+	var flicker_index := clampi(int(ctx.random01(11) * 4.0), 0, 3)
+	var flicker_source := Vector3.ZERO
+	var fixture_index := 0
 	for t in [-4.5, -1.5, 1.5, 4.5]:
 		var at = scene.world_point(o, Vector3(t, 0, 0), yw)
-		_office_troffer(at, Vector2i(2, 1) if along_x else Vector2i(1, 2), pmat)
+		var panels := Vector2i(2, 1) if along_x else Vector2i(1, 2)
+		var selected_flicker := flicker and fixture_index == flicker_index
+		var fixture_material: Material = Mats.panel_dead() \
+			if dead and fixture_index == dead_index \
+			else (flicker_panel if selected_flicker else steady_panel)
+		var lens := _office_troffer(at, panels, fixture_material)
+		if selected_flicker:
+			lens.set_meta("office_ceiling_flicker", true)
+			flicker_source = _office_ceiling_center(Vector3(
+				at.x, ctx.ceiling_height - 0.48, at.z), panels)
+		fixture_index += 1
 	# One supply and one return grille, both kept over the corridor rather than
 	# in the inaccessible office strips.
 	for t in [-3.0, 3.0]:
@@ -100,17 +137,29 @@ func _office_corridor_lighting() -> void:
 		grille.rotation.y = yw
 		grille.set_meta("office_ceiling_fixture", "vent")
 		grille.set_meta("office_ceiling_panels", Vector2i.ONE)
-	if dead:
-		return
-	var light = scene.main_light(flicker, pmat, 0.82)
+	var stable_share := 3.0 / 4.0 if dead or flicker else 1.0
+	var light = scene.fixture_light(false, steady_panel, 0.82 * stable_share,
+		scene.world_point(o, Vector3(-1.5,
+			ctx.ceiling_height - 0.48, 0), yw), "office_troffer_grid")
 	light.light_color = Color(0.91, 1.0, 0.94)
 	light.omni_range = 10.5
-	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.48, WorldGen.CELL_SIZE / 2.0)
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 22.0
 	light.distance_fade_length = 8.0
 	scene.add_node(light)
+	if flicker:
+		var flicker_energy := 0.82 / 4.0
+		var flutter := scene.fixture_light(true, flicker_panel,
+			flicker_energy, flicker_source, "office_flickering_troffer")
+		flutter.light_energy = flicker_energy
+		flutter.light_color = Color(0.91, 1.0, 0.94)
+		flutter.omni_range = 4.0
+		flutter.shadow_enabled = false
+		flutter.distance_fade_enabled = true
+		flutter.distance_fade_begin = 18.0
+		flutter.distance_fade_length = 6.0
+		scene.add_node(flutter)
 
 
 ## Ceiling light fixture: recessed glowing lens inside a trim frame, instead
@@ -600,7 +649,8 @@ func _office_cubicle_cluster(c: Vector3, qi_base: int) -> void:
 		qi += 1
 	# waste bin
 	var bin_side = -1.0 if int(qi_base / 12) % 2 == 1 else 1.0
-	scene.cylinder(c + Vector3(1.7 * bin_side, 0.18, 1.7), 0.14, 0.36, Mats.charcoal())
+	scene.waste_bin(c + Vector3(1.7 * bin_side, 0, 1.7),
+		0.0, "office_bin")
 
 
 func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
@@ -813,7 +863,9 @@ func _office_break() -> void:
 	for i in 4:
 		var ang = TAU * float(i) / 4.0 + 0.4
 		var cp = c + Vector3(cos(ang) * 1.15, 0, sin(ang) * 1.15)
-		scene.task_chair(cp, ang + PI / 2.0 + (ctx.random01(98 + i) - 0.5) * 0.7)
+		# The task chair's seat faces local -Z, so aim the facing (not the
+		# position angle) at the table centre.
+		scene.task_chair(cp, atan2(cos(ang), sin(ang)) + (ctx.random01(98 + i) - 0.5) * 0.7)
 	# counter along the south wall with a coffee maker
 	var coffee_counter = scene.rounded_box(Vector3(4.5, 0.45, 0.75), Vector3(3.0, 0.9, 0.6), Mats.desk_white(), 0.015)
 	coffee_counter.set_meta("surface_wear_prop", "office_coffee_counter")
@@ -837,7 +889,8 @@ func _office_break() -> void:
 		Chunk.OFFICE_WATER_COOLER_SCALE, Chunk.OFFICE_WATER_COOLER_CENTRE,
 		"office_water_cooler")
 	if cooler != null:
-		scene.collider_box(wc + Vector3(0, 0.69, 0), Vector3(0.34, 1.38, 0.36))
+		scene.collider_box(wc + Vector3(0, Chunk.OFFICE_WATER_COOLER_COLLIDER_SIZE.y * 0.5, 0),
+			Chunk.OFFICE_WATER_COOLER_COLLIDER_SIZE)
 		scene.bind_furnishing_colliders(cooler, wc_body0)
 	# the catering cart that never gets restocked
 	if ctx.random01(103) < 0.5:
@@ -881,7 +934,7 @@ func _office_boardroom() -> void:
 		for i in 8:
 			var x = -4.9 + 1.4 * float(i)
 			var cp = c + Vector3(x, 0, side * 1.75)
-			scene.task_chair(cp, 0.0 if side < 0.0 else PI)
+			scene.task_chair(cp, PI if side < 0.0 else 0.0)
 	# One chair sits conspicuously far from the head of the table.
 	scene.task_chair(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18)
 	# Dark wall-sized presentation display with a stubborn status line.

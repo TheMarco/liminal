@@ -86,12 +86,15 @@ func _air_lighting() -> void:
 	if dead:
 		return
 	var energy := lerpf(1.35, 1.9, clampf((ctx.ceiling_height - 3.2) / 3.0, 0.0, 1.0))
-	var light = scene.main_light(flicker, pmat, energy)
+	var light_drop := AirportGrandCeiling.depth(ctx.ceiling_height, ctx.style) + 0.30 if grand else 0.6
+	var source := Vector3(6.0, ctx.ceiling_height - light_drop, 6.0)
+	if not grand:
+		source = Vector3(3.0, ctx.ceiling_height - 0.6, 2.5)
+	var light = scene.fixture_light(flicker, pmat, energy, source,
+		"airport_grand_coffer" if grand else "airport_ceiling_fixture")
 	light.light_color = Color(1.0, 0.95, 0.84) if grand else Color(0.94, 0.97, 1.0)
 	light.omni_attenuation = 0.85
 	light.omni_range = 14.5
-	var light_drop := AirportGrandCeiling.depth(ctx.ceiling_height, ctx.style) + 0.30 if grand else 0.6
-	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - light_drop, WorldGen.CELL_SIZE / 2.0)
 	light.shadow_enabled = true
 	light.shadow_blur = 2.0
 	light.distance_fade_enabled = true
@@ -544,17 +547,18 @@ func _air_window_wall(o: Vector3, yw: float) -> void:
 	# taxiway edge lights receding along the strip
 	for i in 5:
 		var lx = -5.0 + 2.5 * float(i)
-		scene.model_sphere(W, Vector3(lx, 0.06, 5.3), 0.045, Mats.lamp_blue())
-	for li in 2:
+		var taxi_pos = Vector3(lx, 0.06, 5.3)
+		scene.model_sphere(W, taxi_pos, 0.045, Mats.lamp_blue())
 		var l = OmniLight3D.new()
 		l.light_color = Color(0.3, 0.55, 1.0)
-		l.light_energy = 0.35
-		l.omni_range = 3.5
-		l.position = Vector3(-2.5 + 5.0 * float(li), 0.4, 5.2)
+		l.light_energy = 0.14
+		l.omni_range = 2.25
+		l.position = taxi_pos
 		l.shadow_enabled = false
 		l.distance_fade_enabled = true
 		l.distance_fade_begin = 16.0
 		l.distance_fade_length = 8.0
+		l.set_meta("visible_source", "taxiway_blue_beacon")
 		W.add_child(l)
 	_air_jetway(W)
 	# most gates have their aircraft still on stand
@@ -597,11 +601,14 @@ func _air_docked_plane(W: Node3D) -> void:
 	l.light_energy = 0.22
 	l.omni_range = 2.6
 	l.position = Vector3(0.18, 1.95, 0)
+	var beacon := scene.model_sphere(P, l.position, 0.065, Mats.lamp_red())
+	beacon.set_meta("visible_source", "plane_red_beacon")
 	l.shadow_enabled = false
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = 18.0
 	l.distance_fade_length = 8.0
 	P.add_child(l)
+	l.set_meta("visible_source", "plane_red_beacon")
 
 
 ## Glass boarding bridge with a blue lift frame, service stairs and docking
@@ -628,11 +635,14 @@ func _air_jetway(W: Node3D) -> void:
 	l.light_energy = 0.22
 	l.omni_range = 2.6
 	l.position = Vector3(2.61, 3.36, -0.58)
+	var beacon := scene.model_sphere(J, l.position, 0.065, Mats.lamp_red())
+	beacon.set_meta("visible_source", "jetway_red_beacon")
 	l.shadow_enabled = false
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = 18.0
 	l.distance_fade_length = 8.0
 	J.add_child(l)
+	l.set_meta("visible_source", "jetway_red_beacon")
 
 
 func _air_gate_desk(o: Vector3, yw: float, code: String) -> void:
@@ -881,6 +891,7 @@ func _air_transit() -> void:
 	l.distance_fade_begin = 22.0
 	l.distance_fade_length = 8.0
 	l.set_meta("stream_room_light", true)
+	l.set_meta("visible_source", "transit_ceiling_fixtures")
 	scene.add_node(l)
 	# Wayfinding over the two genuine walking lanes, tucked under the lid.
 	for ki in 2:
@@ -1008,16 +1019,20 @@ func _air_transit_bay_returns(o: Vector3, yw: float, side: float,
 	var roof = scene.model_box(null, scene.world_point(o, Vector3(t, wh + 0.06, dc), yw),
 		Vector3(width, 0.12, depth), Mats.airport_ceiling())
 	roof.rotation.y = yw
+	var diffuser = scene.model_box(null, scene.world_point(o, Vector3(t, wh - 0.06, dc), yw),
+		Vector3(minf(width * 0.65, 1.2), 0.045, maxf(0.18, depth * 0.55)), Mats.air_panel())
+	diffuser.rotation.y = yw
 	var bl = OmniLight3D.new()
 	bl.light_color = Color(0.85, 0.91, 1.0)
 	bl.light_energy = 0.48
 	bl.omni_range = 4.6
-	bl.position = scene.world_point(o, Vector3(t, wh - 0.38, dc), yw)
+	bl.position = scene.world_point(o, Vector3(t, wh - 0.16, dc), yw)
 	bl.shadow_enabled = false
 	bl.distance_fade_enabled = true
 	bl.distance_fade_begin = 18.0
 	bl.distance_fade_length = 6.0
 	bl.set_meta("stream_room_light", true)
+	bl.set_meta("visible_source", "transit_bay_diffuser")
 	scene.add_node(bl)
 
 

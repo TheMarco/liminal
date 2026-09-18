@@ -3,12 +3,20 @@ extends SceneTree
 ## - an unobstructed figure closes the distance;
 ## - its movement capsule cannot cross a wall;
 ## - it reaches a player in the next area through an offset, narrow doorway;
-## - it follows through three rooms, gives up only while separated, and resumes
-##   if the player returns before the dissolve completes.
+## - it follows through three rooms, then retires only when safely separated;
+## - unseen pursuit eases down rather than parking at a fixed distance;
+## - completed levels apply the same subtle speed multiplier to both modes.
 ##
 ## Run: godot --headless --path . --script tools/audit_ghost_room_contract.gd
 
 const STEP := 1.0 / 60.0
+
+
+class BrokenRoomRouteFigure:
+	extends ShadowFigure
+
+	func _next_route_cell(start: Vector2i, _goal: Vector2i) -> Vector2i:
+		return start
 
 
 func _init() -> void:
@@ -29,10 +37,8 @@ func _init() -> void:
 
 	var failures := 0
 
-	# The per-variant tuning table must never trade away the burn-window
-	# guarantee: from its unseen park, a figure's watched creep to arm's length
-	# has to outlast its own burn time, or a clean park-to-kill leaves no legal
-	# answer. This inequality is the reason the park distance exists.
+	# Baseline near-approach distances still provide a full watched burn window.
+	# Later floors accelerate the approach; the lit-torch ward remains intact.
 	for variant in ShadowFigure.TUNING:
 		var tune: Array = ShadowFigure.TUNING[variant]
 		var window := (float(tune[3]) - ShadowFigure.ADVANCE_MIN) / float(tune[0])
@@ -52,6 +58,33 @@ func _init() -> void:
 		print("FAIL — unobstructed figure closed only %.2fm in two seconds"
 			% (open_start - open_end))
 	open_fig.queue_free()
+
+	# A transiently disconnected/stale room graph used to return the actor's
+	# own position forever. Physical navigation must still make progress toward
+	# the player while the high-level route retries.
+	player.global_position = Vector3(30.0, 0.0, 3.0)
+	var broken_route := BrokenRoomRouteFigure.new()
+	broken_route.player = player
+	broken_route.variant = ShadowFigure.DROWNED
+	broken_route.grace = 0.0
+	broken_route.position = Vector3(2.0, 0.0, 3.0)
+	root.add_child(broken_route)
+	broken_route.set_process(false)
+	broken_route.set_physics_process(false)
+	await physics_frame
+	var broken_start := broken_route.global_position
+	for i in 180:
+		broken_route._advance(STEP, true)
+	if broken_route.global_position.distance_to(broken_start) < 2.0:
+		failures += 1
+		print("FAIL — missing room hop froze physical pursuit")
+	var streamed := broken_route.streaming_cells()
+	if streamed.size() < 9 \
+			or not streamed.has(ShadowFigure._cell_for(broken_route.global_position)
+			+ Vector2i(1, 1)):
+		failures += 1
+		print("FAIL — hostile streaming omitted the local detour footprint")
+	broken_route.queue_free()
 
 	# Finite obstacles must be navigable without letting the movement capsule
 	# clip through them. Freeze automatic processing so these checks are driven
@@ -77,6 +110,8 @@ func _init() -> void:
 	if finite_reach > 1.1 or finite_penetrated:
 		failures += 1
 		print("FAIL — finite box route ended %.2fm away (penetrated=%s)" % [finite_reach, finite_penetrated])
+		print("finite route diagnostic: position=%s points=%s pending=%s blocked=%.3f" % [
+			finite.position, finite._local_path._points, finite._local_path._search.size(), finite._blocked_time])
 	finite.queue_free()
 	box.queue_free()
 	await physics_frame
@@ -108,6 +143,40 @@ func _init() -> void:
 		failures += 1
 		print("FAIL — away-facing U route ended %.2fm away (detour=%s penetrated=%s)" % [u_reach, u_away, u_penetrated])
 	u_open.queue_free()
+
+	# The skinned walkers must pass the same route with their curved, forward-
+	# only steering. Even while a route slice or recovery turn is pending, the
+	# visible walk cycle may not freeze at range.
+	var walker_u := _walker_figure(root, player, Vector3(5.5, 0.0, 6.0))
+	await process_frame
+	await physics_frame
+	var walker_penetrated := false
+	var walker_frozen_frames := 0
+	var walker_max_frozen := 0
+	for i in 1800:
+		var before := walker_u.global_position
+		walker_u._advance(STEP, true)
+		walker_u._walker.animate(STEP, true)
+		var far := _flat_gap(walker_u.global_position,
+			player.global_position) > ShadowFigure.ADVANCE_MIN + 0.15
+		if far and before.distance_squared_to(walker_u.global_position) < 0.0000001 \
+				and walker_u._walker._movement_ratio < 0.05:
+			walker_frozen_frames += 1
+			walker_max_frozen = maxi(walker_max_frozen, walker_frozen_frames)
+		else:
+			walker_frozen_frames = 0
+		if not _capsule_clear(player, walker_u.global_position):
+			walker_penetrated = true
+			break
+		if not far:
+			break
+	var walker_reach := _flat_gap(walker_u.global_position,
+		player.global_position)
+	if walker_reach > 1.2 or walker_penetrated or walker_max_frozen > 6:
+		failures += 1
+		print("FAIL — 3D walker U pursuit reach=%.2f penetrated=%s frozen=%d" % [
+			walker_reach, walker_penetrated, walker_max_frozen])
+	walker_u.queue_free()
 	back_wall.queue_free()
 	arm_low.queue_free()
 	arm_high.queue_free()
@@ -199,9 +268,8 @@ func _init() -> void:
 			% crossing.global_position)
 	crossing.queue_free()
 
-	# A chase follows through three room boundaries. It may begin its give-up
-	# fade only once its room differs from the player's; walking back into that
-	# room must restore the live encounter.
+	# Restore the encounter lifetime from before the 3D roster: three crossed
+	# room boundaries begin retirement only while the player remains elsewhere.
 	var lifetime_cells := _distinct_room_cells(player.world_seed, player.level_theme, 4)
 	if lifetime_cells.size() != 4:
 		failures += 1
@@ -214,16 +282,15 @@ func _init() -> void:
 		for i in range(1, lifetime_cells.size()):
 			lifetime.global_position = _cell_center(lifetime_cells[i])
 			lifetime._update_chase_lifetime()
-		if lifetime._chase_doors != ShadowFigure.CHASE_DOOR_LIMIT \
-				or not lifetime._giving_up or lifetime._fade < 0.0:
+		if lifetime._chase_doors != 3 or lifetime._fade < 0.0 \
+				or not lifetime._giving_up:
 			failures += 1
-			print("FAIL — figure did not give up after %d room boundaries" \
-				% ShadowFigure.CHASE_DOOR_LIMIT)
+			print("FAIL — figure did not retire after %d room boundaries" % 3)
 		player.global_position = lifetime.global_position
 		lifetime._update_chase_lifetime()
-		if lifetime._giving_up or lifetime._fade >= 0.0:
+		if lifetime._fade >= 0.0 or lifetime._giving_up:
 			failures += 1
-			print("FAIL — same-room re-entry did not cancel the give-up fade")
+			print("FAIL — same-room re-entry did not restore the active chase")
 		lifetime.queue_free()
 
 	# The weeping-angel split. Taking your eyes off one has to cost real ground,
@@ -244,53 +311,72 @@ func _init() -> void:
 		pacer._advance(STEP, false)
 	var unwatched := pace_start - _flat_gap(pacer.global_position,
 		player.global_position)
-	# The unseen lunge parks at UNSEEN_MIN, so a one-second sample starts to
-	# saturate before its nominal 4.5m/s rate; it still has to beat the creep.
-	# The unseen move saturates at its safety park, so use the authored reveal
-	# gain plus a ratio guard instead of a fragile 1.7 boundary (2.10/1.25 can
-	# vary by one collision step). This still fails equal or merely brisk speeds.
+	# Unseen pursuit eases toward creep as it closes, but never parks at a
+	# fixed distance. Keep the original watched/unwatched tension assertion.
 	if unwatched < ShadowFigure.REVEAL_GAIN or unwatched < watched * 1.6:
 		failures += 1
 		print("FAIL — a second unwatched gained %.2fm against %.2fm watched"
 			% [unwatched, watched])
 	pacer.queue_free()
 
-	# The waiting anomaly. It is placed in a cell the player has already left,
-	# so it must hold its room untouched until they come back — and then be an
-	# ordinary figure. Built as INERT it was the one thing in the building that
-	# could be neither burned nor escaped, because it never did anything.
+	# A close unseen target must still advance; the old safety park made this
+	# case wait forever just outside arm's length.
+	var no_park := _figure(root, player, Vector3(5.0, 0.0, 3.0))
+	await process_frame
+	var no_park_start := no_park.global_position
+	for i in 60:
+		no_park._advance(STEP, false)
+	var no_park_gain := _flat_gap(no_park_start, no_park.global_position)
+	if no_park_gain <= 0.8:
+		failures += 1
+		print("FAIL — close unseen figure parked after only %.2fm" % no_park_gain)
+	no_park.queue_free()
+
+	# Campaign progression scales observed and unseen pursuit equally by 3% per
+	# completed level, so movement and animation can stay in lockstep.
+	var progression := _figure(root, player, Vector3(2.0, 0.0, 3.0))
+	var base_seen := progression.pursuit_speed(true, 10.0)
+	var base_unseen := progression.pursuit_speed(false, 20.0)
+	for completed in range(1, 11):
+		progression.completed_levels = completed
+		var expected := 1.0 + 0.03 * float(completed)
+		var seen_ratio := progression.pursuit_speed(true, 10.0) / base_seen
+		var unseen_ratio := progression.pursuit_speed(false, 20.0) / base_unseen
+		if not is_equal_approx(seen_ratio, expected) \
+				or not is_equal_approx(unseen_ratio, expected):
+			failures += 1
+			print("FAIL — level %d speed multiplier seen=%.4f unseen=%.4f expected=%.4f" \
+				% [completed, seen_ratio, unseen_ratio, expected])
+	progression.queue_free()
+
+	# A world-placed anomaly may arrive in a cell the player has already left,
+	# but it must hunt immediately. A visible figure can never park itself behind
+	# an invisible generated-room boundary.
 	player.global_position = Vector3(30.0, 0.0, 14.0)
 	await process_frame
 	await physics_frame
-	var waiting := ShadowFigure.new()
-	waiting.player = player
-	waiting.variant = ShadowFigure.GAOLER
-	waiting.mode = ShadowFigure.Mode.WAITING
-	waiting.position = Vector3(4.0, 0.0, 14.0)
-	root.add_child(waiting)
+	var world_placed := ShadowFigure.new()
+	world_placed.player = player
+	world_placed.variant = ShadowFigure.GAOLER
+	world_placed.grace = 0.0
+	world_placed.position = Vector3(4.0, 0.0, 14.0)
+	root.add_child(world_placed)
 	await process_frame
 	await physics_frame
-	var parked := waiting.global_position
+	var placed_start := world_placed.global_position
 	for i in 120:
-		waiting._physics_process(STEP)
-	if waiting.mode != ShadowFigure.Mode.WAITING \
-			or parked.distance_to(waiting.global_position) > 0.01 \
-			or waiting._fade >= 0.0:
+		world_placed._physics_process(STEP)
+	if placed_start.distance_to(world_placed.global_position) < 0.5 \
+			or world_placed._fade >= 0.0:
 		failures += 1
-		print("FAIL — waiting figure did not hold its room while the player was away")
-	player.global_position = Vector3(8.0, 0.0, 14.0)
-	for i in 5:
-		waiting._physics_process(STEP)
-	if waiting.mode != ShadowFigure.Mode.AMBIENT:
-		failures += 1
-		print("FAIL — waiting figure stayed dormant with the player in its room")
-	waiting.queue_free()
+		print("FAIL — world-placed figure waited for the player's room boundary")
+	world_placed.queue_free()
 
 	print("ghost room audit: open close %.2fm | finite reach %.2fm | U reach %.2fm detour=%s | wall stop x=%.2f | watched %.2fm vs unwatched %.2fm | failures=%d"
 		% [open_start - open_end, finite_reach, u_reach, u_away,
 			wall_stop, watched, unwatched, failures])
 	if failures == 0:
-		print("  PASS — walls block, offset doors traverse, and escape takes three rooms")
+		print("  PASS — walls block, doors traverse, and pursuit retires at its room budget")
 	root.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures == 0 else 1)
@@ -301,11 +387,25 @@ func _figure(root: Node3D, player: Player, at: Vector3) -> ShadowFigure:
 	f.player = player
 	f.variant = ShadowFigure.DROWNED
 	f.grace = 0.0
-	f.origin_room = ShadowFigure.room_for(player, player.global_position)
 	f.position = at
 	root.add_child(f)
 	f.set_process(false)
 	f.set_physics_process(false)
+	return f
+
+
+func _walker_figure(root: Node3D, player: Player, at: Vector3) -> ShadowFigure:
+	var f := ShadowFigure.new()
+	f.player = player
+	f.variant = ShadowFigure.DROWNED
+	f.use_walker_prototype = true
+	f.walker_model_index = 0
+	f.grace = 0.0
+	f.position = at
+	root.add_child(f)
+	f.set_process(false)
+	f.set_physics_process(false)
+	f._walker.appear(0.0)
 	return f
 
 

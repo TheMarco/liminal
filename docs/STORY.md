@@ -326,18 +326,37 @@ There is no Dr. Cross recording, no narrator, no final explanation, and no
 human voice telling the player how to interpret what they see. The sequence
 remains first-person. The player is never shown.
 
-After surviving Bloom/Upside Down, the player passes through the apparent exit.
-For a brief moment, the transition should feel like success. The light, open
-space, or absence of the enclosing architecture creates the instinctive relief
-of finally being outside.
+After surviving Bloom/Upside Down, the player makes one final elevator ride.
+The outro begins inside the familiar warm-brown car with its doors closed. The
+car settles, sounds an ordinary arrival chime, and opens exactly as it does in
+play: the two leaves stop half-open. The player steps through the narrow opening
+into what appears to remain of the real world. The initial camera direction is
+away from the Desert Oasis; the hotel must not be visible during the exit.
+
+For a brief moment, the transition should feel like success. Open sky and
+distance after prolonged confinement create the instinctive relief of finally
+being outside.
 
 That relief must collapse completely.
 
 What lies beyond is not home, rescue, or a subtly imperfect return to ordinary
 life. It is an exterior state of absolute desolation: vast, dead, silent, and
-without any credible route back to the human world. The precise imagery can be
-designed later, but its emotional reference is the ending of *The Beyond*—an
-apparent escape that reveals only a larger and more final form of damnation.
+without any credible route back to human life. A broken access road disappears
+under shallow black water and wet ash. Sparse, long-abandoned car wrecks and
+old non-graphic human remains establish that other people were here and that
+none found a way out.
+
+Only after searching forward does the player turn around. The Desert Oasis
+casino from the intro is behind them, recognizable but ruined, flooded and
+lightless. The elevator is physically set into the hotel entrance, not standing
+separately in the waste. Its small warm interior is the only dry, finite,
+habitable-looking place left. Its doors close before the player can return.
+
+The final camera direction is away from the hotel, toward the drowned road,
+wrecks, remains and empty horizon. The emotional reference remains the ending
+of *The Beyond*—an apparent escape that reveals only a larger and more final
+form of damnation. The imagery does not confirm whether this is the original
+world changed, a replacement, or something that was never ordinary reality.
 
 The player may have escaped the rooms. Nothing has become better. There is no
 reason to believe it ever will.
@@ -350,8 +369,8 @@ reason to believe it ever will.
    return to.
 3. **Search:** The player looks or moves for some sign of life, shelter, a road,
    a landmark, or a way back.
-4. **Finality:** Nothing answers. The exit is gone, useless, or leads only back
-   into the same hopeless condition.
+4. **Finality:** Nothing answers. The elevator closes, the hotel offers no
+   shelter, and every visible road ends in the same drowned waste.
 5. **Dread:** The scale of the outside makes the earlier interiors seem almost
    merciful.
 
@@ -362,6 +381,10 @@ The ending should communicate, without text or dialogue:
 Do not soften the ending with a survivor, a distant city, a functioning road,
 a hopeful light, a rescue signal, or evidence that the player can eventually
 return home. Mystery remains, but hope does not.
+
+The wrecks and remains are sparse evidence, not gore or spectacle. They must
+not imply an active battle, recent disaster, loot, usable transport, or another
+gameplay objective.
 
 The final image should hold long enough for the player to understand that this
 is not another obstacle to solve. It is where they are now.

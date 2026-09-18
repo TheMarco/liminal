@@ -9,15 +9,20 @@ const OUT := "res://build/gameplay-review"
 func _init() -> void:
 	call_deferred("run")
 
-func draw(frames := 12) -> void:
+func draw(frames := 12, resume := true) -> void:
 	for i in frames:
+		if resume and is_instance_valid(game._pause_menu):
+			game._close_settings()
+		game.player.set_physics_process(false)
 		await process_frame
+		game._osd_layer.visible = false
+		game._descent_hud.visible = false
 		RenderingServer.force_draw(false, 1.0 / 60.0)
 
 func shot(name: String) -> void:
 	game._osd_layer.visible = false
 	game._descent_hud.visible = false
-	await draw()
+	await draw(12, name != "pause-settings")
 	view.get_texture().get_image().save_png(OUT.path_join(name + ".png"))
 
 func run() -> void:
@@ -31,6 +36,9 @@ func run() -> void:
 	root.add_child(view)
 	game = load("res://scenes/main.tscn").instantiate()
 	game.world_seed = 7
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--seed="):
+			game.world_seed = int(arg.trim_prefix("--seed="))
 	view.add_child(game)
 	await draw(90)
 	game._set_presence(game.Presence.SILENT)
@@ -43,6 +51,8 @@ func run() -> void:
 	var cam: Camera3D = game.player.cam
 	for at in game.descent_route.casino_landmarks:
 		var kind: String = game.descent_route.casino_landmarks[at]
+		if OS.get_cmdline_user_args().has("--last-chance-only") and kind != CasinoLandmarks.LAST_CHANCE:
+			continue
 		var base := Vector3(at.x * 12.0, 0, at.y * 12.0)
 		game.player.teleport(base + Vector3(6, 0.15, 6))
 		game.cm.stream_focus = base + Vector3(6, 0, 6)
@@ -67,6 +77,17 @@ func run() -> void:
 			cam.global_position = plate.global_position + plate.global_basis.z * 2.45 + Vector3(0.35, -0.15, 0)
 			cam.look_at(plate.global_position + Vector3(0, -0.3, 0))
 		await shot(kind)
+		if kind == CasinoLandmarks.LAST_CHANCE:
+			print("LAST_CHANCE_CAPTURE seed=%d cell=%s ceiling=%.2f" % [game.world_seed, at, chunk.ceil_h])
+			if OS.get_cmdline_user_args().has("--last-chance-only"):
+				game._post_process.set_enabled(true)
+				await shot("last_chance-vhs")
+				# Release capture-frame locals before the SceneTree/Variant pool
+				# tears down; the full review below already unwinds naturally.
+				view.free()
+				await preload("res://tools/lib/audit_cleanup.gd").release(self)
+				call_deferred("quit")
+				return
 		if kind == CasinoLandmarks.PHONE:
 			var camera: PhotoCamera = game._photo_camera
 			# Frame the actual door from the traversable corridor and exercise the

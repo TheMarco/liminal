@@ -74,7 +74,7 @@ func _showcase_loop() -> void:
 
 func _show_vhs() -> void:
 	_set_stage(_tv_stage)
-	_set_caption("1 / 3   VHS DISTORTION",
+	_set_caption("1 / 3   VHS EFFECT STRENGTH",
 		"Raw video on the physical TV; use the Main playback capture to review the shared game shader")
 	_place_camera(Vector3(-0.42, 1.02, 2.35),
 		Vector3(-0.42, 0.68, 0.25))

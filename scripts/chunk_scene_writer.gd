@@ -61,6 +61,12 @@ func attributed_prop_local(parent: Node3D, path: String, pos: Vector3,
 		_model_parent(parent), path, pos, yaw, scale)
 
 
+func fixture_light(flicker: bool, material: StandardMaterial3D,
+		energy: float, source_position: Vector3, source_name := "authored_room_fixture") -> OmniLight3D:
+	return _host._make_main_light(flicker, material, energy, source_position, source_name)
+
+# Compatibility for specialized builders whose lights are already anchored by
+# their own fixture construction. Central room builders use fixture_light.
 func main_light(flicker: bool, material: StandardMaterial3D,
 		energy: float) -> OmniLight3D:
 	return _host._make_main_light(flicker, material, energy)

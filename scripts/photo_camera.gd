@@ -53,6 +53,9 @@ var _review_left := 0.0
 ## Counted anomalies with a visible resolution beat. They remain frozen while
 ## the opaque developed print is up, then resolve as the bare-eyed view returns.
 var _review_resolves: Array[PhotoAnomaly] = []
+## Any newly documented unnatural subject, including writing/static anomalies.
+## Delivered once when the print closes, never for an ordinary/repeated photo.
+var _pending_unnatural_photo := false
 ## Doorways belong to the floor, not a streamed anomaly node. Keep their
 ## resolver alive even if the player backs out of the room during review.
 var _review_callbacks: Array[Callable] = []
@@ -87,6 +90,8 @@ signal photo_documented(anomaly_id: String, count: int, required: int,
 ## Emitted only after the opaque developed-print review has closed and Main's
 ## HUD is visible again, so evidence captions never expire behind the photo.
 signal review_finished()
+## A newly documented unnatural subject's print review has closed.
+signal unnatural_photographed()
 signal photograph_taken(image: Image, metadata: Dictionary)
 signal first_raise()
 ## True while the camera is up — main hides the whole HUD so only the
@@ -519,9 +524,12 @@ func _take_photo() -> void:
 	for anomaly in captured:
 		bounty_photo = bounty_photo or anomaly.type == PhotoAnomaly.Type.BOUNTY
 	_pending_risk = counted and not number_reveal and not bounty_photo
+	_pending_unnatural_photo = counted and image != null
 
 
-func _release_review_resolutions() -> void:
+func _release_review_resolutions(allow_aftershock := true) -> void:
+	var unnatural := _pending_unnatural_photo
+	_pending_unnatural_photo = false
 	if not _review_callbacks.is_empty():
 		_doorway_reveal_left = MutationRevealEffect.LIFE_SECONDS
 	for callback in _review_callbacks:
@@ -532,6 +540,8 @@ func _release_review_resolutions() -> void:
 		if is_instance_valid(anomaly):
 			anomaly.resolve()
 	_review_resolves.clear()
+	if unnatural and allow_aftershock:
+		unnatural_photographed.emit()
 
 
 ## The shutter/door reveal owns a short visible beat. A scheduled blackout
@@ -550,7 +560,7 @@ func finish_for_transition() -> void:
 	_paper.visible = false
 	_photo.visible = false
 	_marks.visible = false
-	_release_review_resolutions()
+	_release_review_resolutions(false)
 	_lower()
 
 

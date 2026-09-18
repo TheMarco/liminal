@@ -112,7 +112,7 @@ func build_landmark(clock_only := false) -> void:
 		1:
 			_table(centre, Vector2(3.2, 1.1), Mats.desk_white())
 			for x in [-1.1, 0.0, 1.1]:
-				for side in [-1.0, 1.0]: scene.task_chair(centre + Vector3(x, 0, side * 1.4), PI if side > 0 else 0)
+				for side in [-1.0, 1.0]: scene.task_chair(centre + Vector3(x, 0, side * 1.4), 0.0 if side > 0 else PI)
 			_board("MEETING IN PROGRESS", centre + Vector3(0, 1.95, 0), 3.2, 0.3, Mats.charcoal())
 		2, 11:
 			for i in 6:

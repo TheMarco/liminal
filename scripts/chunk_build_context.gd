@@ -5,8 +5,7 @@ extends RefCounted
 ## ChunkBuildSpec is the mutable assembly object used by ChunkManager. Chunk
 ## immediately snapshots it into this context before a theme builder runs, so
 ## builders cannot accidentally change streaming/game state while constructing
-## geometry. Live services (currently only Player for the waiting anomaly) stay
-## outside this value object.
+## geometry. Live services stay outside this value object.
 
 var _world_seed: int
 var _cell: Vector2i

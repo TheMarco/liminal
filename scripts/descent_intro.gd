@@ -45,7 +45,7 @@ func _ready() -> void:
 		_skip_button = Button.new()
 		var skip := _skip_button
 		skip.name = "SkipIntro"
-		skip.text = "E — SKIP INTRO"
+		skip.text = "SKIP INTRO"
 		skip.add_theme_font_override("font", UI_FONT)
 		skip.add_theme_font_size_override("font_size", 22)
 		skip.add_theme_color_override("font_color", Color(0.92, 0.88, 0.78))
@@ -81,7 +81,7 @@ func _ready() -> void:
 		skip.grab_focus()
 
 	_pause_button = Button.new()
-	_pause_button.text = "ESC — PAUSE"
+	_pause_button.text = "PAUSE"
 	VhsOsd.style_button(_pause_button, 22)
 	_pause_button.pressed.connect(func(): pause_requested.emit())
 	add_child(_pause_button)
@@ -114,7 +114,7 @@ func skip_available() -> bool:
 
 
 ## Consume keyboard input so a key cannot operate the world or a summary below
-## the prologue. Only a previously watched intro accepts the Skip shortcuts.
+## the prologue. A previously watched intro offers a normal Skip button.
 func _input(event: InputEvent) -> void:
 	if not event is InputEventKey:
 		return
@@ -129,10 +129,6 @@ func _input(event: InputEvent) -> void:
 	if focused in [_pause_button, _skip_button] and key.physical_keycode in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]:
 		return
 	get_viewport().set_input_as_handled()
-	if not _skip_allowed or not key.pressed or key.echo:
-		return
-	if key.physical_keycode == KEY_E:
-		_finish(false)
 
 
 func _unhandled_input(_event: InputEvent) -> void:

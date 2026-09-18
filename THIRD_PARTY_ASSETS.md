@@ -298,16 +298,15 @@ and remove it from the distributed build.
 
 ### `shopping_cart.glb`
 
-- **Title:** `Shopping Cart`
-- **Creator:** [AdrianXY](https://sketchfab.com/AdrianXY)
-- **Source:** <https://sketchfab.com/3d-models/shopping-cart-b96f896453b240ae804d0399f1faf027>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** Uniformly scaled to a 1.01m handle height, floor-centred
-  and rotated 180 degrees inside its placement pivot to preserve the generated
-  mall layouts' original cart facing. It replaces every generated shopping
-  cart; loaded variants retain their existing deterministic contents and loose
-  carts receive conservative collision.
-- **Local record:** [`models/cc_by/shopping_cart/SOURCE.md`](models/cc_by/shopping_cart/SOURCE.md)
+- **Title:** `Shopping cart LOD`
+- **Creator:** Supplied directly by the project owner on 2026-09-17.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The static GLB remains unchanged. It replaces the previous
+  CC BY shopping cart at 88% scale for a 1.01m handle height, floor-centred
+  with the handle already on the pivot's facing side, so no turn is needed.
+  Loaded variants keep their deterministic contents, tucked inside the narrower
+  basket, and loose carts receive conservative collision.
+- **Local record:** [`models/provided/shopping_cart/SOURCE.md`](models/provided/shopping_cart/SOURCE.md)
 
 ### `indoor_air_conditioner_unit.glb`
 
@@ -386,18 +385,6 @@ and remove it from the distributed build.
   It replaces the generated copier in all office placements; mesh and embedded
   materials are otherwise unchanged.
 - **Local record:** [`models/cc_by/mfp_office_printer/SOURCE.md`](models/cc_by/mfp_office_printer/SOURCE.md)
-
-### `water_cooler.glb`
-
-- **Title:** `Water Cooler`
-- **Creator:** [小林 団那紀 / dannaki_](https://sketchfab.com/dannaki_)
-- **Source:** <https://sketchfab.com/3d-models/water-cooler-c2176d7cabb6444f9f04734f3fb1ab43>
-- **License:** [Sketchfab Standard](https://sketchfab.com/licenses)
-- **Modifications:** Uniformly scaled to 10% of authored size, floor-centred in
-  the office break-room corner, preloaded with the other authored fixtures and
-  given conservative gameplay collision. Mesh and embedded materials are
-  otherwise unchanged.
-- **Local record:** [`models/sketchfab/water_cooler/SOURCE.md`](models/sketchfab/water_cooler/SOURCE.md)
 
 ### Abandoned hospital — extracted props
 
@@ -512,40 +499,66 @@ and remove it from the distributed build.
 - The former NC sign files have been removed from the repository. Both export
   presets retain explicit NC exclusions as a safeguard against reintroduction.
 
-### `blackjack_table.glb`
+### `royal_blackjack_table.glb`
 
-- **Title:** `Blackjack table`
-- **Creator:** [nermin](https://sketchfab.com/nermin)
-- **Source:** <https://sketchfab.com/3d-models/blackjack-table-b2b0974f06ee4623b882c76378a59483>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** The source is 500,000 triangles, 84% of it a group of 40
-  casino chips modelled at 10,500 triangles each. That group is removed, leaving
-  the table, felt and six matching stools at 80,000 triangles. The remainder is
-  scaled, floor-aligned and given collision on the table body only, so the
-  player can still walk between the stools.
-- **Local record:** [`models/cc_by/blackjack_table/SOURCE.md`](models/cc_by/blackjack_table/SOURCE.md)
+- **Title:** `royal_blackjack_table`
+- **Creator:** Supplied directly by the project owner on 2026-09-17.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The static optimized GLB remains unchanged. It replaces
+  the previous CC BY blackjack table at 85% scale, bringing its 1.20m overall
+  height in line with the roulette table while preserving placement,
+  player-arc orientation and fixture metadata. Collision follows the table
+  body; the seven chairs stay walkable-between.
+- **Local record:** [`models/provided/blackjack_table/SOURCE.md`](models/provided/blackjack_table/SOURCE.md)
 
-### `roulette_table.glb`
+### `roulette_table_complete.glb`
 
-- **Title:** `Roulette table 2`
-- **Creator:** [Dudzy](https://sketchfab.com/Dudzy)
-- **Source:** <https://sketchfab.com/3d-models/roulette-table-2-downloadable-b1d33eebb4f54b8aa250be2f49e87fbb>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** Scaled to a 3.00m table, floor-aligned and given
-  conservative collision. Restricted to grand halls, the only casino rooms with
-  the floor area for it.
-- **Local record:** [`models/cc_by/roulette_table/SOURCE.md`](models/cc_by/roulette_table/SOURCE.md)
+- **Title:** `roulette_table_complete`
+- **Creator:** Supplied directly by the project owner on 2026-09-17.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The supplied static GLB remains unchanged. It replaces
+  the previous roulette table, is floor-aligned from measured bounds, and uses
+  collision matching its 3.49 × 1.20 × 2.80m runtime footprint.
+- **Local record:** [`models/provided/royal_roulette/SOURCE.md`](models/provided/royal_roulette/SOURCE.md)
+
+### `casino_bar.glb`
+
+- **Title:** `Casino bar`
+- **Creator:** Supplied directly by the project owner on 2026-09-17.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The static GLB remains unchanged. It is placed at native
+  metre scale only against backing walls at least as tall as its 3.34m arched
+  sign in grand halls and ballrooms, with door and overlap clearance from the
+  shared wall-bay search. One collider covers the whole 6.00m unit including
+  the stools; the twelve authored accent lights are tagged with their visible
+  fixtures per project convention.
+- **Local record:** [`models/provided/casino_bar/SOURCE.md`](models/provided/casino_bar/SOURCE.md)
+
+### `casino_popup_bar.glb`
+
+- **Title:** `Casino popup bar`
+- **Creator:** Supplied directly by the project owner on 2026-09-17.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The static GLB remains unchanged. It is placed at native
+  metre scale in slot rooms and the smaller table-game rooms the big bar
+  skips, at most one per room against a qualifying wall with door and
+  overlap clearance. One collider covers the whole 3.26m unit including the
+  stools; the four authored accent lights are tuned down and tagged with
+  their visible fixtures per project convention.
+- **Local record:** [`models/provided/casino_popup_bar/SOURCE.md`](models/provided/casino_popup_bar/SOURCE.md)
 
 ### `hotdog_stand.glb`
 
-- **Title:** `Hotdog stand`
-- **Creator:** [shirlanne](https://sketchfab.com/shirlanne)
-- **Source:** <https://sketchfab.com/3d-models/hotdog-stand-3be1662c3f5b4752a9bdda0a081e608e>
-- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
-- **Modifications:** Scaled to a 1.91m cart, floor-aligned and given
-  conservative collision, stranded on the food-court seating floor rather than
-  joined to the generated serving line.
-- **Local record:** [`models/cc_by/hotdog_stand/SOURCE.md`](models/cc_by/hotdog_stand/SOURCE.md)
+- **Title:** `Hotdog stand rebuilt`
+- **Creator:** Supplied directly by the project owner on 2026-09-17.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The static GLB remains unchanged. It replaces the previous
+  CC BY hotdog stand at native metre scale: a 1.76 x 2.16 x 1.02 m cart that
+  clears the 4.00 m mall gallery ceiling with its awning up. Floor-aligned,
+  re-centred from measured bounds, given conservative collision, and stranded
+  on the food-court seating floor rather than joined to the generated serving
+  line.
+- **Local record:** [`models/provided/hotdog_stand/SOURCE.md`](models/provided/hotdog_stand/SOURCE.md)
 
 ### `medical_table.glb`
 
@@ -622,6 +635,20 @@ and remove it from the distributed build.
 - **Modifications:** Height-normalized, width-fitted and aligned to the
   interactive hinge so it opens away from the player from either side.
 - **Local record:** [`models/cc_by/solitary_cell_door/SOURCE.md`](models/cc_by/solitary_cell_door/SOURCE.md)
+
+### `electric_chair.glb`
+
+- **Title:** `Electric chair 1950s`
+- **Creator:** Supplied directly by the project owner on 2026-09-17.
+- **License:** Project-owned asset supplied for use as embedded game content.
+- **Modifications:** The static GLB remains unchanged. It anchors rare
+  execution-chamber takeovers of merged guard, industry, visitation and
+  rotunda rooms at native metre scale: a 1.45 m wide chair, 2.48 m tall
+  with the seat facing local +Z, on a low dais with witness benches behind
+  a rail under one cold pendant. At 72,000 triangles with eighteen packed
+  PNG textures it is the heaviest single furnishing on the floor; chambers
+  stay rare so it is seldom resident twice.
+- **Local record:** [`models/provided/execution_chair/SOURCE.md`](models/provided/execution_chair/SOURCE.md)
 
 ### Authored replacements for generated furniture
 

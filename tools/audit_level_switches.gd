@@ -26,8 +26,8 @@ func run() -> void:
 	video.pressed = true
 	video.physical_keycode = KEY_V
 	game._unhandled_input(video)
-	expect(game._post_process.is_enabled() != filter_before,
-		"V did not toggle the video filter in Wander")
+	expect(game._post_process.is_enabled() == filter_before,
+		"V changed the title-selected video filter in Wander")
 	game._unhandled_input(video)
 
 	game._jump_to(6, SAVED_POSITION, false)

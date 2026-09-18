@@ -36,7 +36,12 @@ func run() -> void:
 				if kind == PhotoAnomaly.Type.DUPLICATE and instances.size() == 2:
 					var a := instances[0].get_parent() as Node3D
 					var b := instances[1].get_parent() as Node3D
-					expect(a.position.distance_to(b.position) >= 0.94, "Duplicate cabinets overlap")
+					# Measure the resized cabinets in their shared orientation, not
+					# the retired full-scale spacing or diagonal world-space AABBs.
+					var bounds_a := visual_bounds(a)
+					var bounds_b: AABB = a.transform.affine_inverse() * b.transform * visual_bounds(b)
+					expect(not bounds_a.grow(0.045).intersects(bounds_b.grow(0.045)),
+						"Duplicate cabinets overlap or lack their 9cm gap")
 				if kind == PhotoAnomaly.Type.PLACEMENT:
 					var pivot := anomaly._placement_pivot
 					var floor_y := Chunk.cell_floor_h(ws, cell, 0)

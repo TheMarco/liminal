@@ -46,6 +46,7 @@ func _init() -> void:
 	var prison_phone_failures := 0
 	var prison_locked_door_facades := 0
 	var prison_interactive_door_leaves := 0
+	var prison_execution_chambers := 0
 	var prison_door_model_failures := 0
 	var exit_housings := {7: 0, 8: 0}
 	var exit_fixture_failures := 0
@@ -103,6 +104,10 @@ func _init() -> void:
 						prison_phone_booths += int(phone_report["booths"])
 						prison_phones += int(phone_report["phones"])
 						prison_phone_failures += int(phone_report["violations"])
+						prison_execution_chambers += int(chunk.authored_furnishing_counts().get(
+							"prison_execution_chair", 0)) + int(
+							chunk.authored_furnishing_counts().get(
+							"prison_execution_table", 0))
 						var door_report := chunk.prison_authored_door_audit()
 						prison_locked_door_facades += int(door_report["locked_facades"])
 						prison_interactive_door_leaves += int(
@@ -148,6 +153,7 @@ func _init() -> void:
 	print("  authored prison doors: locked=%d | interactive=%d | violations=%d" % [
 		prison_locked_door_facades, prison_interactive_door_leaves,
 		prison_door_model_failures])
+	print("  prison execution chambers: %d" % prison_execution_chambers)
 	print("  complete mounted EXIT fixtures: mall=%d prison=%d | violations: %d" % [
 		exit_housings[7], exit_housings[8], exit_fixture_failures])
 	var failures := support_failures + doorway_failures + mall_fixture_failures \
@@ -178,6 +184,9 @@ func _init() -> void:
 	if prison_locked_door_facades == 0 or prison_interactive_door_leaves == 0:
 		failures += 1
 		print("FAIL — authored prison door variants were not both exercised")
+	if prison_execution_chambers == 0:
+		failures += 1
+		print("FAIL — no prison execution chamber was placed")
 	if int(exit_housings[7]) == 0 or int(exit_housings[8]) == 0:
 		failures += 1
 		print("FAIL — mall/prison EXIT fixture audit was not fully exercised")

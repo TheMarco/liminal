@@ -18,28 +18,15 @@ func _prison_lighting() -> void:
 	if dead:
 		return
 	var big = ctx.style == WorldGen.PRISON_CELLBLOCK or ctx.style == WorldGen.PRISON_ROTUNDA
-	var light = scene.main_light(flicker, lens, 2.1 if big else 1.8)
+	var light = scene.fixture_light(flicker, lens, 2.1 if big else 1.8,
+		Vector3(6, ctx.ceiling_height - 0.55, 6), "prison_troffer")
 	light.light_color = Color(0.78, 0.87, 0.79)
 	light.omni_range = 14.5
-	light.position = Vector3(6, ctx.ceiling_height - 0.55, 6)
 	light.shadow_enabled = big
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 23.0
 	light.distance_fade_length = 8.0
 	scene.add_node(light)
-	if big and ctx.ceiling_height > 5.0:
-		# high fill washing the range so the tall volume does not eat the light
-		var fill = OmniLight3D.new()
-		fill.light_color = Color(0.72, 0.80, 0.74)
-		fill.light_energy = 0.8
-		fill.omni_range = 11.0
-		fill.position = Vector3(6, ctx.ceiling_height * 0.55, 6)
-		fill.shadow_enabled = false
-		fill.distance_fade_enabled = true
-		fill.distance_fade_begin = 20.0
-		fill.distance_fade_length = 8.0
-		fill.set_meta("stream_room_light", true)
-		scene.add_node(fill)
 
 
 func _prison_number_wall(dir: int, plane: float) -> void:
@@ -254,9 +241,28 @@ func _wall_pt(dir: int, along: float, off: float, y = 0.0) -> Vector3:
 	return Vector3(along, y, Chunk.T + off)
 
 
+## Sliding cell-gate leaf: green frame with round iron infill, lock box
+## and pull on the corridor face. `centre` is the along-wall centre, `off`
+## the wall offset; the caller parks it over the gap or slid aside.
+func _prison_gate_leaf(dir: int, plane: float, off: float, centre: float) -> void:
+	for sx in [-0.365, 0.365]:
+		scene.surface_facing_box(dir, plane, off, centre + sx, 1.225, 0.07,
+			2.45, 0.05, Mats.prison_green())
+	for ry in [0.08, 1.15, 2.37]:
+		scene.surface_facing_box(dir, plane, off, centre, ry, 0.80, 0.10,
+			0.05, Mats.prison_green())
+	for lx in [-0.24, 0.0, 0.24]:
+		scene.cylinder(_wall_pt(dir, centre + lx, off, 1.225), 0.024, 2.19,
+			Mats.prison_iron(), false)
+	scene.surface_facing_box(dir, plane, off - 0.03, centre + 0.24, 1.10, 0.16,
+		0.24, 0.10, Mats.prison_green())
+	scene.surface_facing_box(dir, plane, off - 0.10, centre + 0.24, 1.10, 0.04,
+		0.20, 0.04, Mats.prison_iron())
+
+
 ## A strip of real cells along one wall: masonry fins split it into 2.4m
-## bays, each fronted floor-to-header with square bars and a slid-open or
-## shut gate — bunk, toilet and shelf inside, number plate over the door.
+## bays, each fronted floor-to-header with round bars, rails and a slid-open
+## or shut gate — bunk, toilet and shelf inside, number plate over the door.
 ## Bays never cross a doorway lane, so a strip can never seal a room.
 
 
@@ -291,7 +297,8 @@ func _prison_cell_strip(dir: int, salt: int) -> void:
 		if ctx.ceiling_height > bh + 0.45:
 			scene.surface_facing_box(dir, plane, deep, bc, (bh + 0.22 + ctx.ceiling_height) / 2.0, 2.4,
 				ctx.ceiling_height - bh - 0.22, 0.12, Mats.prison_wall())
-		# the bar front: gate bay on the fin side the hash picks
+		# the bar front: round bars, three rails, and a framed sliding leaf
+		# parked over the gap or slid aside, on the fin side the hash picks
 		var gside = -1.0 if WorldGen.hr01(giv, 2) < 0.5 else 1.0
 		var gc = bc + gside * 0.62
 		var b0 = bc - 1.08
@@ -300,16 +307,22 @@ func _prison_cell_strip(dir: int, salt: int) -> void:
 			var bx = b0 + (2.16 / float(nb - 1)) * float(bi)
 			if open_gate and absf(bx - gc) < 0.40:
 				continue
-			scene.surface_facing_box(dir, plane, deep, bx, bh / 2.0, 0.045, bh, 0.045, Mats.prison_iron())
+			scene.cylinder(_wall_pt(dir, bx, deep, bh / 2.0), 0.032, bh,
+				Mats.prison_iron(), false)
+		# rails run the fixed sections only, stopping at the doorway gap
+		for seg in [[bc - 1.2, gc - 0.40], [gc + 0.40, bc + 1.2]]:
+			var sw: float = seg[1] - seg[0]
+			if sw < 0.1:
+				continue
+			var sc: float = (seg[0] + seg[1]) / 2.0
+			for ry in [0.15, 1.15, 2.44]:
+				scene.surface_facing_box(dir, plane, deep, sc, ry, sw, 0.09,
+					0.055, Mats.prison_iron())
 		if open_gate:
 			# the gate itself, slid aside and left there for thirty years
-			for gi in 4:
-				scene.surface_facing_box(dir, plane, deep + 0.09, bc - gside * (0.35 + float(gi) * 0.11),
-					bh / 2.0, 0.045, bh - 0.1, 0.045, Mats.prison_green())
+			_prison_gate_leaf(dir, plane, deep + 0.09, bc - gside * 0.62)
 		else:
-			for gi2 in 3:
-				scene.surface_facing_box(dir, plane, deep + 0.09, gc - 0.26 + float(gi2) * 0.26,
-					bh / 2.0, 0.05, bh - 0.1, 0.05, Mats.prison_green())
+			_prison_gate_leaf(dir, plane, deep + 0.09, gc)
 		# what a man's whole world was: bunk, toilet, shelf
 		_prison_bunk(_wall_pt(dir, bc - 0.58, 1.30), byaw, true)
 		_prison_toilet(_wall_pt(dir, bc + 0.74, 0.62),
@@ -382,18 +395,6 @@ func _prison_cellblock() -> void:
 			6.0 + (side * lane_r if ax else 0.0))
 		var ls = Vector3(WorldGen.CELL_SIZE - 1.0, 0.015, 0.07) if ax else Vector3(0.07, 0.015, WorldGen.CELL_SIZE - 1.0)
 		scene.box(lp, ls, Mats.caution_yellow(), false)
-	# catwalk over each strip when the block is tall — the Alcatraz register
-	if ctx.ceiling_height > 5.4:
-		for d2 in dirs:
-			var plane = (WorldGen.CELL_SIZE - Chunk.T / 2.0) if (d2 == 0 or d2 == 2) else (Chunk.T / 2.0)
-			var deck = scene.surface_facing_box(d2, plane, 1.25, 6.0, 3.26, WorldGen.CELL_SIZE - 1.6, 0.14, 2.5, Mats.prison_iron())
-			deck.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			for i in 11:
-				var rx = 1.3 + float(i) * 0.94
-				var rp = scene.surface_facing_box(d2, plane, 2.42, rx, 3.82, 0.045, 1.0, 0.045, Mats.prison_iron())
-				rp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			var tr = scene.surface_facing_box(d2, plane, 2.42, 6.0, 4.3, WorldGen.CELL_SIZE - 1.6, 0.06, 0.06, Mats.prison_iron())
-			tr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func _prison_cells() -> void:
@@ -589,7 +590,7 @@ func _prison_guard_desk(p: Vector3, yaw: float) -> void:
 		Chunk.DESK_PHONE_SCALE, Vector3.ZERO, "desk_phone", station)
 	if phone != null:
 		scene.set_model_material(phone, Mats.prison_handset())
-	var chair = scene.task_chair(p + forward * 1.02, yaw + PI)
+	var chair = scene.task_chair(p + forward * 1.02, yaw)
 	scene.adopt_local(station, chair)
 	scene.bind_furnishing_colliders(station, b0)
 
@@ -821,6 +822,10 @@ func _prison_rotunda() -> void:
 		Vector3(0.14, 0.54, 0.14), Mats.prison_iron(), false)
 	scene.security_camera(cam_mount, cam_yaw)
 	var guard_light = OmniLight3D.new()
+	var pendant_top = c + Vector3(0, ctx.ceiling_height - 0.08, 0)
+	var pendant_bottom = c + Vector3(0, 2.88, 0)
+	scene.beam(pendant_top, pendant_bottom, 0.055, Mats.prison_iron())
+	scene.cylinder(c + Vector3(0, 2.78, 0), 0.34, 0.10, Mats.prison_panel(), false)
 	guard_light.position = c + Vector3(0, 2.75, 0)
 	guard_light.light_color = Color(0.68, 0.88, 0.72)
 	guard_light.light_energy = 2.4
@@ -830,6 +835,7 @@ func _prison_rotunda() -> void:
 	guard_light.distance_fade_begin = 24.0
 	guard_light.distance_fade_length = 8.0
 	guard_light.set_meta("stream_room_light", true)
+	guard_light.set_meta("visible_source", "guard_station_pendant")
 	scene.add_node(guard_light)
 	# radial walkway lanes painted out from the hub to every branch
 	for i in 4:
@@ -839,3 +845,82 @@ func _prison_rotunda() -> void:
 		var lane = scene.box(lp + Vector3(0, 0.012, 0), Vector3(0.07, 0.015, 2.6),
 			Mats.caution_yellow(), false)
 		lane.rotation.y = -a + PI / 2.0
+
+
+## Execution chamber, two kinds sharing one room: the electric chair and
+## the execution table. The anchor builds the chamber around its own centre
+## and the chunk shift centres it on the room; member cells stay empty
+## gallery space. Canonical layout faces +Z; the cardinal yaw turns the
+## whole assembly, so bench backs and rails always read correctly. The
+## gurney lies across the dais, head end to the side, so witnesses face its
+## full profile.
+func _prison_execution() -> void:
+	var c := Vector3(6, 0, 6)
+	var yaw := float(int(ctx.random01(7701) * 4.0)) * PI * 0.5
+	var table_kind := ctx.random01(7703) < 0.5
+	var fwd := Vector3(sin(yaw), 0, cos(yaw))
+	var side := Vector3(fwd.z, 0, -fwd.x)
+	var at := func(lx: float, lz: float) -> Vector3:
+		return c + side * lx + fwd * lz
+	var flat := func(sx: float, sy: float, sz: float) -> Vector3:
+		return Vector3(sz, sy, sx) if absf(fwd.x) > 0.5 \
+			else Vector3(sx, sy, sz)
+	# Dais platform under the centerpiece.
+	scene.box(at.call(0.0, 0.0) + Vector3(0, 0.07, 0),
+		flat.call(3.4, 0.14, 3.0), Mats.prison_wall(), false)
+	scene.box(at.call(0.0, 0.0) + Vector3(0, 0.145, 0),
+		flat.call(3.0, 0.02, 2.6), Mats.prison_iron(), false)
+	var pivot: Node3D = null
+	if table_kind:
+		pivot = scene.attributed_floor_prop(Chunk.PRISON_EXECUTION_TABLE_PATH,
+			at.call(0.0, -0.6) + Vector3(0, 0.14, 0), yaw + PI * 0.5,
+			Chunk.PRISON_EXECUTION_TABLE_SCALE, Chunk.PRISON_EXECUTION_TABLE_CENTRE,
+			"prison_execution_table")
+	else:
+		pivot = scene.attributed_floor_prop(Chunk.PRISON_EXECUTION_CHAIR_PATH,
+			at.call(0.0, -0.6) + Vector3(0, 0.14, 0), yaw,
+			Chunk.PRISON_EXECUTION_CHAIR_SCALE, Chunk.PRISON_EXECUTION_CHAIR_CENTRE,
+			"prison_execution_chair")
+	if pivot == null:
+		return
+	# Witness rail between the dais and the benches.
+	for px in [-1.2, 0.0, 1.2]:
+		scene.box(at.call(px, 1.9) + Vector3(0, 0.5, 0),
+			flat.call(0.08, 1.0, 0.08), Mats.prison_iron(), false)
+	scene.box(at.call(0.0, 1.9) + Vector3(0, 1.0, 0),
+		flat.call(2.8, 0.07, 0.07), Mats.prison_iron(), false)
+	# Two supplied witness benches facing the centerpiece. The model lies
+	# on its side as authored, so each instance is pitched up about the
+	# pivot's yawed long axis; after that it stands 1.92 long and 0.47 tall.
+	for bx in [-1.25, 1.25]:
+		var bp: Vector3 = at.call(bx, 3.6)
+		var bench := scene.attributed_floor_prop(Chunk.PRISON_BENCH_PATH, bp, yaw,
+			Chunk.PRISON_BENCH_SCALE, Chunk.PRISON_BENCH_CENTRE,
+			"prison_witness_bench")
+		if bench != null:
+			for ch in bench.get_children():
+				if ch is Node3D:
+					(ch as Node3D).rotation.x = Chunk.PRISON_BENCH_PITCH
+		scene.collider_yaw_box(bp + Vector3(0, 0.25, 0),
+			Vector3(2.0, 0.55, 0.45), yaw)
+	# One cold pendant over the chair, hung from the ceiling like the
+	# rotunda lamp.
+	var lamp_top: Vector3 = at.call(0.0, -0.6) + Vector3(0, ctx.ceiling_height - 0.08, 0)
+	var lamp_bulb: Vector3 = at.call(0.0, -0.6) + Vector3(0, 2.78, 0)
+	scene.beam(lamp_top, lamp_bulb + Vector3(0, 0.1, 0), 0.05, Mats.prison_iron())
+	scene.cylinder(lamp_bulb, 0.3, 0.09, Mats.prison_panel(), false)
+	var lamp := OmniLight3D.new()
+	lamp.light_color = Color(0.75, 0.88, 1.0)
+	lamp.light_energy = 1.8
+	lamp.omni_range = 9.0
+	lamp.shadow_enabled = true
+	lamp.position = lamp_bulb - Vector3(0, 0.05, 0)
+	lamp.distance_fade_enabled = true
+	lamp.distance_fade_begin = 24.0
+	lamp.distance_fade_length = 8.0
+	lamp.set_meta("stream_room_light", true)
+	lamp.set_meta("visible_source", "execution_chamber_pendant")
+	scene.add_node(lamp)
+	# Dais, centerpiece and rail in one box; benches own theirs above.
+	scene.collider_yaw_box(at.call(0.0, 0.1) + Vector3(0, 1.375, 0),
+		Vector3(3.6, 2.75, 4.2), yaw)

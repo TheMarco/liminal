@@ -154,7 +154,9 @@ func _run() -> void:
 	root.add_child(arrival)
 	var arrival_racks := _count_meta(arrival, "data_center_rack")
 	var arrival_busways := _count_meta(arrival, "data_center_overhead_busway")
-	if arrival_racks < 14 or arrival_busways < 4:
+	# The wider three-bank layout deliberately trades cabinets for escape
+	# aisles. Doorway approaches may cull one four-cabinet bank on arrival.
+	if arrival_racks < 8 or arrival_busways < 3:
 		failures += 1
 		print("FAIL arrival infrastructure racks=%d busways=%d culled=%d counts=%s" % [
 			arrival_racks, arrival_busways, arrival.doorway_props_removed,
@@ -173,7 +175,7 @@ func _run() -> void:
 		root.add_child(rack_room)
 		var racks := _count_meta(rack_room, "data_center_rack")
 		var busways := _count_meta(rack_room, "data_center_overhead_busway")
-		if racks < 12 or busways < 4:
+		if racks < 8 or busways < 4:
 			failures += 1
 			print("FAIL rack room %s racks=%d busways=%d" % [
 				rack_cell, racks, busways])
@@ -264,7 +266,7 @@ func _run() -> void:
 			"data_center_cooling_variant")
 		# Cooling is supporting infrastructure inside a rack hall, not the room's
 		# only content: two individual variants service a dense server field.
-		if cooling_units < 2 or variants.size() < 2 or cooling_racks < 12:
+		if cooling_units < 2 or variants.size() < 2 or cooling_racks < 10:
 			failures += 1
 			print("FAIL cooling plant %s racks=%d units=%d variants=%s" % [
 				cooling_cell, cooling_racks, cooling_units, variants])

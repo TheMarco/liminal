@@ -9,7 +9,9 @@ Four original Blender cabinets replace the two downloaded slot-machine models on
 | slot_dual | Buffalo Sunset: two wide screens, sloping controls, RGB bezel | 3,056 | 4 |
 | slot_triple | Sapphire Palace: three screens, slant touchscreen, RGB bezel | 3,430 | 4 |
 
-Authored front is +Z; feet sit at Y=0. Cabinets fit within 0.94 m width and 0.86 m depth, with heights from 2.24–2.64 m. A simple box collider is bound to each furnishing group so doorway culling removes both together. Repeated cabinets reuse imported meshes and materials. Displays are opaque; bodies have closed front and rear volume. Height scales uniformly only for low ceilings.
+Authored front is +Z; feet sit at Y=0. Source cabinets fit within 0.94 m width and 0.86 m depth, with heights from 2.24–2.64 m. Runtime cabinets use 82% scale, capped further to leave at least 0.50 m below the ceiling, or 0.76 m in the signed Last Chance banks. Paired colliders scale with the models; doorway culling still removes both together. Repeated cabinets reuse imported meshes and materials. Displays are opaque; bodies have closed front and rear volume. Casino evidence/bleed also use the reduced base scale; deliberately giant evidence remains an exception.
+
+September 14 presentation fix: Last Chance keeps one fully active wheel while the other seven cabinets retain all screen/reel/printed artwork at 18% backlight power, rather than replacing it with flat black material. Genuine blackouts still remove this emission without stripping the artwork. The two smaller hanging LAST CHANCE signs now have suspension rods even in low rooms, and at least 14 cm clearance above every cabinet. `tools/audit_slot_presentation.gd` covers seven ceiling heights (2.4–6 m), 56 cabinets, materials, sign gaps and blackout compatibility.
 
 Illustrated display textures are 1024×1024 at export; classic/wheel additionally use a 1024×2048 deterministic printed atlas. Metal/enamel use vertex colors. The shared casino_slot_lights shader preserves colored light guides and adds a slow per-cabinet attract pulse without new point lights. Displays and lamps are ambient prop decoration, not playable gambling interfaces.
 

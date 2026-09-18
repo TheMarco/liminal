@@ -247,10 +247,24 @@ class FlashIcon extends Control:
 ## Recovered-tape playback metadata. This is intentionally not a camera
 ## viewfinder: the still camera owns that language while raised. Normal play
 ## reads as footage already being watched, with transport state, tape counter,
-## an uncanny fixed recording date and tracking damage.
+## a recording date that advances with the Descent and tracking damage.
 class Frame extends Control:
+	const RECORDING_YEAR := 1986
+	const MONTH_NAMES := ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.",
+		"Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."]
+	const MONTH_DAYS := [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
 	var font_size := 22
 	var inset := Vector2(24.0, 24.0)
+	## Campaign floors are separate recovered recording days. Elapsed playback
+	## can still roll the calendar naturally if a session somehow lasts a day.
+	var recording_day_offset := 0:
+		set(value):
+			var next := maxi(0, value)
+			if recording_day_offset == next:
+				return
+			recording_day_offset = next
+			queue_redraw()
 	## 0..1: something photographable is near. One faint tracking sweep hints
 	## at proximity; the camera's sound and focus provide the stronger cues.
 	## Set by PhotoCamera; purely presentational here.
@@ -305,7 +319,7 @@ class Frame extends Control:
 		VhsOsd.draw_osd_string(self, f, Vector2(counter_x, top_y), counter,
 			font_size, VhsOsd.INK)
 
-		var date_text := "Jan. 01 1986"
+		var date_text := _date_text()
 		var clock_text := _clock_text()
 		var line_h := f.get_height(font_size) * 1.05
 		var date_y := s.y - inset.y
@@ -333,4 +347,35 @@ class Frame extends Control:
 		var hour := int(total_minutes / 60) % 24
 		var minute := total_minutes % 60
 		var meridiem := "AM" if hour < 12 else "PM"
-		return "%s %02d:%02d" % [meridiem, hour % 12, minute]
+		var hour_12 := hour % 12
+		if hour_12 == 0:
+			hour_12 = 12
+		return "%s %02d:%02d" % [meridiem, hour_12, minute]
+
+	func _date_text() -> String:
+		var elapsed_days := maxi(0, floori(_t / 86400.0))
+		return recording_date_for_day(recording_day_offset + elapsed_days)
+
+	static func recording_date_for_day(day_offset: int) -> String:
+		var remaining := maxi(0, day_offset)
+		var year := RECORDING_YEAR
+		while true:
+			var days_in_year := 366 if _is_leap_year(year) else 365
+			if remaining < days_in_year:
+				break
+			remaining -= days_in_year
+			year += 1
+		var month := 0
+		while month < MONTH_DAYS.size():
+			var days_in_month: int = MONTH_DAYS[month]
+			if month == 1 and _is_leap_year(year):
+				days_in_month += 1
+			if remaining < days_in_month:
+				break
+			remaining -= days_in_month
+			month += 1
+		return "%s %02d %04d" % [MONTH_NAMES[mini(month,
+			MONTH_NAMES.size() - 1)], remaining + 1, year]
+
+	static func _is_leap_year(year: int) -> bool:
+		return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)

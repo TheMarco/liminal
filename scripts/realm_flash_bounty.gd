@@ -268,11 +268,12 @@ func build(choice: Dictionary, reward_id: String, floor_theme: int) -> void:
 	add_child(_icon)
 	_update_icon()
 	_lamp = OmniLight3D.new()
-	_lamp.position = _icon_origin + towards_entry.normalized() * 0.8
+	_lamp.position = _icon_origin
 	_lamp.light_color = Color(0.25, 0.45, 1.0)
 	_lamp.light_energy = 3.5
 	_lamp.omni_range = 6.0
 	_lamp.shadow_enabled = true
+	_lamp.set_meta("visible_source", "floating_flash_glyph")
 	add_child(_lamp)
 	_hum = AudioStreamPlayer3D.new()
 	_hum.position = bounds.get_center()
@@ -298,6 +299,8 @@ func _update_icon() -> void:
 	# thin edge to the arrival view. Both motion and glyphs stay with the icon.
 	var comfort := 0.35 if GameSettings.flashing_reduced() else 1.0
 	_icon.position = _icon_origin + Vector3.UP * sin(_motion_time * 1.5) * 0.07 * comfort
+	if is_instance_valid(_lamp):
+		_lamp.position = _icon.position
 	_icon.rotation.y = _icon_yaw + 0.32 + sin(_motion_time * 0.9) * 0.14 * comfort
 	bounds = _icon.transform * _icon.mesh.get_aabb()
 	_points = [_icon.position]

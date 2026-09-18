@@ -32,10 +32,11 @@ func configure(centre: Vector3, forward: Vector3, world_seed: int) -> void:
 	_patch.material_override = _material
 	add_child(_patch)
 	_light = OmniLight3D.new()
-	_light.position = Vector3(0, 0, -0.35)
+	_light.position = Vector3.ZERO
 	_light.light_color = Color(0.20, 0.36, 1.0)
 	_light.omni_range = 3.0
 	_light.shadow_enabled = true
+	_light.set_meta("visible_source", "realm_leak_patch")
 	add_child(_light)
 	visible = false
 

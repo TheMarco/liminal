@@ -10,6 +10,10 @@ uniform float flip_rows = 4.0;
 uniform float flip_count = 24.0;
 uniform float base_cut = 0.0;
 uniform float keep_colour = 1.0;
+// A small contrast floor only against genuinely dark, opaque scenery. This
+// changes the cloth, not its outline, and retains ordinary wall occlusion.
+uniform sampler2D scene_colour : hint_screen_texture, repeat_disable, filter_linear;
+uniform float dark_readability : hint_range(0.0, 1.0) = 1.0;
 
 instance uniform float layer = 0.0;
 instance uniform float elapsed = 0.0;
@@ -101,6 +105,11 @@ void fragment() {
     float opacity;
     if (layer < 0.5) {
         albedo = vec3(0.0055, 0.007, 0.009) + vec3(0.023, 0.024, 0.026) * form;
+        float behind = dot(textureLod(scene_colour, SCREEN_UV, 0.0).rgb,
+            vec3(0.2126, 0.7152, 0.0722));
+        float dark = 1.0 - smoothstep(0.004, 0.045, behind);
+        albedo += vec3(0.010, 0.011, 0.012) * dark
+            * (0.45 + 0.55 * form) * dark_readability;
         opacity = smoothstep(0.025, 0.80, shape) * 0.97;
         float body = 1.0 - smoothstep(0.72, 0.92, uv.y);
         opacity = mix(opacity, max(opacity, smoothstep(0.12, 0.56, shape) * 0.995), body);

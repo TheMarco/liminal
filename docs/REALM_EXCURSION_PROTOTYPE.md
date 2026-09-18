@@ -6,12 +6,12 @@ campaign realm. The final realm has no onward visit. The casino reuses its
 introductory photo doorway; later floors have their own doorway, separate from
 photographic obstructions. Existing room builders and models supply each visit.
 
-The entrance and preview survive streaming out and back in. Entering reserves
-that floor's visit for this run. Dying inside the visit clears that floor's
-consumed marker, including on disk, so Retry/Continue offers another chance.
-Returning alive or voluntarily leaving keeps the visit spent. Merely taking
-the doorway photograph does not consume the visit. A fresh run resets visits.
-Normal checkpoints persist this state (save format 6; older saves migrate).
+The entrance and preview survive streaming out and back in. Entering consumes
+that floor's visit for this run. Returning alive, voluntarily leaving, or being
+caught all keep it spent; there is no second attempt on the same floor. Merely
+taking the doorway photograph does not consume the visit. A fresh run resets
+visits. Normal checkpoints persist this state (save format 6; older saves
+migrate).
 
 Destination models begin loading through background resource requests at floor
 arrival. Preview chunks are then constructed in stages, and reward placement
@@ -69,8 +69,10 @@ The visit lasts **30 seconds of active play**. The first five seconds allow
 orientation; existing attackers then spawn in legal, visible, clear positions
 7–12 metres away, with a two-second reaction grace. The encounter allows one,
 then two, then three simultaneous attackers. Normal torch and sprint behavior
-remain in effect. Contact is fatal until the presentation's protected finish: the
-controller first restores the source world, then follows the ordinary death flow.
+remain in effect. Contact fails the one-shot visit without ending the Descent
+run. The exact attacker owns the ordinary first-person caught presentation
+inside the temporary realm; only after its cut to black does the controller
+restore the unchanged source floor. A photographed flash is lost.
 
 An emergency flash appears as a floating 3D lightning bolt, 2.05 metres tall,
 1.15 metres wide, and 0.32 metres deep, made entirely of tiny blue-violet glyphs.
@@ -135,7 +137,7 @@ code traces reconnect, then its solid surfaces return. The source is reattached
 behind opaque black; its own effect starts fully dissolved before the fade
 opens, preventing an ordinary-room flash between the two animations. Player
 actions, source rules, and events stay suspended until reconstruction completes.
-Deaths and early quits skip reconstruction. The shelved fracture version keeps
+Caught failures and early quits skip reconstruction. The shelved fracture version keeps
 its short return fade.
 
 Both versions honor reduced flashing, pause with the encounter, and clean up
@@ -182,7 +184,7 @@ godot --path . --audio-driver Dummy --log-file /tmp/realm-profile.log --script t
 Add `--descent-floor=N` to the campaign audit for another source floor.
 Generation checks count all entrances, prove early route placement and clear
 approaches through every generated blackout state. The campaign audit checks
-normal creation, real streaming, entry, reward, return, checkpoint retry,
+normal creation, real streaming, entry, reward, return, checkpoint persistence,
 next-floor creation, visible discovery pulses and title cleanup. The discovery
 hold audit checks continued pursuit by an existing figure, blocked fresh spawns,
 timer resumption and return cleanup. The rendered capture checks the clue from
@@ -210,7 +212,7 @@ godot --path . --audio-driver Dummy --log-file /tmp/realm-capture-engine.log --s
 
 The lifecycle audit checks the physical threshold trigger, destination support,
 timer, escalating spawns, pause/quit holds, unchanged source objectives/evidence,
-safe return, cleanup, and the fatal-contact branch. Automated survival checks
+safe return, cleanup, and the nonfatal one-shot caught branch. Automated survival checks
 isolate attacker movement; they verify lifecycle correctness, not combat balance.
 The rendered capture uses the real shutter, checks destination album metadata,
 and writes eight images to `/tmp/liminal-realm-visit`.

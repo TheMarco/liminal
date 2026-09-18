@@ -3,6 +3,12 @@
 A Godot 4 proof of concept: first-person wandering through **endless,
 procedurally generated liminal spaces** across eleven worlds:
 
+The desktop build requests Godot 4.7's true HDR output at 100% brightness by
+default. Godot detects the active display, enables HDR on supported HDR/XDR
+screens, follows the window when it moves between displays, and falls back to
+SDR otherwise. A saved HDR toggle and brightness trim remain in Settings; AgX
+tonemapping preserves each floor's authored exposure.
+
 - **Floor 1 — the casino**: seedy Vegas hotel. Garish carpet, flickering
   fluorescents, humming air, slot machine banks glowing in empty rooms,
   double-height marble halls.
@@ -84,8 +90,9 @@ doorway leaves can be opened and closed, and rare physical elevator panels
 carry you onward. Local lights occasionally sag, an unused lift may chime down
 the hall, and inaccessible rooms sometimes knock from the other side.
 
-The default **RECOVERED TAPE** feed uses two passes: a VHS signal followed by
-a CRT display. The signal has separate brightness and color bandwidth,
+The default presentation restores the original combined look: **VHS EFFECT**
+followed by **CRT EFFECT**. These are independent saved settings and may still
+be used alone, together, or both disabled. The VHS stage has separate brightness and color bandwidth,
 horizontal color bleed, fine field-paced noise, and gentle transport wobble.
 The live camera also has drifting red/blue separation, visible around bright
 edges and lettering while the underlying brightness detail stays aligned.
@@ -99,11 +106,12 @@ compensated dropout streaks, with head-switch noise confined to the bottom
 edge. The full-screen feed adds RF snow bursts, sync slips, and short
 white/dark tape streaks. Minor disturbances occur about every 5–11 seconds;
 larger ones every 28–55 seconds, with quick attack and a settling recovery. The 720×480 signal
-approximates interlaced playback without storing previous fields. **B**
-switches to the original clean CRT look; **V** toggles the filter. In-world
+approximates interlaced playback without storing previous fields. Choose
+**VHS EFFECT** and **CRT EFFECT** independently in Settings; both preferences
+are saved and no gameplay key changes them. In-world
 televisions retain their 344×240 signal in a 1280×894 render target. The
-full-screen CRT pass uses the full window resolution; only its 3D source is
-rendered at 480 lines.
+optional full-screen CRT pass uses the full window resolution; when either
+effect is active, its 3D source is rendered at 480 lines.
 
 In Descent, you are not alone. **The figures belong to Descent and only to
 Descent** — Wander is a peaceful place to explore and photograph the building,
@@ -246,7 +254,7 @@ fixtures remain physical geometry: the torch reveals their actual materials
 instead of holes or missing panels. Normal lighting/material states restore
 exactly, and rooms streamed during the outage start unpowered too.
 
-1. Install [Godot 4.6+](https://godotengine.org/download) (Forward+ / desktop).
+1. Install [Godot 4.7+](https://godotengine.org/download) (Forward+ / desktop).
 2. Open this folder in the Godot project manager (Import → select `project.godot`).
 3. Press **F5** (Run Project).
 
@@ -280,9 +288,57 @@ Without this explicit flag, Descent's floor keys remain disabled.
   start at a particular **campaign floor** (8 is Poolrooms). The brief test-mode
   controls hint fades away normally, leaving footage free of a debug watermark.
 
+### Animated 3D monster roster
+
+Normal play chooses from six owner-supplied rigged creatures using a shuffled
+roster, so every design appears before one repeats. The roster is shared by all
+levels. Navigation, smooth steering, pursuit, torch response, audio, collision
+avoidance and caught behavior stay on `ShadowFigure`; only the skinned visual is
+randomized. `--legacy-flat-ghosts` restores the earlier animated 2D apparitions
+for regression comparison, while `--walker-prototype` remains accepted for old
+QA commands.
+
+### Reality aftershock (source; release rebuild pending)
+
+The perception effect runs automatically during normal play. `--reality-aftershock`
+only enables debug **F8** preview and **F9** A/B switching (use Fn on some Macs).
+
+After photographing any newly documented unnatural subject—including writing,
+static anomalies, fallen props, numbered doors and opened passages—the world loses
+focus, stretches with radial blur, and separates into broad coloured layers before
+recovering over about 3.67 seconds (the full animation plays 50% faster, with
+the same warp/defocus intensity). Colour separation is 35% lower than the final
+prototype. The revised look follows the owner's corridor
+references: a defocus surge followed by a pronounced RGB magnification mismatch,
+wide enough to remain visible through the recovered-tape colour filtering.
+The pulse starts after the developed photograph closes, not while aiming. Normal or
+repeated photos and wrong turns do not trigger it. Unnatural subjects, including
+writing, trigger it; overlapping triggers share one envelope. The first eligible ghost approach
+gets a 1.25-second 70%-strength pulse and is held through the pulse plus 0.1 seconds.
+Every visible ghost is immediately active; there is no room-bound waiting state. Torch burning still
+works during the warning, and the cue does not repeat on later turns or reveals.
+
+The effect does not move the camera or change controls, collisions, audio, battery,
+or saved photos. HUD text is outside this effect (the configured VHS and CRT
+stages still apply normally). Menus, photo aiming/review, blackouts, realm entry/return/collapse and floor/death
+transitions hide or cancel it; pausing freezes the pulse. Reduced Flashing cuts its
+strength to 35%; Head Bob at zero also removes geometric warping. F9 disables it
+entirely without saving a preference. Omit the launch flag for normal play.
+
+Active realm visits use the same photo and ghost cues, with the source-floor rules
+kept suspended. These changes are **not included** in the September 14 release
+binaries already exported and notarized; they require a new build for distribution.
+
+Checks: `tools/audit_reality_aftershock.gd` covers state and photo-release contracts;
+`tools/audit_reality_approach.gd` covers real actor movement, waiting activation,
+shared warnings and torch availability;
+`tools/capture_reality_aftershock.gd` renders a real photo-triggered reveal, verifies
+sharp HUD pixels and unchanged photograph/camera, and captures VHS-only, CRT-only,
+and combined modes.
+
 ## Building
 
-`./build.sh` produces both desktop builds (needs Godot 4.6 on `PATH` with
+`./build.sh` produces both desktop builds (needs Godot 4.7+ on `PATH` with
 export templates installed):
 
 - `build/macos/It wants you to stay.app` — universal (Apple Silicon + Intel), signed
@@ -311,18 +367,17 @@ export templates installed):
 | 1–9 | Switch floor (casino / office / Annex / airport / asylum / school / mall / prison / Poolrooms) |
 | 0 | Enter the Data Center |
 | − | Enter the Bloom |
-| V | Toggle the active video filter |
-| B | Switch between CRT and recovered-tape video modes |
 | Q | Ask to end the current mode and return to the title |
 | Esc | Pause / settings; resume when already paused |
 | Click | Recapture mouse |
-| S (title screen) | Open settings |
+| VHS EFFECT / CRT EFFECT (Settings) | Independently configure and save the two video stages |
 | Tab / arrows, Enter (title screen) | Navigate and activate menu buttons |
 | Esc (opening movie) | Pause without skipping the first viewing |
 | E (opening movie, after watching once) | Skip the replay |
 
 Settings persist between launches: mouse sensitivity, field of view, head bob,
-invert Y, toggle sprint, fullscreen, music/effects/dialogue volume, VHS distortion,
+invert Y, toggle sprint, fullscreen, music/effects/dialogue volume, independent
+VHS and CRT effects, VHS effect strength (50% by default),
 reduced flashing, and optional cause-of-death explanations. Reset Defaults asks for confirmation. Pause freezes
 movement and Descent timers. Reduced flashing steadies fixtures and the low
 battery torch, removes the camera flash, and suppresses rapid signal glitches

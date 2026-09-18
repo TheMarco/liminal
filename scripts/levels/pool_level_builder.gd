@@ -1207,6 +1207,7 @@ func _pool_round_window(
 	lamp.set_meta("pool_direct_light", true)
 	lamp.set_meta("pool_light_pair_id", pair_id)
 	lamp.set_meta("pool_light_type", "window")
+	lamp.set_meta("visible_source", "emissive_pool_window")
 	scene.add_node(lamp)
 
 
@@ -1420,6 +1421,7 @@ func _pool_round_ceiling_fixture(at: Vector2, index: int) -> void:
 	lamp.set_meta("pool_direct_light", true)
 	lamp.set_meta("pool_light_pair_id", pair_id)
 	lamp.set_meta("pool_light_type", "ceiling_disc")
+	lamp.set_meta("visible_source", "pool_ceiling_disc")
 	scene.add_node(lamp)
 
 
@@ -1490,6 +1492,7 @@ func _pool_wall_orb_fixture(salt: int) -> bool:
 	lamp.set_meta("pool_direct_light", true)
 	lamp.set_meta("pool_light_pair_id", pair_id)
 	lamp.set_meta("pool_light_type", "porcelain_orb")
+	lamp.set_meta("visible_source", "pool_wall_orb")
 	scene.add_node(lamp)
 	return true
 

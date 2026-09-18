@@ -4,6 +4,8 @@ extends RefCounted
 ## production fields must be declared here. Focused tools may still pass a
 ## Dictionary, which Chunk converts through `from_dictionary()` immediately.
 
+const NO_CELL := Vector2i(1 << 30, 1 << 30)
+
 var casino_landmark := ""
 var route_landmark := ""
 var optional_discovery := false
@@ -27,6 +29,7 @@ var tape_watched := false
 var base_seed := 1
 var bleed := 0.0
 var bleed_theme := -1
+var bleed_target := NO_CELL
 var optional_vhs := false
 var optional_vhs_key := ""
 var broken_station := false
@@ -61,6 +64,7 @@ static func from_dictionary(config: Dictionary) -> ChunkBuildSpec:
 	out.base_seed = int(config.get("base_seed", 1))
 	out.bleed = float(config.get("bleed", 0.0))
 	out.bleed_theme = int(config.get("bleed_theme", -1))
+	out.bleed_target = config.get("bleed_target", NO_CELL)
 	out.optional_vhs = bool(config.get("optional_vhs", false))
 	out.optional_vhs_key = str(config.get("optional_vhs_key", ""))
 	out.broken_station = bool(config.get("broken_station", false))

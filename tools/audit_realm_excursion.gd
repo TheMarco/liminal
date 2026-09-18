@@ -84,7 +84,21 @@ func run_test() -> void:
 		return
 	var caught := OS.get_cmdline_user_args().has("--realm-test-caught")
 	if caught:
+		var catcher := ShadowFigure.new()
+		catcher.player = game.player
+		visit.threats.add_child(catcher)
+		catcher.global_position = game.player.global_position + Vector3.BACK * 0.9
+		catcher.set_physics_process(false)
+		visit.threats.catching_figure = catcher
 		visit.threats.reached_player.emit()
+		check(visit.phase == RealmExcursion.Phase.CAUGHT,
+			"realm catch did not hold the destination world for presentation")
+		check(is_instance_valid(visit._caught_sequence)
+			and visit._caught_sequence._figure == catcher,
+			"realm catch did not present the exact destination attacker")
+		check(not source_root.is_inside_tree(),
+			"source floor returned before the realm caught presentation")
+		check(not source_run.ended, "realm catch ended the source run during presentation")
 	else:
 		# Preserve spawn/floor/line-of-sight behavior, but prevent an unmoving
 		# automated player dying. Separate caught run exercises terminal contact.
@@ -110,7 +124,11 @@ func run_test() -> void:
 		check(not source_run.ended, "survival keeps run alive")
 		check(ArrivalSafety.has_floor(game.get_world_3d(), game.player.global_position, [game.player.get_rid()]), "return has support")
 	else:
-		check(source_run.ended, "caught follows normal death rule after source restoration")
+		check(not source_run.ended, "caught preview ended the source run")
+		check(game._realm_visit_used(floor_idx),
+			"caught preview became available for another attempt")
+		check(visit._caught_sequence == null,
+			"realm caught presentation survived the return")
 	check(not game._progress_enabled, "prototype never writes normal checkpoint")
 	print("REALM AUDIT PASS: caught=%s duration=%.2f spawns=%d" % [caught, visit.elapsed, visit.total_spawned])
 	game.free()

@@ -168,6 +168,16 @@ func run() -> void:
 		"shared Descent topology did not reach run, route and ChunkManager")
 	expect(not game.run.blackout_mutation_requested.get_connections().is_empty(),
 		"blackout mutation signal is not wired to the live game")
+	var encounter_cell := Vector2i(987, 654)
+	game._figures._forced_left = 0.0
+	game._figures._forced_tries = 0
+	game._on_descent_anomaly(encounter_cell, 1)
+	expect(game._figures._forced_tries > 0,
+		"hostile anomaly was not routed to the active encounter spawner")
+	expect(not game.cm.anomalies.has(encounter_cell),
+		"hostile anomaly was incorrectly stored as streamed room geometry")
+	game._figures._forced_left = 0.0
+	game._figures._forced_tries = 0
 	expect(game.descent_route.topology.is_planned() \
 		and game.descent_route.topology.state_count() >= 3,
 		"live floor did not generate alternate realities up front")
@@ -183,8 +193,8 @@ func run() -> void:
 	video.pressed = true
 	video.physical_keycode = KEY_V
 	game._unhandled_input(video)
-	expect(game._post_process.is_enabled() != filter_before,
-		"V did not toggle the video filter in Descent")
+	expect(game._post_process.is_enabled() == filter_before,
+		"V changed the title-selected video filter in Descent")
 	game._unhandled_input(video)
 	var starting_floor_idx: int = game.run.floor_idx
 	game.run.floor_idx = DescentRun.FLOOR_COUNT - 2

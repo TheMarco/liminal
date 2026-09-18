@@ -25,6 +25,7 @@ const IDLE_HUM_DB := -28.0
 # supplied buzz around -36dBFS, beneath the music and close to the room bed.
 # Boost only a connected charger, not every ballast/idle hum.
 const CHARGING_HUM_DB := -6.0
+const LOCATOR_GROUP := "charging_stations"
 
 ## Assigned by the chunk before this enters the tree; config-driven so a
 ## streamed-out trap rebuilds in the same state.
@@ -39,6 +40,7 @@ var _breaking := false
 
 
 func _ready() -> void:
+	add_to_group(LOCATOR_GROUP)
 	set_meta("charging_station", true)
 	var model := MODEL.instantiate() as Node3D
 	_apply_authored_textures(model)
@@ -83,6 +85,26 @@ func _ready() -> void:
 			_hum.stop()
 			_hum.volume_db = -60.0
 			_present_out_of_order()
+
+
+## Only report real, usable poles in the observer's current 3D world. Group
+## membership follows streaming/reparenting, so old floors and off-screen
+## realm previews cannot supply a phantom destination to the battery HUD.
+static func nearest_to(observer: Node3D) -> ChargingStation:
+	if not is_instance_valid(observer) or not observer.is_inside_tree():
+		return null
+	var nearest: ChargingStation
+	var best := INF
+	for node in observer.get_tree().get_nodes_in_group(LOCATOR_GROUP):
+		var station := node as ChargingStation
+		if station == null or station.broken or station.is_queued_for_deletion() \
+				or not station.is_visible_in_tree() or station.get_world_3d() != observer.get_world_3d():
+			continue
+		var distance := observer.global_position.distance_squared_to(station.global_position)
+		if distance < best:
+			best = distance
+			nearest = station
+	return nearest
 
 
 func _apply_authored_textures(root: Node) -> void:

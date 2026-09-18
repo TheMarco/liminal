@@ -8,9 +8,18 @@ func _init() -> void:
 	var settings = GameSettingsType.new(path)
 	_assert(settings.get_value("sensitivity") == 1.0, "defaults")
 	_assert(settings.get_value("dialogue_volume") == 1.0, "dialogue default")
+	_assert(settings.get_value("vhs_enabled") == true, "vhs default")
+	_assert(settings.get_value("crt_enabled") == true, "CRT effect default")
+	_assert(settings.get_value("hdr_enabled") == true, "HDR default")
+	_assert(settings.get_value("hdr_brightness") == 1.0, "HDR brightness default")
+	_assert(settings.get_value("vhs_distortion") == 0.5, "VHS effect strength default")
 	settings.set_value("sensitivity", 2.5)
 	settings.set_value("reduced_flashing", true)
+	settings.set_value("vhs_enabled", false)
+	settings.set_value("crt_enabled", true)
 	settings.set_value("dialogue_volume", 0.35)
+	settings.set_value("hdr_enabled", false)
+	settings.set_value("hdr_brightness", 1.25)
 	for key: String in ["invert_y", "toggle_sprint"]:
 		_assert(settings.get_value(key) == false, key + " default")
 		settings.set_value(key, true)
@@ -20,6 +29,15 @@ func _init() -> void:
 		_assert(roundtrip.get_value(key) == true, key + " roundtrip")
 		roundtrip.set_value(key, "false")
 		_assert(roundtrip.get_value(key) == true, key + " invalid string rejected")
+	_assert(roundtrip.get_value("vhs_enabled") == false, "vhs roundtrip")
+	_assert(roundtrip.get_value("crt_enabled") == true, "CRT effect roundtrip")
+	_assert(roundtrip.get_value("hdr_enabled") == false, "HDR roundtrip")
+	_assert(is_equal_approx(roundtrip.get_value("hdr_brightness"), 1.25),
+		"HDR brightness roundtrip")
+	roundtrip.set_value("vhs_enabled", "false")
+	_assert(roundtrip.get_value("vhs_enabled") == false, "vhs invalid string rejected")
+	roundtrip.set_value("crt_enabled", "false")
+	_assert(roundtrip.get_value("crt_enabled") == true, "CRT effect invalid string rejected")
 	_assert(roundtrip.get_value("sensitivity") == 2.5 and roundtrip.get_value("reduced_flashing"), "roundtrip")
 	_assert(is_equal_approx(roundtrip.get_value("dialogue_volume"), 0.35), "dialogue roundtrip")
 	roundtrip.set_value("dialogue_volume", -0.5)
@@ -28,6 +46,12 @@ func _init() -> void:
 	_assert(roundtrip.get_value("dialogue_volume") == 1.0, "dialogue upper clamp")
 	roundtrip.set_value("field_of_view", 999.0)
 	_assert(roundtrip.get_value("field_of_view") == 100.0, "clamp")
+	roundtrip.set_value("hdr_brightness", 9.0)
+	_assert(is_equal_approx(roundtrip.get_value("hdr_brightness"), 1.4),
+		"HDR brightness upper clamp")
+	roundtrip.set_value("hdr_brightness", 0.1)
+	_assert(is_equal_approx(roundtrip.get_value("hdr_brightness"), 0.6),
+		"HDR brightness lower clamp")
 	roundtrip.set_value("music_volume", INF)
 	_assert(roundtrip.get_value("music_volume") == 1.0, "inf rejection")
 	roundtrip.set_value("head_bob", NAN)
@@ -38,6 +62,13 @@ func _init() -> void:
 	for key: String in ["invert_y", "toggle_sprint"]:
 		_assert(roundtrip.get_value(key) == false, key + " reset")
 	_assert(roundtrip.get_value("sensitivity") == 1.0 and not roundtrip.get_value("reduced_flashing"), "reset")
+	_assert(roundtrip.get_value("vhs_enabled") == true, "vhs reset")
+	_assert(roundtrip.get_value("crt_enabled") == true, "CRT effect reset")
+	_assert(roundtrip.get_value("hdr_enabled") == true, "HDR reset")
+	_assert(roundtrip.get_value("hdr_brightness") == 1.0,
+		"HDR brightness reset")
+	_assert(roundtrip.get_value("vhs_distortion") == 0.5,
+		"VHS effect strength reset")
 	_assert(roundtrip.get_value("dialogue_volume") == 1.0, "dialogue reset")
 	DirAccess.remove_absolute(path)
 	if failures.is_empty():

@@ -67,6 +67,11 @@ var queued := {}
 var _wanted := {}
 var _ahead := {}
 var _retained := {}
+## Collision leases for live hostile actors outside the player-centred stream
+## ring. Callers supply actor/path cells; this is expanded to the same safe 3x3
+## neighbourhood used for arrivals, including merged-room owning anchors.
+var _hostile_cells := {}
+var _hostile_centers := {}
 var _last_center := NO_BROKEN_STATION
 var _last_ahead := NO_BROKEN_STATION
 var _pending_chunk: Chunk
@@ -116,6 +121,24 @@ func warm_up(center: Vector2i) -> void:
 				_build(c)
 
 
+## Keep collision available under live hostile actors without moving the normal
+## player-centred streaming focus. Empty input restores ordinary streaming.
+func set_hostile_cells(centers: Array[Vector2i]) -> void:
+	var unique := {}
+	for center in centers:
+		unique[center] = true
+	if unique == _hostile_centers:
+		return
+	_hostile_centers = unique
+	var requested := {}
+	for center: Vector2i in unique:
+		requested.merge(_room_complete_cells(center, WARM_R))
+	if requested == _hostile_cells:
+		return
+	_hostile_cells = requested
+	_refill_queue()
+
+
 func _process(_dt: float) -> void:
 	if player == null or not player.is_inside_tree():
 		return
@@ -154,7 +177,8 @@ func _process(_dt: float) -> void:
 
 
 	if _pending_chunk != null and (chunks.has(_pending_cell) or
-			(not _wanted.has(_pending_cell) and not _ahead.has(_pending_cell))):
+			(not _wanted.has(_pending_cell) and not _ahead.has(_pending_cell)
+			and not _hostile_cells.has(_pending_cell))):
 		_cancel_pending()
 	var run_state := _pending_run_state
 	if _pending_chunk != null or not queued.is_empty():
@@ -166,25 +190,31 @@ func _process(_dt: float) -> void:
 	if _pending_chunk == null and not queued.is_empty():
 		var closest := NO_BROKEN_STATION
 		var best := INF
+		var best_priority := 99
 		var stale: Array[Vector2i] = []
 		for key in queued:
 			var c: Vector2i = key
-			if chunks.has(c) or (not _wanted.has(c) and not _ahead.has(c)):
+			if chunks.has(c) or (not _wanted.has(c) and not _ahead.has(c)
+					and not _hostile_cells.has(c)):
 				stale.append(c)
 				continue
 			var centre := Vector3((c.x + 0.5) * CELL, prediction.y, (c.y + 0.5) * CELL)
 			var score := centre.distance_squared_to(prediction)
+			var priority := 2 if _wanted.has(c) else 3
 			if _cheb(c, pc) <= WARM_R:
-				score -= 100000.0
-			elif not _wanted.has(c):
-				score += 100000.0
-			if score < best or (score == best and
-					(c.x < closest.x or (c.x == closest.x and c.y < closest.y))):
+				priority = 0
+			elif _hostile_cells.has(c):
+				priority = 1
+			if priority < best_priority or (priority == best_priority and
+					(score < best or (score == best and
+					(c.x < closest.x or (c.x == closest.x and c.y < closest.y))))):
 				closest = c
 				best = score
+				best_priority = priority
 		for c in stale:
 			queued.erase(c)
-		if closest != NO_BROKEN_STATION and (not loading_asset or _cheb(closest, pc) <= WARM_R):
+		if closest != NO_BROKEN_STATION and (not loading_asset \
+				or _cheb(closest, pc) <= WARM_R or _hostile_cells.has(closest)):
 			queued.erase(closest)
 			_pending_run_state = run_state
 			_pending_cell = closest
@@ -212,7 +242,8 @@ func _process(_dt: float) -> void:
 		# Prefetch is useful scenery as soon as it is complete. Likewise, don't
 		# hide a resident room just because we crossed a cell boundary or turned
 		# around. Retain its owning anchor too, keeping merged-room props intact.
-		var show: bool = _wanted.has(c) or _ahead.has(c) or _retained.has(c)
+		var show: bool = _wanted.has(c) or _ahead.has(c) or _retained.has(c) \
+			or _hostile_cells.has(c)
 		if ch.visible != show:
 			ch.visible = show
 		if not show:
@@ -243,14 +274,15 @@ func _room_complete_cells(center: Vector2i, radius: int = LOAD_R) -> Dictionary:
 
 
 func _refill_queue() -> void:
-	for cells in [_wanted, _ahead]:
+	for cells in [_wanted, _ahead, _hostile_cells]:
 		for c in cells:
 			if not chunks.has(c) and c != _pending_cell:
 				queued[c] = true
 
 
 func _cancel_pending() -> void:
-	if _pending_cell != NO_BROKEN_STATION and (_wanted.has(_pending_cell) or _ahead.has(_pending_cell)):
+	if _pending_cell != NO_BROKEN_STATION and (_wanted.has(_pending_cell) \
+			or _ahead.has(_pending_cell) or _hostile_cells.has(_pending_cell)):
 		queued[_pending_cell] = true
 	if _pending_chunk != null:
 		_pending_chunk.free()
@@ -319,6 +351,7 @@ func _build_spec(c: Vector2i, topology_state_override := -1) -> ChunkBuildSpec:
 		spec.base_seed = descent_base_seed
 		spec.bleed = bleed
 		spec.bleed_theme = bleed_theme
+		spec.bleed_target = descent_route.target
 		spec.optional_vhs = optional_vhs
 		spec.optional_vhs_key = "floor:%d:cell:%d:%d" % [
 			descent_floor_idx, c.x, c.y] if optional_vhs else ""

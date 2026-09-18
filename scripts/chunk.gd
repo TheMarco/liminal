@@ -131,6 +131,10 @@ const CASINO_SLOT_PATHS: Array[String] = [
 	"res://models/authored/casino_slots/slot_triple.glb",
 ]
 const CASINO_SLOT_HEIGHTS: Array[float] = [2.25, 2.67, 2.40, 2.62]
+## Human-scale cabinets with breathing room under the lowest casino ceilings.
+const CASINO_SLOT_SCALE := 0.82
+const CASINO_SLOT_HEADROOM := 0.50
+const CASINO_SLOT_SIGN_HEADROOM := 0.76
 const CASINO_SERVICE_CART_PATH := \
 	"res://models/provided/room_service_trolley/room_service_trolley.glb"
 const CASINO_SERVICE_CART_SCALE := 1.0
@@ -144,6 +148,32 @@ const PRISON_TOILET_PATH := \
 	"res://models/cc_by/prison_toilet/prison_toilet.glb"
 const PRISON_DOOR_OLD_PATH := \
 	"res://models/cc_by/prison_door_old/prison_door_old.glb"
+# Execution chambers, two kinds sharing one room: the electric chair and
+# the execution table. The chair is a supplied 1950s chair, 1.45m wide and
+# 2.48m tall with the seat facing local +Z. The table is a supplied
+# lethal-injection gurney, 2.06m across the armboards and 2.23m long with
+# the head cushion at local -Z. Both sit at native scale, recentered, in
+# rare merged-room takeovers.
+const PRISON_EXECUTION_CHAIR_PATH := \
+	"res://models/provided/execution_chair/electric_chair.glb"
+const PRISON_EXECUTION_CHAIR_SCALE := 1.0
+const PRISON_EXECUTION_CHAIR_CENTRE := Vector3(-0.13, 0.0, 0.05)
+const PRISON_EXECUTION_TABLE_PATH := \
+	"res://models/provided/execution_table/execution_table.glb"
+const PRISON_EXECUTION_TABLE_SCALE := 1.0
+const PRISON_EXECUTION_TABLE_CENTRE := Vector3.ZERO
+const PRISON_BENCH_PATH := \
+	"res://models/provided/prison_bench/prison_bench.glb"
+const PRISON_BENCH_SCALE := 1.0
+# The supplied bench lies on its side as authored: the seat panel stands
+# vertical, facing +Z. The runtime pitch below stands it up, after which
+# the footprint is already centred with its lowest point at local Y=0.
+const PRISON_BENCH_CENTRE := Vector3.ZERO
+## Pitch applied to the bench instance so the authored side-lying model
+## stands upright. Rotation about the pivot's yawed X axis, which is the
+## bench's long axis, so it tips up instead of rolling sideways.
+const PRISON_BENCH_PITCH := -PI / 2.0
+const PRISON_EXECUTION_CHANCE := 0.12
 const SOLITARY_CELL_DOOR_PATH := \
 	"res://models/cc_by/solitary_cell_door/solitary_cell_door.glb"
 
@@ -169,6 +199,21 @@ const ASY_NOTICES_PATH := \
 	"res://models/cc_by/abandoned_hospital/pinned_notices.glb"
 const ASY_STRAITJACKET_PATH := \
 	"res://models/authored/straitjacket/straitjacket.glb"
+# Chapel: supplied worn-oak pew and dressed altar. The pew is 2.56m long
+# with its backrest at local -Z, so sitters face local +Z; the altar front
+# (brass cross, bible, candles) faces local +Z. Both stand on Y=0 centred.
+const ASY_PEW_PATH := \
+	"res://models/provided/chapel_pew/chapel_pew.glb"
+const ASY_PEW_CENTRE := Vector3.ZERO
+const ASY_ALTAR_PATH := \
+	"res://models/provided/chapel_altar/chapel_altar.glb"
+const ASY_ALTAR_CENTRE := Vector3.ZERO
+# Dayroom table: supplied institutional table, 1.42m by 0.86m with its top
+# at 0.755m, standing on Y=0 centred. The top height matches the old
+# procedural table, so glassware heights carry over unchanged.
+const ASY_TABLE_PATH := \
+	"res://models/provided/asy_table/asy_table.glb"
+const ASY_TABLE_CENTRE := Vector3.ZERO
 const ASY_TRANSPORT_CLEARANCE := 0.25
 # Four leaves from the same hospital. Mounted at authored height as sealed
 # façades on solid walls, and at ASY_DOOR_FIT in a generated opening, whose
@@ -195,9 +240,12 @@ const OFFICE_TERMINAL_CENTRE := Vector3(-1.2799, 0.0, 2.3151)
 const OFFICE_TERMINAL_SCREEN := preload(
 	"res://textures/office/liminalterminal.png")
 const OFFICE_WATER_COOLER_PATH := \
-	"res://models/sketchfab/water_cooler/water_cooler.glb"
-const OFFICE_WATER_COOLER_SCALE := 0.10
-const OFFICE_WATER_COOLER_CENTRE := Vector3(0.0, 0.0005, -0.0995)
+	"res://models/provided/office_water_cooler/Water_Cooler_GameReady.glb"
+# Native visual bounds are 0.386 x 1.50 x 0.3735m. Keep the replacement at
+# the previous cooler's 1.38m gameplay height.
+const OFFICE_WATER_COOLER_SCALE := 0.92
+const OFFICE_WATER_COOLER_CENTRE := Vector3(0.0, 0.0, 0.00525)
+const OFFICE_WATER_COOLER_COLLIDER_SIZE := Vector3(0.37, 1.38, 0.36)
 const OFFICE_AIR_CONDITIONER_PATH := \
 	"res://models/cc_by/indoor_air_conditioner/indoor_air_conditioner_unit.glb"
 const OFFICE_AIR_CONDITIONER_SCALE := 2.35
@@ -220,31 +268,78 @@ const MALL_DIRECTORY_PATH := \
 const MALL_DIRECTORY_SCALE := 0.01
 const MALL_DIRECTORY_CENTRE := Vector3(47.5, 0.0, -4.3125)
 
-# Casino table games. The blackjack source shipped 40 chips at 10,500 triangles
-# each — 84% of a half-million-triangle model, for props that are cylinders.
-# Only the chips were dropped; the table, felt and six matching stools remain.
+# Casino table games. The blackjack setpiece is a project-owned supplied
+# model: full table with card shoe and seven chairs already arranged around
+# the player arc, authored in metres, so it is used at native scale.
 const CASINO_BLACKJACK_PATH := \
-	"res://models/cc_by/blackjack_table/blackjack_table.glb"
-const CASINO_BLACKJACK_SCALE := 0.00407
+	"res://models/provided/blackjack_table/blackjack_table.glb"
+# Match the roulette table's 1.20m overall height while retaining a clearly
+# readable felt and player-chair arrangement.
+const CASINO_BLACKJACK_SCALE := 0.85
 const CASINO_ROULETTE_PATH := \
-	"res://models/cc_by/roulette_table/roulette_table.glb"
-# Scaled on the baize, not on total height. The wheel bowl, rim and spindle sit
-# above the playing surface and account for a fifth of the model's height, so
-# fitting the total put the layout at 0.71m — visibly low to stand at.
-const CASINO_ROULETTE_SCALE := 0.085
-const CASINO_ROULETTE_CENTRE := Vector3(12.0064, -8.2188, -3.7567)
+	"res://models/provided/royal_roulette/roulette_table_complete.glb"
+# Measured native bounds become a 3.49 x 1.20 x 2.80m floor-aligned table,
+# matching the blackjack table's overall height.
+const CASINO_ROULETTE_SCALE := 0.934
+const CASINO_ROULETTE_CENTRE := Vector3(-0.002003, 0.002, 0.011933)
+# Casino bar: a 6m supplied back-bar unit with counter, stocked shelves and
+# five stools on its +Z front. It always sits against a tall wall in a large
+# room; the wall search only admits backing walls at least as tall as the
+# arched sign, so low rooms skip it on their own.
+const CASINO_BAR_PATH := \
+	"res://models/provided/casino_bar/casino_bar.glb"
+const CASINO_BAR_SCALE := 1.0
+# True footprint: 6m of back bar rising to the 3.34m sign, stools forward.
+const CASINO_BAR_BOUNDS := \
+	AABB(Vector3(-3.0, 0.0, -1.77), Vector3(6.0, 3.42, 3.4))
+# Authored accent energies, tuned down for the room: the supplied values
+# blow out the bottles and counter at these short ranges.
+const CASINO_BAR_LED_ENERGY := 0.6
+const CASINO_BAR_ACCENT_ENERGY := 1.2
+const CASINO_BAR_LAMP_ENERGY := 2.5
+# Wall-search box. Tagged backing walls stop at the 3.2m datum while the
+# sign rises past it, and the clearance trim adds 3.5cm, so the search stays
+# just under the wall tops; the ceiling gate in _ensure_casino_bar guards
+# the sign itself.
+const CASINO_BAR_SEARCH := \
+	AABB(Vector3(-3.0, 0.0, -1.77), Vector3(6.0, 3.15, 3.4))
+# Popup bar for the smaller rooms: a 3.26m supplied counter unit with three
+# stools on its +Z front, short enough for ordinary ceilings. It goes in
+# slot rooms and the table-game rooms the big bar skips, one per room.
+const CASINO_POPUP_PATH := \
+	"res://models/provided/casino_popup_bar/casino_popup_bar.glb"
+const CASINO_POPUP_SCALE := 1.0
+const CASINO_POPUP_BOUNDS := \
+	AABB(Vector3(-1.63, 0.0, -1.23), Vector3(3.26, 2.65, 2.76))
+# Supplied accent energies, a fraction of authored: the dome lamp and
+# display spots sit centimetres from their shades and bottles, so even
+# modest values bloom hard under the VHS pass. Emission on the counter,
+# backbar and votive glass is capped the same way.
+const CASINO_POPUP_LAMP_ENERGY := 0.3
+const CASINO_POPUP_ACCENT_ENERGY := 0.25
+const CASINO_POPUP_GLOW_ENERGY := 0.15
+const CASINO_POPUP_EMISSION_ENERGY := 0.6
+# Share of qualifying small rooms that receive a popup bar, rolled per room
+# so every cell agrees. Without it nearly every slot and lounge room takes
+# one and the bar reads as wallpaper rather than a find.
+const CASINO_POPUP_CHANCE := 0.35
 
-const MALL_HOTDOG_PATH := "res://models/cc_by/hotdog_stand/hotdog_stand.glb"
-const MALL_HOTDOG_SCALE := 0.017
-const MALL_HOTDOG_CENTRE := Vector3(55.9571, 0.0, -16.2907)
+# Supplied cart bounds are 1.76 x 2.16 x 1.02m, metre-authored and
+# floor-aligned, so it is used at native scale with only a small
+# recentring nudge.
+const MALL_HOTDOG_PATH := \
+	"res://models/provided/hotdog_stand/hotdog_stand.glb"
+const MALL_HOTDOG_SCALE := 1.0
+const MALL_HOTDOG_CENTRE := Vector3(0.031, 0.0, 0.0)
 const MALL_SHOPPING_CART_PATH := \
-	"res://models/cc_by/shopping_cart/shopping_cart.glb"
+	"res://models/provided/shopping_cart/shopping_cart.glb"
 const MALL_GARMENT_RACK_PATH := \
 	"res://models/authored/mall_garment_rack/garment_rack.glb"
-# Source bounds are 0.560 x 0.876 x 0.906m. A modest lift brings the handle to
-# a natural 1.01m while keeping the cart narrow enough for the generated aisles.
-const MALL_SHOPPING_CART_SCALE := 1.15
-const MALL_SHOPPING_CART_CENTRE := Vector3(0.0, 0.0, 0.025569)
+# Supplied cart bounds are 0.661 x 1.153 x 1.189m, floor-aligned with the
+# handle already on +Z. This scale brings the handle to a natural 1.01m
+# while keeping the cart narrow enough for the generated aisles.
+const MALL_SHOPPING_CART_SCALE := 0.88
+const MALL_SHOPPING_CART_CENTRE := Vector3(0.0, 0.0, 0.0178)
 
 # Named a medical table; it is an autopsy table — fluted drainage top, castors,
 # undershelf — which is why it belongs in treatment rooms and nowhere else.
@@ -361,8 +456,16 @@ const SCH_DESK_PATH := "res://models/cc_by/school_desk/school_desk.glb"
 const SCH_DESK_SCALE := 0.007
 const SCH_DESK_YAW_FIX := deg_to_rad(136.9088)
 const SCH_DESK_CENTRE := Vector3(-25.9953, 0.0512, -26.8323)
-const SCH_DESK_COL_PITCH := 1.20
-const SCH_DESK_ROW_PITCH := 1.70
+# The station includes its chair: 0.80 x 0.96m. Leave 1.20m side aisles
+# and 1.04m between rows rather than gaps narrower than the player capsule.
+const SCH_DESK_COL_PITCH := 2.0
+const SCH_DESK_ROW_PITCH := 2.0
+# Library shelves: supplied double-bay unit, 3.55m long, 2.12m tall and
+# 0.47m deep with books facing local +Z and the oak back at local -Z.
+# Runs place two back to back so books face both aisles.
+const SCH_SHELF_PATH := \
+	"res://models/provided/sch_shelves/sch_shelves.glb"
+const SCH_SHELF_HALF_DEPTH := 0.225
 
 # School chemistry lab. The source table is a full 6.21 x 5.37m island; a
 # reduction puts its black worktop at 0.86m and leaves useful circulation
@@ -462,6 +565,16 @@ const GARBAGE_BIN_PATH := "res://models/cc_by/garbage_bin/garbage_bin.glb"
 const GARBAGE_BIN_SCALE := 1.0
 const GARBAGE_BIN_CENTRE := Vector3(0.0, 0.0028, 0.0)
 
+## Marco's compact perforated wastebasket. Office desks and school rooms need
+## an indoor bin rather than the large municipal can used in concourses and
+## mall walkways. The supplied model is already in metres and floor-aligned.
+const OFFICE_SCHOOL_BIN_PATH := \
+	"res://models/provided/trash_can/trash_can.glb"
+const OFFICE_SCHOOL_BIN_SCALE := 1.0
+const OFFICE_SCHOOL_BIN_CENTRE := Vector3.ZERO
+const OFFICE_SCHOOL_BIN_RADIUS := 0.147
+const OFFICE_SCHOOL_BIN_HEIGHT := 0.314
+
 const IV_DRIP_PATH := "res://models/cc_by/iv_drip/iv_drip.glb"
 const IV_DRIP_SCALE := 0.00486
 const IV_DRIP_CENTRE := Vector3(31.8042, -0.8658, 0.0)
@@ -540,13 +653,6 @@ const MALL_SIGN_FACES := [
 	["sunshine_princess", 6.0],
 ]
 
-const ART_VEGAS := [
-	"res://paintings/runtime/painting1-vegas.webp",
-	"res://paintings/runtime/painting2-vegas.webp",
-	"res://paintings/runtime/painting3-vegas.webp",
-	"res://paintings/runtime/painting4-vegas.webp",
-	"res://paintings/runtime/painting5-vegas.webp",
-]
 const POSTER_OFFICE := [
 	"res://paintings/runtime/posters/poster-office-01.webp",
 	"res://paintings/runtime/posters/poster-office-02.webp",
@@ -623,6 +729,13 @@ const POSTER_PRISON := [
 	"res://paintings/runtime/posters/poster-prison-07.webp",
 	"res://paintings/runtime/posters/poster-prison-08.webp",
 	"res://paintings/runtime/posters/poster-prison-09.webp",
+]
+const ART_VEGAS := [
+	"res://paintings/runtime/painting1-vegas.webp",
+	"res://paintings/runtime/painting2-vegas.webp",
+	"res://paintings/runtime/painting3-vegas.webp",
+	"res://paintings/runtime/painting4-vegas.webp",
+	"res://paintings/runtime/painting5-vegas.webp",
 ]
 const ART_SEWER := [
 	"res://paintings/runtime/painting1-sewer.webp",
@@ -810,14 +923,13 @@ var descent_broken_station_tried := false
 ## built, and which theme is doing the creeping.
 var bleed_amount := 0.0
 var bleed_theme := -1
+var bleed_target := ChunkBuildSpec.NO_CELL
 var anomaly_kind := -1
 ## Complete furniture recipe selected by the floor's generated reality graph.
 ## Zero is the seed-authored layout; later values are deterministic validated
 ## alternatives and therefore survive streaming/rebuilds exactly.
 var mutation_furniture_variant := 0
 var mutation_furniture_changed_groups := 0
-## Only used by the waiting-figure anomaly, which needs a hunt target.
-var anomaly_player: Player
 var _descent_lift_rig := {}
 var _descent_arrival_rig := {}
 var _blackout := false
@@ -884,6 +996,9 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(PRISON_BUNK_PATH)
 	paths.append(PRISON_TOILET_PATH)
 	paths.append(PRISON_DOOR_OLD_PATH)
+	paths.append(PRISON_EXECUTION_CHAIR_PATH)
+	paths.append(PRISON_EXECUTION_TABLE_PATH)
+	paths.append(PRISON_BENCH_PATH)
 	paths.append(SOLITARY_CELL_DOOR_PATH)
 	paths.append(ASY_BED_PATH)
 	paths.append(ASY_GURNEY_PATH)
@@ -905,6 +1020,8 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(MALL_DIRECTORY_PATH)
 	paths.append(CASINO_BLACKJACK_PATH)
 	paths.append(CASINO_ROULETTE_PATH)
+	paths.append(CASINO_BAR_PATH)
+	paths.append(CASINO_POPUP_PATH)
 	paths.append(MALL_HOTDOG_PATH)
 	paths.append(MALL_SHOPPING_CART_PATH)
 	paths.append(MALL_GARMENT_RACK_PATH)
@@ -946,6 +1063,7 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(ROPE_BARRIER_PATH)
 	paths.append(CHECKIN_DESK_PATH)
 	paths.append(GARBAGE_BIN_PATH)
+	paths.append(OFFICE_SCHOOL_BIN_PATH)
 	paths.append(IV_DRIP_PATH)
 	paths.append(CITY_BENCH_PATH)
 	paths.append(FOOD_COURT_SET_PATH)
@@ -971,7 +1089,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append(CHANGE_MACHINE_PATH)
 			paths.append_array(CASINO_SLOT_PATHS)
 			paths.append_array([CASINO_BLACKJACK_PATH, CASINO_ROULETTE_PATH,
-				CASINO_SERVICE_CART_PATH, ROPE_BARRIER_PATH])
+				CASINO_BAR_PATH, CASINO_POPUP_PATH, CASINO_SERVICE_CART_PATH,
+				ROPE_BARRIER_PATH])
 			paths.append("res://models/cc0/Chandelier_03/Chandelier_03_1k.gltf")
 			paths.append("res://models/cc0/bar_chair_round_01/bar_chair_round_01_1k.gltf")
 			paths.append("res://models/cc0/coffee_table_round_01/coffee_table_round_01_1k.gltf")
@@ -1011,6 +1130,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array([ASY_BED_PATH, ASY_GURNEY_PATH, ASY_TROLLEY_PATH])
 			paths.append_array([ASY_BATH_PATH, ASY_SCRUB_SINK_PATH, ASY_NOTICES_PATH])
 			paths.append_array([ASY_STRAITJACKET_PATH, ASY_ECT_PATH, ASY_RESTRAINT_PATH])
+			paths.append_array([ASY_PEW_PATH, ASY_ALTAR_PATH])
+			paths.append(ASY_TABLE_PATH)
 			paths.append_array([ASY_AUTOPSY_PATH, IV_DRIP_PATH, CHEMISTRY_GLASSWARE_PATH])
 			paths.append_array(ASY_DOOR_PATHS)
 			paths.append("res://models/asylum/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf")
@@ -1024,7 +1145,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 		6:
 			paths.append_array([LOCKERS_PATH, GYM_LOCKER_PATH, SCH_CLEANING_CART_PATH])
 			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH, CHEMISTRY_GLASSWARE_PATH])
-			paths.append_array([SCH_TOILET_PATH, SCH_SINK_PATH, SCH_URINAL_PATH])
+			paths.append_array([SCH_TOILET_PATH, SCH_SINK_PATH, SCH_URINAL_PATH, SCH_SHELF_PATH])
 			paths.append_array([SCH_FOUNTAIN_PATH, SCH_TROPHY_CASE_PATH, SCH_BLEACHERS_PATH,
 				SCH_CAF_TABLE_PATH, SCH_CUPBOARD_PATH, SCH_SERVERY_PATH])
 			paths.append("res://models/cc0/stationery_supplies/stationery_supplies_1k.gltf")
@@ -1046,7 +1167,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/cc0/trashbag/trashbag_1k.gltf")
 		8:
 			paths.append_array([PRISON_DOOR_OLD_PATH, PRISON_BUNK_PATH, PRISON_TOILET_PATH,
-				PRISON_SHOWER_PATH, PRISON_MESS_TABLE_PATH])
+				PRISON_SHOWER_PATH, PRISON_MESS_TABLE_PATH, PRISON_EXECUTION_CHAIR_PATH,
+			PRISON_EXECUTION_TABLE_PATH, PRISON_BENCH_PATH])
 			paths.append_array([PRISON_WALL_PHONE_PATH, DESK_PHONE_PATH, VT100_MONITOR_PATH, VT100_KEYBOARD_PATH])
 			paths.append("res://models/cc0/book_encyclopedia_set_01/book_encyclopedia_set_01_1k.gltf")
 			paths.append("res://models/cc0/can_rusted/can_rusted_1k.gltf")
@@ -1167,6 +1289,7 @@ static func cached_scrawl_font(which: int) -> FontFile:
 
 
 var _build_stage := 0
+var _deferred_wall_art: Array = []
 var _build_blackout := false
 var _build_started_usec := 0
 var _occluder_walls: Array[MeshInstance3D] = []
@@ -1213,12 +1336,8 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	descent_broken_station_tried = spec.broken_station_tried
 	bleed_amount = spec.bleed
 	bleed_theme = spec.bleed_theme
+	bleed_target = spec.bleed_target
 	anomaly_kind = spec.anomaly
-	# The waiting-figure anomaly is a live figure, and a live figure is useless
-	# without the player it is hunting. It has to arrive with the config: the
-	# figure is built during construction, and its own _ready — which sizes the
-	# capsule it moves with — runs before anything outside could set this.
-	anomaly_player = spec.player
 	_build_blackout = spec.blackout
 	body = StaticBody3D.new()
 	add_child(body)
@@ -1287,8 +1406,12 @@ func build_next_stage() -> bool:
 				_apply_furniture_variant(mutation_furniture_variant)
 				_profile_stage("furniture_mutation", started)
 			_ensure_slot_room_change_machine()
+			_ensure_casino_bar()
+			_ensure_casino_popup_bar()
 			NOSTALGIA_PROPS.dress(self)
 			_build_charging_station()
+			for entry in _deferred_wall_art:
+				_wall_art(entry[0], entry[1], 1060 + entry[0] * 7)
 		6:
 			SurfaceWear.apply(self, _build_context)
 			_profile_stage("surface_wear", started)
@@ -1358,7 +1481,7 @@ func _profile_stage(label: String, started_usec: int) -> void:
 		theme, style, cell, label, elapsed_ms])
 
 
-## One station per 3x3 macro-cell, on a fixed lattice rather than a random
+## One baseline station per 3x3 macro-cell, on a fixed lattice rather than a random
 ## roll. A player is therefore normally within roughly 25m as the crow flies
 ## with a clearance-aware search inside each selected cell.
 func _build_charging_station() -> void:
@@ -1386,12 +1509,90 @@ func _nostalgia_prop(id: int, at := Vector3(6, 0, 6), yaw := 0.0) -> Node3D:
 	return NOSTALGIA_PROPS.add(_scene_writer, id, at, yaw)
 
 
+## Execution chambers are rare by construction: merged guard, industry,
+## visitation and rotunda rooms roll once per room on their root, so every
+## member cell agrees and most floors never see one.
+func _prison_execution_room() -> bool:
+	if theme != 8 or room_n < 2:
+		return false
+	if style != WorldGen.PRISON_GUARD and style != WorldGen.PRISON_INDUSTRY \
+			and style != WorldGen.PRISON_VISITATION \
+			and style != WorldGen.PRISON_ROTUNDA:
+		return false
+	return WorldGen.r01(wseed, room_root.x, room_root.y, 7715) \
+		< PRISON_EXECUTION_CHANCE
+
+
 func _ensure_slot_room_change_machine() -> void:
 	if theme != 0 or slot_machine_count() == 0:
 		return
 	var site := NOSTALGIA_PROPS.machine_site(self, CHANGE_MACHINE_BOUNDS)
 	if not site.is_empty():
 		_level_builder._change_machine_at(site.at, site.yaw)
+
+
+## A full back bar needs a tall wall in a large room: grand halls and the
+## ballroom, never slot floors or lounges. It places after furniture shifts,
+## culling and mutations like the change machine, so the wall search sees
+## the finished room. The ceiling gate guards the arched sign. No more than
+## two bars per room: every cell scans the same member list around the room
+## root and only the first and last cells in scan order place, so the pair
+## lands on opposite sides of any rectangular room instead of one per chunk.
+## Rooms without a qualifying wall simply get no bar.
+func _ensure_casino_bar() -> void:
+	if theme != 0 or (style != WorldGen.STYLE_GRAND \
+			and style != WorldGen.STYLE_BALLROOM):
+		return
+	if ceil_h < 3.55:
+		return
+	var members: Array[Vector2i] = []
+	for dx in range(-5, 6):
+		for dz in range(-5, 6):
+			var c := room_root + Vector2i(dx, dz)
+			if WorldGen.room_id(wseed, c) == room_root:
+				members.append(c)
+	if cell != members[0] and cell != members[members.size() - 1]:
+		return
+	var site := NOSTALGIA_PROPS.machine_site(self, CASINO_BAR_SEARCH)
+	if site.is_empty():
+		return
+	_level_builder._casino_bar_at(site.at, site.yaw)
+
+
+## One popup bar per room at most: the first member cell in scan order
+## places, so every cell in the room agrees on the single candidate. Slot
+## rooms and the smaller table-game rooms qualify; grand halls, the
+## ballroom and circulation never do, keeping the two bars apart. The bay
+## needs a genuinely open front, not the first gap between banks: a deep
+## standing zone with side breathing room ahead of the stools.
+func _ensure_casino_popup_bar() -> void:
+	if theme != 0 or (style != WorldGen.STYLE_SLOTS \
+			and style != WorldGen.STYLE_LOUNGE \
+			and style != WorldGen.STYLE_PILLARS \
+			and style != WorldGen.STYLE_EMPTY):
+		return
+	if ceil_h < 2.75:
+		return
+	if WorldGen.r01(wseed, room_root.x, room_root.y, 7713) > CASINO_POPUP_CHANCE:
+		return
+	var members: Array[Vector2i] = []
+	for dx in range(-5, 6):
+		for dz in range(-5, 6):
+			var c := room_root + Vector2i(dx, dz)
+			if WorldGen.room_id(wseed, c) == room_root:
+				members.append(c)
+	if cell != members[0]:
+		return
+	var geometry := ChargingStationPlacement.new(self)
+	var doors := _doorway_clearance_rects()
+	var box := NOSTALGIA_PROPS.machine_clearance_bounds(CASINO_POPUP_BOUNDS)
+	var approach := AABB(Vector3(box.position.x - 0.5, 0.06, box.end.z),
+		Vector3(box.size.x + 1.0, 1.8, 2.0))
+	var site := NOSTALGIA_PROPS.wall_site(self, geometry, doors, box,
+		approach, 0.057, 0.0)
+	if site.is_empty():
+		return
+	_level_builder._casino_popup_bar_at(site.at, site.yaw)
 
 
 func _pick_charging_station_site(preferred: Dictionary = {}) -> Dictionary:
@@ -1427,6 +1628,9 @@ func _add_charging_station(site: Dictionary) -> void:
 	station.set("broken_tried", descent_broken_station_tried and not descent_target)
 	station.set_meta("charging_station", true)
 	station.set_meta("station_cell", cell)
+	station.set_meta("data_center_extra_station", theme == 10 \
+		and not (posmod(cell.x, 3) == 1 and posmod(cell.y, 3) == 1) \
+		and not descent_target)
 	add_child(station)
 
 
@@ -1436,10 +1640,10 @@ func _add_charging_station(site: Dictionary) -> void:
 const BLEED_PROPS := {
 	# Same Royal Sevens cabinet as the casino floor, centred on its measured
 	# footprint. Anomalies/bleed must not resurrect the retired slot asset.
-	0: [CASINO_SLOT_PATHS[0], 1.0, Vector3(0.0385, 0.0, 0.092),
-		Vector3(0.847, 2.239, 0.856)],
+	0: [CASINO_SLOT_PATHS[0], CASINO_SLOT_SCALE, Vector3(0.0385, 0.0, 0.092),
+		Vector3(0.847, 2.239, 0.856) * CASINO_SLOT_SCALE],
 	1: [OFFICE_WATER_COOLER_PATH, OFFICE_WATER_COOLER_SCALE,
-		OFFICE_WATER_COOLER_CENTRE, Vector3(0.42, 1.3, 0.42)],
+		OFFICE_WATER_COOLER_CENTRE, OFFICE_WATER_COOLER_COLLIDER_SIZE],
 	2: [ANNEX_CHAIR_PATH, ANNEX_CHAIR_SCALE, ANNEX_CHAIR_CENTRE,
 		ANNEX_CHAIR_COLLIDER_SIZE],
 	4: [AIRPORT_LUGGAGE_PATH, AIRPORT_LUGGAGE_SCALE, Vector3.ZERO,
@@ -1464,6 +1668,8 @@ func _build_bleed_dressing() -> void:
 		return
 	if bleed_amount < 0.05 or bleed_theme < 0:
 		return
+	if not _bleed_prop_allowed_here():
+		return
 	if WorldGen.r01(wseed, cell.x, cell.y, 6101) > bleed_amount * 0.55:
 		return
 	# One unmistakable foreign object is enough to sell the transition. Two per
@@ -1487,6 +1693,8 @@ func _build_bleed_dressing() -> void:
 
 
 func _place_bleed_prop(at: Vector3, yaw: float) -> void:
+	if not _bleed_prop_allowed_here():
+		return
 	if BLEED_PROPS.has(bleed_theme):
 		var entry: Array = BLEED_PROPS[bleed_theme]
 		var centre: Vector3 = entry[2]
@@ -1532,6 +1740,19 @@ func _place_bleed_prop(at: Vector3, yaw: float) -> void:
 		blob.scale = Vector3(1.4, 0.55, 1.15)
 		intrusion.add_child(blob)
 	_disable_streamed_gi(intrusion)
+
+
+## Casino -> Mall is the first and most literal transition. Shopping carts are
+## useful foreshadowing at the escape lift, but look like ordinary bad dressing
+## anywhere else in Vegas. Keep them in the eight cells touching the objective;
+## the bleed ratchet still controls when they begin appearing.
+func _bleed_prop_allowed_here() -> bool:
+	if theme != 0 or bleed_theme != 7:
+		return true
+	if bleed_target == ChunkBuildSpec.NO_CELL:
+		return false
+	return maxi(absi(cell.x - bleed_target.x),
+		absi(cell.y - bleed_target.y)) <= 1
 
 
 ## Bleed dressing is late, transient set decoration. Excluding it from SDFGI
@@ -1798,7 +2019,9 @@ func _optional_vhs_hits_doorway(at: Vector3, yaw: float) -> bool:
 
 func _is_charging_station_cell() -> bool:
 	if theme != 9:
-		return posmod(cell.x, 3) == 1 and posmod(cell.y, 3) == 1
+		if posmod(cell.x, 3) == 1 and posmod(cell.y, 3) == 1:
+			return true
+		return theme == 10 and cell == _data_center_extra_station_cell()
 	# Pool stations must be on a raised dry deck, never at the bottom of a
 	# basin. Pick exactly one dry cell in each macro-cell by stable hash.
 	var origin := Vector2i(floori(float(cell.x) / 3.0) * 3,
@@ -1815,6 +2038,36 @@ func _is_charging_station_cell() -> bool:
 				best = score
 				chosen = candidate
 	return cell == chosen
+
+
+## The Data Center has one additional maintenance charging point in every
+## third 3x3 macro-cell (+33% candidates). Prefer actual service rooms, then
+## other machine rooms. The ordinary safe-placement search still has final
+## say: never force a pole into a rack, an aisle, or a doorway.
+func _data_center_extra_station_cell() -> Vector2i:
+	var macro := Vector2i(floori(float(cell.x) / 3.0), floori(float(cell.y) / 3.0))
+	var chosen := Vector2i(1 << 20, 1 << 20)
+	if posmod(macro.x + macro.y, 3) != 0:
+		return chosen
+	var best_rank := 99
+	var best_hash := 0x7fffffff
+	for x in 3:
+		for z in 3:
+			if x == 1 and z == 1:
+				continue
+			var candidate := macro * 3 + Vector2i(x, z)
+			# The arrival already has its own resource pacing and furnishings.
+			if candidate == Vector2i.ZERO:
+				continue
+			var kind := WorldGen.cell_style(wseed, candidate, 10)
+			var rank := 0 if kind == WorldGen.BRUTAL_SERVICE else \
+				(2 if kind == WorldGen.BRUTAL_PASSAGE else 1)
+			var score := WorldGen.h(wseed, candidate.x, candidate.y, 8803) & 0x7fffffff
+			if rank < best_rank or (rank == best_rank and score < best_hash):
+				best_rank = rank
+				best_hash = score
+				chosen = candidate
+	return chosen
 
 
 ## Real reflections for the rooms with mirror-like surfaces (marble, gold,
@@ -2485,20 +2738,9 @@ func _build_floor_ceiling() -> void:
 		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), floor_mat)
 	_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.ceiling())
 
-	if style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_BALLROOM:
-		# clerestory band between standard wall height and the raised ceiling
-		var bh := ceil_h - H
-		var by := H + bh / 2.0
-		_box(Vector3(S / 2.0, by, T / 2.0), Vector3(S, bh, T), Mats.band_paint(), false)
-		_box(Vector3(S / 2.0, by, S - T / 2.0), Vector3(S, bh, T), Mats.band_paint(), false)
-		_box(Vector3(T / 2.0, by, S / 2.0), Vector3(T, bh, S), Mats.band_paint(), false)
-		_box(Vector3(S - T / 2.0, by, S / 2.0), Vector3(T, bh, S), Mats.band_paint(), false)
-		var neon: Material = Mats.neon_pink() if _r(31) < 0.5 else Mats.neon_amber()
-		var ny := H + 0.18
-		_box(Vector3(S / 2.0, ny, 0.35), Vector3(S - 1.0, 0.06, 0.08), neon, false)
-		_box(Vector3(S / 2.0, ny, S - 0.35), Vector3(S - 1.0, 0.06, 0.08), neon, false)
-		_box(Vector3(0.35, ny, S / 2.0), Vector3(0.08, 0.06, S - 1.0), neon, false)
-		_box(Vector3(S - 0.35, ny, S / 2.0), Vector3(0.08, 0.06, S - 1.0), neon, false)
+	# Tall Vegas finishes belong to the actual wall segments, not four extra
+	# slabs around every cell. The old slabs overlapped the full-height walls
+	# exactly and also hung across fully open joins inside merged rooms.
 
 
 func _build_walls() -> void:
@@ -2854,14 +3096,20 @@ func _open_edge_fascia(dir: int, plane: float) -> void:
 	var nb_h := cell_ceil_h(wseed, cell + WorldGen.DIRV[dir], theme)
 	if ceil_h - nb_h < 0.1:
 		return
-	var yc := (nb_h + ceil_h) * 0.5
-	var fascia := _box(
-		Vector3(plane, yc, S / 2.0) if dir < 2 else Vector3(S / 2.0, yc, plane),
-		Vector3(T, ceil_h - nb_h, S) if dir < 2 \
-			else Vector3(S, ceil_h - nb_h, T),
-		_wall_material())
-	fascia.set_meta("open_edge_fascia", dir)
-	fascia.set_meta("fascia_low_ceiling", nb_h)
+	var spans: Array[Vector2] = [Vector2(nb_h, ceil_h)]
+	if _casino_upper_band() and nb_h < H:
+		spans = [Vector2(nb_h, H), Vector2(H, ceil_h)]
+	for span in spans:
+		var yc := (span.x + span.y) * 0.5
+		var mat := Mats.band_paint() if _casino_upper_band() and span.x >= H \
+			else _wall_material()
+		var fascia := _box(
+			Vector3(plane, yc, S / 2.0) if dir < 2 else Vector3(S / 2.0, yc, plane),
+			Vector3(T, span.y - span.x, S) if dir < 2 \
+				else Vector3(S, span.y - span.x, T), mat)
+		fascia.set_meta("open_edge_fascia", dir)
+		fascia.set_meta("fascia_low_ceiling", nb_h)
+	_casino_upper_neon(dir, plane, 0.0, S, nb_h, ceil_h)
 
 
 ## Some genuine room-to-room openings get a working leaf. Canonical east and
@@ -3711,7 +3959,37 @@ func _wall_material() -> Material:
 	return Mats.wallpaper_variant(_finish_variant())
 
 
+func _casino_upper_band() -> bool:
+	return theme == 0 and ceil_h > H \
+		and style in [WorldGen.STYLE_GRAND, WorldGen.STYLE_BALLROOM]
+
+
+## Keep the original neon height and inset, but only on a real backing wall.
+## Door jambs and headers partition the run without duplicating any section;
+## same-height open joins have neither a painted band nor floating neon.
+func _casino_upper_neon(dir: int, plane: float, from: float, to: float,
+		y0: float, y1: float) -> void:
+	var ny := H + 0.18
+	if not _casino_upper_band() or y0 > ny - 0.03 or y1 < ny + 0.03:
+		return
+	var a := maxf(from, 0.5)
+	var b := minf(to, S - 0.5)
+	if b - a < 0.05:
+		return
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var neon := Mats.neon_pink() if _r(31) < 0.5 else Mats.neon_amber()
+	_strip(dir, plane + n * (0.35 - T * 0.5), ny,
+		(a + b) * 0.5, b - a, 0.08, 0.06, neon)
+
+
 func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: float) -> void:
+	# One opaque finish per height range. Splitting construction (including
+	# collision) keeps wallpaper below the datum and paint above it without
+	# coplanar faces. The existing y0/y1 trim guards still emit each trim once.
+	if _casino_upper_band() and y0 < H and y1 > H:
+		_wall_seg(dir, plane, from, to, y0, H)
+		_wall_seg(dir, plane, from, to, H, y1)
+		return
 	var wall_t := ANNEX_WALL_T if theme == 2 else (POOL_WALL_T if theme == 9 else T)
 	var annex_t_stub_min := false
 	var annex_t_stub_max := false
@@ -3774,6 +4052,8 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 	var annex_line_winner_min := -1
 	var annex_line_winner_max := -1
 	var wmat: Material = _wall_material()
+	if _casino_upper_band() and y0 >= H:
+		wmat = Mats.band_paint()
 	if theme == 2:
 		# Resolve the treatment for the complete edge, never for an individual
 		# mesh produced by a door cut. A continuous perpendicular wall wins at
@@ -3955,6 +4235,7 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		# baseboard read as detached black bars around every room.
 		return
 	# vegas trim set: crown, baseboard, chair rail
+	_casino_upper_neon(dir, plane, from, to, y0, y1)
 	if y1 >= ceil_h - 0.01:
 		_strip(dir, inner + n * 0.05, ceil_h - 0.05, c, ln, 0.1, 0.1, Mats.crown())
 	if y0 <= 0.01:
@@ -4275,6 +4556,7 @@ func _exit_alarm(face_pos: Vector3, yaw: float, sign_top: float,
 
 	var light := OmniLight3D.new()
 	light.set_meta("structural_exit_light", true)
+	light.set_meta("visible_source", "exit_alarm_lens")
 	light.light_color = Color(1.0, 0.055, 0.035)
 	light.light_energy = 0.22
 	light.omni_range = 1.45
@@ -4380,6 +4662,8 @@ func _wall_art_chance() -> float:
 	if theme == 9:
 		return 0.0
 	match theme:
+		0:
+			return 0.32
 		1:
 			return 0.62 if style == WorldGen.OFFICE_STORAGE else 0.72
 		2:
@@ -4455,6 +4739,81 @@ func _office_wall_art_layout(member: Vector2i, dir: int) -> Dictionary:
 	}
 
 
+## Small solid volumes already hanging in the room: meshes, colliders and
+## labels, with invisible nodes, wear decals, areas and wandering figures
+## left out. Wall and floor slabs stay in the list; callers filter them by
+## position because only they know their own wall face. Shared by late wall
+## decoration and its audit so the two cannot drift.
+func _wall_mount_blockers(ignore: Node = null) -> Array[AABB]:
+	var volumes: Array[AABB] = []
+	_collect_mount_blockers(self, Transform3D.IDENTITY, true, ignore, volumes)
+	return volumes
+
+
+func _collect_mount_blockers(node: Node, parent: Transform3D, shown: bool,
+		ignore: Node, volumes: Array[AABB]) -> void:
+	if node == ignore or node is ShadowFigure or node is ShadowFigures \
+			or node is Area3D:
+		return
+	var xf := parent
+	if node is Node3D:
+		shown = shown and (node as Node3D).visible
+		xf = parent * (node as Node3D).transform
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		if shown and not node.get_meta("surface_wear_patch", false):
+			var bounds: AABB = xf * (node as MeshInstance3D).mesh.get_aabb()
+			if bounds.size.length() > 0.001:
+				volumes.append(bounds)
+	elif node is CollisionShape3D and (node as CollisionShape3D).shape != null \
+			and not (node as CollisionShape3D).disabled:
+		var shape_bounds: AABB = xf * (node as CollisionShape3D).shape.get_debug_mesh().get_aabb()
+		if shape_bounds.size.length() > 0.001:
+			volumes.append(shape_bounds)
+	elif node is Label3D:
+		if shown:
+			var label_bounds: AABB = xf * (node as Label3D).get_aabb()
+			if label_bounds.size.length() > 0.001:
+				volumes.append(label_bounds)
+	for child in node.get_children():
+		_collect_mount_blockers(child, xf, shown, ignore, volumes)
+
+
+## Candidate poster rectangle as a world box: the frame plus a working
+## margin along the wall, reaching half a metre into the room so protruding
+## fixtures count. Shared by placement and its audit.
+func _wall_art_site_box(dir: int, inner: float, n: float, along: float,
+		y: float, size: Vector2) -> AABB:
+	if dir < 2:
+		return AABB(
+			Vector3(inner - (0.6 if n < 0.0 else 0.05), y - size.y * 0.5,
+				along - size.x * 0.5 - 0.3),
+			Vector3(0.65, size.y, size.x + 0.6))
+	return AABB(
+		Vector3(along - size.x * 0.5 - 0.3, y - size.y * 0.5,
+			inner - (0.6 if n < 0.0 else 0.05)),
+		Vector3(size.x + 0.6, size.y, 0.65))
+
+
+## A volume buried in the wall is the wall itself, not a hanging item.
+func _volume_behind_wall_face(vol: AABB, dir: int, inner: float, n: float) -> bool:
+	if dir < 2:
+		return vol.position.x < inner - 0.05 if n > 0.0 \
+			else vol.end.x > inner + 0.05
+	return vol.position.z < inner - 0.05 if n > 0.0 \
+		else vol.end.z > inner + 0.05
+
+
+func _wall_art_site_clear(dir: int, inner: float, n: float, along: float,
+		y: float, size: Vector2, ignore: Node) -> bool:
+	var box := _wall_art_site_box(dir, inner, n, along, y, size)
+	for vol in _wall_mount_blockers(ignore):
+		if _volume_behind_wall_face(vol, dir, inner, n):
+			continue
+		if box.intersects(vol):
+			return false
+	return true
+
+
 func _wall_art(dir: int, plane: float, salt: int) -> void:
 	var office_layout := _office_wall_art_layout(cell, dir) if theme == 1 else {}
 	var path := str(office_layout["path"]) if not office_layout.is_empty() \
@@ -4462,28 +4821,9 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var wall_t := ANNEX_WALL_T if theme == 2 else T
 	var inner := plane + n * (wall_t / 2.0)
-	var max_size := Vector2(1.90, 1.38) if theme == 0 \
-		else Vector2(1.72, 1.34)
+	var max_size := Vector2(1.90, 1.38) if theme == 0 else Vector2(1.72, 1.34)
 	var size: Vector2 = office_layout["size"] if not office_layout.is_empty() \
 		else _wall_art_fit(path, max_size)
-	var along := float(office_layout["along"]) \
-		if not office_layout.is_empty() else -1.0
-	if office_layout.is_empty():
-		var split := _resolved_room_split()
-		for candidate_idx in 6:
-			var candidate := lerpf(0.42 + size.x * 0.5,
-				S - 0.42 - size.x * 0.5,
-				_r(salt + 2 + candidate_idx * 17))
-			var partition_hits_wall := not split.is_empty() \
-				and ((bool(split[0]) and dir < 2) \
-					or (not bool(split[0]) and dir >= 2))
-			if partition_hits_wall \
-					and absf(candidate - float(split[1])) < size.x * 0.5 + 0.30:
-				continue
-			along = candidate
-			break
-	if along < 0.0:
-		return
 	# A 1.92m centre keeps framed art in the upper wall field instead of
 	# reading like furniture-height signage. Short rooms still clamp it safely
 	# beneath the ceiling.
@@ -4500,13 +4840,38 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 	if band > 0.0:
 		y = maxf(y, band + WALL_BAND_CLEAR + size.y * 0.5)
 		y = minf(y, ceil_h - size.y * 0.5 - 0.22)
+	var along := float(office_layout["along"]) \
+		if not office_layout.is_empty() else -1.0
+	if office_layout.is_empty():
+		var split := _resolved_room_split()
+		for candidate_idx in 6:
+			var candidate := lerpf(0.42 + size.x * 0.5,
+				S - 0.42 - size.x * 0.5,
+				_r(salt + 2 + candidate_idx * 17))
+			var partition_hits_wall := not split.is_empty() \
+				and ((bool(split[0]) and dir < 2) \
+					or (not bool(split[0]) and dir >= 2))
+			if partition_hits_wall \
+					and absf(candidate - float(split[1])) < size.x * 0.5 + 0.30:
+				continue
+			# Fixtures share these walls and most go in before decoration
+			# runs, so test each bay against what is already hanging and
+			# try the next one when it is taken.
+			if not _wall_art_site_clear(dir, inner, n, candidate, y, size, null):
+				continue
+			along = candidate
+			break
+	if along < 0.0:
+		return
 	var pos := Vector3(inner + n * 0.055, y, along) if dir < 2 \
 		else Vector3(along, y, inner + n * 0.055)
 	var yaw := (PI / 2.0 if n > 0.0 else -PI / 2.0) if dir < 2 \
 		else (0.0 if n > 0.0 else PI)
 	var tilt_scale := 0.05 if theme == 0 or theme == 2 or theme == 5 else 0.018
-	_wall_art_mount(pos, yaw, dir, path, max_size,
+	var mount := _wall_art_mount(pos, yaw, dir, path, max_size,
 		(_r(salt + 3) - 0.5) * tilt_scale)
+	if not office_layout.is_empty():
+		mount.set_meta("wall_art_curated", true)
 
 
 func _wall_decor(dir: int, plane: float) -> void:
@@ -4525,7 +4890,10 @@ func _wall_decor(dir: int, plane: float) -> void:
 	var r := _r(40 + dir)
 	var art_chance := _wall_art_chance()
 	if art_chance > 0.0 and _r(1040 + dir) < art_chance:
-		_wall_art(dir, plane, 1060 + dir * 7)
+		# Framed art hangs last, once every fixture has claimed its wall:
+		# a poster picked against bare walls ends up behind shower
+		# stations and clocks. Fixtures below stay on the early schedule.
+		_deferred_wall_art.append([dir, plane])
 		return
 	# Interior partitions meet two of the exterior walls. Decorations whose
 	# own helpers do not expose their footprint (cases, clocks, pipes, etc.)
@@ -4614,7 +4982,9 @@ func _wall_decor(dir: int, plane: float) -> void:
 			_level_builder._office_poster(dir, plane)
 		return
 	if r < 0.32:
-		_art(dir, plane)
+		# Leave a portion of casino walls plain so the supplied portraits remain
+		# a discovered detail rather than visual wallpaper in every room.
+		return
 	elif r < 0.5:
 		_sconces(dir, plane)
 	elif r < 0.62:
@@ -4731,10 +5101,6 @@ func _wall_utility_mount(p: Vector3, yaw: float, height: float,
 	return mount
 
 
-func _art(dir: int, plane: float) -> void:
-	_wall_art(dir, plane, 46 + dir * 11)
-
-
 func _sconces(dir: int, plane: float) -> void:
 	var n := -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner := plane + n * (T * 0.5)
@@ -4760,6 +5126,7 @@ func _sconces(dir: int, plane: float) -> void:
 		l.distance_fade_enabled = true
 		l.distance_fade_begin = 14.0
 		l.distance_fade_length = 6.0
+		l.set_meta("visible_source", "wall_sconce_bulb")
 		add_child(l)
 
 
@@ -4840,10 +5207,12 @@ func _build_lighting() -> void:
 		return
 
 	var energy := 2.4 if grand else 1.35
-	var light := _make_main_light(flicker, pmat, energy)
+	var source_position := Vector3(S / 2.0, ceil_h - 1.4, S / 2.0) if grand \
+		else Vector3(3.6, ceil_h - 0.45, 3.6)
+	var light := _make_main_light(flicker, pmat, energy, source_position,
+		"casino_chandelier" if grand else "casino_flush_mount")
 	light.light_color = Color.from_hsv(0.07 + 0.05 * _r(11), 0.25 + 0.35 * _r(12), 1.0)
 	light.omni_range = 16.0 if grand else 11.0
-	light.position = Vector3(S / 2.0, ceil_h - (1.4 if grand else 0.45), S / 2.0)
 	light.shadow_enabled = true
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 24.0
@@ -4863,15 +5232,24 @@ func _troffer(at: Vector3, lens: Vector2, pmat: Material, frame: Material) -> Me
 	return lens_mesh
 
 
-func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float) -> OmniLight3D:
+func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float,
+		source_position := Vector3.ZERO, source_name := "authored_room_fixture") -> OmniLight3D:
 	if not flicker:
 		var l := OmniLight3D.new()
 		l.set_meta("stream_room_light", true)
+		l.set_meta("visible_source", source_name)
+		l.set_meta("visible_source_position", source_position)
 		l.light_energy = energy
+		l.position = source_position
+		l.set_meta("visible_source_name", source_name)
 		return l
 	var fl := FlickerLight.new()
 	fl.set_meta("stream_room_light", true)
+	fl.set_meta("visible_source", source_name)
+	fl.set_meta("visible_source_position", source_position)
 	fl.base_energy = energy
+	fl.position = source_position
+	fl.set_meta("visible_source_name", source_name)
 	fl.mats = [pmat]
 	fl.rng_seed = WorldGen.h(wseed, cell.x, cell.y, 10)
 	var bz := AudioStreamPlayer3D.new()
@@ -4881,7 +5259,8 @@ func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float) ->
 	bz.volume_db = -26.0
 	bz.bus = SoundBank.HALL_BUS
 	bz.autoplay = true
-	bz.position = Vector3(S / 2.0, _wall_h() - 0.5, S / 2.0)
+	bz.position = source_position if source_position != Vector3.ZERO \
+		else Vector3(S / 2.0, _wall_h() - 0.5, S / 2.0)
 	add_child(bz)
 	fl.buzz = bz
 	return fl
@@ -4996,15 +5375,29 @@ func _build_props() -> void:
 		_shift_props(off, n0, b0)
 		_clear_furnishings_from_doorways(n0, b0)
 		return
+	# Rare execution chamber: a merged guard, industry, visitation or
+	# rotunda room gives up its function to the death chamber instead.
+	# Members stay empty gallery space; the anchor builds the chamber and
+	# the shift below centres it on the room.
+	if _prison_execution_room():
+		if is_room_anchor:
+			_level_builder._prison_execution()
+		_shift_props(off, n0, b0)
+		_clear_furnishings_from_doorways(n0, b0)
+		return
 	match style:
 		WorldGen.STYLE_PILLARS:
 			_level_builder._pillars(ceil_h, Mats.brass())
-			# A pillared hall is casino floor. Grand halls are 1.4% of the
-			# level, so gating table games on them left a Vegas with almost no
-			# tables in it; the common room styles carry them instead.
-			if _r(240) < 0.62:
+			# A 24m pillared hall needs a real table-game grid. Local positions
+			# are shifted to the merged-room centre below, between the pillar rows.
+			if room_n >= 4:
+				_level_builder._blackjack(Vector3(2.0, 0, 2.0), 242)
+				_level_builder._roulette(Vector3(10.0, 0, 2.0), 243)
+				_level_builder._roulette(Vector3(2.0, 0, 10.0), 244)
+				_level_builder._blackjack(Vector3(10.0, 0, 10.0), 245)
+			elif _r(240) < 0.62:
 				_level_builder._blackjack(Vector3(6.0, 0, 6.0), 242)
-			elif _r(241) < 0.55:
+			else:
 				_level_builder._roulette(Vector3(6.0, 0, 6.0), 243)
 		WorldGen.STYLE_SLOTS:
 			# Slot rooms are dedicated machine floors. Table-game set pieces
@@ -5019,28 +5412,35 @@ func _build_props() -> void:
 		WorldGen.STYLE_GRAND:
 			_level_builder._pillars(ceil_h, Mats.marble_photo())
 			if room_n >= 4:
-				_level_builder._blackjack(Vector3(1.6, 0, 1.6), 248)
-				_level_builder._blackjack(Vector3(10.4, 0, 10.4), 286)
-				# One roulette table anchors the middle of a grand hall, where
-				# there is genuinely room for a 3m layout.
-				if _r(287) < 0.62:
-					_level_builder._roulette(Vector3(S / 2.0, 0, S / 2.0), 288)
+				# Four games in a wide 8m grid fill the grand floor while preserving
+				# clear circulation lanes between the marble columns.
+				_level_builder._blackjack(Vector3(2.0, 0, 2.0), 248)
+				_level_builder._roulette(Vector3(10.0, 0, 2.0), 286)
+				_level_builder._roulette(Vector3(2.0, 0, 10.0), 287)
+				_level_builder._blackjack(Vector3(10.0, 0, 10.0), 288)
 			elif _r(289) < 0.62:
 				_level_builder._roulette(Vector3(S / 2.0, 0, S / 2.0), 290)
 			else:
 				_level_builder._blackjack(Vector3(S / 2.0, 0, S / 2.0), 291)
-			if _r(246) < 0.5:
-				_level_builder._velvet_ropes()
+			# Do not lay a freestanding queue through the gaming floor. From inside
+			# the run its repeated red swags read as one floating neon bar, while
+			# the posts and unlit rope sides cut through nearby tables as loose rails.
+			# Authored rope barriers remain available for places with a real queue.
 		WorldGen.STYLE_BALLROOM:
 			_level_builder._casino_ballroom()
 		WorldGen.STYLE_HALLWAY:
 			_level_builder._hallway()
 		WorldGen.STYLE_EMPTY:
-			if portal_dest < 0 and _r(20) < 0.35:
-				_planter(Vector3(2.6 + 6.8 * _r(21), 0, 2.6 + 6.8 * _r(22)))
-			if portal_dest < 0 and _r(24) < 0.48:
-				_level_builder._casino_service_cart(Vector3(2.1 if _r(25) < 0.5 else 9.9, 0,
-					2.1 if _r(26) < 0.5 else 9.9), 27)
+			# "Empty" now means a quieter casino lounge, not an unintentional
+			# warehouse. A 24m room receives a complete four-table layout; smaller
+			# rooms get a furnished seating island that leaves their doors legible.
+			if room_n >= 4:
+				_level_builder._blackjack(Vector3(2.0, 0, 2.0), 246)
+				_level_builder._roulette(Vector3(10.0, 0, 2.0), 247)
+				_level_builder._roulette(Vector3(2.0, 0, 10.0), 248)
+				_level_builder._blackjack(Vector3(10.0, 0, 10.0), 249)
+			else:
+				_level_builder._lounge()
 		WorldGen.OFFICE_CORRIDOR:
 			_level_builder._office_corridor()
 		WorldGen.OFFICE_CUBICLES:
@@ -5962,6 +6362,7 @@ func _descent_car_shell(dir: int, out: bool, arrival := false) -> Dictionary:
 	car_light.omni_range = 6.5
 	car_light.shadow_enabled = false
 	car_light.position = Vector3(0, 2.18, 1.1)
+	car_light.set_meta("visible_source", "elevator_ceiling_panel")
 	root.add_child(car_light)
 
 	var left := _descent_leaf(root, -0.54)
@@ -6476,32 +6877,11 @@ func activate_anomaly(kind: int) -> void:
 			light.light_energy = 0.0
 		if not _blackout:
 			_dead_surfaces.apply(self)
-	elif kind == 1 and (WorldGen.corridor(wseed, cell) != 0 \
-			or not WorldGen.room_split(wseed, room_root, theme).is_empty() \
-			or anomaly_player == null):
-		# A narrow or partitioned cell has no universally safe standing corner,
-		# and without a player there is nothing for a figure to hunt. Decline the
-		# optional beat; killing the fixtures here made a successful global power
-		# restore look broken.
+	elif kind == 1:
+		# Hostile encounters belong to ShadowFigures, whose normal spawn search
+		# validates floor, body clearance and line of sight. Never bake a hostile
+		# into streamed room geometry where it can wait or wedge in furniture.
 		anomaly_kind = -1
-	elif kind == 1 and not has_node("WaitingFigure"):
-		var f := ShadowFigure.new()
-		f.name = "WaitingFigure"
-		# stands in a corner rather than hangs, so it reads as watching
-		f.variant = ShadowFigure.GAOLER
-		# WAITING, never INERT. As an INERT node this was the one figure in the
-		# game that could not be burned, could not touch the player and never
-		# faded — the player emptied a torch into it and nothing happened. It
-		# holds its corner until the player is in the room, then it hunts.
-		f.mode = ShadowFigure.Mode.WAITING
-		f.player = anomaly_player
-		f.topology = descent_topology
-		var corners := [
-			Vector3(1.45, 0, 1.45), Vector3(10.55, 0, 1.45),
-			Vector3(1.45, 0, 10.55), Vector3(10.55, 0, 10.55),
-		]
-		f.position = corners[WorldGen.h(wseed, cell.x, cell.y, 2441) % 4]
-		add_child(f)
 
 
 ## Apply one of the floor's predeclared room arrangements. Every candidate is
@@ -7760,7 +8140,9 @@ func _small_desk(p: Vector3, yaw: float) -> void:
 	var paper := _cc0_prop("office_notepads", p + paper_side + Vector3(0, 0.752, 0),
 		yaw + (_r(648) - 0.5) * 0.14, 0.48)
 	_adopt_local(v, paper)
-	_task_chair(p + Vector3(sin(yaw) * 0.95, 0, cos(yaw) * 0.95), yaw + PI)
+	# The chair sits on the facing side and looks back at the desk: the
+	# task chair's seat faces local -Z, so desk yaw already aims it home.
+	_task_chair(p + Vector3(sin(yaw) * 0.95, 0, cos(yaw) * 0.95), yaw)
 
 
 # --- vegas: grand chandelier is above; shared below --------------------------
@@ -7865,9 +8247,23 @@ static func _tune_attributed_scene(path: String, scene: PackedScene) -> void:
 	if not ATTRIBUTED_ROUGHNESS_FLOOR.has(path) \
 			and path != SCH_CHEMISTRY_TABLE_PATH \
 			and path != CHEMISTRY_GLASSWARE_PATH \
-			and path != ALARM_PATH:
+			and path != ALARM_PATH \
+			and path != PRISON_BENCH_PATH:
 		return
 	var probe := scene.instantiate()
+	if path == PRISON_BENCH_PATH:
+		# The bench ships no materials at all, only a corrupt COLOR_0
+		# channel, so it renders default white. One shared wood material
+		# for every surface; the assignment persists on the cached scene.
+		var wood := StandardMaterial3D.new()
+		wood.albedo_color = Color(0.32, 0.2, 0.11)
+		wood.roughness = 0.85
+		for node in probe.find_children("*", "MeshInstance3D", true, false):
+			var mesh := (node as MeshInstance3D).mesh
+			if mesh == null:
+				continue
+			for si in mesh.get_surface_count():
+				mesh.surface_set_material(si, wood)
 	for node in probe.find_children("*", "MeshInstance3D", true, false):
 		var mesh := (node as MeshInstance3D).mesh
 		if mesh == null:
@@ -7972,19 +8368,34 @@ func _attributed_floor_prop(path: String, p: Vector3, yaw: float, scl: float,
 	return pivot
 
 
-## The one waste bin the whole building uses. Airport concourses, school
-## corridors and mall walkways each used to roll their own out of two cylinders
-## in slightly different greys; a public bin is a public bin.
+## Indoor office/school wastebaskets use Marco's compact supplied model;
+## airport concourses and mall walkways retain the larger public bin.
 func _waste_bin(p: Vector3, yaw: float, kind: String) -> Node3D:
+	var indoor := kind in ["office_bin", "school_bin"]
+	var model_path := OFFICE_SCHOOL_BIN_PATH if indoor else GARBAGE_BIN_PATH
+	var model_scale := OFFICE_SCHOOL_BIN_SCALE if indoor else GARBAGE_BIN_SCALE
+	var model_centre := OFFICE_SCHOOL_BIN_CENTRE if indoor else GARBAGE_BIN_CENTRE
 	var b0 := body.get_child_count()
-	var pivot := _attributed_floor_prop(GARBAGE_BIN_PATH, p, yaw,
-		GARBAGE_BIN_SCALE, GARBAGE_BIN_CENTRE, kind, null, true)
+	var pivot := _attributed_floor_prop(model_path, p, yaw,
+		model_scale, model_centre, kind, null, true)
 	if pivot == null:
 		# The generated fallback keeps a floor legible if the model is absent.
-		_cyl(p + Vector3(0, 0.42, 0), 0.26, 0.84, Mats.steel())
-		_cyl(p + Vector3(0, 0.855, 0), 0.22, 0.03, Mats.charcoal(), false)
+		if indoor:
+			_cyl(p + Vector3(0, OFFICE_SCHOOL_BIN_HEIGHT * 0.5, 0),
+				OFFICE_SCHOOL_BIN_RADIUS, OFFICE_SCHOOL_BIN_HEIGHT,
+				Mats.charcoal())
+		else:
+			_cyl(p + Vector3(0, 0.42, 0), 0.26, 0.84, Mats.steel())
+			_cyl(p + Vector3(0, 0.855, 0), 0.22, 0.03,
+				Mats.charcoal(), false)
 		return null
-	_collider_cyl(p + Vector3(0, 0.43, 0), 0.39, 0.86)
+	pivot.set_meta("waste_bin_model_path", model_path)
+	if indoor:
+		pivot.set_meta("project_provided_asset", true)
+		_collider_cyl(p + Vector3(0, OFFICE_SCHOOL_BIN_HEIGHT * 0.5, 0),
+			OFFICE_SCHOOL_BIN_RADIUS * 0.92, OFFICE_SCHOOL_BIN_HEIGHT)
+	else:
+		_collider_cyl(p + Vector3(0, 0.43, 0), 0.39, 0.86)
 	_bind_furnishing_colliders(pivot, b0)
 	return pivot
 
@@ -8059,6 +8470,9 @@ func _set_model_material(node: Node, mat: Material) -> void:
 ## Real five-star caster chair with restrained upholstered back and arms.
 ## Its FBX origin is at the model centre, so lift it 0.507m to put the wheels
 ## on the generated floor. The compact collider follows the caster footprint.
+## Office task chair. The seat faces local -Z (backrest at local +Z), so a
+## chair at `pos` faces `target` with yaw = atan2(-(dx), -(dz)). Callers that
+## want a chair facing a desk or table must negate the facing direction.
 func _task_chair(pos: Vector3, yaw: float) -> Node3D:
 	var ps: PackedScene = _cc0_scenes.get("office_chair")
 	if ps == null:
@@ -8387,6 +8801,17 @@ func wall_art_audit() -> Dictionary:
 		var school_board_overlap := theme == 6 \
 			and dir == _school_chalkboard_wall() \
 			and absf(along - S * 0.5) < size.x * 0.5 + 2.10
+		var fixture_overlap := false
+		if not bool(node.get_meta("wall_art_cased", false)) \
+				and not bool(node.get_meta("wall_art_curated", false)) \
+				and dir >= 0 and dir <= 3 and size.x > 0.0 and size.y > 0.0:
+			var nn := -1.0 if (dir == 0 or dir == 2) else 1.0
+			var inner := (p.x - nn * 0.055) if dir < 2 else (p.z - nn * 0.055)
+			fixture_overlap = not _wall_art_site_clear(dir, inner, nn, along,
+				p.y, size, node)
+			if fixture_overlap:
+				print("FAIL theme=%d cell=%s art %s overlaps a wall fixture at %s" % [
+					theme, cell, path, str(p)])
 		if path.is_empty() or absf(shown - source) > 0.002 \
 				or dir < 0 or dir > 3 \
 				or not bool(_edge_info(cell, dir)["wall"]) \
@@ -8395,7 +8820,7 @@ func wall_art_audit() -> Dictionary:
 				or p.y + size.y * 0.5 > ceil_h - 0.12 \
 				or along - size.x * 0.5 < 0.20 \
 				or along + size.x * 0.5 > S - 0.20 \
-				or partition_overlap or school_board_overlap:
+				or partition_overlap or school_board_overlap or fixture_overlap:
 			report["violations"] += 1
 	return report
 

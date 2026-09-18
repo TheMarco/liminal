@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      GODOT_VERSION: 4.6.3
+      GODOT_VERSION: 4.7.2
 
     steps:
       - name: Check out project
@@ -73,6 +73,12 @@ jobs:
 
       - name: Audit authored chemistry rooms and glassware
         run: godot --headless --path . --script tools/audit_chemistry_props.gd
+
+      - name: Audit supplied Office and School wastebaskets
+        run: godot --headless --path . --script tools/audit_office_school_bins.gd
+
+      - name: Audit recovered-tape calendar progression
+        run: godot --headless --path . --script tools/audit_vhs_calendar.gd
 
       - name: Audit closed slot-machine cabinets
         run: godot --headless --path . --script tools/audit_slots.gd
@@ -134,6 +140,21 @@ jobs:
       - name: Audit hostile figure contract
         run: godot --headless --path . --script tools/audit_ghost_room_contract.gd
 
+      - name: Audit school and Data Center escape aisles
+        run: godot --headless --path . --script tools/audit_chase_clearance.gd
+
+      - name: Audit Data Center charging coverage
+        run: godot --headless --path . --script tools/audit_datacenter_charging.gd
+
+      - name: Audit caught sequence and retry
+        run: godot --headless --path . --script tools/audit_caught_sequence.gd -- --mode=descent --nologo
+
+      - name: Audit caught floor fall clearance and comfort
+        run: godot --headless --path . --script tools/audit_caught_floor.gd
+
+      - name: Audit slot standby materials and hanging-sign clearance
+        run: godot --headless --path . --script tools/audit_slot_presentation.gd
+
       - name: Audit shared horror pacing director
         run: godot --headless --path . --script tools/audit_horror_director.gd
 
@@ -142,6 +163,9 @@ jobs:
 
       - name: Audit saved-run UI layout and resizing
         run: godot --headless --path . --script tools/audit_ui_layout.gd
+
+      - name: Audit HDR output pipeline and settings
+        run: godot --headless --path . --script tools/audit_hdr_output.gd
 
       - name: Audit procedural detail batching
         run: godot --headless --path . --script tools/audit_procedural_details.gd
@@ -157,6 +181,12 @@ jobs:
 
       - name: Audit ceiling seams
         run: godot --headless --path . --script tools/audit_ceiling_seams.gd
+
+      - name: Audit casino wall surfaces
+        run: godot --headless --path . --script tools/audit_casino_wall_surfaces.gd
+
+      - name: Audit blackout geometry preservation
+        run: godot --headless --path . --script tools/audit_blackout_presentation.gd
 
       - name: Audit chunk construction smoke
         run: godot --headless --path . --script tools/audit_chunk_smoke.gd

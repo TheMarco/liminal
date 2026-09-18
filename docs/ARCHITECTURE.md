@@ -76,8 +76,8 @@ may select any generated reality, including a previous one.
 `main.gd` remains the mode/session orchestrator, but focused state lives in:
 
 - `BenchmarkDevController`: CLI benchmark, partition audit, screenshots;
-- `PostProcessController`: CRT/found-footage materials, corruption, glitches,
-  and damage pulses;
+- `PostProcessController`: independent VHS-signal and CRT-display stages,
+  corruption, glitches, and damage pulses;
 - `LevelTransitionController`: transition lock, Wander saved positions, arrival
   policy, fade/teardown/build ordering, and live collision safety;
 - `DescentMutationCoordinator`: blackout preflight and mutation transaction.

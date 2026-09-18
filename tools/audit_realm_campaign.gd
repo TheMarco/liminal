@@ -111,6 +111,10 @@ func run_test() -> void:
 	check(visit.preview.render_target_update_mode == SubViewport.UPDATE_ALWAYS, "photographed doorway no longer renders with camera lowered")
 	await visit.enter()
 	check(visit.phase == RealmExcursion.Phase.VISITING, "normal entrance enters")
+	check(visit.allows_perception_effect() and game._reality_aftershock.presentation_allowed(),
+		"active realm blocks automatic perception effects")
+	check(visit.threats.approach_starting.is_connected(game._reality_aftershock.before_approach),
+		"realm ghosts lack pre-approach warning hook")
 	check(not visit._entrance_hum.playing, "source doorway hum followed into realm")
 	check(game._realm_visit_used(floor_idx), "visit consumed on committed entry")
 	check(game.player.level_theme == DescentRun.FIXED_ORDER[floor_idx + 1], "correct next world")

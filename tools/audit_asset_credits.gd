@@ -4,6 +4,9 @@ extends SceneTree
 
 const RETIRED_DIRS := [
 	"res://models/cc_by/alarm/",
+	"res://models/cc_by/blackjack_table/",
+	"res://models/cc_by/hotdog_stand/",
+	"res://models/cc_by/shopping_cart/",
 	"res://models/cc_by/change_machine/",
 	"res://models/cc_by/office_phone/",
 	"res://models/cc_by/payphone/",
@@ -36,7 +39,8 @@ const RETIRED_DIRS := [
 const RETIRED_CREDITS := [
 	"morrrtu1o", "juliegraham178", "mtaesiri", "JackFarrand", "Katydid",
 	"Mette Aumala", "Madeleine Price Ball", "OpenClipart-Vectors", "Phil Bronnery", "Beao",
-	"Thibaut Rostagnat", "Doverlock", "Audrey Gonçalves",
+	"Thibaut Rostagnat", "Doverlock", "Audrey Gonçalves", "nermin", "AdrianXY",
+	"shirlanne",
 ]
 ## These include creators missed by the old screen, plus two creators whose
 ## other models were replaced but whose remaining assets still need credit.
@@ -128,7 +132,8 @@ func _check_credit_layout() -> void:
 	title._show_credits()
 	var page: Control = title._pages[TitleScreen.Page.CREDITS]
 	for size in [Vector2i(1280, 720), Vector2i(1920, 1080),
-			Vector2i(1024, 768), Vector2i(720, 1280)]:
+			Vector2i(1024, 768), Vector2i(720, 1280),
+			Vector2i(3456, 2234)]:
 		view.size = size
 		for frame in range(6):
 			await process_frame

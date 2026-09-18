@@ -5,7 +5,10 @@ render_mode unshaded;
 // model: https://docs.libretro.com/shader/crt_royale/
 // This is not a port of Royale. The tape signal is rendered first; this pass
 // reconstructs light from the beam in linear space, then phosphors and glass.
-uniform sampler2D screen_texture : hint_screen_texture, filter_linear;
+// The source is already a finished video signal. Mip filtering gives the
+// glass-diffusion pass a broad, stable footprint with a single lookup instead
+// of nine full-resolution HDR texture reads per output pixel.
+uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;
 uniform vec2 signal_resolution = vec2(720.0, 480.0);
 uniform float crt_gamma = 2.4;
 uniform float display_gamma = 2.2;
@@ -47,7 +50,9 @@ vec3 beam_light(vec2 uv) {
     float row = floor(line_pos);
     float footprint = max(fwidth(line_pos), 0.001);
     vec3 light = vec3(0.0);
-    for (int i = -1; i <= 2; i++) {
+    // Three neighbouring scan rows cover the Gaussian footprint. The former
+    // fourth row was visually redundant, but expensive on Retina/XDR panels.
+    for (int i = -1; i <= 1; i++) {
         float scan_row = row + float(i);
         vec3 c = converged_light(vec2(uv.x, (scan_row + 0.5) / signal_resolution.y));
         // More beam current means a broader spot, independently for R/G/B.
@@ -85,18 +90,24 @@ vec3 phosphor_mask(vec2 raster, vec2 viewport_size) {
 }
 
 vec3 glass_diffusion(vec2 uv) {
-    // A broad Gaussian approximation. All samples and additions are linear
-    // light, so bright phosphors spread naturally without gray edge fringes.
-    vec2 spread = vec2(4.5, 2.8) / signal_resolution;
-    vec3 blurred = signal_light(uv) * 0.20;
-    for (int i = -1; i <= 1; i += 2) {
-        blurred += signal_light(uv + vec2(float(i) * spread.x, 0)) * 0.13;
-        blurred += signal_light(uv + vec2(0, float(i) * spread.y)) * 0.13;
-        for (int j = -1; j <= 1; j += 2) {
-            blurred += signal_light(uv + vec2(float(i), float(j)) * spread) * 0.07;
-        }
-    }
-    return blurred;
+    // A trilinear mip sample is the same broad glass bloom at a fraction of
+    // the bandwidth. Clamp the recorded signal before decoding: a CRT is an
+    // SDR display even when the game window itself is presented in HDR.
+    vec3 blurred = textureLod(screen_texture,
+        clamp(uv, vec2(0.001), vec2(0.999)), 2.35).rgb;
+    return pow(clamp(blurred, vec3(0.0), vec3(1.0)), vec3(crt_gamma));
+}
+
+vec3 sdr_tube_shoulder(vec3 light) {
+    // Preserve blacks and midtones, then roll high beam current gently toward
+    // SDR white. This retains fixture/HUD detail instead of turning everything
+    // above paper white into an eye-searing HDR phosphor bloom.
+    const float start = 0.68;
+    const float span = 1.0 - start;
+    vec3 over = max(light - vec3(start), vec3(0.0));
+    vec3 rolled = vec3(start) + vec3(span) *
+        (vec3(1.0) - exp(-over / span));
+    return mix(light, rolled, step(vec3(start), light));
 }
 
 void fragment() {
@@ -121,6 +132,9 @@ void fragment() {
     float falloff = 1.0 - 0.13 * dot(face, face);
     float edge = min(min(glass.x, 1.0 - glass.x), min(glass.y, 1.0 - glass.y));
     float aperture = smoothstep(0.0, 0.013, edge);
-    vec3 display = pow(max(light * falloff, vec3(0.0)), vec3(1.0 / display_gamma));
-    COLOR = vec4(clamp(display, vec3(0), vec3(1)) * aperture, 1.0);
+    light = sdr_tube_shoulder(max(light * falloff, vec3(0.0)));
+    vec3 display = pow(light, vec3(1.0 / display_gamma));
+    // The clean renderer remains true HDR. The emulated tube deliberately
+    // stays within SDR paper white so CRT mode cannot flood an HDR/XDR panel.
+    COLOR = vec4(clamp(display * aperture, vec3(0.0), vec3(1.0)), 1.0);
 }

@@ -47,6 +47,14 @@ func sign_support_checks(chunk: Chunk) -> int:
 	return signs
 
 
+func no_detached_header_checks(chunk: Chunk) -> void:
+	for node in chunk.find_children("*", "Node3D", true, false):
+		check(not node.has_meta("slot_bank_header_fixture"),
+			"Detached slot-bank header geometry returned")
+		check(str(node.get_meta("visible_source", "")) != "slot_bank_header_rail",
+			"Detached slot-bank header light returned")
+
+
 func _init() -> void:
 	call_deferred("run")
 
@@ -95,7 +103,7 @@ func run() -> void:
 					triangles += arrays[Mesh.ARRAY_INDEX].size() / 3
 					var xf := pivot.transform * local_transform(mi, pivot)
 					var world_bounds := xf * mi.mesh.get_aabb()
-					check(world_bounds.position.y >= -0.002 and world_bounds.end.y <= ceiling - .10, "Floor/ceiling penetration")
+					check(world_bounds.position.y >= -0.002 and world_bounds.end.y <= ceiling - Chunk.CASINO_SLOT_HEADROOM + .002, "Floor/ceiling clearance")
 					var local_bounds := collider.transform.affine_inverse() * world_bounds
 					check(local_bounds.position.x >= -shape.size.x / 2.0 - .002 and local_bounds.end.x <= shape.size.x / 2.0 + .002, "Outside collider X")
 					check(local_bounds.position.z >= -shape.size.z / 2.0 - .002 and local_bounds.end.z <= shape.size.z / 2.0 + .002, "Outside collider Z")
@@ -106,6 +114,10 @@ func run() -> void:
 	var machines := 0
 	var kinds := {}
 	var sign_rooms := {"single": 0, "merged": 0}
+	var fixture_probe := Chunk.new(WorldGen.level_seed(4242, 0), Vector2i.ZERO, 0)
+	fixture_probe._level_builder._slots()
+	no_detached_header_checks(fixture_probe)
+	fixture_probe.free()
 	for si in 4:
 		ws = WorldGen.level_seed(WorldGen.h(920713, si * 43, si * 79, 2219) | 1, 0)
 		for x in range(-5, 6):

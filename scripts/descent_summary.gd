@@ -7,10 +7,10 @@ signal new_run
 signal leave
 
 var won := false
+var from_black := false
 var floor_idx := 0
 var floor_display := ""
 var elapsed := 0.0
-var violations := 0
 var death_cause := DescentRun.DeathCause.UNKNOWN
 var show_death_hint := true
 var _cause_hint: Label
@@ -30,7 +30,7 @@ var _active_prompt: ReturnPrompt
 func _ready() -> void:
 	layer = 4
 	var back := ColorRect.new()
-	back.color = Color(0.003, 0.003, 0.003, 0.0)
+	back.color = Color(0.003, 0.003, 0.003, 0.98 if from_black else 0.0)
 	back.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(back)
 	var col := VBoxContainer.new()
@@ -48,8 +48,7 @@ func _ready() -> void:
 	var details := Label.new()
 	var minutes := floori(elapsed / 60.0)
 	var seconds := floori(elapsed) % 60
-	details.text = "%02d:%02d   ·   %d rule break%s" % [
-		minutes, seconds, violations, "" if violations == 1 else "s"]
+	details.text = "%02d:%02d" % [minutes, seconds]
 	_style(details, 34, Color(0.68, 0.65, 0.58))
 	col.add_child(details)
 	var explanation := DescentRun.death_explanation(death_cause)

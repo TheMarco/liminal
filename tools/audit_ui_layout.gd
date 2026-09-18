@@ -33,26 +33,34 @@ func run() -> void:
 	view.add_child(intro)
 	intro._video.stop()
 	var buttons: Array[Node] = title._pages[TitleScreen.Page.MAIN].find_children("*", "Button", true, false)
-	expect(buttons.size() == 8, "Saved title lost an action")
+	expect(buttons.size() == 9, "Saved title lost an action or retained a video switch")
 	for size in [Vector2i(1280,720), Vector2i(1920,1080), Vector2i(1024,768),
-			Vector2i(720,1280), Vector2i(3840,2160), Vector2i(1280,720)]:
+			Vector2i(720,1280), Vector2i(3456,2234), Vector2i(3840,2160),
+			Vector2i(1280,720)]:
 		view.size = size
 		await settle()
 		var safe := VhsOsd.safe_inset(Vector2(size))
 		var bounds := Rect2(safe, Vector2(size) - safe * 2.0)
+		expect(is_zero_approx(title._background.position.x),
+			"%s title art is not pinned to the logo edge" % size)
+		expect(title._background.size.x >= float(size.x)
+			and title._background.position.y <= 0.0
+			and title._background.position.y + title._background.size.y >= float(size.y),
+			"%s title art does not cover the viewport" % size)
 		for button in buttons:
 			contained(button, bounds, "%s %s" % [size, button.text])
 		for entry in summary._labels:
 			contained(entry[0], bounds, "%s summary" % size)
 		contained(intro._skip_button, bounds, "%s skip" % size)
+		contained(intro._pause_button, bounds, "%s intro pause" % size)
 		expect(intro._skip_button.get_theme_font_size("font_size") ==
-			roundi(22.0 * VhsOsd.hud_scale(Vector2(size))), "Skip font lost its scale")
+			roundi(22.0 * maxf(0.85, minf(size.y / 720.0, size.x / 960.0))), "Skip font lost its scale")
 		for i in buttons.size():
 			for j in range(i + 1, buttons.size()):
 				expect(not buttons[i].get_global_rect().intersects(buttons[j].get_global_rect()),
 					"Saved title buttons overlap")
 	view.free()
 	await process_frame
-	print("UI layout: %s (six live resize states, eight saved-run actions)" %
+	print("UI layout: %s (seven live resize states, nine saved-run actions)" %
 		("PASS" if failures == 0 else "FAIL"))
 	quit(0 if failures == 0 else 1)

@@ -47,22 +47,14 @@ func run_test() -> void:
 		await visit.collapse(caught)
 		assert(not game.player.emergency_flash_held and not game._flash_icon.held)
 		assert("FLASH LOST" in game._photo_album_store.entries.back().flash_status)
-		assert(game.run.ended == caught, "caught path no longer lethal without a banked charge")
-		assert(game._realm_visit_used(source_floor) == not caught, "wrong retry state in the live run")
+		assert(not game.run.ended, "realm failure ended the source run")
+		assert(game._realm_visit_used(source_floor), "realm failure restored a spent preview")
 		var reloaded := DescentProgress.new(save_path)
-		assert(reloaded.realm_visit_used(source_floor) == not caught, "wrong retry state after reload")
-		assert(reloaded.realm_visit_used(3 if source_floor != 3 else 4), "retry cleared another floor")
-		if caught:
-			game._descent_progress = reloaded
-			await game._resume_descent_at(source_floor)
-			assert(is_instance_valid(game._realm_visit), "retry did not create another realm visit")
-			assert(not game._realm_visit_used(source_floor), "retry immediately consumed the new chance")
-			while game._realm_visit.phase == RealmExcursion.Phase.PREPARING:
-				await process_frame
-			assert(game._realm_visit.phase == RealmExcursion.Phase.WAITING, "retried realm could not prepare")
+		assert(reloaded.realm_visit_used(source_floor), "spent preview returned after reload")
+		assert(reloaded.realm_visit_used(3 if source_floor != 3 else 4), "failure cleared another floor")
 		progress.clear_from_disk()
 		game.free()
 		await process_frame
-	print("REALM BOUNTY LOSS PASS: captured rewards are not banked on early return or fatal catch")
+	print("REALM BOUNTY LOSS PASS: early/caught returns lose the reward, keep the run, and stay spent")
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit()

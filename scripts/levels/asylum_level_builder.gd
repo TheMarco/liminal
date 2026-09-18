@@ -58,10 +58,10 @@ func _asy_lighting() -> void:
 	if dead:
 		return
 	var tall = ctx.ceiling_height > 4.0
-	var light = scene.main_light(flicker, pmat, 1.8 if tall else 1.35)
+	var light = scene.fixture_light(flicker, pmat, 1.8 if tall else 1.35,
+		Vector3(pts[0].x, ctx.ceiling_height - 0.55, pts[0].y))
 	light.light_color = Color(0.8, 0.94, 0.72)
 	light.omni_range = 13.5 if tall else 11.5
-	light.position = Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.55, WorldGen.CELL_SIZE / 2.0)
 	light.shadow_enabled = true
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 22.0
@@ -641,18 +641,26 @@ func _asy_dayroom_table(c: Vector3, salt: int) -> void:
 	var body0 = scene.collider_mark()
 	var table = scene.furnishing_pivot(c, 0.0, "asylum_dayroom_table")
 	table.set_meta("chemistry_surface_y", 0.755)
-	scene.model_rounded_box(table, Vector3(0, 0.72, 0), Vector3(1.55, 0.07, 1.0),
-		Mats.asy_concrete(), 0.025)
-	for sx in [-0.62, 0.62]:
-		for sz in [-0.36, 0.36]:
-			scene.model_cylinder(table, Vector3(sx, 0.35, sz), 0.025, 0.7,
-				Mats.asy_metal())
-	ProceduralDetails.attach(table, "asy_dayroom_apron_v2", func(d: ProceduralDetails) -> void:
-		for z in [-0.43, 0.43]:
-			d.box(Vector3(0, 0.62, z), Vector3(1.38, 0.16, 0.045), Mats.asy_metal(), 0.012)
-		for x in [-0.70, 0.70]:
-			d.box(Vector3(x, 0.62, 0), Vector3(0.045, 0.16, 0.82), Mats.asy_metal(), 0.012)
-	)
+	if scene.prop_scene(Chunk.ASY_TABLE_PATH) == null:
+		scene.model_rounded_box(table, Vector3(0, 0.72, 0), Vector3(1.55, 0.07, 1.0),
+			Mats.asy_concrete(), 0.025)
+		for sx in [-0.62, 0.62]:
+			for sz in [-0.36, 0.36]:
+				scene.model_cylinder(table, Vector3(sx, 0.35, sz), 0.025, 0.7,
+					Mats.asy_metal())
+		ProceduralDetails.attach(table, "asy_dayroom_apron_v2", func(d: ProceduralDetails) -> void:
+			for z in [-0.43, 0.43]:
+				d.box(Vector3(0, 0.62, z), Vector3(1.38, 0.16, 0.045), Mats.asy_metal(), 0.012)
+			for x in [-0.70, 0.70]:
+				d.box(Vector3(x, 0.62, 0), Vector3(0.045, 0.16, 0.82), Mats.asy_metal(), 0.012)
+		)
+	else:
+		# The supplied table top sits at 0.755m like the procedural one, so
+		# the glassware heights below carry over unchanged.
+		var authored = scene.attributed_prop_local(table, Chunk.ASY_TABLE_PATH,
+			Vector3.ZERO, 0.0, Vector3.ONE)
+		if authored != null:
+			authored.set_meta("authored_model", "asy_dayroom_table")
 	# A minority of common-room tables retain one or two abandoned vessels.
 	# Both are children of the supported table assembly, so doorway culling can
 	# never leave them suspended after removing the furniture underneath.
@@ -664,7 +672,7 @@ func _asy_dayroom_table(c: Vector3, salt: int) -> void:
 			scene.chemistry_glassware(table, Vector3(0.32, 0.758, -0.12),
 				(ctx.random01(salt + 24) - 0.5) * 0.9, salt + 25, false,
 				"asylum_dayroom")
-	scene.collider_box(c + Vector3(0, 0.4, 0), Vector3(1.6, 0.8, 1.05))
+	scene.collider_box(c + Vector3(0, 0.4, 0), Vector3(1.5, 0.8, 0.95))
 	scene.bind_furnishing_colliders(table, body0)
 	for i in 3:
 		var ang = TAU * float(i) / 3.0 + 0.35 + (ctx.random01(salt + i) - 0.5) * 0.2
@@ -730,6 +738,7 @@ func _asy_treatment() -> void:
 	sp.distance_fade_begin = 20.0
 	sp.distance_fade_length = 8.0
 	sp.set_meta("stream_room_light", true)
+	sp.set_meta("visible_source", "surgical_lamp_bulb")
 	scene.add_node(sp)
 	# the barber chair in the corner is somehow worse than the table
 	if ctx.random01(923) < 0.6:
@@ -843,21 +852,37 @@ func _asy_chapel() -> void:
 	# Shallow dais and plain altar at the north end.
 	var front = c + Vector3(0, 0, -8.0)
 	scene.rounded_box(front + Vector3(0, 0.16, 0), Vector3(8.0, 0.32, 2.8), Mats.darkwood(), 0.025)
-	scene.rounded_box(front + Vector3(0, 0.88, 0.1), Vector3(2.2, 1.45, 0.75), Mats.asy_concrete(), 0.035)
+	if scene.prop_scene(Chunk.ASY_ALTAR_PATH) != null:
+		scene.attributed_floor_prop(Chunk.ASY_ALTAR_PATH, front + Vector3(0, 0.32, 0.1),
+			0.0, 1.0, Chunk.ASY_ALTAR_CENTRE, "chapel_altar")
+		scene.collider_box(front + Vector3(0, 1.14, 0.1), Vector3(2.4, 1.65, 0.9))
+	else:
+		scene.rounded_box(front + Vector3(0, 0.88, 0.1), Vector3(2.2, 1.45, 0.75), Mats.asy_concrete(), 0.035)
 	scene.collider_box(front + Vector3(0, 0.48, 0), Vector3(8.1, 0.96, 2.9))
 	# A stark wall cross; it is architecture, not a glowing quest marker.
 	scene.box(front + Vector3(0, 3.45, -1.43), Vector3(0.30, 2.2, 0.09), Mats.darkwood(), false)
 	scene.box(front + Vector3(0, 3.70, -1.43), Vector3(1.45, 0.28, 0.09), Mats.darkwood(), false)
-	# Two banks of pews leave a generous central aisle.
+	# Two banks of pews leave a generous central aisle. The supplied pews
+	# are 2.56m, so each side holds a pair; sitters face the altar (yaw PI
+	# turns the local +Z facing onto world -Z). The old procedural boxes
+	# stay as the import-failure fallback.
+	var pew_ok := scene.prop_scene(Chunk.ASY_PEW_PATH) != null
 	for row in 6:
 		var z = -4.5 + 2.05 * float(row)
 		for side in [-1.0, 1.0]:
 			var p = c + Vector3(side * 3.65, 0, z)
-			scene.rounded_box(p + Vector3(0, 0.54, 0), Vector3(5.6, 0.15, 0.66), Mats.darkwood(), 0.035, false)
-			scene.rounded_box(p + Vector3(0, 0.92, -0.28), Vector3(5.6, 0.72, 0.12), Mats.darkwood(), 0.035, false)
-			for sx in [-2.5, 0.0, 2.5]:
-				scene.box(p + Vector3(sx, 0.30, 0), Vector3(0.10, 0.60, 0.58), Mats.iron_dark(), false)
-			scene.collider_box(p + Vector3(0, 0.65, 0), Vector3(5.7, 1.3, 0.75))
+			if pew_ok:
+				for px in [-1.32, 1.32]:
+					var pp = c + Vector3(side * 3.65 + px, 0, z)
+					scene.attributed_floor_prop(Chunk.ASY_PEW_PATH, pp, PI, 1.0,
+						Chunk.ASY_PEW_CENTRE, "chapel_pew")
+					scene.collider_box(pp + Vector3(0, 0.55, 0), Vector3(2.66, 1.1, 0.75))
+			else:
+				scene.rounded_box(p + Vector3(0, 0.54, 0), Vector3(5.6, 0.15, 0.66), Mats.darkwood(), 0.035, false)
+				scene.rounded_box(p + Vector3(0, 0.92, -0.28), Vector3(5.6, 0.72, 0.12), Mats.darkwood(), 0.035, false)
+				for sx in [-2.5, 0.0, 2.5]:
+					scene.box(p + Vector3(sx, 0.30, 0), Vector3(0.10, 0.60, 0.58), Mats.iron_dark(), false)
+				scene.collider_box(p + Vector3(0, 0.65, 0), Vector3(5.7, 1.3, 0.75))
 	# Human-scale detail makes the symmetry feel abandoned rather than staged.
 	_asy_wheelchair(c + Vector3(0.7, 0, 4.2), PI + 0.22)
 	scene.scattered_papers(c + Vector3(-0.8, 0, 6.5), 1101, 11)

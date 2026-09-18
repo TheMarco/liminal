@@ -45,6 +45,18 @@ func _check_dark(material: Material) -> void:
 		expect(is_zero_approx(float(material.get_shader_parameter("mains_power"))),
 			"powered shader still emits during blackout")
 
+func _annex_ceiling(chunk: Chunk) -> MeshInstance3D:
+	for node in chunk.get_children():
+		if node is not MeshInstance3D or node.mesh == null:
+			continue
+		var bounds: AABB = node.transform * node.mesh.get_aabb()
+		# Match the actual structural slab, including its instance scale. The
+		# blackout material is a local clone, so material identity is not stable.
+		if bounds.size.is_equal_approx(Vector3(12.0, 0.3, 12.0)) \
+				and bounds.position.is_equal_approx(Vector3(0.0, 2.78, 0.0)):
+			return node
+	return null
+
 func _chunk(theme: int, cell: Vector2i) -> void:
 	var ws := WorldGen.level_seed(240721, theme)
 	var chunk := Chunk.new(ws, cell, theme)
@@ -96,13 +108,35 @@ func _chunk(theme: int, cell: Vector2i) -> void:
 		expect(label.shaded == labels[label], "sign shading did not restore")
 	for probe in probes:
 		expect([probe.intensity, probe.visible] == probes[probe], "probe state did not restore")
-	chunk.free()
+	var annex := _annex_ceiling(chunk) if theme == 2 else null
+	if annex != null:
+		expect(annex.visible, "Annex ceiling slab was hidden after blackout restore")
 	# Streaming/staged replacement constructor must also start fully unpowered.
 	var dark := Chunk.new(ws, cell, theme, {"blackout": true})
+	var normal_meshes := chunk.find_children("*", "MeshInstance3D", true, false)
+	var dark_meshes := dark.find_children("*", "MeshInstance3D", true, false)
+	expect(dark_meshes.size() == normal_meshes.size(), "initial blackout changed mesh population")
+	for i in mini(normal_meshes.size(), dark_meshes.size()):
+		var normal_mesh: MeshInstance3D = normal_meshes[i]
+		var dark_mesh: MeshInstance3D = dark_meshes[i]
+		expect(dark_mesh.visible == normal_mesh.visible,
+			"initial blackout changed baseline geometry visibility")
+		if dark_mesh.mesh == null:
+			continue
+		for surface in dark_mesh.mesh.get_surface_count():
+			_check_dark(dark_mesh.get_active_material(surface))
+	var dark_annex := _annex_ceiling(dark) if theme == 2 else null
+	if theme == 2 and cell == Vector2i.ZERO:
+		expect(dark_annex != null, "initial blackout fixture lost Annex ceiling slab")
+	if dark_annex != null:
+		expect(dark_annex.visible, "initial blackout hid Annex ceiling slab")
 	for probe in dark.find_children("*", "ReflectionProbe", true, false):
 		expect(probe.intensity == 0.0, "probe was created powered after initial blackout overlay")
 		expect(not probe.visible, "newly streamed probe could capture the unpowered room")
 	dark.set_blackout(false)
+	if dark_annex != null:
+		expect(dark_annex.visible, "restored initial-blackout Annex ceiling slab is hidden")
+	chunk.free()
 	dark.free()
 	chunks_checked += 1
 
@@ -145,6 +179,21 @@ func run() -> void:
 				_chunk(4, cell)
 				found = true
 	expect(found and probes_checked > 0, "audit missed grand ceiling/probe fixtures")
+	var annex_fixture := Chunk.new(WorldGen.level_seed(240721, 2), Vector2i.ZERO, 2)
+	var annex_slab := _annex_ceiling(annex_fixture)
+	expect(annex_slab != null, "audit missed actual Annex ceiling slab fixture")
+	if annex_slab != null:
+		var annex_bounds := annex_slab.transform * annex_slab.mesh.get_aabb()
+		expect(is_equal_approx(annex_bounds.position.y, 2.78) and is_equal_approx(annex_bounds.end.y, 3.08),
+			"Annex ceiling slab bounds changed")
+		expect(annex_slab.visible, "normal Annex ceiling slab is hidden")
+	annex_fixture.set_blackout(true)
+	if annex_slab != null:
+		expect(annex_slab.visible, "blackout hid actual Annex ceiling slab")
+	annex_fixture.set_blackout(false)
+	if annex_slab != null:
+		expect(annex_slab.visible, "restored blackout hid actual Annex ceiling slab")
+	annex_fixture.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	print("BLACKOUT_PRESENTATION chunks=%d preserved_meshes=%d probes=%d environments=%d" % [
 		chunks_checked, meshes_checked, probes_checked, WorldGen.THEMES.size()])

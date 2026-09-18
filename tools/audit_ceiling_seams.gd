@@ -78,12 +78,18 @@ func _init() -> void:
 
 
 func _fascia_ok(chunk: Node, dir: int, nb_h: float, h: float) -> bool:
+	var spans: Array[Vector2] = []
 	for n in chunk.find_children("*", "MeshInstance3D", true, false):
 		if int(n.get_meta("open_edge_fascia", -1)) != dir:
 			continue
-		# The band must span exactly from the neighbour's ceiling to ours —
-		# short of either plane, a strip of void survives.
-		var yc := (nb_h + h) * 0.5
-		return absf(n.position.y - yc) < 0.05 \
-			and absf(n.scale.y - (h - nb_h)) < 0.05
-	return false
+		var bounds: AABB = n.transform * n.mesh.get_aabb()
+		spans.append(Vector2(bounds.position.y, bounds.end.y))
+	# Different finishes may meet at a seam, but together they must cover the
+	# exact interval once, with neither an exposed gap nor overlapping faces.
+	spans.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+	var covered_to := nb_h
+	for span in spans:
+		if absf(span.x - covered_to) > 0.001 or span.y <= span.x:
+			return false
+		covered_to = span.y
+	return not spans.is_empty() and absf(covered_to - h) < 0.001

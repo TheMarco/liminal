@@ -27,10 +27,10 @@ var descent_floor := -1          # 1-based on the command line, -1 when absent
 var attention := -1.0            # -1 when not overridden
 
 # --- presentation ---
-## RECOVERED TAPE is the default recording mode (owner, 2026-08-20);
-## --crt-mode boots the clean tube instead, B still toggles live.
-var found_footage := true
-var nocrt := false
+## Saved settings own normal play. These are isolated QA overrides: -1 keeps
+## the saved value, 0 disables it, and 1 enables it. Legacy flags remain valid.
+var vhs_override := -1
+var crt_override := -1
 var notaa := false
 var nologo := false
 var screenshot := ""
@@ -52,6 +52,9 @@ var caption_preview := false
 var haunt := false
 var haunt_at := Vector3.ZERO
 var haunt_at_given := false
+## Dev: ring every roster monster around a point ahead of spawn, walking in
+## place and facing the player, for live model inspection.
+var lineup := false
 ## Dev: auto-press play on the objective room's tape right after floor start,
 ## so screenshot runs can verify the zoom and the footage.
 var play_tape := false
@@ -61,6 +64,11 @@ var photo_debug := false
 ## Dev: after the arrival hold, auto-raise the camera and fire the shutter
 ## 0.7s later so screenshot runs can verify both camera presentation states.
 var photo_shoot := false
+## Automatic world-only defocus/warp; flag enables only F8/F9 debug controls.
+var reality_aftershock := false
+## The animated 3D monster roster is now the normal hostile presentation. The
+## original animated cutouts remain available as a QA fallback.
+var walker_prototype := true
 ## QA: start directly facing the selected first-floor photographic doorway.
 var first_door := false
 var first_obstruction := false
@@ -103,11 +111,17 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 		elif arg.begins_with("--attention="):
 			o.attention = clampf(float(arg.substr(12)), 0.0, 1.0)
 		elif arg == "--found-footage":
-			o.found_footage = true
+			o.vhs_override = 1
+			o.crt_override = 1
 		elif arg == "--crt-mode":
-			o.found_footage = false
-		elif arg == "--nocrt":
-			o.nocrt = true
+			o.vhs_override = 0
+			o.crt_override = 1
+		elif arg == "--vhs-only":
+			o.vhs_override = 1
+			o.crt_override = 0
+		elif arg == "--nocrt" or arg == "--no-video-effects":
+			o.vhs_override = 0
+			o.crt_override = 0
 		elif arg == "--notaa":
 			o.notaa = true
 		elif arg == "--nologo":
@@ -134,6 +148,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.caption_preview = true
 		elif arg == "--haunt":
 			o.haunt = true
+		elif arg == "--lineup":
+			o.lineup = true
 		elif arg == "--play-tape":
 			o.play_tape = true
 		elif arg == "--passer":
@@ -160,6 +176,12 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.realm_collapse_style = arg.get_slice("=", 1)
 		elif arg == "--photo-shoot":
 			o.photo_shoot = true
+		elif arg == "--reality-aftershock":
+			o.reality_aftershock = true
+		elif arg == "--walker-prototype":
+			o.walker_prototype = true
+		elif arg == "--legacy-flat-ghosts":
+			o.walker_prototype = false
 		elif arg.begins_with("--haunt-at="):
 			var parts := arg.substr(11).split(",")
 			if parts.size() >= 2:

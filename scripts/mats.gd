@@ -65,6 +65,7 @@ static func carpet() -> Material:
 static func wallpaper() -> Material:
 	var m := _shader("wallpaper", "res://shaders/wallpaper.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
+	m.set_shader_parameter("wood_tex", load("res://textures/annex/half_wall_cap_wood.png"))
 	return m
 
 
@@ -81,17 +82,18 @@ static func wallpaper_variant(idx: int) -> Material:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/wallpaper.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
+	m.set_shader_parameter("wood_tex", load("res://textures/annex/half_wall_cap_wood.png"))
 	if idx == 1:
-		m.set_shader_parameter("col_a", Color(0.43, 0.39, 0.29))
-		m.set_shader_parameter("col_b", Color(0.27, 0.24, 0.17))
-		m.set_shader_parameter("col_flock", Color(0.46, 0.34, 0.15))
-		m.set_shader_parameter("col_wood", Color(0.20, 0.11, 0.06))
+		m.set_shader_parameter("col_a", Color(0.40, 0.295, 0.255))
+		m.set_shader_parameter("col_b", Color(0.34, 0.235, 0.205))
+		m.set_shader_parameter("col_ink", Color(0.51, 0.42, 0.28))
+		m.set_shader_parameter("col_wood", Color(0.265, 0.15, 0.08))
 		m.set_shader_parameter("col_trim", Color(0.57, 0.41, 0.15))
 	else:
-		m.set_shader_parameter("col_a", Color(0.47, 0.32, 0.29))
-		m.set_shader_parameter("col_b", Color(0.30, 0.16, 0.18))
-		m.set_shader_parameter("col_flock", Color(0.57, 0.36, 0.15))
-		m.set_shader_parameter("col_wood", Color(0.21, 0.105, 0.06))
+		m.set_shader_parameter("col_a", Color(0.44, 0.265, 0.28))
+		m.set_shader_parameter("col_b", Color(0.36, 0.205, 0.225))
+		m.set_shader_parameter("col_ink", Color(0.56, 0.425, 0.29))
+		m.set_shader_parameter("col_wood", Color(0.28, 0.145, 0.085))
 		m.set_shader_parameter("col_trim", Color(0.63, 0.42, 0.14))
 	m.resource_name = key
 	_c[key] = m
@@ -99,22 +101,21 @@ static func wallpaper_variant(idx: int) -> Material:
 
 
 ## The hotel circulation variant is quieter than the gaming rooms: the same
-## old flocked paper, but faded by decades of low light and repeated cleaning.
-## Keeping its height field shallow stops the wall reading as carved stone at
-## grazing angles while the actual door/trim geometry supplies the relief.
+## printed damask and timber boards, with quieter dye lots. Printed ornament
+## never drives surface relief; the actual door/trim geometry supplies depth.
 static func hall_wallpaper() -> Material:
 	if _c.has("hall_wallpaper"):
 		return _c["hall_wallpaper"]
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/wallpaper.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
-	m.set_shader_parameter("col_a", Color(0.34, 0.27, 0.22))
-	m.set_shader_parameter("col_b", Color(0.22, 0.13, 0.12))
-	m.set_shader_parameter("col_flock", Color(0.34, 0.22, 0.10))
-	m.set_shader_parameter("col_wood", Color(0.14, 0.075, 0.045))
+	m.set_shader_parameter("wood_tex", load("res://textures/annex/half_wall_cap_wood.png"))
+	m.set_shader_parameter("col_a", Color(0.36, 0.245, 0.235))
+	m.set_shader_parameter("col_b", Color(0.31, 0.195, 0.185))
+	m.set_shader_parameter("col_ink", Color(0.43, 0.35, 0.245))
+	m.set_shader_parameter("col_wood", Color(0.24, 0.13, 0.075))
 	m.set_shader_parameter("col_trim", Color(0.46, 0.31, 0.11))
-	m.set_shader_parameter("bump_strength", 0.09)
-	m.set_shader_parameter("peel_amount", 0.45)
+	m.set_shader_parameter("peel_amount", 0.2)
 	m.resource_name = "hall_wallpaper"
 	_c["hall_wallpaper"] = m
 	return m
@@ -130,20 +131,20 @@ static func hall_wallpaper_variant(idx: int) -> Material:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/wallpaper.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
+	m.set_shader_parameter("wood_tex", load("res://textures/annex/half_wall_cap_wood.png"))
 	if idx == 1:
-		m.set_shader_parameter("col_a", Color(0.30, 0.29, 0.22))
-		m.set_shader_parameter("col_b", Color(0.17, 0.16, 0.11))
-		m.set_shader_parameter("col_flock", Color(0.31, 0.25, 0.11))
-		m.set_shader_parameter("col_wood", Color(0.13, 0.075, 0.04))
+		m.set_shader_parameter("col_a", Color(0.345, 0.26, 0.225))
+		m.set_shader_parameter("col_b", Color(0.285, 0.21, 0.175))
+		m.set_shader_parameter("col_ink", Color(0.41, 0.345, 0.24))
+		m.set_shader_parameter("col_wood", Color(0.225, 0.125, 0.065))
 		m.set_shader_parameter("col_trim", Color(0.42, 0.31, 0.11))
 	else:
-		m.set_shader_parameter("col_a", Color(0.33, 0.23, 0.22))
-		m.set_shader_parameter("col_b", Color(0.19, 0.10, 0.12))
-		m.set_shader_parameter("col_flock", Color(0.36, 0.23, 0.10))
-		m.set_shader_parameter("col_wood", Color(0.14, 0.07, 0.045))
+		m.set_shader_parameter("col_a", Color(0.37, 0.23, 0.25))
+		m.set_shader_parameter("col_b", Color(0.305, 0.18, 0.20))
+		m.set_shader_parameter("col_ink", Color(0.45, 0.34, 0.24))
+		m.set_shader_parameter("col_wood", Color(0.24, 0.12, 0.075))
 		m.set_shader_parameter("col_trim", Color(0.47, 0.30, 0.10))
-	m.set_shader_parameter("bump_strength", 0.09)
-	m.set_shader_parameter("peel_amount", 0.45)
+	m.set_shader_parameter("peel_amount", 0.2)
 	m.resource_name = key
 	_c[key] = m
 	return m
@@ -375,6 +376,24 @@ static func slot_reels() -> Material:
 
 static func casino_slot_lights() -> Material:
 	return _shader("casino_slot_lights", "res://shaders/casino_slot_lights.gdshader")
+
+
+## Last Chance keeps one fully active wheel and seven dim standby cabinets.
+## Shared immutable variants retain printed/reel textures and all geometry;
+## the normal blackout surface pass can still switch these backlights off.
+static func casino_slot_standby(source: Material) -> Material:
+	if source == null:
+		return null
+	var key := "casino_slot_standby_%d" % source.get_instance_id()
+	if _c.has(key):
+		return _c[key]
+	var idle := source.duplicate() as Material
+	if idle is BaseMaterial3D:
+		idle.emission_energy_multiplier *= 0.18
+	elif idle is ShaderMaterial:
+		idle.set_shader_parameter("mains_power", 0.18)
+	_c[key] = idle
+	return idle
 
 
 static func slot_wheel() -> Material:

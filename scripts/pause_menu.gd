@@ -21,6 +21,11 @@ var _quit_button: Button
 var _reset_prompt: ReturnPrompt
 var _quit_emitted := false
 var _scroll: ScrollContainer
+var _hdr_status: Label
+
+const SLIDER_KEYS := ["sensitivity", "field_of_view", "head_bob",
+	"music_volume", "effects_volume", "dialogue_volume", "vhs_distortion",
+	"hdr_brightness"]
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -82,14 +87,32 @@ func _build_ui() -> void:
 	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rows.add_theme_constant_override("separation", 8)
 	scroll.add_child(rows)
-	for key: String in ["sensitivity", "field_of_view", "head_bob", "music_volume", "effects_volume", "dialogue_volume", "vhs_distortion"]:
+	for key: String in SLIDER_KEYS:
+		if key == "hdr_brightness":
+			continue
 		_add_slider(rows, key)
 		if key == "head_bob":
 			_add_toggle(rows, "invert_y", "INVERT Y LOOK")
 			_add_toggle(rows, "toggle_sprint", "TOGGLE SPRINT")
+	_add_toggle(rows, "vhs_enabled", "VHS EFFECT")
+	(_controls["vhs_enabled"] as CheckButton).tooltip_text = \
+		"Tape smearing, colour separation, signal noise and tracking damage."
+	_add_toggle(rows, "crt_enabled", "CRT EFFECT")
+	(_controls["crt_enabled"] as CheckButton).tooltip_text = \
+		"Tube curvature, scan beam, phosphor mask, halation and glass falloff."
 	_add_toggle(rows, "reduced_flashing", "REDUCE FLASHING")
 	_add_toggle(rows, "fullscreen", "FULLSCREEN")
 	_add_toggle(rows, "death_hints", "EXPLAIN CAUSE OF DEATH")
+	_add_toggle(rows, "hdr_enabled", "HDR OUTPUT")
+	(_controls["hdr_enabled"] as CheckButton).tooltip_text = \
+		"Uses true HDR output on supported HDR/XDR displays; otherwise falls back to SDR."
+	_add_slider(rows, "hdr_brightness")
+	(_controls["hdr_brightness"][0] as HSlider).tooltip_text = \
+		"Adjusts the authored scene exposure while HDR output is enabled."
+	_hdr_status = VhsOsd.make_label(18, Color(0.66, 0.72, 0.70))
+	_hdr_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hdr_status.custom_minimum_size.y = 26
+	rows.add_child(_hdr_status)
 	var buttons := GridContainer.new()
 	buttons.columns = 2
 	buttons.add_theme_constant_override("h_separation", 8)
@@ -108,6 +131,10 @@ func _build_ui() -> void:
 		_quit_button.pressed.connect(_close_quit)
 	get_viewport().size_changed.connect(_fit_viewport)
 	_scroll = scroll
+	var window := get_window()
+	if window != null and window.has_signal("output_max_linear_value_changed"):
+		window.connect("output_max_linear_value_changed",
+			func(_value: float) -> void: _refresh_hdr_controls())
 	_fit_viewport()
 	_refresh_controls()
 
@@ -126,7 +153,9 @@ func _add_slider(parent: VBoxContainer, key: String) -> void:
 	var row := VBoxContainer.new()
 	var line := HBoxContainer.new()
 	var label := VhsOsd.make_label(24)
-	label.text = "MOUSE SENSITIVITY" if key == "sensitivity" else key.replace("_", " ").to_upper()
+	label.text = "MOUSE SENSITIVITY" if key == "sensitivity" \
+		else ("VHS EFFECT STRENGTH" if key == "vhs_distortion" \
+		else key.replace("_", " ").to_upper())
 	line.add_child(label)
 	var value_label := VhsOsd.make_label(24, Color(0.9, 0.75, 0.42))
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -204,13 +233,46 @@ func _close_quit() -> void:
 func _refresh_controls() -> void:
 	if not settings:
 		return
-	for key: String in ["sensitivity", "field_of_view", "head_bob", "music_volume", "effects_volume", "dialogue_volume", "vhs_distortion"]:
+	for key: String in SLIDER_KEYS:
 		var pair: Array = _controls[key]
 		var slider: HSlider = pair[0]
 		slider.set_value_no_signal(float(settings.get_value(key)))
 		(pair[1] as Label).text = _format_value(key, float(settings.get_value(key)))
 	for key: String in GameSettings.BOOLEAN_KEYS:
+		if not _controls.has(key):
+			continue
 		(_controls[key] as CheckButton).set_pressed_no_signal(bool(settings.get_value(key)))
+	_refresh_video_controls()
+	_refresh_hdr_controls()
+
+
+func _refresh_video_controls() -> void:
+	if not settings or not _controls.has("vhs_distortion"):
+		return
+	var pair: Array = _controls["vhs_distortion"]
+	var slider := pair[0] as HSlider
+	var value_label := pair[1] as Label
+	slider.editable = bool(settings.get_value("vhs_enabled"))
+	slider.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
+	value_label.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
+
+
+func _refresh_hdr_controls() -> void:
+	if not settings or not _controls.has("hdr_enabled") \
+			or not _controls.has("hdr_brightness"):
+		return
+	var supported := HdrOutput.display_server_supported()
+	var requested := bool(settings.get_value("hdr_enabled"))
+	var toggle := _controls["hdr_enabled"] as CheckButton
+	toggle.disabled = not supported
+	var pair: Array = _controls["hdr_brightness"]
+	var slider := pair[0] as HSlider
+	var value_label := pair[1] as Label
+	slider.editable = supported and requested
+	slider.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
+	value_label.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
+	if is_instance_valid(_hdr_status):
+		_hdr_status.text = HdrOutput.status(get_window(), requested)
 
 func _format_value(key: String, value: float) -> String:
 	if key == "field_of_view":
@@ -227,10 +289,17 @@ func _close_title() -> void:
 	visible = false
 	return_to_title.emit()
 
+static func is_pause_event(event: InputEvent) -> bool:
+	if event is InputEventKey:
+		return event.pressed and not event.echo and (event.physical_keycode == KEY_ESCAPE \
+			or event.keycode == KEY_ESCAPE or event.is_action_pressed("ui_cancel"))
+	return event.is_action_pressed("ui_cancel")
+
+
 func _input(event: InputEvent) -> void:
 	if not visible or is_instance_valid(_reset_prompt):
 		return
-	if event.is_action_pressed("ui_cancel"):
+	if is_pause_event(event):
 		_close_resume()
 		get_viewport().set_input_as_handled()
 

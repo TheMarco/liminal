@@ -26,8 +26,9 @@ godot --headless --path . --import
 # or cold launches fail with "Could not find type X" parse errors.
 ```
 
-- `--nocrt` for every visual-verification screenshot: the CRT filter hides
-  what you are judging. Yaw convention: forward = (−sin yaw, 0, −cos yaw).
+- `--nocrt` for every visual-verification screenshot: it disables both VHS
+  and CRT presentation stages, which otherwise hide what you are judging.
+  Yaw convention: forward = (−sin yaw, 0, −cos yaw).
 - Dev flags: `--play-tape` (auto-plays the ritual tape; needs `--pos` at the
   route target), `--passer` (rapid passing-shadow attempts), `--haunt-at`,
   `--attention=`, `--descent-floor=N`, `--test-ride` (simulates a real lift
@@ -149,8 +150,8 @@ with it.
   brackets), the HUD scale is `VhsOsd.hud_scale` (viewport_h/720,
   unclamped), all text carries a same-ink `STROKE` outline plus hard shadow
   (`style_label` / `draw_osd_string`) so VT323 hairlines survive the tube,
-  and no in-game text drops under ~32px at 720p. Verify OSD changes with a
-  CRT-on screenshot, not `--nocrt`. There is no directional needle — finding the lift IS
+  and no in-game text drops under ~32px at 720p. Verify OSD changes with the
+  default combined VHS + CRT presentation and each stage in isolation. There is no directional needle — finding the lift IS
   the level. Route bands: authored 26-34 edges (floor
   1) to 40-52 (floor 11), with floors 1-3 shortened by
   `DescentRoute.EARLY_SHORTEN` (x0.62/0.78/0.9 → floor 1 ≈ 16-21 edges;

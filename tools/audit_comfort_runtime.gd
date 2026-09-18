@@ -36,6 +36,19 @@ func run() -> void:
 	expect(is_instance_valid(game._pause_menu), "pause menu was not instantiated")
 	expect(is_equal_approx(game.run.floor_elapsed, elapsed_before), "run elapsed while paused")
 	game._close_settings()
+
+	var base_exposure: float = game.we.environment.tonemap_exposure
+	settings.set_value("hdr_enabled", true)
+	settings.set_value("hdr_brightness", 1.2)
+	if HdrOutput.is_active(game.get_window()):
+		expect(is_equal_approx(game.we.environment.tonemap_exposure,
+			base_exposure * 1.2), "HDR brightness was not applied live")
+	else:
+		expect(is_equal_approx(game.we.environment.tonemap_exposure,
+			base_exposure), "HDR brightness changed the SDR fallback")
+	settings.set_value("hdr_enabled", false)
+	expect(is_equal_approx(game.we.environment.tonemap_exposure, base_exposure),
+		"disabling HDR did not restore authored exposure")
 	expect(not paused and Input.mouse_mode == old_mouse,
 		"resume did not restore pause state and mouse mode")
 
@@ -84,8 +97,9 @@ func run() -> void:
 		and float(material.get_shader_parameter("tear_amount")) == 0.0,
 		"VHS distortion zero did not clear live material")
 	settings.reset_defaults()
-	expect(is_equal_approx(float(material.get_shader_parameter("jitter_amount")), float(raw.get("jitter_amount", 0.0))),
-		"VHS reset did not restore raw jitter")
+	expect(is_equal_approx(float(material.get_shader_parameter("jitter_amount")),
+		float(raw.get("jitter_amount", 0.0)) * 0.5),
+		"VHS reset did not restore 50% effect strength")
 	settings.set_value("reduced_flashing", true)
 	game._post_process.glitch_burst()
 	game._post_process.damage_hit(0.5)
@@ -98,7 +112,7 @@ func run() -> void:
 	settings.set_value("vhs_distortion", 0.0)
 	expect(float(television.get_shader_parameter("ghost_amount")) == 0, "existing TV ignored live distortion settings")
 	settings.reset_defaults()
-	expect(is_equal_approx(float(television.get_shader_parameter("ghost_amount")), 0.16), "TV settings reset compounded uniform strength")
+	expect(is_equal_approx(float(television.get_shader_parameter("ghost_amount")), 0.08), "TV settings reset did not restore 50% effect strength")
 	await _exercise_menu_inputs(game)
 	DirAccess.remove_absolute("/tmp/liminal-comfort-audit.cfg")
 	await teardown_game(game)
@@ -115,6 +129,8 @@ func _exercise_menu_inputs(game: Node) -> void:
 		await process_frame
 		var menu: PauseMenu = game._pause_menu
 		expect(menu._controls.has("dialogue_volume"), "dialogue slider missing from menu")
+		expect(menu._controls.has("hdr_enabled") and menu._controls.has("hdr_brightness"),
+			"HDR controls missing from menu")
 		for option in ["invert_y", "toggle_sprint"]:
 			var toggle: CheckButton = menu._controls[option]
 			var before_toggle: bool = bool(game._settings.get_value(option))

@@ -63,7 +63,6 @@ var _video: VideoStreamPlayer
 var _video_vp: SubViewport
 var _video_aspect: AspectRatioContainer
 var _cam: Camera3D
-var _watch_fill: OmniLight3D
 var _prev_cam: Camera3D
 var _viewer: Player
 var _discovery_light: OmniLight3D
@@ -190,23 +189,23 @@ func _build_audio() -> void:
 
 
 ## Optional recordings must read as intentional discoveries while the player
-## is still moving through the route. The CRT already shows snow; this cold,
-## shadowless wall wash and its stronger localized hiss make the set legible
-## from the doorway without adding a HUD marker or an expensive shadow pass.
+## is still moving through the route. The cold cue now originates on the
+## visibly emissive CRT glass instead of washing the wall from empty space.
 func _build_discovery_cue() -> void:
 	if objective:
 		return
 	_discovery_light = OmniLight3D.new()
 	_discovery_light.name = "RecoveredTapeCue"
-	_discovery_light.position = Vector3(-0.35, 1.05, 0.45)
+	_discovery_light.position = _screen.position + Vector3(0.0, 0.0, 0.035)
 	_discovery_light.light_color = Color(0.56, 0.72, 0.92)
-	_discovery_light.light_energy = 1.15
+	_discovery_light.light_energy = 0.90
 	_discovery_light.omni_range = OPTIONAL_CUE_RANGE
 	_discovery_light.shadow_enabled = false
 	_discovery_light.light_volumetric_fog_energy = 0.0
 	_discovery_light.distance_fade_enabled = true
 	_discovery_light.distance_fade_begin = 10.0
 	_discovery_light.distance_fade_length = 5.0
+	_discovery_light.set_meta("visible_source", "crt_screen")
 	add_child(_discovery_light)
 
 
@@ -329,22 +328,6 @@ func _begin_watch(viewer: Player) -> void:
 		_cam = Camera3D.new()
 		_cam.fov = 50.0
 		add_child(_cam)
-		# A soft viewing light keeps the black bezel readable in dark rooms.
-		# It follows the lens and affects only the physical TV setup; the
-		# unshaded footage retains its own exposure before the shared scene pass.
-		_watch_fill = OmniLight3D.new()
-		_watch_fill.name = "PlaybackCabinetFill"
-		_watch_fill.position = Vector3(-0.25, 0.3, 0.15)
-		_watch_fill.light_color = Color(0.80, 0.87, 1.0)
-		_watch_fill.light_energy = 0.7
-		_watch_fill.light_specular = 0.25
-		_watch_fill.omni_range = 2.0
-		_watch_fill.layers = WATCH_LAYER
-		_watch_fill.light_cull_mask = WATCH_LAYER
-		_watch_fill.shadow_enabled = false
-		_watch_fill.light_volumetric_fog_energy = 0.0
-		_cam.add_child(_watch_fill)
-	_watch_fill.visible = true
 	_cam.cull_mask = WATCH_LAYER
 	_cam.global_transform = _prev_cam.global_transform
 	_cam.make_current()
@@ -406,8 +389,6 @@ func _end_watch() -> void:
 
 
 func _restore_viewer() -> void:
-	if is_instance_valid(_watch_fill):
-		_watch_fill.visible = false
 	if _viewer != null and is_instance_valid(_viewer):
 		_viewer.set_physics_process(true)
 		_viewer.set_process_unhandled_input(true)

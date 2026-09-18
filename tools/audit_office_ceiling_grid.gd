@@ -12,6 +12,10 @@ var failures := 0
 var lights := 0
 var vents := 0
 var corridors := 0
+var dead_rooms := 0
+var dead_corridors := 0
+var flicker_rooms := 0
+var flicker_corridors := 0
 
 func check(ok: bool, message: String) -> void:
 	if not ok:
@@ -78,6 +82,9 @@ func _scan(ws: int, cell: Vector2i) -> void:
 	var fixtures := _fixture_nodes(chunk)
 	var seen_lights := 0
 	var seen_vents := 0
+	var dead_lights := 0
+	var flicker_lenses := 0
+	var flicker_material: Material
 	var boxes: Array[AABB] = []
 	for fixture in fixtures:
 		var kind := String(fixture.get_meta("office_ceiling_fixture", ""))
@@ -102,12 +109,57 @@ func _scan(ws: int, cell: Vector2i) -> void:
 			check(absf(perp) + half_perp <= 1.3 + EPS, "%s leaves corridor lane" % fixture.name)
 		if kind == "light":
 			seen_lights += 1
+			if fixture.material_override == Mats.panel_dead():
+				dead_lights += 1
+			if fixture.has_meta("office_ceiling_flicker"):
+				flicker_lenses += 1
+				flicker_material = fixture.material_override
 		else:
 			seen_vents += 1
 		check(kind == "light" or kind == "vent", "unknown fixture kind %s" % kind)
 	var expected := 4 if actual_style == WorldGen.OFFICE_CORRIDOR else 8
 	check(seen_lights == expected and seen_vents == 2,
 		"style %d has %d lights/%d vents, expected %d/2" % [actual_style, seen_lights, seen_vents, expected])
+	var expected_dead := WorldGen.r01(ws, cell.x, cell.y, 8) < (0.025 if actual_style == WorldGen.OFFICE_CORRIDOR else 0.02)
+	if actual_style != WorldGen.OFFICE_CORRIDOR:
+		expected_dead = cell != Vector2i.ZERO and expected_dead
+	var expected_flicker := not expected_dead \
+		and WorldGen.r01(ws, cell.x, cell.y, 9) \
+		< (0.07 if actual_style == WorldGen.OFFICE_CORRIDOR else 0.05)
+	if actual_style != WorldGen.OFFICE_CORRIDOR:
+		expected_flicker = cell != Vector2i.ZERO and expected_flicker
+	check(dead_lights == (1 if expected_dead else 0),
+		"cell %s dead lenses=%d expected %d" % [cell, dead_lights, 1 if expected_dead else 0])
+	check(flicker_lenses == (1 if expected_flicker else 0),
+		"cell %s flicker lenses=%d expected %d" % [
+			cell, flicker_lenses, 1 if expected_flicker else 0])
+	if expected_dead:
+		if actual_style == WorldGen.OFFICE_CORRIDOR:
+			dead_corridors += 1
+		else:
+			dead_rooms += 1
+	if expected_flicker:
+		if actual_style == WorldGen.OFFICE_CORRIDOR:
+			flicker_corridors += 1
+		else:
+			flicker_rooms += 1
+	var room_lights: Array[Node] = []
+	for candidate in chunk.find_children("*", "OmniLight3D", true, false):
+		if str(candidate.get_meta("visible_source", "")) in [
+				"office_troffer_grid", "office_flickering_troffer"]:
+			room_lights.append(candidate)
+	check(room_lights.size() == (2 if expected_flicker else 1),
+		"cell %s has %d actual lights, expected %d" % [
+			cell, room_lights.size(), 2 if expected_flicker else 1])
+	var flicker_nodes := 0
+	for room_light in room_lights:
+		if room_light is FlickerLight:
+			flicker_nodes += 1
+			check((room_light as FlickerLight).mats == [flicker_material],
+				"cell %s flicker drives more than its selected lens" % cell)
+	check(flicker_nodes == (1 if expected_flicker else 0),
+		"cell %s flicker nodes=%d expected %d" % [
+			cell, flicker_nodes, 1 if expected_flicker else 0])
 	lights += seen_lights
 	vents += seen_vents
 	if actual_style == WorldGen.OFFICE_CORRIDOR:
@@ -124,5 +176,10 @@ func run() -> void:
 			for z in range(-3, 4):
 				_scan(ws, Vector2i(x, z))
 	check(corridors > 0, "sample did not cover an office corridor")
+	check(dead_rooms > 0, "sample did not cover a dead office room")
+	check(dead_corridors > 0, "sample did not cover a dead office corridor")
+	check(flicker_rooms > 0, "sample did not cover a flickering office room")
+	check(flicker_corridors > 0,
+		"sample did not cover a flickering office corridor")
 	print("OFFICE_CEILING_GRID_AUDIT: cells=147 lights=%d vents=%d corridors=%d failures=%d" % [lights, vents, corridors, failures])
 	quit(1 if failures else 0)

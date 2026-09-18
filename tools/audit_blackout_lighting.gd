@@ -1,8 +1,8 @@
 extends SceneTree
 ## Regression for the reported hallway that stayed dark after global power
 ## returned. Post-blackout secondary beats may no longer request dead lights,
-## and a waiting figure unsuitable for a corridor must decline rather than
-## silently falling back to killing every fixture.
+## and hostile encounter requests must never be baked into streamed chunks or
+## silently fall back to killing every fixture.
 
 var failures := 0
 
@@ -54,8 +54,8 @@ func _run() -> void:
 	if not _same_light_state(working_before):
 		_fail("global blackout did not restore exact working-light state")
 
-	# Find an actual narrow corridor and prove the optional waiting-figure beat
-	# declines there without using the old dead-light fallback.
+	# Prove encounter requests are declined by streamed geometry without using
+	# the old dead-light fallback. Main hands these to the hostile manager.
 	var corridor := Vector2i(1 << 20, 1 << 20)
 	for x in range(-12, 13):
 		for y in range(-12, 13):
@@ -75,12 +75,12 @@ func _run() -> void:
 		var hallway_before := _light_state(hallway)
 		hallway.activate_anomaly(1)
 		if hallway.anomaly_kind != -1:
-			_fail("unsuitable hallway did not decline waiting-figure anomaly")
+			_fail("streamed hallway accepted a live encounter as room geometry")
 		if not _same_light_state(hallway_before):
 			_fail("declined hallway figure killed the corridor lights")
 		hallway.free()
 
-	# Repeated post-blackout selection may emit nothing or a waiting figure,
+	# Repeated post-blackout selection may emit nothing or a hostile encounter,
 	# but never the removed kind-0 dead-light mutation.
 	var run := DescentRun.new()
 	run.player = player
@@ -101,7 +101,6 @@ func _run() -> void:
 		if kind != 1:
 			_fail("post-blackout restoration still requested a dead-light anomaly")
 			break
-
 	run.free()
 	working.free()
 	player.queue_free()

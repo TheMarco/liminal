@@ -1,4 +1,6 @@
 extends Node3D
+
+const MonsterLineupScene := preload("res://scripts/monster_lineup.gd")
 ## Entry point and level manager. Eleven endless floors share one player:
 ##   1 — seedy Vegas hotel-casino            (theme 0)
 ##   2 — sterile Severance-style office      (theme 1)
@@ -23,6 +25,7 @@ extends Node3D
 const DEFAULT_SPAWN := Vector3(6.0, 0.15, 2.0)
 const MUTATION_REVEAL_EFFECT := preload(
 	"res://scripts/mutation_reveal_effect.gd")
+const CAUGHT_SEQUENCE := preload("res://scripts/caught_sequence.gd")
 ## What the ambient presence systems are allowed to do right now. Only three
 ## combinations of {figures, whispers, heartbeat} are ever wanted, and they were
 ## previously spelled out three lines at a time in eleven places -- including the
@@ -53,8 +56,10 @@ var _switching: bool:
 			_transitions.set_switching(value)
 var _fade: ColorRect
 var _post_process: PostProcessController
+var _reality_aftershock: CanvasLayer
 var _post_enabled := true
-var _found_footage_requested := false
+var _vhs_enabled := true
+var _crt_enabled := true
 var _dev_tools: BenchmarkDevController
 var _figures: ShadowFigures
 var _passers: PassingShadows
@@ -63,6 +68,7 @@ var _whispers: Whispers
 var _director: HorrorDirector
 var _heart: Heartbeat
 var _dying := false
+var _caught_sequence: CanvasLayer
 var _music: AudioStreamPlayer
 var _title: TitleScreen
 var _hint: Label
@@ -80,6 +86,7 @@ var _stamina_meter: VhsOsd.Meter
 var _charging_panel: VBoxContainer
 var _charging_label: Label
 var _charging_meter: VhsOsd.Meter
+var _charger_distance: Label
 var _events: EnvironmentEvents
 var _photo_director: PhotoDirector
 var _photo_camera: PhotoCamera
@@ -157,6 +164,7 @@ var _settings: GameSettings:
 const SaveFailureNotice = preload("res://scripts/save_failure_notice.gd")
 var _save_notice: CanvasLayer
 var _applied_fullscreen: Variant = null
+var _applied_hdr_output: Variant = null
 var _quitting := false
 var _quit_prompt: ReturnPrompt
 var _pause_menu: PauseMenu
@@ -209,8 +217,6 @@ func _ready() -> void:
 	if opts.active_level != 0:
 		active_level = opts.active_level
 	descent = descent or opts.descent
-	if opts.found_footage:
-		_found_footage_requested = true
 	if opts.attention >= 0.0:
 		_attention_override = opts.attention
 	if world_seed == 0:
@@ -286,9 +292,13 @@ func _ready() -> void:
 			func(): print("test-ride done"); get_tree().quit())
 	if opts.notaa:
 		get_viewport().use_taa = false
-	# dev: start with the tube off, so screenshots show the raw full-res render
-	if opts.nocrt:
-		_post_enabled = false
+	# Normal play uses the saved independent stages. QA flags can override either
+	# stage without altering the player's profile.
+	_vhs_enabled = bool(_settings.get_value("vhs_enabled")) \
+		if opts.vhs_override < 0 else opts.vhs_override == 1
+	_crt_enabled = bool(_settings.get_value("crt_enabled")) \
+		if opts.crt_override < 0 else opts.crt_override == 1
+	_post_enabled = _vhs_enabled or _crt_enabled
 	_photo_debug = opts.photo_debug
 	_apply_scaling()
 	get_viewport().size_changed.connect(_apply_scaling)
@@ -312,6 +322,11 @@ func _ready() -> void:
 	player.position = spawn
 	player.rotation.y = yaw
 	add_child(player)
+	if opts.lineup:
+		var forward := Vector3(-sin(yaw), 0, -cos(yaw))
+		var ring: Node3D = MonsterLineupScene.new()
+		add_child(ring)
+		ring.configure(spawn + forward * 8.5, spawn + Vector3(0, 1.5, 0))
 	_dev_tools = BenchmarkDevController.new()
 	add_child(_dev_tools)
 	# Live tuning panel for the Poolrooms. Dragging a slider beats editing a
@@ -350,6 +365,9 @@ func _ready() -> void:
 	add_child(_whispers)
 	_figures = ShadowFigures.new()
 	_figures.player = player
+	_figures.chunk_manager = cm
+	_figures.floor_idx = run.floor_idx if descent and run != null else 99
+	_figures.completed_levels = run.floor_idx if descent and run != null else 0
 	_figures.horror_director = _director
 	_figures.topology = descent_route.topology \
 		if descent_route != null else null
@@ -369,6 +387,7 @@ func _ready() -> void:
 	_figures.dev_haunt_at = opts.haunt_at
 	_figures.dev_haunt_at_given = opts.haunt_at_given
 	_figures.dev_haunt_variant = opts.haunt_variant
+	_figures.use_walker_prototype = opts.walker_prototype
 	_figures.reached_player.connect(_on_figure_reached_player)
 	add_child(_figures)
 	# Frights raise the pulse; it bleeds away on its own. Wired after the
@@ -428,6 +447,11 @@ func _ready() -> void:
 		_set_world_audio(false)
 	_switch_music(active_level)
 	_build_ui()
+	var game_window := get_window()
+	if game_window != null \
+			and game_window.has_signal("output_max_linear_value_changed"):
+		game_window.connect("output_max_linear_value_changed",
+			_on_output_max_linear_value_changed)
 	player.emergency_flash_changed.connect(_on_emergency_flash_changed)
 	player.emergency_flash_used.connect(_on_emergency_flash_used)
 	_apply_game_settings()
@@ -526,7 +550,12 @@ func _build_level(level: int, around: Vector3) -> void:
 		cm.descent_base_seed = world_seed
 		run.target_cell = descent_route.target
 		cm.blackout = run.blackout
-		cm.anomalies = run.anomalies
+		# Kind 1 is a live encounter request, not streamed room geometry. Only
+		# persistent surface mutations belong in ChunkManager.
+		cm.anomalies = {}
+		for anomaly_cell in run.anomalies:
+			if int(run.anomalies[anomaly_cell]) == 0:
+				cm.anomalies[anomaly_cell] = 0
 		cm.descent_arrival_used = run.arrival_used
 		cm.descent_lift_called = run.lift_called
 		cm.descent_lift_wait = run.lift_wait_left
@@ -543,6 +572,8 @@ func _build_level(level: int, around: Vector3) -> void:
 		_passers.topology = descent_route.topology \
 			if descent_route != null else null
 	if _figures != null:
+		_figures.chunk_manager = cm
+		_figures.completed_levels = run.floor_idx if descent and run != null else 0
 		_figures.topology = descent_route.topology \
 			if descent_route != null else null
 		# Gates the tuned archetypes' debuts; the roster grows as the run
@@ -647,6 +678,7 @@ func _finish_transition_build(level: int) -> void:
 	player.level_theme = level
 	player.water_y = _water_level_for(level)
 	we.environment = _build_env(level)
+	_set_recording_day_for_level(level)
 	ambience.queue_free()
 	ambience = Ambience.new(level)
 	add_child(ambience)
@@ -663,6 +695,12 @@ func _apply_game_settings() -> void:
 		if DisplayServer.get_name() != "headless":
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen \
 				else DisplayServer.WINDOW_MODE_WINDOWED)
+	var hdr_enabled := bool(_settings.get_value("hdr_enabled"))
+	if _applied_hdr_output != hdr_enabled:
+		_applied_hdr_output = hdr_enabled
+		HdrOutput.request(get_window(), hdr_enabled)
+	if is_instance_valid(we) and we.environment != null:
+		_apply_hdr_brightness(we.environment)
 	if is_instance_valid(player):
 		player.sensitivity_multiplier = float(_settings.values.sensitivity)
 		player.base_fov = float(_settings.values.field_of_view)
@@ -676,6 +714,19 @@ func _apply_game_settings() -> void:
 		if idx >= 0:
 			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(0.0001, float(_settings.values[pair[1]]))))
 	PostProcessController.refresh_comfort()
+	var vhs_enabled := bool(_settings.get_value("vhs_enabled")) \
+		if opts.vhs_override < 0 else opts.vhs_override == 1
+	var crt_enabled := bool(_settings.get_value("crt_enabled")) \
+		if opts.crt_override < 0 else opts.crt_override == 1
+	var post_enabled := vhs_enabled or crt_enabled
+	if _post_process != null and (_vhs_enabled != vhs_enabled or _crt_enabled != crt_enabled):
+		_vhs_enabled = vhs_enabled
+		_crt_enabled = crt_enabled
+		_post_process.set_effects(_vhs_enabled, _crt_enabled)
+		ShadowFigure.set_tape_look(_vhs_enabled)
+	if _post_enabled != post_enabled:
+		_post_enabled = post_enabled
+		_apply_scaling()
 	for mat in [Mats.casino_slot_lights(), Mats.ticker()]:
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("reduced_flashing", GameSettings.flashing_reduced())
@@ -790,7 +841,7 @@ func _input(event: InputEvent) -> void:
 		if _open_photo_album():
 			get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("ui_cancel") and not is_instance_valid(_pause_menu) \
+	if PauseMenu.is_pause_event(event) and not is_instance_valid(_pause_menu) \
 			and not is_instance_valid(_title) and not _switching and not _dying \
 			and not is_instance_valid(_return_prompt) \
 			and not is_instance_valid(_descent_summary) \
@@ -881,11 +932,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif not descent:
 				_switch_level(floor_theme)
 			return
-		if event.physical_keycode == KEY_V:
-			_post_enabled = _post_process.toggle_enabled()
-			_apply_scaling()
-		elif event.physical_keycode == KEY_B:
-			_toggle_post_mode()
 
 
 func _show_return_prompt() -> void:
@@ -1283,7 +1329,8 @@ func _on_photo_raised(on: bool) -> void:
 
 func _sync_osd_visible() -> void:
 	if _osd_layer != null:
-		_osd_layer.visible = not (_osd_hidden_tape or _osd_hidden_camera)
+		_osd_layer.visible = not (_osd_hidden_tape or _osd_hidden_camera \
+			or (descent and run != null and run.ended))
 
 
 func _on_photo_proximity(value: float, los: float) -> void:
@@ -1703,7 +1750,8 @@ func _on_descent_exit() -> void:
 ## system suspended; the guard below also makes a stale signal harmless.
 ##
 ## An earned emergency flash intercepts the exact figure's _seize() before
-## this signal. Reaching here still means an unprotected, fatal catch.
+## this signal. The temporary realm owns its one-shot, nonfatal failure beat;
+## everywhere else reaching here still means an unprotected, fatal catch.
 func _on_figure_reached_player() -> void:
 	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
 		_realm_visit.collapse(true)
@@ -1901,8 +1949,8 @@ func _on_blackout_locate(value: float) -> void:
 		_post_process.damage_hit(0.35)
 
 
-## It found them. The player never sees what it was — one frame of something
-## at the lens, the loudest sound in the game, and the run is over.
+## It found them. Unlike a visible figure catch, this stays unseen: a brief
+## camera slump and cut to black, with no apparition teleported to the lens.
 func _on_blackout_ambush() -> void:
 	if not descent or run == null or run.ended or _dying:
 		return
@@ -1910,7 +1958,6 @@ func _on_blackout_ambush() -> void:
 	_blackout_locate_cue = 0
 	var pick := Sfx.random_scare()
 	_play_descent_cue(pick[0], -2.0)
-	_post_process.damage_hit(1.0)
 	_play_player_death()
 	run.finish(false, DescentRun.DeathCause.BLACKOUT_MOVEMENT)
 
@@ -1969,6 +2016,13 @@ func _play_descent_cue_at(stream: AudioStream, volume: float,
 func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 	if not descent or cm == null or descent_route == null \
 			or at == descent_route.target or at == descent_route.origin:
+		return
+	if kind == 1:
+		# Use the same clearance-checked, routed hunter path as every ordinary
+		# ghost. A room-authored silhouette can be visible across an open office
+		# while waiting forever on a logical room ID or wedged in furniture.
+		if _figures != null:
+			_figures.force_encounter(0.25)
 		return
 	cm.set_anomaly(at, kind)
 
@@ -2046,13 +2100,51 @@ func _rank_blackout_mutation_frustum(proposal: TopologyDelta) -> float:
 func _on_descent_ended(won: bool) -> void:
 	_persist_current_runtime_state()
 	_set_presence(Presence.SILENT)
+	_sync_osd_visible()
+	_flash_notice_left = 0.0
+	_pending_photo_message = ""
+	if _event_tween != null and _event_tween.is_valid():
+		_event_tween.kill()
+	_event_panel.modulate.a = 0.0
 	if is_instance_valid(_descent_hud):
 		_descent_hud.set_active(false)
 	player.set_process_unhandled_input(false)
 	player.velocity = Vector3.ZERO
 	player.set_rumble(0.0)
+	player.stop_charging()
+	player.stop_motion_audio()
+	# Suspension stops pursuit; the caught shot also freezes fades/burn updates.
+	for figure in _figures.active_figures():
+		figure.set_physics_process(false)
+	if not won and run.death_cause in [DescentRun.DeathCause.FIGURE,
+			DescentRun.DeathCause.BLACKOUT_MOVEMENT]:
+		_dying = true
+		var finished_run := run
+		_caught_sequence = CAUGHT_SEQUENCE.new()
+		add_child(_caught_sequence)
+		var source: ShadowFigure = _figures.catching_figure \
+			if run.death_cause == DescentRun.DeathCause.FIGURE else null
+		# Freeze immediately, including held-key physics while a shutter waits.
+		_caught_sequence.begin(player, source)
+		_caught_sequence.set_process(false)
+		# Let an in-flight shutter finish its render before releasing its print.
+		while is_instance_valid(_photo_camera) and _photo_camera._capturing:
+			await get_tree().process_frame
+		if _photo_camera != null:
+			_photo_camera.finish_for_transition()
+		_caught_sequence.set_process(true)
+		await _caught_sequence.finished
+		_caught_sequence.restore()
+		if run != finished_run or _quitting:
+			_caught_sequence.queue_free()
+			_caught_sequence = null
+			return
+	_figures.despawn()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_show_descent_summary(won)
+	if is_instance_valid(_caught_sequence):
+		_caught_sequence.queue_free()
+		_caught_sequence = null
 
 
 func _show_descent_summary(won: bool) -> void:
@@ -2060,10 +2152,10 @@ func _show_descent_summary(won: bool) -> void:
 		return
 	_descent_summary = DescentSummary.new()
 	_descent_summary.won = won
+	_descent_summary.from_black = is_instance_valid(_caught_sequence)
 	_descent_summary.floor_idx = run.floor_idx
 	_descent_summary.floor_display = run.floor_name()
 	_descent_summary.elapsed = run.elapsed
-	_descent_summary.violations = run.violations
 	_descent_summary.death_cause = run.death_cause
 	_descent_summary.show_death_hint = _settings == null or bool(_settings.get_value("death_hints"))
 	_descent_summary.world_seed = world_seed
@@ -2176,6 +2268,7 @@ func _leave_descent() -> void:
 	var spawn := _safe_arrival(0, Vector2i.ZERO, DEFAULT_SPAWN)
 	await _jump_to(0, spawn, false)
 	_transitions.clear_saved_positions()
+	_dying = false
 	_build_title(true)
 
 
@@ -2206,6 +2299,7 @@ func _settle_initial_arrival() -> void:
 
 
 func _process(dt: float) -> void:
+	_sync_osd_visible()
 	_flash_notice_left = maxf(0.0, _flash_notice_left - dt)
 	_check_torch_hint()
 	_post_process.update()
@@ -2271,11 +2365,11 @@ func _switch_music(level: int) -> void:
 		tw.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
 
 
-## With post enabled, render the 3D source at 480 lines (about 854x480 at
-## 16:9). Recovered tape targets a 720x480 signal; its separate CRT display
+## With either video stage enabled, render the 3D source at 480 lines (about
+## 854x480 at 16:9). VHS targets a 720x480 signal; the optional CRT display
 ## runs at the full viewport resolution, preserving fine phosphor detail.
 ## scaling_3d_scale affects only the world, not the CanvasItem post passes.
-## With the tube off, the world returns to full native resolution.
+## With both stages off, the world returns to full native resolution.
 func _apply_scaling() -> void:
 	var vp := get_viewport()
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
@@ -2294,7 +2388,8 @@ func _apply_hud_scaling() -> void:
 	var viewport_size := Vector2(get_viewport().size)
 	var scale := maxf(1.0, minf(viewport_size.y / 720.0, viewport_size.x / 960.0))
 	var inset := VhsOsd.safe_inset(viewport_size)
-	# Every size here assumes the OSD is read THROUGH the tube: the post pass
+	# Every size here assumes the OSD is read through the selected video stages;
+	# the post pass
 	# emulates a 320-row signal, so no text may drop under ~5% of the
 	# viewport height (about 16 emulated rows) and everything sits inside the
 	# title-safe area used by the recovered-tape metadata.
@@ -2340,6 +2435,13 @@ func _apply_hud_scaling() -> void:
 		inset.y + (counter_height - _battery_meter.size.y) * 0.48)
 	_flash_icon.size = Vector2(30.0, 34.0) * scale
 	_flash_icon.position = _battery_meter.position - Vector2(40.0, 3.0) * scale
+	# A short line beneath the right-hand transport counter, clear of the
+	# central lift/evidence instrument. Narrow windows put it below that
+	# instrument instead, leaving its stacked evidence rows unobstructed.
+	_charger_distance.add_theme_font_size_override("font_size", roundi(30.0 * scale))
+	_charger_distance.size = Vector2(210.0, 40.0) * scale
+	_charger_distance.position = Vector2(viewport_size.x - inset.x - _charger_distance.size.x,
+		inset.y + (198.0 if viewport_size.x / scale < 1100.0 and descent else 65.0) * scale)
 
 	_stamina_meter.font_size = roundi(34.0 * scale)
 	_stamina_meter.size = Vector2(280.0, 74.0) * scale
@@ -2361,16 +2463,6 @@ func _position_interaction_prompt() -> void:
 	# Anchor the final wrapped height, including after a large-to-small resize.
 	_interact_panel.position = Vector2((extent.x - _interact_panel.size.x) * 0.5,
 		extent.y - VhsOsd.safe_inset(extent).y - 20.0 * scale - _interact_panel.size.y)
-
-
-func _toggle_post_mode() -> void:
-	if _post_process == null:
-		return
-	var label := _post_process.toggle_mode()
-	ShadowFigure.set_tape_look(_post_process.is_found_footage())
-	if _title == null:
-		_show_event_message("VIDEO MODE — " + label)
-	_set_mode_hint()
 
 
 ## World effects route through Game; spatial sounds first pass through Hall
@@ -2437,16 +2529,48 @@ func _set_tape_audio_hold(on: bool) -> void:
 ## The floor's WorldEnvironment. Kept as a method because _switch_level and the
 ## runtime audits call it; the settings themselves live in EnvBuilder.
 func _build_env(theme: int) -> Environment:
-	return EnvBuilder.build(theme)
+	var environment := EnvBuilder.build(theme)
+	_apply_hdr_brightness(environment)
+	return environment
+
+
+## Preserve each floor's authored exposure as the datum. Settings refreshes,
+## level switches and realm previews can then reapply the player's HDR trim
+## without compounding it on an already-adjusted Environment.
+func _apply_hdr_brightness(environment: Environment) -> void:
+	if environment == null:
+		return
+	const BASE_META := &"_authored_tonemap_exposure"
+	if not environment.has_meta(BASE_META):
+		environment.set_meta(BASE_META, environment.tonemap_exposure)
+	var multiplier := 1.0
+	if HdrOutput.is_active(get_window()) and _settings != null \
+			and bool(_settings.get_value("hdr_enabled")):
+		multiplier = float(_settings.get_value("hdr_brightness"))
+	environment.tonemap_exposure = float(environment.get_meta(BASE_META)) * multiplier
+
+
+func _on_output_max_linear_value_changed(_value: float) -> void:
+	# HDR activation can change after the request, when the window moves to a
+	# different display, or when the OS display setting changes.
+	if is_instance_valid(we) and we.environment != null:
+		_apply_hdr_brightness(we.environment)
 
 
 func _build_ui() -> void:
-	# Screen treatment over the 3D view, under UI. V enables/disables it and B
-	# changes recording media between the established CRT and recovered tape.
+	# VHS degrades the signal; CRT optionally displays that signal on a tube.
+	# Both are independent saved settings and neither has a gameplay hotkey.
 	_post_process = PostProcessController.new()
 	add_child(_post_process)
-	_post_process.setup(self, _found_footage_requested, _post_enabled)
-	ShadowFigure.set_tape_look(_post_process.is_found_footage())
+	_post_process.setup(self, _vhs_enabled, _crt_enabled)
+	_post_process.ensure_scene_copy()
+	_reality_aftershock = preload("res://scripts/reality_aftershock.gd").new()
+	_reality_aftershock.host = self
+	_reality_aftershock.debug_controls = opts.reality_aftershock
+	add_child(_reality_aftershock)
+	_photo_camera.unnatural_photographed.connect(_reality_aftershock.trigger)
+	_figures.approach_starting.connect(_reality_aftershock.before_approach)
+	ShadowFigure.set_tape_look(_vhs_enabled)
 
 	var cl := CanvasLayer.new()
 	cl.layer = 2
@@ -2459,6 +2583,7 @@ func _build_ui() -> void:
 	# Recovered-tape playback metadata first so other readouts draw over it.
 	_vf_frame = VhsOsd.Frame.new()
 	cl.add_child(_vf_frame)
+	_set_recording_day_for_level(active_level)
 	if _photo_camera != null:
 		_photo_camera.proximity_changed.connect(_on_photo_proximity)
 		_photo_camera.raised_changed.connect(_on_photo_raised)
@@ -2494,6 +2619,12 @@ func _build_ui() -> void:
 	cl.add_child(_battery_meter)
 	_flash_icon = VhsOsd.FlashIcon.new()
 	cl.add_child(_flash_icon)
+	_charger_distance = VhsOsd.make_label(30, VhsOsd.INK_DIM)
+	_charger_distance.text = "CHARGER --"
+	_charger_distance.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_charger_distance.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_charger_distance.visible = false
+	cl.add_child(_charger_distance)
 
 	_stamina_meter = VhsOsd.Meter.new()
 	_stamina_meter.text = "SPRINT"
@@ -2527,6 +2658,17 @@ func _build_ui() -> void:
 	cl.add_child(_fade)
 	add_child(cl)
 	_apply_hud_scaling()
+
+
+## The recovered recordings retain 1986, but every canonical floor belongs to
+## the next calendar day. Descent uses its actual progress; Wander/test views
+## use the same story-order date assigned to that environment.
+func _set_recording_day_for_level(theme: int) -> void:
+	if not is_instance_valid(_vf_frame):
+		return
+	var day := run.floor_idx if descent and run != null \
+		else DescentRun.FIXED_ORDER.find(theme)
+	_vf_frame.recording_day_offset = maxi(0, day)
 
 
 ## The recording breaks around the thing it cannot hold: project the nearest
@@ -2583,6 +2725,15 @@ func _update_flashlight_hud() -> void:
 	_charging_meter.value = level
 	_charging_panel.visible = player.is_charging()
 	_stamina_meter.value = player.stamina()
+	_charger_distance.visible = not is_instance_valid(_title) and not _switching and not _dying \
+		and not is_instance_valid(_descent_intro) and not is_instance_valid(_descent_summary)
+	if _charger_distance.visible:
+		var station := ChargingStation.nearest_to(player)
+		_charger_distance.text = "CHARGING" if player.is_charging() else (
+			"CHARGER %dm" % maxi(1, ceili(player.global_position.distance_to(station.global_position))) \
+			if station != null else "CHARGER --")
+		VhsOsd.set_ink(_charger_distance, VhsOsd.RED if level <= 0.1 \
+			else (VhsOsd.AMBER if level <= 0.25 else VhsOsd.INK_DIM))
 
 
 func award_emergency_flash(photo_id: String) -> bool:
@@ -2800,6 +2951,7 @@ func _on_start(selected_descent: bool) -> void:
 
 
 func _finish_mode_start(selected_descent: bool) -> void:
+	_apply_hud_scaling()
 	_music.stream_paused = false
 	_set_world_audio(true)
 	_switch_music(active_level)
@@ -2846,11 +2998,11 @@ func _set_mode_hint() -> void:
 		return
 	var sprint_hint := "Shift toggle sprint" if _settings != null and bool(_settings.get_value("toggle_sprint")) else "Shift sprint"
 	if descent:
-		_hint.text = "WASD move  ·  %s  ·  E use  ·  F torch  ·  C camera + Space photo  ·  P album  ·  B mode  ·  Esc pause  ·  Q title" % sprint_hint
+		_hint.text = "WASD move  ·  %s  ·  E use  ·  F torch  ·  C camera + Space photo  ·  P album  ·  Esc settings  ·  Q title" % sprint_hint
 		if opts.test_mode:
 			_hint.text = "TEST MODE · 1–9 / 0 / − jump floors · campaign not saved\n" + _hint.text
 	else:
-		_hint.text = "WASD move  ·  %s  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  V filter  ·  B mode  ·  Esc pause  ·  Q title" % sprint_hint
+		_hint.text = "WASD move  ·  %s  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  Esc settings  ·  Q title" % sprint_hint
 
 
 ## The Poolrooms are the only floor with standing water. Everywhere else the

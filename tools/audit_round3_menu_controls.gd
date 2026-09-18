@@ -19,6 +19,13 @@ func tap(code: Key) -> void:
 func settle() -> void:
 	for frame in 6: await process_frame
 
+func focus_action(title: TitleScreen, text: String) -> void:
+	for button in title._pages[TitleScreen.Page.MAIN].find_children("*", "Button", true, false):
+		if button.text == text:
+			button.grab_focus()
+			return
+	check(false, "missing title action: " + text)
+
 func run() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var path := "/tmp/liminal-menu-audit-%d.cfg" % OS.get_process_id()
@@ -30,6 +37,16 @@ func run() -> void:
 	menu.open()
 	paused = true
 	await settle()
+	check(menu._controls.has("vhs_enabled") and menu._controls.has("crt_enabled"),
+		"gameplay settings do not expose separate VHS and CRT toggles")
+	check((menu._controls["vhs_enabled"] as CheckButton).button_pressed
+		and (menu._controls["crt_enabled"] as CheckButton).button_pressed,
+		"gameplay settings do not present the restored VHS + CRT defaults")
+	var settings_labels := ""
+	for label in menu.find_children("*", "Label", true, false):
+		settings_labels += (label as Label).text + "\n"
+	check(settings_labels.contains("VHS EFFECT STRENGTH"),
+		"settings still use the old VHS distortion label")
 	var resumes: Array[bool] = []
 	var quits: Array[bool] = []
 	menu.resumed.connect(func(): resumes.append(true))
@@ -84,22 +101,32 @@ func run() -> void:
 		tap(KEY_TAB)
 		await settle()
 		var focused := root.gui_get_focus_owner() as Button
-		check(focused != null and "ENTER" in focused.text, "Tab does not initially focus Descent")
+		check(focused != null and focused == title._primary_button, "Tab does not initially focus primary Descent control")
 		tap(KEY_C)
 		await settle()
-		check(title._current_page == TitleScreen.Page.CREDITS and root.gui_get_focus_owner().is_visible_in_tree(), "focused title shortcuts/page focus broken")
+		check(title._current_page == TitleScreen.Page.MAIN, "letter shortcut unexpectedly changed title page")
+		focus_action(title, "CREDITS")
+		tap(KEY_ENTER)
+		await settle()
+		check(title._current_page == TitleScreen.Page.CREDITS and root.gui_get_focus_owner().is_visible_in_tree(), "Credits button did not open page with visible focus")
 		tap(KEY_ESCAPE)
 		await settle()
 		check(title._current_page == TitleScreen.Page.MAIN, "Escape did not return to main")
 		if saved:
 			tap(KEY_N)
 			await settle()
+			check(title._current_page == TitleScreen.Page.MAIN and not is_instance_valid(title._entry_confirmation), "letter shortcut unexpectedly opened new run")
+			focus_action(title, "NEW DESCENT")
+			tap(KEY_ENTER)
+			await settle()
+			check(is_instance_valid(title._entry_confirmation), "New Descent button bypassed confirmation")
 			tap(KEY_ESCAPE)
 			await settle()
 			check(root.gui_get_focus_owner() != null and root.gui_get_focus_owner().is_visible_in_tree(), "cancel new run lost title keyboard focus")
 			title._focus_page_control(TitleScreen.Page.MAIN)
 		var selected: Array[int] = []
 		title.descent_requested.connect(func(entry: int): selected.append(entry))
+		title._primary_button.grab_focus()
 		tap(KEY_ENTER)
 		check(selected == [TitleScreen.DescentEntry.CONTINUE if saved else TitleScreen.DescentEntry.NEW], "focused Descent did not activate through GUI")
 		title.free()

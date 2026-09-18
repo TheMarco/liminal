@@ -153,6 +153,7 @@ var _body_rids: Array[RID] = []
 ## Anomaly visual roots remain present after documentation.
 var _resolvables: Array[Node] = []
 var _glow: OmniLight3D
+var _glow_source: MeshInstance3D
 var _floor_y := 0.0
 ## PORTAL only: the theme whose air the tear looks out into (-1 = the
 ## outside, a dead grey). Set by the director from the descent order.
@@ -635,6 +636,8 @@ func _release_ceiling_furniture(restoring := false) -> void:
 	_set_layer(pivot, EYE_ONLY_LAYER)
 	if is_instance_valid(_glow):
 		_glow.light_cull_mask = PHOTO_LAYER
+	if is_instance_valid(_glow_source):
+		_set_layer(_glow_source, PHOTO_LAYER)
 	if restoring:
 		pivot.position.y = _placement_rest_y
 		var sign_value := -1.0 \
@@ -963,7 +966,9 @@ func _build_props(floor_h: float, count: int) -> void:
 		_glow.omni_attenuation = 1.4
 		_glow.shadow_enabled = false
 		_glow.position = Vector3(spot.x, pivot_y + bottom - 0.25, spot.z)
+		_glow.set_meta("visible_source", "anomaly_cold_mote")
 		add_child(_glow)
+		_glow_source = _visible_anomaly_source(_glow.position)
 		# Sample only the portion below the slab; a point embedded in the ceiling
 		# would make an otherwise obvious anomaly fail the line-of-sight test.
 		_points = [
@@ -1020,6 +1025,9 @@ func _build_universal_photo(floor_h: float) -> void:
 	var exposure_mat := StandardMaterial3D.new()
 	exposure_mat.albedo_color = Color(0.055, 0.065, 0.06)
 	exposure_mat.roughness = 0.82
+	exposure_mat.emission_enabled = true
+	exposure_mat.emission = Color(0.28, 0.42, 0.72)
+	exposure_mat.emission_energy_multiplier = 1.35
 	var exposure_mesh := BoxMesh.new()
 	exposure_mesh.size = Vector3(0.76, 0.52, 0.052)
 	var exposure := MeshInstance3D.new()
@@ -1033,7 +1041,8 @@ func _build_universal_photo(floor_h: float) -> void:
 	glow.light_energy = 0.42
 	glow.omni_range = 3.6
 	glow.shadow_enabled = false
-	glow.position = _placement_pivot.position - Vector3(0, 0.55, 0)
+	glow.position = _placement_pivot.position
+	glow.set_meta("visible_source", "impossible_photo_exposure")
 	add_child(glow)
 	_glow = glow
 	_points = [_placement_pivot.position,
@@ -1087,10 +1096,35 @@ func _build_giant(floor_h: float) -> void:
 	glow.omni_attenuation = 1.4
 	glow.shadow_enabled = false
 	glow.position = spot + Vector3(0, base_h * factor + 0.3, 0)
+	glow.set_meta("visible_source", "anomaly_cold_mote")
 	add_child(glow)
 	_glow = glow
+	_glow_source = _visible_anomaly_source(glow.position)
 	_points = [spot + Vector3(0, base_h * factor * 0.5, 0),
 		spot + Vector3(0, base_h * factor * 0.9, 0)]
+
+
+## Supernatural highlights still need a visible origin. This small cold mote is
+## deliberately readable before its modest local light reaches nearby walls;
+## it replaces the former unexplained point-source glow around anomalies.
+func _visible_anomaly_source(at: Vector3) -> MeshInstance3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.12, 0.20, 0.42)
+	material.emission_enabled = true
+	material.emission = Color(0.42, 0.62, 1.0)
+	material.emission_energy_multiplier = 2.2
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.055
+	mesh.height = 0.11
+	var mote := MeshInstance3D.new()
+	mote.name = "AnomalyLightSource"
+	mote.mesh = mesh
+	mote.material_override = material
+	mote.position = at
+	mote.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mote)
+	return mote
 
 
 ## RING: the prop repeated in a circle, every copy facing the centre —

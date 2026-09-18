@@ -68,6 +68,7 @@ func _hall_lighting() -> void:
 		light.distance_fade_length = 7.0
 		light.distance_fade_shadow = 15.0
 		light.set_meta("stream_room_light", true)
+		light.set_meta("visible_source", "hotel_ceiling_medallion")
 		scene.add_node(light)
 
 
@@ -126,26 +127,18 @@ func _pillars(h: float, mat: Material) -> void:
 
 func _slots() -> void:
 	var idx = 0
-	for row in [[4.35, -1.0], [7.65, 1.0]]:
+	# Four banks form two close back-to-back islands, as on a real casino floor.
+	# Seats face the outside of each island, preserving a central circulation
+	# lane and perimeter routes instead of creating four isolated rows.
+	for row in [[3.15, -1.0], [4.05, 1.0], [7.95, -1.0], [8.85, 1.0]]:
 		var z: float = row[0]
 		var fx: float = row[1]
-		for i in 5:
-			_slot_machine(3.4 + 1.3 * i, z, fx, idx)
+		for i in 6:
+			_slot_machine(2.7 + 1.32 * i, z, fx, idx)
 			idx += 1
-	# colored glow washing over each bank's player side
-	var glow_cols = [Color(1.0, 0.35, 0.6), Color(0.45, 0.8, 1.0)]
-	var glow_z = [3.0, 9.0]
-	for gi in 2:
-		var gl = OmniLight3D.new()
-		gl.light_color = glow_cols[gi]
-		gl.light_energy = 0.7
-		gl.omni_range = 5.5
-		gl.position = Vector3(WorldGen.CELL_SIZE / 2.0, 2.3, glow_z[gi])
-		gl.shadow_enabled = false
-		gl.distance_fade_enabled = true
-		gl.distance_fade_begin = 16.0
-		gl.distance_fade_length = 8.0
-		scene.add_node(gl)
+	# The cabinets already carry authored emissive displays and light guides.
+	# A separate bank-wide header always sat in the player aisle and read as
+	# loose geometry, even with brackets, so the entire assembly is gone.
 	# magenta ceiling cove around the slot floor
 	var cy = ctx.ceiling_height - 0.22
 	scene.box(Vector3(WorldGen.CELL_SIZE / 2.0, cy, 0.5), Vector3(WorldGen.CELL_SIZE - 1.6, 0.05, 0.06), Mats.neon_pink(), false)
@@ -185,19 +178,19 @@ func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 	inst.name = "AuthoredCabinet"
 	inst.set_meta("slot_front_shell", true)
 	inst.set_meta("slot_rear_shell", true)
-	var scale := minf(1.0, (ctx.ceiling_height - 0.12) / height)
+	var headroom := Chunk.CASINO_SLOT_SIGN_HEADROOM \
+		if ctx.casino_landmark == CasinoLandmarks.LAST_CHANCE else Chunk.CASINO_SLOT_HEADROOM
+	var scale := minf(Chunk.CASINO_SLOT_SCALE, (ctx.ceiling_height - headroom) / height)
 	inst.scale = Vector3.ONE * scale
 	pivot.add_child(inst)
 	for mesh: MeshInstance3D in inst.find_children("LightGuides", "MeshInstance3D", true, false):
 		mesh.material_override = Mats.casino_slot_lights()
 	if not powered:
-		var glass := StandardMaterial3D.new()
-		glass.albedo_color = Color(0.013, 0.019, 0.022)
-		glass.metallic = 0.3
-		glass.roughness = 0.25
+		# Idle cabinets must still read as complete machines. Retain the actual
+		# reel/paytable artwork with a dim backlight, not featureless black holes.
 		for mesh: MeshInstance3D in inst.find_children("*", "MeshInstance3D", true, false):
 			if str(mesh.name) in ["Displays", "PrintedGlass", "LightGuides"]:
-				mesh.material_override = glass
+				mesh.material_override = Mats.casino_slot_standby(mesh.get_active_material(0))
 	var b0 := scene.collider_mark()
 	scene.collider_box(Vector3(x, height * scale * 0.5, z + f * 0.09 * scale),
 		Vector3(0.96, height, 0.90) * scale)
@@ -207,7 +200,8 @@ func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 		var cpos := Vector3(x + (ctx.random01(96 + idx) - 0.5) * 0.16,
 			0, z + f * 0.95)
 		scene.cc0_prop("bar_chair_round_01", cpos, yaw)
-		scene.collider_cylinder(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
+		# Casino stools are loose, light furniture. They must not turn each
+		# machine face into a solid wall or strand the player between banks.
 	return
 
 ## Compatibility entry point for the existing alternate-cabinet preview.
@@ -465,6 +459,7 @@ func _casino_neon(dir: int, plane: float) -> void:
 	l.distance_fade_enabled = true
 	l.distance_fade_begin = 14.0
 	l.distance_fade_length = 6.0
+	l.set_meta("visible_source", "casino_neon_tube")
 	scene.add_node(l)
 
 
@@ -518,11 +513,11 @@ func _change_machine_at(at: Vector3, yaw: float) -> void:
 	scene.bind_furnishing_colliders(v, collider_start)
 
 
-## Blackjack table nobody deals anymore: baize, shoe, chips, three stools.
-## The authored blackjack setpiece: semicircular table, felt, and six matching
-## stools already arranged around the player arc. It replaces the generated
-## table outright rather than standing beside it, so a floor never shows both
-## versions of the same furniture.
+## Blackjack table nobody deals anymore: baize, shoe, seven chairs, no dealer.
+## The supplied setpiece arrives complete, with table, card shoe and chairs
+## already arranged around the player arc, so it replaces the generated
+## table outright rather than standing beside it, and a floor never shows
+## both versions of the same furniture.
 
 
 func _blackjack_authored(p: Vector3, salt: int) -> bool:
@@ -531,9 +526,10 @@ func _blackjack_authored(p: Vector3, salt: int) -> bool:
 		Chunk.CASINO_BLACKJACK_SCALE, Vector3.ZERO, "blackjack_table")
 	if pivot == null:
 		return false
-	# Collide the table body only. The stools sit outside it and are thin
-	# enough that walking between them reads as intended rather than blocked.
-	scene.collider_yaw_box(p + Vector3(0, 0.45, 0), Vector3(2.45, 0.90, 1.15), yaw)
+	# Collide the table body only. The chairs ring it outside the footprint
+	# and stay walkable-between rather than blocked.
+	scene.collider_yaw_box(p + Vector3(0, 0.47, -0.20).rotated(Vector3.UP, yaw),
+		Vector3(2.13, 0.94, 1.40), yaw)
 	return true
 
 
@@ -545,7 +541,7 @@ func _roulette(p: Vector3, salt: int) -> void:
 	if scene.attributed_floor_prop(Chunk.CASINO_ROULETTE_PATH, p, yaw,
 			Chunk.CASINO_ROULETTE_SCALE, Chunk.CASINO_ROULETTE_CENTRE, "roulette_table") == null:
 		return
-	scene.collider_yaw_box(p + Vector3(0, 0.48, 0), Vector3(3.5, 0.96, 2.12), yaw)
+	scene.collider_yaw_box(p + Vector3(0, 0.6, 0), Vector3(3.49, 1.2, 2.80), yaw)
 
 
 ## Every table is the authored one now. The generated felt-and-torus table below
@@ -586,6 +582,76 @@ func _blackjack(p: Vector3, salt: int) -> void:
 		_chair_at(cp, atan2(cos(ang), sin(ang)) + (ctx.random01(salt + 31 + i) - 0.5) * 0.5, Mats.velvet())
 
 
+## Full back bar against a tall wall: stocked shelves, counter, five stools.
+## The wall search guarantees the bay, so the unit always arrives complete:
+## there is no generated fallback, just no bar when the model is absent.
+func _casino_bar_at(at: Vector3, yaw: float) -> void:
+	var pivot = scene.attributed_floor_prop(Chunk.CASINO_BAR_PATH, at, yaw,
+		Chunk.CASINO_BAR_SCALE, Vector3.ZERO, "casino_bar")
+	if pivot == null:
+		return
+	# Tag the authored lamp, accent and LED lights with their visible
+	# fixtures, following the project convention for runtime lights, and
+	# bring their energies down to room level: the supplied values blow out
+	# the bottles and counter at these short ranges. Classify on the
+	# authored energy before overwriting it.
+	for node in pivot.find_children("*", "Light3D", true, false):
+		var l := node as Light3D
+		var source := "bar_undercounter_led"
+		var energy := Chunk.CASINO_BAR_LED_ENERGY
+		if l.light_energy > 10.0:
+			source = "bar_counter_lamp"
+			energy = Chunk.CASINO_BAR_LAMP_ENERGY
+		elif l.light_energy > 4.0:
+			source = "bar_shelf_accent"
+			energy = Chunk.CASINO_BAR_ACCENT_ENERGY
+		l.set_meta("visible_source", source)
+		l.light_energy = energy
+	# One box for the whole unit, stools included: everything stands against
+	# the wall, so there is no walkable-between seating arc to preserve.
+	scene.collider_yaw_box(at + Vector3(0, 1.3, -0.07).rotated(Vector3.UP, yaw),
+		Vector3(6.0, 2.6, 3.4), yaw)
+
+
+## Smaller popup bar for slot rooms and the table-game rooms the big bar
+## skips. Same contract: wall bay guaranteed by the search, unit arrives
+## complete, no generated fallback.
+func _casino_popup_bar_at(at: Vector3, yaw: float) -> void:
+	var pivot = scene.attributed_floor_prop(Chunk.CASINO_POPUP_PATH, at, yaw,
+		Chunk.CASINO_POPUP_SCALE, Vector3.ZERO, "casino_popup_bar")
+	if pivot == null:
+		return
+	# Tag the dome lamp, display spots and votive glow with their visible
+	# fixtures and bring them down to room level. Classify on the authored
+	# energy before overwriting it.
+	for node in pivot.find_children("*", "Light3D", true, false):
+		var l := node as Light3D
+		var source := "bar_popup_glow"
+		var energy := Chunk.CASINO_POPUP_GLOW_ENERGY
+		if l.light_energy > 4.5:
+			source = "bar_popup_lamp"
+			energy = Chunk.CASINO_POPUP_LAMP_ENERGY
+		elif l.light_energy > 1.0:
+			source = "bar_popup_accent"
+			energy = Chunk.CASINO_POPUP_ACCENT_ENERGY
+		l.set_meta("visible_source", source)
+		l.light_energy = energy
+	# Cap emission on the shade and display glass: an absolute set, so every
+	# bar in the building shares the tuned look instead of compounding it.
+	for node in pivot.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		for surface in mesh_instance.mesh.get_surface_count():
+			var mat := mesh_instance.mesh.surface_get_material(surface)
+			if mat is StandardMaterial3D and (mat as StandardMaterial3D).emission_enabled:
+				(mat as StandardMaterial3D).emission_energy_multiplier = \
+					Chunk.CASINO_POPUP_EMISSION_ENERGY
+	# One box for the whole unit, stools included, against the wall.
+	scene.collider_yaw_box(at + Vector3(0, 1.0, 0.15).rotated(Vector3.UP, yaw),
+		Vector3(3.26, 2.0, 2.76), yaw)
+
+
 ## Brass posts and sagging red rope framing the grand hall's centre aisle.
 ## Two queue lines flanking the casino's main axis, laid out on the authored
 ## barrier's own 1.891m post pitch rather than a chosen one.
@@ -605,12 +671,9 @@ func _velvet_ropes() -> void:
 
 func _casino_ballroom() -> void:
 	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
-	# Inlaid dance floor and brass border.
+	# Inlaid dance floor. The brass perimeter read as loose rails because the
+	# marble inset is deliberately close to the surrounding casino floor.
 	scene.box(c + Vector3(0, 0.012, 0.6), Vector3(10.2, 0.024, 8.2), Mats.marble_photo(), false)
-	for sx in [-5.18, 5.18]:
-		scene.box(c + Vector3(sx, 0.027, 0.6), Vector3(0.08, 0.03, 8.35), Mats.brass(), false)
-	for sz in [-3.52, 4.72]:
-		scene.box(c + Vector3(0, 0.027, sz), Vector3(10.35, 0.03, 0.08), Mats.brass(), false)
 	# Low stage across the far side, curtain folds and an abandoned microphone.
 	var stage = c + Vector3(0, 0, -8.0)
 	scene.rounded_box(stage + Vector3(0, 0.22, 0), Vector3(9.2, 0.44, 2.7), Mats.darkwood(), 0.025)
@@ -730,6 +793,7 @@ func _hallway() -> void:
 		l.distance_fade_enabled = true
 		l.distance_fade_begin = 14.0
 		l.distance_fade_length = 6.0
+		l.set_meta("visible_source", "hotel_wall_sconce")
 		scene.add_node(l)
 
 
@@ -992,14 +1056,14 @@ func _casino_landmark() -> void:
 				_authored_slot_machine(4.35 + 1.1 * (i % 4),
 					4.85 if row == 0 else 7.15, -1.0 if row == 0 else 1.0,
 					i, 1 if i == 2 else i % 4, i == 2)
-			_landmark_sign("LAST CHANCE", Vector3(6, minf(3.05, ctx.ceiling_height - 0.33), 4.72), PI, Color(1, 0.62, 0.22), 0.006)
-			_landmark_sign("LAST CHANCE", Vector3(6, minf(3.05, ctx.ceiling_height - 0.33), 7.28), 0.0, Color(1, 0.62, 0.22), 0.006)
-			var glow := OmniLight3D.new()
-			glow.position = Vector3(6, 2.2, 3.25)
-			glow.light_color = Color(1, 0.58, 0.22)
-			glow.light_energy = 1.25
-			glow.omni_range = 6.0
-			scene.add_node(glow)
+			# Compact framed boards reserve their own vertical band. Cabinet caps
+			# leave >=15cm below the lower brass edge even at a 2.7m ceiling.
+			var sign_y := minf(3.05, ctx.ceiling_height - 0.36)
+			_landmark_sign("LAST CHANCE", Vector3(6, sign_y, 4.72), PI, Color(1, 0.62, 0.22), 0.0045, true)
+			_landmark_sign("LAST CHANCE", Vector3(6, sign_y, 7.28), 0.0, Color(1, 0.62, 0.22), 0.0045, true)
+			# The room's visible flush mount and powered cabinet/sign materials do
+			# the lighting. The old free-floating amber wash in front of the bank
+			# made the floor glow without any source and is intentionally gone.
 		CasinoLandmarks.LOUNGE:
 			for pair in [[4.6, 0.0], [7.4, PI]]:
 				var pos := Vector3(6, -0.32, pair[0])
@@ -1017,6 +1081,7 @@ func _casino_landmark() -> void:
 				lamp.light_color = Color(1.0, 0.61, 0.27)
 				lamp.light_energy = 0.85
 				lamp.omni_range = 6.5
+				lamp.set_meta("visible_source", "lounge_floor_lamp_bulb")
 				scene.add_node(lamp)
 			_landmark_sign("THE AMBER LOUNGE", Vector3(6, 2.75, 4.6), 0, Color(0.94, 0.74, 0.42), 0.0035)
 			var music := AudioStreamPlayer3D.new()
@@ -1041,8 +1106,10 @@ func _casino_landmark() -> void:
 				_landmark_sign("GUEST ROOMS", Vector3(6, 2.65, 4.43), 0, Color(0.85, 0.72, 0.46), 0.003)
 
 
-func _landmark_sign(text: String, at: Vector3, yaw: float, color: Color, pixel: float) -> void:
+func _landmark_sign(text: String, at: Vector3, yaw: float, color: Color, pixel: float,
+		hanging := false) -> void:
 	var board := Node3D.new()
+	board.set_meta("casino_landmark_sign", text)
 	board.position = at
 	board.rotation.y = yaw
 	scene.add_node(board)
@@ -1053,7 +1120,7 @@ func _landmark_sign(text: String, at: Vector3, yaw: float, color: Color, pixel: 
 		scene.model_box(board, Vector3(x, 0, 0.04), Vector3(0.025, height, 0.025), Mats.brass())
 	for y in [-height * 0.5, height * 0.5]:
 		scene.model_box(board, Vector3(0, y, 0.04), Vector3(width, 0.025, 0.025), Mats.brass())
-	if at.y > 2.7:
+	if hanging or at.y > 2.7:
 		var drop := maxf(0.0, ctx.ceiling_height - at.y - height * 0.5)
 		for x in [-width * 0.38, width * 0.38]:
 			scene.model_cylinder(board, Vector3(x, height * 0.5 + drop * 0.5, 0), 0.014, maxf(0.02, drop), Mats.brass())
@@ -1070,12 +1137,13 @@ func _landmark_sign(text: String, at: Vector3, yaw: float, color: Color, pixel: 
 
 
 func _landmark_lighting() -> void:
-	# Steady, modest fill maintains navigation even in the mostly dead bank.
+	# Steady, modest fill maintains navigation around the dim standby bank.
 	var light := OmniLight3D.new()
 	light.position = Vector3(6, ctx.ceiling_height - 0.4, 6)
 	light.omni_range = 10
 	light.light_energy = 0.42 if ctx.casino_landmark == CasinoLandmarks.LAST_CHANCE else 0.7
 	light.light_color = Color(0.70, 0.76, 0.85) if ctx.casino_landmark == CasinoLandmarks.LAST_CHANCE else Color(1, 0.70, 0.42)
+	light.set_meta("visible_source", "casino_flush_mount")
 	scene.add_node(light)
 	_casino_flush_mount(Vector3(6, 0, 6), Mats.panel_on())
 
@@ -1129,11 +1197,17 @@ func _red_telephone(at: Vector3, yaw: float) -> void:
 			scene.model_box(phone, Vector3(-0.055 + x * 0.06, 1.60 - y * 0.055, 0.248), Vector3(0.044, 0.035, 0.014), Mats.chrome())
 	for i in range(16):
 		scene.model_sphere(phone, Vector3(-0.18 + cos(i * PI) * 0.014, 1.08 - i * 0.025, 0.19), 0.018, Mats.darkwood())
+	# The red indicator above the keypad is the actual source. Keeping the lamp
+	# on the phone face prevents the old red pool from appearing in empty air.
+	var indicator_pos := Vector3(0, 1.84, 0.258)
+	var indicator := scene.model_sphere(phone, indicator_pos, 0.035, Mats.lamp_red())
+	indicator.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var light := OmniLight3D.new()
-	light.position = Vector3(0, 1.85, 0.65)
+	light.position = indicator_pos
 	light.light_color = Color(1, 0.08, 0.035)
 	light.light_energy = 0.65
 	light.omni_range = 3.5
+	light.set_meta("visible_source", "telephone_indicator")
 	phone.add_child(light)
 	var label := Label3D.new()
 	label.text = "RECEPTION"
