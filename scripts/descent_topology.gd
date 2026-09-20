@@ -1334,7 +1334,8 @@ func _furniture_style_priority(style: int) -> int:
 		return 0
 	if style in [
 		WorldGen.STYLE_PILLARS, WorldGen.STYLE_GRAND,
-		WorldGen.STYLE_BALLROOM, WorldGen.OFFICE_STORAGE,
+		WorldGen.STYLE_BALLROOM, WorldGen.OFFICE_EMPTY,
+		WorldGen.OFFICE_STORAGE,
 		WorldGen.ANNEX_QUIET, WorldGen.AIR_CHECKIN,
 		WorldGen.ASY_HYDRO, WorldGen.SCH_AUDITORIUM,
 		WorldGen.MALL_ATRIUM, WorldGen.PRISON_ROTUNDA,

@@ -70,8 +70,23 @@ func _surface_points(at: Vector3i) -> Array[Vector3]:
 	return result
 
 func _publish_search_progress(clear: Callable) -> void:
-	if not _points.is_empty() or _search.is_empty(): return
-	_points = _smooth(_last_from, _safe_partial(_surface_points(_search.closest)), clear)
+	if _search.is_empty(): return
+	# The closest proven node advances as each time slice expands. Refresh a
+	# partial route even while the actor is following the previous prefix; keeping
+	# the first published point forever made host-load timing decide whether a
+	# follower repeatedly returned to a doorway jamb.
+	var result := _safe_partial(_surface_points(_search.closest))
+	var joined := false
+	for index in range(result.size() - 1, -1, -1):
+		if clear.call(_last_from, result[index]):
+			result = result.slice(index)
+			joined = true
+			break
+	if not joined:
+		return
+	var candidate := _smooth(_last_from, result, clear)
+	if not candidate.is_empty():
+		_points = candidate
 
 func _safe_partial(points: Array[Vector3]) -> Array[Vector3]:
 	# Do not commit to an irreversible drop while still searching for a route

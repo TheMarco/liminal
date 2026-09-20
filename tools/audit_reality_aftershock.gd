@@ -142,14 +142,16 @@ func run() -> void:
 	var ghost := ShadowFigure.new()
 	var pulses := effect.pulse_count
 	effect.before_approach(ghost)
-	expect(effect.pulse_count == pulses + 1 and is_equal_approx(ghost._approach_hold, 1.35), "pre-approach pulse/hold missing")
+	expect(effect.pulse_count == pulses + 1 and is_zero_approx(ghost._approach_hold),
+		"pre-approach pulse did not start while walker remained in motion")
 	effect._process(0.15)
 	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), RealityAftershock.APPROACH_STRENGTH), "pre-approach strength differs")
 	var second_ghost := ShadowFigure.new()
 	var phase_before := effect.elapsed
 	effect.before_approach(second_ghost)
 	expect(effect.pulse_count == pulses + 1 and effect.elapsed == phase_before, "second ghost restarts/stacks pulse")
-	expect(second_ghost._approach_hold <= 1.21 and second_ghost._approach_hold > 1.19, "second ghost hold does not match remaining pulse")
+	expect(is_zero_approx(second_ghost._approach_hold),
+		"second walker was frozen during the shared warning pulse")
 	effect._process(1.11)
 	expect(not effect.visible, "pre-approach effect failed to clear before movement")
 	effect.trigger()

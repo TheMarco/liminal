@@ -1,7 +1,7 @@
 extends CanvasLayer
 ## Perception beats after unnatural photographs and before hostile approach.
-## No camera transforms, audio or saved-photo changes. Legacy apparitions wait
-## through the warning; 3D walkers materialize in motion with contact grace.
+## No camera transforms, audio or saved-photo changes. Walkers materialize in
+## motion through the warning and rely on their normal contact grace.
 ## Phase uses paused gameplay time, never shader TIME. Hidden passes do no work.
 
 const EFFECT_SHADER := preload("res://shaders/reality_aftershock.gdshader")
@@ -12,7 +12,6 @@ const ATTACK := 0.65
 const RELEASE_START := 1.65
 const APPROACH_SECONDS := 1.25
 const APPROACH_STRENGTH := 0.7
-const REACTION_MARGIN := 0.10
 
 var host: Node
 var enabled := true

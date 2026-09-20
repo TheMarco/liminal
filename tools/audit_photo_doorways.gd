@@ -3,7 +3,7 @@ extends "res://tools/lib/audit_base.gd"
 ## and disk-save contract. No renderer required; capture_photo_doorway.gd
 ## additionally exercises the actual shutter and captures all visual states.
 ## godot --headless --path . --script tools/audit_photo_doorways.gd -- \
-##   --mode=descent --nologo
+##   --mode=descent --nologo --realm-visit --seed=7
 const SEED := 7
 
 func _layers_ok(node: Node, expected: int) -> bool:
@@ -34,12 +34,21 @@ func _ray(player: Player, centre: Vector3, forward: Vector3) -> Dictionary:
 
 func run() -> void:
 	var game := await boot_game(SEED)
+	var realm: RealmExcursion = game._realm_visit
+	expect(is_instance_valid(realm), "realm visit fixture was not prepared")
+	if not is_instance_valid(realm):
+		await teardown_game(game)
+		finish()
+		return
+	expect(await await_until(func(): return realm.phase == RealmExcursion.Phase.WAITING, 20000),
+		"realm preview did not become ready")
 	var route: DescentRoute = game.descent_route
 	var topology: DescentTopology = route.topology
 	var cm: ChunkManager = game.cm
 	var director: PhotoDirector = game._photo_director
 	var camera: PhotoCamera = game._photo_camera
 	var player: Player = game.player
+	expect(director.realm_preview_ready, "realm phase settled without photo preview readiness")
 	game.run.set_process(false)
 	game.set_process(false)
 	player.set_physics_process(false)
@@ -53,6 +62,7 @@ func run() -> void:
 		finish()
 		return
 	var record := records[0]
+	expect(bool(record.get("realm", false)), "doorway fixture is not owned by the realm preview")
 	var id := str(record["id"])
 	var at: Vector2i = record["cell"]
 	var dir := DescentTopology.edge_dir(record)

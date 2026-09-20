@@ -2424,6 +2424,39 @@ func _floor_spot_clear(p: Vector3, radius: float, height := 0.9) -> bool:
 	return true
 
 
+## Conservative local-space counterpart to the camera's physics ray. Chunk
+## construction already registers authored furniture on `body`; checking those
+## same shapes here lets objective placement reject a visually buried wall
+## before the anomaly is spawned. Cylinders use their enclosing box: a false
+## rejection merely selects the universal ceiling-photo fallback, while a false
+## clear could strand the evidence quota.
+func _segment_clear(p_from: Vector3, p_to: Vector3,
+		end_tolerance := 0.45) -> bool:
+	for child in body.get_children():
+		var cs := child as CollisionShape3D
+		if cs == null or cs.disabled:
+			continue
+		var size := Vector3.ZERO
+		var box := cs.shape as BoxShape3D
+		var cyl := cs.shape as CylinderShape3D
+		if box != null:
+			size = box.size
+		elif cyl != null:
+			size = Vector3(cyl.radius * 2.0, cyl.height, cyl.radius * 2.0)
+		else:
+			continue
+		var inverse := cs.transform.affine_inverse()
+		var local_from := inverse * p_from
+		var local_to := inverse * p_to
+		var bounds := AABB(-size * 0.5, size)
+		var hit: Variant = bounds.intersects_segment(local_from, local_to)
+		if hit != null:
+			var hit_in_chunk: Vector3 = cs.transform * (hit as Vector3)
+			if hit_in_chunk.distance_to(p_to) > end_tolerance:
+				return false
+	return true
+
+
 ## Full-footprint counterpart to `_floor_spot_clear`. Long furniture cannot be
 ## represented by a small clearance circle: doing that let the middle of an
 ## Annex shelf clear a divider while the rack's far end passed through it.

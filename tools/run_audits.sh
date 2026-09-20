@@ -157,7 +157,7 @@ AUDITS=(
 	"photo_album_store|tools/audit_photo_album_store.gd|"
 	"photo_album|tools/audit_photo_album.gd|--mode=descent --nologo"
 	"photo_runtime|tools/audit_photo_runtime.gd|--mode=descent --nologo"
-	"photo_doorways|tools/audit_photo_doorways.gd|--mode=descent --nologo"
+	"photo_doorways|tools/audit_photo_doorways.gd|--mode=descent --nologo --realm-visit --seed=7"
 	"photo_obstruction|tools/audit_photo_obstruction.gd|--mode=descent --descent-floor=2 --nologo --seed=21"
 	"all_floor_obstructions|tools/audit_all_floor_obstructions.gd|--seed=21 --states=7"
 	"realm_generation|tools/audit_realm_generation.gd|--seed=21 --states=7"

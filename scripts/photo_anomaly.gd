@@ -483,7 +483,8 @@ static func writing_spot_for_chunk(route: DescentRoute, at: Vector2i,
 		if chunk._edge_info(at, dir).has("photo_door_id"):
 			continue # writing must not float across the lens-only aperture
 		var along := float(spot["along"])
-		if _writing_approach_clear(chunk, dir, along):
+		if _writing_approach_clear(chunk, dir, along) \
+				and _writing_sightline_clear(chunk, dir, along):
 			return spot
 	return {}
 
@@ -546,6 +547,50 @@ static func _writing_approach_clear(chunk: Chunk, dir: int,
 				0.38, 1.8):
 			return false
 	return true
+
+
+## Prove at least one real eye-height view of the writing's maximum fitted
+## rectangle. Capsule clearance alone is insufficient: cubicle partitions and
+## other side furniture can leave a walkable lane while hiding one of the label
+## corners, and PhotoCamera correctly requires every corner to be visible.
+static func _writing_sightline_clear(chunk: Chunk, dir: int,
+		along: float) -> bool:
+	var floor_h := Chunk.cell_floor_h(chunk.wseed, chunk.cell, chunk.theme)
+	var dirv3 := Vector3(WorldGen.DIRV[dir].x, 0.0, WorldGen.DIRV[dir].y)
+	var inward := -dirv3
+	var across := Vector3.FORWARD if absf(dirv3.x) > 0.5 else Vector3.RIGHT
+	var half := WorldGen.CELL_SIZE * 0.5
+	var plane := half + signf(dirv3.x + dirv3.z) * (half - 0.45)
+	var centre := Vector3(plane, floor_h + 1.52, along) \
+		if dirv3.x != 0.0 else Vector3(along, floor_h + 1.52, plane)
+	var bottom := floor_h + WRITING_FLOOR_MARGIN
+	var top := Chunk.cell_ceil_h(chunk.wseed, chunk.cell, chunk.theme) \
+		- WRITING_CEILING_MARGIN
+	var height := minf(WRITING_MAX_HEIGHT, top - bottom)
+	centre.y = clampf(centre.y, bottom + height * 0.5, top - height * 0.5)
+	var targets: Array[Vector3] = [centre]
+	for side in [-1.0, 1.0]:
+		for vertical in [-1.0, 1.0]:
+			targets.append(centre + across * WRITING_MAX_WIDTH * 0.5 * side \
+				+ Vector3.UP * height * 0.5 * vertical)
+	# At 3.5m the maximum fitted phrase clears the raised camera's 58-degree
+	# framing. Later stances rescue a view whose near point is beside furniture.
+	for distance in [3.5, 4.2]:
+		var stance := centre + inward * float(distance)
+		stance.y = floor_h
+		# Mirrors Player's 0.38m x 1.8m capsule and 1.377m eye without a
+		# PhotoAnomaly <-> Player script dependency cycle.
+		if not chunk._floor_spot_clear(stance, 0.38, 1.8):
+			continue
+		var eye := stance + Vector3.UP * 1.377
+		var all_clear := true
+		for target in targets:
+			if not chunk._segment_clear(eye, target):
+				all_clear = false
+				break
+		if all_clear:
+			return true
+	return false
 
 
 ## Theme builders can place an entire authored structure in front of an

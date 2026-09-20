@@ -14,6 +14,7 @@ func run() -> void:
 	var director: PhotoDirector = game._photo_director
 	var camera: PhotoCamera = game._photo_camera
 	expect(director != null and camera != null, "photo layer missing")
+	game.player.handheld_camera_enabled = false
 	var checked := 0
 	for at in director.plan:
 		game.cm.stream_focus = Vector3(at.x * 12.0 + 6, 0.0, at.y * 12.0 + 6)
@@ -33,6 +34,7 @@ func run() -> void:
 		var mid: Vector3 = points[0]
 		if points.size() > 1:
 			mid = (points[0] + points[1]) * 0.5
+		var legal_stances := 0
 		var frames := 0
 		for dist in [1.8, 3.5, 6.0]:
 			for ang in 8:
@@ -57,21 +59,23 @@ func run() -> void:
 				# capsule before accepting this framing stance.
 				if not stand_chunk._floor_spot_clear(local_stand, 0.38, 1.8):
 					continue
+				legal_stances += 1
 				stand.y = floor_h + 0.15
 				game.player.teleport(stand)
 				var eye: Vector3 = game.player.cam.global_position
 				var flat := Vector2(mid.x - eye.x, mid.z - eye.z)
 				game.player.rotation.y = atan2(-flat.x, -flat.y)
-				game.player.cam.rotation = Vector3(
-					atan2(mid.y - eye.y, flat.length()),
-					game.player.rotation.y, 0.0)
-				await physics_frame
+				# Player owns the top-level camera pose every rendered frame. Set its
+				# authored pitch rather than a transient Camera3D rotation that
+				# _process() would overwrite before the capture check.
+				game.player._pitch = atan2(mid.y - eye.y, flat.length())
+				await process_frame
 				if camera._captured_anomalies().has(anomaly):
 					frames += 1
 		var style := WorldGen.cell_style(director.world_seed, at, director.theme)
 		expect(frames > 0,
-			"planned %s type %d style %d capturable from 0/24 legal stances"
-			% [str(at), anomaly.type, style])
+			"planned %s type %d style %d capturable from 0/%d legal stances"
+			% [str(at), anomaly.type, style, legal_stances])
 		checked += 1
 	expect(checked == director.plan.size(),
 		"expected %d planned anomalies, checked %d" % [
