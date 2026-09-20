@@ -15,12 +15,40 @@ func run() -> void:
 	settings.set_value("sensitivity", 2.0)
 	settings.set_value("field_of_view", 90.0)
 	settings.set_value("head_bob", 0.0)
+	settings.set_value("handheld_camera", false)
+	settings.set_value("handheld_strength", 0.73)
 	settings.set_value("invert_y", true)
 	settings.set_value("toggle_sprint", true)
 	expect(game.player.invert_y and game.player.toggle_sprint, "comfort input toggles not applied live")
 	expect(is_equal_approx(game.player.sensitivity_multiplier, 2.0), "sensitivity not applied")
 	expect(is_equal_approx(game.player.base_fov, 90.0), "FOV not applied")
 	expect(is_equal_approx(game.player.head_bob_strength, 0.0), "head bob not applied")
+	expect(not game.player.handheld_camera_enabled, "handheld camera toggle not applied")
+	expect(is_equal_approx(game.player.handheld_camera_strength, 0.73),
+		"handheld camera strength not applied")
+	game.player._handheld_motion.reset()
+	game._figures.seen_by_player.emit()
+	expect(is_zero_approx(game.player.handheld_fear_level()),
+		"disabled handheld camera accepted an enemy reveal")
+	settings.set_value("handheld_camera", true)
+	game._figures.seen_by_player.emit()
+	expect(game.player.handheld_fear_level() > 0.0,
+		"enemy reveal did not trigger handheld fear motion")
+	game.player._handheld_motion.reset()
+	game.player._sprinting = false
+	game.player.velocity = Vector3(Player.WALK_SPEED, 0.0, 0.0)
+	game.player._process(0.1)
+	expect(game.player._handheld_motion._activity_blend > 0.0,
+		"ordinary walking did not drive handheld activity")
+	var walk_activity: float = game.player._handheld_motion._activity_blend
+	game.player._sprinting = true
+	game.player.velocity = Vector3(Player.SPRINT_SPEED, 0.0, 0.0)
+	game.player._process(0.1)
+	expect(game.player._handheld_motion._activity_blend > walk_activity,
+		"sprinting did not intensify beyond walking activity")
+	game.player._sprinting = false
+	game.player.velocity = Vector3.ZERO
+	game.player._handheld_motion.reset()
 
 	game.run.resume_rules()
 	await physics_frame
@@ -131,6 +159,9 @@ func _exercise_menu_inputs(game: Node) -> void:
 		expect(menu._controls.has("dialogue_volume"), "dialogue slider missing from menu")
 		expect(menu._controls.has("hdr_enabled") and menu._controls.has("hdr_brightness"),
 			"HDR controls missing from menu")
+		expect(menu._controls.has("handheld_camera")
+			and menu._controls.has("handheld_strength"),
+			"handheld camera controls missing from menu")
 		for option in ["invert_y", "toggle_sprint"]:
 			var toggle: CheckButton = menu._controls[option]
 			var before_toggle: bool = bool(game._settings.get_value(option))

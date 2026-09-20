@@ -28,6 +28,8 @@ const SENS := 0.0022
 var sensitivity_multiplier := 1.0
 var base_fov := 77.0
 var head_bob_strength := 1.0
+var handheld_camera_enabled := true
+var handheld_camera_strength := 0.55
 var invert_y := false
 var toggle_sprint := false:
 	set(value):
@@ -71,6 +73,7 @@ const WADE_ACCEL := 0.45
 const LADDER_LAYER := 8
 const CLIMB_SPEED := 2.1
 const WaterInteraction = preload("res://scripts/pool_water_interaction.gd")
+const HandheldCameraMotionType = preload("res://scripts/handheld_camera_motion.gd")
 
 signal interaction_prompt_changed(text: String)
 signal emergency_flash_changed(held: bool)
@@ -107,6 +110,7 @@ var _bob := 0.0
 ## is sold almost entirely through this and the motor loop.
 var _rumble := 0.0
 var _rumble_t := 0.0
+var _handheld_motion = HandheldCameraMotionType.new()
 var _step_acc := 0.0
 var _roll := 0.0
 var _land := 0.0
@@ -219,6 +223,7 @@ func teleport(to: Vector3) -> void:
 	if _water_fx != null: _water_fx.reset()
 	_was_submerged = false
 	_water_audio_primed = false
+	_handheld_motion.reset()
 	global_position = to
 	velocity = Vector3.ZERO
 	_prev_pos = to
@@ -231,6 +236,19 @@ func teleport(to: Vector3) -> void:
 ## Descent's lift ride owns this; nothing else currently drives it.
 func set_rumble(amount: float) -> void:
 	_rumble = clampf(amount, 0.0, 1.0)
+
+
+## Briefly intensify the independent handheld-camera layer. Horror systems call
+## this at perceptible beats; invisible enemy placement deliberately does not.
+func trigger_handheld_scare(amount: float = 1.0, hold_seconds: float = 0.10,
+		release_seconds: float = 1.6) -> void:
+	_handheld_motion.enabled = handheld_camera_enabled
+	_handheld_motion.strength = handheld_camera_strength
+	_handheld_motion.trigger_scare(amount, hold_seconds, release_seconds)
+
+
+func handheld_fear_level() -> float:
+	return _handheld_motion.fear_level()
 
 
 ## Take the mouse. Capturing it warps the cursor to the middle of the window,
@@ -275,8 +293,14 @@ func clear_sprint_toggle() -> void:
 
 func _apply_mouse_look(relative: Vector2) -> void:
 	var look_sens := SENS * sensitivity_multiplier
-	rotate_y(-relative.x * look_sens)
-	_pitch = clampf(_pitch + relative.y * look_sens * (1.0 if invert_y else -1.0), -1.45, 1.45)
+	var yaw_delta := -relative.x * look_sens
+	var pitch_before := _pitch
+	rotate_y(yaw_delta)
+	_pitch = clampf(_pitch + relative.y * look_sens \
+		* (1.0 if invert_y else -1.0), -1.45, 1.45)
+	_handheld_motion.enabled = handheld_camera_enabled
+	_handheld_motion.strength = handheld_camera_strength
+	_handheld_motion.note_look_delta(yaw_delta, _pitch - pitch_before)
 
 
 func _notification(what: int) -> void:
@@ -367,6 +391,7 @@ func reset_descent_resources() -> void:
 	_flash_t = 0.0
 	_stamina = STAMINA_MAX
 	_sprint_spent = false
+	_handheld_motion.reset()
 	velocity = Vector3.ZERO
 
 
@@ -667,12 +692,26 @@ func _process(dt: float) -> void:
 			sin(_rumble_t) * 0.0155,
 			cos(_rumble_t * 0.79) * 0.0090) * _rumble * head_bob_strength
 		tilt = sin(_rumble_t * 0.61) * 0.0045 * _rumble * head_bob_strength
-	cam.rotation = Vector3(_pitch, rotation.y, _roll + tilt)
+	_handheld_motion.enabled = handheld_camera_enabled
+	_handheld_motion.strength = handheld_camera_strength
+	var camera_speed := Vector2(velocity.x, velocity.z).length()
+	# Walking is already handheld movement, not a stabilized idle state. Drive
+	# the gait layer continuously from real speed; a normal walk lands around
+	# 55%, while a full sprint reaches the authored maximum.
+	_handheld_motion.activity = 0.0 if is_pool_sliding() else clampf(
+		camera_speed / SPRINT_SPEED, 0.0, 1.0)
+	var handheld: Dictionary = _handheld_motion.advance(dt)
+	cam.rotation = Vector3(_pitch, rotation.y, _roll + tilt) \
+		+ (handheld["rotation"] as Vector3)
+	# Position shake is camera-local: leaning and breathing move with the
+	# operator regardless of the world's axes or the direction they face.
+	cam.global_position += cam.global_transform.basis \
+		* (handheld["position"] as Vector3)
 	_interaction_scan_left -= dt
 	if _interaction_scan_left <= 0.0:
 		_interaction_scan_left = INTERACTION_SCAN_SECONDS
 		_scan_interaction()
-	var hs := Vector2(velocity.x, velocity.z).length()
+	var hs := camera_speed
 	var fov_target := base_fov + 6.0 if (_sprinting and hs > 4.0) else base_fov
 	if photo_aim:
 		fov_target = base_fov * 58.0 / 77.0

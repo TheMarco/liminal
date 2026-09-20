@@ -402,12 +402,14 @@ func _ready() -> void:
 	add_child(_heart)
 	_passers.revealed.connect(
 		func():
+			player.trigger_handheld_scare(0.24, 0.05, 0.75)
 			if _corner_apparitions != null:
 				_corner_apparitions.defer_for(
 					CornerApparitions.SHARED_QUIET_SECONDS))
 	_corner_apparitions.revealed.connect(
 		func(_texture_key: String):
 			_heart.bump(Heartbeat.BUMP_SEEN)
+			player.trigger_handheld_scare(0.72, 0.10, 1.25)
 			_post_process.damage_hit(0.32)
 			if _passers != null:
 				_passers.defer_for(CornerApparitions.SHARED_QUIET_SECONDS))
@@ -415,7 +417,12 @@ func _ready() -> void:
 	# screenshot and --nologo starts release this below.
 	_set_presence(Presence.SILENT)
 	_figures.seen_by_player.connect(
-		func(): _heart.bump(Heartbeat.BUMP_SEEN))
+		func():
+			_heart.bump(Heartbeat.BUMP_SEEN)
+			player.trigger_handheld_scare(1.0, 0.14, 1.8))
+	_figures.approach_starting.connect(
+		func(_figure: ShadowFigure):
+			player.trigger_handheld_scare(0.38, 0.06, 0.9))
 	_figures.spawned.connect(func(): _post_process.glitch_burst())
 	_figures.burned_away.connect(
 		func():
@@ -953,6 +960,8 @@ func _apply_game_settings() -> void:
 		player.sensitivity_multiplier = float(_settings.values.sensitivity)
 		player.base_fov = float(_settings.values.field_of_view)
 		player.head_bob_strength = float(_settings.values.head_bob)
+		player.handheld_camera_enabled = bool(_settings.values.handheld_camera)
+		player.handheld_camera_strength = float(_settings.values.handheld_strength)
 		player.invert_y = bool(_settings.values.invert_y)
 		player.toggle_sprint = bool(_settings.values.toggle_sprint)
 	_set_mode_hint()
@@ -2127,6 +2136,7 @@ func _on_descent_blackout(on: bool) -> void:
 	if is_instance_valid(ambience):
 		ambience.set_powered(not on)
 	if on:
+		player.trigger_handheld_scare(0.58, 0.08, 1.1)
 		_blackout_environment.apply(we.environment)
 		_play_descent_cue(SoundBank.thud(), -7.0)
 		_show_event_message("BLACKOUT — STAND STILL · THE TORCH STILL WORKS", true)

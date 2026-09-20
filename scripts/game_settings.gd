@@ -14,6 +14,8 @@ const DEFAULTS: Dictionary = {
 	"sensitivity": 1.0,
 	"field_of_view": 77.0,
 	"head_bob": 1.0,
+	"handheld_camera": true,
+	"handheld_strength": 0.55,
 	"invert_y": false,
 	"toggle_sprint": false,
 	"fullscreen": false,
@@ -29,13 +31,14 @@ const DEFAULTS: Dictionary = {
 	"hdr_brightness": 1.0,
 }
 
-const BOOLEAN_KEYS := ["invert_y", "toggle_sprint", "fullscreen",
+const BOOLEAN_KEYS := ["invert_y", "toggle_sprint", "handheld_camera", "fullscreen",
 	"reduced_flashing", "death_hints", "vhs_enabled", "crt_enabled", "hdr_enabled"]
 
 const RANGES: Dictionary = {
 	"sensitivity": Vector2(0.2, 3.0),
 	"field_of_view": Vector2(60.0, 100.0),
 	"head_bob": Vector2(0.0, 1.0),
+	"handheld_strength": Vector2(0.0, 1.0),
 	"music_volume": Vector2(0.0, 1.0),
 	"effects_volume": Vector2(0.0, 1.0),
 	"dialogue_volume": Vector2(0.0, 1.0),

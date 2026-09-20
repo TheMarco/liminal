@@ -116,6 +116,7 @@ AUDITS=(
 	"descent_progress|tools/audit_descent_progress.gd|"
 	"recording_replay|tools/audit_recording_replay.gd|--mode=descent --nologo"
 	"game_settings|tools/audit_game_settings.gd|"
+	"handheld_camera|tools/audit_handheld_camera.gd|"
 	"hdr_output|tools/audit_hdr_output.gd|"
 	"vhs_calendar|tools/audit_vhs_calendar.gd|"
 	"start_options|tools/audit_start_options.gd|--nologo"

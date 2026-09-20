@@ -13,6 +13,9 @@ func _init() -> void:
 	_assert(settings.get_value("hdr_enabled") == true, "HDR default")
 	_assert(settings.get_value("hdr_brightness") == 1.0, "HDR brightness default")
 	_assert(settings.get_value("vhs_distortion") == 0.5, "VHS effect strength default")
+	_assert(settings.get_value("handheld_camera") == true, "handheld camera default")
+	_assert(is_equal_approx(settings.get_value("handheld_strength"), 0.55),
+		"handheld strength default")
 	settings.set_value("sensitivity", 2.5)
 	settings.set_value("reduced_flashing", true)
 	settings.set_value("vhs_enabled", false)
@@ -20,6 +23,8 @@ func _init() -> void:
 	settings.set_value("dialogue_volume", 0.35)
 	settings.set_value("hdr_enabled", false)
 	settings.set_value("hdr_brightness", 1.25)
+	settings.set_value("handheld_camera", false)
+	settings.set_value("handheld_strength", 0.72)
 	for key: String in ["invert_y", "toggle_sprint"]:
 		_assert(settings.get_value(key) == false, key + " default")
 		settings.set_value(key, true)
@@ -32,6 +37,19 @@ func _init() -> void:
 	_assert(roundtrip.get_value("vhs_enabled") == false, "vhs roundtrip")
 	_assert(roundtrip.get_value("crt_enabled") == true, "CRT effect roundtrip")
 	_assert(roundtrip.get_value("hdr_enabled") == false, "HDR roundtrip")
+	_assert(roundtrip.get_value("handheld_camera") == false,
+		"handheld camera roundtrip")
+	_assert(is_equal_approx(roundtrip.get_value("handheld_strength"), 0.72),
+		"handheld strength roundtrip")
+	roundtrip.set_value("handheld_camera", "false")
+	_assert(roundtrip.get_value("handheld_camera") == false,
+		"handheld camera invalid string rejected")
+	roundtrip.set_value("handheld_strength", 2.0)
+	_assert(roundtrip.get_value("handheld_strength") == 1.0,
+		"handheld strength upper clamp")
+	roundtrip.set_value("handheld_strength", -1.0)
+	_assert(roundtrip.get_value("handheld_strength") == 0.0,
+		"handheld strength lower clamp")
 	_assert(is_equal_approx(roundtrip.get_value("hdr_brightness"), 1.25),
 		"HDR brightness roundtrip")
 	roundtrip.set_value("vhs_enabled", "false")
@@ -69,6 +87,10 @@ func _init() -> void:
 		"HDR brightness reset")
 	_assert(roundtrip.get_value("vhs_distortion") == 0.5,
 		"VHS effect strength reset")
+	_assert(roundtrip.get_value("handheld_camera") == true,
+		"handheld camera reset")
+	_assert(is_equal_approx(roundtrip.get_value("handheld_strength"), 0.55),
+		"handheld strength reset")
 	_assert(roundtrip.get_value("dialogue_volume") == 1.0, "dialogue reset")
 	DirAccess.remove_absolute(path)
 	if failures.is_empty():

@@ -23,7 +23,7 @@ var _quit_emitted := false
 var _scroll: ScrollContainer
 var _hdr_status: Label
 
-const SLIDER_KEYS := ["sensitivity", "field_of_view", "head_bob",
+const SLIDER_KEYS := ["sensitivity", "field_of_view", "head_bob", "handheld_strength",
 	"music_volume", "effects_volume", "dialogue_volume", "vhs_distortion",
 	"hdr_brightness"]
 
@@ -94,6 +94,12 @@ func _build_ui() -> void:
 		if key == "head_bob":
 			_add_toggle(rows, "invert_y", "INVERT Y LOOK")
 			_add_toggle(rows, "toggle_sprint", "TOGGLE SPRINT")
+			_add_toggle(rows, "handheld_camera", "HANDHELD CAMERA")
+			(_controls["handheld_camera"] as CheckButton).tooltip_text = \
+				"Adds smooth found-footage drift and stronger motion during scares."
+		elif key == "handheld_strength":
+			(_controls["handheld_strength"][0] as HSlider).tooltip_text = \
+				"Scales calm drift, sprint jostle and event-driven fear shake together."
 	_add_toggle(rows, "vhs_enabled", "VHS EFFECT")
 	(_controls["vhs_enabled"] as CheckButton).tooltip_text = \
 		"Tape smearing, colour separation, signal noise and tracking damage."
@@ -155,7 +161,8 @@ func _add_slider(parent: VBoxContainer, key: String) -> void:
 	var label := VhsOsd.make_label(24)
 	label.text = "MOUSE SENSITIVITY" if key == "sensitivity" \
 		else ("VHS EFFECT STRENGTH" if key == "vhs_distortion" \
-		else key.replace("_", " ").to_upper())
+		else ("HANDHELD STRENGTH" if key == "handheld_strength" \
+		else key.replace("_", " ").to_upper()))
 	line.add_child(label)
 	var value_label := VhsOsd.make_label(24, Color(0.9, 0.75, 0.42))
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -243,6 +250,7 @@ func _refresh_controls() -> void:
 			continue
 		(_controls[key] as CheckButton).set_pressed_no_signal(bool(settings.get_value(key)))
 	_refresh_video_controls()
+	_refresh_motion_controls()
 	_refresh_hdr_controls()
 
 
@@ -253,6 +261,18 @@ func _refresh_video_controls() -> void:
 	var slider := pair[0] as HSlider
 	var value_label := pair[1] as Label
 	slider.editable = bool(settings.get_value("vhs_enabled"))
+	slider.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
+	value_label.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
+
+
+func _refresh_motion_controls() -> void:
+	if not settings or not _controls.has("handheld_camera") \
+			or not _controls.has("handheld_strength"):
+		return
+	var pair: Array = _controls["handheld_strength"]
+	var slider := pair[0] as HSlider
+	var value_label := pair[1] as Label
+	slider.editable = bool(settings.get_value("handheld_camera"))
 	slider.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
 	value_label.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
 
