@@ -555,7 +555,7 @@ func _machine_room_light(at: Vector3, energy := 2.0) -> void:
 	scene.add_node(light)
 
 
-func _rack_aisle(axis_x: bool) -> void:
+func _rack_aisle(axis_x: bool, service_half_width := 1.60) -> void:
 	var span := scene.room_span()
 	var long_span := span.x if axis_x else span.y
 	var cross_span := span.y if axis_x else span.x
@@ -577,7 +577,7 @@ func _rack_aisle(axis_x: bool) -> void:
 		var near_column := absf(lane - 1.70) < 0.95 \
 			or absf(lane - 10.30) < 0.95
 		_dense_rack_row(axis_x, lane, row_index % 2, long_span,
-			3.25 if near_column else 1.25)
+			3.25 if near_column else 1.25, service_half_width)
 	# Guide and light every facing pair; the continuous transverse break through
 	# all rows remains the cross-route even in eight-row merged rooms.
 	for pair_start in range(0, rack_lanes.size() - 1, 2):
@@ -592,7 +592,7 @@ func _rack_aisle(axis_x: bool) -> void:
 
 
 func _dense_rack_row(axis_x: bool, lane: float, side: int,
-		long_span: float, end_inset := 1.25) -> void:
+		long_span: float, end_inset := 1.25, service_half_width := 1.60) -> void:
 	# Four clusters plus two closed racks make each 12m row read almost
 	# continuous. The deliberate 4m break around t=6 is the transverse service
 	# aisle, so higher density never turns the room into an impassable wall.
@@ -600,8 +600,8 @@ func _dense_rack_row(axis_x: bool, lane: float, side: int,
 	if side == 1:
 		rack_yaw += PI
 	var limits := [
-		Vector2(6.0 - long_span * 0.5 + end_inset, 4.40),
-		Vector2(7.60, 6.0 + long_span * 0.5 - end_inset),
+		Vector2(6.0 - long_span * 0.5 + end_inset, 6.0 - service_half_width),
+		Vector2(6.0 + service_half_width, 6.0 + long_span * 0.5 - end_inset),
 	]
 	for limit in limits:
 		var points: Array[float] = []
@@ -943,7 +943,9 @@ func _brutal_water_court() -> void:
 	# A compact room gets three banks; a merged hall gets eight full rack rows.
 	var span := scene.room_span()
 	if span.x > 18.0 or span.y > 18.0:
-		_rack_aisle(true)
+		# The network banks are 2.10m wide after their quarter-turn. Leave
+		# room for the 1.69m condenser plus 15cm beside each bank.
+		_rack_aisle(true, 2.05)
 	else:
 		_compact_server_field()
 	# Two individual condenser variants sit at the room ends. Both clear the

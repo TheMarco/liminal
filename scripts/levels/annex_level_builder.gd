@@ -76,6 +76,7 @@ func _annex_carpet_damage() -> void:
 			chosen = candidate
 			break
 	if chosen == Vector3.INF:
+		overlay.free()
 		return
 	overlay.position = chosen
 	var half_size := STAIN_SIZE * 0.5

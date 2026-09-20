@@ -20,6 +20,9 @@ var route: DescentRoute
 var run: DescentRun
 var world_seed := 1
 var theme := 0
+## Optional link context: when set, the metre readout measures through
+## hidden links instead of raw space. Null keeps legacy raw metres.
+var traversal_graph: TraversalGraph = null
 
 var _active := false
 var _true_left := 0.0
@@ -174,7 +177,13 @@ func _process(dt: float) -> void:
 			target_world = Vector3(
 				float(route.target.x) * CELL + CELL * 0.5, 0.0,
 				float(route.target.y) * CELL + CELL * 0.5)
-		var delta := target_world - player.global_position
+		var apparent := target_world
+		if traversal_graph != null:
+			var links: Array = traversal_graph.links()
+			if not links.is_empty():
+				apparent = SpatialQuery.apparent_position(
+					player.global_position, target_world, links)
+		var delta := apparent - player.global_position
 		distance_text = "%dm" % maxi(1,
 			roundi(Vector2(delta.x, delta.z).length()))
 	if label_text != _last_label_text:

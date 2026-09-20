@@ -40,6 +40,22 @@ var dev_force := false
 
 var _t := 20.0
 var _live: Node3D
+## Hidden-link site/matching envelopes this ambient system must never enter
+## (spec 6.4): separate grid and LOS logic stays out of the seam entirely.
+var excluded_volumes: Array[AABB] = []
+
+
+## Reserve a site envelope before admission. Existing instances are never
+## deleted in view; admission waits for them to clear instead.
+func exclude_volume(aabb: AABB) -> void:
+	excluded_volumes.append(aabb)
+
+
+func _excluded(point: Vector3) -> bool:
+	for volume in excluded_volumes:
+		if volume.has_point(point):
+			return true
+	return false
 
 
 func active_apparition() -> Node3D:
@@ -120,6 +136,7 @@ func _attempt() -> bool:
 		var d := to.length()
 		if d >= MIN_D and d <= MAX_D \
 				and fwd.dot(to / d) >= HALL_AHEAD_DOT \
+				and not _excluded(point) \
 				and _clear_line(cam.global_position,
 					point + Vector3(0, 1.4, 0)):
 			candidates.append([point, d])

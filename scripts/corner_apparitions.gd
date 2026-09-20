@@ -50,6 +50,9 @@ var passive := false
 var dev_force := false
 
 var reveal_count := 0
+## Hidden-link site/matching envelopes this ambient system must never enter
+## (spec 6.4): separate grid and LOS logic stays out of the seam entirely.
+var excluded_volumes: Array[AABB] = []
 var _rng := RandomNumberGenerator.new()
 var _t := 60.0
 var _scan_left := 0.0
@@ -80,6 +83,19 @@ func defer_for(seconds: float) -> void:
 	_clear_observations()
 	if not is_instance_valid(_live):
 		_t = maxf(_t, seconds)
+
+
+## Reserve a site envelope before admission. Existing instances are never
+## deleted in view; admission waits for them to clear instead.
+func exclude_volume(aabb: AABB) -> void:
+	excluded_volumes.append(aabb)
+
+
+func _excluded(point: Vector3) -> bool:
+	for volume in excluded_volumes:
+		if volume.has_point(point):
+			return true
+	return false
 
 
 func _physics_process(dt: float) -> void:
@@ -164,6 +180,8 @@ func _scan_visibility() -> void:
 		var target := _cell_point(cell)
 		var distance := player.global_position.distance_to(target)
 		if distance < MIN_REVEAL_D or distance > MAX_REVEAL_D:
+			continue
+		if _excluded(target):
 			continue
 		active[cell] = true
 		var sight := target + Vector3(0, 1.05, 0)

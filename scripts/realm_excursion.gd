@@ -17,6 +17,13 @@ const PREVIEW_BUILD_BUDGET_USEC := 2000
 ## Normal streaming expands this neighbourhood after the player enters it.
 const PREVIEW_LOAD_R := 2
 
+# Preview jobs wait on owner signals so teardown can wake and cancel them
+# while this instance still exists, before SceneTree emits another frame.
+signal _preview_frame
+signal _preview_physics_frame
+var _preview_cancelled := false
+
+
 var phase := Phase.PREPARING
 var elapsed := 0.0
 var total_spawned := 0
@@ -66,6 +73,11 @@ var _entrance_hum: AudioStreamPlayer3D
 var _door_leak: RealmDoorLeak
 var _prize: Dictionary = {}
 var _caught_sequence: CanvasLayer
+
+
+func _ready() -> void:
+	get_tree().process_frame.connect(_preview_frame.emit)
+	get_tree().physics_frame.connect(_preview_physics_frame.emit)
 
 
 func collapse_seconds() -> float:
@@ -154,7 +166,9 @@ func _preload_preview_resources() -> void:
 			continue
 		_preview_resource_pending = path
 		while ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-			await get_tree().process_frame
+			await _preview_frame
+			if _preview_cancelled:
+				return
 		if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_LOADED:
 			var resource := ResourceLoader.load_threaded_get(path)
 			if resource != null:
@@ -164,11 +178,13 @@ func _preload_preview_resources() -> void:
 
 
 func _build_preview() -> void:
-	if _building:
+	if _building or _preview_cancelled:
 		return
 	_building = true
 	while not _preview_resources_ready:
-		await get_tree().process_frame
+		await _preview_frame
+		if _preview_cancelled:
+			return
 	preview = SubViewport.new()
 	preview.name = "NextRealmPreview"
 	preview.own_world_3d = true
@@ -208,10 +224,17 @@ func _build_preview() -> void:
 				var ms := (Time.get_ticks_usec() - started) / 1000.0
 				if ms > 4.0:
 					print("realm build slice %s %.1fms" % [cell, ms])
-			await get_tree().process_frame
-	await get_tree().physics_frame
+			await _preview_frame
+			if _preview_cancelled:
+				return
+	await _preview_physics_frame
+	if _preview_cancelled:
+		return
 	var placement_started := Time.get_ticks_usec()
-	if not await _choose_destination():
+	var found_destination := await _choose_destination()
+	if _preview_cancelled:
+		return
+	if not found_destination:
 		_fail("No clear next-realm landing and preview approach")
 		return
 	if game.opts.chunktime:
@@ -349,7 +372,10 @@ func _choose_destination() -> bool:
 			var q := PhysicsRayQueryParameters3D.create(behind + Vector3.UP * 1.5, safe + Vector3.UP * 1.5, 1)
 			if not world.direct_space_state.intersect_ray(q).is_empty():
 				continue
-			var prize := await RealmFlashBounty.choose(pocket, safe, fwd)
+			var prize := await RealmFlashBounty.choose(pocket, safe, fwd,
+				_preview_frame, func() -> bool: return _preview_cancelled)
+			if _preview_cancelled:
+				return false
 			if prize.is_empty():
 				continue
 			_prize = prize
@@ -707,7 +733,8 @@ func _present_caught_in_realm() -> void:
 		figure.set_physics_process(false)
 	_caught_sequence = CAUGHT_SEQUENCE.new()
 	add_child(_caught_sequence)
-	_caught_sequence.begin(game.player, threats.catching_figure)
+	_caught_sequence.begin(game.player, threats.catching_figure,
+		threats.catch_presentation)
 	# Match normal Descent death handling: a shutter already in flight owns its
 	# render until it has produced the photograph, but cannot hide the catch.
 	_caught_sequence.set_process(false)
@@ -759,6 +786,13 @@ func _fail(reason: String) -> void:
 
 
 func _exit_tree() -> void:
+	_preview_cancelled = true
+	if get_tree().process_frame.is_connected(_preview_frame.emit):
+		get_tree().process_frame.disconnect(_preview_frame.emit)
+	if get_tree().physics_frame.is_connected(_preview_physics_frame.emit):
+		get_tree().physics_frame.disconnect(_preview_physics_frame.emit)
+	_preview_frame.emit()
+	_preview_physics_frame.emit()
 	if is_instance_valid(_caught_sequence):
 		_caught_sequence.restore()
 	if not _preview_resource_pending.is_empty():

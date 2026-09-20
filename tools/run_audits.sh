@@ -66,6 +66,7 @@ AUDITS=(
 	"corridors|tools/audit_corridors.gd|"
 	"sightlines|tools/audit_sightlines.gd|"
 	"annex|tools/audit_annex.gd|"
+	"annex_overlay_cleanup|tools/audit_annex_overlay_cleanup.gd|"
 	"wall_utilities|tools/audit_wall_utilities.gd|"
 	"zones|tools/audit_zones.gd|"
 	"doorways|tools/audit_doorways.gd|"
@@ -111,6 +112,19 @@ AUDITS=(
 	"migrating_door|tools/audit_migrating_door.gd|"
 	"spatial_placement|tools/audit_spatial_placement.gd|"
 	"spatial_campaign_event|tools/audit_spatial_campaign_event.gd|--mode=descent --nologo --seed=900393 --descent-floor=3"
+	"traversal_math|tools/audit_traversal_math.gd|"
+	"hidden_link|tools/audit_hidden_link.gd|"
+	"traversal_actors|tools/audit_traversal_actors.gd|"
+	"spatial_query|tools/audit_spatial_query.gd|"
+	"spatial_roster|tools/audit_spatial_roster.gd|"
+	"hidden_link_pursuit|tools/audit_hidden_link_pursuit.gd|"
+	"spatial_streaming|tools/audit_spatial_streaming.gd|"
+	"spatial_revisions|tools/audit_spatial_revisions.gd|"
+	"seam_walk|tools/audit_seam_walk.gd|"
+	"seam_meeting|tools/audit_seam_meeting.gd|"
+	"spatial_integration|tools/audit_spatial_integration.gd|"
+	"seam_safety|tools/audit_seam_safety.gd|"
+	"seam_occlusion|tools/audit_seam_occlusion.gd|"
 	"world_mutation_contract|tools/audit_world_mutation_contract.gd|"
 	"descent_runtime|tools/audit_descent_runtime.gd|--mode=descent --nologo"
 	"airport_runtime|tools/audit_airport_runtime.gd|--mode=descent --descent-floor=4 --nologo"
@@ -311,6 +325,13 @@ run_one() {
 	if [ $rc -eq 0 ]; then
 		grep '^ERROR:' "$log" | grep -Ev \
 			'^ERROR: (Parameter "(material|t)" is null\.|Condition "ret != noErr" is true\. Returning: ""|Error saving editor settings to |Cannot save file .*/editor_settings-4\.6\.tres)' \
+			| { if [ "$name" = "photo_album_store" ]; then
+				# This audit deliberately writes beneath a file and decodes a
+				# corrupt JPEG. Only those exact fixture errors are expected.
+				grep -Ev "^ERROR: (Could not create directory: '/tmp/liminal_album_[0-9]+/blocker/1'\\.|Error loading image: '/tmp/liminal_album_[0-9]+/102/photo_missing\\.jpg'\\.)$"
+			else
+				cat
+			fi; } \
 			>"$LOGDIR/$name.unexpected-errors" || true
 		if [ -s "$LOGDIR/$name.unexpected-errors" ]; then rc=92; fi
 	fi
@@ -322,6 +343,15 @@ active=0
 for entry in "${AUDITS[@]}"; do
 	IFS='|' read -r name script extra <<<"$entry"
 	[ -n "$FILTER" ] && [[ "$name" != *"$FILTER"* ]] && continue
+	# Exhaustive route searches approach the wall-clock budget when competing
+	# with other Godot processes. Keep their corpus and timeout unchanged, but
+	# give them an uncontended slot (like the generation performance gate).
+	if [ "$name" = "descent_routes" ] || [ "$name" = "blackout_shortcuts" ]; then
+		wait
+		active=0
+		run_one "$name" "$script" "$extra"
+		continue
+	fi
 	run_one "$name" "$script" "$extra" &
 	active=$((active + 1))
 	if [ "$active" -ge "$JOBS" ]; then

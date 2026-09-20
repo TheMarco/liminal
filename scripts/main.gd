@@ -2399,7 +2399,7 @@ func _on_descent_ended(won: bool) -> void:
 		var source: ShadowFigure = _figures.catching_figure \
 			if run.death_cause == DescentRun.DeathCause.FIGURE else null
 		# Freeze immediately, including held-key physics while a shutter waits.
-		_caught_sequence.begin(player, source)
+		_caught_sequence.begin(player, source, _figures.catch_presentation)
 		_caught_sequence.set_process(false)
 		# Let an in-flight shutter finish its render before releasing its print.
 		while is_instance_valid(_photo_camera) and _photo_camera._capturing:

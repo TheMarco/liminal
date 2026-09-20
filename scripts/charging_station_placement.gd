@@ -6,6 +6,13 @@ var obstacles: Array[AABB] = []
 var water: Array[AABB] = []
 var supports: Array[AABB] = []
 
+static func collision_bounds(shape: Shape3D) -> AABB:
+	# Box dimensions already are exact CPU geometry. Creating a debug mesh
+	# here needlessly allocates renderer RIDs during threaded asset loading.
+	if shape is BoxShape3D:
+		return AABB(-shape.size * 0.5, shape.size)
+	return shape.get_debug_mesh().get_aabb()
+
 func _init(chunk: Node3D) -> void:
 	for child in chunk.get_children():
 		_collect(child, Transform3D.IDENTITY)
@@ -32,7 +39,7 @@ func _collect(node: Node, parent: Transform3D, shown := true) -> void:
 			# They must not reject a cabinet seated against that same wall.
 			obstacles.append(bounds)
 	if node is CollisionShape3D and node.shape != null and not node.disabled:
-		var bounds: AABB = xf * node.shape.get_debug_mesh().get_aabb()
+		var bounds: AABB = xf * collision_bounds(node.shape)
 		obstacles.append(bounds)
 		if node.shape is BoxShape3D:
 			supports.append(bounds)

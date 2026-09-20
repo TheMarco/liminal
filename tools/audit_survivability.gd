@@ -42,6 +42,14 @@ func _init() -> void:
 ## player is not in a tree — so none of it can happen during `_init`.
 func _run() -> void:
 	await physics_frame
+	var floor_body := StaticBody3D.new()
+	var floor_shape := CollisionShape3D.new()
+	var floor_box := BoxShape3D.new()
+	floor_box.size = Vector3(200.0, 1.0, 200.0)
+	floor_shape.shape = floor_box
+	floor_body.position.y = -0.5
+	floor_body.add_child(floor_shape)
+	get_root().add_child(floor_body)
 	var args := OS.get_cmdline_user_args()
 	var floors := clampi(int(args[0]) if args.size() > 0 \
 		else DescentRun.FLOOR_COUNT, 1, DescentRun.FLOOR_COUNT)
@@ -147,6 +155,7 @@ func _run() -> void:
 				passive_ticks += 1
 		run.queue_free()
 		stub.queue_free()
+	floor_body.queue_free()
 
 	# --- 3. the torch can clear a full house before its cell runs out ----------
 	# MAX_FIGS figures, BURN_TIME each, plus a beat to swing between them. If

@@ -117,6 +117,7 @@ var _land := 0.0
 var _was_floor := true
 var _pitch := 0.0
 var _prev_pos := Vector3.ZERO
+var spatial_traversal: SpatialTraversal = null
 var _curr_pos := Vector3.ZERO
 var _cam_y := CAM_H
 var _grabbed := -10000
@@ -213,9 +214,43 @@ func _ready() -> void:
 	add_child(_splash_p)
 
 
+## Hidden-link transfer eligibility (version one): dry, grounded actors
+## only. Ladders, slides, and water need explicit traversal contracts.
+func seam_transfer_eligible() -> bool:
+	if not is_on_floor() or is_pool_sliding() or _on_ladder:
+		return false
+	return not (global_position.y + 0.55 < _water_surface_here())
+
+
+## Seam transfer: rebase movement through M without any teleport reset.
+## Sprint, stamina, gait, pitch, torch charge, traversal samples, and the
+## handheld layer all survive; the camera follows via rebased history.
+func apply_seam_transfer(m: Transform3D) -> void:
+	var mapped: Vector3 = m * global_position
+	global_transform = Transform3D(
+		(m.basis * global_transform.basis).orthonormalized(), mapped)
+	velocity = m.basis * velocity
+	_prev_pos = m * _prev_pos
+	_curr_pos = m * _curr_pos
+	if cam != null:
+		cam.global_position = m * cam.global_position
+		cam.global_basis = (m.basis * cam.global_basis).orthonormalized()
+	_last_traversal_sample = Vector3.INF
+
+
+func reject_seam_motion(safe: Vector3) -> void:
+	global_position = safe
+	_curr_pos = safe
+	_prev_pos = safe
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+
 ## Move without the camera sweeping across the world to catch up — the
 ## interpolation would otherwise smear from the old position for a tick.
 func teleport(to: Vector3) -> void:
+	if spatial_traversal != null:
+		spatial_traversal.note_repositioned(self)
 	_traversal_samples.clear()
 	_last_traversal_sample = Vector3.INF
 	clear_sprint_toggle()
@@ -555,7 +590,14 @@ func _physics_process(dt: float) -> void:
 		if submerged and velocity.y < -2.2:
 			velocity.y = lerpf(velocity.y, -2.2, minf(1.0, dt * 6.0))
 	var vy_before := velocity.y
+	var before_motion := global_position
+	if spatial_traversal != null:
+		var permitted := spatial_traversal.constrain_motion(self, before_motion,
+			before_motion + velocity * dt, seam_transfer_eligible())
+		velocity = (permitted - before_motion) / maxf(dt, 0.00001)
 	move_and_slide()
+	if spatial_traversal != null:
+		spatial_traversal.after_motion(self, before_motion, dt)
 	_record_traversal_sample()
 	if sliding:
 		var target := _pool_slide.point_at(_slide_distance) + Vector3.UP * PoolSlide.FOOT_CLEARANCE

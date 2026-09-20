@@ -27,8 +27,11 @@ var _icon_yaw := 0.0
 var _motion_time := 0.0
 
 
-static func choose(cm: ChunkManager, origin: Vector3, forward := Vector3.FORWARD) -> Dictionary:
+static func choose(cm: ChunkManager, origin: Vector3, forward := Vector3.FORWARD,
+		frame_tick: Signal = Signal(), cancelled: Callable = Callable()) -> Dictionary:
 	var tree := cm.get_tree()
+	if frame_tick.is_null():
+		frame_tick = tree.process_frame
 	var models: Array[Dictionary] = []
 	_collect_models(cm, models)
 	var world := cm.get_world_3d()
@@ -63,8 +66,9 @@ static func choose(cm: ChunkManager, origin: Vector3, forward := Vector3.FORWARD
 		# Thousands of capsule sweeps used to run in one frame as the player
 		# approached. Keep the exact search/order but share it across frames.
 		if Time.get_ticks_usec() - slice_started >= SEARCH_BUDGET_USEC:
-			await tree.process_frame
-			if not is_instance_valid(cm) or not cm.is_inside_tree():
+			await frame_tick
+			if (cancelled.is_valid() and cancelled.call()) \
+					or not is_instance_valid(cm) or not cm.is_inside_tree():
 				return {}
 			slice_started = Time.get_ticks_usec()
 		var key := queue[head]

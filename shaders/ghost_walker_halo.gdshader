@@ -13,8 +13,14 @@ uniform sampler2D noise_tex : repeat_enable, filter_linear_mipmap;
 uniform float halo_width : hint_range(0.0, 0.2) = 0.05;
 uniform float halo_alpha : hint_range(0.0, 1.0) = 0.2;
 uniform float halo_emission : hint_range(0.0, 2.0) = 0.5;
+// Seam clip: world-space plane, abc the kept-side normal. Fragments with a
+// negative signed distance are discarded while enabled. The default plane
+// keeps the whole world even if enabled before it is set.
+uniform vec4 clip_plane = vec4(0.0, 1.0, 0.0, 1000000.0);
+uniform float clip_enabled = 0.0;
 
 varying vec3 object_position;
+varying vec3 world_position;
 
 void vertex() {
 	object_position = VERTEX;
@@ -24,6 +30,7 @@ void vertex() {
 	vec3 radial = normalize(vec3(VERTEX.x, (VERTEX.y - 0.85) * 0.35,
 		VERTEX.z));
 	VERTEX += normalize(mix(NORMAL, radial, 0.18)) * width;
+	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	// Constant depth bias toward the camera so the shell never grazes the
 	// body's prepass depth and flickers as the view moves. Far too small
 	// to break real occlusion against furniture.
@@ -32,6 +39,10 @@ void vertex() {
 }
 
 void fragment() {
+	if (clip_enabled > 0.5
+			&& dot(world_position, clip_plane.xyz) + clip_plane.w < 0.0) {
+		discard;
+	}
 	float master = clamp(manifestation * fade * (1.0 - fragmented), 0.0, 1.0);
 	float burn_progress = (1.0 - fade) * ignite;
 	float alive = 1.0 - smoothstep(0.03, 0.42, burn_progress);

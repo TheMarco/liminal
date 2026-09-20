@@ -569,7 +569,7 @@ func _photo_passage_obstructed(node: Node, parent: Transform3D, passage: AABB) -
 	if node is CollisionShape3D:
 		var shape := node as CollisionShape3D
 		if not shape.disabled and shape.shape != null:
-			var bounds := transform * shape.shape.get_debug_mesh().get_aabb()
+			var bounds := transform * ChargingStationPlacement.collision_bounds(shape.shape)
 			if passage.intersects(bounds):
 				return true
 	for child in node.get_children():

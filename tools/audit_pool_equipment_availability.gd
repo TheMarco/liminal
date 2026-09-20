@@ -63,7 +63,7 @@ func run() -> void:
 			failures.append("No slide within %d open-edge hops of arrival, base=%d" % [MAX_HOPS, base])
 		await process_frame
 	if totals[1] < 30 or totals[2] < 10:
-		failures.append("Local neighborhoods lack slide variety: %s" % totals)
+		failures.append("Local neighborhoods lack slide variety: %s" % [totals])
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	for failure in failures:
 		printerr("FAIL " + failure)

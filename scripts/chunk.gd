@@ -4895,7 +4895,7 @@ func _wall_mount_blockers(ignore: Node = null) -> Array[AABB]:
 func _collect_mount_blockers(node: Node, parent: Transform3D, shown: bool,
 		ignore: Node, volumes: Array[AABB]) -> void:
 	if node == ignore or node is ShadowFigure or node is ShadowFigures \
-			or node is Area3D:
+			or node is Area3D or node.get_meta("surface_wear_patch", false):
 		return
 	var xf := parent
 	if node is Node3D:
@@ -4908,7 +4908,7 @@ func _collect_mount_blockers(node: Node, parent: Transform3D, shown: bool,
 				volumes.append(bounds)
 	elif node is CollisionShape3D and (node as CollisionShape3D).shape != null \
 			and not (node as CollisionShape3D).disabled:
-		var shape_bounds: AABB = xf * (node as CollisionShape3D).shape.get_debug_mesh().get_aabb()
+		var shape_bounds: AABB = xf * ChargingStationPlacement.collision_bounds((node as CollisionShape3D).shape)
 		if shape_bounds.size.length() > 0.001:
 			volumes.append(shape_bounds)
 	elif node is Label3D:
@@ -5004,6 +5004,11 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 			along = candidate
 			break
 	if along < 0.0:
+		return
+	# Curated office bays still have to respect later floor fixtures, including
+	# coffee machines. Their deterministic layout is a preference, not a reservation.
+	if not office_layout.is_empty() \
+			and not _wall_art_site_clear(dir, inner, n, along, y, size, null):
 		return
 	var pos := Vector3(inner + n * 0.055, y, along) if dir < 2 \
 		else Vector3(along, y, inner + n * 0.055)
@@ -7643,6 +7648,7 @@ func school_fixture_integrity_audit() -> Dictionary:
 		"urinals": 0,
 		"doors": 0,
 		"library_stacks": 0,
+		"authored_library_units": 0,
 		"encyclopedia_sets": 0,
 		"elevators": 0,
 		"admin_counters": 0,
@@ -7675,10 +7681,18 @@ func school_fixture_integrity_audit() -> Dictionary:
 		if node.has_meta("school_library_stack"):
 			report["library_stacks"] = int(report["library_stacks"]) + 1
 			var owned_books := 0
+			var authored_units := 0
 			for child in node.find_children("*", "Node3D", true, false):
 				if child.has_meta("school_library_encyclopedia_set"):
 					owned_books += 1
-			if owned_books != 1:
+				if str(child.get_meta("authored_model", "")) == "school_library_shelf" \
+						and child.scene_file_path == SCH_SHELF_PATH:
+					authored_units += 1
+			report["authored_library_units"] += authored_units
+			# Supplied shelves contain their own books; the procedural fallback
+			# owns one separate encyclopedia set. Each assembly must be complete.
+			if not ((authored_units == 2 and owned_books == 0) \
+					or (authored_units == 0 and owned_books == 1)):
 				report["violations"] = int(report["violations"]) + 1
 		if node.has_meta("school_library_encyclopedia_set"):
 			report["encyclopedia_sets"] = int(report["encyclopedia_sets"]) + 1
@@ -7706,6 +7720,8 @@ func school_fixture_integrity_audit() -> Dictionary:
 			report["carts"] = int(report["carts"]) + 1
 			var mesh := node as MeshInstance3D
 			var mat := mesh.material_override as BaseMaterial3D
+			if mat == null and mesh.mesh != null and mesh.mesh.get_surface_count() > 0:
+				mat = mesh.get_active_material(0) as BaseMaterial3D
 			if mat == null \
 					or mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
 				report["violations"] = int(report["violations"]) + 1

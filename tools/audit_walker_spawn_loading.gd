@@ -39,10 +39,15 @@ func _fixture_scene() -> PackedScene:
 	return scene
 
 
+func _fixture_run_scene() -> PackedScene:
+	return _fixture_scene()
+
+
 func _run() -> void:
 	var scene := _fixture_scene()
 	for index in ShadowWalkerVisual.model_count():
 		ShadowWalkerVisual._model_scenes[index] = scene
+	ShadowWalkerVisual._run_model_scenes[10] = _fixture_run_scene()
 	check(not ShadowWalkerVisual.is_model_ready(-1), "negative model index was ready")
 	check(not ShadowWalkerVisual.is_model_ready(ShadowWalkerVisual.model_count()),
 		"out-of-range model index was ready")

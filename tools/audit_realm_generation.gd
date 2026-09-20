@@ -85,5 +85,5 @@ func run() -> void:
 		director.free()
 		cm.free()
 		await process_frame
-	Chunk.clear_runtime_caches()
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	finish("realm generation: %d physical doorway checks" % checked)

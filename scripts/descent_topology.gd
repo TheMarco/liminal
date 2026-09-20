@@ -67,6 +67,7 @@ var _furniture_probe_count := 0
 var _cell_allowed_cache := {}
 var _room_members_cache := {}
 var _mutation_cell_safe_cache := {}
+var _photo_room_cache := {}
 static var _plan_cache := {}
 
 
@@ -716,8 +717,10 @@ func photo_geometry_edge(at: Vector2i, dir: int) -> Dictionary:
 
 
 func _photo_room(at: Vector2i) -> Vector2i:
-	return WorldGen.annex_room_id(world_seed, at) if theme == 2 \
-		else WorldGen.room_id(world_seed, at)
+	if not _photo_room_cache.has(at):
+		_photo_room_cache[at] = WorldGen.annex_room_id(world_seed, at) if theme == 2 \
+			else WorldGen.room_id(world_seed, at)
+	return _photo_room_cache[at]
 
 
 ## Room transitions, not grid steps: crossing a merged hall is free here.
@@ -728,14 +731,11 @@ func _photo_room_graph(route: DescentRoute) -> Dictionary:
 		return route._photo_graph_cache
 	var neighbours := {}
 	for at in route.scanned_cells():
-		var room := _photo_room(at)
+		var room := route.base_room(at)
 		if not neighbours.has(room):
 			neighbours[room] = {}
-		for dir in 4:
-			var other: Vector2i = at + WorldGen.DIRV[dir]
-			if not route.scanned_contains(other) or route.base_is_wall(at, dir):
-				continue
-			var next_room := _photo_room(other)
+		for other in route.base_neighbours(at):
+			var next_room := route.base_room(other)
 			if room != next_room:
 				neighbours[room][next_room] = true
 	route._photo_graph_cache = neighbours
@@ -800,6 +800,7 @@ func _site_digest() -> String:
 
 
 func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_only := false) -> void:
+	_photo_room_cache = route._base_room_cache
 	if not obstruction_only and not intro_only and not route.obstruction_hint.is_empty():
 		for hint in [route.intro_door_hint, route.obstruction_hint, route.realm_door_hint]:
 			if not hint.is_empty():
@@ -821,11 +822,18 @@ func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_onl
 	var near_path := {}
 	var path := route.path_from_origin()
 	var path_rooms := {}
-	for at in path:
-		path_rooms[_photo_room(at)] = true
+	var approach_indices := {}
+	for idx in path.size():
+		var at := path[idx]
+		var room := _photo_room(at)
+		path_rooms[room] = true
 		for dz in range(-1, 2):
 			for dx in range(-1, 2):
-				near_path[at + Vector2i(dx, dz)] = true
+				var neighbour := at + Vector2i(dx, dz)
+				near_path[neighbour] = true
+				if obstruction_only and not approach_indices.has(neighbour) \
+						and _photo_room(neighbour) == room:
+					approach_indices[neighbour] = idx
 	var seen := {}
 	var candidates: Array[Dictionary] = []
 	for at: Vector2i in near_path:
@@ -856,7 +864,7 @@ func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_onl
 			if not obstruction_only and route.floor_idx == 0 and theme == 0:
 				record.merge(_photo_intro_approach(route, record, distances, path, intro_only))
 			if obstruction_only:
-				var approach := _photo_obstruction_approach(record, distances, path)
+				var approach := _photo_obstruction_approach(record, distances, path, approach_indices)
 				if approach.is_empty():
 					continue
 				record.merge(approach)
@@ -942,10 +950,13 @@ func _photo_intro_approach(route: DescentRoute, record: Dictionary,
 
 
 func _photo_obstruction_approach(record: Dictionary, distances: Dictionary,
-		path: Array[Vector2i]) -> Dictionary:
+		path: Array[Vector2i], approach_indices: Dictionary = {}) -> Dictionary:
 	var at: Vector2i = record["cell"]
 	var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
 	var approach := at if int(distances[_photo_room(at)]) > int(distances[_photo_room(other)]) else other
+	if not approach_indices.is_empty():
+		return {"approach_cell": approach, "approach_path_index": approach_indices[approach]} \
+			if approach_indices.has(approach) else {}
 	for idx in path.size():
 		if _photo_room(path[idx]) == _photo_room(approach) \
 				and maxi(absi(path[idx].x - approach.x), absi(path[idx].y - approach.y)) <= 1:
@@ -956,6 +967,7 @@ func _photo_obstruction_approach(record: Dictionary, distances: Dictionary,
 ## A temporary visit needs an early, visible approach, not a minimum shortcut
 ## saving. Reserve its ordinary rooms before recordings or furniture are dealt.
 func plan_realm_door(route: DescentRoute, allow_station_cells := false) -> Dictionary:
+	_photo_room_cache = route._base_room_cache
 	if route.floor_idx >= DescentRun.FLOOR_COUNT - 1:
 		return {}
 	if not route.intro_door_hint.is_empty():
@@ -1080,17 +1092,38 @@ func intro_photo_door() -> Dictionary:
 
 func _photo_cell_safe(route: DescentRoute, at: Vector2i,
 		protected: Dictionary, optional: Array[Vector2i], allow_corridor := false) -> bool:
-	if not _mutation_cell_safe(route, at, protected, optional):
+	# Candidate targets share the same seeded geometry. Check their changing
+	# reservations before consulting a route-local cache of immutable facts.
+	if not route.scanned_contains(at) or at == route.origin or at == route.target \
+			or optional.has(at):
 		return false
+	var members := route.base_room_members(at)
+	for member in members:
+		if protected.has(member):
+			return false
+	var key := Vector3i(at.x, at.y, 1 if allow_corridor else 0)
+	if route._photo_cell_base_cache.has(key):
+		return bool(route._photo_cell_base_cache[key])
+	var safe := true
+	for member in members:
+		if WorldGen.portal(world_seed, member, theme) >= 0 \
+				or WorldGen.elevator_cell(world_seed, member, theme) \
+				or (posmod(member.x, 3) == 1 and posmod(member.y, 3) == 1):
+			safe = false
+			break
+	safe = safe and route._blackout_cell_ok(at, Vector2i(1 << 30, 1 << 30),
+		[], true, true)
 	# Corridor shells, split rooms and submerged pools can hide an edge behind
 	# another architectural barrier. Only reserve ordinary, dry room boundaries.
 	if not allow_corridor and (WorldGen.annex_corridor_axis(world_seed, at) if theme == 2 \
 			else WorldGen.corridor(world_seed, at)) != 0:
-		return false
+		safe = false
 	var style := WorldGen.cell_style(world_seed, at, theme)
 	if theme == 2 and style == WorldGen.ANNEX_PASSAGE:
-		return false
-	return theme != 9 or Chunk.pool_style_dry(style)
+		safe = false
+	safe = safe and (theme != 9 or Chunk.pool_style_dry(style))
+	route._photo_cell_base_cache[key] = safe
+	return safe
 
 
 func _closure_record(edge: Dictionary) -> Dictionary:

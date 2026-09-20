@@ -123,9 +123,16 @@ var _target_distance := {}
 var _optional_vhs_ready := false
 var _optional_vhs: Array[Vector2i] = []
 var _path_cells := {}
+## Live hidden-link cell pairs, each [Vector2i, Vector2i]. The reverse map
+## routes across them as one step either way; empty restores the legacy map.
+var _traversal_link_cells: Array = []
 var _path_rooms := {}
 var _ritual_cell := Vector2i(1 << 30, 1 << 30)
 var _base_wall_cache := {}
+var _base_room_cache := {}
+var _base_neighbours := {}
+var _photo_cell_base_cache := {}
+var _base_room_members_cache := {}
 
 static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 	var cache_key := "%d:%d:%d" % [ws, floor_theme, p_floor_idx]
@@ -138,6 +145,13 @@ static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 		route.floor_idx = p_floor_idx
 		route._obstruction_district = district
 		route._build()
+		# Search each district once in order. Keep the original obstruction
+		# fallback boundary, but never recurse through complete route builds.
+		if p_floor_idx != 0 and route.obstruction_hint.is_empty():
+			if district + 1 < OBSTRUCTION_DISTRICTS:
+				district += 1
+				continue
+			push_warning("No safe photographic obstruction for seed %d theme %d" % [ws, floor_theme])
 		var realm_plan := DescentTopology.new(ws, floor_theme)
 		route.realm_door_hint = realm_plan.plan_realm_door(route)
 		if not route.realm_door_hint.is_empty() or p_floor_idx == 0 or p_floor_idx >= DescentRun.FLOOR_COUNT - 1:
@@ -238,6 +252,14 @@ func refresh_topology() -> void:
 		_build_reverse_map()
 
 
+## Objective guidance across live hidden links. Rebuilds immediately so
+## callers never read a stale map; passing [] restores the legacy map.
+func set_traversal_link_cells(pairs: Array) -> void:
+	_traversal_link_cells = pairs.duplicate()
+	if not _origin_distance.is_empty():
+		_build_reverse_map()
+
+
 func edge_info(at: Vector2i, dir: int) -> Dictionary:
 	if topology != null:
 		return topology.edge_info(at, dir)
@@ -250,10 +272,37 @@ func is_wall(at: Vector2i, dir: int) -> bool:
 
 
 func base_is_wall(at: Vector2i, dir: int) -> bool:
-	var key := DescentTopology.edge_key(at, dir)
+	# Same canonical edge as DescentTopology.edge_key, without allocating a
+	# dictionary and formatting a string for every BFS edge.
+	var key := Vector3i(at.x - (1 if dir == 1 else 0),
+		at.y - (1 if dir == 3 else 0), 0 if dir < 2 else 1)
 	if not _base_wall_cache.has(key):
 		_base_wall_cache[key] = WorldGen.is_wall(world_seed, at, dir, theme)
 	return bool(_base_wall_cache[key])
+
+
+func base_room(at: Vector2i) -> Vector2i:
+	if not _base_room_cache.has(at):
+		_base_room_cache[at] = WorldGen.annex_room_id(world_seed, at) if theme == 2 \
+			else WorldGen.room_id(world_seed, at)
+	return _base_room_cache[at]
+
+
+func base_neighbours(at: Vector2i) -> Array[Vector2i]:
+	if not _base_neighbours.has(at):
+		var neighbours: Array[Vector2i] = []
+		for dir in 4:
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if _origin_distance.has(other) and not base_is_wall(at, dir):
+				neighbours.append(other)
+		_base_neighbours[at] = neighbours
+	return _base_neighbours[at]
+
+
+func base_room_members(at: Vector2i) -> Array[Vector2i]:
+	if not _base_room_members_cache.has(at):
+		_base_room_members_cache[at] = WorldGen.owning_room_members(world_seed, at, theme)
+	return _base_room_members_cache[at]
 
 
 func scanned_contains(at: Vector2i) -> bool:
@@ -704,12 +753,6 @@ func _build() -> void:
 			if obstruction_hint.is_empty():
 				target = original
 			_obstruction_target_cache[cache_key] = {"target": target, "obstruction": obstruction_hint.duplicate(true)}
-		if obstruction_hint.is_empty():
-			if _obstruction_district + 1 < OBSTRUCTION_DISTRICTS:
-				_obstruction_district += 1
-				_build()
-				return
-			push_warning("No safe photographic obstruction for seed %d theme %d" % [world_seed, theme])
 	target_wall = WorldGen.anchor_wall(world_seed, target, TARGET_WALL_SALT, theme)
 	graph_distance = int(_origin_distance[target])
 	_build_reverse_map()
@@ -774,6 +817,7 @@ func _pick_origin() -> void:
 
 func _scan(from: Vector2i, radius: int) -> void:
 	_photo_graph_cache.clear()
+	_base_neighbours.clear()
 	_origin_distance.clear()
 	var queue: Array[Vector2i] = [from]
 	_origin_distance[from] = 0
@@ -845,8 +889,11 @@ func _ranked_pick(candidates: Array[Vector2i], salt: int) -> Vector2i:
 
 
 func _build_reverse_map() -> void:
-	_next.clear()
-	_target_distance.clear()
+	# Fresh maps, never cleared in place: readers hold the previous build
+	# while a rebuild runs (plain-vs-linked comparison, live guidance
+	# refresh), so rebinding keeps every outstanding snapshot intact.
+	_next = {}
+	_target_distance = {}
 	var queue: Array[Vector2i] = [target]
 	_target_distance[target] = 0
 	_next[target] = target
@@ -855,14 +902,35 @@ func _build_reverse_map() -> void:
 		var c := queue[head]
 		head += 1
 		var dist := int(_target_distance[c])
-		for dir in 4:
-			var nb: Vector2i = c + WorldGen.DIRV[dir]
-			if not _origin_distance.has(nb) or _target_distance.has(nb):
-				continue
-			if is_wall(c, dir):
+		# Target selection repeats this BFS up to sixteen times on the same
+		# immutable scan. Reuse adjacency; live overlays still resolve every edge.
+		var neighbours: Array[Vector2i] = []
+		if topology == null:
+			neighbours = base_neighbours(c)
+		else:
+			for dir in 4:
+				var nb: Vector2i = c + WorldGen.DIRV[dir]
+				if _origin_distance.has(nb) and not is_wall(c, dir):
+					neighbours.append(nb)
+		for nb in neighbours:
+			if _target_distance.has(nb):
 				continue
 			_target_distance[nb] = dist + 1
 			_next[nb] = c
 			queue.append(nb)
+		for pair in _traversal_link_cells:
+			var other := Vector2i(1 << 30, 1 << 30)
+			if c == pair[0]:
+				other = pair[1]
+			elif c == pair[1]:
+				other = pair[0]
+			else:
+				continue
+			if not _origin_distance.has(other) \
+					or _target_distance.has(other):
+				continue
+			_target_distance[other] = dist + 1
+			_next[other] = c
+			queue.append(other)
 	if _target_distance.has(origin):
 		graph_distance = int(_target_distance[origin])

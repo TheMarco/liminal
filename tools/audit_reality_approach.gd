@@ -1,5 +1,5 @@
 extends SceneTree
-## Real actor/manager physics: dormant -> warning -> approach, once per actor.
+## Real actor/manager physics: warn once while moving, with optional explicit holds.
 const UnitAudit = preload("res://tools/audit_reality_aftershock.gd")
 const Effect = preload("res://scripts/reality_aftershock.gd")
 const DT := 1.0 / 60.0
@@ -29,7 +29,11 @@ func actor(at: Vector3) -> ShadowFigure:
 	world.add_child(f)
 	f.set_physics_process(false)
 	f.grace = 0.0
-	f._reveal = 0.0
+	f._fade = -1.0
+	f._seen = true
+	f._observed = false
+	f._approach_announced = false
+	f._approach_hold = 0.0
 	f._was_sighted = true
 	manager.adopt(f)
 	return f
@@ -78,15 +82,21 @@ func run() -> void:
 	f.suppressed = false
 	f.grace = 0.5
 	tick(f, 10)
-	expect(effect.pulse_count == 0, "spawn grace warned early")
+	expect(effect.pulse_count == 1, "spawn grace prevented the approach warning")
+	expect(flat_distance(start, f.global_position) > 0.01,
+		"actor did not move through its arrival warning")
+	expect(f._approach_hold == 0.0, "ordinary warning imposed an unwanted movement hold")
 	f.grace = 0.0
+	# Explicit holds remain supported for callers that need a reaction window.
+	f.hold_approach(1.5)
+	start = f.global_position
 	f._physics_process(DT)
-	expect(effect.pulse_count == 1 and f._approach_hold > 1.3, "adopted actor did not synchronously receive warning hold")
-	expect(flat_distance(start, f.global_position) < 0.0001, "actor moved on warning's first frame")
+	expect(f._approach_hold > 1.3, "explicit reaction hold was lost")
+	expect(flat_distance(start, f.global_position) < 0.0001, "actor moved during explicit hold")
 	tick(f, 75)
 	expect(not effect.visible, "warning still obscures view at 1.25 seconds")
 	expect(flat_distance(start, f.global_position) < 0.0001, "actor moved before clear-view margin")
-	tick(f, 25)
+	tick(f, 60)
 	expect(flat_distance(start, f.global_position) > 0.1, "actor did not approach after warning")
 	expect(effect.pulse_count == 1, "ordinary chase repeated warning")
 	f._was_sighted = false
@@ -100,8 +110,7 @@ func run() -> void:
 	var world_start := world_placed.global_position
 	world_placed._physics_process(DT)
 	expect(effect.pulse_count == 2, "world-placed figure did not warn immediately")
-	expect(world_placed._approach_hold > 0.0, "world-placed figure has no reaction hold")
-	expect(flat_distance(world_start, world_placed.global_position) < 0.0001, "world-placed figure moved before its warning")
+	expect(world_placed._approach_hold == 0.0, "world-placed warning froze the figure")
 	tick(world_placed, 100)
 	expect(flat_distance(world_start, world_placed.global_position) > 0.1, "world-placed figure stayed dormant after its warning")
 	# Holding approach is not immunity from the torch.
@@ -117,11 +126,18 @@ func run() -> void:
 	var spawned: ShadowFigure = manager._figs[-1]
 	spawned.set_physics_process(false)
 	spawned._was_sighted = true
-	spawned._reveal = 0.0
+	spawned._fade = -1.0
+	spawned._seen = true
+	spawned._observed = false
+	spawned._approach_announced = false
+	spawned._approach_hold = 0.0
 	var spawned_start := spawned.global_position
 	spawned._physics_process(DT)
-	expect(spawned._approach_hold > 0.0 and effect.pulse_count == pulses + 1, "normal spawned actor missed its warning")
-	expect(flat_distance(spawned_start, spawned.global_position) < 0.0001, "spawned actor advanced before its warning")
+	expect(effect.pulse_count == pulses + 1, "normal spawned actor missed its warning")
+	expect(spawned._approach_hold == 0.0, "normal spawn warning froze the figure")
+	tick(spawned, 10)
+	expect(flat_distance(spawned_start, spawned.global_position) > 0.01,
+		"normal spawned actor did not advance during its warning")
 	for tween in get_processed_tweens():
 		tween.kill()
 	for audio in world.find_children("*", "AudioStreamPlayer3D", true, false):

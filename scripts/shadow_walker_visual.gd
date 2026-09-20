@@ -83,6 +83,10 @@ var _manifestation := 0.0
 var _transition: Tween
 var _closeup := false
 var _phase := 0.0
+var _skeleton: Skeleton3D
+## Render-only seam mirror: skips the arrival tween so the first sync owns
+## every visible parameter, and never advances its own animation player.
+var proxy_mode := false
 var _movement_ratio := 0.0
 var _locomotion_clip := &"walk"
 var _turn_velocity := 0.0
@@ -95,7 +99,8 @@ func _ready() -> void:
 	_phase = randf() * 19.0
 	_build_model()
 	set_manifestation(0.0)
-	appear(APPEAR_SECONDS)
+	if not proxy_mode:
+		appear(APPEAR_SECONDS)
 
 
 func _build_model() -> void:
@@ -529,6 +534,47 @@ func set_manifestation(value: float) -> void:
 	if is_instance_valid(_presentation):
 		_presentation.visible = _manifestation > 0.0001
 	manifestation_changed.emit(_manifestation)
+
+
+## World-space seam clip on every body and halo pass. Deliberately outside
+## _parameters: each side of a mirror pair keeps its own half-space.
+func set_seam_clip(plane: Vector4, enabled: bool) -> void:
+	_set_parameter(&"clip_plane", plane)
+	_set_parameter(&"clip_enabled", 1.0 if enabled else 0.0)
+
+
+func skeleton() -> Skeleton3D:
+	if not is_instance_valid(_skeleton):
+		_skeleton = null
+		if is_instance_valid(_model):
+			var found := _model.find_children("*", "Skeleton3D", true,
+				false)
+			if not found.is_empty():
+				_skeleton = found[0] as Skeleton3D
+	return _skeleton
+
+
+## Become the other walker's exact rendered twin: local transform, every
+## bone pose, material state, noise phase, and closeup treatment. The
+## animation player is never touched, so no blend or advance can drift.
+func mirror_from(other: ShadowWalkerVisual) -> void:
+	transform = other.transform
+	var src := other.skeleton()
+	var dst := skeleton()
+	if src != null and dst != null:
+		var n := mini(src.get_bone_count(), dst.get_bone_count())
+		for i in n:
+			dst.set_bone_pose_rotation(i, src.get_bone_pose_rotation(i))
+			dst.set_bone_pose_position(i, src.get_bone_pose_position(i))
+			dst.set_bone_pose_scale(i, src.get_bone_pose_scale(i))
+	for key in other._parameters:
+		set_instance_shader_parameter(key, other._parameters[key])
+	set_manifestation(other._manifestation)
+	if other._closeup != _closeup:
+		set_closeup_mode(other._closeup)
+	if other._phase != _phase:
+		_phase = other._phase
+		_set_parameter(&"phase", _phase)
 
 
 func appear(duration := 0.7) -> void:

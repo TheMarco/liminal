@@ -1109,10 +1109,18 @@ func _build_giant(floor_h: float) -> void:
 	var centre_off: Vector3 = row[2]
 	var extents: Vector3 = row[3]
 	var ceil_h := Chunk.cell_ceil_h(world_seed, cell, theme)
-	var base_h := maxf(extents.y, 0.6)
+	var inst := scene.instantiate() as Node3D
+	inst.scale = Vector3.ONE * scl
+	inst.position = -centre_off * scl
+	var span: Array = [INF, -INF]
+	_visual_span(inst, inst.transform, span)
+	# Authored collider dimensions can be shorter than the imported mesh.
+	# Cap the visible top as well as the collision box.
+	var base_h := maxf(maxf(extents.y, float(span[1])), 0.6)
 	# The ceiling cap wins even when a full-size replacement cabinet leaves
 	# less than the preferred 1.5x enlargement. Never bury its top in the slab.
-	var factor := minf((ceil_h - floor_h - 0.25) / base_h, GIANT_SCALE_MAX)
+	# Reserve the 30cm light offset and its 5.5cm visible mote above the prop.
+	var factor := minf((ceil_h - floor_h - 0.25 - 0.355) / base_h, GIANT_SCALE_MAX)
 	var spot := _find_spot(floor_h, 1.5, base_h * factor)
 	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25
@@ -1120,7 +1128,6 @@ func _build_giant(floor_h: float) -> void:
 	pivot.position = spot
 	pivot.rotation.y = yaw
 	add_child(pivot)
-	var inst := scene.instantiate() as Node3D
 	inst.scale = Vector3.ONE * scl * factor
 	inst.position = -centre_off * scl * factor
 	pivot.add_child(inst)

@@ -78,7 +78,12 @@ static func plan(ctx: ChunkBuildContext, layout: Dictionary,
 			# Centre their full operating width, then try nearby positions along
 			# this shore before giving up on a safe slide placement.
 			var lateral_center: float = DECK_BOUNDS[kind].get_center().x
-			for offset: float in [0.0, -0.6, 0.6, -1.2, 1.2]:
+			# Preserve preferred bays, then search finer and wider along the shore.
+			# The asymmetric spiral often fits between an access lane and a corner
+			# at a position the old five samples skipped. All clearance tests apply.
+			for offset: float in [0.0, -0.6, 0.6, -1.2, 1.2,
+					-1.8, 1.8, -2.4, 2.4, -0.3, 0.3, -0.9, 0.9,
+					-1.5, 1.5, -2.1, 2.1]:
 				var candidate := at + Vector3(offset - lateral_center, 0, 0).rotated(Vector3.UP, yaw)
 				var deck := footprint(DECK_BOUNDS[kind], candidate, yaw)
 				# Keep a clear strip at the room perimeter, even along full-open edges.

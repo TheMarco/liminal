@@ -44,6 +44,7 @@ func _init() -> void:
 	var school_urinals := 0
 	var school_doors := 0
 	var school_library_stacks := 0
+	var school_authored_library_units := 0
 	var school_encyclopedia_sets := 0
 	var school_elevators := 0
 	var school_fixture_failures := 0
@@ -100,6 +101,7 @@ func _init() -> void:
 					school_urinals += int(school_report["urinals"])
 					school_doors += int(school_report["doors"])
 					school_library_stacks += int(school_report["library_stacks"])
+					school_authored_library_units += int(school_report["authored_library_units"])
 					school_encyclopedia_sets += int(
 						school_report["encyclopedia_sets"])
 					school_elevators += int(school_report["elevators"])
@@ -161,8 +163,8 @@ func _init() -> void:
 		school_carts, school_stalls, school_fixture_failures])
 	print("  fitted school doors: %d | wall-clear urinals: %d" % [
 		school_doors, school_urinals])
-	print("  atomic school library stacks: %d | supported encyclopedia sets: %d" % [
-		school_library_stacks, school_encyclopedia_sets])
+	print("  atomic school library stacks: %d | authored units: %d | supported encyclopedia sets: %d" % [
+		school_library_stacks, school_authored_library_units, school_encyclopedia_sets])
 	print("  unobstructed school elevators: %d" % school_elevators)
 	print("  asylum authored furniture %s | violations: %d" % [
 		asylum_authored, asylum_failures])
@@ -178,7 +180,7 @@ func _init() -> void:
 		print("FAIL — school cart/stall integrity audit was not fully exercised")
 	if school_urinals == 0 or school_doors == 0 \
 			or school_library_stacks == 0 \
-			or school_encyclopedia_sets != school_library_stacks \
+			or school_encyclopedia_sets * 2 + school_authored_library_units != school_library_stacks * 2 \
 			or school_elevators == 0:
 		failures += 1
 		print("FAIL — school door/urinal/library/elevator audit was not fully exercised")

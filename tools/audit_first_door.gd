@@ -9,12 +9,6 @@ func run() -> void:
 	var player: Player = game.player
 	var camera: PhotoCamera = game._photo_camera
 	var director: PhotoDirector = game._photo_director
-	game.run.set_process(false)
-	game.set_process(false)
-	player.set_physics_process(false)
-	player.set_process(false)
-	cm.set_process(false)
-	camera.set_process(false)
 	var record := route.topology.intro_photo_door()
 	expect(not record.is_empty(), "new run lacks its introductory doorway")
 	if record.is_empty():
@@ -40,6 +34,7 @@ func run() -> void:
 			part.free()
 	var path := route.path_from_origin()
 	var index := int(record["approach_path_index"])
+	var approach: Vector2i = record["approach_cell"]
 	expect(index <= 8 and int(record["approach_room_steps"]) <= 4,
 		"introductory doorway is too late")
 	var first_seen := {}
@@ -61,6 +56,25 @@ func run() -> void:
 			if cm.chunk_at(at) == null:
 				cm._build(at)
 		director._register_photo_doors()
+	# Realm previews are intentionally lazy. Bring the player to the streamed
+	# approach cell first, then wait for the real preview lifecycle to settle.
+	var floor_y := Chunk.cell_floor_h(cm.world_seed, approach, game.active_level)
+	player.teleport(Vector3((float(approach.x) + 0.5) * WorldGen.CELL_SIZE,
+		floor_y, (float(approach.y) + 0.5) * WorldGen.CELL_SIZE))
+	var preview_deadline := Time.get_ticks_msec() + 15000
+	while not director.realm_preview_ready and Time.get_ticks_msec() < preview_deadline:
+		await physics_frame
+	expect(director.realm_preview_ready, "realm phase did not settle after approach streaming")
+	if not director.realm_preview_ready:
+		await teardown_game(game)
+		finish()
+		return
+	game.run.set_process(false)
+	game.set_process(false)
+	player.set_physics_process(false)
+	player.set_process(false)
+	cm.set_process(false)
+	camera.set_process(false)
 	await physics_frame
 	var doorway: PhotoAnomaly
 	for node in director.capturable():
@@ -71,7 +85,6 @@ func run() -> void:
 		await teardown_game(game)
 		finish()
 		return
-	var approach: Vector2i = record["approach_cell"]
 	var chunk := cm.chunk_at(approach)
 	var seal: PhotoDoorSeal
 	for item in chunk.photo_door_seals():
