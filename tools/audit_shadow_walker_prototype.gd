@@ -9,30 +9,20 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	var ordinary_options := CliOptions.parse_args([])
-	var prototype_options := CliOptions.parse_args(["--walker-prototype"])
-	var legacy_options := CliOptions.parse_args(["--legacy-flat-ghosts"])
-	expect(ordinary_options.walker_prototype,
-		"normal play did not enable the all-level 3D monster roster")
-	expect(prototype_options.walker_prototype,
-		"legacy --walker-prototype QA command stopped working")
-	expect(not legacy_options.walker_prototype,
-		"--legacy-flat-ghosts did not restore the earlier presentation")
-	expect(ShadowWalkerVisual.model_count() == 4,
-		"shadow-person roster does not contain all supplied walkers")
+	expect(ShadowWalkerVisual.model_count() == 12,
+		"walker roster does not contain all supplied monsters")
 
 	var ordinary := ShadowFigure.new()
 	root.add_child(ordinary)
 	ordinary.set_physics_process(false)
-	expect(ordinary._quad != null and ordinary._walker == null,
-		"ordinary ShadowFigure no longer uses the established 2D visual")
+	expect(ordinary._walker != null,
+		"ShadowFigure did not build its animated walker")
 
 	var alternate := ShadowFigure.new()
-	alternate.use_walker_prototype = true
 	root.add_child(alternate)
 	alternate.set_physics_process(false)
-	expect(alternate._quad == null and alternate._walker != null,
-		"prototype ShadowFigure did not select the animated walker")
+	expect(alternate._walker != null,
+		"second ShadowFigure did not build its animated walker")
 	var visual := alternate._walker as ShadowWalkerVisual
 	expect(visual._materials.size() == 1,
 		"the supplied one-surface walker did not produce one runtime material")
@@ -55,11 +45,23 @@ func _run() -> void:
 		root.add_child(roster_visual)
 		expect(roster_visual._materials.size() == 1,
 			"roster model %d did not produce one runtime material" % index)
-		expect(roster_visual._halo_materials.size() == 5,
-			"roster model %d did not produce its Gaussian defocus kernel" % index)
+		var shells := 4 if ShadowWalkerVisual.GHOST_RENDER[index] else 5
+		expect(roster_visual._halo_materials.size() == shells,
+			"roster model %d did not produce its defocus kernel" % index)
 		expect(roster_visual.animation_player() != null and
 			roster_visual.animation_player().has_animation(&"runtime/walk"),
 			"roster model %d did not install its walking loop" % index)
+		if index == ShadowFigure.POOL_GIRL_MODEL_INDEX:
+			expect(roster_visual.has_run_cycle(),
+				"pool girl did not install the supplied running loop")
+			roster_visual.set_ground_speed(ShadowFigure.POOL_GIRL_DECK_SPEED, true)
+			expect(roster_visual.locomotion_clip() == &"run" and
+				roster_visual.animation_player().current_animation == &"runtime/run",
+				"pool girl did not switch to running on dry deck")
+			roster_visual.set_ground_speed(ShadowFigure.POOL_GIRL_WATER_SPEED, false)
+			expect(roster_visual.locomotion_clip() == &"walk" and
+				roster_visual.animation_player().current_animation == &"runtime/walk",
+				"pool girl did not switch back to walking in water")
 		var roster_surface := roster_visual.burn_surface_points(320)
 		expect(roster_surface.size() == 320,
 			"roster model %d cannot provide its skinned burn surface" % index)
@@ -98,11 +100,17 @@ func _run() -> void:
 		"runtime spawns can still appear too close to an existing figure")
 	expect(manager._spawn_separated(Vector3(5.0, 0.0, 0.0)),
 		"runtime spawn separation rejects a safely distant position")
+	var scout := Player.new()
+	scout.level_theme = 0
+	manager.player = scout
+	manager._dark_bag.clear()
 	var picked := {}
-	for draw in ShadowWalkerVisual.model_count():
-		picked[manager._next_walker_model()] = true
-	expect(picked.size() == ShadowWalkerVisual.model_count(),
-		"shuffle bag repeated a monster before the complete roster appeared")
+	for draw in ShadowFigures.DARK_ROSTER.size():
+		picked[manager._next_spawn_model()] = true
+	expect(picked.size() == ShadowFigures.DARK_ROSTER.size()
+		and not picked.has(-1),
+		"dark bag repeated a design before the black roster completed")
+	scout.free()
 	visual.set_instance_shader_parameter(&"burn", 0.65)
 	visual.set_ground_speed(1.25)
 	var phase_before := visual.animation_player().current_animation_position

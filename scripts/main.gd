@@ -127,6 +127,11 @@ var _pending_mutation_reveal := false
 var _pending_mutation_reveal_at := Vector3.INF
 var _pending_mutation_reveal_descriptor := {}
 var _mutation_coordinator: DescentMutationCoordinator
+var _spatial_director: SpatialMutationDirector
+var _spatial_poll := 0.0
+var _spatial_lasts := {}
+var _spatial_edges := {}
+var _spatial_denials := {}
 ## Environmental bleed presentation: captured baselines for this floor's fog
 ## and the next floor's targets, plus the rising next-floor room tone.
 var _bleed_base_fog := Color.BLACK
@@ -326,7 +331,7 @@ func _ready() -> void:
 		var forward := Vector3(-sin(yaw), 0, -cos(yaw))
 		var ring: Node3D = MonsterLineupScene.new()
 		add_child(ring)
-		ring.configure(spawn + forward * 8.5, spawn + Vector3(0, 1.5, 0))
+		ring.configure(spawn + forward * 8.5, spawn + Vector3(0, 1.5, 0), player)
 	_dev_tools = BenchmarkDevController.new()
 	add_child(_dev_tools)
 	# Live tuning panel for the Poolrooms. Dragging a slider beats editing a
@@ -387,7 +392,6 @@ func _ready() -> void:
 	_figures.dev_haunt_at = opts.haunt_at
 	_figures.dev_haunt_at_given = opts.haunt_at_given
 	_figures.dev_haunt_variant = opts.haunt_variant
-	_figures.use_walker_prototype = opts.walker_prototype
 	_figures.reached_player.connect(_on_figure_reached_player)
 	add_child(_figures)
 	# Frights raise the pulse; it bleeds away on its own. Wired after the
@@ -617,6 +621,7 @@ func _build_level(level: int, around: Vector3) -> void:
 	level_root.add_child(cm)
 	if descent:
 		_configure_mutation_coordinator()
+		_configure_spatial_sites()
 	# Streaming must orbit the ARRIVAL until the player is teleported there,
 	# or the stale pre-teleport player position frees these warmed chunks
 	# mid-transition (see ChunkManager.stream_focus).
@@ -632,6 +637,249 @@ func _configure_mutation_coordinator() -> void:
 		_figures, _passers, _mutation_mode_ready,
 		_persist_committed_mutation)
 	_mutation_coordinator.committed.connect(_on_mutation_committed)
+	_mutation_coordinator.failed.connect(_on_mutation_failed)
+
+
+## Spatial mutation sites for this floor, if the topology admitted any.
+## Package 2 supports the same safe forward migration under blackout or lit
+## presentation. Reverse pacing remains a later campaign package.
+func _configure_spatial_sites() -> void:
+	_spatial_director = null
+	_spatial_lasts.clear()
+	_spatial_edges.clear()
+	_spatial_denials.clear()
+	if descent_route == null or descent_route.topology == null:
+		return
+	var topology := descent_route.topology
+	if topology.site_specs.is_empty():
+		return
+	_spatial_director = SpatialMutationDirector.new()
+	_spatial_director.process_physics_priority = 100
+	level_root.add_child(_spatial_director)
+	_spatial_director.configure(_director, cm, topology, descent_route)
+	_spatial_director.set_camera(player.cam if player != null else null)
+	_spatial_director.set_mode_ready(Callable(self, "_spatial_mode_ready"))
+	_spatial_director.event_started.connect(_on_spatial_event_started)
+	_spatial_director.event_finished.connect(_on_spatial_event_finished)
+	if run != null:
+		_spatial_director.set_blackout_driver(
+			Callable(run, "begin_structural_blackout"), Callable())
+	for spec in topology.site_specs:
+		_install_spatial_site(spec)
+
+
+func _install_spatial_site(spec: SpatialSiteSpec) -> void:
+	var site := MigratingDoorSite.new()
+	site.name = "SpatialSite"
+	level_root.add_child(site)
+	var state: SpatialSiteState = null
+	if _progress_enabled and _descent_progress.run_seed == world_seed \
+			and run != null:
+		state = _descent_progress.site_state_for_floor(run.floor_idx,
+			spec.id)
+	if state == null or not state.matches(spec):
+		state = SpatialSiteState.for_spec(spec, "a_open")
+	var frame := SpatialSitePlanner.junction_frame(spec)
+	var dirs: Array = frame["dirs"]
+	if dirs.size() != 2:
+		push_error("spatial site has no aperture frame")
+		site.queue_free()
+		return
+	var junction: Vector2i = frame["cell"]
+	var prepared := site.prepare(spec, state, {
+		"wall_material": Mats.office_wall_variant(
+			WorldGen.finish_variant(world_seed, junction,
+				descent_route.theme)),
+		"trim_material": Mats.box_white(),
+		"ceiling_h": Chunk.HOFF,
+		"pattern_tile_m": 0.8,
+	})
+	if not prepared.ok:
+		push_error("spatial site failed to prepare: " + prepared.reason)
+		site.queue_free()
+		return
+	var apertures: Dictionary = SpatialSiteTransaction.PHASE_APERTURES.get(
+		state.stable_phase, {"a": 1.0, "b": 0.0})
+	_spatial_edges[spec.id] = {
+		"a": {"cell": junction, "dir": int(dirs[0])},
+		"b": {"cell": junction, "dir": int(dirs[1])},
+	}
+	var topology := descent_route.topology
+	topology.set_site_edge(spec.id, junction, int(dirs[0]),
+		float(apertures["a"]) > 0.5)
+	topology.set_site_edge(spec.id, junction, int(dirs[1]),
+		float(apertures["b"]) > 0.5)
+	_spatial_director.register_door_site(site, state,
+		Callable(self, "_spatial_occupancy"),
+		Callable(self, "_persist_spatial_state").bind(run.floor_idx),
+		Callable(self, "_spatial_graph_invalidated"))
+
+
+func _persist_spatial_state(state: SpatialSiteState,
+		floor_idx: int) -> Error:
+	if not _progress_enabled:
+		return OK
+	return _descent_progress.record_site_state(floor_idx, state)
+
+
+func _spatial_graph_invalidated() -> void:
+	if descent_route != null:
+		descent_route.refresh_topology()
+	if _figures != null:
+		_figures.invalidate_navigation_for_topology_change()
+
+
+func _spatial_mode_ready(presentation := "") -> bool:
+	if not _mutation_mode_ready() or run == null or run.ended \
+			or run.suspended or run.watching or run.blackout \
+			or run.arrival_grace > 0.0:
+		return false
+	if player == null or player.is_charging() \
+			or player.is_pool_ladder_traversing() or player.is_pool_sliding():
+		return false
+	if _photo_camera != null and (_photo_camera._capturing \
+			or _photo_camera._review_left > 0.0 \
+			or _photo_camera.doorway_reveal_active()):
+		return false
+	if presentation == "lit" and _figures != null \
+			and not _figures.active_figures().is_empty():
+		return false
+	return not (is_instance_valid(_realm_visit) and _realm_visit.is_away())
+
+
+func _on_spatial_event_started(site_id: String, presentation: String) -> void:
+	if presentation != "lit" or _spatial_director == null:
+		return
+	var at := _spatial_director.site_cue_position(site_id)
+	if at != Vector3.INF:
+		_play_descent_cue_at(SoundBank.creak(), -8.0, at)
+
+
+func _on_spatial_event_finished(_site_id: String, _outcome: String) -> void:
+	# When darkness ended before a blocked transition finished settling, the
+	# lights-on callback deliberately deferred the reveal until this stable state.
+	if _spatial_director != null \
+			and int(_spatial_director.last_event.get("lights_on_msec", -1)) >= 0:
+		_play_spatial_reveal_if_ready()
+
+
+func _play_spatial_reveal_if_ready() -> bool:
+	if _spatial_director == null:
+		return false
+	var reveal := _spatial_director.take_blackout_reveal()
+	if reveal.is_empty():
+		return false
+	_play_descent_cue_at(SoundBank.creak(), -2.0, reveal["position"])
+	_play_descent_cue(SoundBank.thud(), -13.0)
+	_show_event_message("POWER RESTORED")
+	return true
+
+
+func _spatial_occupancy() -> Array:
+	var out := []
+	if player != null and player.is_inside_tree():
+		_spatial_push_actor(out, "player", player.global_position)
+	if _figures != null:
+		for figure in _figures.active_figures():
+			_spatial_push_actor(out,
+				"figure_%d" % figure.get_instance_id(),
+				figure.global_position)
+	return out
+
+
+func _spatial_push_actor(out: Array, id: String, curr: Vector3) -> void:
+	var prev: Vector3 = _spatial_lasts.get(id, curr)
+	_spatial_lasts[id] = curr
+	out.append({"id": id, "prev": prev, "curr": curr,
+		"radius": Player.BODY_RADIUS})
+
+
+func _poll_spatial_events() -> void:
+	if _spatial_director == null or _spatial_director.is_active():
+		return
+	if descent_route == null or descent_route.topology == null:
+		return
+	for spec in descent_route.topology.site_specs:
+		var state := _spatial_director.site_state(spec.id)
+		if state == null or state.stable_phase == "b_open":
+			continue
+		var plan := _spatial_plan_for(spec, state.stable_phase, "b_open")
+		if plan == null:
+			continue
+		var result: Dictionary = _spatial_director.request_event(spec.id,
+			plan)
+		if bool(result.get("ok", false)):
+			_spatial_denials.erase(spec.id)
+			return
+		var reason := str(result.get("reason", ""))
+		if str(_spatial_denials.get(spec.id, "")) != reason:
+			_spatial_denials[spec.id] = reason
+			print("spatial event deferred (%s): %s" % [spec.id, reason])
+		return
+
+
+func _spatial_plan_for(spec: SpatialSiteSpec, from_phase: String,
+		to_phase: String) -> SpatialTransitionPlan:
+	if not _spatial_edges.has(spec.id):
+		return null
+	var topology := descent_route.topology
+	var plan := SpatialTransitionPlan.new()
+	plan.site_id = spec.id
+	plan.expected_revision = topology.revision
+	plan.from_phase = from_phase
+	plan.to_phase = to_phase
+	var junction: Vector2i = (_spatial_edges[spec.id]["a"] as Dictionary) \
+		["cell"]
+	var dir_a := int((_spatial_edges[spec.id]["a"] as Dictionary)["dir"])
+	var dir_b := int((_spatial_edges[spec.id]["b"] as Dictionary)["dir"])
+	var key_a := DescentTopology.edge_key(junction, dir_a)
+	var key_b := DescentTopology.edge_key(junction, dir_b)
+	var cell_na: Vector2i = junction + WorldGen.DIRV[dir_a]
+	var cell_nb: Vector2i = junction + WorldGen.DIRV[dir_b]
+	var entrance := -1
+	var cell_ec := junction
+	for dir in 4:
+		if dir == dir_a or dir == dir_b:
+			continue
+		var other: Vector2i = junction + WorldGen.DIRV[dir]
+		if descent_route.base_is_wall(junction, dir):
+			continue
+		if not descent_route.scanned_contains(other):
+			continue
+		entrance = dir
+		cell_ec = other
+		break
+	if entrance < 0:
+		return null
+	plan.phase_edges = {
+		"a_open": {key_a: true, key_b: false},
+		"both_open": {key_a: true, key_b: true},
+		"b_open": {key_a: false, key_b: true},
+	}
+	var occupiable := {
+		"a_open": [junction, cell_na, cell_ec],
+		"both_open": [junction, cell_na, cell_nb, cell_ec],
+		"b_open": [junction, cell_nb, cell_ec],
+	}
+	plan.phase_pairs = {}
+	for phase in occupiable.keys():
+		var cells: Array = occupiable[phase]
+		var pairs := []
+		for i in cells.size():
+			for j in range(i + 1, cells.size()):
+				pairs.append([cells[i], cells[j]])
+		plan.phase_pairs[phase] = pairs
+	plan.aperture_edges = (_spatial_edges[spec.id] as Dictionary).duplicate()
+	# The same physical transaction supports both presentations. Test mode keeps
+	# the lit path directly inspectable; normal campaign seeds introduce it only
+	# after the player has spent meaningful time with ordinary blackouts.
+	var lit_seed := posmod(WorldGen.h(world_seed,
+		run.floor_idx if run != null else 0, junction.x, junction.y), 3) == 0
+	plan.presentation = "lit" if opts.test_mode or (run != null \
+		and run.floor_idx >= 2 and run.elapsed >= 120.0 and lit_seed) \
+		else "blackout"
+	plan.hold_timeout = 6.0
+	return plan if plan.is_valid() else null
 
 
 func _configure_level_transitions() -> void:
@@ -1885,29 +2133,35 @@ func _on_descent_blackout(on: bool) -> void:
 	else:
 		_blackout_environment.restore()
 		_blackout_locate_cue = 0
-		if _pending_mutation_reveal:
-			_pending_mutation_reveal = false
-			if _pending_mutation_reveal_at != Vector3.INF:
-				_play_descent_cue_at(SoundBank.creak(), -2.0,
-					_pending_mutation_reveal_at)
-				_spawn_mutation_reveal(_pending_mutation_reveal_at,
-					_pending_mutation_reveal_descriptor)
+		if _mutation_coordinator != null:
+			_mutation_coordinator.note_lights_on()
+		if _spatial_director != null:
+			_spatial_director.notify_lights_on()
+		var spatial_revealed := _play_spatial_reveal_if_ready()
+		if not spatial_revealed:
+			if _pending_mutation_reveal:
+				_pending_mutation_reveal = false
+				if _pending_mutation_reveal_at != Vector3.INF:
+					_play_descent_cue_at(SoundBank.creak(), -2.0,
+						_pending_mutation_reveal_at)
+					_spawn_mutation_reveal(_pending_mutation_reveal_at,
+						_pending_mutation_reveal_descriptor)
+				else:
+					_play_descent_cue(SoundBank.creak(), -7.0)
+				# Promise the glow only when a positioned reveal actually
+				# spawned; a bare architectural change gets an honest caption.
+				_play_descent_cue(SoundBank.thud(), -13.0)
+				if _pending_mutation_reveal_at != Vector3.INF:
+					_show_event_message("POWER RESTORED — FOLLOW THE GLOW", true)
+				else:
+					_show_event_message("POWER RESTORED — SOMETHING CHANGED", true)
+				_pending_mutation_reveal_at = Vector3.INF
+				_pending_mutation_reveal_descriptor = {}
 			else:
-				_play_descent_cue(SoundBank.creak(), -7.0)
-			# Promise the glow only when a positioned reveal actually
-			# spawned; a bare architectural change gets an honest caption.
-			_play_descent_cue(SoundBank.thud(), -13.0)
-			if _pending_mutation_reveal_at != Vector3.INF:
-				_show_event_message("POWER RESTORED — FOLLOW THE GLOW", true)
-			else:
-				_show_event_message("POWER RESTORED — SOMETHING CHANGED", true)
-			_pending_mutation_reveal_at = Vector3.INF
-			_pending_mutation_reveal_descriptor = {}
-		else:
-			# A failed preflight postpones the blackout, so this path is only a
-			# defensive fallback for teardown/level-switch races.
-			_play_descent_cue(SoundBank.ding(), -10.0)
-			_show_event_message("POWER RESTORED")
+				# A failed preflight postpones the blackout, so this path is only a
+				# defensive fallback for teardown/level-switch races.
+				_play_descent_cue(SoundBank.ding(), -10.0)
+				_show_event_message("POWER RESTORED")
 
 
 func _spawn_mutation_reveal(at: Vector3,
@@ -2029,8 +2283,14 @@ func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 
 func _on_blackout_mutation(proposal: TopologyDelta,
 		assistance_requested: bool) -> void:
-	if _mutation_coordinator != null:
-		_mutation_coordinator.begin(proposal, assistance_requested)
+	if _mutation_coordinator == null:
+		return
+	if _mutation_coordinator.begin(proposal, assistance_requested):
+		return
+	var reason := "coordinator unavailable"
+	if _mutation_coordinator.last_transaction != null:
+		reason = _mutation_coordinator.last_transaction.failure_reason
+	print("blackout mutation rejected at begin: %s" % reason)
 
 
 func _mutation_mode_ready() -> bool:
@@ -2065,6 +2325,10 @@ func _on_mutation_committed(_transaction: DescentMutationTransaction,
 	_pending_mutation_reveal = true
 	_pending_mutation_reveal_at = reveal_at
 	_pending_mutation_reveal_descriptor = reveal.duplicate()
+
+
+func _on_mutation_failed(reason: String) -> void:
+	print("blackout mutation failed: %s" % reason)
 
 
 func _discard_pending_mutation_reveal() -> void:
@@ -2323,6 +2587,12 @@ func _process(dt: float) -> void:
 		if _figures != null:
 			_figures.interval_scale = minf(_figures.interval_scale,
 				lerpf(0.6, 0.3, run.floor_progress()))
+	if descent and _spatial_director != null and run != null \
+			and not run.ended:
+		_spatial_poll -= dt
+		if _spatial_poll <= 0.0:
+			_spatial_poll = 5.0
+			_poll_spatial_events()
 	if _dev_tools != null:
 		_dev_tools.update(dt)
 

@@ -16,7 +16,14 @@ const MODEL_PATHS := [
 	"res://models/provided/silent_visitor/Meshy_AI_The_Silent_Visitor_biped_Animation_Walking_withSkin.glb",
 	"res://models/provided/veiled_matron/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin.glb",
 	"res://models/provided/hound/monster6-dog.glb",
+	"res://models/provided/horror_girl/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin.glb",
+	"res://models/provided/faceless_enforcer/Meshy_AI_The_Faceless_Enforcer_biped_Animation_Walking_withSkin.glb",
 ]
+## Optional second locomotion clips. The body and skeleton come from the walk
+## scene above; these scenes contribute animation data only.
+const RUN_MODEL_PATHS := {
+	10: "res://models/provided/horror_girl/Meshy_AI_horror_girl_hair_cove_biped_Animation_Running_withSkin.glb",
+}
 const BODY_SHADER := preload("res://shaders/shadow_walker.gdshader")
 const HALO_SHADER := preload("res://shaders/shadow_walker_halo.gdshader")
 const GHOST_SHADER := preload("res://shaders/ghost_walker.gdshader")
@@ -24,19 +31,19 @@ const GHOST_HALO_SHADER := preload("res://shaders/ghost_walker_halo.gdshader")
 ## The supplied walkers use the standard Mixamo metre-scale skeleton. Keep
 ## this per model so a future roster addition cannot silently inherit the
 ## wrong physical scale.
-const SOURCE_HEIGHTS := [1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 0.75]
+const SOURCE_HEIGHTS := [1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 0.75, 1.7, 1.7]
 ## The hound ships as a centimetre-scale Unreal export with a 0.01 Armature
 ## node, so it needs a 100x prescale before the target-height scaling or it
 ## renders two centimetres tall. Everything else is authored in metres.
-const MODEL_PRESCALE := [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0]
+const MODEL_PRESCALE := [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 1.0, 1.0]
 const TARGET_HEIGHT := 2.08
 ## The hound stages smaller than the humanoids: between its 0.75m authored
 ## size and the 2.08m roster standard.
-const MODEL_TARGET_HEIGHTS := [2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 1.55]
+const MODEL_TARGET_HEIGHTS := [2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 1.55, 2.08, 2.08]
 ## Ghost roster members render as cold translucent apparitions (own body and
 ## halo shaders) instead of the black shadow treatment. The manifestation,
 ## fade and burn parameters drive the same state machine in both styles.
-const GHOST_RENDER := [false, false, false, false, true, true, true, true, true, true]
+const GHOST_RENDER := [false, false, false, false, true, true, true, true, true, true, true, true]
 const APPEAR_SECONDS := 0.8
 ## A heavy human-sized silhouette should visibly pivot, not snap toward a new
 ## path node. At 135 degrees/sec a right-angle turn takes about two-thirds of
@@ -48,12 +55,17 @@ const TURN_ACCELERATION := deg_to_rad(540.0)
 ## guessed 2.9 value left the planted foot sliding forward with the body.
 # Metres/sec of planted-foot travel at playback 1.0, measured from the Hollow
 # Watcher's authored Mixamo walk at TARGET_HEIGHT.
-const WALK_CYCLE_SPEEDS := [1.98, 1.98, 1.98, 1.965, 1.85, 1.65, 1.82, 1.72, 1.72, 1.98]
+const WALK_CYCLE_SPEEDS := [1.98, 1.98, 1.98, 1.965, 1.85, 1.65, 1.82, 1.72, 1.72, 1.98, 1.755, 1.72]
+## Planted-foot travel at playback 1.0 for optional run clips. Kept separate
+## from gameplay speed so animation cadence can match whatever the AI chooses.
+const RUN_CYCLE_SPEEDS := {10: 1.73}
 
 ## Retain completed requests so a spawn's readiness check and visual creation
 ## share the same decoded scene, including after the loader request is consumed.
 static var _model_scenes: Dictionary = {}
+static var _run_model_scenes: Dictionary = {}
 static var _walking_clips: Dictionary = {}
+static var _running_clips: Dictionary = {}
 
 var _presentation: Node3D
 var _model: Node3D
@@ -72,6 +84,7 @@ var _transition: Tween
 var _closeup := false
 var _phase := 0.0
 var _movement_ratio := 0.0
+var _locomotion_clip := &"walk"
 var _turn_velocity := 0.0
 ## Assigned before entering the tree. Keeping the selection on the visual makes
 ## caught sequences and focused captures reproduce the exact spawned monster.
@@ -193,6 +206,25 @@ func _prepare_animation(root: Node) -> void:
 	var walking: Animation = _walking_clips[source]
 	var runtime := AnimationLibrary.new()
 	runtime.add_animation(&"walk", walking)
+	var run_scene := _run_model_scene(model_index)
+	if run_scene != null:
+		var run_root := run_scene.instantiate()
+		var run_player := run_root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+		if run_player != null:
+			var run_name := StringName()
+			for candidate in run_player.get_animation_list():
+				if "run" in String(candidate).to_lower() \
+						and run_player.get_animation(candidate).length > 0.25:
+					run_name = candidate
+					break
+			if run_name != StringName():
+				var run_source := run_player.get_animation(run_name)
+				if not _running_clips.has(run_source):
+					var run_loop := run_source.duplicate(true) as Animation
+					run_loop.loop_mode = Animation.LOOP_LINEAR
+					_running_clips[run_source] = run_loop
+				runtime.add_animation(&"run", _running_clips[run_source])
+		run_root.free()
 	_animation_player.add_animation_library(&"runtime", runtime)
 	# Advance from the same physics sample as translation. An autonomous idle
 	# clock can play an extra fraction of a step after the actor brakes/turns.
@@ -413,12 +445,31 @@ func set_movement_ratio(value: float) -> void:
 	_movement_ratio = maxf(value, 0.0)
 
 
-func set_ground_speed(metres_per_second: float) -> void:
-	set_movement_ratio(metres_per_second / walk_cycle_speed())
+func set_ground_speed(metres_per_second: float, running := false) -> void:
+	var wanted := &"run" if running and has_run_cycle() else &"walk"
+	if wanted != _locomotion_clip:
+		_locomotion_clip = wanted
+		# Both clips use the same Meshy skeleton. A short blend hides the phase
+		# discontinuity without delaying the readable deck/water gait change.
+		_animation_player.play(StringName("runtime/" + String(wanted)), 0.12)
+	var cycle_speed := run_cycle_speed() if wanted == &"run" else walk_cycle_speed()
+	set_movement_ratio(metres_per_second / cycle_speed)
 
 
 func walk_cycle_speed() -> float:
 	return WALK_CYCLE_SPEEDS[clampi(model_index, 0, WALK_CYCLE_SPEEDS.size() - 1)]
+
+
+func has_run_cycle() -> bool:
+	return _animation_player != null and _animation_player.has_animation(&"runtime/run")
+
+
+func run_cycle_speed() -> float:
+	return float(RUN_CYCLE_SPEEDS.get(model_index, walk_cycle_speed()))
+
+
+func locomotion_clip() -> StringName:
+	return _locomotion_clip
 
 
 func forward_world() -> Vector3:
@@ -539,12 +590,18 @@ static func model_count() -> int:
 ## texture-heavy; preparing it eagerly would make every level pay its full
 ## startup and memory cost before a single monster had appeared.
 static func request_model(index: int) -> void:
-	if index < 0 or index >= MODEL_PATHS.size() or _model_scenes.has(index):
+	if index < 0 or index >= MODEL_PATHS.size():
 		return
-	var path: String = MODEL_PATHS[index]
-	var status := ResourceLoader.load_threaded_get_status(path)
-	if status == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
-		ResourceLoader.load_threaded_request(path, "PackedScene")
+	if not _model_scenes.has(index):
+		var path: String = MODEL_PATHS[index]
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			ResourceLoader.load_threaded_request(path, "PackedScene")
+	if RUN_MODEL_PATHS.has(index) and not _run_model_scenes.has(index):
+		var run_path: String = RUN_MODEL_PATHS[index]
+		var run_status := ResourceLoader.load_threaded_get_status(run_path)
+		if run_status == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			ResourceLoader.load_threaded_request(run_path, "PackedScene")
 
 
 ## Poll without ever waiting for decoding. Managers leave their selected model
@@ -552,16 +609,23 @@ static func request_model(index: int) -> void:
 static func is_model_ready(index: int) -> bool:
 	if index < 0 or index >= MODEL_PATHS.size():
 		return false
-	if _model_scenes.has(index):
-		return true
 	request_model(index)
-	var path: String = MODEL_PATHS[index]
-	if ResourceLoader.load_threaded_get_status(path) != ResourceLoader.THREAD_LOAD_LOADED:
-		return false
-	var scene := ResourceLoader.load_threaded_get(path) as PackedScene
-	if scene == null:
-		return false
-	_model_scenes[index] = scene
+	if not _model_scenes.has(index):
+		var path: String = MODEL_PATHS[index]
+		if ResourceLoader.load_threaded_get_status(path) != ResourceLoader.THREAD_LOAD_LOADED:
+			return false
+		var scene := ResourceLoader.load_threaded_get(path) as PackedScene
+		if scene == null:
+			return false
+		_model_scenes[index] = scene
+	if RUN_MODEL_PATHS.has(index) and not _run_model_scenes.has(index):
+		var run_path: String = RUN_MODEL_PATHS[index]
+		if ResourceLoader.load_threaded_get_status(run_path) != ResourceLoader.THREAD_LOAD_LOADED:
+			return false
+		var run_scene := ResourceLoader.load_threaded_get(run_path) as PackedScene
+		if run_scene == null:
+			return false
+		_run_model_scenes[index] = run_scene
 	return true
 
 
@@ -579,6 +643,24 @@ static func _model_scene(index: int) -> PackedScene:
 	var scene := load(MODEL_PATHS[index]) as PackedScene
 	if scene != null:
 		_model_scenes[index] = scene
+	return scene
+
+
+static func _run_model_scene(index: int) -> PackedScene:
+	if not RUN_MODEL_PATHS.has(index):
+		return null
+	if _run_model_scenes.has(index):
+		return _run_model_scenes[index] as PackedScene
+	var path: String = RUN_MODEL_PATHS[index]
+	if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_LOADED:
+		var threaded := ResourceLoader.load_threaded_get(path) as PackedScene
+		if threaded != null:
+			_run_model_scenes[index] = threaded
+			return threaded
+	# Standalone previews and focused audits may instantiate directly.
+	var scene := load(path) as PackedScene
+	if scene != null:
+		_run_model_scenes[index] = scene
 	return scene
 
 

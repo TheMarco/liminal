@@ -55,7 +55,7 @@ func run() -> void:
 	expect(not game.run.ended and not is_instance_valid(game._caught_sequence),
 		"emergency flash incorrectly started fatal presentation")
 	expect(not game.player.emergency_flash_held
-		and saved._quad.get_instance_shader_parameter("ignite") == 1.0,
+		and saved._walker._parameters[&"ignite"] == 1.0,
 		"emergency flash did not consume its charge and burn the exact figure")
 	game._figures.despawn()
 	await process_frame

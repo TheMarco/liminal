@@ -50,7 +50,6 @@ func _run() -> void:
 	await physics_frame
 	var figure := Figure.new()
 	figure.player = player
-	figure.use_walker_prototype = true
 	figure.grace = 3.0
 	figure.position = Vector3(2, 0, 6)
 	world.add_child(figure)
@@ -64,7 +63,7 @@ func _run() -> void:
 	check(not visual._presentation.visible and not figure._wisps.visible,
 		"arrival starts fully visible")
 	check(is_zero_approx(figure._wisps.preprocess), "arrival fast-forwards GPU particles")
-	check(figure._wisps.process_material == ShadowFigure.prewarm_presence(true).process,
+	check(figure._wisps.process_material == ShadowFigure.prewarm_presence().process,
 		"arrival rebuilt immutable particle resources")
 	var start := figure.position
 	figure._physics_process(DT)

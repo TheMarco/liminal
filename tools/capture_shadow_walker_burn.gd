@@ -72,7 +72,6 @@ func _run() -> void:
 
 	var figure := ShadowFigure.new()
 	figure.player = player
-	figure.use_walker_prototype = true
 	figure.walker_model_index = 2
 	figure.position = Vector3.ZERO
 	figure.suppressed = true

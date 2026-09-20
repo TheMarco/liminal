@@ -93,8 +93,6 @@ func before_approach(figure: ShadowFigure) -> void:
 		# A photograph or another figure may already own the pulse. Finish that
 		# same trajectory sooner instead of stacking or restarting the distortion.
 		_playback_speed = maxf(_playback_speed, (DURATION - elapsed) / APPROACH_SECONDS)
-	if not figure.use_walker_prototype:
-		figure.hold_approach((DURATION - elapsed) / _playback_speed + REACTION_MARGIN)
 
 
 func cancel() -> void:

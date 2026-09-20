@@ -1,5 +1,7 @@
 extends SceneTree
 ## Runtime contract for the layered GhostVisual owner and its four mesh layers.
+## The hostile figures are 3D walkers now; this covers the shared quad visual
+## still used by corner apparitions and passing shadows.
 ## Run: godot --headless --path . --script tools/audit_ghost_visuals.gd
 
 func _init() -> void:
@@ -11,15 +13,12 @@ func _run() -> void:
 	var root_node := Node3D.new()
 	get_root().add_child(root_node)
 	var visuals: Array[GhostVisual] = []
-	for variant in ShadowFigure.LOOKS:
-		var figure := ShadowFigure.new()
-		figure.variant = variant
-		root_node.add_child(figure)
-		figure.set_physics_process(false)
-		var visual := figure._quad
+	for sheet in ["wraith_anim", "wraith2", "wraith3", "wraith4", "wraith5",
+			"wraith6", "wraith7"]:
+		var visual := ShadowFigure.make_visual(sheet)
+		root_node.add_child(visual)
 		visual.set_process(false)
 		visuals.append(visual)
-		var sheet: String = ShadowFigure.LOOKS[variant][0]
 		if visual._layers.size() != 4 or visual._layers[0].material_override.shader != GhostVisual.SHADER:
 			failures.append("visual %s lacks four layered shader meshes" % sheet)
 		for i in visual._layers.size():

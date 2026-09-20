@@ -6,6 +6,7 @@ extends RefCounted
 
 signal committed(transaction: DescentMutationTransaction, reveal_at: Vector3,
 	reveal: Dictionary)
+signal failed(reason: String)
 
 const NO_VISIBLE_WITNESS := -1.0
 ## Category gaps exceed every route/distance preference in the pure selector:
@@ -24,6 +25,13 @@ var mode_ready: Callable
 var persist_committed: Callable
 ## Most recent proposal for diagnostics/audits; ownership remains here.
 var last_transaction: DescentMutationTransaction
+## Structured record of the most recent begin-to-commit attempt. Fixed keys:
+## requested_at_msec, from_state, to_state, assistance, rebuild_cell_count,
+## witness_kind, witness_before (visible/nearest_fallback/none per
+## SpatialWitnessTracker provenance), witness_distance, outcome
+## ("committed"/"failed"), failure_reason, distance_before, distance_after,
+## lights_on_msec (-1 until main reports lights-on).
+var last_commit_record := {}
 var _selected_witness_at := Vector3.INF
 var _selected_witness := {}
 var _selected_ghost: Node3D
@@ -45,12 +53,29 @@ func configure(p_manager: ChunkManager, p_run: DescentRun,
 
 func begin(proposal: TopologyDelta, assistance_requested: bool) -> bool:
 	_clear_selected_ghost()
-	var witness := visible_witness(proposal)
+	var seen := visible_witness(proposal)
+	var witness := seen
 	if witness.is_empty():
 		witness = nearest_witness(proposal)
 	_selected_witness = witness.duplicate()
 	_selected_witness_at = witness.get("position", Vector3.INF)
 	var rebuild := rebuild_cells(proposal)
+	last_commit_record = {
+		"requested_at_msec": Time.get_ticks_msec(),
+		"from_state": proposal.from_state if proposal != null else -1,
+		"to_state": proposal.to_state if proposal != null else -1,
+		"assistance": assistance_requested,
+		"rebuild_cell_count": rebuild.size(),
+		"witness_kind": str(witness.get("kind", "")),
+		"witness_before": SpatialWitnessTracker.record_witness_provenance(
+			not seen.is_empty(), not witness.is_empty()),
+		"witness_distance": float(witness.get("distance", -1.0)),
+		"outcome": "failed",
+		"failure_reason": "",
+		"distance_before": -1,
+		"distance_after": -1,
+		"lights_on_msec": -1,
+	}
 	var before_runtime := manager.runtime_state_for_cells(rebuild) \
 		if manager != null else ChunkRuntimeState.new()
 	var before_present := manager.runtime_object_descriptors(rebuild) \
@@ -61,12 +86,31 @@ func begin(proposal: TopologyDelta, assistance_requested: bool) -> bool:
 		assistance_requested, route, run._cell if run != null else Vector2i.ZERO,
 		rebuild)
 	last_transaction = transaction
+	last_commit_record["distance_before"] = transaction.distance_before
 	if not transaction.preflight(Callable(self, "can_commit")):
+		_record_failure(transaction.failure_reason)
 		return false
-	return transaction.stage(manager,
-		Callable(self, "_prepare_commit").bind(transaction),
-		Callable(self, "_finish_commit").bind(transaction),
-		Callable(self, "_stage_failed").bind(transaction))
+	if not transaction.stage(manager,
+			Callable(self, "_prepare_commit").bind(transaction),
+			Callable(self, "_finish_commit").bind(transaction),
+			Callable(self, "_stage_failed").bind(transaction)):
+		_record_failure(transaction.failure_reason)
+		return false
+	return true
+
+
+func _record_failure(reason: String) -> void:
+	last_commit_record["outcome"] = "failed"
+	last_commit_record["failure_reason"] = reason
+	failed.emit(reason)
+
+
+## Main reports lights-on so the record carries the full request-to-reveal
+## timeline. Observation-only; it never alters the committed outcome.
+func note_lights_on() -> void:
+	if last_commit_record.is_empty():
+		return
+	last_commit_record["lights_on_msec"] = Time.get_ticks_msec()
 
 
 ## Runs while all replacement rooms are still off-tree and old collision is
@@ -95,6 +139,18 @@ func _finish_commit(transaction: DescentMutationTransaction) -> void:
 	if transaction == null or not transaction.finalize(
 			manager.runtime_state_for_cells(transaction.rebuild_cells),
 			manager.runtime_object_descriptors(transaction.rebuild_cells)):
+		if transaction != null:
+			_record_failure(transaction.failure_reason)
+		return
+	# No outcome is reported committed before scene and graph agree. The
+	# manager guarantees this ordering, so a mismatch is a loud invariant
+	# failure, never a quiet success claim.
+	if route == null or route.topology == null or transaction.delta == null \
+			or route.topology.current_state_id() \
+				!= transaction.delta.to_state:
+		_record_failure("scene committed without graph agreement")
+		push_error("DescentMutationCoordinator: scene/graph disagreement "
+			+ "at commit; committed signal withheld")
 		return
 	var topology := route.topology
 	manager.descent_topology = topology
@@ -126,6 +182,9 @@ func _finish_commit(transaction: DescentMutationTransaction) -> void:
 	if is_instance_valid(_selected_ghost):
 		reveal["ghost"] = _selected_ghost
 		_selected_ghost = null
+	last_commit_record["outcome"] = "committed"
+	last_commit_record["failure_reason"] = ""
+	last_commit_record["distance_after"] = transaction.distance_after
 	committed.emit(transaction, reveal_at, reveal)
 	_selected_witness = {}
 	print("blackout reality %d -> %d, route %d -> %d, cells=%d, assistance=%s" % [
@@ -145,6 +204,7 @@ func _stage_failed(reason: String,
 		transaction.rollback(route.topology, route, reason, manager)
 	else:
 		transaction.fail(reason)
+	_record_failure(transaction.failure_reason)
 
 
 func _clear_selected_ghost() -> void:

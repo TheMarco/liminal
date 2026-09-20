@@ -29,7 +29,7 @@ func _run() -> void:
 		await process_frame
 	print("SPAWN PROFILE model decode/wait %.2fms" % ((Time.get_ticks_usec() - started) / 1000.0))
 	started = Time.get_ticks_usec()
-	ShadowFigure.prewarm_presence(true)
+	ShadowFigure.prewarm_presence()
 	print("SPAWN PROFILE manager setup/prewarm %.3fms" % ((Time.get_ticks_usec() - started) / 1000.0))
 	var visual := TimedVisual.new()
 	started = Time.get_ticks_usec()
@@ -38,7 +38,6 @@ func _run() -> void:
 	visual.free()
 	for index in 4:
 		var figure := ShadowFigure.new()
-		figure.use_walker_prototype = true
 		figure.process_mode = Node.PROCESS_MODE_DISABLED
 		started = Time.get_ticks_usec()
 		root.add_child(figure)

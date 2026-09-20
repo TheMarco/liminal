@@ -43,7 +43,6 @@ func box(parent: Node, at: Vector3, size: Vector3) -> StaticBody3D:
 func actor(parent: Node, player: Player, at: Vector3) -> Pursuer:
 	var f := Pursuer.new()
 	f.player = player
-	f.use_walker_prototype = true
 	f.position = at
 	f.grace = 0.0
 	parent.add_child(f)

@@ -18,6 +18,7 @@ var scripted_hold := false
 
 var _hostile_count := 0
 var _blackout_active := false
+var _structural_active := false
 var _visual_left := 0.0
 var _whisper_left := 0.0
 var _ambient_left := 0.0
@@ -39,6 +40,7 @@ func advance(dt: float) -> void:
 func reset_floor() -> void:
 	_hostile_count = 0
 	_blackout_active = false
+	_structural_active = false
 	_visual_left = 0.0
 	_whisper_left = 0.0
 	_ambient_left = 0.0
@@ -64,8 +66,10 @@ func can_start_hostile() -> bool:
 		return true
 	# Reinforcements are part of one hostile encounter, not a competing beat.
 	if _hostile_count > 0:
-		return not scripted_hold and not _blackout_active
+		return not scripted_hold and not _blackout_active \
+			and not _structural_active
 	return not scripted_hold and not _blackout_active \
+		and not _structural_active \
 		and _visual_left <= 0.0 and _whisper_left <= 0.0 \
 		and _ambient_left <= 0.0 and _recovery_left <= 0.0
 
@@ -81,7 +85,7 @@ func set_hostile_count(value: int, start_recovery := true) -> void:
 func try_start_blackout(priority := false) -> bool:
 	if not enabled:
 		return true
-	if scripted_hold or _blackout_active:
+	if scripted_hold or _blackout_active or _structural_active:
 		return false
 	if not priority and (_hostile_count > 0 or _visual_left > 0.0 \
 			or _whisper_left > 0.0 or _ambient_left > 0.0 \
@@ -139,15 +143,41 @@ func try_start_ambient(seconds: float) -> bool:
 
 
 func _can_start_quiet_beat() -> bool:
-	return not scripted_hold and not _blackout_active and _hostile_count == 0 \
+	return not scripted_hold and not _blackout_active \
+		and not _structural_active and _hostile_count == 0 \
 		and _visual_left <= 0.0 and _whisper_left <= 0.0 \
 		and _ambient_left <= 0.0 and _recovery_left <= 0.0
+
+
+## One spatial mutation event owns the floor's structural beat. This is a
+## dedicated flag rather than scripted_hold because tape, passive, and
+## presence holds are last-writer-wins bools owned elsewhere.
+func try_start_structural() -> bool:
+	if not enabled:
+		return true
+	if scripted_hold or _blackout_active or _structural_active \
+			or _hostile_count > 0 or _visual_left > 0.0 \
+			or _whisper_left > 0.0 or _ambient_left > 0.0 \
+			or _recovery_left > 0.0:
+		return false
+	_structural_active = true
+	return true
+
+
+func end_structural() -> void:
+	if not _structural_active:
+		return
+	_structural_active = false
+	if enabled:
+		_recovery_left = maxf(_recovery_left, lerpf(
+			BLACKOUT_RECOVERY_EARLY, BLACKOUT_RECOVERY_LATE, pressure))
 
 
 func snapshot() -> Dictionary:
 	return {
 		"hostiles": _hostile_count,
 		"blackout": _blackout_active,
+		"structural": _structural_active,
 		"visual": _visual_left,
 		"whisper": _whisper_left,
 		"ambient": _ambient_left,

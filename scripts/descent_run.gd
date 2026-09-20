@@ -20,6 +20,7 @@ signal anomaly_requested(cell: Vector2i, kind: int)
 ## selection state: presentation must never reveal whether the new reality was
 ## chosen because the player was lost or merely because the building moved.
 signal blackout_mutation_requested(proposal: TopologyDelta, assistance: bool)
+signal structural_blackout_requested()
 ## The called car finished its descent. Whoever owns the objective chunk opens
 ## the doors; the wait itself is run state so it survives the target room
 ## streaming out from under a player who walked off during it.
@@ -158,6 +159,12 @@ var blackout_mutation_ranker: Callable
 ## though the player sees through them. This second ranker keeps the mutation in
 ## the camera frustum when the strict line-of-sight pass cannot find one.
 var blackout_mutation_fallback_ranker: Callable
+## Ring log (newest last, capped) of blackout request attempts. Fixed keys:
+## at_msec, outcome ("started", "started_structural", "no_route",
+## "no_proposal", "validator_rejected", "horror_busy"), visibility_retries,
+## ranker_mode ("strict", "frustum", "unranked", "structural").
+## Observation-only.
+var blackout_attempt_log: Array[Dictionary] = []
 
 var _cell := Vector2i.ZERO
 var _pending_cell := Vector2i.ZERO
@@ -718,36 +725,69 @@ func _begin_blackout() -> void:
 	# after the player moves instead of inventing geometry at runtime.
 	if route == null or route.topology == null:
 		_blackout_due = 6.0
+		_log_blackout_attempt("no_route", "strict")
 		return
 	# Prefer an actually unobstructed witness. If transparent airport glass (or
 	# another transient occluder) starves that pass, relax to the camera frustum,
 	# then finally accept any nearby prevalidated transition. Presentation must
 	# never be allowed to suppress the floor mechanic indefinitely.
 	var ranker := blackout_mutation_ranker
+	var ranker_mode := "strict"
 	if _blackout_visibility_retries == 1 \
 			and blackout_mutation_fallback_ranker.is_valid():
 		ranker = blackout_mutation_fallback_ranker
+		ranker_mode = "frustum"
 	elif _blackout_visibility_retries >= 2:
 		ranker = Callable()
+		ranker_mode = "unranked"
 	var proposal := route.topology.find_transition(
 		route, _cell, visited, mercy_armed, ranker,
 		blackout_mutation_validator)
 	if proposal == null or proposal.is_empty():
 		_blackout_visibility_retries += 1
 		_blackout_due = 3.0
+		_log_blackout_attempt("no_proposal", ranker_mode)
 		return
 	if blackout_mutation_validator.is_valid() \
 			and not bool(blackout_mutation_validator.call(proposal)):
 		_blackout_due = 3.0
+		_log_blackout_attempt("validator_rejected", ranker_mode)
 		return
 	# The doorway is valid, but another authored beat may still own the moment.
 	# Retry shortly without spending or replacing the normal blackout schedule.
 	if horror_director != null and not horror_director.try_start_blackout(true):
 		_blackout_due = 4.0
+		_log_blackout_attempt("horror_busy", ranker_mode)
 		return
 	pending_blackout_mutation = proposal
 	_blackout_visibility_retries = 0
 	var assistance := mercy_armed and proposal.assistance
+	_enter_blackout_state()
+	_log_blackout_attempt("started", ranker_mode)
+	blackout_changed.emit(true)
+	blackout_mutation_requested.emit(proposal, assistance)
+	# Recompute now rather than at the top of the next frame: for that one frame
+	# the lights would be out with the figures still free to close.
+	_update_passive()
+
+
+## Darkness for a spatial mutation event. Same stand-still rules, grace, and
+## timer as a legacy blackout; the mutation payload is a site transition,
+## not a TopologyDelta. Horror exclusion comes from the caller's structural
+## hold, so this path never touches the horror blackout flag.
+func begin_structural_blackout() -> bool:
+	if blackout or route == null or route.topology == null:
+		return false
+	pending_blackout_mutation = null
+	_enter_blackout_state()
+	_log_blackout_attempt("started_structural", "structural")
+	blackout_changed.emit(true)
+	structural_blackout_requested.emit()
+	_update_passive()
+	return true
+
+
+func _enter_blackout_state() -> void:
 	blackout = true
 	_blackouts_this_floor += 1
 	_blackout_left = _rng.randf_range(
@@ -760,11 +800,17 @@ func _begin_blackout() -> void:
 	_blackout_episode = false
 	_blackout_locate = 0.0
 	_ambushed = false
-	blackout_changed.emit(true)
-	blackout_mutation_requested.emit(proposal, assistance)
-	# Recompute now rather than at the top of the next frame: for that one frame
-	# the lights would be out with the figures still free to close.
-	_update_passive()
+
+
+func _log_blackout_attempt(outcome: String, ranker_mode: String) -> void:
+	blackout_attempt_log.append({
+		"at_msec": Time.get_ticks_msec(),
+		"outcome": outcome,
+		"visibility_retries": _blackout_visibility_retries,
+		"ranker_mode": ranker_mode,
+	})
+	while blackout_attempt_log.size() > 8:
+		blackout_attempt_log.pop_front()
 
 
 func _end_blackout() -> void:

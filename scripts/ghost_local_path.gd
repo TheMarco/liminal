@@ -39,7 +39,7 @@ func waypoint(from: Vector3, target: Vector3, dt: float, clear: Callable,
 		_target = target
 		_retry = 0.0
 	_last_from = from
-	while not _points.is_empty() and Vector2(from.x - _points[0].x, from.z - _points[0].z).length() < 0.04:
+	while not _points.is_empty() and from.distance_to(_points[0]) < 0.04:
 		_points.pop_front()
 	# Re-test the next segment as the actor approaches a corner. The original
 	# path was smoothed only from its old starting point, so it otherwise held

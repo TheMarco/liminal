@@ -100,9 +100,18 @@ var dev_haunt := false
 var dev_haunt_at := Vector3.ZERO
 var dev_haunt_at_given := false
 var dev_haunt_variant := -1
-## Presentation-only QA switch. Never enabled by normal spawning or settings.
-var use_walker_prototype := false
-var _walker_model_bag: Array[int] = []
+## Each haunted level has its signature stalker, staged by roster index: the
+## office hound, the Annex trenchwalker, the airport silent visitor, the
+## asylum plague surgeon, the school teacher (veiled matron) and the mall
+## harlequin, the prison enforcer and the poolrooms horror girl. Between
+## signature appearances the black shadow people (roster 0-3) haunt every
+## level; unmapped levels see only them.
+const THEME_WALKER := {1: 9, 2: 4, 4: 7, 5: 6, 6: 8, 7: 5, 8: 11, 9: 10}
+const DARK_ROSTER := [0, 1, 2, 3]
+## The signature stalker alternates with black shadow people; every level
+## opens with its monster.
+var _walker_due := true
+var _dark_bag: Array[int] = []
 func active_figures() -> Array[ShadowFigure]:
 	var out: Array[ShadowFigure] = []
 	for figure in _figs:
@@ -121,6 +130,15 @@ func _sync_suppression() -> void:
 		figure.suppressed = passive or suspended
 
 
+## Broadcast a published topology change to every live pursuit immediately.
+## Refreshing leases after route invalidation also drops any stale next-room
+## waypoint from the hostile streaming footprint.
+func invalidate_navigation_for_topology_change() -> void:
+	for figure in active_figures():
+		figure.invalidate_navigation_for_topology_change()
+	_refresh_streaming()
+
+
 func _ready() -> void:
 	# Figures the world places rather than the haunt timer find us through this.
 	add_to_group("figure_manager")
@@ -134,9 +152,10 @@ func _ready() -> void:
 		_dev = true
 	if dev_haunt_variant >= 0:
 		_force_variant = dev_haunt_variant
-	if use_walker_prototype:
-		ShadowFigure.prewarm_presence(true)
-		_refill_walker_model_bag()
+	ShadowFigure.prewarm_presence()
+	if player != null:
+		ShadowWalkerVisual.request_model(
+			THEME_WALKER.get(player.level_theme, -1))
 
 
 ## Try to place a short-lived realm-encounter figure in a visible, clear area.
@@ -244,6 +263,7 @@ func adopt(f: ShadowFigure) -> void:
 func despawn(reset_encounters := true) -> void:
 	catching_figure = null
 	_new_spawn_hold = 0.0
+	_walker_due = true
 	for f in _figs:
 		if is_instance_valid(f):
 			f.queue_free()
@@ -266,6 +286,9 @@ func despawn(reset_encounters := true) -> void:
 	# A beat owed on this floor does not follow the player to the next one.
 	_forced_left = 0.0
 	_forced_tries = 0
+	if player != null:
+		ShadowWalkerVisual.request_model(
+			THEME_WALKER.get(player.level_theme, -1))
 
 
 func _physics_process(dt: float) -> void:
@@ -436,16 +459,14 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 		return false
 	if not ShadowFigure.pool_deck_clear(player, ground, FIGURE_CLEAR_RADIUS):
 		return false
-	var walker_model := _next_walker_model() if use_walker_prototype else -1
-	if use_walker_prototype and walker_model < 0:
+	var walker_model := _next_spawn_model()
+	if walker_model < 0:
 		return false
 	var f := ShadowFigure.new()
 	f.player = player
 	f.topology = topology
 	f.completed_levels = completed_levels
-	f.use_walker_prototype = use_walker_prototype
-	if use_walker_prototype:
-		f.walker_model_index = walker_model
+	f.walker_model_index = walker_model
 	f.variant = _force_variant if _force_variant >= 0 else _pick_variant()
 	_force_variant = -1
 	f.grace = grace
@@ -466,17 +487,25 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	return true
 
 
-## Shuffle-bag selection keeps a multi-model roster genuinely varied: every creature
-## appear once before any design can repeat, while their order stays surprising.
-## An unfinished decode defers the spawn without consuming its chosen design.
-func _next_walker_model() -> int:
-	if _walker_model_bag.is_empty():
-		_refill_walker_model_bag()
-	if not _walker_model_ready(_walker_model_bag.back()):
+## The level's signature stalker alternates with black shadow people, so both
+## haunt every mapped level. -1 defers the spawn without consuming anything:
+## an unfinished decode waits for its design rather than staging a fallback.
+func _next_spawn_model() -> int:
+	var theme_model: int = THEME_WALKER.get(player.level_theme, -1)
+	if theme_model >= 0 and _walker_due:
+		if not _walker_model_ready(theme_model):
+			return -1
+		_walker_due = false
+		return theme_model
+	if _dark_bag.is_empty():
+		_refill_dark_bag()
+	if not _walker_model_ready(_dark_bag.back()):
 		return -1
-	var selected: int = _walker_model_bag.pop_back()
-	if not _walker_model_bag.is_empty():
-		ShadowWalkerVisual.request_model(_walker_model_bag.back())
+	var selected: int = _dark_bag.pop_back()
+	if not _dark_bag.is_empty():
+		ShadowWalkerVisual.request_model(_dark_bag.back())
+	if theme_model >= 0:
+		_walker_due = true
 	return selected
 
 
@@ -484,11 +513,10 @@ func _walker_model_ready(index: int) -> bool:
 	return ShadowWalkerVisual.is_model_ready(index)
 
 
-func _refill_walker_model_bag() -> void:
-	for index in ShadowWalkerVisual.model_count():
-		_walker_model_bag.append(index)
-	_walker_model_bag.shuffle()
-	ShadowWalkerVisual.request_model(_walker_model_bag.back())
+func _refill_dark_bag() -> void:
+	_dark_bag.assign(DARK_ROSTER)
+	_dark_bag.shuffle()
+	ShadowWalkerVisual.request_model(_dark_bag.back())
 
 
 func _spawn_separated(ground: Vector3) -> bool:

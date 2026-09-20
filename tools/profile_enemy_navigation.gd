@@ -11,7 +11,7 @@ const WATCHDOG_SECONDS := 180.0
 class TestWalker extends ShadowWalkerVisual:
 	func _ready() -> void: pass
 
-class ProfilePath extends GhostLocalPath:
+class ProfilePath extends EnemyLocalPath:
 	var elapsed_us := 0
 	var search_us: Array[int] = []
 	var search_slice_us: Array[int] = []
@@ -82,7 +82,6 @@ func _pool(parent: Node) -> void:
 func _actor(parent: Node, player: Player, at: Vector3) -> Pursuer:
 	var actor := Pursuer.new()
 	actor.player = player
-	actor.use_walker_prototype = true
 	actor.position = at
 	actor.grace = 0.0
 	actor.completed_levels = 10

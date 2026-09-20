@@ -338,7 +338,7 @@ and combined modes.
 
 ## Building
 
-`./build.sh` produces both desktop builds (needs Godot 4.7+ on `PATH` with
+`./build.sh` produces all three desktop builds (needs Godot 4.7+ on `PATH` with
 export templates installed):
 
 - `build/macos/It wants you to stay.app` — universal (Apple Silicon + Intel), signed
@@ -350,6 +350,10 @@ export templates installed):
   no installer and no DLLs beside it. Windows uses Godot's Forward+ renderer
   through the native Direct3D 12 driver, with Vulkan retained as the automatic
   fallback on unsupported systems.
+- `build/linux/It wants you to stay.x86_64` — single self-contained x86_64
+  executable with its PCK embedded, distributed as
+  `build/linux/It wants you to stay-Linux.zip`. Linux uses the Forward+
+  renderer through Vulkan.
 
 ## Controls
 

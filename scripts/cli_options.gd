@@ -66,9 +66,6 @@ var photo_debug := false
 var photo_shoot := false
 ## Automatic world-only defocus/warp; flag enables only F8/F9 debug controls.
 var reality_aftershock := false
-## The animated 3D monster roster is now the normal hostile presentation. The
-## original animated cutouts remain available as a QA fallback.
-var walker_prototype := true
 ## QA: start directly facing the selected first-floor photographic doorway.
 var first_door := false
 var first_obstruction := false
@@ -178,10 +175,6 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.photo_shoot = true
 		elif arg == "--reality-aftershock":
 			o.reality_aftershock = true
-		elif arg == "--walker-prototype":
-			o.walker_prototype = true
-		elif arg == "--legacy-flat-ghosts":
-			o.walker_prototype = false
 		elif arg.begins_with("--haunt-at="):
 			var parts := arg.substr(11).split(",")
 			if parts.size() >= 2:

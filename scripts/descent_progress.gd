@@ -34,6 +34,10 @@ var objective_tapes := {}
 ## Realm excursions already consumed, keyed by source floor. A visit is a
 ## one-shot campaign event even if the player reloads the checkpoint.
 var realm_visits := {}
+## Stable spatial-site outcomes per floor (str(floor) -> site id -> allowlisted
+## SpatialSiteState disk form). No scene nodes, no animation progress. Older
+## checkpoints simply carry no site data and load with no active new events.
+var site_states := {}
 var _save_path := SAVE_PATH
 var recovered_from_backup := false
 const AtomicConfig = preload("res://scripts/atomic_config.gd")
@@ -61,6 +65,7 @@ func start_new(seed: int) -> void:
 	photo_states.clear()
 	objective_tapes.clear()
 	realm_visits.clear()
+	site_states.clear()
 	save_to_disk()
 
 
@@ -82,6 +87,7 @@ func reach_floor(seed: int, floor_idx: int) -> void:
 		photo_states.clear()
 		objective_tapes.clear()
 		realm_visits.clear()
+		site_states.clear()
 	else:
 		deepest_floor = maxi(deepest_floor, floor)
 	save_to_disk()
@@ -190,6 +196,45 @@ func mutation_state_for_floor(floor_idx: int) -> Dictionary:
 	return (value as Dictionary).duplicate(true) if value is Dictionary else {}
 
 
+func record_site_state(floor_idx: int, state: SpatialSiteState) -> Error:
+	if not has_checkpoint() or state == null or state.spec_id.is_empty():
+		return ERR_UNCONFIGURED
+	var floor := clampi(floor_idx, 0, DescentRun.FLOOR_COUNT - 1)
+	var key := str(floor)
+	var disk := state.to_disk()
+	var parsed := SpatialSiteState.from_disk(disk)
+	if parsed == null or parsed.spec_id != state.spec_id:
+		return ERR_INVALID_DATA
+	var had_floor := site_states.has(key)
+	var previous_floor: Dictionary = (site_states.get(key, {}) \
+		as Dictionary).duplicate(true)
+	var floor_sites: Dictionary = previous_floor.duplicate(true)
+	if not floor_sites.has(state.spec_id) and floor_sites.size() >= 16:
+		return ERR_OUT_OF_MEMORY
+	site_states[key] = floor_sites
+	floor_sites[state.spec_id] = parsed.to_disk()
+	var error := save_to_disk()
+	if error != OK:
+		# The in-memory checkpoint must not claim a record is durable when the
+		# atomic write failed. A later unrelated save cannot commit it by accident.
+		if had_floor:
+			site_states[key] = previous_floor
+		else:
+			site_states.erase(key)
+	return error
+
+
+func site_state_for_floor(floor_idx: int, site_id: String) -> SpatialSiteState:
+	var floor_sites: Variant = site_states.get(str(clampi(
+		floor_idx, 0, DescentRun.FLOOR_COUNT - 1)), {})
+	if not floor_sites is Dictionary:
+		return null
+	var raw: Variant = (floor_sites as Dictionary).get(site_id, {})
+	if not raw is Dictionary:
+		return null
+	return SpatialSiteState.from_disk(raw as Dictionary)
+
+
 func record_runtime_state(floor_idx: int, state: ChunkRuntimeState) -> Error:
 	if not has_checkpoint() or state == null:
 		return ERR_UNCONFIGURED
@@ -244,6 +289,7 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, "photo_states", photo_states)
 	config.set_value(SECTION, "objective_tapes", objective_tapes)
 	config.set_value(SECTION, "realm_visits", realm_visits)
+	config.set_value(SECTION, "site_states", site_states)
 	config.set_value(SECTION, "emergency_flash_held", emergency_flash_held)
 	config.set_value(SECTION, "emergency_flash_photo_id", emergency_flash_photo_id)
 	var previous := ConfigFile.new()
@@ -269,6 +315,7 @@ func load_from_disk() -> bool:
 	photo_states.clear()
 	objective_tapes.clear()
 	realm_visits.clear()
+	site_states.clear()
 	var config := ConfigFile.new()
 	if config.load(_save_path) != OK or not _valid_checkpoint(config):
 		config = ConfigFile.new()
@@ -386,6 +433,31 @@ func load_from_disk() -> bool:
 				continue
 			if saved_realm_visits[raw_key] is bool and saved_realm_visits[raw_key] == true:
 				realm_visits[str(floor)] = true
+	var saved_sites: Variant = config.get_value(SECTION, "site_states", {})
+	if saved_sites is Dictionary:
+		for raw_key in saved_sites:
+			var key := str(raw_key)
+			if not key.is_valid_int():
+				continue
+			var floor := int(key)
+			if floor < 0 or floor >= DescentRun.FLOOR_COUNT:
+				continue
+			var raw_sites: Variant = saved_sites[raw_key]
+			if not raw_sites is Dictionary:
+				continue
+			var clean := {}
+			for site_id in raw_sites:
+				if clean.size() >= 16:
+					break
+				if not site_id is String:
+					continue
+				var parsed := SpatialSiteState.from_disk(
+					(raw_sites as Dictionary)[site_id])
+				if parsed != null and str(site_id) == parsed.spec_id \
+						and clean.size() < 16:
+					clean[str(site_id)] = parsed.to_disk()
+			if not clean.is_empty():
+				site_states[str(floor)] = clean
 	return true
 
 
@@ -414,3 +486,4 @@ func clear_from_disk() -> void:
 	photo_states.clear()
 	objective_tapes.clear()
 	realm_visits.clear()
+	site_states.clear()

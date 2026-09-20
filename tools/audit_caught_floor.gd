@@ -106,9 +106,10 @@ func _exercise(p: Player, f: ShadowFigure, label: String, pitch: float,
 	seq._sample(SEQUENCE.LOOM_AT)
 	expect(is_equal_approx(figure_pose.basis.y.angle_to(f.global_basis.y), SEQUENCE.LEAN),
 		label + " ghost did not achieve its full forward lean")
-	f._quad._process(0.0)
-	expect(f._quad.global_basis.z.normalized().y < -0.30,
-		label + " billboard update cancelled the visible downward tilt")
+	f._walker.animate(0.0, true)
+	expect(f._walker.global_basis.y.normalized().dot(
+		f.global_basis.y.normalized()) > 0.999,
+		label + " walker lost the figure lean")
 	expect(p.global_transform.is_equal_approx(body_pose), label + " moved player body")
 	expect(p.cam.global_position.is_equal_approx(pose.origin.lerp(seq._floor_eye, motion)),
 		label + " head-motion strength did not scale the fall")

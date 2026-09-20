@@ -546,7 +546,6 @@ func enter() -> void:
 	threats.floor_idx = destination_floor
 	threats.completed_levels = source_floor
 	threats.chunk_manager = pocket
-	threats.use_walker_prototype = game._figures.use_walker_prototype
 	# This is the one authored combat space whose pressure curve deliberately
 	# escalates from one pursuer to three. Ordinary floors stay single-stalker.
 	threats.allow_reinforcements = true

@@ -107,6 +107,9 @@ AUDITS=(
 	# keeping the complete suite quick enough for routine local use.
 	"blackout_shortcuts|tools/audit_blackout_shortcuts.gd|6"
 	"descent_mutation_graph|tools/audit_descent_mutation_graph.gd|"
+	"spatial_witness|tools/audit_spatial_witness.gd|"
+	"migrating_door|tools/audit_migrating_door.gd|"
+	"spatial_placement|tools/audit_spatial_placement.gd|"
 	"world_mutation_contract|tools/audit_world_mutation_contract.gd|"
 	"descent_runtime|tools/audit_descent_runtime.gd|--mode=descent --nologo"
 	"airport_runtime|tools/audit_airport_runtime.gd|--mode=descent --descent-floor=4 --nologo"
@@ -134,6 +137,7 @@ AUDITS=(
 	"light_distance|tools/audit_light_distance.gd|"
 	"blackout_presentation|tools/audit_blackout_presentation.gd|"
 	"ghost_room_contract|tools/audit_ghost_room_contract.gd|"
+	"enemy_topology_invalidation|tools/audit_enemy_topology_invalidation.gd|"
 	"enemy_pursuit|tools/audit_enemy_pursuit.gd|"
 	"navigation_budget|tools/audit_navigation_budget.gd|"
 	"walker_spawn_loading|tools/audit_walker_spawn_loading.gd|"

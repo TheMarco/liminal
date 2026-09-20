@@ -1838,6 +1838,16 @@ func _pool_ladder_at(dir: int, edge: float, along: float, inward: float,
 	var area = Area3D.new()
 	area.position = Vector3(0, 0.9, 0)
 	area.set_meta("pool_ladder_volume", true)
+	# The enemy climb finishes on this dry-side point before it is allowed to
+	# replan. `dry_axis` is in the pivot/area's local space, so Area3D.to_global
+	# preserves the correct side for all four wall orientations.
+	area.set_meta("enemy_ladder_landing_local", Vector3(
+		dry_axis.x * 0.70, Chunk.POOL_DRY_Y - area.position.y,
+		dry_axis.z * 0.70))
+	# Centre the body between the rails on the water side before it rises. The
+	# Y component is replaced with the current basin-floor height at runtime.
+	area.set_meta("enemy_ladder_climb_local", -dry_axis * 0.60)
+	area.set_meta("enemy_ladder_facing_local", dry_axis)
 	area.collision_layer = Player.LADDER_LAYER
 	area.collision_mask = 0
 	area.monitorable = true

@@ -1,11 +1,10 @@
 class_name ShadowFigure
 extends Node3D
-## One of them. A real human silhouette (CC0/CC-BY photo-traced cutouts in
-## textures/ghosts/) in a curved layered apparition, edges eaten by drifting
-## noise. Watching it does not stop it and cannot banish it: it walks at you
-## slowly while you hold it in view, and closes hard the moment you cannot see
-## it. It follows through several rooms before distance can finally shed it;
-## the torch or its touch can end the encounter sooner.
+## One of them. An animated 3D walker: a level's signature ghost or a black
+## shadow person. Watching it does not stop it and cannot banish it: it walks
+## at you slowly while you hold it in view, and closes hard the moment you
+## cannot see it. It follows through several rooms before distance can
+## finally shed it; the torch or its touch can end the encounter sooner.
 
 const FADE_T := 0.95
 const WISP_SHADER := preload("res://shaders/ghost_wisp.gdshader")
@@ -22,34 +21,25 @@ const ADVANCE_SPD := 1.25
 ## act, and the distance you lose for it has to be large enough to read as a
 ## jump when you turn round again, not as a slow walk you merely missed.
 const UNSEEN_SPD := 4.5
+const POOL_GIRL_MODEL_INDEX := 10
+const POOL_GIRL_DECK_SPEED := 2.1
+const POOL_GIRL_WATER_SPEED := 1.35
+const POOL_GIRL_WATER_SAMPLE_HEIGHT := 0.55
 ## Ground it must gain while unobserved before looking back at it is its own
 ## event. Below this it was only walking; at or above it, it lunged.
 const REVEAL_GAIN := 2.0
 const REVEAL_SCARE_GAP := 3.0
 const ADVANCE_MIN := 1.05   # it has you at arm's length
-## Coming out from behind cover costs it a beat, which gives the player a fair
-## window to aim after the figure has walked around an obstruction.
-const REVEAL_HOLD := 0.6
-## The widest camera-facing cutout is roughly 1.3m across. Movement reserves
-## that entire silhouette, not just an invisible point at its feet, so no part
-## of a ghost can protrude through a wall while it approaches.
-## Slimmer than the visual silhouette on purpose: at 0.68 the capsule could
-## not fit the narrower generated doorways at all, so a pursuing figure hit
-## the frame and stalled there. A little visual overlap at a jamb is a fair
-## price for it actually coming through the door.
-const MOVE_RADIUS := 0.52
-## The visible cutout can loom above an ordinary person, but its movement
-## sweep must fit below the 2.25m lintel used by most generated doorways.
-## At 2.55m the capsule hit the header even when perfectly centred in the
-## opening, so doorway-aware routing alone could never make it cross.
-const MOVE_HEIGHT := 2.08
+## Presentation may loom wider/taller, but traversability must match the
+## player's standing envelope, including narrow airport circulation paths.
+const MOVE_RADIUS := Player.BODY_RADIUS
+const MOVE_HEIGHT := Player.BODY_HEIGHT
 ## Dynamic actors do not have physics bodies of their own. Reserve this much
 ## horizontal space explicitly so multiple pursuers cannot walk through one
 ## another as their routes converge on the player.
 const PEER_SEPARATION := 1.4
-## Pool decks, dry halls and bridges share this height. Water has no collider;
-## its basin floor must never count as ground for an enemy. Reserve the feet
-## as well as the centre so a walker cannot cut across the lip of a pool.
+## Full-footprint dry-deck checks remain useful for safe authored SPAWNS.
+## Movement uses EnemyTraversal and may enter the basin or climb out of it.
 const POOL_SUPPORT_OFFSETS := [Vector2.ZERO, Vector2(1, 0), Vector2(-1, 0),
 	Vector2(0, 1), Vector2(0, -1), Vector2(0.707107, 0.707107),
 	Vector2(-0.707107, 0.707107), Vector2(0.707107, -0.707107),
@@ -128,16 +118,6 @@ var topology: DescentTopology
 ## that breathes, so the roster is animated or it is nothing.
 enum { REVENANT, DROWNED, PILGRIM, TRAILING, GAOLER, REACHER, DRIFTER }
 
-# variant -> [texture sheet, height m, width factor, flip, floats]
-const LOOKS := {
-	REVENANT: ["wraith_anim", 2.05, 1.0, false, true],
-	DROWNED:  ["wraith2", 1.98, 1.0, false, false],
-	PILGRIM:  ["wraith3", 2.02, 1.0, true, false],
-	TRAILING: ["wraith4", 2.24, 1.0, false, true],
-	GAOLER:   ["wraith5", 2.10, 1.0, true, false],
-	REACHER:  ["wraith6", 1.96, 1.0, false, false],
-	DRIFTER:  ["wraith7", 2.18, 1.0, true, true],
-}
 # sheet -> [aspect (w/h of ONE FRAME), feet, head]
 # feet/head are where the body actually starts and stops inside a frame, as a
 # fraction of frame height measured up from the bottom. These are grids, so the
@@ -197,20 +177,6 @@ const BASE_CUT := {
 const COLOURED := ["wraith_anim", "wraith2", "wraith3", "wraith4", "wraith5",
 	"wraith6", "wraith7"]
 
-## The loop must never be legible as a loop. A sprite sheet running at a fixed
-## rate is read as an animated cutout within about two seconds of being looked
-## at, no matter how good the frames are. So the script drives the frame rather
-## than the shader's clock: under the player's gaze it plays slow and stalls at
-## random intervals, and while it is unwatched it runs fast. Turning back finds
-## it in a pose it was never seen reaching, which is the same trick the movement
-## already plays with distance.
-const ANIM_OBSERVED_RATE := 0.55
-const ANIM_UNSEEN_RATE := 1.30
-const ANIM_HOLD_MIN := 0.16
-const ANIM_HOLD_MAX := 0.42
-const ANIM_HOLD_GAP_MIN := 1.4
-const ANIM_HOLD_GAP_MAX := 4.2
-
 static var _mats := {}
 static var _layered_mats := {}
 ## Shared across every figure: a scare that fires twice in a minute is a
@@ -223,12 +189,9 @@ static var _last_reveal := -1000.0
 
 var player: Player
 var variant := REVENANT
-## Explicit prototype flag only. The seven animated 2D apparitions remain the
-## ordinary path and no asset or variant is replaced on disk.
-var use_walker_prototype := false
-## Selected by ShadowFigures from a shuffled roster before this node enters the
-## tree. Kept separate from the gameplay archetype in `variant`: appearance and
-## pursuit behavior are deliberately independent.
+## Selected by ShadowFigures before this node enters the tree. Kept separate
+## from the gameplay archetype in `variant`: appearance and pursuit behavior
+## are deliberately independent.
 var walker_model_index := 0
 ## Campaign progression, separate from archetype eligibility and spawn pacing.
 var completed_levels := 0
@@ -239,7 +202,18 @@ var _avoid_direction := Vector3.ZERO
 var _avoid_left := 0.0
 var _recovery_direction := Vector3.ZERO
 var _recovery_left := 0.0
-var grace := 0.9            # legacy reveal hold; moving walkers get contact safety only
+var _traversal: EnemyTraversal
+var _vertical_target := Vector3.INF
+var _vertical_ignored := RID()
+var _ladder_landing := Vector3.INF
+var _ladder_top := Vector3.INF
+var _ladder_facing := Vector3.ZERO
+var _ladder_phase := 0
+var _pool_slide: PoolSlide
+var _slide_distance := 0.0
+var _slide_speed := 0.0
+var _slide_rearm := 0.0
+var grace := 0.9            # arrival contact safety while it materializes
 var announce := false       # a soft footstep as it arrives
 
 ## The variant's row from TUNING, read once in _ready.
@@ -249,10 +223,9 @@ var _burn_time := BURN_TIME
 var _unseen_min := UNSEEN_MIN
 var _chase_limit := CHASE_DOOR_LIMIT
 
-var _quad: GhostVisual
 var _walker: ShadowWalkerVisual
 ## Matter it sheds and darkness it gathers: true-3D wisp particles and a local
-## fog volume surround the layered body. Both follow `fade`.
+## fog volume surround the walking body. Both follow `fade`.
 var _wisps: GPUParticles3D
 var _gloom: FogVolume
 ## Private stream. World dressing draws from the global generator while chunks
@@ -260,16 +233,9 @@ var _gloom: FogVolume
 ## shifts every prop authored after it and moves the world hash. Anything added
 ## to this script from now on must draw from here.
 var _rng := RandomNumberGenerator.new()
-var _anim_frame := 0.0
-var _anim_fps := 0.0
-var _anim_count := 0.0
-var _anim_hold := 0.0
-var _anim_next_hold := 0.0
 var _fade := -1.0
 var _fade_len := FADE_T
 var _bob_t := 0.0
-var _bob_base := 0.0
-var _floats := false
 var _eye_h := 1.4
 var _seen := false
 var _shiver: AudioStreamPlayer3D
@@ -284,20 +250,21 @@ var _flash: OmniLight3D
 ## freed at the end of the burn animation.
 var _burn_particles: ShadowBurnFragments
 var _burn_disintegration_started := false
-var _sway := 0.0
 ## Set by ShadowFigures while the rules have the player pinned. It still burns
 ## and still fades — it simply does not close the distance.
 var suppressed := false
 var _approach_announced := false
 var _approach_hold := 0.0
 var _was_sighted := true
-var _reveal := 0.0
 ## Whether the player could actually see it last frame — in frustum AND not
 ## behind anything. The seeing is what governs how fast it closes: watched,
 ## it creeps; unseen, it lunges.
 var _observed := false
 var _lost_dist := INF
-var _local_path := GhostLocalPath.new()
+var _local_path: GhostLocalPath = EnemyLocalPath.new()
+var _direct_route_left := 0.0
+var _direct_route_clear := false
+var _door_attempt_left := 0.0
 var _route_left := 0.0
 var _route_from := NO_ROOM
 var _route_goal := NO_ROOM
@@ -394,14 +361,13 @@ func _ready() -> void:
 	_burn_time = float(tune[2])
 	_unseen_min = float(tune[3])
 	_chase_limit = int(tune[4])
-	if use_walker_prototype:
-		_create_walker_visual()
-	else:
-		_create_layered_visual()
+	_create_walker_visual()
 	_build_presence()
-	_bob_base = position.y
 	_bob_t = randf() * TAU
 	if player != null:
+		_traversal = EnemyTraversal.new(player)
+		if _local_path is EnemyLocalPath:
+			_local_path.traversal = _traversal
 		_move_shape = CapsuleShape3D.new()
 		_move_shape.radius = MOVE_RADIUS
 		_move_shape.height = MOVE_HEIGHT
@@ -430,54 +396,6 @@ func _ready() -> void:
 		sh.play()
 
 
-func _create_layered_visual() -> void:
-	var look: Array = LOOKS[variant]
-	var body: Array = BODY[look[0]]
-	var s := randf_range(0.96, 1.08)
-	# LOOKS gives how tall the figure stands, not how tall its file is: blow
-	# the quad up so the body inside it comes out at that height, then drop it
-	# so the feet — not the haze under them — land on the floor.
-	var h: float = look[1] * s
-	var qh: float = h / (float(body[2]) - float(body[1]))
-	var w: float = qh * float(body[0]) * float(look[2])
-	_floats = look[4]
-	_eye_h = h * 0.78
-	_quad = make_visual(look[0])
-	_quad.scale = Vector3(w, qh, 1.0)
-	_quad.position = Vector3(0, qh * (0.5 - float(body[1]))
-		+ (0.06 if _floats else 0.0), 0)
-	# ShaderMaterial is cached per texture; per-instance uniforms keep mirrored
-	# poses and dissolves independent when several use the same cutout.
-	_set_visual_parameter("fade", 1.0)
-	_set_visual_parameter("flip", 1.0 if look[3] else 0.0)
-	_set_visual_parameter("dissolve_seed", randf())
-	_set_visual_parameter("burn", 0.0)
-	_set_visual_parameter("ignite", 0.0)
-	_set_visual_parameter("sway", 0.0)
-	# Two of them on screen must not be marching in lockstep.
-	_set_visual_parameter("flip_phase", randf())
-	add_child(_quad)
-	# The script owns the frame from here (see _animate), so the sheet's own
-	# clock is overridden immediately rather than for one frame showing pose 0.
-	if FLIPBOOKS.has(look[0]):
-		var fb: Array = FLIPBOOKS[look[0]]
-		_anim_count = float(fb[2])
-		# No two figures share a playback rate, so even two of the same sheet
-		# never fall into step.
-		_anim_fps = float(fb[3]) * _rng.randf_range(0.86, 1.14)
-		_anim_frame = _rng.randf() * _anim_count
-		_anim_next_hold = _rng.randf_range(ANIM_HOLD_GAP_MIN, ANIM_HOLD_GAP_MAX)
-		_set_visual_parameter("flip_frame", _anim_frame)
-		# Temporal smoothing and echo: the fractional frame the script already
-		# feeds blends between poses (looping back through frame 0), and the
-		# two previous poses linger as a faint analog smear. The observation
-		# stalls in _animate freeze the fraction too, so a held pose stays
-		# perfectly still.
-		_set_visual_parameter("flip_blend", 1.0)
-		_set_visual_parameter("flip_loop", 1.0)
-		_set_visual_parameter("trail_amt", 0.55)
-
-
 func _create_walker_visual() -> void:
 	_walker = ShadowWalkerVisual.new()
 	_walker.name = "ShadowWalkerPrototype"
@@ -490,7 +408,6 @@ func _create_walker_visual() -> void:
 	add_child(_walker)
 	_walker.manifestation_changed.connect(_on_walker_manifestation_changed)
 	# This model has a grounded authored walk, so its feet stay on the real floor.
-	_floats = false
 	_eye_h = 1.66
 	_set_visual_parameter(&"fade", 1.0)
 	_set_visual_parameter(&"burn", 0.0)
@@ -509,33 +426,30 @@ func _on_walker_manifestation_changed(value: float) -> void:
 
 
 func _set_visual_parameter(parameter: StringName, value: Variant) -> void:
-	if _quad != null:
-		_quad.set_instance_shader_parameter(parameter, value)
-	elif _walker != null:
+	if _walker != null:
 		_walker.set_instance_shader_parameter(parameter, value)
 
 
 ## The figure's additional 3D presence: shed wisps and gathered darkness.
-## These retain their existing world-space movement around the layered body.
+## These retain their existing world-space movement around the walking body.
 static var _presence_cache := {}
 
 
 ## Immutable particle resources are shared; emitter/fog state stays per actor.
 ## Preparing the next encounter must not rebuild a turbulence shader and ramp.
-static func prewarm_presence(prototype: bool) -> Dictionary:
-	if _presence_cache.has(prototype):
-		return _presence_cache[prototype]
+static func prewarm_presence() -> Dictionary:
+	if _presence_cache.has(true):
+		return _presence_cache[true]
 	var pm := ParticleProcessMaterial.new()
 	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(0.42, 0.88, 0.24) if prototype \
-		else Vector3(0.28, 0.95, 0.10)
+	pm.emission_box_extents = Vector3(0.42, 0.88, 0.24)
 	pm.direction = Vector3(0, 1, 0)
 	pm.spread = 24.0
-	pm.initial_velocity_min = 0.025 if prototype else 0.04
-	pm.initial_velocity_max = 0.12 if prototype else 0.16
-	pm.gravity = Vector3(0, 0.075 if prototype else 0.10, 0)
-	pm.scale_min = 0.14 if prototype else 0.4
-	pm.scale_max = 0.38 if prototype else 1.0
+	pm.initial_velocity_min = 0.025
+	pm.initial_velocity_max = 0.12
+	pm.gravity = Vector3(0, 0.075, 0)
+	pm.scale_min = 0.14
+	pm.scale_max = 0.38
 	pm.turbulence_enabled = true
 	pm.turbulence_noise_strength = 0.4
 	pm.turbulence_noise_scale = 2.4
@@ -547,40 +461,38 @@ static func prewarm_presence(prototype: bool) -> Dictionary:
 	ramp_tex.gradient = ramp
 	pm.color_ramp = ramp_tex
 	var mote := QuadMesh.new()
-	mote.size = Vector2(0.22, 0.22) if prototype else Vector2(0.46, 0.46)
+	mote.size = Vector2(0.22, 0.22)
 	var mat := ShaderMaterial.new()
 	mat.shader = WISP_SHADER
 	mote.material = mat
-	_presence_cache[prototype] = {"process": pm, "mesh": mote}
-	return _presence_cache[prototype]
+	_presence_cache[true] = {"process": pm, "mesh": mote}
+	return _presence_cache[true]
 
 
 func _build_presence() -> void:
 	_wisps = GPUParticles3D.new()
-	var prototype := _walker != null
-	var resources := prewarm_presence(prototype)
-	_wisps.amount = 36 if prototype else 14
-	_wisps.lifetime = 1.15 if prototype else 2.4
+	var resources := prewarm_presence()
+	_wisps.amount = 36
+	_wisps.lifetime = 1.15
 	# Grow the mist with the materialization. Preprocessing simulated nearly a
 	# second of particles in one render frame at every spawn, causing a hitch.
-	_wisps.preprocess = 0.0 if prototype else 1.4
+	_wisps.preprocess = 0.0
 	_wisps.local_coords = false
 	_wisps.process_material = resources.process
 	_wisps.draw_pass_1 = resources.mesh
-	_wisps.position = Vector3(0, 0.96 if prototype else 1.05, 0)
+	_wisps.position = Vector3(0, 0.96, 0)
 	add_child(_wisps)
 
 	_gloom = FogVolume.new()
 	_gloom.shape = RenderingServer.FOG_VOLUME_SHAPE_ELLIPSOID
 	_gloom.size = Vector3(1.9, 2.8, 1.9)
 	var fog := FogMaterial.new()
-	fog.density = GLOOM_DENSITY * (0.28 if prototype else 1.0)
+	fog.density = GLOOM_DENSITY * 0.28
 	fog.albedo = Color(0.04, 0.04, 0.05)
 	_gloom.material = fog
 	_gloom.position = Vector3(0, 1.25, 0)
 	add_child(_gloom)
-	if prototype:
-		_on_walker_manifestation_changed(_walker._manifestation)
+	_on_walker_manifestation_changed(_walker._manifestation)
 
 
 func _spawn_burn_particles() -> void:
@@ -616,30 +528,6 @@ func _spawn_burn_particles() -> void:
 func _animate(dt: float, observed: bool) -> void:
 	if _walker != null:
 		_walker.animate(dt, observed)
-		return
-	if _anim_count <= 0.0:
-		return
-	var rate := ANIM_UNSEEN_RATE
-	if observed:
-		rate = ANIM_OBSERVED_RATE
-		# The stalls only ever happen while it is being looked at. Motion that
-		# hitches under direct observation reads as something whose movement is
-		# not coming from a body, and it costs no art to do.
-		if _anim_hold > 0.0:
-			_anim_hold -= dt
-			rate = 0.0
-		else:
-			_anim_next_hold -= dt
-			if _anim_next_hold <= 0.0:
-				_anim_hold = _rng.randf_range(ANIM_HOLD_MIN, ANIM_HOLD_MAX)
-				_anim_next_hold = _rng.randf_range(ANIM_HOLD_GAP_MIN, ANIM_HOLD_GAP_MAX)
-				rate = 0.0
-	else:
-		_anim_hold = 0.0
-	if rate <= 0.0:
-		return
-	_anim_frame = fmod(_anim_frame + _anim_fps * rate * dt, _anim_count)
-	_set_visual_parameter("flip_frame", _anim_frame)
 
 
 func _physics_process(dt: float) -> void:
@@ -658,23 +546,13 @@ func _physics_process(dt: float) -> void:
 	var approach_was_held := _approach_hold > 0.0
 	if approach_was_held and not suppressed:
 		_approach_hold = maxf(0.0, _approach_hold - dt)
-	if _floats:
-		# it does not stand. it hangs.
-		_bob_t += dt
-		position.y = _bob_base + 0.03 + sin(_bob_t * 1.1) * 0.035
 	var cam := player.cam
 	var eye := global_position + Vector3(0, _eye_h, 0)
 	var to := eye - cam.global_position
 	var dist := to.length()
 	var aim := _beam_aim(cam)
 	var sighted := _clear_line(cam.global_position, eye)
-	# Only the initial reveal has a reaction hold. Repeated furniture occlusion
-	# must not keep resetting a stop timer during an otherwise continuous chase.
-	if _walker == null and sighted and not _was_sighted and not _approach_announced:
-		_reveal = REVEAL_HOLD
 	_was_sighted = sighted
-	if _reveal > 0.0:
-		_reveal = maxf(0.0, _reveal - dt)
 	# Whether the player can see it at all. Seen, it only creeps — but it
 	# never stops. Take your eyes off it entirely and it closes hard.
 	var observed := sighted and (cam.is_position_in_frustum(eye)
@@ -690,21 +568,17 @@ func _physics_process(dt: float) -> void:
 		else:
 			_lost_dist = dist
 		_observed = observed
-	if _fade < 0.0 and not suppressed \
-			and (_walker != null or (_reveal <= 0.0 and grace <= 0.0)):
+	if _fade < 0.0 and not suppressed:
 		if not _approach_announced:
 			_approach_announced = true
 			approach_starting.emit(self)
-		# Respect any explicit listener hold; walkers normally move through their
-		# arrival warning. Never replay the announcement on later LOS changes.
+		# Respect any explicit listener hold; the walker normally moves through
+		# its arrival warning. Never replay the announcement on later LOS changes.
 		if not approach_was_held and _approach_hold <= 0.0:
 			_advance(dt, observed)
 	if ground_velocity.length_squared() < 0.000001:
 		_travel_speed = 0.0
 	_animate(dt, observed)
-	_sway += dt
-	_set_visual_parameter("sway",
-		sin(_sway * 0.9 + _bob_t))
 	# What the beam REVEALS, as distinct from what it burns. The two share a
 	# gesture but not a timescale: the surface lights the instant the light
 	# lands on it, while the heat needs a second and a half to build. Eased so
@@ -719,7 +593,7 @@ func _physics_process(dt: float) -> void:
 	_set_visual_parameter("torch", _torch)
 	# The torch burns it away far faster than a stare, and keeps burning only
 	# while the beam stays on it.
-	if _fade < 0.0 and (grace <= 0.0 or _walker != null) and beam:
+	if _fade < 0.0 and beam:
 		_burn = minf(_burn_time, _burn + dt)
 		if not _burning:
 			_burning = true
@@ -754,28 +628,18 @@ func _physics_process(dt: float) -> void:
 		# The shed matter and the gathered dark go with the body.
 		if _wisps != null:
 			_wisps.emitting = left > 0.35
-			if _walker != null:
-				_wisps.visible = left > 0.02 and not _burn_disintegration_started
+			_wisps.visible = left > 0.02 and not _burn_disintegration_started
 		if _gloom != null and _gloom.material != null:
-			(_gloom.material as FogMaterial).density = GLOOM_DENSITY \
-				* (0.28 if _walker != null else 1.0) * left
+			(_gloom.material as FogMaterial).density = GLOOM_DENSITY * 0.28 * left
 		if _flash != null:
 			var t := 1.0 - left
 			var flick := 0.78 + 0.22 * sin(t * 71.0) * sin(t * 23.0 + _bob_t)
-			if _walker != null:
-				# A fast, whole-body flare that remains bright long enough to read,
-				# then falls with the creature instead of climbing through it.
-				var env := smoothstep(0.0, 0.30, t) \
-					* (1.0 - smoothstep(0.45, 1.0, t))
-				_flash.light_energy = 0.45 * env * flick
-				_flash.position.y = _eye_h * (0.35 + 0.60 * t)
-			else:
-				# Envelope follows the legacy front up the body; the flicker on top
-				# separates a fire from a lamp on a dimmer.
-				var env := smoothstep(0.0, 0.30, t) \
-					* (1.0 - smoothstep(0.45, 1.0, t))
-				_flash.light_energy = 6.4 * env * flick
-				_flash.position.y = _eye_h * (0.35 + 0.60 * t)
+			# A fast, whole-body flare that remains bright long enough to read,
+			# then falls with the creature instead of climbing through it.
+			var env := smoothstep(0.0, 0.30, t) \
+				* (1.0 - smoothstep(0.45, 1.0, t))
+			_flash.light_energy = 0.45 * env * flick
+			_flash.position.y = _eye_h * (0.35 + 0.60 * t)
 		if _fade <= 0.0:
 			queue_free()
 
@@ -802,8 +666,7 @@ func _update_chase_lifetime() -> void:
 				_wisps.emitting = true
 				_wisps.visible = true
 			if _gloom != null and _gloom.material != null:
-				(_gloom.material as FogMaterial).density = GLOOM_DENSITY \
-					* (0.28 if _walker != null else 1.0)
+				(_gloom.material as FogMaterial).density = GLOOM_DENSITY * 0.28
 		return
 	if _chase_doors >= _chase_limit and ghost_room != player_room \
 			and _fade < 0.0:
@@ -825,29 +688,53 @@ func hold_approach(seconds: float) -> void:
 	_approach_hold = maxf(_approach_hold, maxf(0.0, seconds))
 
 
+## A published doorway/passability change makes every cached navigation answer
+## suspect. Clear them synchronously so the next ordinary movement decision
+## rechecks the live topology and collision geometry. Ladder and slide state are
+## traversal commitments rather than path caches; preserving them prevents a
+## topology change elsewhere on the floor from dropping an actor mid-traverse.
+func invalidate_navigation_for_topology_change() -> void:
+	_direct_route_left = 0.0
+	_direct_route_clear = false
+	_clear_route()
+	_local_path.invalidate()
+	_blocked_time = 0.0
+	_recovery_direction = Vector3.ZERO
+	_recovery_left = 0.0
+	_avoid_direction = Vector3.ZERO
+	_avoid_left = 0.0
+	_door_attempt_left = 0.0
+
+
 func _advance(dt: float, observed := true) -> void:
 	ground_velocity = Vector3.ZERO
-	if _walker != null:
-		_walker.begin_motion_frame()
+	_walker.begin_motion_frame()
 	if _approach_hold > 0.0 or dt <= 0.0:
 		return
 	# Bound both steering and travel on a hitch, rather than bounding yaw alone
 	# while letting the actor travel a full long frame in the wrong direction.
 	var frame_dt := dt
 	dt = minf(dt, 0.1)
+	if _advance_slide(dt, frame_dt): return
+	if _vertical_target != Vector3.INF:
+		_advance_vertical(dt, frame_dt)
+		return
 	_recovery_left = maxf(0.0, _recovery_left - dt)
+	_door_attempt_left = maxf(0.0, _door_attempt_left - dt)
 	var player_to := player.global_position - global_position
 	player_to.y = 0.0
 	var player_d := player_to.length()
 	var speed := pursuit_speed(observed, player_d)
 	var contact_clear := false
-	if player_d <= ADVANCE_MIN + speed * dt:
+	if player_d <= ADVANCE_MIN + speed * dt \
+			and absf(global_position.y - player.global_position.y) < 0.8:
 		contact_clear = _clear_line(global_position + Vector3.UP,
 			player.global_position + Vector3.UP)
-	if player_d <= ADVANCE_MIN + 0.015 and contact_clear:
+	if player_d <= ADVANCE_MIN + 0.015 and contact_clear \
+			and absf(global_position.y - player.global_position.y) < 0.8:
 		# Arrival grace protects the player from invisible contact, not from a
 		# visibly frozen monster. Walk and animate during the materialization.
-		if _walker != null and (grace > 0.0 or _walker._manifestation < 0.95):
+		if grace > 0.0 or _walker._manifestation < 0.95:
 			_travel_speed = 0.0
 			return
 		# The lit torch is a ward. While the beam lives it comes to arm's
@@ -865,20 +752,32 @@ func _advance(dt: float, observed := true) -> void:
 	# open edges and aim beyond the next doorway so the capsule commits through
 	# the opening before resuming its chase.
 	var target := _route_target(dt)
-	target.y = global_position.y
 	var reach := ADVANCE_MIN if target.distance_to(player.global_position) < 0.1 else 0.0
 	var reachable := func(point: Vector3) -> bool:
 		return _clear_line(point + Vector3.UP, player.global_position + Vector3.UP)
-	# A player in the water has no legal dry endpoint. Take the closest reachable
-	# deck position instead, and resume pursuit when they climb out.
+	# The local search retains surface height and can follow into basins or up
+	# the same ladder volumes the player uses.
 	# A complete path is preferable, but an incremental safe prefix is always
 	# useful. Refusing partial progress made an exhausted furniture search return
 	# the actor's own position and hold it there for seconds at a time.
 	target = _local_path.waypoint(global_position, target, dt, _clear_travel,
 		reach, reachable, true)
+	var leg := _traversal.path(global_position, target)
+	if not leg.is_empty():
+		# Preserve elevation corners (a pool lip or ladder top) rather than
+		# replacing a safe polyline with a diagonal through solid geometry.
+		for point: Vector3 in leg:
+			if absf(point.y - global_position.y) > 0.005:
+				target = point
+				break
 	var to := target - global_position
 	to.y = 0.0
 	var d := to.length()
+	if d < 0.04 and absf(target.y - global_position.y) > 0.04 \
+			and _traversal.ladder(global_position):
+		_begin_vertical_travel(target)
+		_advance_vertical(dt, frame_dt)
+		return
 	var route_waiting := d < 0.001
 	var direct := to / d if not route_waiting else player_to.normalized()
 	if direct.length_squared() < 0.0001:
@@ -896,59 +795,232 @@ func _advance(dt: float, observed := true) -> void:
 		var recovery := _recovery_step_direction(direct)
 		if recovery != Vector3.ZERO:
 			direct = recovery
-	if _walker != null:
-		# Steer continuously toward the actual local-path step. Translation is
-		# always along the body's authored +Z axis, so its route becomes a real
-		# left/right arc rather than a sideways slide or stop-and-snap pivot.
-		var alignment := _walker.face_world_direction(direct, dt)
-		# A complete reversal still has to plant and turn; ordinary corners keep
-		# moving, but slow down in proportion to their steering error so the turn
-		# radius remains believable at both creep and unseen chase speeds.
-		var curve_speed := smoothstep(0.0, 0.985, alignment)
-		if player_d > ADVANCE_MIN + 1.0:
-			curve_speed = maxf(curve_speed, FAR_TURN_SPEED_SCALE)
-		speed *= curve_speed
-		# Short approach to a waypoint needs a tighter turn radius. Without this
-		# the walker can circle a path corner forever without reaching it.
-		if alignment < 0.985:
-			speed = minf(speed, d * ShadowWalkerVisual.TURN_SPEED * 0.65)
-		var forward := _walker.forward_world()
-		_travel_speed = move_toward(_travel_speed, speed,
-			(ACCELERATION if speed > _travel_speed else BRAKING) * dt)
-		direct = forward
-	else:
-		_travel_speed = speed
+	# Steer continuously toward the actual local-path step. Translation is
+	# always along the body's authored +Z axis, so its route becomes a real
+	# left/right arc rather than a sideways slide or stop-and-snap pivot.
+	var alignment := _walker.face_world_direction(direct, dt)
+	# A complete reversal still has to plant and turn; ordinary corners keep
+	# moving, but slow down in proportion to their steering error so the turn
+	# radius remains believable at both creep and unseen chase speeds.
+	var curve_speed := smoothstep(0.0, 0.985, alignment)
+	if player_d > ADVANCE_MIN + 1.0:
+		curve_speed = maxf(curve_speed, FAR_TURN_SPEED_SCALE)
+	speed *= curve_speed
+	# Short approach to a waypoint needs a tighter turn radius. Without this
+	# the walker can circle a path corner forever without reaching it.
+	if alignment < 0.985:
+		speed = minf(speed, d * ShadowWalkerVisual.TURN_SPEED * 0.65)
+	var forward := _walker.forward_world()
+	_travel_speed = move_toward(_travel_speed, speed,
+		(ACCELERATION if speed > _travel_speed else BRAKING) * dt)
+	# Crossing the lip is the gait boundary for this experiment. Do not let dry
+	# running momentum carry her halfway across a basin after she has switched
+	# visibly to the slower water walk.
+	if walker_model_index == POOL_GIRL_MODEL_INDEX and _pool_girl_in_water():
+		_travel_speed = minf(_travel_speed, speed)
+	direct = forward
 	var step := minf(_travel_speed * dt, d)
 	if contact_clear:
 		step = minf(step, maxf(0.0, player_d - ADVANCE_MIN))
 	# Sweep the entire segment against geometry AND other bodies. If a turn is
 	# temporarily blocked, brake and keep rotating along the real route.
 	var destination := global_position + direct * step
+	destination += _traversal.belt_velocity(global_position) * dt
 	# Keep a little turning room in front of a curved walker. Driving exactly
 	# onto the wall's contact skin can leave no numerically valid sideways arc
 	# into an adjacent narrow doorway, even though the planned route is open.
-	var probe := maxf(step, 0.18) if _walker != null else step
-	if step > 0.00001 and _peer_clear(destination) and _can_move(direct, probe):
+	var grounded := _traversal.project(global_position, destination)
+	# A proven slope/ladder-exit segment must be followed in 3D. Re-projecting
+	# a millimetre-long horizontal step from below a ledge loses the upward
+	# component of that route and wedges the actor under the lip indefinitely.
+	if not leg.is_empty() and alignment > 0.985 and d > 0.001 \
+			and target.y > global_position.y + 0.02:
+		grounded = destination
+		grounded.y = lerpf(global_position.y, target.y, minf(1.0, step / d))
+	var dropping := grounded != Vector3.INF and grounded.y < global_position.y - 0.12
+	if grounded != Vector3.INF and not dropping: destination.y = grounded.y
+	var valid := grounded != Vector3.INF and _traversal.body_clear(global_position, destination)
+	if dropping: valid = valid and _traversal.body_clear(destination, grounded)
+	if step > 0.00001 and _peer_clear(destination) and valid:
 		# Report movement over the actual frame, not its clamped simulation step,
 		# so a hitch cannot advance the clip farther than the body travelled.
 		ground_velocity = (destination - global_position) / frame_dt
 		global_position = destination
+		if dropping: _begin_vertical_travel(grounded)
 		_blocked_time = 0.0
-		if _walker != null:
-			_walker.set_ground_speed(ground_velocity.length())
+		_walker.set_ground_speed(ground_velocity.length(), _pool_girl_should_run())
 	else:
 		_travel_speed = 0.0
 		var before := _blocked_time
 		_blocked_time += dt
+		if _door_attempt_left <= 0.0 and _try_open_door(direct):
+			_door_attempt_left = 0.9
+			_blocked_time = 0.0
+			return
 		# Keep the body visibly walking while it searches/turns. A stopped clip at
 		# range reads as dead AI even when a route slice is still being computed.
-		if _walker != null and player_d > ADVANCE_MIN + 0.25:
-			_walker.set_ground_speed(maxf(_creep_spd * 0.52, speed * 0.35))
+		if player_d > ADVANCE_MIN + 0.25:
+			_walker.set_ground_speed(maxf(_creep_spd * 0.52, speed * 0.35),
+				_pool_girl_should_run())
 		if before < BLOCKED_REPLAN_SECONDS \
 				and _blocked_time >= BLOCKED_REPLAN_SECONDS:
 			_local_path.invalidate()
 			_clear_route()
 			_recovery_left = 0.0
+
+
+func _try_open_door(direction: Vector3) -> bool:
+	# Doors expose the same Interactable that the player uses. Ask only for
+	# explicit door prompts so a pursuing figure never activates terminals,
+	# elevators, or story objects while trying to clear a blocked route.
+	direction.y = 0.0
+	if direction.length_squared() < 0.0001:
+		return false
+	direction = direction.normalized()
+	var space := get_world_3d().direct_space_state
+	for distance in [0.42, 0.68, 0.92]:
+		for height in [0.85, 1.25]:
+			var q := PhysicsPointQueryParameters3D.new()
+			q.position = global_position + direction * distance + Vector3.UP * height
+			q.collision_mask = 2
+			q.collide_with_areas = true
+			q.collide_with_bodies = false
+			for hit in space.intersect_point(q, 4):
+				var interactable := hit.collider as Interactable
+				if interactable == null or not interactable.enabled:
+					continue
+				if not interactable.get_prompt().to_lower().contains("open door"):
+					continue
+				if interactable.can_interact(self):
+					interactable.interact(self)
+					return true
+	return false
+
+
+func _begin_vertical_travel(target: Vector3) -> void:
+	_vertical_target = target
+	_ladder_landing = Vector3.INF
+	_ladder_top = Vector3.INF
+	_ladder_facing = Vector3.ZERO
+	_ladder_phase = 0
+	if target.y <= global_position.y + 0.04:
+		return
+	var landing := _traversal.ladder_landing(global_position)
+	if landing == Vector3.INF or landing.y <= global_position.y + 0.04:
+		return
+	# Centre on the water side first, climb vertically so the capsule cannot cut
+	# through the pool wall, then cross the lip at full deck height.
+	var climb_point := _traversal.ladder_climb_point(global_position)
+	if climb_point == Vector3.INF:
+		climb_point = global_position
+	climb_point.y = global_position.y
+	_ladder_top = Vector3(climb_point.x, landing.y, climb_point.z)
+	_ladder_landing = landing
+	if Vector2(climb_point.x - global_position.x,
+			climb_point.z - global_position.z).length() > 0.05:
+		_vertical_target = climb_point
+		_ladder_phase = 1 # align between the rails
+	else:
+		_vertical_target = _ladder_top
+		_ladder_phase = 2 # climb
+	_ladder_facing = _traversal.ladder_facing(global_position)
+	if _ladder_facing == Vector3.ZERO:
+		_ladder_facing = landing - global_position
+		_ladder_facing.y = 0.0
+		if _ladder_facing.length_squared() > 0.0001:
+			_ladder_facing = _ladder_facing.normalized()
+
+
+func _clear_vertical_travel() -> void:
+	_vertical_target = Vector3.INF
+	_vertical_ignored = RID()
+	_ladder_landing = Vector3.INF
+	_ladder_top = Vector3.INF
+	_ladder_facing = Vector3.ZERO
+	_ladder_phase = 0
+
+
+func _advance_vertical(dt: float, frame_dt: float) -> void:
+	if _ladder_facing != Vector3.ZERO:
+		var alignment := _walker.face_world_direction(_ladder_facing, dt)
+		# Do not let a model rise backwards or sideways beside the rails. Turn to
+		# face the lip first, then keep that facing through the deck commit.
+		if _ladder_phase != 0 and alignment < 0.90:
+			ground_velocity = Vector3.ZERO
+			_walker.set_ground_speed(0.0)
+			return
+	var destination := global_position.move_toward(_vertical_target, Player.CLIMB_SPEED * dt)
+	if not _traversal.body_clear(global_position, destination, _vertical_ignored):
+		_clear_vertical_travel()
+		_local_path.invalidate()
+		return
+	ground_velocity = (destination - global_position) / frame_dt
+	global_position = destination
+	_walker.set_ground_speed(ground_velocity.length())
+	if global_position.distance_to(_vertical_target) < 0.005:
+		match _ladder_phase:
+			1:
+				_vertical_target = _ladder_top
+				_ladder_phase = 2
+			2:
+				# Crossing at full deck height is the visible step off the ladder
+				# and prevents replanning onto a downward edge at the pool lip.
+				_vertical_target = _ladder_landing
+				_ladder_phase = 3
+			3:
+				_clear_vertical_travel()
+			_:
+				_clear_vertical_travel()
+
+
+## The same entry trigger, spline and temporary equipment-collision exception
+## used by Player. Other walls and other enemies remain solid throughout.
+func _advance_slide(dt: float, frame_dt: float) -> bool:
+	_slide_rearm = maxf(0.0, _slide_rearm - dt)
+	if not is_instance_valid(_pool_slide) and _slide_rearm <= 0.0:
+		var q := PhysicsPointQueryParameters3D.new()
+		q.position = global_position + Vector3.UP * 0.20
+		q.collision_mask = PoolSlide.ENTRY_LAYER
+		q.collide_with_areas = true
+		q.collide_with_bodies = false
+		for hit in get_world_3d().direct_space_state.intersect_point(q):
+			var slide := hit.collider as PoolSlide
+			if slide != null and slide.can_board(global_position):
+				_pool_slide = slide
+				_slide_distance = slide.entry_distance(global_position)
+				_slide_speed = PoolSlide.START_SPEED
+				_clear_vertical_travel()
+				break
+	if not is_instance_valid(_pool_slide): return false
+	var tangent := _pool_slide.tangent_at(_slide_distance)
+	_slide_speed = minf(PoolSlide.MAX_SPEED, _slide_speed + (1.2 + Player.GRAVITY * maxf(0.0, -tangent.y)) * dt)
+	var next_distance := minf(_pool_slide.length, _slide_distance + _slide_speed * dt)
+	var desired := _pool_slide.point_at(next_distance) + Vector3.UP * PoolSlide.FOOT_CLEARANCE
+	var destination := global_position.move_toward(desired, _slide_speed * dt)
+	var ignored := _pool_slide.collision_body.get_rid() if is_instance_valid(_pool_slide.collision_body) else RID()
+	if not _peer_clear(destination) or not _traversal.body_clear(global_position, destination, ignored):
+		_pool_slide = null
+		_slide_rearm = 0.8
+		_local_path.invalidate()
+		return true
+	_slide_distance = next_distance
+	ground_velocity = (destination - global_position) / frame_dt
+	global_position = destination
+	_walker.face_world_direction(tangent, dt)
+	_walker.set_ground_speed(ground_velocity.length())
+	if next_distance >= _pool_slide.length and destination.distance_to(desired) < 0.08:
+		_pool_slide = null
+		_slide_rearm = 0.8
+		# The authored trough is still above the basin floor at its last sample.
+		# A normal ground probe sees that trough before it sees the water floor, so
+		# finish the same short drop the player gets after the slide releases.
+		# Pool basins keep a one-metre drop from the water surface to the floor.
+		var basin_floor := global_position
+		basin_floor.y = player.water_y - 1.05 + EnemyTraversal.SKIN
+		_begin_vertical_travel(basin_floor)
+		_vertical_ignored = ignored
+		_local_path.invalidate()
+	return true
 
 
 func _recovery_step_direction(preferred: Vector3) -> Vector3:
@@ -993,9 +1065,25 @@ func _recovery_step_direction(preferred: Vector3) -> Vector3:
 func pursuit_speed(observed: bool, distance: float) -> float:
 	# The unseen rush eases to the normal approach speed, never a stationary
 	# "park". Every completed campaign floor adds three percent to both speeds.
+	var progression := 1.0 + SPEED_PER_LEVEL * clampi(completed_levels, 0,
+		DescentRun.FLOOR_COUNT - 1)
+	if walker_model_index == POOL_GIRL_MODEL_INDEX:
+		# The experiment is deliberately legible: she runs on dry tile even while
+		# watched, then physically slows and changes to her walk below the waterline.
+		return (POOL_GIRL_WATER_SPEED if _pool_girl_in_water() \
+			else POOL_GIRL_DECK_SPEED) * progression
 	var rush := 0.0 if observed else smoothstep(_unseen_min, _unseen_min + 2.0, distance)
-	return lerpf(_creep_spd, _unseen_spd, rush) \
-		* (1.0 + SPEED_PER_LEVEL * clampi(completed_levels, 0, DescentRun.FLOOR_COUNT - 1))
+	return lerpf(_creep_spd, _unseen_spd, rush) * progression
+
+
+func _pool_girl_in_water() -> bool:
+	return walker_model_index == POOL_GIRL_MODEL_INDEX and player != null \
+		and player.water_y > -1.0e8 \
+		and global_position.y + POOL_GIRL_WATER_SAMPLE_HEIGHT < player.water_y
+
+
+func _pool_girl_should_run() -> bool:
+	return walker_model_index == POOL_GIRL_MODEL_INDEX and not _pool_girl_in_water()
 
 
 func _peers() -> Array[ShadowFigure]:
@@ -1020,6 +1108,10 @@ func _avoid_peers(desired: Vector3, speed: float, dt: float) -> Vector3:
 	# their own right, so head-on encounters separate to opposite world sides.
 	# A held direction penalizes left/right dithering as their positions change.
 	var horizon := clampf(speed * 0.65, 1.8, 3.2)
+	# Near the destination, a long prediction sweeps beyond the player and
+	# mistakes a neighbour on the far side for a blockage. Shorten the horizon
+	# so the outer follower can settle into its own clear approach lane.
+	horizon = minf(horizon, maxf(0.8, global_position.distance_to(player.global_position) - ADVANCE_MIN))
 	var best := desired
 	var best_score := INF
 	for degrees in [0.0, -20.0, 20.0, -40.0, 40.0, -65.0, 65.0, -90.0, 90.0,
@@ -1070,6 +1162,14 @@ func _peer_clear(destination: Vector3) -> bool:
 
 
 func _route_target(dt: float) -> Vector3:
+	# Physical shortcuts include ramps and paths inside a cell that the coarse
+	# room graph never represented. Prefer them when the whole route is clear.
+	_direct_route_left -= dt
+	if _direct_route_left <= 0.0:
+		_direct_route_left = ROUTE_REPATH_TIME
+		_direct_route_clear = _clear_travel(global_position, player.global_position)
+	if _direct_route_clear:
+		return player.global_position
 	var start := _cell_for(global_position)
 	var goal := _cell_for(player.global_position)
 	# Finish clearing the jamb before turning within the destination cell.
@@ -1169,26 +1269,8 @@ func _doorway_waypoint(from: Vector2i, to: Vector2i) -> Vector3:
 	var edge: Dictionary = _edge_info(from, dir)
 	var along := float(edge["t"])
 	var waypoint := _edge_waypoint(from, dir, along)
-	if player.level_theme == 9:
-		# A connected basin can occupy the middle of a full-width opening. Aim
-		# through a dry section of that same opening, not through its water lane.
-		var cross := Vector3(WorldGen.DIRV[dir].x, 0, WorldGen.DIRV[dir].y) \
-			* DOORWAY_CROSS_INSET * 2.0
-		if _clear_travel(waypoint - cross, waypoint):
-			return waypoint
-		var half_width := Chunk.S * 0.5 if bool(edge.get("full_open", false)) \
-			else float(edge.get("w", 0.0)) * 0.5
-		var low := maxf(MOVE_RADIUS, along - half_width + MOVE_RADIUS)
-		var high := minf(Chunk.S - MOVE_RADIUS, along + half_width - MOVE_RADIUS)
-		for step in range(1, ceili(Chunk.S / GhostLocalPath.GRID) + 1):
-			for sign_dir: float in [-1.0, 1.0]:
-				var candidate := along + step * GhostLocalPath.GRID * sign_dir
-				if candidate < low or candidate > high:
-					continue
-				var dry_waypoint := _edge_waypoint(from, dir, candidate)
-				if _clear_travel(dry_waypoint - cross, dry_waypoint):
-					return dry_waypoint
-	return waypoint
+	var ground := _traversal.ground(waypoint)
+	return ground if ground != Vector3.INF else waypoint
 
 
 func _edge_waypoint(from: Vector2i, dir: int, along: float) -> Vector3:
@@ -1243,31 +1325,7 @@ static func pool_deck_clear(p: Player, at: Vector3, radius: float) -> bool:
 
 
 func _clear_travel(from: Vector3, to: Vector3) -> bool:
-	var space := player.get_world_3d().direct_space_state
-	_move_query.transform = Transform3D(Basis.IDENTITY,
-		to + Vector3(0, MOVE_HEIGHT * 0.5 + 0.04, 0))
-	_move_query.motion = Vector3.ZERO
-	if not space.intersect_shape(_move_query, 1).is_empty():
-		return false
-	_move_query.transform.origin = from + Vector3(0, MOVE_HEIGHT * 0.5 + 0.04, 0)
-	_move_query.motion = to - from
-	if space.cast_motion(_move_query)[0] < 1.0:
-		return false
-	# Sample support along the segment too: a clear capsule above a hole is
-	# not a walkable detour, and smoothing must not jump over that hole.
-	var samples := maxi(1, ceili(from.distance_to(to) / GhostLocalPath.GRID))
-	for index in range(1, samples + 1):
-		var foot := from.lerp(to, float(index) / samples)
-		if player.level_theme == 9:
-			if not pool_deck_clear(player, foot, MOVE_RADIUS):
-				return false
-			continue
-		var query := PhysicsRayQueryParameters3D.create(foot + Vector3.UP * 0.2,
-			foot - Vector3.UP * 0.6, 1, [player.get_rid()])
-		var hit := space.intersect_ray(query)
-		if hit.is_empty() or (hit.normal as Vector3).y < 0.72:
-			return false
-	return true
+	return _traversal.clear(from, to)
 
 
 static func room_for(p: Player, at: Vector3) -> Vector2i:
@@ -1322,17 +1380,16 @@ func _ignite(refund_torch := true, play_sound := true) -> void:
 	_set_visual_parameter("burn", 0.0)
 	_set_visual_parameter("ignite", 1.0)
 	_set_visual_parameter("fragmented", 0.0)
-	if _walker != null:
-		# Dark ambient wisps would muddy the white-hot breakup. The dedicated
-		# particle sibling now owns the visible matter leaving the silhouette.
-		if _wisps != null:
-			_wisps.emitting = false
-			_wisps.visible = false
-		_burn_disintegration_started = true
-		# The complete posed fragment body replaces the black mesh on this exact
-		# frame. There is no intact flare or spotted erosion phase underneath it.
-		_spawn_burn_particles()
-		_set_visual_parameter("fragmented", 1.0)
+	# Dark ambient wisps would muddy the white-hot breakup. The dedicated
+	# particle sibling now owns the visible matter leaving the silhouette.
+	if _wisps != null:
+		_wisps.emitting = false
+		_wisps.visible = false
+	_burn_disintegration_started = true
+	# The complete posed fragment body replaces the mesh on this exact frame.
+	# There is no intact flare or spotted erosion phase underneath it.
+	_spawn_burn_particles()
+	_set_visual_parameter("fragmented", 1.0)
 	if refund_torch:
 		burned_away.emit()
 	# The room should be lit by the thing burning, which means the light has to
@@ -1342,13 +1399,11 @@ func _ignite(refund_torch := true, play_sound := true) -> void:
 	_flash = OmniLight3D.new()
 	_flash.light_color = Color(1.0, 0.70, 0.38)
 	_flash.light_energy = 0.0
-	_flash.omni_range = 2.5 if _walker != null else 8.0
+	_flash.omni_range = 2.5
 	_flash.shadow_enabled = false
-	_flash.set_meta("visible_source",
-		"walker_burning_body_and_particles" if _walker != null else "burning_apparition")
-	# The walker ignites as one body; legacy apparitions retain their travelling
-	# burn-front light position.
-	_flash.position = Vector3(0, _eye_h * (0.55 if _walker != null else 0.35), 0)
+	_flash.set_meta("visible_source", "walker_burning_body_and_particles")
+	# The walker ignites as one body.
+	_flash.position = Vector3(0, _eye_h * 0.55, 0)
 	add_child(_flash)
 	# Its own recording rather than a jump-scare pitched up: a stinger is the
 	# sound of something arriving, and this is the sound of something ending.

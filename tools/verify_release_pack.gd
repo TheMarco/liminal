@@ -1,5 +1,5 @@
 extends SceneTree
-## Run externally against an exported Mac PCK or Windows embedded-PCK EXE:
+## Run externally against an exported Mac PCK or Windows/Linux embedded-PCK executable:
 ## godot --headless --main-pack <pack> --script /absolute/path/to/this/script
 ## The editor/source project must NOT supply res:// during this check.
 
@@ -24,20 +24,28 @@ func _verify() -> void:
 	var walker_script = load("res://scripts/shadow_walker_visual.gd")
 	_expect(walker_script != null, "animated monster presentation absent")
 	if walker_script != null:
-		_expect(walker_script.MODEL_PATHS.size() == 4, "supplied shadow walker roster incomplete")
+		_expect(walker_script.MODEL_PATHS.size() == 12, "supplied shadow walker roster incomplete")
 		for path in walker_script.MODEL_PATHS:
 			_expect(ResourceLoader.exists(path), "monster GLB missing from pack: " + path)
-		_expect(walker_script.WALK_CYCLE_SPEEDS == [1.98, 1.98, 1.98, 1.965],
+		for path in walker_script.RUN_MODEL_PATHS.values():
+			_expect(ResourceLoader.exists(path), "monster run GLB missing from pack: " + path)
+		_expect(walker_script.WALK_CYCLE_SPEEDS == [1.98, 1.98, 1.98, 1.965,
+			1.85, 1.65, 1.82, 1.72, 1.72, 1.98, 1.755, 1.72],
 			"measured monster stride calibration missing or stale")
+		_expect(walker_script.RUN_CYCLE_SPEEDS == {10: 1.73},
+			"measured Pool Girl run calibration missing or stale")
 	_expect(ResourceLoader.exists("res://shaders/shadow_walker.gdshader"),
 		"animated monster shader absent")
 	var options = load("res://scripts/cli_options.gd").parse_args([])
-	_expect(options.walker_prototype and not options.test_mode,
-		"release defaults do not enable the monster roster with test mode off")
+	_expect(not options.test_mode,
+		"release defaults do not start with test mode off")
 	var pursuer = load("res://scripts/shadow_figure.gd").new()
 	pursuer.completed_levels = 1
 	_expect(is_equal_approx(pursuer.pursuit_speed(true, 10.0), 1.25 * 1.03),
 		"per-floor enemy speed progression missing")
+	pursuer.walker_model_index = 10
+	_expect(is_equal_approx(pursuer.pursuit_speed(true, 10.0), 2.1 * 1.03),
+		"halved Pool Girl deck run speed missing")
 	pursuer.free()
 	for folder in ["res://art/ending_outside", "res://deliverables/ending_cutscene_final_kit",
 			"res://models/cc_by_nc", "res://textures/cc_by_nc", "res://prototypes_shelved",

@@ -398,7 +398,6 @@ func _walker_figure(root: Node3D, player: Player, at: Vector3) -> ShadowFigure:
 	var f := ShadowFigure.new()
 	f.player = player
 	f.variant = ShadowFigure.DROWNED
-	f.use_walker_prototype = true
 	f.walker_model_index = 0
 	f.grace = 0.0
 	f.position = at

@@ -41,6 +41,18 @@ var _shortcuts := {}
 ## IDs reconstruct it before chunks build, including a quit during photo review.
 var _photo_doors: Dictionary = {} # canonical edge key -> opening record
 var _photo_open: Dictionary = {}  # evidence id -> true
+## Spatial-site overlay: canonical edge key -> passability record, and owned
+## cell -> site id. Precedence is photographed opening, then site owner, then
+## legacy blackout override, then seeded base geometry.
+var _site_edges := {}
+var _site_cells := {}
+## Accepted site specs for this floor, in planning order. Immutable after
+## plan_floor; builders and the spatial director read them.
+var site_specs: Array[SpatialSiteSpec] = []
+## Monotonic connectivity/geometry revision. Bumped by every state transition,
+## restore, and site passability commit. Consumers recheck their expected
+## revision before acting; see SpatialSiteTransaction.
+var revision := 0
 
 ## State 0 is always the seed-authored base.  Every later state is a complete
 ## snapshot, never a delta from the previous state, which makes arbitrary
@@ -92,6 +104,9 @@ static func edge_dir(edge: Dictionary) -> int:
 func _reset_states() -> void:
 	_photo_doors.clear()
 	_photo_open.clear()
+	_site_edges.clear()
+	_site_cells.clear()
+	site_specs.clear()
 	_states = [TopologyState.new()]
 	_current_state = 0
 	_previous_state = -1
@@ -116,9 +131,10 @@ func plan_floor(route: DescentRoute) -> void:
 	_plan_photo_doors(route)
 	if not route.realm_door_hint.is_empty():
 		_photo_doors[str(route.realm_door_hint["key"])] = route.realm_door_hint.duplicate(true)
-	var cache_key := "%d:%d:%d:%d:%d:%d" % [GENERATION_VERSION,
+	_plan_site_reservations(route)
+	var cache_key := "%d:%d:%d:%d:%d:%d:%s" % [GENERATION_VERSION,
 		world_seed, theme, route.floor_idx, route.origin.x * 4099 + route.origin.y,
-		route.target.x * 4099 + route.target.y]
+		route.target.x * 4099 + route.target.y, _site_digest()]
 	if _plan_cache.has(cache_key):
 		for cached in _plan_cache[cache_key]:
 			_states.append(TopologyState.from_dictionary(cached))
@@ -242,6 +258,7 @@ func states() -> Array[Dictionary]:
 
 func restore_state(state_id: int, visited: Array[int] = []) -> void:
 	_current_state = clampi(state_id, 0, maxi(0, _states.size() - 1))
+	revision += 1
 	_previous_state = -1
 	_visited_states = {0: true, _current_state: true}
 	for value in visited:
@@ -256,6 +273,7 @@ func transition_to(state_id: int) -> bool:
 	_previous_state = _current_state
 	_current_state = state_id
 	_visited_states[state_id] = true
+	revision += 1
 	return true
 
 
@@ -275,6 +293,8 @@ func has_shortcut(cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		return photo_door_open(str(_photo_doors[key]["id"]))
+	if _site_edges.has(key):
+		return str(_site_edges[key].get("kind", "open")) != "wall"
 	var override := _current_edges().get(key, {}) as Dictionary
 	if not override.is_empty():
 		return str(override.get("kind", "")) != "wall"
@@ -306,6 +326,8 @@ func is_wall(cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		return not photo_door_open(str(_photo_doors[key]["id"]))
+	if _site_edges.has(key):
+		return str(_site_edges[key].get("kind", "open")) == "wall"
 	var record: Dictionary = _current_edges().get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -350,7 +372,7 @@ func state_delta(from_state: int, to_state: int) -> TopologyDelta:
 	var changed_edges: Array[Dictionary] = []
 	var cells := {}
 	for key in edge_keys:
-		if _photo_doors.has(key):
+		if _photo_doors.has(key) or _site_edges.has(key):
 			continue
 		var before: Dictionary = before_edges.get(key, {})
 		var after: Dictionary = after_edges.get(key, {})
@@ -381,6 +403,8 @@ func state_delta(from_state: int, to_state: int) -> TopologyDelta:
 	for key in room_keys:
 		var room: Vector2i = key
 		if int(before_rooms.get(room, 0)) == int(after_rooms.get(room, 0)):
+			continue
+		if _site_cells.has(room):
 			continue
 		changed_rooms.append(room)
 		cells[room] = true
@@ -509,6 +533,8 @@ func _edge_info_with(edges: Dictionary, cell: Vector2i, dir: int) -> Dictionary:
 		if photo_door_open(str(_photo_doors[key]["id"])):
 			return photo_geometry_edge(cell, dir)
 		return WorldGen.edge_info(world_seed, cell, dir, theme)
+	if _site_edges.has(key):
+		return _site_edge_info(_site_edges[key])
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -559,6 +585,108 @@ func photo_doorways() -> Array[Dictionary]:
 
 func photo_door_open(id: String) -> bool:
 	return _photo_open.has(id)
+
+
+## Reserve owned cells for a spatial site. Rejects empty ids, cells already
+## owned by another site, and cells whose shared edges are photographed.
+func reserve_site_cells(cells: Array[Vector2i], site_id: String) -> bool:
+	if site_id.is_empty() or cells.is_empty():
+		return false
+	for at in cells:
+		var owner: String = str(_site_cells.get(at, ""))
+		if not owner.is_empty() and owner != site_id:
+			return false
+		for dir in 4:
+			if _photo_doors.has(edge_key(at, dir)):
+				return false
+	for at in cells:
+		_site_cells[at] = site_id
+	return true
+
+
+func site_id_at(cell: Vector2i) -> String:
+	return str(_site_cells.get(cell, ""))
+
+
+func site_spec(site_id: String) -> SpatialSiteSpec:
+	for spec in site_specs:
+		if spec.id == site_id:
+			return spec
+	return null
+
+
+## Any photographed shared edge on this cell. Sites never reserve one.
+func photo_edge_near(cell: Vector2i) -> bool:
+	for dir in 4:
+		if _photo_doors.has(edge_key(cell, dir)):
+			return true
+	return false
+
+
+func site_cells(site_id: String) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for at in _site_cells.keys():
+		if str(_site_cells[at]) == site_id:
+			out.append(at)
+	return out
+
+
+## Publish one site-owned edge. Only the reserving site may set its edges;
+## every commit bumps the revision so transaction witnesses can recheck.
+func set_site_edge(site_id: String, cell: Vector2i, dir: int,
+		is_open: bool) -> bool:
+	if site_id.is_empty() or dir < 0 or dir >= 4:
+		return false
+	if str(_site_cells.get(cell, "")) != site_id:
+		return false
+	var key := edge_key(cell, dir)
+	if _photo_doors.has(key):
+		return false
+	var edge := canonical_edge(cell, dir)
+	_site_edges[key] = {
+		"key": key,
+		"cell": edge["cell"],
+		"axis": int(edge["axis"]),
+		"kind": "open" if is_open else "wall",
+		"site_id": site_id,
+	}
+	revision += 1
+	return true
+
+
+func site_edge(cell: Vector2i, dir: int) -> Dictionary:
+	return (_site_edges.get(edge_key(cell, dir), {}) as Dictionary).duplicate()
+
+
+func clear_site(site_id: String) -> void:
+	for key in _site_edges.keys():
+		if str(_site_edges[key].get("site_id", "")) == site_id:
+			_site_edges.erase(key)
+	for at in _site_cells.keys():
+		if str(_site_cells[at]) == site_id:
+			_site_cells.erase(at)
+
+
+func _site_edge_info(record: Dictionary) -> Dictionary:
+	if str(record.get("kind", "open")) == "wall":
+		return {
+			"wall": true,
+			"full_open": false,
+			"t": SHORTCUT_CENTRE,
+			"w": 0.0,
+			"exit_sign": false,
+			"spatial_site": str(record.get("site_id", "")),
+			"mutation_state": _current_state,
+		}
+	return {
+		"wall": false,
+		"full_open": false,
+		"t": SHORTCUT_CENTRE,
+		"w": SHORTCUT_WIDTH,
+		"exit_sign": false,
+		"spatial_site": str(record.get("site_id", "")),
+		"mutation_state": _current_state,
+	}
 
 
 func open_photo_door(id: String) -> bool:
@@ -638,6 +766,37 @@ func _photo_room_distances(route: DescentRoute, graph: Dictionary,
 				distances[next_room] = int(distances[room]) + 1
 				queue.append(next_room)
 	return distances
+
+
+## Site reservations precede legacy state picking so generated realities
+## never overlap site cells. Conflicting specs are rejected here, never
+## resolved visually at runtime.
+func _plan_site_reservations(route: DescentRoute) -> void:
+	var specs := SpatialSitePlanner.plan_sites(route, _protected_cells(route))
+	for spec in specs:
+		if not (spec is SpatialSiteSpec and spec.is_valid()):
+			continue
+		if not reserve_site_cells(spec.cells, spec.id):
+			continue
+		site_specs.append(spec)
+		# Publish the initial overlay now: chunks stream before site
+		# installation and must see prepared modules, never normal walls.
+		# Installation re-publishes for resumed (non-initial) phases.
+		var frame := SpatialSitePlanner.junction_frame(spec)
+		var dirs: Array = frame["dirs"]
+		if dirs.size() == 2:
+			set_site_edge(spec.id, frame["cell"], int(dirs[0]), true)
+			set_site_edge(spec.id, frame["cell"], int(dirs[1]), false)
+
+
+func _site_digest() -> String:
+	if _site_cells.is_empty():
+		return "sites:none"
+	var parts: Array[String] = []
+	for at in _site_cells.keys():
+		parts.append("%d,%d=%s" % [at.x, at.y, str(_site_cells[at])])
+	parts.sort()
+	return "sites:" + "|".join(parts)
 
 
 func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_only := false) -> void:
@@ -970,6 +1129,8 @@ func _protected_cells(route: DescentRoute) -> Dictionary:
 		protected[at] = true
 	for at in route.optional_vhs_cells():
 		protected[at] = true
+	for at in _site_cells.keys():
+		protected[at] = true
 	return protected
 
 
@@ -1228,6 +1389,8 @@ func _is_wall_with(edges: Dictionary, cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		return not photo_door_open(str(_photo_doors[key]["id"]))
+	if _site_edges.has(key):
+		return str(_site_edges[key].get("kind", "open")) == "wall"
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -1241,6 +1404,8 @@ func _is_wall_for_route(route: DescentRoute, edges: Dictionary,
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		return not photo_door_open(str(_photo_doors[key]["id"]))
+	if _site_edges.has(key):
+		return str(_site_edges[key].get("kind", "open")) == "wall"
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})

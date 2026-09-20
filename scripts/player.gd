@@ -10,6 +10,9 @@ extends CharacterBody3D
 ## because the mouse-driven rotation beside it is perfectly smooth.
 
 const WALK_SPEED := 3.4
+## Shared navigation envelope: enemies must fit every passage we fit.
+const BODY_RADIUS := 0.38
+const BODY_HEIGHT := 1.8
 const SPRINT_SPEED := 6.2
 ## Sprint is a reserve, not a state: five seconds flat out, ten to fill back
 ## up. Partial recovery is spendable — the only lockout is after running the
@@ -123,6 +126,11 @@ var _spin_wait := 3.0
 var _spin_left := 0.0
 var _strafe := 0.0
 var _sprinting := false
+## Exact samples of physically traversed passages seed enemy navigation where
+## a regular search lattice misses a very narrow or off-centre opening.
+## These are floor-local route hints, never permission to bypass collision.
+var _traversal_samples := {}
+var _last_traversal_sample := Vector3.INF
 ## Mode-owned movement gate. Both current modes allow sprint; Descent observes
 ## `_sprinting` to turn the extra noise into attention pressure.
 var allow_sprint := true
@@ -138,8 +146,8 @@ var _interaction_scan_left := 0.0
 func _init() -> void:
 	var col := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
-	cap.radius = 0.38
-	cap.height = 1.8
+	cap.radius = BODY_RADIUS
+	cap.height = BODY_HEIGHT
 	col.shape = cap
 	col.position = Vector3(0, 0.9, 0)
 	add_child(col)
@@ -204,6 +212,8 @@ func _ready() -> void:
 ## Move without the camera sweeping across the world to catch up — the
 ## interpolation would otherwise smear from the old position for a tick.
 func teleport(to: Vector3) -> void:
+	_traversal_samples.clear()
+	_last_traversal_sample = Vector3.INF
 	clear_sprint_toggle()
 	_cancel_pool_slide()
 	if _water_fx != null: _water_fx.reset()
@@ -521,6 +531,7 @@ func _physics_process(dt: float) -> void:
 			velocity.y = lerpf(velocity.y, -2.2, minf(1.0, dt * 6.0))
 	var vy_before := velocity.y
 	move_and_slide()
+	_record_traversal_sample()
 	if sliding:
 		var target := _pool_slide.point_at(_slide_distance) + Vector3.UP * PoolSlide.FOOT_CLEARANCE
 		if global_position.distance_to(target) > 0.65:
@@ -565,6 +576,42 @@ func _physics_process(dt: float) -> void:
 
 func is_pool_sliding() -> bool:
 	return is_instance_valid(_pool_slide) and _pool_slide.is_inside_tree()
+
+
+func is_pool_ladder_traversing() -> bool:
+	return _on_ladder
+
+
+static func _traversal_bucket(at: Vector3) -> Vector3i:
+	return Vector3i(floori(at.x / 2.0), floori(at.y / 2.0), floori(at.z / 2.0))
+
+
+func _record_traversal_sample() -> void:
+	if _last_traversal_sample != Vector3.INF \
+			and global_position.distance_to(_last_traversal_sample) < 0.12: return
+	_last_traversal_sample = global_position
+	var key := _traversal_bucket(global_position)
+	var points: PackedVector3Array = _traversal_samples.get(key, PackedVector3Array())
+	for point in points:
+		if point.distance_squared_to(global_position) < 0.0064: return
+	points.append(global_position)
+	if points.size() > 128: points.remove_at(0)
+	_traversal_samples[key] = points
+	if _traversal_samples.size() > 2048:
+		_traversal_samples.erase(_traversal_samples.keys()[0])
+
+
+func traversal_neighbors(at: Vector3) -> Array[Vector3]:
+	var result: Array[Vector3] = []
+	var centre := _traversal_bucket(at)
+	for x in range(-1, 2):
+		for y in range(-1, 2):
+			for z in range(-1, 2):
+				for point: Vector3 in _traversal_samples.get(centre + Vector3i(x, y, z), []):
+					var distance := at.distance_squared_to(point)
+					if distance > 0.0025 and distance < 0.64:
+						result.append(point)
+	return result
 
 
 func _cancel_pool_slide() -> void:

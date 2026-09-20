@@ -106,6 +106,13 @@ static func build_plan(p_route: DescentRoute) -> Dictionary:
 	if path.size() < 4:
 		return out
 	var reserved := {p_route.origin: true, p_route.target: true}
+	# Spatial sites own their complete footprint and approach dressing. Evidence
+	# is planned after topology, so reserve those cells here as well; otherwise a
+	# later photo objective can be placed in architecture that the site changes.
+	if p_route.topology != null:
+		for at in p_route.scanned_cells():
+			if not p_route.topology.site_id_at(at).is_empty():
+				reserved[at] = true
 	# The three on-route anomalies are three DIFFERENT types wherever the
 	# cells allow it — a floor of three identical ceiling pieces reads as one
 	# idea repeated (playtest, 2026-08-19).

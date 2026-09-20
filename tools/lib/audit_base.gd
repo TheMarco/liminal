@@ -50,7 +50,12 @@ func boot_game(world_seed: int) -> Node:
 ## count. Audio has to stop before the node goes, and Chunk's threaded prop loads
 ## have to be consumed or they read as leaked resources.
 func teardown_game(game: Node) -> void:
+	game.process_mode = Node.PROCESS_MODE_DISABLED
 	stop_audio(game)
+	# Give the audio server one main-loop turn to retire playback objects after
+	# their streams are detached. Freeing the tree in the same turn is racy on
+	# macOS and intermittently leaves WAV/MP3 playback resources at process exit.
+	await process_frame
 	# Runtime scenarios deliberately tear down mid-animation. Kill every
 	# process-owned tween first so the harness verifies game objects rather than
 	# leaking a ref-counted tween that the next real frame would have finished.
@@ -69,9 +74,17 @@ func teardown_game(game: Node) -> void:
 
 func stop_audio(root: Node) -> void:
 	for node in root.find_children("*", "AudioStreamPlayer", true, false):
-		(node as AudioStreamPlayer).stop()
+		var player := node as AudioStreamPlayer
+		player.stop()
+		player.stream = null
+	for node in root.find_children("*", "AudioStreamPlayer2D", true, false):
+		var player := node as AudioStreamPlayer2D
+		player.stop()
+		player.stream = null
 	for node in root.find_children("*", "AudioStreamPlayer3D", true, false):
-		(node as AudioStreamPlayer3D).stop()
+		var player := node as AudioStreamPlayer3D
+		player.stop()
+		player.stream = null
 
 
 func expect(condition: bool, message: String) -> void:

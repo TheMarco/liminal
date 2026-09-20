@@ -63,14 +63,8 @@ void fragment() {
 
 	EMISSION = flare_colour * flare * manifestation * 0.85
 		+ ghost_tint * 0.04 * arrival_edge * master;
-	// Nearly solid, with a whisper of translucency and slightly denser
-	// silhouette edges: the facing factor is the inverse of the shadow body's.
-	// Alpha stays this high so stacked limbs composite almost identically to
-	// single surfaces instead of printing dark overlap patches.
-	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
-	float edge = 1.0 - smoothstep(0.0, 0.55, facing);
-	float alpha = (0.94 + 0.06 * edge) * (0.97 + 0.03 * fine);
-	alpha = mix(alpha, 1.0, flare);
-	alpha = clamp(master * arrival * foot * alpha, 0.0, 1.0);
+	// Fully opaque body. Only the arrival, fade and burn transitions thin
+	// it out; at rest there is no translucency left to stack or shimmer.
+	float alpha = clamp(master * arrival * foot, 0.0, 1.0);
 	ALPHA = alpha;
 }
