@@ -7,12 +7,17 @@ extends RefCounted
 ## cells[0] is always the junction. The site's apertures sit on the
 ## junction's walls; witness and dressing math derives from that.
 
-const PLANNER_VERSION := 2
+const PLANNER_VERSION := 3
 const OFFICE_THEME := 1
 const MAX_CANDIDATES := 40
 const SALTS := 4
 const MAX_ROOM_MEMBERS := 9
 const FAR_CELL := Vector2i(1 << 30, 1 << 30)
+
+## The wall clock is read as a landmark together with the fixed pillar edge
+## around it.  The physical face alone is too small to satisfy the global
+## useful-view thresholds from the site's intended junction composition.
+const ANCHOR_WITNESS_EXTENTS := Vector2(0.55, 0.55)
 
 ## Adjacent (perpendicular) direction pairs for the two apertures.
 const APERTURE_PAIRS := [
@@ -209,7 +214,7 @@ static func _make_spec(route: DescentRoute, junction: Vector2i,
 			"wall_b": {"position": _witness_spot(end_b),
 				"extents": Vector2(1.6, 1.35)},
 			"anchor_clock": {"position": anchor_face,
-				"extents": Vector2(0.4, 0.4)},
+				"extents": ANCHOR_WITNESS_EXTENTS},
 		},
 		["exit"])
 

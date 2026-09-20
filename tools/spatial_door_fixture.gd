@@ -80,7 +80,7 @@ func make_spec() -> SpatialSiteSpec:
 			"wall_b": {"position": Vector3(3.5, 1.4, 0.0),
 				"extents": Vector2(1.6, 1.35)},
 			"anchor_clock": {"position": Vector3(3.3, 1.6, -3.3),
-				"extents": Vector2(0.4, 0.4)},
+				"extents": SpatialSitePlanner.ANCHOR_WITNESS_EXTENTS},
 		},
 		["exit"])
 

@@ -586,6 +586,29 @@ static func model_count() -> int:
 	return MODEL_PATHS.size()
 
 
+## Audit/test teardown only. Normal play keeps decoded scenes and extracted
+## animation clips for the process lifetime. A short headless run can exit
+## while the signature model requested by ShadowFigures is still decoding;
+## consume those requests before clearing the caches so Godot does not report
+## the loader's zero-ref bookkeeping object as leaked.
+static func clear_runtime_caches() -> void:
+	for path in MODEL_PATHS:
+		_finish_threaded_request(path)
+	for path in RUN_MODEL_PATHS.values():
+		_finish_threaded_request(str(path))
+	_model_scenes.clear()
+	_run_model_scenes.clear()
+	_walking_clips.clear()
+	_running_clips.clear()
+
+
+static func _finish_threaded_request(path: String) -> void:
+	var status := ResourceLoader.load_threaded_get_status(path)
+	if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS \
+			or status == ResourceLoader.THREAD_LOAD_LOADED:
+		ResourceLoader.load_threaded_get(path)
+
+
 ## The manager requests only the next shuffled design. These source models are
 ## texture-heavy; preparing it eagerly would make every level pay its full
 ## startup and memory cost before a single monster had appeared.

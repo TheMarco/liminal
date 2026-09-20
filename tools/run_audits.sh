@@ -110,6 +110,7 @@ AUDITS=(
 	"spatial_witness|tools/audit_spatial_witness.gd|"
 	"migrating_door|tools/audit_migrating_door.gd|"
 	"spatial_placement|tools/audit_spatial_placement.gd|"
+	"spatial_campaign_event|tools/audit_spatial_campaign_event.gd|--mode=descent --nologo --seed=900393 --descent-floor=3"
 	"world_mutation_contract|tools/audit_world_mutation_contract.gd|"
 	"descent_runtime|tools/audit_descent_runtime.gd|--mode=descent --nologo"
 	"airport_runtime|tools/audit_airport_runtime.gd|--mode=descent --descent-floor=4 --nologo"

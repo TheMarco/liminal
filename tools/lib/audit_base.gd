@@ -62,7 +62,9 @@ func teardown_game(game: Node) -> void:
 	for tween in get_processed_tweens():
 		tween.kill()
 	game.free()
+	GameSettings.current = null
 	Chunk.clear_runtime_caches()
+	ShadowWalkerVisual.clear_runtime_caches()
 	SoundBank._c.clear()
 	Sfx._c.clear()
 	Mats.clear_runtime_caches()
