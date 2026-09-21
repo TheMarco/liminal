@@ -89,15 +89,6 @@ var _force_variant := -1
 var _figs: Array[ShadowFigure] = []
 ## Exact source of the fatal contact, retained only until the caught beat ends.
 var catching_figure: ShadowFigure
-## Where the catcher reads from the player when the catch spans a seam;
-## INF collects the figure's own pose, the legacy framing.
-var catch_presentation := Vector3.INF
-## Narrow link adapter, shared with every managed figure while hidden
-## links are admitted. Null keeps legacy raw-distance proximity.
-var traversal_graph: TraversalGraph = null
-## Positional audio bridge across live links. The traversal driver reports
-## crossings; this tick repositions tracked emitters along audible paths.
-var audio_bridge := SeamAudioBridge.new()
 var _prev_yaw := NAN
 var _turn_acc := 0.0
 var _turn_cd := 8.0
@@ -271,7 +262,6 @@ func adopt(f: ShadowFigure) -> void:
 ## visit only removes the figures; its source encounter clock stays paused.
 func despawn(reset_encounters := true) -> void:
 	catching_figure = null
-	catch_presentation = Vector3.INF
 	_new_spawn_hold = 0.0
 	_walker_due = true
 	for f in _figs:
@@ -313,7 +303,6 @@ func _physics_process(dt: float) -> void:
 		if not is_instance_valid(_figs[i]):
 			_figs.remove_at(i)
 	_sync_director_count()
-	_sync_seam_audio(dt)
 	if passive:
 		_prev_yaw = NAN
 		return
@@ -475,8 +464,6 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 		return false
 	var f := ShadowFigure.new()
 	f.player = player
-	# Links propagate to every spawn; null keeps legacy routing.
-	f.traversal_graph = traversal_graph
 	f.topology = topology
 	f.completed_levels = completed_levels
 	f.walker_model_index = walker_model
@@ -547,28 +534,7 @@ func _on_figure_approach(figure: ShadowFigure) -> void:
 
 func _on_figure_reached(figure: ShadowFigure) -> void:
 	catching_figure = figure
-	catch_presentation = figure.get("_catch_presentation")
 	reached_player.emit()
-
-
-## Keep tracked enemy emitters at their apparent positions while links
-## are live. Silent without an adapter: legacy audio is already placed.
-func _sync_seam_audio(dt: float) -> void:
-	if traversal_graph == null or player == null \
-			or not player.is_inside_tree():
-		return
-	for f in active_figures():
-		if is_instance_valid(f.get("_shiver")):
-			audio_bridge.track(f.get("_shiver"), f)
-		if is_instance_valid(f.get("_announce_player")):
-			audio_bridge.track(f.get("_announce_player"), f)
-	var links: Array = []
-	links.assign(traversal_graph.links())
-	var ear := player.global_position
-	if player.cam != null:
-		ear = player.cam.global_position
-	audio_bridge.update(ear, links,
-		player.get_world_3d().direct_space_state, dt)
 
 
 func _sync_director_count(start_recovery := true) -> void:
@@ -609,15 +575,11 @@ func _variant_eligible(variant: int, deep: bool) -> bool:
 func nearest_distance() -> float:
 	if player == null or not player.is_inside_tree():
 		return 1e9
-	var links: Array = []
-	if traversal_graph != null:
-		links.assign(traversal_graph.links())
 	var best := 1e9
 	for f in _figs:
 		if not is_instance_valid(f):
 			continue
-		best = minf(best, SpatialQuery.mapped_distance(
-			player.global_position, f.global_position, links))
+		best = minf(best, f.global_position.distance_to(player.global_position))
 	return best
 
 

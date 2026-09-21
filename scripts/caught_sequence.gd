@@ -33,9 +33,6 @@ var _from := Vector3.ZERO
 var _to := Vector3.ZERO
 var _floor_eye := Vector3.ZERO
 var _figure_pose := Transform3D.IDENTITY
-## A spanning catch frames the presentation while the body holds its
-## distant pose; only the loom lean applies, mirrored by the proxy.
-var _span_freeze := false
 var _figure_physics_was := false
 var _gloom_was_visible := false
 var _lean_axis := Vector3.RIGHT
@@ -48,10 +45,7 @@ var _restored := false
 var _curtain: ColorRect
 
 
-## presentation overrides the catcher's pose when the catch spans a seam:
-## frame where the figure reads from the player, never its distant body.
-func begin(subject: Player, figure: ShadowFigure = null,
-		presentation := Vector3.INF) -> void:
+func begin(subject: Player, figure: ShadowFigure = null) -> void:
 	layer = 110
 	_player = subject
 	_figure = figure
@@ -75,9 +69,7 @@ func begin(subject: Player, figure: ShadowFigure = null,
 		_figure_pose = figure.global_transform
 		_figure_physics_was = figure.is_physics_processing()
 		figure.set_physics_process(false)
-		_from = presentation if presentation != Vector3.INF \
-			else figure.global_position
-		_span_freeze = presentation != Vector3.INF
+		_from = figure.global_position
 		# Finish only the real catcher's final approach, retaining its floor and
 		# wall clearance. Do not move it through a desk to improve the framing.
 		var toward := subject.global_position - _from
@@ -129,7 +121,7 @@ func _sample(seconds: float) -> void:
 		# and flipbook, so the looming pose never flattens or freezes its body.
 		_figure.global_transform = Transform3D(
 			Basis(_lean_axis, LEAN * loom) * _figure_pose.basis,
-			_figure_pose.origin if _span_freeze else _from.lerp(_to, close))
+			_from.lerp(_to, close))
 	# Accelerate into the fall, then one small settling recoil. No repeated
 	# shake, lens zoom, or instant 180-degree snap for side/rear catches.
 	var fall := pow(clampf((seconds - FALL_START) / (LAND_AT - FALL_START), 0.0, 1.0), 2.0)
@@ -141,8 +133,7 @@ func _sample(seconds: float) -> void:
 	if _motion > 0.0:
 		var focus := _to + Vector3.UP * 1.6
 		if is_instance_valid(_figure):
-			focus = _to + Vector3.UP * _figure._eye_h if _span_freeze \
-				else _figure.global_transform * Vector3(0, _figure._eye_h, 0)
+			focus = _figure.global_transform * Vector3(0, _figure._eye_h, 0)
 		var gaze := focus - eye
 		# With an exactly overhead actor, retain a tiny horizontal component so
 		# look-at never receives parallel forward/up vectors.

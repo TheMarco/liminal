@@ -2806,9 +2806,6 @@ func _build_walls() -> void:
 		if info.has("photo_door_id"):
 			_build_photo_door_wall(dir, plane, wtop, owns_annex_wall, info)
 			continue
-		if info.has("spatial_site") and theme == 1:
-			_build_site_wall(dir, plane, wtop, info)
-			continue
 		if info["wall"]:
 			if owns_annex_wall:
 				if theme == 9 \
@@ -2953,112 +2950,6 @@ func _build_photo_door_wall(dir: int, plane: float, top: float,
 	seal.set_preview_ready(false)
 	if bool(info.get("photo_door_open", false)):
 		seal.open()
-
-
-## Site-owned aperture wall: solid segments around the pockets, one room-side
-## skin per pocket per chunk half (the combined void carries the travelling
-## leaves), filler above the void, end caps, and a tall-ceiling lintel. The
-## aperture hole itself stays empty: the site node owns leaves, header, jambs.
-func _build_site_wall(dir: int, plane: float, top: float,
-		info: Dictionary) -> void:
-	var aperture_w := MigratingDoorSite.APERTURE_WIDTH
-	var aperture_h := MigratingDoorSite.APERTURE_HEIGHT
-	var t := float(info.get("t", S * 0.5))
-	var a := t - aperture_w * 0.5
-	var b := t + aperture_w * 0.5
-	var pocket := MigratingDoorSite.POCKET_DEPTH
-	_wall_seg(dir, plane, 0.0, a - pocket, 0.0, top)
-	_wall_seg(dir, plane, b + pocket, S, 0.0, top)
-	var mat := _wall_material()
-	var to_room := -1.0 if (dir == 0 or dir == 2) else 1.0
-	for span in [[a - pocket, a], [b, b + pocket]]:
-		var mid := (float(span[0]) + float(span[1])) * 0.5
-		_site_box(dir, plane + to_room * 0.06, mid, 0.03, 0.0, top,
-			pocket, mat, true)
-		if top > aperture_h:
-			_site_box(dir, plane, mid, T, aperture_h, top, pocket, mat,
-				true)
-	for cap in [a - pocket - 0.05, b + pocket + 0.05]:
-		_site_box(dir, plane, cap, T, 0.0, aperture_h, 0.1, mat, true)
-	if top > 3.0:
-		_wall_seg(dir, plane, a, b, 3.0, top)
-
-
-func _site_box(dir: int, normal_pos: float, along_mid: float,
-		thick: float, y0: float, y1: float, along_len: float,
-		mat: Material, collide: bool) -> void:
-	if y1 <= y0 or along_len <= 0.0:
-		return
-	var center := Vector3(normal_pos, (y0 + y1) * 0.5, along_mid) \
-		if dir < 2 else Vector3(along_mid, (y0 + y1) * 0.5, normal_pos)
-	var size := Vector3(thick, y1 - y0, along_len) \
-		if dir < 2 else Vector3(along_len, y1 - y0, thick)
-	_box(center, size, mat, collide)
-
-
-## Office anchor dressing for the junction chunk only: clock pillar with a
-## fixed 3:00 face, a crooked chair, and a floor stain. Positions derive
-## from the spec frame, matching the planner's witness points.
-func _build_site_dressing(site_id: String) -> void:
-	if descent_topology == null:
-		return
-	var spec := descent_topology.site_spec(site_id)
-	if spec == null:
-		return
-	var frame := SpatialSitePlanner.junction_frame(spec)
-	if frame["cell"] != cell:
-		return
-	var dirs: Array = frame["dirs"]
-	if dirs.size() != 2:
-		return
-	var floor_y := _floor_h()
-	var origin := Vector3(cell.x * S, floor_y, cell.y * S)
-	var anchor := SpatialSitePlanner.anchor_spot(origin, int(dirs[0]),
-		int(dirs[1]), floor_y)
-	var local := anchor - Vector3(cell.x * S, 0.0, cell.y * S)
-	var wall_mat := _wall_material()
-	_tag_site(_box(local + Vector3(0, 1.5, 0), Vector3(0.5, 3.0, 0.5),
-		wall_mat, true))
-	var to_center := Vector3(6.0, 0.0, 6.0) - local
-	to_center.y = 0.0
-	var face_x := absf(to_center.x) >= absf(to_center.z)
-	var facing := Vector3(signf(to_center.x), 0, 0) if face_x \
-		else Vector3(0, 0, signf(to_center.z))
-	var plate_thick := Vector3(0.06, 0.4, 0.4) if face_x \
-		else Vector3(0.4, 0.4, 0.06)
-	_tag_site(_box(local + facing * 0.28 + Vector3(0, 1.9, 0),
-		plate_thick, Mats.box_white(), false))
-	var hand_v := Vector3(0.02, 0.18, 0.035) if face_x \
-		else Vector3(0.035, 0.18, 0.02)
-	var hand_h := Vector3(0.02, 0.035, 0.14) if face_x \
-		else Vector3(0.14, 0.035, 0.02)
-	_tag_site(_box(local + facing * 0.33 + Vector3(0, 1.9, 0), hand_v,
-		Mats.charcoal(), false))
-	_tag_site(_box(local + facing * 0.33 + Vector3(0, 1.9, 0), hand_h,
-		Mats.charcoal(), false))
-	var chair_spot := local + to_center.normalized() * 2.2
-	_tag_site(_box(chair_spot + Vector3(0, 0.45, 0),
-		Vector3(0.45, 0.06, 0.45), Mats.darkwood(), true))
-	_tag_site(_box(chair_spot - facing * 0.2 + Vector3(0, 0.75, 0),
-		Vector3(0.45, 0.6, 0.06) if face_x \
-			else Vector3(0.06, 0.6, 0.45),
-		Mats.darkwood(), true))
-	var stain_spot := local + to_center.normalized() * 1.2
-	_tag_site(_box(stain_spot + Vector3(0, 0.006, 0),
-		Vector3(0.5, 0.012, 0.5), Mats.charcoal(), false))
-
-
-func _tag_site(node: MeshInstance3D) -> void:
-	node.set_meta("site_dressing", true)
-
-
-func _room_has_site() -> bool:
-	if descent_topology == null:
-		return false
-	for member in WorldGen.owning_room_members(wseed, cell, theme):
-		if not descent_topology.site_id_at(member).is_empty():
-			return true
-	return false
 
 
 func photo_door_seals() -> Array[PhotoDoorSeal]:
@@ -5437,10 +5328,6 @@ func _resolved_room_split_for(member: Vector2i) -> Array:
 
 func _build_props() -> void:
 	portal_dest = -1
-	if theme == 1 and descent_topology != null:
-		var own_site := descent_topology.site_id_at(cell)
-		if not own_site.is_empty():
-			_build_site_dressing(own_site)
 	# Cell strips hug their own cell's walls, so every cell of a merged block
 	# builds its own — the anchor-only path would leave the rest of the block
 	# as bare box rooms.
@@ -5468,8 +5355,6 @@ func _build_props() -> void:
 	if _build_context.optional_discovery and theme != 9:
 		# Reserve a quiet side room for the actual, optional tape encounter.
 		set_meta("optional_discovery", true)
-		return
-	if theme == 1 and _room_has_site():
 		return
 	if _build_context.route_landmark == RouteSetpieces.CLOCK_NAME and theme != 9:
 		RouteSetpieces.new(_build_context, _scene_writer).build_landmark(true)

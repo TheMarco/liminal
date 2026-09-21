@@ -72,10 +72,6 @@ var _retained := {}
 ## neighbourhood used for arrivals, including merged-room owning anchors.
 var _hostile_cells := {}
 var _hostile_centers := {}
-## Collision leases for active spatial-mutation site footprints. Exact cells,
-## no neighbourhood expansion: sites are static and declare their full swept
-## footprint up front. Empty input restores ordinary streaming.
-var _site_cells := {}
 var _last_center := NO_BROKEN_STATION
 var _last_ahead := NO_BROKEN_STATION
 var _pending_chunk: Chunk
@@ -143,19 +139,6 @@ func set_hostile_cells(centers: Array[Vector2i]) -> void:
 	_refill_queue()
 
 
-## Lease the exact cells of active spatial sites (footprint plus both sides
-## of any connection). Merged into the same priority, retention, and
-## pending-cancel guards as hostile leases.
-func set_site_cells(cells: Array[Vector2i]) -> void:
-	var leased := {}
-	for at in cells:
-		leased[at] = true
-	if leased == _site_cells:
-		return
-	_site_cells = leased
-	_refill_queue()
-
-
 func _process(_dt: float) -> void:
 	if player == null or not player.is_inside_tree():
 		return
@@ -195,8 +178,7 @@ func _process(_dt: float) -> void:
 
 	if _pending_chunk != null and (chunks.has(_pending_cell) or
 			(not _wanted.has(_pending_cell) and not _ahead.has(_pending_cell)
-			and not _hostile_cells.has(_pending_cell)
-			and not _site_cells.has(_pending_cell))):
+			and not _hostile_cells.has(_pending_cell))):
 		_cancel_pending()
 	var run_state := _pending_run_state
 	if _pending_chunk != null or not queued.is_empty():
@@ -213,8 +195,7 @@ func _process(_dt: float) -> void:
 		for key in queued:
 			var c: Vector2i = key
 			if chunks.has(c) or (not _wanted.has(c) and not _ahead.has(c)
-					and not _hostile_cells.has(c)
-					and not _site_cells.has(c)):
+					and not _hostile_cells.has(c)):
 				stale.append(c)
 				continue
 			var centre := Vector3((c.x + 0.5) * CELL, prediction.y, (c.y + 0.5) * CELL)
@@ -222,7 +203,7 @@ func _process(_dt: float) -> void:
 			var priority := 2 if _wanted.has(c) else 3
 			if _cheb(c, pc) <= WARM_R:
 				priority = 0
-			elif _hostile_cells.has(c) or _site_cells.has(c):
+			elif _hostile_cells.has(c):
 				priority = 1
 			if priority < best_priority or (priority == best_priority and
 					(score < best or (score == best and
@@ -233,8 +214,7 @@ func _process(_dt: float) -> void:
 		for c in stale:
 			queued.erase(c)
 		if closest != NO_BROKEN_STATION and (not loading_asset \
-				or _cheb(closest, pc) <= WARM_R or _hostile_cells.has(closest) \
-				or _site_cells.has(closest)):
+				or _cheb(closest, pc) <= WARM_R or _hostile_cells.has(closest)):
 			queued.erase(closest)
 			_pending_run_state = run_state
 			_pending_cell = closest
@@ -263,7 +243,7 @@ func _process(_dt: float) -> void:
 		# hide a resident room just because we crossed a cell boundary or turned
 		# around. Retain its owning anchor too, keeping merged-room props intact.
 		var show: bool = _wanted.has(c) or _ahead.has(c) or _retained.has(c) \
-			or _hostile_cells.has(c) or _site_cells.has(c)
+			or _hostile_cells.has(c)
 		if ch.visible != show:
 			ch.visible = show
 		if not show:
@@ -294,7 +274,7 @@ func _room_complete_cells(center: Vector2i, radius: int = LOAD_R) -> Dictionary:
 
 
 func _refill_queue() -> void:
-	for cells in [_wanted, _ahead, _hostile_cells, _site_cells]:
+	for cells in [_wanted, _ahead, _hostile_cells]:
 		for c in cells:
 			if not chunks.has(c) and c != _pending_cell:
 				queued[c] = true
@@ -302,8 +282,7 @@ func _refill_queue() -> void:
 
 func _cancel_pending() -> void:
 	if _pending_cell != NO_BROKEN_STATION and (_wanted.has(_pending_cell) \
-			or _ahead.has(_pending_cell) or _hostile_cells.has(_pending_cell) \
-			or _site_cells.has(_pending_cell)):
+			or _ahead.has(_pending_cell) or _hostile_cells.has(_pending_cell)):
 		queued[_pending_cell] = true
 	if _pending_chunk != null:
 		_pending_chunk.free()

@@ -733,8 +733,7 @@ func _present_caught_in_realm() -> void:
 		figure.set_physics_process(false)
 	_caught_sequence = CAUGHT_SEQUENCE.new()
 	add_child(_caught_sequence)
-	_caught_sequence.begin(game.player, threats.catching_figure,
-		threats.catch_presentation)
+	_caught_sequence.begin(game.player, threats.catching_figure)
 	# Match normal Descent death handling: a shutter already in flight owns its
 	# render until it has produced the photograph, but cannot hide the catch.
 	_caught_sequence.set_process(false)

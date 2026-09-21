@@ -123,9 +123,6 @@ var _target_distance := {}
 var _optional_vhs_ready := false
 var _optional_vhs: Array[Vector2i] = []
 var _path_cells := {}
-## Live hidden-link cell pairs, each [Vector2i, Vector2i]. The reverse map
-## routes across them as one step either way; empty restores the legacy map.
-var _traversal_link_cells: Array = []
 var _path_rooms := {}
 var _ritual_cell := Vector2i(1 << 30, 1 << 30)
 var _base_wall_cache := {}
@@ -248,14 +245,6 @@ func set_topology(value: DescentTopology) -> void:
 
 
 func refresh_topology() -> void:
-	if not _origin_distance.is_empty():
-		_build_reverse_map()
-
-
-## Objective guidance across live hidden links. Rebuilds immediately so
-## callers never read a stale map; passing [] restores the legacy map.
-func set_traversal_link_cells(pairs: Array) -> void:
-	_traversal_link_cells = pairs.duplicate()
 	if not _origin_distance.is_empty():
 		_build_reverse_map()
 
@@ -918,19 +907,5 @@ func _build_reverse_map() -> void:
 			_target_distance[nb] = dist + 1
 			_next[nb] = c
 			queue.append(nb)
-		for pair in _traversal_link_cells:
-			var other := Vector2i(1 << 30, 1 << 30)
-			if c == pair[0]:
-				other = pair[1]
-			elif c == pair[1]:
-				other = pair[0]
-			else:
-				continue
-			if not _origin_distance.has(other) \
-					or _target_distance.has(other):
-				continue
-			_target_distance[other] = dist + 1
-			_next[other] = c
-			queue.append(other)
 	if _target_distance.has(origin):
 		graph_distance = int(_target_distance[origin])

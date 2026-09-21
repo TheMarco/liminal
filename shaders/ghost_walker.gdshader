@@ -15,27 +15,16 @@ uniform float phase = 0.0;
 uniform float effect_strength : hint_range(0.0, 1.0) = 1.0;
 uniform float burn_peak : hint_range(1.0, 8.0) = 1.25;
 uniform float foot_base = 0.0;
-// Seam clip: world-space plane, abc the kept-side normal. Fragments with a
-// negative signed distance are discarded while enabled. The default plane
-// keeps the whole world even if enabled before it is set.
-uniform vec4 clip_plane = vec4(0.0, 1.0, 0.0, 1000000.0);
-uniform float clip_enabled = 0.0;
 
 varying vec3 object_position;
 varying vec2 albedo_uv;
-varying vec3 world_position;
 
 void vertex() {
 	object_position = VERTEX;
 	albedo_uv = UV;
-	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
-	if (clip_enabled > 0.5
-			&& dot(world_position, clip_plane.xyz) + clip_plane.w < 0.0) {
-		discard;
-	}
 	float broad = texture(noise_tex,
 		object_position.xz * 0.78 + vec2(TIME * 0.022, phase * 4.13)).r;
 	float fine = texture(noise_tex,

@@ -41,18 +41,6 @@ var _shortcuts := {}
 ## IDs reconstruct it before chunks build, including a quit during photo review.
 var _photo_doors: Dictionary = {} # canonical edge key -> opening record
 var _photo_open: Dictionary = {}  # evidence id -> true
-## Spatial-site overlay: canonical edge key -> passability record, and owned
-## cell -> site id. Precedence is photographed opening, then site owner, then
-## legacy blackout override, then seeded base geometry.
-var _site_edges := {}
-var _site_cells := {}
-## Accepted site specs for this floor, in planning order. Immutable after
-## plan_floor; builders and the spatial director read them.
-var site_specs: Array[SpatialSiteSpec] = []
-## Monotonic connectivity/geometry revision. Bumped by every state transition,
-## restore, and site passability commit. Consumers recheck their expected
-## revision before acting; see SpatialSiteTransaction.
-var revision := 0
 
 ## State 0 is always the seed-authored base.  Every later state is a complete
 ## snapshot, never a delta from the previous state, which makes arbitrary
@@ -67,7 +55,6 @@ var _furniture_probe_count := 0
 var _cell_allowed_cache := {}
 var _room_members_cache := {}
 var _mutation_cell_safe_cache := {}
-var _photo_room_cache := {}
 static var _plan_cache := {}
 
 
@@ -105,9 +92,6 @@ static func edge_dir(edge: Dictionary) -> int:
 func _reset_states() -> void:
 	_photo_doors.clear()
 	_photo_open.clear()
-	_site_edges.clear()
-	_site_cells.clear()
-	site_specs.clear()
 	_states = [TopologyState.new()]
 	_current_state = 0
 	_previous_state = -1
@@ -132,10 +116,9 @@ func plan_floor(route: DescentRoute) -> void:
 	_plan_photo_doors(route)
 	if not route.realm_door_hint.is_empty():
 		_photo_doors[str(route.realm_door_hint["key"])] = route.realm_door_hint.duplicate(true)
-	_plan_site_reservations(route)
-	var cache_key := "%d:%d:%d:%d:%d:%d:%s" % [GENERATION_VERSION,
+	var cache_key := "%d:%d:%d:%d:%d:%d" % [GENERATION_VERSION,
 		world_seed, theme, route.floor_idx, route.origin.x * 4099 + route.origin.y,
-		route.target.x * 4099 + route.target.y, _site_digest()]
+		route.target.x * 4099 + route.target.y]
 	if _plan_cache.has(cache_key):
 		for cached in _plan_cache[cache_key]:
 			_states.append(TopologyState.from_dictionary(cached))
@@ -259,7 +242,6 @@ func states() -> Array[Dictionary]:
 
 func restore_state(state_id: int, visited: Array[int] = []) -> void:
 	_current_state = clampi(state_id, 0, maxi(0, _states.size() - 1))
-	revision += 1
 	_previous_state = -1
 	_visited_states = {0: true, _current_state: true}
 	for value in visited:
@@ -274,7 +256,6 @@ func transition_to(state_id: int) -> bool:
 	_previous_state = _current_state
 	_current_state = state_id
 	_visited_states[state_id] = true
-	revision += 1
 	return true
 
 
@@ -294,8 +275,6 @@ func has_shortcut(cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		return photo_door_open(str(_photo_doors[key]["id"]))
-	if _site_edges.has(key):
-		return str(_site_edges[key].get("kind", "open")) != "wall"
 	var override := _current_edges().get(key, {}) as Dictionary
 	if not override.is_empty():
 		return str(override.get("kind", "")) != "wall"
@@ -327,8 +306,6 @@ func is_wall(cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		return not photo_door_open(str(_photo_doors[key]["id"]))
-	if _site_edges.has(key):
-		return str(_site_edges[key].get("kind", "open")) == "wall"
 	var record: Dictionary = _current_edges().get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -373,7 +350,7 @@ func state_delta(from_state: int, to_state: int) -> TopologyDelta:
 	var changed_edges: Array[Dictionary] = []
 	var cells := {}
 	for key in edge_keys:
-		if _photo_doors.has(key) or _site_edges.has(key):
+		if _photo_doors.has(key):
 			continue
 		var before: Dictionary = before_edges.get(key, {})
 		var after: Dictionary = after_edges.get(key, {})
@@ -404,8 +381,6 @@ func state_delta(from_state: int, to_state: int) -> TopologyDelta:
 	for key in room_keys:
 		var room: Vector2i = key
 		if int(before_rooms.get(room, 0)) == int(after_rooms.get(room, 0)):
-			continue
-		if _site_cells.has(room):
 			continue
 		changed_rooms.append(room)
 		cells[room] = true
@@ -534,8 +509,6 @@ func _edge_info_with(edges: Dictionary, cell: Vector2i, dir: int) -> Dictionary:
 		if photo_door_open(str(_photo_doors[key]["id"])):
 			return photo_geometry_edge(cell, dir)
 		return WorldGen.edge_info(world_seed, cell, dir, theme)
-	if _site_edges.has(key):
-		return _site_edge_info(_site_edges[key])
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -588,108 +561,6 @@ func photo_door_open(id: String) -> bool:
 	return _photo_open.has(id)
 
 
-## Reserve owned cells for a spatial site. Rejects empty ids, cells already
-## owned by another site, and cells whose shared edges are photographed.
-func reserve_site_cells(cells: Array[Vector2i], site_id: String) -> bool:
-	if site_id.is_empty() or cells.is_empty():
-		return false
-	for at in cells:
-		var owner: String = str(_site_cells.get(at, ""))
-		if not owner.is_empty() and owner != site_id:
-			return false
-		for dir in 4:
-			if _photo_doors.has(edge_key(at, dir)):
-				return false
-	for at in cells:
-		_site_cells[at] = site_id
-	return true
-
-
-func site_id_at(cell: Vector2i) -> String:
-	return str(_site_cells.get(cell, ""))
-
-
-func site_spec(site_id: String) -> SpatialSiteSpec:
-	for spec in site_specs:
-		if spec.id == site_id:
-			return spec
-	return null
-
-
-## Any photographed shared edge on this cell. Sites never reserve one.
-func photo_edge_near(cell: Vector2i) -> bool:
-	for dir in 4:
-		if _photo_doors.has(edge_key(cell, dir)):
-			return true
-	return false
-
-
-func site_cells(site_id: String) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	for at in _site_cells.keys():
-		if str(_site_cells[at]) == site_id:
-			out.append(at)
-	return out
-
-
-## Publish one site-owned edge. Only the reserving site may set its edges;
-## every commit bumps the revision so transaction witnesses can recheck.
-func set_site_edge(site_id: String, cell: Vector2i, dir: int,
-		is_open: bool) -> bool:
-	if site_id.is_empty() or dir < 0 or dir >= 4:
-		return false
-	if str(_site_cells.get(cell, "")) != site_id:
-		return false
-	var key := edge_key(cell, dir)
-	if _photo_doors.has(key):
-		return false
-	var edge := canonical_edge(cell, dir)
-	_site_edges[key] = {
-		"key": key,
-		"cell": edge["cell"],
-		"axis": int(edge["axis"]),
-		"kind": "open" if is_open else "wall",
-		"site_id": site_id,
-	}
-	revision += 1
-	return true
-
-
-func site_edge(cell: Vector2i, dir: int) -> Dictionary:
-	return (_site_edges.get(edge_key(cell, dir), {}) as Dictionary).duplicate()
-
-
-func clear_site(site_id: String) -> void:
-	for key in _site_edges.keys():
-		if str(_site_edges[key].get("site_id", "")) == site_id:
-			_site_edges.erase(key)
-	for at in _site_cells.keys():
-		if str(_site_cells[at]) == site_id:
-			_site_cells.erase(at)
-
-
-func _site_edge_info(record: Dictionary) -> Dictionary:
-	if str(record.get("kind", "open")) == "wall":
-		return {
-			"wall": true,
-			"full_open": false,
-			"t": SHORTCUT_CENTRE,
-			"w": 0.0,
-			"exit_sign": false,
-			"spatial_site": str(record.get("site_id", "")),
-			"mutation_state": _current_state,
-		}
-	return {
-		"wall": false,
-		"full_open": false,
-		"t": SHORTCUT_CENTRE,
-		"w": SHORTCUT_WIDTH,
-		"exit_sign": false,
-		"spatial_site": str(record.get("site_id", "")),
-		"mutation_state": _current_state,
-	}
-
-
 func open_photo_door(id: String) -> bool:
 	if photo_door_open(id):
 		return false
@@ -717,10 +588,8 @@ func photo_geometry_edge(at: Vector2i, dir: int) -> Dictionary:
 
 
 func _photo_room(at: Vector2i) -> Vector2i:
-	if not _photo_room_cache.has(at):
-		_photo_room_cache[at] = WorldGen.annex_room_id(world_seed, at) if theme == 2 \
-			else WorldGen.room_id(world_seed, at)
-	return _photo_room_cache[at]
+	return WorldGen.annex_room_id(world_seed, at) if theme == 2 \
+		else WorldGen.room_id(world_seed, at)
 
 
 ## Room transitions, not grid steps: crossing a merged hall is free here.
@@ -731,11 +600,14 @@ func _photo_room_graph(route: DescentRoute) -> Dictionary:
 		return route._photo_graph_cache
 	var neighbours := {}
 	for at in route.scanned_cells():
-		var room := route.base_room(at)
+		var room := _photo_room(at)
 		if not neighbours.has(room):
 			neighbours[room] = {}
-		for other in route.base_neighbours(at):
-			var next_room := route.base_room(other)
+		for dir in 4:
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if not route.scanned_contains(other) or route.base_is_wall(at, dir):
+				continue
+			var next_room := _photo_room(other)
 			if room != next_room:
 				neighbours[room][next_room] = true
 	route._photo_graph_cache = neighbours
@@ -768,39 +640,7 @@ func _photo_room_distances(route: DescentRoute, graph: Dictionary,
 	return distances
 
 
-## Site reservations precede legacy state picking so generated realities
-## never overlap site cells. Conflicting specs are rejected here, never
-## resolved visually at runtime.
-func _plan_site_reservations(route: DescentRoute) -> void:
-	var specs := SpatialSitePlanner.plan_sites(route, _protected_cells(route))
-	for spec in specs:
-		if not (spec is SpatialSiteSpec and spec.is_valid()):
-			continue
-		if not reserve_site_cells(spec.cells, spec.id):
-			continue
-		site_specs.append(spec)
-		# Publish the initial overlay now: chunks stream before site
-		# installation and must see prepared modules, never normal walls.
-		# Installation re-publishes for resumed (non-initial) phases.
-		var frame := SpatialSitePlanner.junction_frame(spec)
-		var dirs: Array = frame["dirs"]
-		if dirs.size() == 2:
-			set_site_edge(spec.id, frame["cell"], int(dirs[0]), true)
-			set_site_edge(spec.id, frame["cell"], int(dirs[1]), false)
-
-
-func _site_digest() -> String:
-	if _site_cells.is_empty():
-		return "sites:none"
-	var parts: Array[String] = []
-	for at in _site_cells.keys():
-		parts.append("%d,%d=%s" % [at.x, at.y, str(_site_cells[at])])
-	parts.sort()
-	return "sites:" + "|".join(parts)
-
-
 func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_only := false) -> void:
-	_photo_room_cache = route._base_room_cache
 	if not obstruction_only and not intro_only and not route.obstruction_hint.is_empty():
 		for hint in [route.intro_door_hint, route.obstruction_hint, route.realm_door_hint]:
 			if not hint.is_empty():
@@ -822,18 +662,11 @@ func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_onl
 	var near_path := {}
 	var path := route.path_from_origin()
 	var path_rooms := {}
-	var approach_indices := {}
-	for idx in path.size():
-		var at := path[idx]
-		var room := _photo_room(at)
-		path_rooms[room] = true
+	for at in path:
+		path_rooms[_photo_room(at)] = true
 		for dz in range(-1, 2):
 			for dx in range(-1, 2):
-				var neighbour := at + Vector2i(dx, dz)
-				near_path[neighbour] = true
-				if obstruction_only and not approach_indices.has(neighbour) \
-						and _photo_room(neighbour) == room:
-					approach_indices[neighbour] = idx
+				near_path[at + Vector2i(dx, dz)] = true
 	var seen := {}
 	var candidates: Array[Dictionary] = []
 	for at: Vector2i in near_path:
@@ -864,7 +697,7 @@ func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_onl
 			if not obstruction_only and route.floor_idx == 0 and theme == 0:
 				record.merge(_photo_intro_approach(route, record, distances, path, intro_only))
 			if obstruction_only:
-				var approach := _photo_obstruction_approach(record, distances, path, approach_indices)
+				var approach := _photo_obstruction_approach(record, distances, path)
 				if approach.is_empty():
 					continue
 				record.merge(approach)
@@ -950,13 +783,10 @@ func _photo_intro_approach(route: DescentRoute, record: Dictionary,
 
 
 func _photo_obstruction_approach(record: Dictionary, distances: Dictionary,
-		path: Array[Vector2i], approach_indices: Dictionary = {}) -> Dictionary:
+		path: Array[Vector2i]) -> Dictionary:
 	var at: Vector2i = record["cell"]
 	var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
 	var approach := at if int(distances[_photo_room(at)]) > int(distances[_photo_room(other)]) else other
-	if not approach_indices.is_empty():
-		return {"approach_cell": approach, "approach_path_index": approach_indices[approach]} \
-			if approach_indices.has(approach) else {}
 	for idx in path.size():
 		if _photo_room(path[idx]) == _photo_room(approach) \
 				and maxi(absi(path[idx].x - approach.x), absi(path[idx].y - approach.y)) <= 1:
@@ -967,7 +797,6 @@ func _photo_obstruction_approach(record: Dictionary, distances: Dictionary,
 ## A temporary visit needs an early, visible approach, not a minimum shortcut
 ## saving. Reserve its ordinary rooms before recordings or furniture are dealt.
 func plan_realm_door(route: DescentRoute, allow_station_cells := false) -> Dictionary:
-	_photo_room_cache = route._base_room_cache
 	if route.floor_idx >= DescentRun.FLOOR_COUNT - 1:
 		return {}
 	if not route.intro_door_hint.is_empty():
@@ -1092,38 +921,17 @@ func intro_photo_door() -> Dictionary:
 
 func _photo_cell_safe(route: DescentRoute, at: Vector2i,
 		protected: Dictionary, optional: Array[Vector2i], allow_corridor := false) -> bool:
-	# Candidate targets share the same seeded geometry. Check their changing
-	# reservations before consulting a route-local cache of immutable facts.
-	if not route.scanned_contains(at) or at == route.origin or at == route.target \
-			or optional.has(at):
+	if not _mutation_cell_safe(route, at, protected, optional):
 		return false
-	var members := route.base_room_members(at)
-	for member in members:
-		if protected.has(member):
-			return false
-	var key := Vector3i(at.x, at.y, 1 if allow_corridor else 0)
-	if route._photo_cell_base_cache.has(key):
-		return bool(route._photo_cell_base_cache[key])
-	var safe := true
-	for member in members:
-		if WorldGen.portal(world_seed, member, theme) >= 0 \
-				or WorldGen.elevator_cell(world_seed, member, theme) \
-				or (posmod(member.x, 3) == 1 and posmod(member.y, 3) == 1):
-			safe = false
-			break
-	safe = safe and route._blackout_cell_ok(at, Vector2i(1 << 30, 1 << 30),
-		[], true, true)
 	# Corridor shells, split rooms and submerged pools can hide an edge behind
 	# another architectural barrier. Only reserve ordinary, dry room boundaries.
 	if not allow_corridor and (WorldGen.annex_corridor_axis(world_seed, at) if theme == 2 \
 			else WorldGen.corridor(world_seed, at)) != 0:
-		safe = false
+		return false
 	var style := WorldGen.cell_style(world_seed, at, theme)
 	if theme == 2 and style == WorldGen.ANNEX_PASSAGE:
-		safe = false
-	safe = safe and (theme != 9 or Chunk.pool_style_dry(style))
-	route._photo_cell_base_cache[key] = safe
-	return safe
+		return false
+	return theme != 9 or Chunk.pool_style_dry(style)
 
 
 func _closure_record(edge: Dictionary) -> Dictionary:
@@ -1161,8 +969,6 @@ func _protected_cells(route: DescentRoute) -> Dictionary:
 	for at in route.discovery_rooms:
 		protected[at] = true
 	for at in route.optional_vhs_cells():
-		protected[at] = true
-	for at in _site_cells.keys():
 		protected[at] = true
 	return protected
 
@@ -1367,8 +1173,7 @@ func _furniture_style_priority(style: int) -> int:
 		return 0
 	if style in [
 		WorldGen.STYLE_PILLARS, WorldGen.STYLE_GRAND,
-		WorldGen.STYLE_BALLROOM, WorldGen.OFFICE_EMPTY,
-		WorldGen.OFFICE_STORAGE,
+		WorldGen.STYLE_BALLROOM, WorldGen.OFFICE_STORAGE,
 		WorldGen.ANNEX_QUIET, WorldGen.AIR_CHECKIN,
 		WorldGen.ASY_HYDRO, WorldGen.SCH_AUDITORIUM,
 		WorldGen.MALL_ATRIUM, WorldGen.PRISON_ROTUNDA,
@@ -1423,8 +1228,6 @@ func _is_wall_with(edges: Dictionary, cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		return not photo_door_open(str(_photo_doors[key]["id"]))
-	if _site_edges.has(key):
-		return str(_site_edges[key].get("kind", "open")) == "wall"
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -1438,8 +1241,6 @@ func _is_wall_for_route(route: DescentRoute, edges: Dictionary,
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		return not photo_door_open(str(_photo_doors[key]["id"]))
-	if _site_edges.has(key):
-		return str(_site_edges[key].get("kind", "open")) == "wall"
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})

@@ -47,9 +47,6 @@ const POOL_SUPPORT_OFFSETS := [Vector2.ZERO, Vector2(1, 0), Vector2(-1, 0),
 const ROUTE_REPATH_TIME := 0.5
 const DOORWAY_CROSS_INSET := MOVE_RADIUS + 0.40
 const ROUTE_MAX_EXPANSIONS := 4096
-## Graph regions are coarse (one node per site side), so a small Dijkstra
-## budget still spans every live link hop.
-const LINK_ROUTE_BUDGET := 64
 const SPEED_PER_LEVEL := 0.03
 const ACCELERATION := 3.5
 const BRAKING := 9.0
@@ -191,21 +188,6 @@ static var _last_scare := -1000.0
 static var _last_reveal := -1000.0
 
 var player: Player
-## Narrow adapter over grid topology plus live traversal links. Null in
-## legacy campaigns; set while hidden links are admitted, and the figure
-## diverts through link approach waypoints instead of the room graph.
-var traversal_graph: TraversalGraph = null
-var spatial_traversal: SpatialTraversal = null
-var _chase_region := ""
-## Presentation pose for a catch spanning a seam: where this figure reads
-## from the player. INF while no seam contact is in progress.
-var _catch_presentation := Vector3.INF
-## Render-only twin on the paired side, while this figure stands inside a
-## live link region. Owned here, placed as a world-space sibling.
-var _seam_proxy: SeamActorProxy
-## Last topology fingerprint seen: graph revision plus per-link enable
-## states, so direct flag flips invalidate without a signal round trip.
-var _topology_seen := ""
 var variant := REVENANT
 ## Selected by ShadowFigures before this node enters the tree. Kept separate
 ## from the gameplay archetype in `variant`: appearance and pursuit behavior
@@ -257,7 +239,6 @@ var _bob_t := 0.0
 var _eye_h := 1.4
 var _seen := false
 var _shiver: AudioStreamPlayer3D
-var _announce_player: AudioStreamPlayer3D
 var _burn := 0.0
 var _burning := false
 ## Eased beam-on-it strength, for the shader's relief. Not the burn charge.
@@ -404,8 +385,7 @@ func _ready() -> void:
 	_shiver.bus = SoundBank.HALL_BUS
 	add_child(_shiver)
 	if announce:
-		_announce_player = AudioStreamPlayer3D.new()
-		var sh := _announce_player
+		var sh := AudioStreamPlayer3D.new()
 		sh.stream = SoundBank.randomized(SoundBank.step_carpet(), 1.2, 2.0)
 		sh.pitch_scale = 0.68
 		sh.max_distance = 22.0
@@ -550,61 +530,6 @@ func _animate(dt: float, observed: bool) -> void:
 		_walker.animate(dt, observed)
 
 
-## Mirror sync runs on the render clock, after every physics tick of the
-## frame, so the proxy samples the exact pose the original will render.
-func _process(_dt: float) -> void:
-	_sync_seam_proxy()
-
-
-func _exit_tree() -> void:
-	_drop_seam_proxy()
-
-
-## One proxy while this figure stands inside a live link region, none
-## anywhere else. The original keeps its approach half, the proxy the
-## paired continuation half; the clips join exactly at the seam plane.
-func _sync_seam_proxy() -> void:
-	if traversal_graph == null or _walker == null \
-			or get_parent() == null:
-		_drop_seam_proxy()
-		return
-	var pairing := _proxy_pairing(
-		traversal_graph.locate(global_position))
-	if pairing.is_empty():
-		_drop_seam_proxy()
-		return
-	var link: TraversalLink = pairing["link"]
-	var from_a := bool(pairing["from_a"])
-	if not is_instance_valid(_seam_proxy) or _seam_proxy.link != link \
-			or _seam_proxy.from_a != from_a:
-		_drop_seam_proxy()
-		_seam_proxy = SeamActorProxy.new()
-		get_parent().add_child(_seam_proxy)
-		_seam_proxy.attach(self, link, from_a)
-	if not _seam_proxy.sync():
-		_drop_seam_proxy()
-		return
-	var frame := link.endpoint_a if from_a else link.endpoint_b
-	_walker.set_seam_clip(SeamActorProxy.keep_positive(frame), true)
-
-
-func _proxy_pairing(region: String) -> Dictionary:
-	for link in traversal_graph.links():
-		if region == link.region_a:
-			return {"link": link, "from_a": true}
-		if region == link.region_b:
-			return {"link": link, "from_a": false}
-	return {}
-
-
-func _drop_seam_proxy() -> void:
-	if is_instance_valid(_seam_proxy):
-		_seam_proxy.queue_free()
-	_seam_proxy = null
-	if is_instance_valid(_walker):
-		_walker.set_seam_clip(Vector4.ZERO, false)
-
-
 func _physics_process(dt: float) -> void:
 	if player == null or not player.is_inside_tree():
 		queue_free()
@@ -623,16 +548,16 @@ func _physics_process(dt: float) -> void:
 		_approach_hold = maxf(0.0, _approach_hold - dt)
 	var cam := player.cam
 	var eye := global_position + Vector3(0, _eye_h, 0)
-	var sight := _seam_sight(cam.global_position, eye)
-	var apparent_eye: Vector3 = sight["apparent"]
-	var dist := float(sight["distance"])
+	var to := eye - cam.global_position
+	var dist := to.length()
 	var aim := _beam_aim(cam)
-	var sighted := bool(sight["visible"])
+	var sighted := _clear_line(cam.global_position, eye)
 	_was_sighted = sighted
 	# Whether the player can see it at all. Seen, it only creeps — but it
 	# never stops. Take your eyes off it entirely and it closes hard.
-	var observed := sighted and (cam.is_position_in_frustum(apparent_eye)
-		or _visible_sample(cam, global_position + Vector3(0, _eye_h * 0.55, 0)))
+	var observed := sighted and (cam.is_position_in_frustum(eye)
+		or cam.is_position_in_frustum(global_position
+			+ Vector3(0, _eye_h * 0.55, 0)))
 	if observed != _observed:
 		if observed:
 			# You turned back into it. If it used the dark to cover real ground,
@@ -686,9 +611,9 @@ func _physics_process(dt: float) -> void:
 	# is not standing in the way.
 	if not _seen and _fade < 0.0:
 		var base := global_position
-		var visible := _visible_sample(cam, base + Vector3(0, _eye_h, 0)) \
-			or _visible_sample(cam, base + Vector3(0, _eye_h * 0.55, 0)) \
-			or _visible_sample(cam, base + Vector3(0, 0.2, 0))
+		var visible := cam.is_position_in_frustum(base + Vector3(0, _eye_h, 0)) \
+			or cam.is_position_in_frustum(base + Vector3(0, _eye_h * 0.55, 0)) \
+			or cam.is_position_in_frustum(base + Vector3(0, 0.2, 0))
 		if visible and (sighted
 				or _clear_line(cam.global_position, base + Vector3(0, _eye_h * 0.55, 0))):
 			_seen = true
@@ -726,21 +651,13 @@ func _physics_process(dt: float) -> void:
 func _update_chase_lifetime() -> void:
 	var ghost_room := room_for(player, global_position)
 	var player_room := room_for(player, player.global_position)
-	var same_room := ghost_room == player_room
-	if traversal_graph != null:
-		var region := _encounter_region(global_position)
-		same_room = region == _encounter_region(player.global_position)
-		if not _chase_region.is_empty() and region != _chase_region:
-			_chase_doors += 1
-		_chase_region = region
-		_chase_room = ghost_room
-	elif _chase_room == NO_ROOM:
+	if _chase_room == NO_ROOM:
 		_chase_room = ghost_room
 	elif ghost_room != _chase_room:
 		_chase_room = ghost_room
 		_chase_doors += 1
 	if _giving_up:
-		if same_room:
+		if ghost_room == player_room:
 			_giving_up = false
 			_fade = -1.0
 			_fade_len = FADE_T
@@ -751,21 +668,11 @@ func _update_chase_lifetime() -> void:
 			if _gloom != null and _gloom.material != null:
 				(_gloom.material as FogMaterial).density = GLOOM_DENSITY * 0.28
 		return
-	if _chase_doors >= _chase_limit and not same_room \
+	if _chase_doors >= _chase_limit and ghost_room != player_room \
 			and _fade < 0.0:
 		_giving_up = true
 		_fade = FADE_T
 		_fade_len = FADE_T
-
-
-func _encounter_region(at: Vector3) -> String:
-	var site_id := traversal_graph.site_at(at)
-	return "site:" + site_id if not site_id.is_empty() else str(room_for(player, at))
-
-
-func _visible_sample(cam: Camera3D, point: Vector3) -> bool:
-	var seen := _seam_sight(cam.global_position, point)
-	return bool(seen["visible"]) and cam.is_position_in_frustum(seen["apparent"])
 
 
 ## Something the player has actually laid eyes on and which is still out there.
@@ -817,28 +724,13 @@ func _advance(dt: float, observed := true) -> void:
 	var player_to := player.global_position - global_position
 	player_to.y = 0.0
 	var player_d := player_to.length()
-	if traversal_graph != null:
-		player_d = SpatialQuery.mapped_distance(global_position, player.global_position, _seam_links())
 	var speed := pursuit_speed(observed, player_d)
 	var contact_clear := false
-	var contact_close := player_d <= ADVANCE_MIN + 0.015
-	_catch_presentation = Vector3.INF
-	if traversal_graph != null:
-		# Sighted from the player so the apparent pose frames the catch:
-		# where this figure reads, not where its body stands.
-		var seen := _seam_sight(player.global_position + Vector3.UP,
-			global_position + Vector3.UP)
-		if bool(seen["visible"]):
-			var mapped_d := float(seen["distance"])
-			contact_clear = mapped_d <= ADVANCE_MIN + speed * dt
-			contact_close = mapped_d <= ADVANCE_MIN + 0.015
-			if contact_close:
-				_catch_presentation = seen["apparent"]
-	elif player_d <= ADVANCE_MIN + speed * dt \
+	if player_d <= ADVANCE_MIN + speed * dt \
 			and absf(global_position.y - player.global_position.y) < 0.8:
 		contact_clear = _clear_line(global_position + Vector3.UP,
 			player.global_position + Vector3.UP)
-	if contact_close and contact_clear \
+	if player_d <= ADVANCE_MIN + 0.015 and contact_clear \
 			and absf(global_position.y - player.global_position.y) < 0.8:
 		# Arrival grace protects the player from invisible contact, not from a
 		# visibly frozen monster. Walk and animate during the materialization.
@@ -934,8 +826,6 @@ func _advance(dt: float, observed := true) -> void:
 	# temporarily blocked, brake and keep rotating along the real route.
 	var destination := global_position + direct * step
 	destination += _traversal.belt_velocity(global_position) * dt
-	if spatial_traversal != null:
-		destination = spatial_traversal.constrain_motion(self, global_position, destination)
 	# Keep a little turning room in front of a curved walker. Driving exactly
 	# onto the wall's contact skin can leave no numerically valid sideways arc
 	# into an adjacent narrow doorway, even though the planned route is open.
@@ -954,11 +844,8 @@ func _advance(dt: float, observed := true) -> void:
 	if step > 0.00001 and _peer_clear(destination) and valid:
 		# Report movement over the actual frame, not its clamped simulation step,
 		# so a hitch cannot advance the clip farther than the body travelled.
-		var before_motion := global_position
 		ground_velocity = (destination - global_position) / frame_dt
 		global_position = destination
-		if spatial_traversal != null:
-			spatial_traversal.after_motion(self, before_motion, dt)
 		if dropping: _begin_vertical_travel(grounded)
 		_blocked_time = 0.0
 		_walker.set_ground_speed(ground_velocity.length(), _pool_girl_should_run())
@@ -1235,12 +1122,12 @@ func _avoid_peers(desired: Vector3, speed: float, dt: float) -> Vector3:
 			score += (1.0 - direction.dot(_avoid_direction)) * 0.8
 		var near_peer := false
 		for other in peers:
-			var relative := _peer_position(other) - global_position
+			var relative := other.global_position - global_position
 			relative.y = 0.0
 			if relative.length() > horizon + PEER_SEPARATION + 2.0:
 				continue
 			near_peer = true
-			var travel := direction * horizon - _peer_velocity(other) * 0.65
+			var travel := direction * horizon - other.ground_velocity * 0.65
 			var t := clampf(relative.dot(travel) / maxf(travel.length_squared(), 0.001), 0.0, 1.0)
 			var gap := (relative - travel * t).length()
 			score += maxf(0.0, PEER_SEPARATION + 0.30 - gap) * 12.0
@@ -1261,7 +1148,7 @@ func _peer_clear(destination: Vector3) -> bool:
 	var travel := destination - global_position
 	travel.y = 0.0
 	for other in _peers():
-		var relative := _peer_position(other) - global_position
+		var relative := other.global_position - global_position
 		relative.y = 0.0
 		var t := clampf(relative.dot(travel) / maxf(travel.length_squared(), 0.000001), 0.0, 1.0)
 		var closest := (relative - travel * t).length()
@@ -1275,14 +1162,6 @@ func _peer_clear(destination: Vector3) -> bool:
 
 
 func _route_target(dt: float) -> Vector3:
-	# A live link hop outranks every same-side shortcut: the direct line to
-	# a player across the seam crosses unloaded space, not open floor.
-	if traversal_graph != null:
-		_revise_topology_if_stale()
-		var hop := _link_route_target()
-		if hop != Vector3.INF:
-			_clear_route()
-			return hop
 	# Physical shortcuts include ramps and paths inside a cell that the coarse
 	# room graph never represented. Prefer them when the whole route is clear.
 	_direct_route_left -= dt
@@ -1322,137 +1201,6 @@ func _clear_route() -> void:
 	_route_goal = NO_ROOM
 	_route_next = NO_ROOM
 	_route_waypoint = Vector3.INF
-
-
-## Connectivity changed under this figure: drop every navigation cache
-## (room route, direct-clear flag, local search, doorway waypoint, held
-## avoidance, recovery, failure timers) so the next decision rebuilds from
-## the live graph. Preserved: position, velocity, the adapter itself, catch
-## presentation, encounter state, and any in-flight traversal permit (which
-## lives in the traversal phase, revalidated at the crossing, never here).
-func revise_topology() -> void:
-	_clear_route()
-	_direct_route_left = 0.0
-	_direct_route_clear = false
-	_local_path.invalidate()
-	_avoid_left = 0.0
-	_avoid_direction = Vector3.ZERO
-	_recovery_left = 0.0
-	_recovery_direction = Vector3.ZERO
-	_blocked_time = 0.0
-	_travel_speed = 0.0
-
-
-func _topology_fingerprint() -> String:
-	var parts := [str(traversal_graph.topology_revision)]
-	var ids := traversal_graph.links().map(
-		func(l: TraversalLink) -> String: return l.id)
-	ids.sort()
-	for id in ids:
-		var link := traversal_graph.link(id)
-		parts.append("%s=%d" % [id, 1 if link.enabled else 0])
-	return ":".join(parts)
-
-
-func _revise_topology_if_stale() -> void:
-	var fingerprint := _topology_fingerprint()
-	if fingerprint != _topology_seen:
-		_topology_seen = fingerprint
-		revise_topology()
-
-
-## First approach waypoint toward the player through the link graph, or
-## INF when both ends share a region (legacy room routing owns that) or
-## no link step leads onward. Only the approach waypoint is returned: the
-## traversal phase maps the actor across, and the exit waypoint belongs
-## to the far side's next repath.
-func _link_route_target() -> Vector3:
-	var step := _first_graph_step()
-	if step.is_empty():
-		return Vector3.INF if traversal_graph.locate(global_position) == traversal_graph.locate(player.global_position) else global_position
-	if str(step["kind"]) != "link":
-		return _site_path_target(step["waypoints"])
-	var link: TraversalLink = traversal_graph.link(str(step["link"]))
-	var region: String = step["from_region"]
-	if link.waypoints.has(region):
-		return _site_path_target(link.waypoints[region])
-	var waypoints: Array = step["waypoints"]
-	var first: Vector3 = waypoints[0]
-	if global_position.distance_to(first) > 0.35:
-		return first
-	# Committed: walk the seam center so the crossing detector fires
-	# instead of stalling a metre out at the approach waypoint.
-	var frame := link.endpoint_a \
-		if str(step["from_region"]) == link.region_a \
-		else link.endpoint_b
-	var beyond := frame * Vector3(0, 0, -0.25)
-	return Vector3(beyond.x, global_position.y, beyond.z)
-
-
-func _site_path_target(points: Array) -> Vector3:
-	# Choose the furthest physically reachable waypoint, never cut across a
-	# dogleg wall or steer at the raw coordinate of a remote player.
-	for i in range(points.size() - 1, -1, -1):
-		var point: Vector3 = points[i]
-		point.y = global_position.y
-		if _clear_travel(global_position, point):
-			return point
-	return global_position
-
-
-## First onward link step toward the player, or {} when the legacy room
-## router owns this leg (same region, no link hop, or a grid-edge step).
-func _first_link_step() -> Dictionary:
-	var step := _first_graph_step()
-	if step.is_empty() or str(step["kind"]) != "link":
-		return {}
-	var result := step.duplicate()
-	result["link"] = traversal_graph.link(str(step["link"]))
-	return result
-
-
-func _first_graph_step() -> Dictionary:
-	var from_region := traversal_graph.locate(global_position)
-	var to_region := traversal_graph.locate(player.global_position)
-	if from_region == to_region:
-		return {}
-	var path := traversal_graph.route(from_region, to_region,
-		LINK_ROUTE_BUDGET)
-	if path.size() < 2:
-		return {}
-	for step in traversal_graph.neighbors(from_region):
-		if str(step["destination"]) != path[1]:
-			continue
-		var waypoints: Array = step["waypoints"]
-		if waypoints.is_empty():
-			return {}
-		var result: Dictionary = step.duplicate()
-		result["from_region"] = from_region
-		return result
-	return {}
-
-
-## Seam transfer: rebase pursuit through M exactly once. Position and
-## ground velocity map by the link; every room-graph and local-path
-## cache is stale on the far side, so all of it is invalidated and the
-## next repath reroutes from the arrival point.
-func apply_seam_transfer(m: Transform3D) -> void:
-	global_transform = Transform3D(
-		(m.basis * global_transform.basis).orthonormalized(),
-		m * global_position)
-	ground_velocity = m.basis * ground_velocity
-	_avoid_direction = m.basis * _avoid_direction
-	_recovery_direction = m.basis * _recovery_direction
-	_chase_room = room_for(player, global_position)
-	_direct_route_left = 0.0
-	_clear_route()
-	_local_path.invalidate()
-
-
-func reject_seam_motion(safe: Vector3) -> void:
-	global_position = safe
-	ground_velocity = Vector3.ZERO
-	_travel_speed = 0.0
 
 
 func _next_route_cell(start: Vector2i, goal: Vector2i) -> Vector2i:
@@ -1511,17 +1259,6 @@ func streaming_cells() -> Array[Vector2i]:
 	if _route_next != NO_ROOM:
 		if not cells.has(_route_next):
 			cells.append(_route_next)
-	# Lookahead past the seam: the far-side exit cell stays resident
-	# so arrival collision exists before the crossing lands.
-	if traversal_graph != null and is_instance_valid(player):
-		var step := _first_link_step()
-		if not step.is_empty():
-			var waypoints: Array = step["waypoints"]
-			if waypoints.size() > 1:
-				var exit_cell := TraversalGraph.world_cell(
-					waypoints[1])
-				if not cells.has(exit_cell):
-					cells.append(exit_cell)
 	return cells
 
 
@@ -1608,16 +1345,13 @@ func _beam_aim(cam: Camera3D) -> float:
 	var fwd := -cam.global_transform.basis.z
 	var best := TAU
 	for h in [0.2, _eye_h * 0.55, _eye_h]:
-		var point := global_position + Vector3(0, float(h), 0)
-		if traversal_graph != null:
-			point = SpatialQuery.apparent_position(cam.global_position,
-				point, _seam_links())
-		var to := point - cam.global_position
+		var to := global_position + Vector3(0, float(h), 0) \
+			- cam.global_position
 		if to.length_squared() < 1e-6:
 			return 0.0
 		best = minf(best, fwd.angle_to(to.normalized()))
 	var dist := maxf(
-		_sight_range_to(cam.global_position), 0.001)
+		global_position.distance_to(cam.global_position), 0.001)
 	# The card is about 0.9m wide.
 	best -= minf(atan(0.45 / dist), 0.6)
 	return maxf(best, 0.0)
@@ -1629,21 +1363,9 @@ func _in_beam(cam: Camera3D, aim: float, sighted: bool) -> bool:
 	var lamp := player.flashlight
 	if lamp == null or not lamp.visible or not sighted:
 		return false
-	if _sight_range_to(cam.global_position) > lamp.spot_range:
+	if global_position.distance_to(cam.global_position) > lamp.spot_range:
 		return false
 	return aim < BURN_CONE
-
-
-## Range along the verified sight path: raw distance without an adapter,
-## summed one-link distance across a seam, infinite when nothing verifies.
-func _sight_range_to(from: Vector3) -> float:
-	if traversal_graph == null:
-		return global_position.distance_to(from)
-	var seen := _seam_sight(from,
-		global_position + Vector3(0, _eye_h * 0.55, 0))
-	if not bool(seen["visible"]):
-		return INF
-	return float(seen["distance"])
 
 
 ## Burned out by the beam. This is the loud one: the silhouette tears apart from
@@ -1778,43 +1500,9 @@ func _reveal_scare() -> void:
 
 
 func _clear_line(a: Vector3, b: Vector3) -> bool:
-	if traversal_graph != null:
-		return bool(_seam_sight(a, b)["visible"])
 	var q := PhysicsRayQueryParameters3D.create(a, b, 1)
 	q.exclude = [player.get_rid()]
 	var hit := player.get_world_3d().direct_space_state.intersect_ray(q)
 	# Figures have no physics body to ignore at the endpoint. The former 1.2m
 	# tolerance explicitly treated a thin wall near the target as transparent.
 	return hit.is_empty()
-
-
-## Enabled links for perception, empty without an adapter.
-func _seam_links() -> Array:
-	var out: Array = []
-	if traversal_graph != null:
-		out.assign(traversal_graph.links())
-	return out
-
-
-## Direct-or-one-link visibility with the legacy ray mask and player
-## exclusion, so every sight, torch, and contact check shares one path.
-func _seam_sight(a: Vector3, b: Vector3) -> Dictionary:
-	return SpatialQuery.sight(get_world_3d().direct_space_state, a, b,
-		_seam_links(), 1, [player.get_rid()])
-
-
-## Where a peer reads from here, mapped across an open seam.
-func _peer_position(other: ShadowFigure) -> Vector3:
-	if traversal_graph == null:
-		return other.global_position
-	return SpatialQuery.apparent_position(global_position,
-		other.global_position, _seam_links())
-
-
-## The peer's velocity in this side's frame, for avoidance prediction.
-func _peer_velocity(other: ShadowFigure) -> Vector3:
-	if traversal_graph == null:
-		return other.ground_velocity
-	var pose := SpatialQuery.apparent_pose(global_position,
-		other.global_position, _seam_links())
-	return (pose["basis"] as Basis) * other.ground_velocity
