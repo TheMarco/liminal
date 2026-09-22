@@ -341,18 +341,41 @@ and combined modes.
 During quiet exploration, a clear wall can slowly swell and settle. Attached
 stripes, rails and lower panels follow it. After the first two breaths, occasional
 travelling pressure can cross the wall, or a clear ceiling patch can breathe.
+An occasional walkable hallway wave also passes through native walls, ceiling,
+floor and fixtures. Its collision follows the same motion. Eligible straight
+passages are supported across levels; Airport uses ordinary halls, not moving
+walkways, and Poolrooms uses dry alcoves without water/Jacuzzis. Interactive
+mechanisms, portals, objective rooms and unsupported layouts are skipped.
 Ceilings keep their native finish, avoid lights/vents/beams and preserve standing
 headroom; rooms without a suitable patch skip the effect. Events have long quiet gaps, share the
 horror director's pacing, and withdraw when an actor approaches. Recordings,
 chases, blackouts, realm visits and transitions suppress them.
 
 `--breathing` enables **F6** requests cycling through wall breath, travelling pressure,
-and ceiling breath. Look up for the ceiling request. Requests still require a
+ceiling breath and hallway wave. Look up for the ceiling request. Requests still require a
 visible, clear surface and normal gameplay safety gates.
 F6 shows on-screen status when controls are disabled, gameplay is blocking a
 request, or the search is waiting for a safe surface. On a Mac keyboard, use
 Fn/🌐 + F6 if the top-row key is assigned to a system function.
 Standalone visual review: `godot --path . --script tools/preview_breath_shapes.gd -- --kind=ceiling --theme=1` (also `--kind=breath` or `--kind=travel`).
+
+`--hallway-wave` waits for **F6**, which always requests/replays a wave in this test
+mode (no automatic event before you are ready). A repeatable
+Office gameplay check (real streaming, no campaign saves):
+`godot --path . -- --nologo --level=1 --seed=980712989 --pos=-78,-87 --yaw=0 --flashlight --hallway-wave`.
+Press F6 once, then wait for the “PLAYING NOW” notice. Preparation is spread over
+frames. Walk/sprint through the wave and cross into the next room. Relaunch with
+`--breathing` instead to use the normal four-effect F6 cycle.
+
+Visible breathing and wave events use one of six supplied supernatural loops,
+randomly chosen without immediate repeats. A quiet layer fades in over 0.8 seconds
+and out over 1.2 seconds when the effect leaves view or ends. It uses the existing
+Game audio bus; music and monster audio are unchanged. The mix level is
+`LEVEL_DB` in `scripts/supernatural_audio.gd` (currently −22 dB).
+
+Focused checks: `tools/audit_hallway_wave.gd -- --nologo --level=1` and
+`tools/audit_breathing_runtime.gd -- --nologo`, both via `godot --headless --path . --script`.
+See [wave integration notes](docs/HALLWAY_WAVE_PROOF.md) for coverage and limitations.
 
 ## Building
 

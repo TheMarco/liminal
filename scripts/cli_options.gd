@@ -66,8 +66,10 @@ var photo_debug := false
 var photo_shoot := false
 ## Automatic world-only defocus/warp; flag enables only F8/F9 debug controls.
 var reality_aftershock := false
-## F6 requests wall breath, travelling pressure or ceiling breath.
+## F6 requests wall breath, travelling pressure, ceiling breath or hallway wave.
 var breathing := false
+## Manual wave test: wait for F6, which always requests/replays a hallway wave.
+var hallway_wave := false
 ## QA: start directly facing the selected first-floor photographic doorway.
 var first_door := false
 var first_obstruction := false
@@ -88,7 +90,10 @@ static func parse() -> CliOptions:
 static func parse_args(args: PackedStringArray) -> CliOptions:
 	var o := CliOptions.new()
 	for arg in args:
-		if arg == "--breathing":
+		if arg == "--hallway-wave":
+			o.hallway_wave = true
+			o.breathing = true
+		elif arg == "--breathing":
 			o.breathing = true
 		elif arg.begins_with("--seed="):
 			o.world_seed = int(arg.substr(7))

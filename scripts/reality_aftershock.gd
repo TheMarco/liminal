@@ -12,10 +12,13 @@ const ATTACK := 0.65
 const RELEASE_START := 1.65
 const APPROACH_SECONDS := 1.25
 const APPROACH_STRENGTH := 0.7
+const ARCHITECTURE_STRENGTH := APPROACH_STRENGTH * 0.5
 
 var host: Node
 var enabled := true
 var debug_controls := false
+var architecture_weight: Callable
+var _architecture_phase := 0.0
 var elapsed := DURATION
 var pulse_count := 0
 var _playback_speed := PLAYBACK_SPEED
@@ -96,6 +99,7 @@ func before_approach(figure: ShadowFigure) -> void:
 
 func cancel() -> void:
 	elapsed = DURATION
+	_architecture_phase = 0.0
 	visible = false
 	if _material != null:
 		_material.set_shader_parameter("strength", 0.0)
@@ -111,13 +115,21 @@ func _process(dt: float) -> void:
 	# Advance the envelope AND shader motion together, preserving the same look.
 	elapsed = minf(DURATION, elapsed + dt * _playback_speed)
 	var amount := envelope(elapsed) * _strength_scale
+	var shader_phase := elapsed
+	var architecture := clampf(float(architecture_weight.call()), 0.0, 1.0) if architecture_weight.is_valid() else 0.0
+	_architecture_phase = _architecture_phase + dt * PLAYBACK_SPEED if architecture > 0.0001 else 0.0
+	# Reuse the same pass, never stack another blur. Photo/enemy pulses retain
+	# their exact strength, timing and shader phase, taking exclusive priority.
+	if elapsed >= DURATION and architecture > 0.0001:
+		amount = architecture * ARCHITECTURE_STRENGTH
+		shader_phase = _architecture_phase
 	if GameSettings.flashing_reduced():
 		amount *= 0.35
 	var motion := 1.0
 	if GameSettings.current != null:
 		motion = float(GameSettings.current.get_value("head_bob"))
 	_material.set_shader_parameter("strength", amount)
-	_material.set_shader_parameter("phase", elapsed)
+	_material.set_shader_parameter("phase", shader_phase)
 	_material.set_shader_parameter("motion_scale", motion)
 	visible = amount > 0.0001
 

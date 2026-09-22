@@ -198,6 +198,7 @@ func _ready() -> void:
 	_settings.changed.connect(_apply_game_settings)
 	randomize()
 	opts = CliOptions.parse()
+	if opts.hallway_wave: get_window().title = "Liminal — Wave test: F6 to play"
 	# Command-line starts are isolated QA/dev worlds. Only a normal title-screen
 	# session may read or write the player's real Descent checkpoint.
 	_progress_enabled = not opts.test_mode and not opts.descent and not opts.skips_title() \
@@ -636,7 +637,7 @@ func _build_level(level: int, around: Vector3) -> void:
 	FloorResourcePreloader.configure(Chunk.theme_prop_paths(level))
 	_breathing = preload("res://scripts/environment_breath_director.gd").new()
 	level_root.add_child(_breathing)
-	_breathing.configure(cm, player, _director, _breathing_allowed, opts.breathing)
+	_breathing.configure(cm, player, _director, _breathing_allowed, opts.breathing, opts.hallway_wave)
 	_breathing.debug_notice.connect(_show_event_message)
 
 
@@ -2597,6 +2598,9 @@ func _build_ui() -> void:
 	_reality_aftershock = preload("res://scripts/reality_aftershock.gd").new()
 	_reality_aftershock.host = self
 	_reality_aftershock.debug_controls = opts.reality_aftershock
+	# Resolve the current director each frame: level transitions replace it.
+	_reality_aftershock.architecture_weight = func() -> float:
+		return _breathing.perception_weight() if is_instance_valid(_breathing) else 0.0
 	add_child(_reality_aftershock)
 	_photo_camera.unnatural_photographed.connect(_reality_aftershock.trigger)
 	_figures.approach_starting.connect(_reality_aftershock.before_approach)

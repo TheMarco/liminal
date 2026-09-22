@@ -175,6 +175,35 @@ func run() -> void:
 	effect.debug_controls = true
 	effect._unhandled_input(debug_key)
 	expect(effect.pulse_count == pulses + 1, "debug preview flag no longer works")
+	# Architecture shares the pass at half warning strength; it cannot amplify
+	# or retime either existing pulse, and its visibility fade reaches zero.
+	effect.cancel()
+	var architecture := {"weight": 1.0}
+	effect.architecture_weight = func() -> float: return architecture.weight
+	var settings_before_architecture := GameSettings.current
+	GameSettings.current = GameSettings.new("/tmp/architecture-aftershock-audit-%d.cfg" % OS.get_process_id())
+	effect._process(0.5)
+	expect(effect.visible and is_equal_approx(float(effect._material.get_shader_parameter("strength")), RealityAftershock.APPROACH_STRENGTH * 0.5), "architecture is not half warning strength")
+	architecture.weight = 0.5
+	effect._process(0.1)
+	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), 0.175), "architecture visibility fade ignored")
+	architecture.weight = 1.0
+	effect.trigger()
+	effect._process(0.5)
+	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), 1.0), "architecture stacks with photo pulse")
+	expect(is_equal_approx(float(effect._material.get_shader_parameter("phase")), 0.75), "architecture retimes photo pulse")
+	effect.cancel()
+	effect.before_approach(ghost)
+	effect._process(0.15)
+	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), RealityAftershock.APPROACH_STRENGTH), "architecture changes enemy warning")
+	effect.cancel()
+	GameSettings.current.set_value("reduced_flashing", true)
+	effect._process(0.1)
+	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), 0.35 * 0.35), "architecture ignores comfort strength")
+	architecture.weight = 0.0
+	effect._process(0.1)
+	expect(not effect.visible, "architecture remains visible without a source")
+	GameSettings.current = settings_before_architecture
 	ghost.free()
 	second_ghost.free()
 	_audit_photo_signal()
