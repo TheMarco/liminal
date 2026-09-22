@@ -159,6 +159,17 @@ func _slot_machine(x: float, z: float, f: float, idx: int) -> void:
 	_authored_slot_machine(x, z, f, idx, variant)
 
 
+## Worn red-vinyl slot stool (Scenario-authored GLB) pulled up to a machine.
+## Returns false when the asset fails to load, so callers skip its collider.
+func _slot_stool(cpos: Vector3, yaw: float) -> bool:
+	var stool := scene.attributed_floor_prop(Chunk.CASINO_STOOL_PATH, cpos, yaw,
+		Chunk.CASINO_STOOL_SCALE, Chunk.CASINO_STOOL_CENTRE, "casino_slot_stool")
+	if stool == null:
+		push_error("Casino slot stool asset failed to load: " + Chunk.CASINO_STOOL_PATH)
+		return false
+	return true
+
+
 func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 		variant: int, powered := true) -> void:
 	var path := Chunk.CASINO_SLOT_PATHS[variant]
@@ -199,7 +210,7 @@ func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 		var yaw := (0.0 if f > 0.0 else PI) + (ctx.random01(66 + idx) - 0.5) * 0.6
 		var cpos := Vector3(x + (ctx.random01(96 + idx) - 0.5) * 0.16,
 			0, z + f * 0.95)
-		scene.cc0_prop("bar_chair_round_01", cpos, yaw)
+		_slot_stool(cpos, yaw)
 		# Casino stools are loose, light furniture. They must not turn each
 		# machine face into a solid wall or strand the player between banks.
 	return
@@ -378,8 +389,8 @@ func _procedural_slot_machine(x: float, z: float, f: float, idx: int) -> void:
 		var cyaw = (0.0 if f > 0.0 else PI) + (ctx.random01(66 + idx) - 0.5) * 0.6
 		var cpos = Vector3(x + (ctx.random01(96 + idx) - 0.5) * 0.16, 0, z + f * 0.95)
 		# a real worn bar stool pulled up to the machine
-		scene.cc0_prop("bar_chair_round_01", cpos, cyaw)
-		scene.collider_cylinder(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
+		if _slot_stool(cpos, cyaw):
+			scene.collider_cylinder(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
 	scene.collider_box(Vector3(x, 1.42, z), Vector3(0.68, 2.85, 0.72))
 
 
@@ -607,6 +618,17 @@ func _casino_bar_at(at: Vector3, yaw: float) -> void:
 			energy = Chunk.CASINO_BAR_ACCENT_ENERGY
 		l.set_meta("visible_source", source)
 		l.light_energy = energy
+	# Swap the supplied stools for the generated red-vinyl one, so the bar
+	# matches the slot rooms. New stools only go in when the old group was
+	# found and hidden: never double up.
+	var stool_group := pivot.find_child("Five_bar_stools", true, false)
+	if stool_group != null:
+		(stool_group as Node3D).visible = false
+		for x in Chunk.CASINO_BAR_STOOL_XS:
+			scene.attributed_floor_prop(Chunk.CASINO_STOOL_PATH,
+				Vector3(x, 0, Chunk.CASINO_BAR_STOOL_Z), 0.0,
+				Chunk.CASINO_BAR_STOOL_SCALE, Chunk.CASINO_STOOL_CENTRE,
+				"casino_bar_stool", pivot)
 	# One box for the whole unit, stools included: everything stands against
 	# the wall, so there is no walkable-between seating arc to preserve.
 	scene.collider_yaw_box(at + Vector3(0, 1.3, -0.07).rotated(Vector3.UP, yaw),

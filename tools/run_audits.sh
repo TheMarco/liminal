@@ -61,6 +61,8 @@ LOGDIR=$(mktemp -d /tmp/liminal-audits.XXXXXX)
 # Kept in the order the CI workflow runs them, with the audits that CI does not
 # yet run appended.
 AUDITS=(
+	"environment_breath|tools/audit_environment_breath.gd|"
+	"breathing_runtime|tools/audit_breathing_runtime.gd|--nologo"
 	"visible_light_sources|tools/audit_visible_light_sources.gd|"
 	"pool_enemy_ground|tools/audit_pool_enemy_ground.gd|"
 	"corridors|tools/audit_corridors.gd|"

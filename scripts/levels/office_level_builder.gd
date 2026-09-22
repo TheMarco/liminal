@@ -713,7 +713,7 @@ func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
 	# so the two never share the same corner of the desk.
 	_office_desk_phone(workstation, deskc, yaw, qi)
 	# chair facing the desk, never perfectly parked
-	scene.task_chair(c + dv * 1.95 + Vector3((ctx.random01(97 + qi) - 0.5) * 0.2, 0, 0),
+	scene.modern_task_chair(c + dv * 1.95 + Vector3((ctx.random01(97 + qi) - 0.5) * 0.2, 0, 0),
 		yaw + (ctx.random01(87 + qi) - 0.5) * 0.5)
 
 
@@ -865,7 +865,7 @@ func _office_break() -> void:
 		var cp = c + Vector3(cos(ang) * 1.15, 0, sin(ang) * 1.15)
 		# The task chair's seat faces local -Z, so aim the facing (not the
 		# position angle) at the table centre.
-		scene.task_chair(cp, atan2(cos(ang), sin(ang)) + (ctx.random01(98 + i) - 0.5) * 0.7)
+		scene.modern_task_chair(cp, atan2(cos(ang), sin(ang)) + (ctx.random01(98 + i) - 0.5) * 0.7)
 	# counter along the south wall with a coffee maker
 	var coffee_counter = scene.rounded_box(Vector3(4.5, 0.45, 0.75), Vector3(3.0, 0.9, 0.6), Mats.desk_white(), 0.015)
 	coffee_counter.set_meta("surface_wear_prop", "office_coffee_counter")
@@ -934,9 +934,9 @@ func _office_boardroom() -> void:
 		for i in 8:
 			var x = -4.9 + 1.4 * float(i)
 			var cp = c + Vector3(x, 0, side * 1.75)
-			scene.task_chair(cp, PI if side < 0.0 else 0.0)
+			scene.modern_task_chair(cp, PI if side < 0.0 else 0.0)
 	# One chair sits conspicuously far from the head of the table.
-	scene.task_chair(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18)
+	scene.modern_task_chair(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18)
 	# Dark wall-sized presentation display with a stubborn status line.
 	scene.box(c + Vector3(-8.9, 1.75, 0), Vector3(0.10, 2.3, 5.8), Mats.charcoal(), false)
 	var screen = Label3D.new()

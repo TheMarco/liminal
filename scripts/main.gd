@@ -57,6 +57,8 @@ var _switching: bool:
 var _fade: ColorRect
 var _post_process: PostProcessController
 var _reality_aftershock: CanvasLayer
+var _breathing: Node
+var _presence_state := Presence.SILENT
 var _post_enabled := true
 var _vhs_enabled := true
 var _crt_enabled := true
@@ -352,6 +354,7 @@ func _ready() -> void:
 	add_child(ambience)
 	_director = HorrorDirector.new()
 	add_child(_director)
+	if is_instance_valid(_breathing): _breathing.pacing = _director
 	if run != null:
 		run.horror_director = _director
 	var oneshots := OneShots.new()
@@ -484,6 +487,7 @@ func _ready() -> void:
 ## that changes what the player can hear or meet should change state here rather
 ## than assign the three flags directly.
 func _set_presence(state: Presence) -> void:
+	_presence_state = state
 	if _director != null:
 		_director.enabled = state == Presence.DESCENT
 		var presentation_hold := state == Presence.SILENT
@@ -630,6 +634,23 @@ func _build_level(level: int, around: Vector3) -> void:
 	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
 	# Startup collision is ready before background decoding begins.
 	FloorResourcePreloader.configure(Chunk.theme_prop_paths(level))
+	_breathing = preload("res://scripts/environment_breath_director.gd").new()
+	level_root.add_child(_breathing)
+	_breathing.configure(cm, player, _director, _breathing_allowed, opts.breathing)
+	_breathing.debug_notice.connect(_show_event_message)
+
+
+func _breathing_allowed() -> bool:
+	if _presence_state == Presence.SILENT or _switching or _dying or _quitting \
+			or _descent_preparing or get_tree().paused: return false
+	for modal in [_title, _pause_menu, _return_prompt, _quit_prompt, _descent_summary, _descent_intro, _photo_album]:
+		if is_instance_valid(modal): return false
+	if is_instance_valid(_realm_visit) and _realm_visit.is_away(): return false
+	if descent and run != null and (run.ended or run.blackout or run.watching or run.suspended or run.arrival_grace > 0 or run.lift_called): return false
+	if cm == null or not cm._staged_cells.is_empty(): return false
+	if _director != null and (_director.scripted_hold or _director._hostile_count > 0): return false
+	if _photo_camera != null and (_photo_camera._raised or _photo_camera._capturing or _photo_camera._review_left > 0.0 or _photo_camera.doorway_reveal_active()): return false
+	return true
 
 
 func _configure_mutation_coordinator() -> void:

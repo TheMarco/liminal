@@ -390,8 +390,15 @@ func _asy_locked_door_wall(dir: int, plane: float) -> void:
 	pivot.position = pos
 	pivot.rotation.y = yaw
 	scene.add_node(pivot)
-	var inst = scene.attributed_prop_local(pivot, Chunk.ASY_DOOR_PATHS[pick],
-		Vector3.ZERO, Chunk.ASY_DOOR_FACE_YAW[pick])
+	var inst: Node3D
+	if pick < Chunk.ASY_FIRST_NEW_LEAF:
+		inst = scene.attributed_prop_local(pivot, Chunk.ASY_DOOR_PATHS[pick],
+			Vector3.ZERO, Chunk.ASY_DOOR_FACE_YAW[pick])
+	else:
+		var fit := Chunk.ASY_CELL_FACADE_FIT \
+			if pick == Chunk.ASY_FIRST_NEW_LEAF else Chunk.ASY_WARD_FACADE_FIT
+		inst = scene.attributed_prop_local(pivot, Chunk.ASY_DOOR_PATHS[pick],
+			Vector3(0, Chunk.ASY_NEW_LEAF_FACADE_LIFT, 0), 0.0, fit)
 	if inst == null:
 		pivot.get_parent().remove_child(pivot)
 		pivot.free()
@@ -1063,20 +1070,32 @@ func _asy_corridor_bay_returns(o: Vector3, yw: float, side: float,
 func _asy_corridor_open_casing(o: Vector3, yw: float, side: float,
 		t: float, width: float) -> void:
 	var inn = side - signf(side) * 0.115
-	for edge in [t - width * 0.5, t + width * 0.5]:
-		var jamb = scene.model_box(null, scene.world_point(o, Vector3(edge, Chunk.DOOR_TOP * 0.5, inn), yw),
-			Vector3(0.12, Chunk.DOOR_TOP, 0.3), Mats.asy_metal_green())
-		jamb.rotation.y = yw
-	var lintel = scene.model_box(null, scene.world_point(o, Vector3(t, Chunk.DOOR_TOP + 0.065, inn), yw),
-		Vector3(width + 0.18, 0.13, 0.3), Mats.asy_metal_green())
-	lintel.rotation.y = yw
+	var v = Node3D.new()
+	v.position = scene.world_point(o, Vector3(t, 0, inn), yw)
+	v.rotation.y = yw + (PI if side > 0.0 else 0.0)
+	scene.add_node(v)
+	# The wide portal frame, sized to the bay: near-unity stretch across
+	# the whole 1.9-2.9m range, and the opening always stays inside the
+	# wall cut.
+	var sx := (width + 0.12) / Chunk.ASY_BAY_FRAME_W
+	var frame := scene.attributed_prop_local(v, Chunk.ASY_BAY_FRAME_PATH,
+		Vector3(0, Chunk.ASY_BAY_FRAME_LIFT, 0), 0.0,
+		Vector3(sx, Chunk.ASY_BAY_FRAME_SCALE, Chunk.ASY_BAY_FRAME_SCALE))
+	if frame == null:
+		for edge in [-width * 0.5, width * 0.5]:
+			scene.model_box(v, Vector3(edge, Chunk.DOOR_TOP * 0.5, 0),
+				Vector3(0.12, Chunk.DOOR_TOP, 0.3), Mats.asy_metal_green())
+		scene.model_box(v, Vector3(0, Chunk.DOOR_TOP + 0.065, 0),
+			Vector3(width + 0.18, 0.13, 0.3), Mats.asy_metal_green())
+	else:
+		frame.set_meta("asylum_door_frame", true)
 
 
-## Heavy ward door installed into an actual wall opening. Most hang an authored
-## hospital leaf, which brings its own vision panel, hatch and handle; the
-## generated leaf below covers the remainder and any import failure. Either way
-## the panel is backed by darkness, suggesting a lightless cell without
-## exposing empty map.
+## Heavy ward door installed into an actual wall opening. Every leaf is
+## authored now: four hospital pulls plus two generated for this project,
+## hung in a riveted steel frame. The generated leaf below only covers
+## import failure. Either way the panel is backed by darkness, suggesting
+## a lightless cell without exposing empty map.
 
 
 func _asy_corridor_door(o: Vector3, yw: float, t: float,
@@ -1086,16 +1105,24 @@ func _asy_corridor_door(o: Vector3, yw: float, t: float,
 	v.position = scene.world_point(o, Vector3(t, 0, inn), yw)
 	v.rotation.y = yw + (PI if side > 0.0 else 0.0)
 	scene.add_node(v)
-	# Casing first: it is the same whichever leaf hangs in it.
-	scene.model_box(v, Vector3(-0.57, 1.09, 0), Vector3(0.12, 2.2, 0.3), Mats.asy_metal())
-	scene.model_box(v, Vector3(0.57, 1.09, 0), Vector3(0.12, 2.2, 0.3), Mats.asy_metal())
-	scene.model_box(v, Vector3(0, 2.22, 0), Vector3(1.26, 0.13, 0.3), Mats.asy_metal())
+	# Casing first: one riveted steel frame, the same whichever leaf hangs
+	# in it. It overlaps the 1.22m wall cut on both sides.
+	var frame := scene.attributed_prop_local(v, Chunk.ASY_FRAME_PATH,
+		Vector3(0, Chunk.ASY_FRAME_LIFT, 0), 0.0,
+		Vector3.ONE * Chunk.ASY_FRAME_SCALE)
+	if frame == null:
+		scene.model_box(v, Vector3(-0.57, 1.09, 0), Vector3(0.12, 2.2, 0.3), Mats.asy_metal())
+		scene.model_box(v, Vector3(0.57, 1.09, 0), Vector3(0.12, 2.2, 0.3), Mats.asy_metal())
+		scene.model_box(v, Vector3(0, 2.22, 0), Vector3(1.26, 0.13, 0.3), Mats.asy_metal())
+	else:
+		frame.set_meta("asylum_door_frame", true)
 	# Darkness behind the leaf, so a vision panel reads as an unlit room.
-	scene.model_rounded_box(v, Vector3(0, 1.06, -0.02), Vector3(1.02, 2.12, 0.02),
+	# It sits behind the deepest new leaf, not the old thin ones.
+	scene.model_rounded_box(v, Vector3(0, 1.06, -0.22), Vector3(1.02, 2.12, 0.02),
 		Mats.charcoal(), 0.004)
 	if _asy_authored_leaf(v, salt):
 		scene.collider_yaw_box(scene.world_point(o, Vector3(t, 1.06, inn), yw),
-			Vector3(1.02, 2.12, 0.16), yw)
+			Vector3(1.02, 2.12, 0.51), yw)
 		_asy_door_number(v, t, salt)
 		return
 	scene.model_rounded_box(v, Vector3(0, 1.06, 0), Vector3(1.0, 2.12, 0.09),
@@ -1123,18 +1150,24 @@ func _asy_corridor_door(o: Vector3, yw: float, t: float,
 	_asy_door_number(v, t, salt)
 
 
-## Hang one of the four authored hospital leaves in a casing already built at
-## `v`. Returns false when the model is unavailable, leaving the caller to fall
+## Hang one of the six authored leaves in a casing already built at `v`.
+## Returns false when the model is unavailable, leaving the caller to fall
 ## back to its generated leaf.
 
 
 func _asy_authored_leaf(v: Node3D, salt: int) -> bool:
-	if ctx.random01(salt + 17) >= 0.74:
-		return false
 	var pick = WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + 23) % Chunk.ASY_DOOR_PATHS.size()
-	var leaf = scene.attributed_prop_local(v, Chunk.ASY_DOOR_PATHS[pick],
-		Vector3(0, 0, 0.045), Chunk.ASY_DOOR_FACE_YAW[pick],
-		Vector3.ONE * Chunk.ASY_LEAF_FIT)
+	var leaf: Node3D
+	if pick < Chunk.ASY_FIRST_NEW_LEAF:
+		leaf = scene.attributed_prop_local(v, Chunk.ASY_DOOR_PATHS[pick],
+			Vector3(0, 0, 0.045), Chunk.ASY_DOOR_FACE_YAW[pick],
+			Vector3.ONE * Chunk.ASY_LEAF_FIT)
+	else:
+		# Centred leaves: lift onto the floor, face +Z with no turn.
+		var fit := Vector3.ONE * Chunk.ASY_CELL_FIT \
+			if pick == Chunk.ASY_FIRST_NEW_LEAF else Chunk.ASY_WARD_FIT
+		leaf = scene.attributed_prop_local(v, Chunk.ASY_DOOR_PATHS[pick],
+			Vector3(0, Chunk.ASY_NEW_LEAF_LIFT, 0.045), 0.0, fit)
 	if leaf == null:
 		return false
 	leaf.set_meta("asylum_authored_leaf", pick)

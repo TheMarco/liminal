@@ -14,7 +14,7 @@ const SHORTCUT_CENTRE := 6.0
 const MUTATION_STATE_TARGET := 7 # base reality plus six alternatives
 ## Bump whenever candidate generation or state meaning changes. Saves resolve a
 ## stable signature inside this generation instead of trusting numeric order.
-const GENERATION_VERSION := 11 # staggered room apertures and Annex turning bays
+const GENERATION_VERSION := 12 # safe floor-wide furniture fallback
 const PHOTO_DOOR_COUNT := 2
 const PHOTO_DOOR_MIN_SAVING := 4
 const INTRO_DOOR_MAX_ROOM_STEPS := 4
@@ -52,6 +52,8 @@ var _visited_states := {0: true}
 var _planned := false
 var _furniture_probe_cache := {}
 var _furniture_probe_count := 0
+var _floor_furniture_candidates: Array[Vector2i] = []
+var _floor_furniture_scanned := false
 var _cell_allowed_cache := {}
 var _room_members_cache := {}
 var _mutation_cell_safe_cache := {}
@@ -98,6 +100,8 @@ func _reset_states() -> void:
 	_visited_states = {0: true}
 	_furniture_probe_cache.clear()
 	_furniture_probe_count = 0
+	_floor_furniture_candidates.clear()
+	_floor_furniture_scanned = false
 	_cell_allowed_cache.clear()
 	_room_members_cache.clear()
 	_mutation_cell_safe_cache.clear()
@@ -1107,24 +1111,32 @@ func _pick_safe_closure(route: DescentRoute, centre: Vector2i,
 
 
 func _pick_furniture_room(route: DescentRoute, centre: Vector2i,
-		protected: Dictionary, slot: int, variant: int) -> Vector2i:
+		protected: Dictionary, slot: int, variant: int, floor_fallback := false) -> Vector2i:
 	var sentinel := Vector2i(1 << 30, 1 << 30)
 	var options: Array[Vector2i] = []
 	var seen := {}
-	for at in _nearby_cells(route, centre, protected):
+	var cells := route.scanned_cells() if floor_fallback else _nearby_cells(route, centre, protected)
+	if floor_fallback and _floor_furniture_scanned:
+		cells = _floor_furniture_candidates
+	for at in cells:
 		var corridor := WorldGen.annex_corridor_axis(world_seed, at) != 0 \
 			if theme == 2 else WorldGen.corridor(world_seed, at) != 0
 		if corridor:
 			continue
 		var root := WorldGen.annex_room_id(world_seed, at) if theme == 2 \
 			else WorldGen.room_id(world_seed, at)
-		if seen.has(root) or protected.has(root) \
-				or not _cell_allowed(route, root, protected):
-			continue
+		if seen.has(root): continue
 		seen[root] = true
+		# Reject unsupported styles before the whole-room protection scan.
+		# The floor-wide fallback can encounter thousands of irrelevant rooms.
+		if not _furniture_variant_is_viable(root, variant) or protected.has(root) \
+				or not _cell_allowed(route, root, protected): continue
 		options.append(root)
+	if floor_fallback and not _floor_furniture_scanned:
+		_floor_furniture_candidates = options.duplicate()
+		_floor_furniture_scanned = true
 	if options.is_empty():
-		return sentinel
+		return sentinel if floor_fallback else _pick_furniture_room(route, centre, protected, slot, variant, true)
 	options.sort_custom(func(a: Vector2i, b: Vector2i):
 		var ap := _furniture_style_priority(
 			WorldGen.cell_style(world_seed, a, theme))
@@ -1139,7 +1151,10 @@ func _pick_furniture_room(route: DescentRoute, centre: Vector2i,
 	for room in options:
 		if _furniture_variant_is_viable(room, variant):
 			return room
-	return sentinel
+	# Some districts contain only unsupported layouts near every route sample.
+	# Search the already-scanned floor once before giving up; retain the same
+	# owning-room protections and supported-style/clearance contract.
+	return sentinel if floor_fallback else _pick_furniture_room(route, centre, protected, slot, variant, true)
 
 
 func _furniture_variant_is_viable(room: Vector2i, variant: int) -> bool:

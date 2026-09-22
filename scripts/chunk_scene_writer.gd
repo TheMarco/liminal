@@ -390,6 +390,10 @@ func task_chair(pos: Vector3, yaw: float) -> Node3D:
 	return _host._task_chair(pos, yaw)
 
 
+func modern_task_chair(pos: Vector3, yaw: float) -> Node3D:
+	return _host._modern_task_chair(pos, yaw)
+
+
 func security_camera(mount: Vector3, lens_yaw: float) -> void:
 	_host._security_camera(mount, lens_yaw)
 

@@ -124,6 +124,14 @@ const CC0_PROP_NAMES := ["ArmChair_01", "Chandelier_03", "CoffeeCart_01",
 	"industrial_storage_cart", "metal_trash_can", "long_life_food",
 	"plunger", "drain_cleaner", "can_rusted"]
 const OFFICE_CHAIR_PATH := "res://models/cc0/office_chair/Office_Chair.fbx"
+const OFFICE_MODERN_CHAIR_PATH := \
+	"res://models/authored/office_chair/office_chair.glb"
+# World bounds (after the file's own 0.90176 root scale and -90° root yaw)
+# are x -0.4060..0.4060, y -0.4500..0.4500 and z -0.4077..0.4077: a
+# 0.81 x 0.90 x 0.82m chair centred on its origin. The seat faces +Z
+# natively, so the runtime instance carries a half-turn to face the
+# placement -Z like the chair it replaces.
+const OFFICE_MODERN_CHAIR_LIFT := 0.45
 const CASINO_SLOT_PATHS: Array[String] = [
 	"res://models/authored/casino_slots/slot_classic.glb",
 	"res://models/authored/casino_slots/slot_wheel.glb",
@@ -142,6 +150,14 @@ const CASINO_SERVICE_CART_SCALE := 1.0
 # z -0.2580..0.2600. Re-centre the footprint and land its lowest point on the
 # generated floor while preserving the model's real-world metre scale.
 const CASINO_SERVICE_CART_CENTRE := Vector3(-0.0794, 0.0004, 0.0010)
+const CASINO_STOOL_PATH := \
+	"res://models/authored/casino_stool/casino_stool.glb"
+const CASINO_STOOL_SCALE := 0.34
+# Imported bounds are x -0.7297..0.7297, y -0.9513..0.9513 and
+# z -0.7320..0.7310. Re-centre the footprint and land its lowest point on
+# the generated floor. At 0.34 the stool stands 0.65m tall and 0.50m wide,
+# inside the existing slot-stool collider.
+const CASINO_STOOL_CENTRE := Vector3(0.0, -0.9513, -0.0005)
 const PRISON_BUNK_PATH := \
 	"res://models/cc_by/bunk_bed/bunk_bed.glb"
 const PRISON_TOILET_PATH := \
@@ -215,23 +231,60 @@ const ASY_TABLE_PATH := \
 	"res://models/provided/asy_table/asy_table.glb"
 const ASY_TABLE_CENTRE := Vector3.ZERO
 const ASY_TRANSPORT_CLEARANCE := 0.25
-# Four leaves from the same hospital. Mounted at authored height as sealed
-# façades on solid walls, and at ASY_DOOR_FIT in a generated opening, whose
-# head is DOOR_TOP.
+# Four leaves from the same hospital, plus two Scenario-authored leaves.
+# Mounted at authored height as sealed façades on solid walls, and at
+# ASY_DOOR_FIT in a generated opening, whose head is DOOR_TOP.
 const ASY_DOOR_PATHS := [
 	"res://models/cc_by/abandoned_hospital/ward_door.glb",
 	"res://models/cc_by/abandoned_hospital/cell_door.glb",
 	"res://models/cc_by/abandoned_hospital/service_door.glb",
 	"res://models/cc_by/abandoned_hospital/vision_door.glb",
+	"res://models/authored/asy_cell_door/asy_cell_door.glb",
+	"res://models/authored/asy_ward_door/asy_ward_door.glb",
 ]
 const ASY_DOOR_H := 2.4447          # tallest authored leaf
 # `ward_door` is modelled with its width down X and its face on +Z; the other
 # three run down Z with their face on +X and need a quarter turn to match.
-const ASY_DOOR_FACE_YAW := [0.0, -PI / 2.0, -PI / 2.0, -PI / 2.0]
+# The two new leaves already face +Z at import.
+const ASY_DOOR_FACE_YAW := [0.0, -PI / 2.0, -PI / 2.0, -PI / 2.0, 0.0, 0.0]
 # Leaf height inside the generated corridor casing, which is shorter than a
 # free-standing opening because the casing carries its own lintel.
 const ASY_LEAF_H := 2.12
 const ASY_LEAF_FIT := ASY_LEAF_H / ASY_DOOR_H
+# First index into ASY_DOOR_PATHS that is a Scenario-authored leaf. Unlike
+# the hospital set, these arrive centred on their origin (0.97-1.0m wide,
+# 2.12m tall at fit) with their detail on +Z, so they need a floor lift
+# instead of standing authored, and no corrective turn.
+const ASY_FIRST_NEW_LEAF := 4
+const ASY_CELL_FIT := 1.01
+const ASY_WARD_FIT := Vector3(1.20, 1.01, 1.0)
+const ASY_NEW_LEAF_LIFT := 1.0605
+# Native world footprint of the new leaves at scale 1.0, for swing doors
+# whose openings vary: width stretches to fit, height stays fitted.
+const ASY_CELL_LEAF_W := 0.958
+const ASY_CELL_LEAF_D := 0.486
+const ASY_WARD_LEAF_W := 0.834
+const ASY_WARD_LEAF_D := 0.295
+const ASY_NEW_LEAF_FACADE_LIFT := 1.05
+const ASY_CELL_FACADE_FIT := Vector3.ONE
+const ASY_WARD_FACADE_FIT := Vector3(1.20, 1.0, 1.0)
+# Scenario-authored riveted steel frame. World bounds are 1.245w x 2.100h x
+# 0.579d with a 0.949m opening; at 1.1 the opening clears every leaf and the
+# 1.37m shell overlaps the 1.22m wall cut on both sides.
+const ASY_FRAME_PATH := \
+	"res://models/authored/asy_door_frame/asy_door_frame.glb"
+const ASY_FRAME_SCALE := 1.1
+const ASY_FRAME_W := 1.37
+const ASY_FRAME_LIFT := 1.155
+# Wide sibling for the 1.9-2.9m open bays. World bounds are 2.100w x 2.100h
+# x 0.473d with a 1.804m opening; stretched only 0.96-1.44x to fit instead
+# of the 1.5-2.2x the narrow frame needed. Same 1.1 height as the door
+# frame, so lintels line up down a corridor.
+const ASY_BAY_FRAME_PATH := \
+	"res://models/authored/asy_bay_frame/asy_bay_frame.glb"
+const ASY_BAY_FRAME_SCALE := 1.1
+const ASY_BAY_FRAME_W := 2.10
+const ASY_BAY_FRAME_LIFT := 1.155
 
 const OFFICE_TERMINAL_PATH := \
 	"res://models/cc_by/ibm_3278_terminal/ibm_3278_terminal.glb"
@@ -292,6 +345,14 @@ const CASINO_BAR_SCALE := 1.0
 # True footprint: 6m of back bar rising to the 3.34m sign, stools forward.
 const CASINO_BAR_BOUNDS := \
 	AABB(Vector3(-3.0, 0.0, -1.77), Vector3(6.0, 3.42, 3.4))
+# The supplied bar's own five stools are hidden and replaced by the
+# generated red-vinyl stool. The model is 1.9 units tall, so 0.44 lands a
+# 0.84m seat against the 1.16m counter; the 5.7m counter front takes a
+# wider 1.2m spread than the supplied stools, so the fat trumpet bases
+# keep clear of each other.
+const CASINO_BAR_STOOL_XS := [-2.4, -1.2, 0.0, 1.2, 2.4]
+const CASINO_BAR_STOOL_Z := 1.3
+const CASINO_BAR_STOOL_SCALE := 0.44
 # Authored accent energies, tuned down for the room: the supplied values
 # blow out the bottles and counter at these short ranges.
 const CASINO_BAR_LED_ENERGY := 0.6
@@ -991,6 +1052,7 @@ static func _prop_preload_paths() -> Array[String]:
 	for mname in CC0_PROP_NAMES:
 		paths.append("res://models/cc0/%s/%s_1k.gltf" % [mname, mname])
 	paths.append(OFFICE_CHAIR_PATH)
+	paths.append(OFFICE_MODERN_CHAIR_PATH)
 	paths.append_array(CASINO_SLOT_PATHS)
 	paths.append(CASINO_SERVICE_CART_PATH)
 	paths.append(PRISON_BUNK_PATH)
@@ -1009,6 +1071,8 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append_array([ASY_STRAITJACKET_PATH, ASY_ECT_PATH, ASY_RESTRAINT_PATH])
 	for door_path in ASY_DOOR_PATHS:
 		paths.append(door_path)
+	paths.append(ASY_FRAME_PATH)
+	paths.append(ASY_BAY_FRAME_PATH)
 	paths.append(OFFICE_TERMINAL_PATH)
 	paths.append(OFFICE_WATER_COOLER_PATH)
 	paths.append(OFFICE_AIR_CONDITIONER_PATH)
@@ -1090,7 +1154,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array(CASINO_SLOT_PATHS)
 			paths.append_array([CASINO_BLACKJACK_PATH, CASINO_ROULETTE_PATH,
 				CASINO_BAR_PATH, CASINO_POPUP_PATH, CASINO_SERVICE_CART_PATH,
-				ROPE_BARRIER_PATH])
+				CASINO_STOOL_PATH, ROPE_BARRIER_PATH])
 			paths.append("res://models/cc0/Chandelier_03/Chandelier_03_1k.gltf")
 			paths.append("res://models/cc0/bar_chair_round_01/bar_chair_round_01_1k.gltf")
 			paths.append("res://models/cc0/coffee_table_round_01/coffee_table_round_01_1k.gltf")
@@ -1102,7 +1166,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/cc0/potted_plant_01/potted_plant_01_1k.gltf")
 		1:
 			paths.append_array([OFFICE_AIR_CONDITIONER_PATH, OFFICE_PHONE_PATH, OFFICE_PRINTER_PATH])
-			paths.append_array([OFFICE_WATER_COOLER_PATH, OFFICE_CHAIR_PATH, OFFICE_TERMINAL_PATH])
+			paths.append_array([OFFICE_WATER_COOLER_PATH, OFFICE_CHAIR_PATH, OFFICE_MODERN_CHAIR_PATH, OFFICE_TERMINAL_PATH])
 			paths.append_array([OFFICE_BOXES_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/clipboard/clipboard_1k.gltf")
@@ -1134,6 +1198,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append(ASY_TABLE_PATH)
 			paths.append_array([ASY_AUTOPSY_PATH, IV_DRIP_PATH, CHEMISTRY_GLASSWARE_PATH])
 			paths.append_array(ASY_DOOR_PATHS)
+			paths.append(ASY_FRAME_PATH)
+			paths.append(ASY_BAY_FRAME_PATH)
 			paths.append("res://models/asylum/mounted_fluorescent_lights/mounted_fluorescent_lights_1k.gltf")
 			paths.append("res://models/asylum/old_bed_frame/old_bed_frame_1k.gltf")
 			paths.append("res://models/asylum/wheelchair_01/wheelchair_01_1k.gltf")
@@ -3211,7 +3277,27 @@ func _maybe_swing_door(dir: int, plane: float, a: float, b: float,
 		authored_prison_leaf = authored != null
 		if authored_prison_leaf:
 			authored.set_meta("interactive_prison_door", true)
-	if not authored_prison_leaf:
+	var authored_asy_leaf := false
+	var asy_leaf_thickness := 0.075
+	if theme == 5:
+		# One of the two generated leaves, hung on the gameplay pivot like
+		# the prison leaf: floor-aligned, edge-seated, protruding hardware
+		# at the moving end (measured at local -Z on the cell leaf; the
+		# ward leaf's handle is painted flat, so its side is moot).
+		var asy_pick = WorldGen.h(wseed, cell.x, cell.y, 1777 + dir) % 2
+		var asy_path: String = ASY_DOOR_PATHS[ASY_FIRST_NEW_LEAF + asy_pick]
+		var native_w := ASY_CELL_LEAF_W if asy_pick == 0 else ASY_WARD_LEAF_W
+		var sx := width / native_w
+		var door_pos := Vector3(0, ASY_NEW_LEAF_LIFT, width * 0.5) if dir == 0 \
+			else Vector3(width * 0.5, ASY_NEW_LEAF_LIFT, 0)
+		var door_yaw := -PI / 2.0 if dir == 0 else 0.0
+		var asy := _attributed_prop_local(pivot, asy_path, door_pos, door_yaw,
+			Vector3(sx, ASY_CELL_FIT, ASY_CELL_FIT))
+		authored_asy_leaf = asy != null
+		if authored_asy_leaf:
+			asy.set_meta("interactive_asy_door", true)
+			asy_leaf_thickness = ASY_CELL_LEAF_D if asy_pick == 0 else ASY_WARD_LEAF_D
+	if not authored_prison_leaf and not authored_asy_leaf:
 		_mrbox(pivot, panel_pos, panel_size, panel_mat, 0.012)
 		# Kick plate, closer and proper lever make the selected leaf read
 		# differently from the permanently locked facade doors nearby.
@@ -3227,6 +3313,13 @@ func _maybe_swing_door(dir: int, plane: float, a: float, b: float,
 		var closer_pos := panel_pos + Vector3(0, 0.86, 0)
 		_mbox(pivot, closer_pos, Vector3(0.10, 0.10, 0.42) if dir == 0 \
 			else Vector3(0.42, 0.10, 0.10), Mats.charcoal())
+	if authored_asy_leaf:
+		# The chunky generated leaf, not the thin procedural panel, is what
+		# the player meets: size the collider to its real thickness.
+		if dir == 0:
+			panel_size.x = asy_leaf_thickness
+		else:
+			panel_size.z = asy_leaf_thickness
 	var sb := StaticBody3D.new()
 	pivot.add_child(sb)
 	var cs := CollisionShape3D.new()
@@ -4425,16 +4518,35 @@ func _door_casing(dir: int, plane: float, a: float, b: float) -> void:
 		# producing a thin distance-dependent ridge that vanished up close.
 		return
 	if theme == 5:
-		# chipped green steel frame, a size heavier than it needs to be
-		var gm := Mats.asy_metal_green()
-		if dir < 2:
-			_box(Vector3(plane, DOOR_TOP * 0.5, a), Vector3(T + 0.16, DOOR_TOP, 0.2), gm, false)
-			_box(Vector3(plane, DOOR_TOP * 0.5, b), Vector3(T + 0.16, DOOR_TOP, 0.2), gm, false)
-			_box(Vector3(plane, DOOR_TOP + 0.09, (a + b) * 0.5), Vector3(T + 0.16, 0.18, b - a + 0.2), gm, false)
-		else:
-			_box(Vector3(a, DOOR_TOP * 0.5, plane), Vector3(0.2, DOOR_TOP, T + 0.16), gm, false)
-			_box(Vector3(b, DOOR_TOP * 0.5, plane), Vector3(0.2, DOOR_TOP, T + 0.16), gm, false)
-			_box(Vector3((a + b) * 0.5, DOOR_TOP + 0.09, plane), Vector3(b - a + 0.2, 0.18, T + 0.16), gm, false)
+		# One riveted steel portal frame per opening, detailed and textured
+		# on both faces, so it reads from either side of a walk-through.
+		# Narrow frame up to 1.87m, bay frame above. Never double it back to
+		# back: mirrored instances share coplanar faces and flicker.
+		var w := b - a
+		var wide := w > 1.87
+		var fpath := ASY_BAY_FRAME_PATH if wide else ASY_FRAME_PATH
+		var fnom := ASY_BAY_FRAME_W if wide else ASY_FRAME_W
+		var fscale := ASY_BAY_FRAME_SCALE if wide else ASY_FRAME_SCALE
+		var flift := ASY_BAY_FRAME_LIFT if wide else ASY_FRAME_LIFT
+		var fsx := (w + 0.12) / fnom
+		var fpos := Vector3(plane, 0, (a + b) * 0.5) if dir < 2 \
+			else Vector3((a + b) * 0.5, 0, plane)
+		var fyaw := PI / 2.0 if dir < 2 else 0.0
+		var fr := _attributed_prop_local(self, fpath,
+			fpos + Vector3(0, flift, 0), fyaw,
+			Vector3(fsx, fscale, fscale))
+		if fr != null:
+			fr.set_meta("asylum_door_frame", true)
+		if fr == null:
+			var gm := Mats.asy_metal_green()
+			if dir < 2:
+				_box(Vector3(plane, DOOR_TOP * 0.5, a), Vector3(T + 0.16, DOOR_TOP, 0.2), gm, false)
+				_box(Vector3(plane, DOOR_TOP * 0.5, b), Vector3(T + 0.16, DOOR_TOP, 0.2), gm, false)
+				_box(Vector3(plane, DOOR_TOP + 0.09, (a + b) * 0.5), Vector3(T + 0.16, 0.18, b - a + 0.2), gm, false)
+			else:
+				_box(Vector3(a, DOOR_TOP * 0.5, plane), Vector3(0.2, DOOR_TOP, T + 0.16), gm, false)
+				_box(Vector3(b, DOOR_TOP * 0.5, plane), Vector3(0.2, DOOR_TOP, T + 0.16), gm, false)
+				_box(Vector3((a + b) * 0.5, DOOR_TOP + 0.09, plane), Vector3(b - a + 0.2, 0.18, T + 0.16), gm, false)
 		return
 	if theme == 6:
 		# painted steel frame, and the door itself parked open against the wall
@@ -8068,9 +8180,32 @@ func _partition(along_x: bool, off: float) -> void:
 			_box(Vector3(dt, DOOR_TOP + head_h / 2.0, off), Vector3(dw, head_h, 0.14), wmat)
 		else:
 			_box(Vector3(off, DOOR_TOP + head_h / 2.0, dt), Vector3(0.14, head_h, dw), wmat)
-	var cmat: Material = Mats.paint_white() if theme == 1 else (Mats.steel() if theme == 4 else (Mats.asy_metal_green() if theme == 5 else \
+	if theme == 5:
+		# One riveted steel frame in the 1.15m partition doorway; the
+		# generated frame reads from both rooms, so no mirror is needed.
+		var psx := (dw + 0.12) / ASY_FRAME_W
+		var ppos := Vector3(dt, 0, off) if along_x else Vector3(off, 0, dt)
+		var pyaw := 0.0 if along_x else PI / 2.0
+		var pf := _attributed_prop_local(self, ASY_FRAME_PATH,
+			ppos + Vector3(0, ASY_FRAME_LIFT, 0), pyaw,
+			Vector3(psx, ASY_FRAME_SCALE, ASY_FRAME_SCALE))
+		if pf != null:
+			pf.set_meta("asylum_door_frame", true)
+			return
+		var gm := Mats.asy_metal_green()
+		for sside in [-1.0, 1.0]:
+			if along_x:
+				_box(Vector3(dt + sside * dw / 2.0, DOOR_TOP / 2.0, off), Vector3(0.1, DOOR_TOP, 0.2), gm, false)
+			else:
+				_box(Vector3(off, DOOR_TOP / 2.0, dt + sside * dw / 2.0), Vector3(0.2, DOOR_TOP, 0.1), gm, false)
+		if along_x:
+			_box(Vector3(dt, DOOR_TOP + 0.06, off), Vector3(dw + 0.2, 0.12, 0.2), gm, false)
+		else:
+			_box(Vector3(off, DOOR_TOP + 0.06, dt), Vector3(0.2, 0.12, dw + 0.2), gm, false)
+		return
+	var cmat: Material = Mats.paint_white() if theme == 1 else (Mats.steel() if theme == 4 else \
 		(Mats.sch_red() if theme == 6 else (Mats.mall_trim() if theme == 7 else \
-		(Mats.prison_iron() if theme == 8 else Mats.darkwood())))))
+		(Mats.prison_iron() if theme == 8 else Mats.darkwood()))))
 	for sside in [-1.0, 1.0]:
 		if along_x:
 			_box(Vector3(dt + sside * dw / 2.0, DOOR_TOP / 2.0, off), Vector3(0.1, DOOR_TOP, 0.2), cmat, false)
@@ -8191,7 +8326,12 @@ func _small_desk(p: Vector3, yaw: float) -> void:
 	_adopt_local(v, paper)
 	# The chair sits on the facing side and looks back at the desk: the
 	# task chair's seat faces local -Z, so desk yaw already aims it home.
-	_task_chair(p + Vector3(sin(yaw) * 0.95, 0, cos(yaw) * 0.95), yaw)
+	var chair_pos := p + Vector3(sin(yaw) * 0.95, 0, cos(yaw) * 0.95)
+	# School shares this helper; the new chair is an Office-only replacement.
+	if theme == 1:
+		_modern_task_chair(chair_pos, yaw)
+	else:
+		_task_chair(chair_pos, yaw)
 
 
 # --- vegas: grand chandelier is above; shared below --------------------------
@@ -8535,6 +8675,29 @@ func _task_chair(pos: Vector3, yaw: float) -> Node3D:
 	add_child(inst)
 	_collider_yaw_box(pos + Vector3(0, 0.52, 0), Vector3(0.62, 1.04, 0.62), yaw)
 	return inst
+
+
+## Modern fabric task chair for office floors: tubular frame, five-star
+## caster base, keeps its own PBR materials. The pivot carries the placement
+## yaw and the chair meta, so the seat faces the pivot's -Z exactly like
+## `_task_chair` and the facing audit keeps working unchanged. The instance
+## inside carries the half-turn the model needs plus the floor lift.
+func _modern_task_chair(pos: Vector3, yaw: float) -> Node3D:
+	var ps: PackedScene = _cc0_scenes.get("modern_task_chair")
+	if ps == null:
+		ps = _prop_scene(OFFICE_MODERN_CHAIR_PATH)
+		_cc0_scenes["modern_task_chair"] = ps
+	var pivot := Node3D.new()
+	pivot.position = pos
+	pivot.rotation.y = yaw
+	pivot.set_meta("surface_wear_prop", "office_task_chair")
+	add_child(pivot)
+	var inst: Node3D = ps.instantiate()
+	inst.position = Vector3(0, OFFICE_MODERN_CHAIR_LIFT, 0)
+	inst.rotation.y = PI
+	pivot.add_child(inst)
+	_collider_yaw_box(pos + Vector3(0, 0.46, 0), Vector3(0.84, 0.92, 0.84), yaw)
+	return pivot
 
 
 ## A real late-20th-century CCTV housing. `mount` is the wall contact point and

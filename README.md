@@ -336,6 +336,24 @@ shared warnings and torch availability;
 sharp HUD pixels and unchanged photograph/camera, and captures VHS-only, CRT-only,
 and combined modes.
 
+### Breathing architecture
+
+During quiet exploration, a clear wall can slowly swell and settle. Attached
+stripes, rails and lower panels follow it. After the first two breaths, occasional
+travelling pressure can cross the wall, or a clear ceiling patch can breathe.
+Ceilings keep their native finish, avoid lights/vents/beams and preserve standing
+headroom; rooms without a suitable patch skip the effect. Events have long quiet gaps, share the
+horror director's pacing, and withdraw when an actor approaches. Recordings,
+chases, blackouts, realm visits and transitions suppress them.
+
+`--breathing` enables **F6** requests cycling through wall breath, travelling pressure,
+and ceiling breath. Look up for the ceiling request. Requests still require a
+visible, clear surface and normal gameplay safety gates.
+F6 shows on-screen status when controls are disabled, gameplay is blocking a
+request, or the search is waiting for a safe surface. On a Mac keyboard, use
+Fn/🌐 + F6 if the top-row key is assigned to a system function.
+Standalone visual review: `godot --path . --script tools/preview_breath_shapes.gd -- --kind=ceiling --theme=1` (also `--kind=breath` or `--kind=travel`).
+
 ## Building
 
 `./build.sh` produces all three desktop builds (needs Godot 4.7+ on `PATH` with

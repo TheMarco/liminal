@@ -86,11 +86,37 @@ Controllers communicate through typed methods and narrow callback ports.
 Gameplay-specific decisions such as Descent route creation remain in Main;
 generic sequencing and persistent controller state do not.
 
+## Temporary architectural motion
+
+`environment_breath_director.gd` belongs to the current level root and uses
+Main's presence/presentation gate plus `HorrorDirector.try_start_visual()`.
+It chooses a visible, clear wall or ceiling in one nearby room per attempt, with its own
+seeded RNG. It does not consume world-generation randomness or persist changes.
+
+`environment_breath_surface.gd` belongs to that surface's streamed Chunk. Preparation
+is incremental and leaves the original resources installed until complete.
+Prepared GPU morphs retain native materials and rest-space texture coordinates;
+known attached wall bands share the same deformation frame. A small collision
+grid updates at 15 Hz while the original room collider remains present. Actor
+approach, presentation changes, room retirement and floor teardown restore the
+original mesh/material/cull margin and disable the temporary collider.
+
+After two wall breaths, the automatic pool contains wall breath (58%), travelling
+pressure (22%) and ceiling breath (20%); `--breathing`/F6 cycles all three for review.
+Ceiling selection excludes fixtures/overlays and junctions, leaves at least 2.25m
+headroom at maximum depth, and uses a vertically oriented swept-body exclusion.
+No safe patch means no event; it does not move ceiling fixtures or replace finishes.
+Paired-wall prototypes remain outside this runtime system.
+These effects are temporary visual events, not
+persistent generated-object mutations or topology transactions.
+
 ## Verification gates
 
 Run `tools/run_audits.sh -j 1` before accepting an architectural change. The
 critical focused gates are:
 
+- `audit_environment_breath.gd` and `audit_breathing_runtime.gd`: profile/normal math,
+  collision, real materials/bands across all themes, automatic selection and cleanup;
 - `audit_world_hash.gd`: exact generated-scene fingerprint;
 - `audit_chunk_smoke.gd`: all representative styles and runtime identities;
 - `audit_level_switches.gd`: teardown/build ordering and arrival safety;
