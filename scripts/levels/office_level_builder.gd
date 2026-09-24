@@ -35,6 +35,9 @@ func _office_troffer(at: Vector3, panels: Vector2i,
 		Vector3(1.5, 0.08, 0.75), PI / 2.0 if turned else 0.0, false)
 	var lens: MeshInstance3D = null
 	if holder != null:
+		# The source preview is viewed from above. In a ceiling installation its
+		# diffuser must face the room below, not the cavity above the housing.
+		holder.rotation.x = PI
 		lens = holder.find_child("DiffuserLens", true, false) as MeshInstance3D
 	if lens == null:
 		if holder != null:

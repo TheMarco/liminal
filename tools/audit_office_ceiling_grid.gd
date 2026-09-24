@@ -129,6 +129,15 @@ func _scan(ws: int, cell: Vector2i) -> void:
 			check(absf(perp) + half_perp <= 1.3 + EPS, "%s leaves corridor lane" % fixture.name)
 		if kind == "light":
 			seen_lights += 1
+			var housing := fixture.get_parent().find_child(
+				"Troffer metal housing", true, false) as MeshInstance3D
+			check(housing != null, "imported light housing is missing")
+			if housing != null:
+				var offset := Vector3(cell.x * S, 0, cell.y * S)
+				var lens_box := _local_box(fixture, offset)
+				var housing_box := _local_box(housing, offset)
+				check(lens_box.position.y < housing_box.position.y - 0.002,
+					"light diffuser faces the ceiling cavity instead of the room")
 			if fixture.material_override == Mats.panel_dead():
 				dead_lights += 1
 			if fixture.has_meta("office_ceiling_flicker"):
