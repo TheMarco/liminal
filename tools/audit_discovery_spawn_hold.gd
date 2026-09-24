@@ -109,6 +109,24 @@ func run_test() -> void:
 	manager._physics_process(1.0 / 60.0)
 	check(manager._t < remaining_t and manager._forced_left < remaining_forced,
 		"queued encounter clocks did not resume after the live stalker left")
+	manager.despawn()
+	var pacing := HorrorDirector.new()
+	pacing.enabled = true
+	manager.horror_director = pacing
+	check(pacing.try_start_visual(8.0), "could not reserve visual beat")
+	manager.force_encounter(0.8, true)
+	manager._physics_process(0.2)
+	check(is_equal_approx(manager._forced_left, 0.8),
+		"random room encounter interrupted a reserved visual beat")
+	pacing.advance(13.0)
+	manager._physics_process(0.2)
+	check(manager._forced_left < 0.8,
+		"random room encounter did not resume after visual recovery")
+	# A later authored tape/charger beat still takes priority over that queue.
+	manager.force_encounter(0.3)
+	check(not manager._forced_requires_quiet, "authored encounter lost priority")
+	pacing.free()
+	manager.horror_director = null
 
 	world.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)

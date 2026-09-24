@@ -16,6 +16,7 @@ var final := false
 var floor_idx := 0
 var anomaly := -1
 var topology: DescentTopology
+var native_doorway_plan: NativeDoorwayPlan
 var topology_state_override := -1
 var furniture_variant_override := -1
 var blackout := false
@@ -49,6 +50,7 @@ static func from_dictionary(config: Dictionary) -> ChunkBuildSpec:
 	out.floor_idx = int(config.get("floor_idx", 0))
 	out.anomaly = int(config.get("anomaly", -1))
 	out.topology = config.get("topology", null) as DescentTopology
+	out.native_doorway_plan = config.get("native_doorway_plan", null) as NativeDoorwayPlan
 	out.topology_state_override = int(
 		config.get("topology_state_override", -1))
 	out.furniture_variant_override = int(

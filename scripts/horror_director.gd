@@ -9,6 +9,7 @@ const HOSTILE_RECOVERY_LATE := 6.0
 const BLACKOUT_RECOVERY_EARLY := 8.0
 const BLACKOUT_RECOVERY_LATE := 5.0
 const VISUAL_RECOVERY := 4.0
+const ARCHITECTURE_RECOVERY := 1.0
 const WHISPER_RECOVERY := 1.5
 const AMBIENT_RECOVERY := 0.8
 
@@ -108,14 +109,29 @@ func end_blackout() -> void:
 			BLACKOUT_RECOVERY_EARLY, BLACKOUT_RECOVERY_LATE, pressure))
 
 
-func try_start_visual(seconds: float) -> bool:
+func try_start_visual(seconds: float, recovery_seconds := VISUAL_RECOVERY) -> bool:
 	if not enabled:
 		return true
 	if not _can_start_quiet_beat():
 		return false
 	_visual_left = maxf(0.1, seconds)
-	_recovery_left = maxf(_recovery_left, _visual_left + VISUAL_RECOVERY)
+	_recovery_left = maxf(_recovery_left, _visual_left + maxf(0.0, recovery_seconds))
 	return true
+
+
+## The viewer walked past a prepared beat before any legible motion. No other
+## quiet channel can own this lease while visual time is still reserved.
+func abandon_unseen_visual() -> void:
+	if _visual_left <= 0.0 or _hostile_count > 0 or _blackout_active: return
+	_visual_left = 0.0
+	_recovery_left = 0.0
+
+
+## Keep an accepted architectural preparation from being interrupted by a
+## random quiet beat. The owner releases this on cancellation or starts motion.
+func hold_preparing_visual() -> void:
+	_visual_left = maxf(_visual_left, 2.0)
+	_recovery_left = maxf(_recovery_left, _visual_left + VISUAL_RECOVERY)
 
 
 func try_start_whisper(seconds: float) -> bool:

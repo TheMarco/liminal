@@ -88,10 +88,39 @@ generic sequencing and persistent controller state do not.
 
 ## Temporary architectural motion
 
+`architectural_event_director.gd` belongs to Main and owns the shared cadence,
+recent-history and long-run variety for wall breath, travelling pressure,
+ceiling breath, hallway wave and supernatural doorways. Its memory survives
+floor changes. After 3–5 seconds of active exploration it tries one of the player's room or
+eight neighbouring rooms per physics tick. Starting at 6 seconds, it
+also checks every half-second for a hallway wave in the player's current room and
+for visible doorways in nearby resident prepared walls, so crossing a rare site does not
+depend on the broader search timer. Opportunistic waves respect their share
+of the mix and leave the first ordinary search alone; the normal search still
+allows them as a fallback. This keeps long wave preparations from continually
+displacing quicker wall and ceiling effects. It counts an event only when the effect
+becomes visible, uses 6–10 seconds between wall/ceiling opportunities
+(8–12 after waves, 9–14 after doorways), and
+gives cancelled preparations a short retry. Doorways have
+an additional 30–45 second repeat delay and at most six reveals per Descent floor.
+Camera use and encounters let the waiting time expire while preventing effect
+starts. Menus, scripted presentations and realm visits pause that clock.
+An interrupted doorway preparation does not consume that floor's reveal.
+Wall, ceiling and wave motion counts as a sighting only while its central
+animation is in view with a clear line of sight. Preparation, the nearly flat
+first frames and offscreen motion do not spend the long cooldown. An unseen
+cancelled breath also leaves the attempted wall eligible for the short retry.
+Architectural motion retains exclusive pacing through its full animation, followed
+by a one-second recovery instead of the generic four-second visual recovery.
+Eligibility can delay any kind; the manager never forces an unsafe event.
+
 `environment_breath_director.gd` belongs to the current level root and uses
 Main's presence/presentation gate plus `HorrorDirector.try_start_visual()`.
-It chooses a visible, clear wall or ceiling in one nearby room per attempt, with its own
-seeded RNG. It does not consume world-generation randomness or persist changes.
+It chooses a visible, clear wall or ceiling, with its own seeded RNG. It does
+not consume world-generation randomness or persist changes. The doorway director
+likewise retains its native geometry and final safety gate; both directors defer
+automatic timing to the shared manager in normal gameplay. Preview modes keep
+their manual controls.
 
 `environment_breath_surface.gd` belongs to that surface's streamed Chunk. Preparation
 is incremental and leaves the original resources installed until complete.
@@ -101,14 +130,42 @@ grid updates at 15 Hz while the original room collider remains present. Actor
 approach, presentation changes, room retirement and floor teardown restore the
 original mesh/material/cull margin and disable the temporary collider.
 
-After two wall breaths, the automatic pool contains wall breath (58%), travelling
-pressure (22%) and ceiling breath (20%); `--breathing`/F6 cycles all three for review.
+The manager targets a long-run mix of wall breath (31%), travelling pressure
+(19%), ceiling breath (19%), hallway wave (18%) and doorway (13%), adjusting
+for recent sightings and preferring a different type or surface. Repeated kinds
+and walls remain available as fallbacks when they are the only safe visible site.
+These are selection targets, not guaranteed observed frequencies: nearby safe,
+visible surfaces still determine which effects can play. `--breathing`/F6 cycles
+the four surface effects for review.
+`tools/audit_architecture_cadence.gd -- --nologo --level=7` checks automatic
+first and repeat sightings in a furnished Mall room, including camera use,
+without overriding cooldowns or directly starting an effect.
+`tools/audit_office_hallway.gd -- --test-mode --seed=1021555651 --descent-floor=3`
+walks back and forth through a real Office corridor with the normal camera,
+streaming, Descent rules and automatic scheduler. The walker uses its torch
+against visible encounters, then resumes walking. `--capture` saves rendered
+motion frames. Visible faces are filtered before filling the candidate limit;
+the narrow corridor's walls remain eligible, with swept-body clearance retained.
+Selection accounts for walking past a surface before the bow develops. Unseen
+walls passed during motion release their quiet slot. Waves reserve quiet time
+during preparation, wait briefly if they finish behind the viewer, and space
+attempts so a failed preparation cannot starve wall effects. Random room-exit
+encounters respect these reservations; authored tape/charger encounters retain
+priority. Room-exit events no longer permanently extinguish a whole chunk;
+legacy dead-light requests are ignored and genuine blackouts remain reversible.
 Ceiling selection excludes fixtures/overlays and junctions, leaves at least 2.25m
 headroom at maximum depth, and uses a vertically oriented swept-body exclusion.
 No safe patch means no event; it does not move ceiling fixtures or replace finishes.
 Paired-wall prototypes remain outside this runtime system.
 These effects are temporary visual events, not
 persistent generated-object mutations or topology transactions.
+
+Route landmarks are spatial setpieces, not timed architectural events. Descent
+plans one on-route setpiece per non-Casino floor and three on the Casino route;
+the first Casino landmark is placed within three room transitions. A true
+rare native hall is preferred where the generated route already contains one,
+but the on-route furniture or clock composition is the fallback. Wander has
+no fixed objective route, so landmark exposure is not guaranteed there.
 
 ## Verification gates
 

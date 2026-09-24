@@ -24,6 +24,16 @@ func _init() -> void:
 	director.advance(HorrorDirector.VISUAL_RECOVERY + 0.1)
 	_expect(director.can_start_hostile(),
 		"visual recovery never released the hostile channel")
+	# Architecture has a shorter tail, while the motion itself stays exclusive.
+	_expect(director.try_start_visual(7.0, HorrorDirector.ARCHITECTURE_RECOVERY),
+		"idle director rejected architecture")
+	director.advance(7.5)
+	_expect(not director.try_start_visual(7.0, HorrorDirector.ARCHITECTURE_RECOVERY),
+		"architecture skipped its short recovery")
+	director.advance(0.6)
+	_expect(director.try_start_visual(7.0, HorrorDirector.ARCHITECTURE_RECOVERY),
+		"architecture retained the old four-second recovery")
+	director.reset_floor()
 
 	# Several figures may comprise one encounter, but no other beat joins it.
 	director.set_hostile_count(1)

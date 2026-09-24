@@ -1,10 +1,10 @@
 # Hallway wave: conservative gameplay integration
 
-The approved inward travelling swell is now an occasional choice in the existing
-breathing director, in Wander and normal Descent exploration. It shares that
-director's cooldown and safety gates; no separate competing event scheduler.
-The first two architectural events remain ordinary breaths. Subsequent attempts
-have an 18% wave selection chance, subject to eligible rooms and quiet pacing.
+The approved inward travelling swell is an occasional choice in the shared
+architectural event manager, in Wander and normal Descent exploration. It shares
+one cadence and recent-history policy with wall/ceiling breaths and supernatural
+doorways. Its long-run selection target is 18%, subject to eligible visible
+rooms and quiet pacing. The wave effect retains its own final safety gates.
 
 Native meshes/materials/fixtures are deformed, not replaced by a synthetic room.
 GPU shapes and static collision share phase keys, updated before player movement.

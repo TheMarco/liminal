@@ -84,6 +84,11 @@ func _sch_lighting() -> void:
 	light.light_color = Color(0.94, 0.97, 1.0)
 	light.omni_range = 17.0 if tall else 12.0
 	light.shadow_enabled = true
+	# Several broad fluorescent tubes share this one point light. Fully opaque,
+	# sharp point-light shadows make the wall/ceiling junction go nearly black;
+	# approximate the softer penumbra of the visible diffusers instead.
+	light.shadow_opacity = 0.4
+	light.shadow_blur = 3.0
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 24.0
 	light.distance_fade_length = 8.0

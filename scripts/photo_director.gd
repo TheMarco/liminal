@@ -505,10 +505,12 @@ func _register_photo_doors() -> void:
 					continue
 				if opened:
 					seal.open()
-					continue
-				seal.set_preview_ready(ready)
+				else:
+					seal.set_preview_ready(ready)
 				var live_key := "%s:%s" % [id, endpoint]
-				if not ready or _documented.has(id):
+				# Opened doors remain album subjects after streaming/reloading.
+				# capturable() excludes their saved ids from repeat credit.
+				if not opened and (not ready or _documented.has(id)):
 					if _live_doors.has(live_key) and is_instance_valid(_live_doors[live_key]):
 						(_live_doors[live_key] as Node).queue_free()
 					_live_doors.erase(live_key)

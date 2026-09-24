@@ -28,6 +28,10 @@ func run() -> void:
 		finish("live runtime wave capture")
 		return
 	var director: Node = game._breathing
+	if is_instance_valid(game._architectural_events):
+		game._architectural_events.set_physics_process(false)
+		# This audit drives a specific wave through the lower-level director.
+		director.managed = false
 	director.set_physics_process(false)
 	game.cm.set_process(false)
 	game.player.set_physics_process(false)
@@ -58,6 +62,27 @@ func run() -> void:
 	game.player.cam.global_position = game.player.global_position+Vector3.UP*1.4
 	game.player.cam.look_at(chunk.to_global(frame*Vector3(0,1.4,0)))
 	print("Runtime wave spawn: ", game.player.global_position, "; yaw=", rad_to_deg(game.player.rotation.y))
+	# Normal scheduling reserves preparation, but a refused attempt must never
+	# cancel someone else's visual/quiet slot. Manual preview keeps its wait.
+	director.managed = true
+	game._director.enabled = true
+	game._director.reset_floor()
+	game._director.try_start_visual(8.0)
+	expect(not director.start_event(chunk, layout, "wave"), "wave stole a reserved visual slot")
+	expect(not director._wave_reserved, "refused wave claimed lease ownership")
+	director.cancel()
+	expect(game._director._visual_left > 0.0, "refused wave cancelled someone else's lease")
+	game._director.reset_floor()
+	expect(director.start_event(chunk, layout, "wave"), "managed wave did not reserve preparation")
+	game._director.advance(1.5)
+	director._physics_process(0.016)
+	expect(game._director._visual_left >= 1.9, "wave preparation let its lease expire")
+	director.cancel()
+	expect(game._director._visual_left == 0.0 and game._director._recovery_left == 0.0,
+		"unseen wave cancellation retained quiet time")
+	game._director.enabled = false
+	director.managed = false
+	await process_frame
 	# Read-only neighbor snapshot: event ownership must remain in one chunk.
 	var neighbor: Chunk = game.cm.chunks[cell+Vector2i.RIGHT]
 	var meshes := {}

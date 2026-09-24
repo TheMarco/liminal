@@ -84,6 +84,7 @@ var _t := 0.0
 var _dev := false
 var _forced_left := 0.0
 var _forced_tries := 0
+var _forced_requires_quiet := false
 var _force_at := Vector3.INF
 var _force_variant := -1
 var _figs: Array[ShadowFigure] = []
@@ -194,7 +195,11 @@ func try_realm_encounter(front_first: bool = false) -> bool:
 ## skips the director's pacing gate — it IS the directed beat — but still
 ## respects the figure cap and the passive hold, and gives up quietly if the
 ## room never offers a legal spot.
-func force_encounter(delay := 1.6) -> void:
+func force_encounter(delay := 1.6, respect_pacing := false) -> void:
+	# Random room-exit encounters queue behind a reserved visual beat. Authored
+	# tape/charger encounters retain priority, including over an existing queue.
+	_forced_requires_quiet = respect_pacing if _forced_left <= 0.0 \
+		else _forced_requires_quiet and respect_pacing
 	_forced_left = delay if _forced_left <= 0.0 else minf(_forced_left, delay)
 	_forced_tries = 6
 
@@ -246,6 +251,8 @@ func adopt(f: ShadowFigure) -> void:
 		return
 	f.player = player
 	f.topology = topology
+	f.native_doorway_plan = chunk_manager.native_doorway_plan \
+		if chunk_manager != null else null
 	f.completed_levels = completed_levels
 	if f.is_inside_tree() and f.get_parent() != self:
 		f.reparent(self, true)
@@ -286,6 +293,7 @@ func despawn(reset_encounters := true) -> void:
 	# A beat owed on this floor does not follow the player to the next one.
 	_forced_left = 0.0
 	_forced_tries = 0
+	_forced_requires_quiet = false
 	if player != null:
 		ShadowWalkerVisual.request_model(
 			THEME_WALKER.get(player.level_theme, -1))
@@ -318,7 +326,9 @@ func _physics_process(dt: float) -> void:
 	# under the dolly-back.
 	# An authored beat remains pending behind the live stalker instead of
 	# creating a pair or silently spending all of its placement retries.
-	if _forced_left > 0.0 and _can_add_figure():
+	if _forced_left > 0.0 and _can_add_figure() \
+			and (not _forced_requires_quiet or horror_director == null \
+			or horror_director.can_start_hostile()):
 		_forced_left -= dt
 		if _forced_left <= 0.0:
 			_forced_tries -= 1
@@ -465,6 +475,8 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	var f := ShadowFigure.new()
 	f.player = player
 	f.topology = topology
+	f.native_doorway_plan = chunk_manager.native_doorway_plan \
+		if chunk_manager != null else null
 	f.completed_levels = completed_levels
 	f.walker_model_index = walker_model
 	f.variant = _force_variant if _force_variant >= 0 else _pick_variant()

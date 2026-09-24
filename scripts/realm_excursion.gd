@@ -66,6 +66,7 @@ var _preview_chunk: Chunk
 var _preview_resources: Array[Resource] = []
 var _preview_resource_pending := ""
 var _preview_resources_ready := false
+var _preview_has_frame := false
 var _bind_left := 0.0
 var _discovery_started := false
 var _last_discovery_cell := Vector2i(1 << 30, 1 << 30)
@@ -78,6 +79,16 @@ var _caught_sequence: CanvasLayer
 func _ready() -> void:
 	get_tree().process_frame.connect(_preview_frame.emit)
 	get_tree().physics_frame.connect(_preview_physics_frame.emit)
+	RenderingServer.frame_post_draw.connect(_on_preview_drawn)
+
+
+func _on_preview_drawn() -> void:
+	if phase != Phase.WAITING or not is_instance_valid(preview) \
+			or preview.render_target_update_mode != SubViewport.UPDATE_ALWAYS:
+		return
+	_preview_has_frame = true
+	if is_instance_valid(window):
+		window.visible = true
 
 
 func collapse_seconds() -> float:
@@ -294,6 +305,7 @@ func _refresh_binding() -> void:
 
 func _attach_window() -> void:
 	window = MeshInstance3D.new()
+	window.visible = false # Never expose an unrendered viewport texture.
 	var quad := QuadMesh.new()
 	quad.size = Vector2(seal.width - 0.03, seal.height - 0.03)
 	window.mesh = quad
@@ -304,7 +316,7 @@ func _attach_window() -> void:
 	window.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	seal.add_child(window)
 	window.global_position = source_centre - source_forward * 0.035 + Vector3.UP * seal.height * 0.5
-	window.look_at(window.global_position - source_forward)
+	window.look_at(window.global_position + source_forward)
 	window.layers = PhotoAnomaly.PHOTO_LAYER
 	if not is_instance_valid(_door_leak):
 		_door_leak = RealmDoorLeak.new()
@@ -327,6 +339,33 @@ func _attach_window() -> void:
 func _entrance_in_room() -> bool:
 	return ShadowFigure.room_for(game.player, game.player.global_position) \
 		== ShadowFigure.room_for(game.player, return_position)
+
+
+## The virtual eye can be inside an unrelated destination wall while the
+## player is still approaching. A normal perspective camera renders that
+## wall over the entrance. Align an off-axis frustum to the aperture instead:
+## its near plane clips everything on the source side of the destination.
+## Mapping the resulting texture to the aperture's UVs preserves parallax
+## without depending on the main camera's orientation or screenshot size.
+func _update_preview_camera() -> bool:
+	var forward := _rotation * source_forward
+	var right := forward.cross(Vector3.UP)
+	var eye: Vector3 = destination_position + _rotation * (
+		game.player.cam.global_position - source_centre)
+	var centre := destination_position + _rotation * (
+		window.global_position - source_centre)
+	var offset := centre - eye
+	var depth := offset.dot(forward)
+	if depth <= 0.01:
+		return false
+	preview_camera.global_transform = Transform3D(
+		Basis(right, Vector3.UP, -forward), eye)
+	# The image aspect follows the actual aperture, rather than the screen.
+	var aperture := (window.mesh as QuadMesh).size
+	preview_camera.keep_aspect = Camera3D.KEEP_HEIGHT
+	preview_camera.set_frustum(aperture.y,
+		Vector2(offset.dot(right), offset.y), depth, depth + 70.0)
+	return true
 
 
 func _leak_in_view() -> bool:
@@ -424,7 +463,11 @@ func _process(dt: float) -> void:
 		var nearby := offset.length() < 18.0
 		# The sealed wall completely hides this world from the eye. Rendering
 		# it there was paying for a second scene throughout every approach.
-		var show_preview: bool = nearby and (seal.opened or game._photo_camera._raised)
+		# The aperture is visible beyond the audio/entry cue's 18m range.
+		# Keeping its viewport disabled there exposed a blank white texture.
+		var in_view := player.cam.is_position_in_frustum(
+			source_centre + Vector3.UP * seal.height * 0.5)
+		var show_preview: bool = (nearby or in_view) and (seal.opened or game._photo_camera._raised)
 		preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS if show_preview else SubViewport.UPDATE_DISABLED
 		if show_preview:
 			var vp := game.get_viewport()
@@ -432,12 +475,17 @@ func _process(dt: float) -> void:
 			# Match the source world's 3D pixel density, including CRT scaling;
 			# retain the existing cap when playing with the CRT switched off.
 			var scale := minf(vp.scaling_3d_scale, 1280.0 / maxf(1.0, view_size.x))
-			var target_size := Vector2i(maxi(1, roundi(view_size.x * scale)), maxi(1, roundi(view_size.y * scale)))
+			var aperture := (window.mesh as QuadMesh).size
+			var aspect := aperture.x / aperture.y
+			var height := maxi(1, mini(roundi(view_size.y * scale), roundi(1280.0 / aspect)))
+			var target_size := Vector2i(maxi(1, roundi(height * aspect)), height)
 			if preview.size != target_size:
+				_preview_has_frame = false
 				preview.size = target_size
-			preview_camera.global_transform = Transform3D(_rotation * player.cam.global_basis,
-				destination_position + _rotation * (player.cam.global_position - source_centre))
-			preview_camera.fov = player.cam.fov
+			if not _update_preview_camera():
+				show_preview = false
+				preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		window.visible = show_preview and _preview_has_frame
 		var held: bool = game.run.suspended or game.run.watching or game.run.blackout
 		# The signal invites the player to turn. It can be heard in the room,
 		# or through a clear opening on approach, before the wall is in view.

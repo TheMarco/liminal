@@ -42,6 +42,7 @@ var descent_route: DescentRoute
 ## One mutable resolver is shared by route guidance, rendered chunks and
 ## figures. WorldGen stays seed-pure; Descent's blackout openings live here.
 var descent_topology: DescentTopology
+var native_doorway_plan: NativeDoorwayPlan
 var blackout := false
 var anomalies := {}
 ## Mirrored from DescentRun so a target or arrival room that streams out and
@@ -325,6 +326,7 @@ func _build(c: Vector2i, install := true,
 func _build_spec(c: Vector2i, topology_state_override := -1) -> ChunkBuildSpec:
 	var spec := ChunkBuildSpec.new()
 	spec.player = player as Player
+	spec.native_doorway_plan = native_doorway_plan
 	if descent and descent_route != null:
 		var optional_vhs := _is_optional_vhs_cell(c)
 		spec.descent = true
@@ -580,6 +582,7 @@ func runtime_state_for_cells(cells: Array[Vector2i]) -> ChunkRuntimeState:
 
 func restore_runtime_state(state: ChunkRuntimeState) -> void:
 	_runtime_state = state.copy() if state != null else ChunkRuntimeState.new()
+	_restore_native_doorways()
 	for key in chunks:
 		var at: Vector2i = key
 		var chunk := chunks[key] as Chunk
@@ -592,11 +595,38 @@ func restore_runtime_state_for_cells(state: ChunkRuntimeState,
 		cells: Array[Vector2i]) -> void:
 	if state != null:
 		_runtime_state.merge(state)
+	_restore_native_doorways()
 	for at in cells:
 		var chunk := chunk_at(at)
 		if chunk != null:
 			chunk.restore_runtime_state(
 				_runtime_state.subset_for_cells([at]))
+
+
+func set_native_doorway_open(cell: Vector2i, dir: int, value: bool) -> void:
+	if native_doorway_plan == null \
+			or native_doorway_plan.candidate(cell, dir).is_empty(): return
+	native_doorway_plan.set_open(cell, dir, value)
+	var edge := NativeDoorwayPlan.canonical(cell, dir)
+	var root: Vector2i = edge["cell"]
+	_runtime_state.put(ChunkRuntimeState.object_key(root,
+		"native_doorway", str(int(edge["dir"]))), "native_doorway",
+		{"cell_x": root.x, "cell_z": root.y,
+		"dir": int(edge["dir"]), "open": value})
+
+
+func _restore_native_doorways() -> void:
+	if native_doorway_plan == null: return
+	for key in _runtime_state.keys():
+		if _runtime_state.kind_for(key) != "native_doorway": continue
+		var value := _runtime_state.payload_for(key)
+		var cell := Vector2i(int(value.get("cell_x", 1 << 30)),
+			int(value.get("cell_z", 1 << 30)))
+		var dir := int(value.get("dir", -1))
+		if dir not in [0, 2] \
+				or native_doorway_plan.candidate(cell, dir).is_empty(): continue
+		native_doorway_plan.set_open(cell, dir,
+			bool(value.get("open", false)))
 
 
 func runtime_object_descriptors(cells: Array[Vector2i]) -> Dictionary:

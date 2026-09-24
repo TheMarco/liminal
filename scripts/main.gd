@@ -58,6 +58,8 @@ var _fade: ColorRect
 var _post_process: PostProcessController
 var _reality_aftershock: CanvasLayer
 var _breathing: Node
+var _native_doorways: Node
+var _architectural_events: Node
 var _presence_state := Presence.SILENT
 var _post_enabled := true
 var _vhs_enabled := true
@@ -356,6 +358,8 @@ func _ready() -> void:
 	_director = HorrorDirector.new()
 	add_child(_director)
 	if is_instance_valid(_breathing): _breathing.pacing = _director
+	if is_instance_valid(_native_doorways): _native_doorways.pacing = _director
+	if is_instance_valid(_architectural_events): _architectural_events.pacing = _director
 	if run != null:
 		run.horror_director = _director
 	var oneshots := OneShots.new()
@@ -549,6 +553,7 @@ func _build_level(level: int, around: Vector3) -> void:
 	cm.theme = level
 	cm.player = player
 	cm.descent = descent
+	cm.native_doorway_plan = NativeDoorwayPlan.new()
 	if descent:
 		if _progress_enabled and _descent_progress.run_seed == world_seed \
 				and _descent_progress.objective_tape_completed(run.floor_idx):
@@ -558,15 +563,15 @@ func _build_level(level: int, around: Vector3) -> void:
 		cm.descent_floor_idx = run.floor_idx
 		cm.descent_route = descent_route
 		cm.descent_topology = descent_route.topology
+		# A saved opening must be restored before any room is constructed.
+		cm.native_doorway_plan.configure(cm.world_seed, level,
+			cm.descent_topology)
 		cm.descent_base_seed = world_seed
 		run.target_cell = descent_route.target
 		cm.blackout = run.blackout
-		# Kind 1 is a live encounter request, not streamed room geometry. Only
-		# persistent surface mutations belong in ChunkManager.
+		# Encounters are live requests. Old dead-light requests must not rebuild
+		# permanent dark chunks when returning to a floor.
 		cm.anomalies = {}
-		for anomaly_cell in run.anomalies:
-			if int(run.anomalies[anomaly_cell]) == 0:
-				cm.anomalies[anomaly_cell] = 0
 		cm.descent_arrival_used = run.arrival_used
 		cm.descent_lift_called = run.lift_called
 		cm.descent_lift_wait = run.lift_wait_left
@@ -577,6 +582,8 @@ func _build_level(level: int, around: Vector3) -> void:
 				and _descent_progress.run_seed == world_seed:
 			cm.restore_runtime_state(
 				_descent_progress.runtime_state_for_floor(run.floor_idx))
+	else:
+		cm.native_doorway_plan.configure(cm.world_seed, level, null)
 	if _passers != null:
 		_passers.configure(_level_seed(level), level)
 		_passers.run = run
@@ -639,15 +646,35 @@ func _build_level(level: int, around: Vector3) -> void:
 	level_root.add_child(_breathing)
 	_breathing.configure(cm, player, _director, _breathing_allowed, opts.breathing, opts.hallway_wave)
 	_breathing.debug_notice.connect(_show_event_message)
+	_native_doorways = preload("res://scripts/native_doorway_director.gd").new()
+	level_root.add_child(_native_doorways)
+	_native_doorways.debug_notice.connect(_show_event_message)
+	_native_doorways.configure(cm, player, _director, _breathing_allowed,
+		opts.doorway)
+	# Preview flags retain their independent F6/manual timing. Normal play has
+	# one cross-effect cadence and recent-event memory across floor changes.
+	if not opts.breathing and not opts.hallway_wave and not opts.doorway:
+		if not is_instance_valid(_architectural_events):
+			_architectural_events = preload(
+				"res://scripts/architectural_event_director.gd").new()
+			add_child(_architectural_events)
+		_architectural_events.configure(cm, player, _breathing,
+			_native_doorways, _director, _breathing_allowed, _architecture_clock_allowed)
 
 
-func _breathing_allowed() -> bool:
+func _architecture_clock_allowed() -> bool:
 	if _presence_state == Presence.SILENT or _switching or _dying or _quitting \
 			or _descent_preparing or get_tree().paused: return false
 	for modal in [_title, _pause_menu, _return_prompt, _quit_prompt, _descent_summary, _descent_intro, _photo_album]:
 		if is_instance_valid(modal): return false
 	if is_instance_valid(_realm_visit) and _realm_visit.is_away(): return false
-	if descent and run != null and (run.ended or run.blackout or run.watching or run.suspended or run.arrival_grace > 0 or run.lift_called): return false
+	if descent and run != null and (run.ended or run.watching or run.suspended): return false
+	return true
+
+
+func _breathing_allowed() -> bool:
+	if not _architecture_clock_allowed(): return false
+	if descent and run != null and (run.blackout or run.arrival_grace > 0 or run.lift_called): return false
 	if cm == null or not cm._staged_cells.is_empty(): return false
 	if _director != null and (_director.scripted_hold or _director._hostile_count > 0): return false
 	if _photo_camera != null and (_photo_camera._raised or _photo_camera._capturing or _photo_camera._review_left > 0.0 or _photo_camera.doorway_reveal_active()): return false
@@ -2053,7 +2080,7 @@ func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 		# ghost. A room-authored silhouette can be visible across an open office
 		# while waiting forever on a logical room ID or wedged in furniture.
 		if _figures != null:
-			_figures.force_encounter(0.25)
+			_figures.force_encounter(0.25, true)
 		return
 	cm.set_anomaly(at, kind)
 

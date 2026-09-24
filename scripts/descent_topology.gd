@@ -41,6 +41,9 @@ var _shortcuts := {}
 ## IDs reconstruct it before chunks build, including a quit during photo review.
 var _photo_doors: Dictionary = {} # canonical edge key -> opening record
 var _photo_open: Dictionary = {}  # evidence id -> true
+## Optional architectural portals are still walls in every authored reality
+## until their visible opening reaches its stable endpoint.
+var _native_doorway_open: Dictionary = {}
 
 ## State 0 is always the seed-authored base.  Every later state is a complete
 ## snapshot, never a delta from the previous state, which makes arbitrary
@@ -94,6 +97,7 @@ static func edge_dir(edge: Dictionary) -> int:
 func _reset_states() -> void:
 	_photo_doors.clear()
 	_photo_open.clear()
+	_native_doorway_open.clear()
 	_states = [TopologyState.new()]
 	_current_state = 0
 	_previous_state = -1
@@ -277,6 +281,7 @@ func furniture_variant_for_state(room_root: Vector2i, state_id: int) -> int:
 
 func has_shortcut(cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
+	if _native_doorway_open.has(key): return true
 	if _photo_doors.has(key):
 		return photo_door_open(str(_photo_doors[key]["id"]))
 	var override := _current_edges().get(key, {}) as Dictionary
@@ -300,14 +305,24 @@ func edge_info(cell: Vector2i, dir: int) -> Dictionary:
 	return _edge_info_with(_current_edges(), cell, dir)
 
 
-func edge_info_for_state(cell: Vector2i, dir: int, state_id: int) -> Dictionary:
+func edge_info_for_state(cell: Vector2i, dir: int, state_id: int,
+		include_native := true) -> Dictionary:
 	if state_id < 0 or state_id >= _states.size():
 		return WorldGen.edge_info(world_seed, cell, dir, theme)
-	return _edge_info_with(_states[state_id].edges, cell, dir)
+	return _edge_info_with(_states[state_id].edges, cell, dir, include_native)
+
+
+## Route searches only need wall occupancy. Avoid constructing a complete edge
+## record for every visited neighbour in every generated reality.
+func is_wall_for_state(cell: Vector2i, dir: int, state_id: int) -> bool:
+	if state_id < 0 or state_id >= _states.size():
+		return WorldGen.is_wall(world_seed, cell, dir, theme)
+	return _is_wall_with(_states[state_id].edges, cell, dir)
 
 
 func is_wall(cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
+	if _native_doorway_open.has(key): return false
 	if _photo_doors.has(key):
 		return not photo_door_open(str(_photo_doors[key]["id"]))
 	var record: Dictionary = _current_edges().get(key, {})
@@ -507,12 +522,15 @@ func _current_edges() -> Dictionary:
 	return _states[_current_state].edges
 
 
-func _edge_info_with(edges: Dictionary, cell: Vector2i, dir: int) -> Dictionary:
+func _edge_info_with(edges: Dictionary, cell: Vector2i, dir: int,
+		include_native := true) -> Dictionary:
 	var key := edge_key(cell, dir)
 	if _photo_doors.has(key):
 		if photo_door_open(str(_photo_doors[key]["id"])):
 			return photo_geometry_edge(cell, dir)
 		return WorldGen.edge_info(world_seed, cell, dir, theme)
+	if include_native and _native_doorway_open.has(key):
+		return _native_doorway_open[key]
 	var record: Dictionary = edges.get(key, {})
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
@@ -538,6 +556,17 @@ func _edge_info_with(edges: Dictionary, cell: Vector2i, dir: int) -> Dictionary:
 		"runtime_door": bool(record.get("door", false)),
 		"mutation_state": _current_state,
 	}
+
+
+func set_native_doorway_open(cell: Vector2i, dir: int, value: bool,
+		along: float, width: float) -> void:
+	var key := edge_key(cell, dir)
+	if value:
+		_native_doorway_open[key] = {"wall": false, "full_open": false,
+			"t": along, "w": width, "exit_sign": false,
+			"runtime_shortcut": true, "native_latent": true}
+	else:
+		_native_doorway_open.erase(key)
 
 
 func _opening_record(edge: Dictionary, door: bool) -> Dictionary:

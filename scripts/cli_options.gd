@@ -70,6 +70,8 @@ var reality_aftershock := false
 var breathing := false
 ## Manual wave test: wait for F6, which always requests/replays a hallway wave.
 var hallway_wave := false
+## Manual generated-doorway check on any level: F6 requests a prepared opening.
+var doorway := false
 ## QA: start directly facing the selected first-floor photographic doorway.
 var first_door := false
 var first_obstruction := false
@@ -95,6 +97,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.breathing = true
 		elif arg == "--breathing":
 			o.breathing = true
+		elif arg == "--doorway":
+			o.doorway = true
 		elif arg.begins_with("--seed="):
 			o.world_seed = int(arg.substr(7))
 		elif arg.begins_with("--pos="):

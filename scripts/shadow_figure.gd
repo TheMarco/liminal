@@ -111,6 +111,7 @@ signal approach_starting(figure: ShadowFigure)
 ## Descent may add a real doorway while this figure is alive. Sharing the
 ## floor resolver keeps its BFS and exact jamb waypoint on rendered geometry.
 var topology: DescentTopology
+var native_doorway_plan: NativeDoorwayPlan
 
 ## Seven of them, and every one is animated. The static photo-traced cutouts
 ## that came before were replaced wholesale: a still silhouette standing
@@ -1292,6 +1293,8 @@ func _edge_waypoint(from: Vector2i, dir: int, along: float) -> Vector3:
 func _edge_info(cell: Vector2i, dir: int) -> Dictionary:
 	if topology != null:
 		return topology.edge_info(cell, dir)
+	if native_doorway_plan != null and native_doorway_plan.is_open(cell, dir):
+		return native_doorway_plan.candidate(cell, dir)
 	return WorldGen.edge_info(player.world_seed, cell, dir,
 		player.level_theme)
 

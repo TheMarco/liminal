@@ -101,6 +101,37 @@ func _run() -> void:
 		if kind != 1:
 			_fail("post-blackout restoration still requested a dead-light anomaly")
 			break
+	# Walking away used a separate legacy path; the post-blackout check above
+	# did not cover it. Repeat at different cells without changing its rolls.
+	requested.clear()
+	run.anomalies.clear()
+	run.world_seed = 1021555651
+	run.floor_idx = 2
+	for x in range(14, 26):
+		for y in range(45, 62):
+			run._maybe_anomaly(Vector2i(x, y))
+	if requested.is_empty(): _fail("walk-away fixture did not exercise encounter selection")
+	for kind in requested:
+		if kind != 1:
+			_fail("walking away still requested a permanent dark chunk")
+			break
+	# Legacy state must not darken Office tiles or lights, even across a
+	# genuine blackout. Compare exact material identities, not just energy.
+	var office := Chunk.new(677189935, Vector2i(18, 46), 1, {"anomaly": 0})
+	var office_before := _light_state(office)
+	var surfaces := {}
+	for mesh: MeshInstance3D in office.find_children("*", "MeshInstance3D", true, false):
+		surfaces[mesh] = mesh.material_override
+	office.activate_anomaly(0)
+	office.set_blackout(true)
+	office.set_blackout(false)
+	if office.anomaly_kind != -1 or not _same_light_state(office_before):
+		_fail("legacy Office dead-light state survived blackout restoration")
+	for mesh in surfaces:
+		if mesh.material_override != surfaces[mesh]:
+			_fail("Office ceiling or fixture material failed to restore")
+			break
+	office.free()
 	run.free()
 	working.free()
 	player.queue_free()

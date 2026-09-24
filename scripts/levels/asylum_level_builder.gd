@@ -63,6 +63,10 @@ func _asy_lighting() -> void:
 	light.light_color = Color(0.8, 0.94, 0.72)
 	light.omni_range = 13.5 if tall else 11.5
 	light.shadow_enabled = true
+	# Hanging fluorescent panels are broad emitters, not a single bare bulb.
+	# Keep the ward dark, but avoid point-light-black wall junctions.
+	light.shadow_opacity = 0.6
+	light.shadow_blur = 2.5
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 22.0
 	light.distance_fade_length = 8.0

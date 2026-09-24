@@ -20,6 +20,25 @@ between indivisible stages/queries; they are not hard frame-time guarantees.
 The preview renders only while the lens exposes it or the photographed doorway
 is open, at the source world's 3D resolution (480 lines with CRT). This avoids
 rendering an invisible second world behind the sealed wall.
+The preview uses an off-axis camera whose near plane sits at the entrance,
+with the image mapped to the opening itself. Destination walls between the
+virtual eye and that plane are clipped: backing away or stepping sideways in
+the source room must not turn the view into a flat pale rectangle. Visible
+entrances continue rendering beyond the 18-metre discovery-cue range, and a
+new or resized viewport stays hidden until it has rendered a frame.
+
+This is the cross-realm visit system. Prepared architectural doorways connect
+neighbouring rooms of the current environment and exclude reserved realm sites.
+Opened realm entrances remain recognizable as already documented after their
+source room streams back in; further photos retain their captions without
+awarding another evidence credit.
+
+The rendered regression uses the reported Mall seed in save-isolated test mode:
+
+```sh
+godot --path . --audio-driver Dummy --script tools/audit_realm_preview.gd -- --test-mode --seed=1021555651 --descent-floor=2
+```
+
 Add `--perf-log --chunktime` to a play session to record frame and build timings
 without the automatic movement enabled by `--bench`.
 

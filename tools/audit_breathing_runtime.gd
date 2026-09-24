@@ -6,6 +6,12 @@ func run() -> void:
 	var game := await boot_game(980712989)
 	var director: Node = game._breathing
 	expect(director != null and director.pacing == game._director, "startup lost pacing authority")
+	expect(game._architectural_events != null and director.managed \
+		and game._native_doorways.managed,
+		"normal play did not assign both effects to one scheduler")
+	# This audit exercises the director's lower-level safety contract directly.
+	# The scheduler has its own focused timing/variety contract.
+	game._architectural_events.set_physics_process(false)
 	director.set_physics_process(false)
 	game.player.set_physics_process(false)
 	game.player.set_process(false)
@@ -32,6 +38,47 @@ func run() -> void:
 	await physics_frame
 	expect(game._breathing_allowed(), "normal Wander exploration is blocked")
 	expect(Placement.visible(choice, chunk, game.player.cam), "clear visible wall was rejected")
+	var scheduler: Node = game._architectural_events
+	scheduler.cooldown = 0.0
+	scheduler._door_ready_at = INF
+	for scan in 18:
+		scheduler._physics_process(0.016)
+		if is_instance_valid(director.active): break
+	expect(is_instance_valid(director.active) and scheduler._pending == "breath",
+		"shared scheduler did not hand a visible wall to the effect director")
+	if is_instance_valid(director.active):
+		finish_preparing(director)
+		director._physics_process(0.016)
+		scheduler._physics_process(0.016)
+		expect(scheduler.events_started == 0 and scheduler._pending == "breath",
+			"barely started motion consumed the full sighting cooldown")
+		game._photo_camera._raised = true
+		director._physics_process(0.016)
+		game._photo_camera._raised = false
+		scheduler._physics_process(0.016)
+		expect(scheduler.cooldown <= 3.0 and director._last_mesh_id == 0,
+			"unseen cancellation spent the wall or long cooldown")
+		expect(director.try_kind_at_cell("breath", chunk.cell),
+			"cancelled wall cannot be selected again by the ordinary search")
+		if is_instance_valid(director.active):
+			scheduler._pending = "breath"
+			finish_preparing(director)
+			game.player.cam.rotate_y(PI)
+			director._physics_process(2.0)
+			scheduler._physics_process(0.016)
+			expect(scheduler.events_started == 0,
+				"offscreen wall motion consumed the sighting cooldown")
+			game.player.cam.rotate_y(-PI)
+			director._physics_process(0.11)
+			scheduler._physics_process(0.016)
+		expect(scheduler.events_started == 1 \
+			and scheduler.history.back() == "breath" \
+			and scheduler.cooldown >= 6.0 and scheduler.cooldown <= 10.0,
+			"shared scheduler did not record a completed live sighting")
+		director.cancel()
+	director.managed = false
+	director._last_mesh_id = 0
+	await physics_frame
 	# Route actual key events through the viewport, including logical-key-only
 	# events. Missing flags and gameplay gates must explain themselves on HUD.
 	var notices: Array[String] = []
@@ -114,6 +161,9 @@ func run() -> void:
 	await await_until(func(): return not game._switching, 12000)
 	expect(not is_instance_valid(old_director), "floor transition retained old director")
 	expect(is_instance_valid(game._breathing) and game._breathing.manager == game.cm, "new floor lacks configured director")
+	expect(game._architectural_events.breathing == game._breathing \
+		and game._breathing.managed and game._native_doorways.managed,
+		"new floor did not reconnect the shared architecture scheduler")
 	await teardown_game(game)
 	finish("breathing runtime: pacing, visibility, gates, actor withdrawal and teardown")
 

@@ -13,6 +13,9 @@ var player: Player
 var pacing: HorrorDirector
 var allowed: Callable
 var debug_controls := false
+## Normal gameplay is scheduled by ArchitecturalEventDirector. Preview tools
+## leave this false so their existing F6 and autonomous audit paths still work.
+var managed := false
 var active: Node3D
 var active_chunk: Chunk
 var selection: Dictionary = {}
@@ -31,6 +34,7 @@ var _debug_kind := ""
 var _debug_index := 0
 var _last_mesh_id := 0
 var _wave_started := false
+var _wave_reserved := false
 var _prepare_elapsed := 0.0
 var _audio: Node
 var _audio_started := false
@@ -38,6 +42,8 @@ var _visibility_left := 0.0
 var _wave_preview_mode := false
 var _preview_hint_shown := false
 var _wave_wait := 0.0
+var _sighting_seen := false
+var last_cancel_reason := ""
 
 func configure(cm: ChunkManager, actor: Player, director: HorrorDirector, gate: Callable, debug := false, request_wave := false) -> void:
 	manager = cm
@@ -70,6 +76,8 @@ func _physics_process(dt: float) -> void:
 		if not is_instance_valid(active_chunk) or not active_chunk.is_inside_tree() or active_chunk.is_queued_for_deletion() or manager.chunks.get(active_chunk.cell) != active_chunk or not actor_clear():
 			cancel("stopped: room changed, hostile nearby or too close to the side wall")
 			return
+		if _wave_reserved and not _wave_started and pacing != null:
+			pacing.hold_preparing_visual()
 		if not active.prepared:
 			_prepare_elapsed += dt
 			if _prepare_elapsed > 45.0:
@@ -84,9 +92,18 @@ func _physics_process(dt: float) -> void:
 				cancel("skipped: " + active.failure if kind == "wave" else "preparation failed")
 			return
 		if kind == "wave" and not _wave_started:
+			# Preparation can outlast a whole corridor crossing. Do not play the
+			# completed geometry behind the walker; wait briefly for their return.
+			var center := active_chunk.to_global(Vector3(6, active_chunk._floor_h()+1.4, 6))
+			if not player.cam.is_position_in_frustum(center):
+				_wave_wait += dt
+				if _wave_wait >= 10.0: cancel("prepared wave left out of sight")
+				return
 			# Preparation may take seconds. Reserve quiet time for the actual
 			# motion, not a lease that expires while still building its meshes.
-			if pacing != null and not pacing.try_start_visual(WaveProfile.DURATION+1.0):
+			if _wave_reserved and pacing != null:
+				pacing.abandon_unseen_visual()
+			if pacing != null and not pacing.try_start_visual(WaveProfile.DURATION+1.0, HorrorDirector.ARCHITECTURE_RECOVERY):
 				if _wave_preview_mode and _wave_wait < 30.0:
 					if _wave_wait == 0.0:
 						debug_notice.emit("HALLWAY WAVE — prepared; waiting for a quiet moment")
@@ -111,7 +128,23 @@ func _physics_process(dt: float) -> void:
 		else: active.pose(Profile.weights(kind, elapsed / duration))
 		_visibility_left -= dt
 		if _visibility_left <= 0.0:
-			_audio.set_in_view(_effect_in_view())
+			var in_view := _effect_in_view()
+			if kind != "wave" and not _sighting_seen and not in_view \
+					and player.velocity.length() > 1.0:
+				var to_wall := active_chunk.to_global(selection.center) - player.cam.global_position
+				if to_wall.dot(-player.cam.global_basis.z) < 0.0:
+					if pacing != null: pacing.abandon_unseen_visual()
+					cancel("walked past unseen wall")
+					return
+			_audio.set_in_view(in_view)
+			# Initial blend weights are almost zero. Count the central motion
+			# only when it is actually in sight, not while preparing or behind
+			# the viewer. An unseen cancellation must leave this wall eligible.
+			var phase := elapsed / duration
+			if not _sighting_seen and in_view and phase >= 0.25 and phase <= 0.75:
+				_sighting_seen = true
+				events_started += 1
+				if kind != "wave": _last_mesh_id = selection.face.mesh.get_instance_id()
 			_visibility_left = 0.1
 		_collision_left -= dt
 		if _collision_left <= 0.0:
@@ -122,6 +155,7 @@ func _physics_process(dt: float) -> void:
 			_collision_left = 0.0 if kind == "wave" else 1.0 / 15.0
 		return
 	active = null
+	if managed: return
 	cooldown -= dt
 	if cooldown > 0: return
 	if _scan_cells.is_empty():
@@ -138,31 +172,43 @@ func _physics_process(dt: float) -> void:
 		return
 	# A bounded room search, never every resident room or every frame.
 	var cell: Vector2i = _scan_cells.pop_front()
-	var chunk: Chunk = manager.chunks.get(cell)
-	if is_instance_valid(chunk) and not chunk.is_queued_for_deletion():
-		var options: Array = []
-		if kind == "wave":
-			var layout := WavePlacement.eligible(chunk)
-			if not layout.is_empty(): options.append(layout)
-		else: options = Placement.candidates(chunk, kind)
-		for candidate in options:
-			if kind == "wave":
-				var center := chunk.to_global(Vector3(6, chunk._floor_h()+1.4, 6))
-				if not player.cam.is_position_in_frustum(center) and not chunk.cell == Vector2i(floori(player.global_position.x/12), floori(player.global_position.z/12)): continue
-				if start_event(chunk, candidate, kind): return
-				continue
-			if candidate.face.mesh.get_instance_id() == _last_mesh_id and _debug_kind.is_empty(): continue
-			if not Placement.visible(candidate, chunk, player.cam): continue
-			candidate.depth = _rng.randf_range(0.20, 0.35)
-			candidate.size *= Vector2(_rng.randf_range(0.80, 1.0), _rng.randf_range(0.85, 1.0))
-			selection = candidate
-			active_chunk = chunk
-			if actor_clear() and start_event(chunk, candidate, kind): return
+	if try_kind_at_cell(kind, cell): return
 	cooldown = 1.0 if not _scan_cells.is_empty() else 8.0
 	if _scan_cells.is_empty() and not _debug_kind.is_empty():
 		var hint := "look up at a clear ceiling" if kind == "ceiling" else "face a clear wall from 4–6 metres away"
 		if kind == "wave": hint = "enter a straight hallway; moving walkways, water and special rooms are excluded"
 		debug_notice.emit("BREATHING %s — waiting; %s and stay still" % [kind.to_upper(), hint])
+
+
+## One bounded visible-room probe for the shared architecture scheduler. It
+## never weakens the effect's final actor, topology or pacing checks.
+func try_kind_at_cell(shape_kind: String, cell: Vector2i) -> bool:
+	if is_instance_valid(active) or not is_instance_valid(manager) \
+			or not is_instance_valid(player): return false
+	var chunk: Chunk = manager.chunks.get(cell)
+	if not is_instance_valid(chunk) or chunk.is_queued_for_deletion(): return false
+	if shape_kind == "wave":
+		var layout := WavePlacement.eligible(chunk)
+		if layout.is_empty(): return false
+		var center := chunk.to_global(Vector3(6, chunk._floor_h() + 1.4, 6))
+		var here := Vector2i(floori(player.global_position.x / ChunkManager.CELL),
+			floori(player.global_position.z / ChunkManager.CELL))
+		if not player.cam.is_position_in_frustum(center) \
+				and not (debug_controls and here == cell): return false
+		return start_event(chunk, layout, shape_kind)
+	var candidates := Placement.candidates(chunk, shape_kind, false, player.cam)
+	# Try a different surface first, without permanently banning the only
+	# clear wall in a furnished room after its first sighting.
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return a.face.mesh.get_instance_id() != _last_mesh_id \
+			and b.face.mesh.get_instance_id() == _last_mesh_id)
+	for candidate in candidates:
+		if not Placement.visible(candidate, chunk, player.cam): continue
+		candidate.depth = _rng.randf_range(0.20, 0.35)
+		candidate.size *= Vector2(_rng.randf_range(0.80, 1.0),
+			_rng.randf_range(0.85, 1.0))
+		if start_event(chunk, candidate, shape_kind): return true
+	return false
 
 func start_event(chunk: Chunk, candidate: Dictionary, shape_kind := "breath") -> bool:
 	if is_instance_valid(active) or not is_instance_valid(chunk): return false
@@ -176,7 +222,12 @@ func start_event(chunk: Chunk, candidate: Dictionary, shape_kind := "breath") ->
 		kind = previous_kind
 		return false
 	if shape_kind == "wave" and WavePlacement.eligible(chunk).is_empty(): return false
-	if shape_kind != "wave" and pacing != null and not pacing.try_start_visual(Profile.duration(shape_kind) + 1.0): return false
+	if shape_kind != "wave" and pacing != null and not pacing.try_start_visual(Profile.duration(shape_kind) + 1.0, HorrorDirector.ARCHITECTURE_RECOVERY): return false
+	# Normal scheduling owns a quiet slot while preparing, so random ambient
+	# and encounter timers cannot continually steal the finished wave's slot.
+	var reserve_wave := shape_kind == "wave" and managed and pacing != null
+	if reserve_wave and not pacing.try_start_visual(2.0): return false
+	_wave_reserved = reserve_wave
 	var effect: Node3D = WaveSurface.new() if shape_kind == "wave" else Surface.new()
 	chunk.add_child(effect)
 	if shape_kind == "wave": effect.begin_setup(chunk, candidate.axis, candidate.width, candidate.height)
@@ -190,10 +241,9 @@ func start_event(chunk: Chunk, candidate: Dictionary, shape_kind := "breath") ->
 	_wave_started = false
 	_wave_wait = 0.0
 	_audio_started = false
+	_sighting_seen = false
 	_visibility_left = 0.0
 	_collision_left = 0.0
-	events_started += 1
-	if shape_kind != "wave": _last_mesh_id = candidate.face.mesh.get_instance_id()
 	_scan_cells.clear()
 	var requested := not _debug_kind.is_empty()
 	_debug_kind = ""
@@ -203,12 +253,17 @@ func start_event(chunk: Chunk, candidate: Dictionary, shape_kind := "breath") ->
 		if requested: debug_notice.emit("HALLWAY WAVE — preparing native room" if kind == "wave" else "BREATHING %s — starting" % kind.to_upper())
 	return true
 
+func event_was_seen() -> bool:
+	# Retain the result through cancellation until the next event starts, so
+	# the manager can reconcile it after a temporary gameplay hold.
+	return _sighting_seen
+
 func actor_clear() -> bool:
 	if selection.is_empty() or not is_instance_valid(active_chunk): return false
 	if kind == "wave":
 		if not is_instance_valid(player) or WavePlacement.eligible(active_chunk).is_empty(): return false
 		var local := active_chunk.to_local(player.global_position)
-		if Vector2(local.x-6, local.z-6).length() > 24.0: return false
+		if Vector2(local.x-6, local.z-6).length() > 36.0: return false
 		# Walking the moving floor is supported. Approaching a narrowing wall
 		# or any hostile entering the room withdraws the inward-only warp.
 		var across := local.z-6 if int(selection.axis) == 1 else local.x-6
@@ -241,6 +296,10 @@ func actor_clear() -> bool:
 	return true
 
 func cancel(reason := "") -> void:
+	if is_instance_valid(active): last_cancel_reason = reason
+	if _wave_reserved and not _sighting_seen and pacing != null:
+		pacing.abandon_unseen_visual()
+	_wave_reserved = false
 	if is_instance_valid(active) and kind == "wave" and debug_controls and not reason.is_empty():
 		debug_notice.emit("HALLWAY WAVE — " + reason)
 		print("Hallway wave: ", reason)

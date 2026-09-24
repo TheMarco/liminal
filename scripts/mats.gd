@@ -577,20 +577,10 @@ static func office_wall() -> Material:
 	return _shader("office_wall", "res://shaders/office_wall.gdshader")
 
 
-static func office_wall_variant(idx: int) -> Material:
-	idx = posmod(idx, 3)
-	if idx == 0:
-		return office_wall()
-	var key := "office_wall_variant_%d" % idx
-	if _c.has(key):
-		return _c[key]
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/office_wall.gdshader")
-	m.set_shader_parameter("base_col", Color(0.81, 0.84, 0.80) if idx == 1 \
-		else Color(0.86, 0.83, 0.76))
-	m.resource_name = key
-	_c[key] = m
-	return m
+static func office_wall_variant(_idx: int) -> Material:
+	# Single neutral gray everywhere. Per-chunk paint variants used to split
+	# flat walls with a visible seam where two tints met mid-plane.
+	return office_wall()
 
 
 static func office_ceiling() -> Material:

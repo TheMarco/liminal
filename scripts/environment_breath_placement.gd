@@ -1,7 +1,7 @@
 extends RefCounted
 ## Conservative, read-only discovery of usable wall surfaces.
 
-static func candidates(chunk: Chunk, kind := "breath", compact := false) -> Array[Dictionary]:
+static func candidates(chunk: Chunk, kind := "breath", compact := false, camera: Camera3D = null) -> Array[Dictionary]:
 	var scanner := SurfaceWear.new()
 	scanner.host = chunk
 	scanner.ctx = chunk._build_context
@@ -10,7 +10,7 @@ static func candidates(chunk: Chunk, kind := "breath", compact := false) -> Arra
 	for node: MeshInstance3D in chunk.find_children("*", "MeshInstance3D", true, false):
 		if node.mesh != null and node.visible:
 			blockers.append({"mesh": node, "transform": relative(node, chunk), "bounds": node.mesh.get_aabb()})
-	if kind == "ceiling": return ceiling_candidates(scanner, blockers, chunk)
+	if kind == "ceiling": return ceiling_candidates(scanner, blockers, chunk, camera)
 	var result: Array[Dictionary] = []
 	for face: SurfaceWear.Face in scanner.walls:
 		if not (face.mesh.mesh is BoxMesh or face.mesh.mesh is QuadMesh): continue
@@ -22,6 +22,10 @@ static func candidates(chunk: Chunk, kind := "breath", compact := false) -> Arra
 			var center: Vector3 = face.center + face.u * (face.size.x - size.x) * float(lateral)
 			center.y = clampf(chunk._floor_h() + (2.1 if compact else 1.5), face.center.y - (face.size.y - size.y) * 0.5 + 0.05, face.center.y + (face.size.y - size.y) * 0.5 - 0.05)
 			var frame := Transform3D(Basis(face.u, face.v, face.normal), center)
+			var candidate := {"face": face, "center": center, "size": size, "depth": 0.35, "companions": bands}
+			# Filter before the bounded result fills. Outer shell walls and the
+			# backs of corridor walls otherwise consume every candidate slot.
+			if camera != null and not visible(candidate, chunk, camera): continue
 			# Keep 1.6m of empty space in front of the maximum live 35cm bow.
 			var envelope := AABB(Vector3(-size.x/2, -size.y/2, -0.015), Vector3(size.x, size.y, 1.965))
 			var clear := true
@@ -32,11 +36,11 @@ static func candidates(chunk: Chunk, kind := "breath", compact := false) -> Arra
 					clear = false
 					break
 			if clear:
-				result.append({"face": face, "center": center, "size": size, "depth": 0.35, "companions": bands})
+				result.append(candidate)
 				if result.size() >= 12: return result
-	return candidates(chunk, kind, true) if result.is_empty() and not compact else result
+	return candidates(chunk, kind, true, camera) if result.is_empty() and not compact else result
 
-static func ceiling_candidates(scanner: SurfaceWear, blockers: Array[Dictionary], chunk: Chunk) -> Array[Dictionary]:
+static func ceiling_candidates(scanner: SurfaceWear, blockers: Array[Dictionary], chunk: Chunk, camera: Camera3D = null) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for face: SurfaceWear.Face in scanner.ceilings:
 		if not (face.mesh.mesh is BoxMesh or face.mesh.mesh is QuadMesh): continue
@@ -50,6 +54,8 @@ static func ceiling_candidates(scanner: SurfaceWear, blockers: Array[Dictionary]
 					var offset := Vector2(ox, oy) * face.size
 					if absf(offset.x) + size.x / 2 + 0.1 > face.size.x / 2 or absf(offset.y) + size.y / 2 + 0.1 > face.size.y / 2: continue
 					var center := face.center + face.u * offset.x + face.v * offset.y
+					var candidate := {"face": face, "center": center, "size": size, "depth": 0.35, "companions": []}
+					if camera != null and not visible(candidate, chunk, camera): continue
 					var frame := Transform3D(Basis(face.u, face.v, face.normal), center)
 					# Leave lights, vents, beams, wear overlays and wall junctions
 					# completely untouched; do not deform through attached fixtures.
@@ -61,7 +67,7 @@ static func ceiling_candidates(scanner: SurfaceWear, blockers: Array[Dictionary]
 							clear = false
 							break
 					if clear:
-						result.append({"face": face, "center": center, "size": size, "depth": 0.35, "companions": []})
+						result.append(candidate)
 						if result.size() >= 6: return result
 	return result
 
@@ -69,9 +75,17 @@ static func visible(selection: Dictionary, chunk: Chunk, camera: Camera3D) -> bo
 	var center := chunk.to_global(selection.center)
 	var delta := center - camera.global_position
 	var ceiling: bool = selection.face.normal.y < -0.98
-	if delta.length() < (1.2 if ceiling else 3.5) or delta.length() > 14.0 or not camera.is_position_in_frustum(center): return false
+	if delta.length() < (1.2 if ceiling else 1.5) or delta.length() > 14.0 or not camera.is_position_in_frustum(center): return false
+	if camera.get_parent() is Player:
+		# The bow becomes legible about two seconds after selection. A nearby
+		# wall that the walking player will already have passed is a wasted beat.
+		var motion: Vector3 = camera.get_parent().velocity * 2.0
+		if (delta - motion).dot(-camera.global_basis.z) < 1.0: return false
 	var normal: Vector3 = chunk.global_basis * selection.face.normal
-	if normal.dot(camera.global_position - center) < (0.6 if ceiling else 2.0): return false
+	# A 3.55m corridor leaves only 1.775m to either wall. The old 2m
+	# perpendicular minimum excluded both sides even when safely ahead.
+	# actor_clear still reserves the swept body before and during the motion.
+	if normal.dot(camera.global_position - center) < (0.6 if ceiling else 1.3): return false
 	var ray := PhysicsRayQueryParameters3D.create(camera.global_position, center + normal * 0.08)
 	if camera.get_parent() is CollisionObject3D: ray.exclude = [camera.get_parent().get_rid()]
 	return camera.get_world_3d().direct_space_state.intersect_ray(ray).is_empty()

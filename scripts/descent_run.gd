@@ -650,6 +650,12 @@ func _maybe_anomaly(at: Vector2i) -> void:
 		return
 	var kind := WorldGen.h(world_seed, at.x, at.y,
 		2417 + floor_idx * 31) % 2
+	# The traversal path must follow the same policy as post-blackout beats:
+	# no permanent, uncaptioned 12m lights-out rectangles along a corridor.
+	# Keep the encounter probability unchanged rather than replacing the
+	# removed dead-light rolls with additional hostiles.
+	if kind == 0:
+		return
 	anomalies[at] = kind
 	anomaly_requested.emit(at, kind)
 

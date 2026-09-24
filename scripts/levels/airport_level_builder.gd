@@ -96,7 +96,10 @@ func _air_lighting() -> void:
 	light.omni_attenuation = 0.85
 	light.omni_range = 14.5
 	light.shadow_enabled = true
-	light.shadow_blur = 2.0
+	# One point light represents a ceiling grid of broad diffusers. Its hard,
+	# fully opaque shadows made bright terminal walls turn abruptly black.
+	light.shadow_opacity = 0.55
+	light.shadow_blur = 3.0
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 24.0
 	light.distance_fade_length = 8.0

@@ -282,8 +282,68 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo \
 			and event.physical_keycode == KEY_F:
 		set_flashlight(not flashlight.visible)
+	elif event is InputEventKey and event.pressed and not event.echo \
+			and event.physical_keycode == KEY_F7:
+		_debug_dump_lights()
 	elif event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+## F7 diagnostic: list every live light near the player with its source
+## tag, color, energy and range, nearest first, plus the player position
+## and every red emissive surface nearby. Added to hunt a pink wall wash
+## in the office that no static chunk light can explain.
+func _debug_dump_lights() -> void:
+	var scene_root := get_tree().current_scene
+	var rows: Array = []
+	for n in scene_root.find_children("*", "Light3D", true, false):
+		var l := n as Light3D
+		if not l.visible:
+			continue
+		var d := global_position.distance_to(l.global_position)
+		if d > 30.0:
+			continue
+		var src := str(l.get_meta("visible_source")) if l.has_meta("visible_source") else "?"
+		var r: float = l.omni_range if l is OmniLight3D \
+			else (l as SpotLight3D).spot_range
+		rows.append([d, "%5.1fm %-28s col=%s e=%.2f r=%.1f sh=%s" % [d, src,
+			l.light_color, l.light_energy, r, l.shadow_enabled]])
+	rows.sort()
+	var wseed := -1
+	var wcell := Vector2i.ZERO
+	var wbest := INF
+	for n in scene_root.find_children("*", "Node3D", true, false):
+		if not n.has_method("authored_furnishing_counts"):
+			continue
+		var d := global_position.distance_to((n as Node3D).global_position)
+		if d < wbest:
+			wbest = d
+			wseed = int(n.get("wseed"))
+			wcell = n.get("cell")
+	print("LIGHTDUMP seed=%d at %s facing %s (near chunk %s), %d lights within 30m:" % [
+		wseed, global_position, -global_transform.basis.z, wcell, rows.size()])
+	for row in rows:
+		print("  " + str(row[1]))
+	var reds: Array = []
+	for n in scene_root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		var d := global_position.distance_to(mi.global_position)
+		if d > 15.0:
+			continue
+		for si in mi.mesh.get_surface_count() if mi.mesh != null else 0:
+			var m := mi.get_active_material(si) as StandardMaterial3D
+			if m != null and m.emission_enabled and m.emission.r > 0.5 \
+					and m.emission.r > m.emission.g * 1.5:
+				var sz: Vector3 = mi.mesh.get_aabb().size \
+					* mi.global_transform.basis.get_scale()
+				reds.append([d, "%5.1fm size=%s e=%s x%.1f at %s" % [d, sz,
+					m.emission, m.emission_energy_multiplier,
+					mi.global_position]])
+				break
+	reds.sort()
+	print("REDUMP %d red emissives within 15m:" % reds.size())
+	for row in reds:
+		print("  " + str(row[1]))
 
 
 func clear_sprint_toggle() -> void:

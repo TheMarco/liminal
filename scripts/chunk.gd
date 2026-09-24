@@ -997,7 +997,6 @@ var _blackout := false
 var _blackout_lights := {}
 var _blackout_probes := {}
 var _blackout_surfaces := preload("res://scripts/blackout_surfaces.gd").new()
-var _dead_surfaces := preload("res://scripts/blackout_surfaces.gd").new()
 var _pool_reflection: ReflectionProbe
 var _furnishing_group_serial := 0
 ## Stable semantic identities for objects whose generated node instances may
@@ -1359,6 +1358,10 @@ var _deferred_wall_art: Array = []
 var _build_blackout := false
 var _build_started_usec := 0
 var _occluder_walls: Array[MeshInstance3D] = []
+## Generated doorway assemblies temporarily borrowed by the visual director.
+## At rest these are the original meshes and shapes, not replacement topology.
+var native_doorway_sites: Dictionary = {}
+var native_doorway_plan: NativeDoorwayPlan
 var _rendering_prepared := false
 var casino_landmark := ""
 
@@ -1383,6 +1386,7 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 	casino_landmark = spec.casino_landmark
 	descent = spec.descent
 	descent_topology = spec.topology
+	native_doorway_plan = spec.native_doorway_plan
 	descent_topology_state_override = spec.topology_state_override
 	descent_target = spec.target
 	descent_target_wall = spec.target_wall
@@ -2846,7 +2850,20 @@ func _build_walls() -> void:
 	var wall_t := ANNEX_WALL_T if theme == 2 else (POOL_WALL_T if theme == 9 else T)
 	for dir in 4:
 		var edge_visual_start := get_child_count()
+		var edge_shape_start := body.get_child_count()
 		var info := _edge_info(cell, dir)
+		var native_doorway := bool(info.get("native_latent", false)) \
+			and theme != 3 \
+			and (theme != 2 and theme != 9 or dir == 0 or dir == 2) \
+			and not bool(info.get("runtime_door", false)) \
+			and not info.has("photo_door_id") and not bool(info["wall"]) \
+			and not bool(info["full_open"]) and not bool(info["exit_sign"]) \
+			and float(info["w"]) >= 1.2 and float(info["w"]) <= 10.5 \
+			and not (theme == 0 and _casino_upper_band()) \
+			and (theme != 9 or (pool_style_dry(style) and pool_style_dry(
+				WorldGen.cell_style(wseed, cell + WorldGen.DIRV[dir], theme))))
+		var skip_doorway_utilities := native_doorway \
+			and bool(info.get("runtime_shortcut", false))
 		# Annex and pool shared boundaries have one canonical east/south owner
 		# and sit on the actual boundary plane. Previously both neighbouring
 		# chunks built an inward half, producing a compound double wall — in
@@ -2882,7 +2899,7 @@ func _build_walls() -> void:
 				else:
 					_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
 			_wall_decor(dir, plane)
-			if (theme == 1 or theme == 2) \
+			if not skip_doorway_utilities and (theme == 1 or theme == 2) \
 					and (theme != 2 or owns_annex_wall) \
 					and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
 					and not (theme == 1 and style == WorldGen.OFFICE_CORRIDOR):
@@ -2912,7 +2929,7 @@ func _build_walls() -> void:
 						or bool(info.get("runtime_door", false)):
 					_maybe_swing_door(dir, plane, a, b,
 						bool(info.get("runtime_door", false)))
-			if (theme == 1 or theme == 2) \
+			if not skip_doorway_utilities and (theme == 1 or theme == 2) \
 					and (theme != 2 or owns_annex_wall) \
 					and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
 					and not (theme == 1 and style == WorldGen.OFFICE_CORRIDOR):
@@ -2930,6 +2947,19 @@ func _build_walls() -> void:
 		if bool(info.get("runtime_shortcut", false)) \
 				or bool(info.get("runtime_seal", false)):
 			_tag_mutation_edge_visuals(edge_visual_start, dir)
+		if native_doorway:
+			_register_native_doorway_site(dir, edge_visual_start, edge_shape_start,
+				float(info["t"]), float(info["w"]))
+			if not native_doorway_site(dir).is_empty():
+				# The hidden endpoint is the very same full-wall builder used by
+				# ordinary edges, including its finish, skirting and collider.
+				var closed_visual_start := get_child_count()
+				var closed_shape_start := body.get_child_count()
+				_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
+				_register_native_closed_wall(dir, closed_visual_start,
+					closed_shape_start)
+				show_native_doorway(dir,
+					native_doorway_plan.is_open(cell, dir))
 	if theme == 9:
 		# Each grid vertex has one deterministic southwest owner.  This chunk
 		# therefore owns its north-east vertex and builds at most one curved
@@ -2939,6 +2969,9 @@ func _build_walls() -> void:
 
 
 func _edge_info(at: Vector2i, dir: int) -> Dictionary:
+	if native_doorway_plan != null:
+		var latent := native_doorway_plan.candidate(at, dir)
+		if not latent.is_empty(): return latent
 	if descent_topology != null:
 		var photo_edge := descent_topology.photo_geometry_edge(at, dir)
 		if not photo_edge.is_empty():
@@ -2948,6 +2981,74 @@ func _edge_info(at: Vector2i, dir: int) -> Dictionary:
 			if descent_topology_state_override >= 0 else \
 			descent_topology.edge_info(at, dir)
 	return WorldGen.edge_info(wseed, at, dir, theme)
+
+
+func _register_native_doorway_site(dir: int, first_node: int, first_shape: int,
+		along: float, width: float) -> void:
+	var nodes: Array[Node3D] = []
+	var shapes: Array[CollisionShape3D] = []
+	for index in range(first_node, get_child_count()):
+		var node := get_child(index) as Node3D
+		# An operable leaf owns its own runtime state and must never be hidden
+		# by a temporary architecture effect.
+		if node != null and int(node.get_meta("door_dir", -1)) == dir: return
+		if node != null and node != body: nodes.append(node)
+	for index in range(first_shape, body.get_child_count()):
+		var shape := body.get_child(index) as CollisionShape3D
+		if shape != null: shapes.append(shape)
+	if not nodes.is_empty() and not shapes.is_empty():
+		var material: Material
+		for node in nodes:
+			if node is MeshInstance3D and node.material_override != null:
+				material = node.material_override
+				break
+		if material == null: return
+		var head := DOOR_TOP
+		if theme == 4 or theme == 7: head = AIR_DOOR
+		elif theme == 9: head = POOL_DOOR_TOP
+		elif theme == 10: head = BRUTAL_DOOR_TOP
+		elif theme == 11: head = BLOOM_DOOR_TOP
+		native_doorway_sites[dir] = {"nodes": nodes, "shapes": shapes,
+			"t": along, "w": width, "material": material,
+			"head": head, "floor": _floor_h(),
+			"half_depth": (ANNEX_WALL_T * 0.5 if theme == 2 else
+				(POOL_WALL_T * 0.5 if theme == 9 else T)),
+			"single_owner": theme == 2 or theme == 9}
+
+
+func _register_native_closed_wall(dir: int, first_node: int,
+		first_shape: int) -> void:
+	var site := native_doorway_site(dir)
+	if site.is_empty(): return
+	var closed_nodes: Array[Node3D] = []
+	var closed_shapes: Array[CollisionShape3D] = []
+	for index in range(first_node, get_child_count()):
+		var node := get_child(index) as Node3D
+		if node != null and node != body: closed_nodes.append(node)
+	for index in range(first_shape, body.get_child_count()):
+		var shape := body.get_child(index) as CollisionShape3D
+		if shape != null: closed_shapes.append(shape)
+	site["closed_nodes"] = closed_nodes
+	site["closed_shapes"] = closed_shapes
+
+
+func native_doorway_site(dir: int) -> Dictionary:
+	return native_doorway_sites.get(dir, {})
+
+
+func show_native_doorway(dir: int, value: bool, update_collision := true,
+		transitioning := false) -> void:
+	var site := native_doorway_site(dir)
+	if site.is_empty(): return
+	for node: Node3D in site["nodes"]:
+		if is_instance_valid(node): node.visible = value
+	for node: Node3D in site.get("closed_nodes", []):
+		if is_instance_valid(node): node.visible = not value and not transitioning
+	if update_collision:
+		for shape: CollisionShape3D in site["shapes"]:
+			if is_instance_valid(shape): shape.disabled = not value
+		for shape: CollisionShape3D in site.get("closed_shapes", []):
+			if is_instance_valid(shape): shape.disabled = value or transitioning
 
 
 ## Build the opening once, then fill it with a separately owned visual and
@@ -4677,6 +4778,11 @@ func _exit_alarm(face_pos: Vector3, yaw: float, sign_top: float,
 	# left so the plate is flush and the lamp projects into the room.
 	model.rotation.y = -PI / 2.0
 	pivot.set_meta("alarm_mount_yaw", -PI / 2.0)
+	if theme == 6:
+		# The alarm's imported housing is much larger than its glowing lens.
+		# A shadow-casting red lamp would project its giant silhouette above
+		# the exit rather than a soft halo from the diffuser.
+		_disable_shadows(model)
 	var state := [AABB(), false]
 	_collect_model_bounds(model, Transform3D.IDENTITY, state)
 	if not bool(state[1]):
@@ -4703,11 +4809,14 @@ func _exit_alarm(face_pos: Vector3, yaw: float, sign_top: float,
 	light.set_meta("structural_exit_light", true)
 	light.set_meta("visible_source", "exit_alarm_lens")
 	light.light_color = Color(1.0, 0.055, 0.035)
-	light.light_energy = 0.22
-	light.omni_range = 1.45
+	light.light_energy = 0.28 if theme == 6 else 0.22
+	light.omni_range = 2.8 if theme == 6 else 1.45
 	# The spill now starts at the physical lens rather than inside the wall.
 	light.position = Vector3(0, -height * 0.08, bounds.size.z + 0.065)
-	light.shadow_enabled = false
+	# A wider School spill must not paint the next room through the wall.
+	light.shadow_enabled = theme == 6
+	if theme == 6:
+		light.shadow_blur = 2.0
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 10.0
 	light.distance_fade_length = 5.0
@@ -7008,26 +7117,17 @@ func set_blackout(on: bool) -> void:
 	_blackout_lights.clear()
 	_blackout_probes.clear()
 	_blackout = false
-	if anomaly_kind == 0:
-		_dead_surfaces.apply(self)
 
 
 ## Presentation-only mutations never touch walls, floors or connectivity.
 func activate_anomaly(kind: int) -> void:
-	anomaly_kind = kind
+	# Legacy room state can still contain a dead-light request. Do not rebuild
+	# it as a permanently black ceiling segment when the chunk streams back.
 	if kind == 0:
-		for node in find_children("*", "Light3D", true, false):
-			var light := node as Light3D
-			if _blackout_lights.has(light):
-				var state: Array = _blackout_lights[light]
-				state[0] = false
-				state[1] = 0.0
-				_blackout_lights[light] = state
-			light.visible = false
-			light.light_energy = 0.0
-		if not _blackout:
-			_dead_surfaces.apply(self)
-	elif kind == 1:
+		anomaly_kind = -1
+		return
+	anomaly_kind = kind
+	if kind == 1:
 		# Hostile encounters belong to ShadowFigures, whose normal spawn search
 		# validates floor, body clearance and line of sight. Never bake a hostile
 		# into streamed room geometry where it can wait or wedge in furniture.

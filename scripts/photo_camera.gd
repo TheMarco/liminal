@@ -622,6 +622,9 @@ func viewfinder_feedback() -> Dictionary:
 	var best_dot := 0.94
 	var message := ""
 	var framed := _captured_anomalies(true)
+	for anomaly in framed:
+		if not anomaly.realm_destination.is_empty() and director._documented.has(anomaly.id):
+			return {"focused": false, "text": "ALREADY DOCUMENTED"}
 	for anomaly in director.album_subjects():
 		if not _on_facing_side(anomaly, cam.global_position):
 			continue
