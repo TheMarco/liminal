@@ -8,6 +8,8 @@ uniform vec3 col_dark : source_color = vec3(0.06, 0.14, 0.10);
 uniform vec3 col_light : source_color = vec3(0.16, 0.30, 0.22);
 uniform float bump_strength = 0.3;
 uniform sampler2D detail_tex : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D scenario_carpet_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform float scenario_blend = 0.0;
 
 varying vec3 wpos;
 
@@ -38,6 +40,12 @@ void fragment() {
 	float mid = vnoise(p * 7.0);
 	vec3 c = mix(col_base, col_light, fine * 0.55);
 	c = mix(c, col_dark, smoothstep(0.55, 0.9, mid) * 0.45);
+	// The approved Scenario carpet supplies the fiber pattern. Keep the existing
+	// institutional green tint so the circulation lane still reads clearly.
+	if (scenario_blend > 0.0) {
+		vec3 fiber = texture(scenario_carpet_tex, p / 0.75).rgb;
+		c *= mix(vec3(1.0), fiber / vec3(0.30, 0.36, 0.33), scenario_blend);
+	}
 	// carpet tile seams
 	vec2 g = fract(p / 0.5);
 	float seam = min(min(g.x, 1.0 - g.x), min(g.y, 1.0 - g.y));

@@ -7,11 +7,15 @@ func _office_door_decor(dir: int, plane: float) -> void:
 	var inner = plane + n * (Chunk.T / 2.0)
 	var fc = inner + n * 0.02
 	if dir < 2:
-		scene.box(Vector3(fc, 1.06, along), Vector3(0.05, 2.1, 1.0), Mats.wood_door(), false)
-		scene.cylinder(Vector3(fc + n * 0.03, 1.05, along + 0.36), 0.02, 0.12, Mats.chrome(), false)
+		var yaw := PI / 2.0 if n > 0.0 else -PI / 2.0
+		var p := Vector3(fc, 0, along)
+		scene.fitted_model("res://models/scenario/office/solid_door.glb", null,
+			p, Vector3(1.0, 2.1, 0.08), yaw)
 	else:
-		scene.box(Vector3(along, 1.06, fc), Vector3(1.0, 2.1, 0.05), Mats.wood_door(), false)
-		scene.cylinder(Vector3(along + 0.36, 1.05, fc + n * 0.03), 0.02, 0.12, Mats.chrome(), false)
+		var yaw := 0.0 if n > 0.0 else PI
+		var p := Vector3(along, 0, fc)
+		scene.fitted_model("res://models/scenario/office/solid_door.glb", null,
+			p, Vector3(1.0, 2.1, 0.08), yaw)
 
 
 func _office_ceiling_center(at: Vector3, panels: Vector2i) -> Vector3:
@@ -25,10 +29,43 @@ func _office_ceiling_center(at: Vector3, panels: Vector2i) -> Vector3:
 func _office_troffer(at: Vector3, panels: Vector2i,
 		pmat: Material) -> MeshInstance3D:
 	at = _office_ceiling_center(at, panels)
-	var lens := scene.troffer(at, OfficeCeilingGrid.lens_size(panels), pmat, Mats.metal_gray())
+	var turned := panels.y > panels.x
+	var holder := scene.fitted_model("res://models/scenario/office/ceiling_light.glb",
+		null, Vector3(at.x, ctx.ceiling_height - 0.04, at.z),
+		Vector3(1.5, 0.08, 0.75), PI / 2.0 if turned else 0.0, false)
+	var lens: MeshInstance3D = null
+	if holder != null:
+		lens = holder.find_child("DiffuserLens", true, false) as MeshInstance3D
+	if lens == null:
+		if holder != null:
+			holder.free()
+		lens = scene.troffer(at, OfficeCeilingGrid.lens_size(panels), pmat,
+			Mats.metal_gray())
+	else:
+		lens.material_override = pmat
 	lens.set_meta("office_ceiling_fixture", "light")
 	lens.set_meta("office_ceiling_panels", panels)
 	return lens
+
+
+func _office_ceiling_vent(at: Vector3, yaw := 0.0) -> MeshInstance3D:
+	var holder := scene.fitted_model("res://models/scenario/office/ceiling_vent.glb",
+		null, at, Vector3(OfficeCeilingGrid.PITCH, OfficeCeilingGrid.PITCH, 0.032),
+		0.0, false)
+	var grille: MeshInstance3D = null
+	if holder != null:
+		# The preview faces a wall; rotate its flat front into the drop ceiling.
+		holder.rotation = Vector3(-PI / 2.0, yaw, 0.0)
+		grille = holder.find_child("Dark recessed backing", true, false) as MeshInstance3D
+	if grille == null:
+		if holder != null:
+			holder.free()
+		grille = scene.box(at,
+			Vector3(OfficeCeilingGrid.PITCH, 0.032, OfficeCeilingGrid.PITCH),
+			Mats.metal_gray(), false)
+	grille.set_meta("office_ceiling_fixture", "vent")
+	grille.set_meta("office_ceiling_panels", Vector2i.ONE)
+	return grille
 
 
 func _office_lighting() -> void:
@@ -62,12 +99,7 @@ func _office_lighting() -> void:
 	# AC diffuser grilles between the light rows
 	for vp in [Vector2(6.0, 3.4), Vector2(6.0, 8.6)]:
 		var at := _office_ceiling_center(Vector3(vp.x, ctx.ceiling_height - 0.015, vp.y), Vector2i.ONE)
-		var grille := scene.box(at, Vector3(OfficeCeilingGrid.PITCH, 0.03, OfficeCeilingGrid.PITCH), Mats.metal_gray(), false)
-		grille.set_meta("office_ceiling_fixture", "vent")
-		grille.set_meta("office_ceiling_panels", Vector2i.ONE)
-		for si in 4:
-			scene.box(Vector3(at.x, ctx.ceiling_height - 0.035, at.z - 0.225 + 0.15 * float(si)),
-				Vector3(0.60, 0.012, 0.05), Mats.charcoal(), false)
+		_office_ceiling_vent(at)
 	# A failed or flickering tube removes only its own eighth of the grid. The
 	# former shared FlickerLight drove every lens and the room's only light,
 	# producing a hard 12m rectangle of darkness instead of one bad ballast.
@@ -133,10 +165,7 @@ func _office_corridor_lighting() -> void:
 	for t in [-3.0, 3.0]:
 		var vp = scene.world_point(o, Vector3(t, ctx.ceiling_height - 0.018, 0.88 if t < 0.0 else -0.88), yw)
 		vp = _office_ceiling_center(vp, Vector2i.ONE)
-		var grille = scene.model_box(null, vp, Vector3(OfficeCeilingGrid.PITCH, 0.032, OfficeCeilingGrid.PITCH), Mats.metal_gray())
-		grille.rotation.y = yw
-		grille.set_meta("office_ceiling_fixture", "vent")
-		grille.set_meta("office_ceiling_panels", Vector2i.ONE)
+		_office_ceiling_vent(vp, yw)
 	var stable_share := 3.0 / 4.0 if dead or flicker else 1.0
 	var light = scene.fixture_light(false, steady_panel, 0.82 * stable_share,
 		scene.world_point(o, Vector3(-1.5,
@@ -173,18 +202,10 @@ func _office_floor_files(p: Vector3, salt: int) -> void:
 		v.position = p + Vector3(ox, 0, -0.14)
 		v.rotation.y = (ctx.random01(salt + i) - 0.5) * 0.34
 		scene.add_node(v)
-		var y = 0.70 if i == 2 else 0.24
-		scene.model_rounded_box(v, Vector3(0, y, 0), Vector3(0.58, 0.46, 0.48), Mats.box_white(), 0.015)
-		scene.model_box(v, Vector3(0, y + 0.235, 0), Vector3(0.5, 0.018, 0.4), Mats.paint_white())
-		ProceduralDetails.attach(v, "office_floor_file_folder_tabs_y" + str(y), func(d: ProceduralDetails):
-			for layer in 3:
-				var ly = y + 0.245 + float(layer) * 0.012
-				d.box(Vector3(0, ly, 0), Vector3(0.48, 0.009, 0.37), Mats.paint_white(), 0.002,
-					Vector3(0, (float(layer) - 1.0) * 0.025, 0))
-				d.box(Vector3(-0.13 + float(layer) * 0.12, ly + 0.006, -0.17),
-					Vector3(0.13, 0.018, 0.035), Mats.box_white(), 0.003)
-		)
-	scene.scattered_papers(p + Vector3(0.6, 0, 0.35), salt + 8, 6)
+		scene.fitted_model("res://models/scenario/office/archive_box.glb", v,
+			Vector3(0, 0.47 if i == 2 else 0, 0), Vector3(0.58, 0.46, 0.48))
+	scene.fitted_model("res://models/scenario/office/paper_stack.glb", null,
+		p + Vector3(0.6, 0, 0.35), Vector3(0.48, 0.08, 0.37))
 	scene.collider_box(p + Vector3(0, 0.42, 0), Vector3(1.25, 0.84, 1.0))
 
 
@@ -413,6 +434,13 @@ func _office_corridor_utilities(o: Vector3, yw: float, side: float, si: int,
 	var face = side - signf(side) * 0.078
 	var facing = yw + (PI if side > 0.0 else 0.0)
 	var base = 1480 + si * 23
+	if ctx.random01(base + 2) < 0.55:
+		var vent_t := _office_corridor_clear_t(si, doors, bay)
+		if vent_t < 90.0:
+			scene.fitted_model("res://models/scenario/office/wall_vent.glb", null,
+				scene.world_point(o,
+					Vector3(vent_t, ctx.ceiling_height - 0.42, face), yw),
+				Vector3(0.70, 0.40, 0.065), facing, false)
 	if ctx.random01(base) < 0.82:
 		var outlet_t = _office_corridor_clear_t(si, doors, bay)
 		if outlet_t < 90.0:
@@ -516,13 +544,9 @@ func _office_corridor_bay_returns(o: Vector3, yw: float, side: float,
 func _office_corridor_open_casing(o: Vector3, yw: float, side: float,
 		t: float, width: float) -> void:
 	var inn = side - signf(side) * 0.105
-	for edge in [t - width * 0.5, t + width * 0.5]:
-		var jamb = scene.model_box(null, scene.world_point(o, Vector3(edge, Chunk.DOOR_TOP * 0.5, inn), yw),
-			Vector3(0.11, Chunk.DOOR_TOP, 0.24), Mats.paint_white())
-		jamb.rotation.y = yw
-	var head = scene.model_box(null, scene.world_point(o, Vector3(t, Chunk.DOOR_TOP + 0.06, inn), yw),
-		Vector3(width + 0.16, 0.12, 0.24), Mats.paint_white())
-	head.rotation.y = yw
+	scene.fitted_model("res://models/scenario/office/open_doorway_casing.glb",
+		null, scene.world_point(o, Vector3(t, 0, inn), yw),
+		Vector3(width + 0.16, Chunk.DOOR_TOP + 0.12, 0.24), yw)
 
 
 ## A sealed office door installed in a real wall opening. The collider and
@@ -538,35 +562,17 @@ func _office_corridor_door(o: Vector3, yw: float, t: float,
 	v.rotation.y = yw + (PI if side > 0.0 else 0.0)
 	scene.add_node(v)
 	var service = ctx.random01(salt) < 0.24
-	var door_mat: Material = Mats.metal_gray() if service else Mats.wood_door()
-	scene.model_rounded_box(v, Vector3(0, 1.09, 0), Vector3(1.04, 2.18, 0.07), door_mat, 0.012)
-	scene.model_box(v, Vector3(-0.575, 1.11, 0), Vector3(0.11, 2.23, 0.25), Mats.paint_white())
-	scene.model_box(v, Vector3(0.575, 1.11, 0), Vector3(0.11, 2.23, 0.25), Mats.paint_white())
-	scene.model_box(v, Vector3(0, 2.25, 0), Vector3(1.26, 0.12, 0.25), Mats.paint_white())
+	var door_path := "res://models/scenario/office/solid_door.glb"
 	if not service and ctx.random01(salt + 1) < 0.62:
-		# Milky vision panel with a slim aluminium bead.
-		scene.model_rounded_box(v, Vector3(0, 1.58, 0.041), Vector3(0.43, 0.5, 0.014),
-			Mats.office_privacy_glass(), 0.01)
-		for sx in [-0.235, 0.235]:
-			scene.model_box(v, Vector3(sx, 1.58, 0.052), Vector3(0.025, 0.55, 0.018), Mats.chrome())
-		for sy in [1.295, 1.865]:
-			scene.model_box(v, Vector3(0, sy, 0.052), Vector3(0.495, 0.025, 0.018), Mats.chrome())
-	# Lever, latch plate, and a dead access-control reader.
-	scene.model_rounded_box(v, Vector3(0.36, 1.02, 0.06), Vector3(0.13, 0.2, 0.025), Mats.chrome(), 0.008)
-	scene.model_sphere(v, Vector3(0.36, 1.02, 0.092), 0.035, Mats.chrome())
-	scene.model_rounded_box(v, Vector3(0.24, 1.02, 0.1), Vector3(0.25, 0.035, 0.035), Mats.chrome(), 0.012)
-	scene.model_rounded_box(v, Vector3(0.72, 1.28, 0.07), Vector3(0.12, 0.2, 0.035), Mats.charcoal(), 0.008)
-	scene.model_box(v, Vector3(0.72, 1.34, 0.091), Vector3(0.055, 0.025, 0.008), Mats.lamp_red())
+		door_path = "res://models/scenario/office/vision_door.glb"
+	scene.fitted_model(door_path, v, Vector3.ZERO,
+		Vector3(1.26, 2.31, 0.25))
+	scene.fitted_model("res://models/scenario/office/card_reader.glb", v,
+		Vector3(0.72, 1.28, 0.085), Vector3(0.12, 0.2, 0.035), 0.0, false)
 	scene.collider_yaw_box(scene.world_point(o, Vector3(t, 1.09, inn), yw),
 		Vector3(1.06, 2.18, 0.11), yw)
-	var plate = scene.model_rounded_box(v, Vector3(-0.78, 1.58, 0.075),
-		Vector3(0.34, 0.24, 0.025), Mats.paint_white(), 0.006)
-	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	ProceduralDetails.attach(v, "office_corridor_door_sign_mounts_034_024_v1", func(d: ProceduralDetails):
-		for sy in [1.48, 1.68]:
-			d.box(Vector3(-0.96, sy, 0.071), Vector3(0.035, 0.035, 0.018),
-				Mats.metal_gray(), 0.006)
-	)
+	scene.fitted_model("res://models/scenario/office/directory.glb", v,
+		Vector3(-0.78, 1.58, 0.075), Vector3(0.34, 0.24, 0.025), 0.0, false)
 	var lb = Label3D.new()
 	lb.text = "ELECTRICAL" if service else Chunk.OFFICE_CORRIDOR_LABELS[
 		WorldGen.h(ctx.world_seed, ctx.cell.x + int(t * 5.0), ctx.cell.y, salt + 2) % Chunk.OFFICE_CORRIDOR_LABELS.size()]
@@ -585,15 +591,8 @@ func _office_corridor_directory(o: Vector3, yw: float, side: float, t: float) ->
 	v.position = scene.world_point(o, Vector3(t, 1.55, inn), yw)
 	v.rotation.y = yw + (PI if side > 0.0 else 0.0)
 	scene.add_node(v)
-	scene.model_rounded_box(v, Vector3(0, 0, 0), Vector3(0.76, 0.88, 0.045), Mats.charcoal(), 0.008)
-	scene.model_quad(v, Vector3(0, 0, 0.026), Vector2(0.69, 0.81), Mats.paint_white())
-	ProceduralDetails.attach(v, "office_directory_mounts_076_088_v1", func(d: ProceduralDetails):
-		for sx in [-0.34, 0.34]:
-			d.box(Vector3(sx, 0, -0.045), Vector3(0.055, 0.94, 0.045), Mats.metal_gray(), 0.008)
-		for sx in [-0.31, 0.31]:
-			for sy in [-0.36, 0.36]:
-				d.box(Vector3(sx, sy, 0.055), Vector3(0.022, 0.022, 0.012), Mats.charcoal(), 0.004)
-	)
+	scene.fitted_model("res://models/scenario/office/directory.glb", v,
+		Vector3.ZERO, Vector3(0.76, 0.88, 0.045), 0.0, false)
 	var title = Label3D.new()
 	title.text = "DIRECTORY"
 	title.font_size = 50
@@ -638,11 +637,12 @@ func _office_cubicles() -> void:
 
 func _office_cubicle_cluster(c: Vector3, qi_base: int) -> void:
 	# cross divider
-	scene.box(c + Vector3(0, 0.675, 0), Vector3(3.6, 1.35, 0.08), Mats.divider_gray())
-	scene.box(c + Vector3(0, 0.675, 0), Vector3(0.08, 1.35, 3.6), Mats.divider_gray())
-	# white cap rails
-	scene.box(c + Vector3(0, 1.36, 0), Vector3(3.7, 0.04, 0.12), Mats.paint_white(), false)
-	scene.box(c + Vector3(0, 1.36, 0), Vector3(0.12, 0.04, 3.7), Mats.paint_white(), false)
+	scene.fitted_model("res://models/scenario/office/cubicle_divider.glb", null,
+		c, Vector3(3.7, 1.38, 0.36))
+	scene.fitted_model("res://models/scenario/office/cubicle_divider.glb", null,
+		c, Vector3(3.7, 1.38, 0.36), PI / 2.0)
+	scene.collider_box(c + Vector3(0, 0.675, 0), Vector3(3.6, 1.35, 0.08))
+	scene.collider_box(c + Vector3(0, 0.675, 0), Vector3(0.08, 1.35, 3.6))
 	var qi = 0
 	for q in [Vector2(-1, -1), Vector2(-1, 1), Vector2(1, -1), Vector2(1, 1)]:
 		_office_desk(c + Vector3(q.x * 1.5, 0, 0), Vector2(0, q.y), qi_base + qi)
@@ -662,24 +662,8 @@ func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
 	var dv = Vector3(d.x, 0, d.y)
 	var deskc = c + dv * 1.05
 	var top_size = Vector3(0.8, 0.035, 1.5) if d.x != 0.0 else Vector3(1.5, 0.035, 0.8)
-	scene.model_rounded_box(workstation, deskc + Vector3(0, 0.73, 0), top_size, Mats.desk_white(), 0.012)
-	# side panel legs
-	var leg_off = Vector3(0, 0, 0.68) if d.x != 0.0 else Vector3(0.68, 0, 0)
-	var leg_size = Vector3(0.74, 0.71, 0.04) if d.x != 0.0 else Vector3(0.04, 0.71, 0.74)
-	scene.model_rounded_box(workstation, deskc + leg_off + Vector3(0, 0.355, 0), leg_size, Mats.desk_white(), 0.008)
-	scene.model_rounded_box(workstation, deskc - leg_off + Vector3(0, 0.355, 0), leg_size, Mats.desk_white(), 0.008)
-	var desk_detail = Node3D.new()
-	desk_detail.position = deskc
-	desk_detail.rotation.y = atan2(dv.x, dv.z)
-	workstation.add_child(desk_detail)
-	ProceduralDetails.attach(desk_detail, "office_desk_150_080_modesty_feet_edges_v1", func(dd: ProceduralDetails):
-		dd.box(Vector3(0, 0.37, -0.31), Vector3(1.25, 0.46, 0.035), Mats.desk_white(), 0.008)
-		for x in [-0.68, 0.68]:
-			for z in [-0.32, 0.32]:
-				dd.box(Vector3(x, 0.035, z), Vector3(0.11, 0.07, 0.11), Mats.metal_gray(), 0.012)
-		dd.box(Vector3(0, 0.735, -0.39), Vector3(1.48, 0.025, 0.025), Mats.metal_gray(), 0.006)
-		dd.box(Vector3(0, 0.735, 0.39), Vector3(1.48, 0.025, 0.025), Mats.metal_gray(), 0.006)
-	)
+	scene.fitted_model("res://models/scenario/office/office_desk.glb",
+		workstation, deskc, Vector3(1.5, 0.745, 0.8), atan2(dv.x, dv.z))
 	scene.collider_box(deskc + Vector3(0, 0.4, 0), top_size * Vector3(1.0, 1.0, 1.0) + Vector3(0, 0.77, 0))
 	# Terminal at the inner edge, screen facing the worker (outward). Every
 	# office desk uses the authored IBM 3278/VT100-style unit. It arrives as one
@@ -754,8 +738,8 @@ func _office_poster(dir: int, plane: float) -> void:
 		v.rotation.y = 0.0 if n > 0.0 else PI
 	v.rotation.z = (ctx.random01(64 + dir) - 0.5) * 0.04
 	scene.add_node(v)
-	scene.model_box(v, Vector3(0, 0, -0.008), Vector3(0.68, 0.94, 0.016), Mats.charcoal())
-	scene.model_quad(v, Vector3(0, 0, 0.004), Vector2(0.62, 0.88), Mats.paint_white())
+	scene.fitted_model("res://models/scenario/office/poster_frame.glb", v,
+		Vector3.ZERO, Vector3(0.68, 0.94, 0.016), 0.0, false)
 	var hd = Label3D.new()
 	hd.text = Chunk.OFFICE_POSTERS[int(ctx.random01(65 + dir) * (float(Chunk.OFFICE_POSTERS.size()) - 0.01))]
 	hd.font_size = 30
@@ -784,16 +768,9 @@ func _office_dept_sign(along_x: bool) -> void:
 	v.position = Vector3(WorldGen.CELL_SIZE / 2.0, 2.55, WorldGen.CELL_SIZE / 2.0)
 	v.rotation.y = PI / 2.0 if along_x else 0.0
 	scene.add_node(v)
-	var rod_h = ctx.ceiling_height - 2.55 - 0.19
-	for sx in [-0.55, 0.55]:
-		scene.model_cylinder(v, Vector3(sx, 0.19 + rod_h / 2.0, 0), 0.012, rod_h, Mats.metal_gray())
-	scene.model_rounded_box(v, Vector3.ZERO, Vector3(1.6, 0.38, 0.05), Mats.paint_white(), 0.01)
-	ProceduralDetails.attach(v, "office_dept_sign_mount_caps_160_038_rh" + str(rod_h), func(d: ProceduralDetails):
-		for sx in [-0.55, 0.55]:
-			d.ring(Vector3(sx, 0.205, 0), 0.035, 0.008, Mats.metal_gray(), Vector3.FORWARD)
-			d.box(Vector3(sx, 0.19 + rod_h, 0), Vector3(0.07, 0.035, 0.07),
-				Mats.metal_gray(), 0.008)
-	)
+	scene.fitted_model("res://models/scenario/office/hanging_sign.glb", v,
+		Vector3(0, -0.19, 0),
+		Vector3(1.6, ctx.ceiling_height - 2.55 + 0.19, 0.05))
 	var zone = WorldGen.macro_zone(ctx.world_seed, ctx.cell, ctx.theme)
 	var labels: Array = Chunk.OFFICE_ZONE_DEPTS[zone]
 	for sside in [-1.0, 1.0]:
@@ -855,10 +832,11 @@ func _office_storage() -> void:
 func _office_break() -> void:
 	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
 	# round table with four chairs
-	var table_top = scene.cylinder(c + Vector3(0, 0.72, 0), 0.55, 0.05, Mats.desk_white(), false)
-	table_top.set_meta("surface_wear_prop", "office_break_table")
-	scene.cylinder(c + Vector3(0, 0.36, 0), 0.06, 0.72, Mats.metal_gray(), false)
-	scene.cylinder(c + Vector3(0, 0.02, 0), 0.3, 0.04, Mats.metal_gray(), false)
+	var table := scene.fitted_model(
+		"res://models/scenario/office/breakroom_table.glb", null, c,
+		Vector3(1.10, 0.745, 1.10))
+	if table != null:
+		table.set_meta("surface_wear_prop", "office_break_table")
 	scene.collider_cylinder(c + Vector3(0, 0.4, 0), 0.6, 0.8)
 	for i in 4:
 		var ang = TAU * float(i) / 4.0 + 0.4
@@ -867,21 +845,14 @@ func _office_break() -> void:
 		# position angle) at the table centre.
 		scene.modern_task_chair(cp, atan2(cos(ang), sin(ang)) + (ctx.random01(98 + i) - 0.5) * 0.7)
 	# counter along the south wall with a coffee maker
-	var coffee_counter = scene.rounded_box(Vector3(4.5, 0.45, 0.75), Vector3(3.0, 0.9, 0.6), Mats.desk_white(), 0.015)
-	coffee_counter.set_meta("surface_wear_prop", "office_coffee_counter")
-	scene.rounded_box(Vector3(3.6, 1.08, 0.75), Vector3(0.3, 0.36, 0.3), Mats.charcoal(), 0.02, false)
-	scene.box(Vector3(3.6, 1.02, 0.92), Vector3(0.05, 0.02, 0.04), Mats.lamp_red(), false)
-	var break_detail = Node3D.new()
-	break_detail.position = Vector3(4.5, 0, 0.75)
-	scene.add_node(break_detail)
-	ProceduralDetails.attach(break_detail, "office_break_counter300_090_060_coffee_v1", func(d: ProceduralDetails):
-		d.box(Vector3(0, 0.095, 0.305), Vector3(2.78, 0.19, 0.06), Mats.charcoal(), 0.012)
-		for x in [-1.02, 0.0, 1.02]:
-			d.box(Vector3(x, 0.49, 0.306), Vector3(0.82, 0.58, 0.025), Mats.desk_white(), 0.018)
-		d.box(Vector3(-0.9, 1.11, 0.17), Vector3(0.19, 0.12, 0.025), Mats.charcoal(), 0.008)
-		d.tube(Vector3(-0.86, 1.02, 0.19), Vector3(-0.82, 0.98, 0.23), 0.012, Mats.charcoal())
-		d.box(Vector3(-0.90, 0.99, 0.16), Vector3(0.16, 0.16, 0.10), Mats.charcoal(), 0.025)
-	)
+	var coffee_counter := scene.fitted_model(
+		"res://models/scenario/office/breakroom_counter.glb", null,
+		Vector3(4.5, 0, 0.75), Vector3(3.0, 0.9, 0.6))
+	if coffee_counter != null:
+		coffee_counter.set_meta("surface_wear_prop", "office_coffee_counter")
+	scene.collider_box(Vector3(4.5, 0.45, 0.75), Vector3(3.0, 0.9, 0.6))
+	scene.fitted_model("res://models/scenario/office/coffee_maker.glb", null,
+		Vector3(3.6, 0.9, 0.75), Vector3(0.3, 0.36, 0.3))
 	# water cooler in the corner
 	var wc = Vector3(10.5, 0, 1.0)
 	var wc_body0 = scene.collider_mark()
@@ -913,22 +884,8 @@ func _office_break() -> void:
 func _office_boardroom() -> void:
 	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
 	var ln = 11.5
-	scene.rounded_box(c + Vector3(0, 0.75, 0), Vector3(ln, 0.10, 2.15), Mats.desk_white(), 0.045)
-	for x in [-4.7, -1.6, 1.6, 4.7]:
-		scene.rounded_box(c + Vector3(x, 0.38, 0), Vector3(0.18, 0.72, 1.65), Mats.metal_gray(), 0.025)
-	var board_detail = Node3D.new()
-	board_detail.position = c
-	scene.add_node(board_detail)
-	ProceduralDetails.attach(board_detail, "office_boardroom_table1150_215_apron_ports_display_bezel_v1", func(d: ProceduralDetails):
-		d.box(Vector3(0, 0.64, -0.91), Vector3(10.9, 0.22, 0.08), Mats.metal_gray(), 0.018)
-		d.box(Vector3(0, 0.64, 0.91), Vector3(10.9, 0.22, 0.08), Mats.metal_gray(), 0.018)
-		for x in [-2.8, 0.0, 2.8]:
-			d.ring(Vector3(x, 0.806, 0), 0.07, 0.012, Mats.charcoal())
-		for y in [0.62, 2.88]:
-			d.box(Vector3(-8.835, y, 0), Vector3(0.045, 0.08, 5.92), Mats.metal_gray(), 0.012)
-		for z in [-2.92, 2.92]:
-			d.box(Vector3(-8.835, 1.75, z), Vector3(0.045, 2.34, 0.08), Mats.metal_gray(), 0.012)
-	)
+	scene.fitted_model("res://models/scenario/office/boardroom_table.glb", null,
+		c, Vector3(ln, 0.8, 2.15))
 	scene.collider_box(c + Vector3(0, 0.48, 0), Vector3(ln, 0.96, 2.2))
 	for side in [-1.0, 1.0]:
 		for i in 8:
@@ -938,7 +895,8 @@ func _office_boardroom() -> void:
 	# One chair sits conspicuously far from the head of the table.
 	scene.modern_task_chair(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18)
 	# Dark wall-sized presentation display with a stubborn status line.
-	scene.box(c + Vector3(-8.9, 1.75, 0), Vector3(0.10, 2.3, 5.8), Mats.charcoal(), false)
+	scene.fitted_model("res://models/scenario/office/wall_display.glb", null,
+		c + Vector3(-8.9, 1.75, 0), Vector3(5.8, 2.3, 0.10), PI / 2.0, false)
 	var screen = Label3D.new()
 	screen.text = "QUARTER  48\nATTENDANCE  0"
 	screen.font_size = 92

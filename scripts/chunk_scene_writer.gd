@@ -8,6 +8,8 @@ extends RefCounted
 
 var _host: Chunk
 var _body: StaticBody3D
+static var _fitted_scenes: Dictionary = {}
+static var _fitted_bounds: Dictionary = {}
 
 
 func _init(host: Chunk, body: StaticBody3D) -> void:
@@ -59,6 +61,52 @@ func attributed_prop_local(parent: Node3D, path: String, pos: Vector3,
 		yaw: float, scale := Vector3.ONE) -> Node3D:
 	return _host._attributed_prop_local(
 		_model_parent(parent), path, pos, yaw, scale)
+
+
+## Fit a reviewed office model to its old gameplay footprint. Keep the imported
+## scene under a pivot so collisions and surrounding props retain their existing
+## world-space placements even when the source GLB has a different origin.
+func fitted_model(path: String, parent: Node3D, pos: Vector3,
+		size: Vector3, yaw := 0.0, floor_aligned := true) -> Node3D:
+	var packed := _fitted_scenes.get(path) as PackedScene
+	if packed == null:
+		packed = ResourceLoader.load(path, "PackedScene") as PackedScene
+	if packed == null:
+		push_error("Missing office model: " + path)
+		return null
+	_fitted_scenes[path] = packed
+	var inst := packed.instantiate() as Node3D
+	if inst == null:
+		push_error("Office model has no Node3D root: " + path)
+		return null
+	var bounds: AABB
+	if _fitted_bounds.has(path):
+		bounds = _fitted_bounds[path]
+	else:
+		var state := [AABB(), false]
+		_host._collect_model_bounds(inst, Transform3D.IDENTITY, state)
+		if not bool(state[1]):
+			inst.free()
+			push_error("Office model has no mesh: " + path)
+			return null
+		bounds = state[0]
+		_fitted_bounds[path] = bounds
+	var fit := Vector3(
+		size.x / maxf(bounds.size.x, 0.001),
+		size.y / maxf(bounds.size.y, 0.001),
+		size.z / maxf(bounds.size.z, 0.001))
+	var pivot := Node3D.new()
+	pivot.position = pos
+	pivot.rotation.y = yaw
+	pivot.set_meta("office_model", path)
+	_model_parent(parent).add_child(pivot)
+	pivot.add_child(inst)
+	inst.scale = fit
+	inst.position = Vector3(
+		-bounds.get_center().x * fit.x,
+		-bounds.position.y * fit.y if floor_aligned else -bounds.get_center().y * fit.y,
+		-bounds.get_center().z * fit.z)
+	return pivot
 
 
 func fixture_light(flicker: bool, material: StandardMaterial3D,

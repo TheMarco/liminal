@@ -4703,7 +4703,18 @@ func _exit_sign(dir: int, t: float) -> void:
 	else:
 		base = Vector3(t, y, S)
 		hsize = Vector3(0.62, sign_height, normal_depth)
-	var housing := _box(base, hsize, Mats.sign_housing(), false)
+	var housing: MeshInstance3D = null
+	if theme == 1:
+		var sign_model := _scene_writer.fitted_model(
+			"res://models/scenario/office/exit_sign.glb", null, base,
+			Vector3(0.62, sign_height, normal_depth),
+			PI / 2.0 if dir == 0 else 0.0, false)
+		if sign_model != null:
+			housing = sign_model.find_child("Rectangular exit housing", true, false) as MeshInstance3D
+			if housing == null:
+				sign_model.free()
+	if housing == null:
+		housing = _box(base, hsize, Mats.sign_housing(), false)
 	var normal_half_extent := normal_depth * 0.5
 	var face_offset := normal_half_extent + 0.008
 	housing.set_meta("structural_exit_housing", true)
@@ -7524,9 +7535,6 @@ func _filing_bank(dir: int, plane: float) -> void:
 	var along := S / 2.0 + (_r(59 + dir) - 0.5) * 4.0
 	var count := 3 + int(_r(60 + dir) * 1.99)
 	var open_i := int(_r(61 + dir) * float(count) * 0.99)
-	# Keep the open drawer at a usable hand height. A bottom drawer pulled
-	# nearly its full depth read as a detached cabinet block on the floor.
-	var open_j := 1 + int(_r(62 + dir) * 1.99)
 	for i in count:
 		var t := along + (float(i) - float(count - 1) / 2.0) * 0.5
 		var v := Node3D.new()
@@ -7539,47 +7547,25 @@ func _filing_bank(dir: int, plane: float) -> void:
 		v.set_meta("filing_bank_cabinet", true)
 		v.set_meta("filing_bank_dir", dir)
 		add_child(v)
-		_mrbox(v, Vector3(0, 0.66, 0), Vector3(0.46, 1.32, 0.6), Mats.metal_gray(), 0.015)
-		for j in 4:
-			# The old 0.18m anchor lifted the complete drawer stack 13cm and
-			# pushed the top face beyond the 1.32m cabinet shell.
-			var dy := 0.05 + 0.31 * float(j)
-			if i == open_i and j == open_j:
-				# A short 12cm pull exposes the paper insert without projecting
-				# a full filing-box depth into the walkway.
-				var drawer := _mbox(v, Vector3(0, dy + 0.13, 0.365),
-					Vector3(0.4, 0.24, 0.13), Mats.metal_gray())
+		var is_open := i == open_i
+		var path := "res://models/scenario/office/filing_cabinet_open.glb" \
+			if is_open else "res://models/scenario/office/filing_cabinet_closed.glb"
+		var cabinet := _scene_writer.fitted_model(path, v, Vector3.ZERO,
+			Vector3(0.46, 1.32, 0.74 if is_open else 0.623))
+		if cabinet != null and is_open:
+			# Both files share the same straight shell. Centre on that shell, not
+			# the ajar drawer's larger overall bounds, so the bank stays aligned.
+			var imported := cabinet.get_child(0) as Node3D
+			imported.position.z = -0.0115
+			cabinet.set_meta("filing_bank_open_row", 2)
+			cabinet.set_meta("filing_bank_projection", 0.117)
+			cabinet.set_meta("filing_bank_dir", dir)
+			var drawer := cabinet.find_child("One matching drawer opening", true, false) as MeshInstance3D
+			if drawer != null:
 				drawer.set_meta("filing_bank_open_drawer", true)
-				drawer.set_meta("filing_bank_open_row", j)
-				drawer.set_meta("filing_bank_projection", 0.128)
+				drawer.set_meta("filing_bank_open_row", 2)
+				drawer.set_meta("filing_bank_projection", 0.117)
 				drawer.set_meta("filing_bank_dir", dir)
-				var open_face := _mbox(v, Vector3(0, dy + 0.14, 0.436),
-					Vector3(0.4, 0.27, 0.012), Mats.divider_gray())
-				open_face.set_meta("filing_bank_drawer_face", true)
-				open_face.set_meta("filing_bank_drawer_row", j)
-				_mbox(v, Vector3(0, dy + 0.245, 0.449),
-					Vector3(0.13, 0.022, 0.014), Mats.chrome())
-				_mbox(v, Vector3(0, dy + 0.23, 0.375),
-					Vector3(0.34, 0.02, 0.10), Mats.box_white())
-			else:
-				var closed_face := _mbox(v, Vector3(0, dy + 0.14, 0.302),
-					Vector3(0.4, 0.27, 0.012), Mats.divider_gray())
-				closed_face.set_meta("filing_bank_drawer_face", true)
-				closed_face.set_meta("filing_bank_drawer_row", j)
-				_mbox(v, Vector3(0, dy + 0.245, 0.315),
-					Vector3(0.13, 0.022, 0.014), Mats.chrome())
-		var open_row := open_j if i == open_i else -1
-		ProceduralDetails.attach(v, "filing_trim_%d" % open_row, func(d: ProceduralDetails):
-			d.box(Vector3(0, 0.024, 0.004), Vector3(0.43, 0.048, 0.57), Mats.charcoal(), 0.008)
-			for row in 4:
-				var y := 0.19 + 0.31 * float(row)
-				var z := 0.448 if row == open_row else 0.314
-				# Recessed label holders sit below the protruding pull, with short
-				# end mounts making the existing chrome bar a usable handle.
-				d.box(Vector3(0, y - 0.01, z), Vector3(0.15, 0.055, 0.006), Mats.chrome(), 0.003)
-				d.box(Vector3(0, y - 0.01, z + 0.004), Vector3(0.128, 0.036, 0.004), Mats.box_white())
-				for x in [-0.056, 0.056]:
-					d.box(Vector3(x, y + 0.096, z - 0.001), Vector3(0.016, 0.026, 0.022), Mats.chrome(), 0.004))
 	var cc: Vector3
 	var csize: Vector3
 	if dir < 2:
@@ -7854,7 +7840,36 @@ func _vt100_keyboard(pos: Vector3, yaw: float) -> Node3D:
 	return p
 
 
+func _office_shelf_unit(c: Vector3, along_x: bool, salt: int) -> void:
+	var body0 := body.get_child_count()
+	var rack := _furnishing_pivot(c, 0.0, "shelf_unit")
+	_scene_writer.fitted_model("res://models/scenario/office/wood_shelf.glb",
+		rack, Vector3.ZERO, Vector3(2.4, 2.2, 0.6),
+		0.0 if along_x else PI / 2.0)
+	# The new four-plank rack has surfaces at these heights after fitting.
+	for sy in [0.82, 1.49, 2.15]:
+		for bi in 4:
+			if WorldGen.r01(wseed, cell.x + bi, cell.y + int(sy * 10.0), salt) >= 0.72:
+				continue
+			var t := -0.9 + 0.6 * bi
+			var shelf_pos := (Vector3(t, sy + 0.02, 0)
+				if along_x else Vector3(0, sy + 0.02, t))
+			var box_yaw := (WorldGen.r01(wseed, cell.x + bi,
+				cell.y + int(sy * 7.0), salt + 1) - 0.5) * 0.14
+			var box_model := _scene_writer.fitted_model(
+				"res://models/scenario/office/archive_box.glb", rack,
+				shelf_pos, Vector3(0.5, 0.34, 0.45), box_yaw)
+			if box_model != null:
+				box_model.set_meta("authored_model", "office_archive_box")
+	_collider_box(c + Vector3(0, 1.1, 0),
+		Vector3(2.5, 2.2, 0.65) if along_x else Vector3(0.65, 2.2, 2.5))
+	_bind_furnishing_colliders(rack, body0)
+
+
 func _shelf_unit(c: Vector3, along_x: bool, salt: int) -> void:
+	if theme == 1:
+		_office_shelf_unit(c, along_x, salt)
+		return
 	var body0 := body.get_child_count()
 	var rack := _furnishing_pivot(c, 0.0, "shelf_unit")
 	var half := Vector3(1.2, 0, 0.3) if along_x else Vector3(0.3, 0, 1.2)
@@ -9201,8 +9216,8 @@ func office_wall_mount_audit() -> Dictionary:
 	return report
 
 
-## Filing banks deliberately leave one drawer ajar, but it must remain a short
-## reveal at hand height rather than a full-depth box protruding at floor level.
+## Filing banks use separate reviewed closed/open scenes. Check the imported
+## geometry itself so a missing drawer or a full-depth pull cannot pass silently.
 func filing_bank_audit() -> Dictionary:
 	var report := {
 		"cabinets": 0, "drawer_faces": 0, "open_drawers": 0,
@@ -9211,34 +9226,51 @@ func filing_bank_audit() -> Dictionary:
 	var cabinets_by_dir := {}
 	var opens_by_dir := {}
 	for node in find_children("*", "Node3D", true, false):
-		if node.has_meta("filing_bank_cabinet"):
-			report["cabinets"] += 1
-			var cabinet_dir := int(node.get_meta("filing_bank_dir", -1))
-			cabinets_by_dir[cabinet_dir] = \
-				int(cabinets_by_dir.get(cabinet_dir, 0)) + 1
-		if node.has_meta("filing_bank_drawer_face"):
-			report["drawer_faces"] += 1
-			var face_row := int(node.get_meta("filing_bank_drawer_row", -1))
-			var expected_y := 0.19 + 0.31 * float(face_row)
-			var face_y := (node as Node3D).position.y
-			# The 27cm faces must remain wholly within the 1.32m shell and
-			# centered on the corrected four-row stack.
-			if face_row < 0 or face_row > 3 \
-					or absf(face_y - expected_y) > 0.001 \
-					or face_y - 0.135 < 0.0 or face_y + 0.135 > 1.32:
-				report["violations"] += 1
-		if not node.has_meta("filing_bank_open_drawer"):
+		if not node.has_meta("filing_bank_cabinet"):
 			continue
-		report["open_drawers"] += 1
-		var drawer_dir := int(node.get_meta("filing_bank_dir", -1))
-		opens_by_dir[drawer_dir] = int(opens_by_dir.get(drawer_dir, 0)) + 1
-		var row := int(node.get_meta("filing_bank_open_row", -1))
-		var projection := float(node.get_meta("filing_bank_projection", INF))
-		var drawer_y := (node as Node3D).position.y
-		# Open-drawer body is 0.24m tall and must remain inside the 1.32m
-		# cabinet just like every closed face in the four-row stack.
-		if row < 1 or row > 2 or projection > 0.15 \
-				or drawer_y - 0.12 < 0.0 or drawer_y + 0.12 > 1.32:
+		report["cabinets"] += 1
+		var cabinet_dir := int(node.get_meta("filing_bank_dir", -1))
+		cabinets_by_dir[cabinet_dir] = \
+			int(cabinets_by_dir.get(cabinet_dir, 0)) + 1
+		var model: Node3D = null
+		for child in node.get_children():
+			if child is Node3D and child.has_meta("office_model"):
+				model = child as Node3D
+				break
+		if model == null:
+			report["violations"] += 1
+			continue
+		var faces := 0
+		var open_parts := 0
+		for part in model.find_children("*", "MeshInstance3D", true, false):
+			if String(part.name).contains("matching face"):
+				faces += 1
+			if String(part.name).contains("One matching drawer opening"):
+				open_parts += 1
+		report["drawer_faces"] += faces
+		if faces != 4:
+			report["violations"] += 1
+		var state := [AABB(), false]
+		_collect_model_bounds(model, Transform3D.IDENTITY, state)
+		if not bool(state[1]):
+			report["violations"] += 1
+			continue
+		var bounds: AABB = state[0]
+		if absf(bounds.position.y) > 0.02 or absf(bounds.size.y - 1.32) > 0.02:
+			report["violations"] += 1
+		var path := str(model.get_meta("office_model", ""))
+		if path.ends_with("filing_cabinet_open.glb"):
+			report["open_drawers"] += 1
+			opens_by_dir[cabinet_dir] = int(opens_by_dir.get(cabinet_dir, 0)) + 1
+			var row := int(model.get_meta("filing_bank_open_row", -1))
+			var projection := bounds.size.z - 0.623
+			if row < 1 or row > 2 or open_parts != 1 \
+					or projection < 0.05 or projection > 0.15:
+				report["violations"] += 1
+		elif path.ends_with("filing_cabinet_closed.glb"):
+			if open_parts != 0:
+				report["violations"] += 1
+		else:
 			report["violations"] += 1
 	for bank_dir in cabinets_by_dir:
 		# Doorway cleanup removes whole cabinet pivots. If the authored open

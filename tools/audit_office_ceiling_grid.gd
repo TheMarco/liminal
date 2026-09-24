@@ -65,16 +65,36 @@ func _light_bounds(chunk: Node, lens: MeshInstance3D, cell: Vector2i) -> AABB:
 			bounds = bounds.merge(_local_box(children[j], Vector3(cell.x * S, 0, cell.y * S)))
 	return bounds
 
+
+func _fixture_bounds(chunk: Node, fixture: MeshInstance3D,
+		cell: Vector2i, kind: String) -> AABB:
+	var model_root := fixture.get_parent()
+	while model_root != null and not model_root.has_meta("office_model"):
+		model_root = model_root.get_parent()
+	if model_root == null:
+		return _light_bounds(chunk, fixture, cell) if kind == "light" \
+			else _local_box(fixture, Vector3(cell.x * S, 0, cell.y * S))
+	var offset := Vector3(cell.x * S, 0, cell.y * S)
+	var result := AABB()
+	var first := true
+	for node in model_root.find_children("*", "MeshInstance3D", true, false):
+		var part := _local_box(node as MeshInstance3D, offset)
+		result = part if first else result.merge(part)
+		first = false
+	return result
+
 func _on_lattice(v: float) -> bool:
 	var n := (v - SEAM_OFFSET) / PITCH
 	return absf(n - round(n)) <= EPS / PITCH
 
 func _check_materials(chunk: Node) -> void:
-	var ceiling := Mats.office_ceiling() as StandardMaterial3D
-	check(ceiling.uv1_world_triplanar and ceiling.uv1_triplanar,
-		"office ceiling material is not world-triplanar")
-	check(ceiling.uv1_scale.is_equal_approx(Vector3.ONE / PITCH),
-		"office ceiling material scale changed: %s" % ceiling.uv1_scale)
+	var ceiling := Mats.office_ceiling() as ShaderMaterial
+	check(ceiling != null and ceiling.shader.resource_path ==
+		"res://shaders/office_ceiling.gdshader", "office ceiling material changed")
+	check(is_equal_approx(ceiling.get_shader_parameter("pitch"), PITCH),
+		"office ceiling pitch changed")
+	check(ceiling.get_shader_parameter("scenario_ceiling_tex") != null,
+		"Scenario ceiling finish is missing")
 
 func _scan(ws: int, cell: Vector2i) -> void:
 	var chunk := Chunk.new(ws, cell, 1)
@@ -90,7 +110,7 @@ func _scan(ws: int, cell: Vector2i) -> void:
 		var kind := String(fixture.get_meta("office_ceiling_fixture", ""))
 		var panels: Vector2i = fixture.get_meta("office_ceiling_panels", Vector2i.ZERO)
 		check(panels.x > 0 and panels.y > 0, "%s has invalid panel metadata" % fixture.name)
-		var b := _light_bounds(chunk, fixture, cell) if kind == "light" else _local_box(fixture, Vector3(cell.x * S, 0, cell.y * S))
+		var b := _fixture_bounds(chunk, fixture, cell, kind)
 		var want := Vector2(panels) * PITCH
 		check(absf(b.size.x - want.x) < 0.012 and absf(b.size.z - want.y) < 0.012,
 			"%s size %s does not match panels %s" % [fixture.name, b.size, panels])

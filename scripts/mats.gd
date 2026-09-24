@@ -552,6 +552,9 @@ static func band_paint() -> StandardMaterial3D:
 static func office_carpet() -> Material:
 	var m := _shader("office_carpet", "res://shaders/office_carpet.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
+	m.set_shader_parameter("scenario_carpet_tex", load(
+		"res://models/scenario/office/carpet_tile_office_dark_carpet.png"))
+	m.set_shader_parameter("scenario_blend", 0.35)
 	return m
 
 
@@ -564,6 +567,9 @@ static func office_lane_carpet() -> Material:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/office_carpet.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
+	m.set_shader_parameter("scenario_carpet_tex", load(
+		"res://models/scenario/office/carpet_tile_office_dark_carpet.png"))
+	m.set_shader_parameter("scenario_blend", 0.35)
 	m.set_shader_parameter("col_base", Color(0.075, 0.18, 0.13))
 	m.set_shader_parameter("col_dark", Color(0.035, 0.105, 0.072))
 	m.set_shader_parameter("col_light", Color(0.12, 0.245, 0.17))
@@ -574,7 +580,12 @@ static func office_lane_carpet() -> Material:
 
 
 static func office_wall() -> Material:
-	return _shader("office_wall", "res://shaders/office_wall.gdshader")
+	var m := _shader("office_wall", "res://shaders/office_wall.gdshader")
+	m.set_shader_parameter("scenario_drywall_tex", load(
+		"res://models/scenario/office/drywall_panel_office_patina_drywall.png"))
+	m.set_shader_parameter("scenario_blend", 0.5)
+	m.set_shader_parameter("wall_roughness", 0.83)
+	return m
 
 
 static func office_wall_variant(_idx: int) -> Material:
@@ -584,7 +595,16 @@ static func office_wall_variant(_idx: int) -> Material:
 
 
 static func office_ceiling() -> Material:
-	return _std("office_ceiling", func(m: StandardMaterial3D):
+	var m := _shader("office_ceiling", "res://shaders/office_ceiling.gdshader")
+	m.set_shader_parameter("scenario_ceiling_tex", load(
+		"res://models/scenario/office/ceiling_tile_office_patina_ceiling.png"))
+	m.set_shader_parameter("pitch", OfficeCeilingGrid.PITCH)
+	return m
+
+
+## The airport still uses the older mineral-fibre map and its own grid pitch.
+static func _airport_ceiling_source() -> StandardMaterial3D:
+	return _std("airport_ceiling_source", func(m: StandardMaterial3D):
 		# AquaEquinox's source is a 12-triangle demonstration slab. Reusing its
 		# authored PBR maps on the existing structural BoxMesh keeps one ceiling
 		# and collider per chunk instead of tiling dozens of overlapping models.
@@ -1014,7 +1034,7 @@ static func airport_ceiling() -> Material:
 		return _c["airport_ceiling"]
 	# Reuse the office's authored mineral-fibre PBR maps, not its material:
 	# Airport has its own cooler finish, panel pitch and restrained bounce fill.
-	var m := office_ceiling().duplicate() as StandardMaterial3D
+	var m := _airport_ceiling_source().duplicate() as StandardMaterial3D
 	m.albedo_color = Color(0.95, 0.97, 1.0)
 	m.emission = Color(0.21, 0.23, 0.25)
 	m.emission_energy_multiplier = 0.48

@@ -6,6 +6,9 @@ shader_type spatial;
 
 uniform vec3 base_col : source_color = vec3(0.88, 0.87, 0.83);
 uniform float ceil_h = 3.0;
+uniform sampler2D scenario_drywall_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform float scenario_blend = 0.0;
+uniform float wall_roughness = 0.42;
 
 varying vec3 wpos;
 
@@ -30,6 +33,10 @@ void fragment() {
 	float u = wpos.x + wpos.z;
 	float y = wpos.y;
 	vec3 c = base_col;
+	if (scenario_blend > 0.0) {
+		vec3 drywall = texture(scenario_drywall_tex, vec2(u, y) / 1.5).rgb;
+		c *= mix(vec3(1.0), drywall / vec3(0.86, 0.84, 0.80), scenario_blend);
+	}
 	// faint vertical panel seams every 1.5m
 	float seam = abs(fract(u / 1.5) - 0.5) * 1.5;
 	c *= mix(0.975, 1.0, smoothstep(0.0, 0.025, seam));
@@ -39,6 +46,6 @@ void fragment() {
 	c *= 1.0 - smoothstep(0.25, 0.0, ceil_h - y) * 0.06;
 
 	ALBEDO = c;
-	ROUGHNESS = 0.42;
+	ROUGHNESS = wall_roughness;
 	SPECULAR = 0.35;
 }
