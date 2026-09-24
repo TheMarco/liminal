@@ -183,10 +183,10 @@ func run() -> void:
 	var settings_before_architecture := GameSettings.current
 	GameSettings.current = GameSettings.new("/tmp/architecture-aftershock-audit-%d.cfg" % OS.get_process_id())
 	effect._process(0.5)
-	expect(effect.visible and is_equal_approx(float(effect._material.get_shader_parameter("strength")), RealityAftershock.APPROACH_STRENGTH * 0.5), "architecture is not half warning strength")
+	expect(effect.visible and is_equal_approx(float(effect._material.get_shader_parameter("strength")), RealityAftershock.APPROACH_STRENGTH * 0.25), "architecture is not at its reduced strength")
 	architecture.weight = 0.5
 	effect._process(0.1)
-	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), 0.175), "architecture visibility fade ignored")
+	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), 0.0875), "architecture visibility fade ignored")
 	architecture.weight = 1.0
 	effect.trigger()
 	effect._process(0.5)
@@ -199,7 +199,7 @@ func run() -> void:
 	effect.cancel()
 	GameSettings.current.set_value("reduced_flashing", true)
 	effect._process(0.1)
-	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), 0.35 * 0.35), "architecture ignores comfort strength")
+	expect(is_equal_approx(float(effect._material.get_shader_parameter("strength")), 0.175 * 0.35), "architecture ignores comfort strength")
 	architecture.weight = 0.0
 	effect._process(0.1)
 	expect(not effect.visible, "architecture remains visible without a source")

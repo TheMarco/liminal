@@ -1322,6 +1322,7 @@ static func prewarm_theme_content(ws: int, p_theme: int) -> void:
 ## Audit/test teardown for process-lifetime scene/prototype caches.
 static func clear_runtime_caches() -> void:
 	preload("res://scripts/blackout_surfaces.gd").clear_cache()
+	preload("res://scripts/environment_breath_surface.gd").clear_runtime_cache()
 	ProceduralDetails.clear_runtime_cache()
 	AirportGrandCeiling.clear_runtime_cache()
 	finish_prop_preloads()

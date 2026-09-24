@@ -2,6 +2,10 @@ extends Node3D
 ## Prepared GPU morphs; per-tick CPU work is limited to the small collision grid.
 const Profile := preload("res://scripts/environment_breath_profile.gd")
 const GRID := Vector2i(24, 18)
+## Shader compilation is far costlier than copying a material. Office walls,
+## ceilings and hallway waves share source shaders across streamed rooms, so
+## compile each morph-capable variant once instead of once per event/mesh.
+static var _wrapped_shaders: Dictionary = {}
 var targets: Array[Dictionary] = []
 var weights := PackedFloat32Array()
 var frame: Transform3D
@@ -148,26 +152,35 @@ func _finish_piece() -> bool:
 	return true
 
 func _wrap_native_shader(source: ShaderMaterial) -> ShaderMaterial:
-	var code := source.shader.code
-	var start := code.find("void vertex()")
-	if start < 0:
-		code += "\nvoid vertex() {}\n"
-		start = code.find("void vertex()")
-	var opening := code.find("{", start)
-	var depth := 1
-	var end := opening + 1
-	while depth > 0 and end < code.length():
-		if code[end] == "{": depth += 1
-		if code[end] == "}": depth -= 1
-		end += 1
-	code = code.insert(end - 1, "\nVERTEX=breath_v; NORMAL=breath_n; TANGENT=breath_t; BINORMAL=breath_b;\n")
-	code = code.insert(opening + 1, "\nvec3 breath_v=VERTEX; vec3 breath_n=NORMAL; vec3 breath_t=TANGENT; vec3 breath_b=BINORMAL;\nVERTEX=CUSTOM0.xyz; NORMAL=CUSTOM1.xyz;\n")
+	var original := source.shader
+	var wrapped: Shader = _wrapped_shaders.get(original)
+	if wrapped == null:
+		var code := original.code
+		var start := code.find("void vertex()")
+		if start < 0:
+			code += "\nvoid vertex() {}\n"
+			start = code.find("void vertex()")
+		var opening := code.find("{", start)
+		var depth := 1
+		var end := opening + 1
+		while depth > 0 and end < code.length():
+			if code[end] == "{": depth += 1
+			if code[end] == "}": depth -= 1
+			end += 1
+		code = code.insert(end - 1, "\nVERTEX=breath_v; NORMAL=breath_n; TANGENT=breath_t; BINORMAL=breath_b;\n")
+		code = code.insert(opening + 1, "\nvec3 breath_v=VERTEX; vec3 breath_n=NORMAL; vec3 breath_t=TANGENT; vec3 breath_b=BINORMAL;\nVERTEX=CUSTOM0.xyz; NORMAL=CUSTOM1.xyz;\n")
+		wrapped = Shader.new()
+		wrapped.code = code
+		_wrapped_shaders[original] = wrapped
 	var result := source.duplicate() as ShaderMaterial
-	result.shader = Shader.new()
-	result.shader.code = code
-	for uniform in source.shader.get_shader_uniform_list():
+	result.shader = wrapped
+	for uniform in original.get_shader_uniform_list():
 		result.set_shader_parameter(uniform.name, source.get_shader_parameter(uniform.name))
 	return result
+
+
+static func clear_runtime_cache() -> void:
+	_wrapped_shaders.clear()
 
 func _prepare_collision(size: Vector2) -> void:
 	for y in range(GRID.y + 1):

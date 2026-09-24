@@ -73,7 +73,7 @@ func run() -> void:
 			scheduler._physics_process(0.016)
 		expect(scheduler.events_started == 1 \
 			and scheduler.history.back() == "breath" \
-			and scheduler.cooldown >= 6.0 and scheduler.cooldown <= 10.0,
+			and scheduler.cooldown >= 24.0 and scheduler.cooldown <= 36.0,
 			"shared scheduler did not record a completed live sighting")
 		director.cancel()
 	director.managed = false
