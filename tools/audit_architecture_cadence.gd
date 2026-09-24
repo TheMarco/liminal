@@ -31,21 +31,25 @@ func run() -> void:
 	# Camera use spends the first wait but cannot start the effect. Lowering
 	# it should take the next safe opportunity, without another full delay.
 	game._photo_camera._raised = true
-	await create_timer(11.0).timeout
+	await create_timer(15.0).timeout
 	expect(scheduler.events_started == 0 and not is_instance_valid(game._breathing.active),
 		"camera hold allowed an architectural effect")
 	expect(scheduler.cooldown == 0.0, "camera use prevented the initial wait from expiring")
 	game._photo_camera._raised = false
 	var began := Time.get_ticks_msec()
-	expect(await await_until(func(): return scheduler.events_started > 0, 6000),
+	expect(await await_until(func(): return scheduler.events_started > 0, 8000),
 		"automatic architecture did not become visible after the camera lowered")
 	print("Automatic first sighting after camera lowered: %.2fs" % ((Time.get_ticks_msec() - began) / 1000.0))
 	# Remain in the same ordinary room: a previously used clear wall and
-	# recent kind are preferences, not permanent exclusions.
+	# recent kind are preferences, not permanent exclusions. The quiet gap
+	# should now be audible in play, without silencing effects entirely.
 	var first: int = scheduler.events_started
 	began = Time.get_ticks_msec()
-	expect(await await_until(func(): return scheduler.events_started > first, 15000),
-		"visible room did not receive a second automatic sighting within the faster cadence")
+	await create_timer(20.0).timeout
+	expect(scheduler.events_started == first,
+		"architectural sight repeated before the intended quiet gap")
+	expect(await await_until(func(): return scheduler.events_started > first, 30000),
+		"visible room did not receive a second automatic sighting within the moderated cadence")
 	print("Automatic repeat sighting: %.2fs" % ((Time.get_ticks_msec() - began) / 1000.0))
 	await teardown_game(game)
 	finish("automatic architecture cadence: camera hold, first sighting and repeat")

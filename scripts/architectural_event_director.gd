@@ -6,15 +6,15 @@ extends Node
 const KINDS := ["breath", "travel", "ceiling", "wave", "doorway"]
 const WEIGHTS := {"breath": 0.31, "travel": 0.19, "ceiling": 0.19,
 	"wave": 0.18, "doorway": 0.13}
-const FIRST_DELAY := Vector2(3.0, 5.0)
-const DOOR_FIRST_DELAY := Vector2(12.0, 18.0)
-const DOOR_REPEAT_DELAY := Vector2(30.0, 45.0)
+const FIRST_DELAY := Vector2(9.0, 13.0)
+const DOOR_FIRST_DELAY := Vector2(30.0, 45.0)
+const DOOR_REPEAT_DELAY := Vector2(75.0, 105.0)
 const MAX_FLOOR_DOORS := 6
 const SEARCH_RETRY := 0.75
 const OPPORTUNITY_POLL := 0.5
-const OPPORTUNITY_FIRST := 6.0
-const OPPORTUNITY_GAP := 6.0
-const WAVE_ATTEMPT_GAP := 20.0
+const OPPORTUNITY_FIRST := 12.0
+const OPPORTUNITY_GAP := 24.0
+const WAVE_ATTEMPT_GAP := 35.0
 
 var manager: ChunkManager
 var player: Player
@@ -221,11 +221,11 @@ func _commit(kind: String) -> void:
 		_floor_doors += 1
 		_door_ready_at = _clock + _rng.randf_range(
 			DOOR_REPEAT_DELAY.x, DOOR_REPEAT_DELAY.y)
-		cooldown = _rng.randf_range(9.0, 14.0)
+		cooldown = _rng.randf_range(30.0, 42.0)
 	elif kind == "wave":
-		cooldown = _rng.randf_range(8.0, 12.0)
+		cooldown = _rng.randf_range(28.0, 40.0)
 	else:
-		cooldown = _rng.randf_range(6.0, 10.0)
+		cooldown = _rng.randf_range(24.0, 36.0)
 	print("ARCHITECTURE SEEN: %s; total %d" % [kind, events_started])
 	_reset_search()
 

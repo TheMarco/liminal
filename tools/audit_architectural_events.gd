@@ -71,8 +71,8 @@ func _run() -> void:
 		_check(consecutive < 3, "the policy scheduled three %s sights in a row" % kind)
 		previous = kind
 		scheduler._commit(kind)
-		_check(scheduler.cooldown >= 6.0 and scheduler.cooldown <= 14.0,
-			"architecture cadence is outside the frequent exploration window")
+		_check(scheduler.cooldown >= 24.0 and scheduler.cooldown <= 42.0,
+			"architecture cadence is outside the intended exploration window")
 	for kind in Scheduler.KINDS:
 		_check(int(scheduler.counts.get(kind, 0)) >= 4,
 			"fair selection starved %s across a long run" % kind)
@@ -105,7 +105,12 @@ func _run() -> void:
 		"opportunistic wave displaced the introductory ordinary search")
 	rare.events_started = 1
 	rare.counts["breath"] = 1
+	rare._last_event_at = rare._clock
 	rare._opportunity_left = 0.0
+	rare._physics_process(0.1)
+	_check(rare_breath.wave_requests == 0,
+		"an opportunistic wave bypassed the minimum quiet gap")
+	rare._clock += Scheduler.OPPORTUNITY_GAP
 	rare._physics_process(0.1)
 	_check(rare._pending == "wave" and rare_breath.wave_requests == 1,
 		"eligible hallway wave waited for the ordinary timer")

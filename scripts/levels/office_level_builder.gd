@@ -847,17 +847,42 @@ func _office_break() -> void:
 		# The task chair's seat faces local -Z, so aim the facing (not the
 		# position angle) at the table centre.
 		scene.modern_task_chair(cp, atan2(cos(ang), sin(ang)) + (ctx.random01(98 + i) - 0.5) * 0.7)
-	# counter along the south wall with a coffee maker
+	# Keep the counter clear of a south-wall entrance before the doorway pass.
+	# Room props are shifted to the merged-room centre after construction, so
+	# test the same shifted footprint that the clearance pass will inspect.
+	var room_centre := WorldGen.room_centre(ctx.world_seed, ctx.room_root)
+	var shift := Vector2(room_centre.x - (float(ctx.cell.x) * WorldGen.CELL_SIZE
+		+ WorldGen.CELL_SIZE * 0.5), room_centre.y -
+		(float(ctx.cell.y) * WorldGen.CELL_SIZE + WorldGen.CELL_SIZE * 0.5))
+	var coffee_x := 4.5
+	var doorway_zones := scene.doorway_clearance_rects()
+	for candidate_x in [4.5, 2.5, 9.5]:
+		var footprint := Rect2(candidate_x - 1.5 + shift.x,
+			0.45 + shift.y, 3.0, 0.6)
+		var blocked := false
+		for zone in doorway_zones:
+			if footprint.intersects(zone):
+				blocked = true
+				break
+		if not blocked:
+			coffee_x = candidate_x
+			break
+	# The appliance and support are one furnishing so a late clearance or
+	# layout mutation can never leave the machine floating by itself.
+	var station_mark := scene.collider_mark()
+	var coffee_station := scene.furnishing_pivot(
+		Vector3(coffee_x, 0, 0.75), 0.0, "office_coffee_station")
 	var coffee_counter := scene.fitted_model(
-		"res://models/scenario/office/breakroom_counter.glb", null,
-		Vector3(4.5, 0, 0.75), Vector3(3.0, 0.9, 0.6))
+		"res://models/scenario/office/breakroom_counter.glb", coffee_station,
+		Vector3.ZERO, Vector3(3.0, 0.9, 0.6))
 	if coffee_counter != null:
 		coffee_counter.set_meta("surface_wear_prop", "office_coffee_counter")
-	scene.collider_box(Vector3(4.5, 0.45, 0.75), Vector3(3.0, 0.9, 0.6))
-	scene.fitted_model("res://models/scenario/office/coffee_maker.glb", null,
-		Vector3(3.6, 0.9, 0.75), Vector3(0.3, 0.36, 0.3))
+	scene.collider_box(Vector3(coffee_x, 0.45, 0.75), Vector3(3.0, 0.9, 0.6))
+	scene.fitted_model("res://models/scenario/office/coffee_maker.glb", coffee_station,
+		Vector3(-0.9, 0.9, 0), Vector3(0.3, 0.36, 0.3))
+	scene.bind_furnishing_colliders(coffee_station, station_mark)
 	# water cooler in the corner
-	var wc = Vector3(10.5, 0, 1.0)
+	var wc = Vector3(1.0 if coffee_x > 8.0 else 10.5, 0, 1.0)
 	var wc_body0 = scene.collider_mark()
 	var cooler = scene.attributed_floor_prop(Chunk.OFFICE_WATER_COOLER_PATH, wc, PI,
 		Chunk.OFFICE_WATER_COOLER_SCALE, Chunk.OFFICE_WATER_COOLER_CENTRE,
