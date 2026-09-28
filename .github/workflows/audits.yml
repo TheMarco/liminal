@@ -17,7 +17,7 @@ jobs:
   audit:
     name: Godot audit suite
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       GODOT_VERSION: 4.7.2
 
@@ -47,161 +47,19 @@ jobs:
       - name: Import project resources
         run: godot --headless --path . --editor --quit
 
-      - name: Audit corridor topology
-        run: godot --headless --path . --script tools/audit_corridors.gd
-
-      - name: Audit Annex topology and minimalism
-        run: godot --headless --path . --script tools/audit_annex.gd
-
-      - name: Audit office and Annex wall utilities
-        run: godot --headless --path . --script tools/audit_wall_utilities.gd
-
-      - name: Audit semantic zones and landmarks
-        run: godot --headless --path . --script tools/audit_zones.gd
-
-      - name: Audit doorway furnishing clearance
-        run: godot --headless --path . --script tools/audit_doorways.gd
-
-      - name: Audit authored airport luggage
-        run: godot --headless --path . --script tools/audit_airport_luggage.gd
-
-      - name: Audit authored mall shopping carts
-        run: godot --headless --path . --script tools/audit_mall_shopping_carts.gd
-
-      - name: Audit mall directory orientation
-        run: godot --headless --path . --script tools/audit_mall_directory.gd
-
-      - name: Audit authored chemistry rooms and glassware
-        run: godot --headless --path . --script tools/audit_chemistry_props.gd
-
-      - name: Audit supplied Office and School wastebaskets
-        run: godot --headless --path . --script tools/audit_office_school_bins.gd
-
-      - name: Audit recovered-tape calendar progression
-        run: godot --headless --path . --script tools/audit_vhs_calendar.gd
-
-      - name: Audit closed slot-machine cabinets
-        run: godot --headless --path . --script tools/audit_slots.gd
-
-      - name: Audit mall and prison furniture support
-        run: godot --headless --path . --script tools/audit_new_levels.gd
-
-      - name: Audit rule survivability
-        run: godot --headless --path . --script tools/audit_survivability.gd
-
-      - name: Audit interpenetrating floor furnishings
-        run: godot --headless --path . --script tools/audit_prop_overlap.gd
-
-      - name: Audit airport collision glass
-        run: godot --headless --path . --script tools/audit_airport_colliders.gd
-
-      - name: Audit mounted wall art
-        run: godot --headless --path . --script tools/audit_wall_art.gd
-
-      - name: Audit interactions
-        run: godot --headless --path . --script tools/audit_interactions.gd
-
-      - name: Audit portal and saved-position arrivals
-        run: godot --headless --path . --script tools/audit_arrivals.gd
-
-      - name: Audit runtime level switching
-        run: godot --headless --path . --script tools/audit_level_switches.gd -- --nologo
-
-      - name: Audit render-resource cache equivalence
-        run: godot --headless --path . --script tools/audit_render_resource_cache.gd
-
-      - name: Audit bounded floor-resource preparation
-        run: godot --headless --path . --script tools/audit_floor_resource_preloader.gd
-
-      - name: Audit incremental chunk streaming
-        run: godot --headless --path . --script tools/audit_incremental_streaming.gd
-
-      - name: Audit Descent objective routes
-        run: godot --headless --path . --script tools/audit_descent_routes.gd -- 8
-
-      - name: Audit blackout rewrites and mercy shortcuts
-        run: godot --headless --path . --script tools/audit_blackout_shortcuts.gd -- 30
-
-      - name: Audit Descent runtime contracts
-        run: godot --headless --path . --script tools/audit_descent_runtime.gd -- --mode=descent --nologo
-
-      - name: Audit blackout mutation reveal
-        run: godot --headless --path . --script tools/audit_mutation_reveal.gd
-
-      - name: Audit blackout light restoration
-        run: godot --headless --path . --script tools/audit_blackout_lighting.gd
-
-      - name: Audit reported airport runtime path
-        run: godot --headless --path . --script tools/audit_airport_runtime.gd -- --mode=descent --descent-floor=4 --nologo
-
-      - name: Audit persistent Descent checkpoint
-        run: godot --headless --path . --script tools/audit_descent_progress.gd
-
-      - name: Audit hostile figure contract
-        run: godot --headless --path . --script tools/audit_ghost_room_contract.gd
-
-      - name: Audit school and Data Center escape aisles
-        run: godot --headless --path . --script tools/audit_chase_clearance.gd
-
-      - name: Audit Data Center charging coverage
-        run: godot --headless --path . --script tools/audit_datacenter_charging.gd
-
-      - name: Audit caught sequence and retry
-        run: godot --headless --path . --script tools/audit_caught_sequence.gd -- --mode=descent --nologo
-
-      - name: Audit caught floor fall clearance and comfort
-        run: godot --headless --path . --script tools/audit_caught_floor.gd
-
-      - name: Audit slot standby materials and hanging-sign clearance
-        run: godot --headless --path . --script tools/audit_slot_presentation.gd
-
-      - name: Audit shared horror pacing director
-        run: godot --headless --path . --script tools/audit_horror_director.gd
-
-      - name: Audit title navigation and attribution
-        run: godot --headless --path . --script tools/audit_title_screen.gd
-
-      - name: Audit saved-run UI layout and resizing
-        run: godot --headless --path . --script tools/audit_ui_layout.gd
-
-      - name: Audit HDR output pipeline and settings
-        run: godot --headless --path . --script tools/audit_hdr_output.gd
-
-      - name: Audit procedural detail batching
-        run: godot --headless --path . --script tools/audit_procedural_details.gd
-
-      - name: Audit bundled fonts
-        run: godot --headless --path . --script tools/font_check.gd
-
-      # The Wander regression contract (docs/DESCENT.md) is the most emphasised
-      # invariant in the project and was the only one with an audit that CI did
-      # not run.
-      - name: Audit Wander mode contract
-        run: godot --headless --path . --script tools/audit_wander_mode.gd -- --nologo
-
-      - name: Audit ceiling seams
-        run: godot --headless --path . --script tools/audit_ceiling_seams.gd
-
-      - name: Audit casino wall surfaces
-        run: godot --headless --path . --script tools/audit_casino_wall_surfaces.gd
-
-      - name: Audit blackout geometry preservation
-        run: godot --headless --path . --script tools/audit_blackout_presentation.gd
-
-      - name: Audit chunk construction smoke
-        run: godot --headless --path . --script tools/audit_chunk_smoke.gd
-
-      - name: Audit Pool Rooms corner geometry
-        run: godot --headless --path . --script tools/audit_pool_corners.gd
-
-      - name: Audit Pool Rooms scale
-        run: godot --headless --path . --script tools/audit_pool_scale.gd
-
-      - name: Audit Pool Rooms water and reflection lifecycle
-        run: godot --headless --path . --script tools/audit_pool_water.gd
-
-      - name: Audit Pool Rooms player water interaction
-        run: godot --headless --path . --script tools/audit_pool_water_interaction.gd
+      - name: Run authoritative audit suite
+        run: tools/run_audits.sh -j 2 --no-import --log-dir "$RUNNER_TEMP/audit-logs"
 
       - name: Build distributable resource pack
         run: godot --headless --quiet --path . --export-pack "macOS" "$RUNNER_TEMP/It wants you to stay-ci.pck"
+
+      - name: Verify exported pack resources
+        run: |
+          bash tools/verify_release_pack.sh "$RUNNER_TEMP/It wants you to stay-ci.pck" "$RUNNER_TEMP/audit-logs/pack-verify.log"
+
+      - name: Upload audit logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-logs
+          path: ${{ runner.temp }}/audit-logs

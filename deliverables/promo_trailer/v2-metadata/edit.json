@@ -1,0 +1,221 @@
+{
+  "version": 2,
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "duration": 60,
+  "vhs": true,
+  "crt": false,
+  "removed_menu_source_frames": {
+    "annex_kill": [
+      48
+    ],
+    "office_kill": [
+      37
+    ],
+    "server": [
+      53
+    ],
+    "server_kill": [
+      41
+    ]
+  },
+  "shots": [
+    {
+      "shot": "intro",
+      "in_seconds": 0.0,
+      "out_seconds": 2.0,
+      "source_frame_in": 0,
+      "source_frame_out": 60
+    },
+    {
+      "shot": "cross_warning",
+      "in_seconds": 2.0,
+      "out_seconds": 3.966666666666667,
+      "source_frame_in": 5,
+      "source_frame_out": 64
+    },
+    {
+      "shot": "casino_kill",
+      "in_seconds": 3.966666666666667,
+      "out_seconds": 6.8,
+      "source_frame_in": 21,
+      "source_frame_out": 117
+    },
+    {
+      "shot": "office",
+      "in_seconds": 6.8,
+      "out_seconds": 8.3,
+      "source_frame_in": 0,
+      "source_frame_out": 74
+    },
+    {
+      "shot": "office_kill",
+      "in_seconds": 8.3,
+      "out_seconds": 11.3,
+      "source_frame_in": 16,
+      "source_frame_out": 117
+    },
+    {
+      "shot": "annex_run",
+      "in_seconds": 11.3,
+      "out_seconds": 12.7,
+      "source_frame_in": 0,
+      "source_frame_out": 70
+    },
+    {
+      "shot": "wave",
+      "in_seconds": 12.7,
+      "out_seconds": 16.4,
+      "source_frame_in": 9,
+      "source_frame_out": 174
+    },
+    {
+      "shot": "pool_hero",
+      "in_seconds": 16.4,
+      "out_seconds": 18.0,
+      "source_frame_in": 0,
+      "source_frame_out": 81
+    },
+    {
+      "shot": "pool",
+      "in_seconds": 18.0,
+      "out_seconds": 19.1,
+      "source_frame_in": 0,
+      "source_frame_out": 60
+    },
+    {
+      "shot": "school",
+      "in_seconds": 19.1,
+      "out_seconds": 20.6,
+      "source_frame_in": 0,
+      "source_frame_out": 74
+    },
+    {
+      "shot": "school_kill",
+      "in_seconds": 20.6,
+      "out_seconds": 23.3,
+      "source_frame_in": 22,
+      "source_frame_out": 116
+    },
+    {
+      "shot": "server",
+      "in_seconds": 23.3,
+      "out_seconds": 25.0,
+      "source_frame_in": 0,
+      "source_frame_out": 81
+    },
+    {
+      "shot": "server_kill",
+      "in_seconds": 25.0,
+      "out_seconds": 28.0,
+      "source_frame_in": 21,
+      "source_frame_out": 116
+    },
+    {
+      "shot": "doors",
+      "in_seconds": 28.0,
+      "out_seconds": 31.6,
+      "source_frame_in": 0,
+      "source_frame_out": 108
+    },
+    {
+      "shot": "breath",
+      "in_seconds": 31.6,
+      "out_seconds": 34.0,
+      "source_frame_in": 9,
+      "source_frame_out": 144
+    },
+    {
+      "shot": "portal",
+      "in_seconds": 34.0,
+      "out_seconds": 38.5,
+      "source_frame_in": 0,
+      "source_frame_out": 135
+    },
+    {
+      "shot": "annex_run",
+      "in_seconds": 38.5,
+      "out_seconds": 39.6,
+      "source_frame_in": 39,
+      "source_frame_out": 89
+    },
+    {
+      "shot": "annex_kill",
+      "in_seconds": 39.6,
+      "out_seconds": 42.4,
+      "source_frame_in": 21,
+      "source_frame_out": 114
+    },
+    {
+      "shot": "casino",
+      "in_seconds": 42.4,
+      "out_seconds": 43.1,
+      "source_frame_in": 30,
+      "source_frame_out": 60
+    },
+    {
+      "shot": "school_run",
+      "in_seconds": 43.1,
+      "out_seconds": 43.8,
+      "source_frame_in": 0,
+      "source_frame_out": 42
+    },
+    {
+      "shot": "server_kill",
+      "in_seconds": 43.8,
+      "out_seconds": 44.5,
+      "source_frame_in": 72,
+      "source_frame_out": 96
+    },
+    {
+      "shot": "pool_hero",
+      "in_seconds": 44.5,
+      "out_seconds": 45.2,
+      "source_frame_in": 30,
+      "source_frame_out": 66
+    },
+    {
+      "shot": "school_kill",
+      "in_seconds": 45.2,
+      "out_seconds": 46.0,
+      "source_frame_in": 15,
+      "source_frame_out": 45
+    },
+    {
+      "shot": "annex_run",
+      "in_seconds": 46.0,
+      "out_seconds": 47.3,
+      "source_frame_in": 45,
+      "source_frame_out": 89
+    },
+    {
+      "shot": "doors",
+      "in_seconds": 47.3,
+      "out_seconds": 48.5,
+      "source_frame_in": 72,
+      "source_frame_out": 108
+    },
+    {
+      "shot": "cross_stay",
+      "in_seconds": 48.5,
+      "out_seconds": 51.96666666666667,
+      "source_frame_in": 36,
+      "source_frame_out": 140
+    },
+    {
+      "shot": "death",
+      "in_seconds": 51.96666666666667,
+      "out_seconds": 54.46666666666667,
+      "source_frame_in": 0,
+      "source_frame_out": 75
+    },
+    {
+      "shot": "title",
+      "in_seconds": 54.46666666666667,
+      "out_seconds": 60.0,
+      "source_frame_in": 0,
+      "source_frame_out": 166
+    }
+  ]
+}

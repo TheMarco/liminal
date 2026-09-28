@@ -26,6 +26,7 @@ const DEFAULT_SPAWN := Vector3(6.0, 0.15, 2.0)
 const MUTATION_REVEAL_EFFECT := preload(
 	"res://scripts/mutation_reveal_effect.gd")
 const CAUGHT_SEQUENCE := preload("res://scripts/caught_sequence.gd")
+const SelfReturnDoor := preload("res://scripts/self_return_door_director.gd")
 ## What the ambient presence systems are allowed to do right now. Only three
 ## combinations of {figures, whispers, heartbeat} are ever wanted, and they were
 ## previously spelled out three lines at a time in eleven places -- including the
@@ -59,11 +60,13 @@ var _post_process: PostProcessController
 var _reality_aftershock: CanvasLayer
 var _breathing: Node
 var _native_doorways: Node
+var _self_return_door: Node
 var _architectural_events: Node
 var _presence_state := Presence.SILENT
 var _post_enabled := true
 var _vhs_enabled := true
 var _crt_enabled := true
+var _crt_curvature_enabled := false
 var _dev_tools: BenchmarkDevController
 var _figures: ShadowFigures
 var _passers: PassingShadows
@@ -303,6 +306,7 @@ func _ready() -> void:
 		if opts.vhs_override < 0 else opts.vhs_override == 1
 	_crt_enabled = bool(_settings.get_value("crt_enabled")) \
 		if opts.crt_override < 0 else opts.crt_override == 1
+	_crt_curvature_enabled = bool(_settings.get_value("crt_curvature"))
 	_post_enabled = _vhs_enabled or _crt_enabled
 	_photo_debug = opts.photo_debug
 	_apply_scaling()
@@ -359,6 +363,7 @@ func _ready() -> void:
 	add_child(_director)
 	if is_instance_valid(_breathing): _breathing.pacing = _director
 	if is_instance_valid(_native_doorways): _native_doorways.pacing = _director
+	if is_instance_valid(_self_return_door): _self_return_door.pacing = _director
 	if is_instance_valid(_architectural_events): _architectural_events.pacing = _director
 	if run != null:
 		run.horror_director = _director
@@ -395,6 +400,10 @@ func _ready() -> void:
 	_figures.dev_haunt_at = opts.haunt_at
 	_figures.dev_haunt_at_given = opts.haunt_at_given
 	_figures.dev_haunt_variant = opts.haunt_variant
+	# The return-door command is a focused visual preview. A timed stalker
+	# would block its interaction gate before the player can inspect it.
+	_figures.directed_only = opts.living_preview == "return" \
+		and not opts.haunt and not opts.haunt_at_given
 	_figures.reached_player.connect(_on_figure_reached_player)
 	add_child(_figures)
 	# Frights raise the pulse; it bleeds away on its own. Wired after the
@@ -478,6 +487,9 @@ func _ready() -> void:
 	if _title == null:
 		if descent:
 			_begin_descent_floor()
+			if opts.living_preview == "corridor":
+				call_deferred("_show_event_message",
+					"CORRIDOR PREVIEW PAUSED — UNDER REDESIGN", true, 6.0)
 		else:
 			# Wander is the pressure-free level browser: keep hostile figures
 			# disabled while leaving the ambient soundscape active.
@@ -545,6 +557,11 @@ func _create_descent_route(level: int, floor_idx: int) -> DescentRoute:
 
 
 func _build_level(level: int, around: Vector3) -> void:
+	# Floor changes are already opaque here. Bound inactive-floor retention and
+	# complete prop decoding before the player can outrun background prefetch.
+	Chunk.prepare_floor_resources(level)
+	ShadowWalkerVisual.retain_models([0, 1, 2, 3,
+		int(ShadowFigures.THEME_WALKER.get(level, -1))])
 	get_viewport().use_occlusion_culling = level in Chunk.occlusion_themes
 	level_root = Node3D.new()
 	add_child(level_root)
@@ -651,15 +668,26 @@ func _build_level(level: int, around: Vector3) -> void:
 	_native_doorways.debug_notice.connect(_show_event_message)
 	_native_doorways.configure(cm, player, _director, _breathing_allowed,
 		opts.doorway)
+	_self_return_door = SelfReturnDoor.new()
+	level_root.add_child(_self_return_door)
+	_self_return_door.preview = opts.living_preview == "return"
+	_self_return_door.managed = not _self_return_door.preview
+	_self_return_door.preview_notice.connect(_show_event_message)
+	_self_return_door.configure(cm, player,
+		_living_preview_allowed if _self_return_door.preview else _breathing_allowed,
+		_persist_current_runtime_state, descent_route)
+	if _director != null: _self_return_door.pacing = _director
 	# Preview flags retain their independent F6/manual timing. Normal play has
 	# one cross-effect cadence and recent-event memory across floor changes.
-	if not opts.breathing and not opts.hallway_wave and not opts.doorway:
+	if not opts.breathing and not opts.hallway_wave and not opts.doorway \
+			and opts.living_preview != "return":
 		if not is_instance_valid(_architectural_events):
 			_architectural_events = preload(
 				"res://scripts/architectural_event_director.gd").new()
 			add_child(_architectural_events)
 		_architectural_events.configure(cm, player, _breathing,
-			_native_doorways, _director, _breathing_allowed, _architecture_clock_allowed)
+			_native_doorways, _self_return_door, _director,
+			_breathing_allowed, _architecture_clock_allowed)
 
 
 func _architecture_clock_allowed() -> bool:
@@ -678,6 +706,18 @@ func _breathing_allowed() -> bool:
 	if cm == null or not cm._staged_cells.is_empty(): return false
 	if _director != null and (_director.scripted_hold or _director._hostile_count > 0): return false
 	if _photo_camera != null and (_photo_camera._raised or _photo_camera._capturing or _photo_camera._review_left > 0.0 or _photo_camera.doorway_reveal_active()): return false
+	return true
+
+
+func _living_preview_allowed() -> bool:
+	# A direct preview must work before arrival grace expires. It still obeys
+	# the safety gates that would make either temporary obstacle hazardous.
+	if not _architecture_clock_allowed(): return false
+	if run == null or run.blackout or run.lift_called: return false
+	if cm == null or not cm._staged_cells.is_empty(): return false
+	if _director != null and _director._hostile_count > 0: return false
+	if _photo_camera != null and (_photo_camera._raised or _photo_camera._capturing \
+			or _photo_camera.doorway_reveal_active()): return false
 	return true
 
 
@@ -716,6 +756,15 @@ func _reset_transition_presence() -> void:
 	_figures.despawn()
 	_whispers.stop()
 	_heart.reset()
+	# Replacing Environment alone preserves the renderer's SDFGI cascades
+	# when their dimensions match. Casino emission then survives in the
+	# Office until camera movement refreshes those cells, tinting gray walls
+	# pink at a distance. Retire the old cache while the transition is black;
+	# _finish_transition_build restores the destination's own GI settings.
+	if we.environment != null and we.environment.sdfgi_enabled:
+		we.environment.sdfgi_enabled = false
+		if DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
 
 
 func _prepare_transition_destination(level: int, pos: Vector3,
@@ -771,16 +820,22 @@ func _apply_game_settings() -> void:
 		if idx >= 0:
 			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(0.0001, float(_settings.values[pair[1]]))))
 	PostProcessController.refresh_comfort()
+	if _post_process != null:
+		_post_process.set_film_grain_intensity(float(_settings.get_value("film_grain")))
 	var vhs_enabled := bool(_settings.get_value("vhs_enabled")) \
 		if opts.vhs_override < 0 else opts.vhs_override == 1
 	var crt_enabled := bool(_settings.get_value("crt_enabled")) \
 		if opts.crt_override < 0 else opts.crt_override == 1
+	var crt_curvature_enabled := bool(_settings.get_value("crt_curvature"))
 	var post_enabled := vhs_enabled or crt_enabled
 	if _post_process != null and (_vhs_enabled != vhs_enabled or _crt_enabled != crt_enabled):
 		_vhs_enabled = vhs_enabled
 		_crt_enabled = crt_enabled
 		_post_process.set_effects(_vhs_enabled, _crt_enabled)
 		ShadowFigure.set_tape_look(_vhs_enabled)
+	if _post_process != null and _crt_curvature_enabled != crt_curvature_enabled:
+		_crt_curvature_enabled = crt_curvature_enabled
+		_post_process.set_curvature_enabled(_crt_curvature_enabled)
 	if _post_enabled != post_enabled:
 		_post_enabled = post_enabled
 		_apply_scaling()
@@ -893,8 +948,7 @@ func _finish_quit() -> void:
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(_photo_album):
 		return
-	if event is InputEventKey and event.pressed and not event.echo \
-			and event.physical_keycode == KEY_P:
+	if GameInput.matches(event, "album"):
 		if _open_photo_album():
 			get_viewport().set_input_as_handled()
 		return
@@ -975,7 +1029,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if is_instance_valid(_descent_intro):
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_Q and _title == null \
+		if GameInput.matches(event, "return_to_title") and _title == null \
 				and not _switching and not is_instance_valid(_return_prompt) \
 				and not is_instance_valid(_descent_summary):
 			get_viewport().set_input_as_handled()
@@ -1224,7 +1278,9 @@ func descent_intro_tape_finished(setup_key: String) -> void:
 	if _intro_state != null:
 		_intro_state.mark_tutorial_viewed()
 	_show_event_message(
-		"PRESS C TO USE YOUR CAMERA. PRESS SPACE TO TAKE A PHOTO.")
+		"PRESS %s TO USE YOUR CAMERA. PRESS %s TO TAKE A PHOTO." % [
+		GameInput.primary_label("camera"),
+		GameInput.primary_label("shutter")])
 	var brief := create_tween()
 	brief.tween_interval(4.5)
 	var brief_run_id := run.get_instance_id()
@@ -1321,7 +1377,7 @@ func descent_photo_refusal_caption() -> String:
 
 func descent_photo_requirement_prompt() -> String:
 	if descent_photo_requirement_met():
-		return "E — play the tape"
+		return "%s — play the tape" % GameInput.primary_label("interact")
 	return "PHOTOGRAPHS %d/%d — TAPE LOCKED" % [
 		_photo_director.documented_count(), _photo_director.required_count()]
 
@@ -1402,7 +1458,7 @@ func _on_photo_proximity(value: float, los: float) -> void:
 	if los > 0.14 and not _photo_sweep_hinted and descent and run != null \
 			and not run.ended:
 		_photo_sweep_hinted = true
-		_show_event_message("RAISE THE CAMERA (C) — SWEEP UNTIL IT FOCUSES")
+		_show_event_message("RAISE THE CAMERA (%s) — SWEEP UNTIL IT FOCUSES" % GameInput.primary_label("camera"))
 
 
 func descent_commit_refused(reason: String) -> void:
@@ -2035,7 +2091,7 @@ func _check_torch_hint() -> void:
 	if figures.nearest_distance() > TORCH_HINT_D:
 		return
 	_torch_hint_shown = true
-	_show_event_message("IT IS COMING — F TO BURN IT", true)
+	_show_event_message("IT IS COMING — %s TO BURN IT" % GameInput.primary_label("torch"), true)
 
 
 func _on_descent_passive(on: bool) -> void:
@@ -2620,7 +2676,8 @@ func _build_ui() -> void:
 	# Both are independent saved settings and neither has a gameplay hotkey.
 	_post_process = PostProcessController.new()
 	add_child(_post_process)
-	_post_process.setup(self, _vhs_enabled, _crt_enabled)
+	_post_process.setup(self, _vhs_enabled, _crt_enabled, _crt_curvature_enabled)
+	_post_process.set_film_grain_intensity(float(_settings.get_value("film_grain")))
 	_post_process.ensure_scene_copy()
 	_reality_aftershock = preload("res://scripts/reality_aftershock.gd").new()
 	_reality_aftershock.host = self
@@ -2875,7 +2932,7 @@ func _preview_captions() -> void:
 
 func _finish_preview_captions() -> void:
 	_show_event_message("THE POWER DIPS")
-	_on_interaction_prompt("E — QUERY TERMINAL")
+	_on_interaction_prompt("%s — QUERY TERMINAL" % GameInput.primary_label("interact"))
 
 
 ## The strip along the top says the same as the title screen; it goes once you
@@ -2915,7 +2972,8 @@ func _build_title(force := false) -> void:
 			_descent_progress.run_seed)[_descent_progress.deepest_floor]
 		_title.configure_descent_progress(true,
 			_descent_progress.deepest_floor,
-			str(DescentRun.THEME_NAMES[checkpoint_theme]))
+			str(DescentRun.THEME_NAMES[checkpoint_theme]),
+			_descent_progress.recovered_from_backup)
 	_title.descent_requested.connect(_on_descent_requested)
 	_title.started.connect(_on_start)
 	_title.settings_requested.connect(func(): _open_settings(true))
@@ -3057,17 +3115,31 @@ func _commit_new_descent_checkpoint() -> void:
 func _set_mode_hint() -> void:
 	if _hint == null:
 		return
-	var sprint_hint := "Shift toggle sprint" if _settings != null and bool(_settings.get_value("toggle_sprint")) else "Shift sprint"
+	var sprint_key := GameInput.primary_hint("sprint")
+	var sprint_hint := "%s toggle sprint" % sprint_key if _settings != null and bool(_settings.get_value("toggle_sprint")) else "%s sprint" % sprint_key
+	var move_hint := GameInput.movement_compact_label()
+	var use_hint := GameInput.primary_hint("interact")
+	var torch_hint := GameInput.primary_hint("torch")
+	var camera_hint := GameInput.primary_hint("camera")
+	var photo_hint := GameInput.primary_hint("shutter")
+	var album_hint := GameInput.primary_hint("album")
+	var title_hint := GameInput.primary_hint("return_to_title")
 	if descent:
-		_hint.text = "WASD move  ·  %s  ·  E use  ·  F torch  ·  C camera + Space photo  ·  P album  ·  Esc settings  ·  Q title" % sprint_hint
+		_hint.text = "%s move  ·  %s  ·  %s use  ·  %s torch  ·  %s camera + %s photo  ·  %s album  ·  Esc settings  ·  %s title" % [
+			move_hint, sprint_hint, use_hint, torch_hint, camera_hint,
+			photo_hint, album_hint, title_hint]
 		if opts.test_mode:
 			_hint.text = "TEST MODE · 1–9 / 0 / − jump floors · campaign not saved\n" + _hint.text
 	else:
-		_hint.text = "WASD move  ·  %s  ·  E use  ·  F torch  ·  1-9 / 0 / − floors  ·  Esc settings  ·  Q title" % sprint_hint
+		_hint.text = "%s move  ·  %s  ·  %s use  ·  %s torch  ·  1-9 / 0 / − floors  ·  Esc settings  ·  %s title" % [
+			move_hint, sprint_hint, use_hint, torch_hint, title_hint]
 
 
-## The Poolrooms are the only floor with standing water. Everywhere else the
-## surface is parked far below the world so the player's wading and ladder
-## code costs nothing and can never trigger.
+## Only the Poolrooms and the rare flooded Annex hall use water surfaces.
+## The interaction samples actual meshes, so dry Annex rooms remain dry.
 func _water_level_for(level: int) -> float:
-	return Chunk.POOL_WATER_Y if level == 9 else -1.0e9
+	if level == 9:
+		return Chunk.POOL_WATER_Y
+	if level == 2:
+		return Chunk.ANNEX_FLOOD_WATER_Y
+	return -1.0e9

@@ -30,6 +30,7 @@ ASSETS={
  'mall_merchandise/mall_merchandise_station':(6000,3),
  'mall_merchandise/mall_merchandise_display':(3500,2),
  'bloom_incubator/bloom_incubator':(8000,6),
+ 'linear_recessed_light/linear_recessed_light':(2500,2),
 }
 def read(path):
  data=path.read_bytes();assert data[:4]==b'glTF'

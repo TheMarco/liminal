@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://conoid23t70kc"
-path="res://.godot/imported/Meshy_AI_Hooded_Harlequin_biped_Animation_Walking_withSkin_texture_0_metallic_roughness.png-0556cdd0693acde0b44971e8117b4021.ctex"
+path.bptc="res://.godot/imported/Meshy_AI_Hooded_Harlequin_biped_Animation_Walking_withSkin_texture_0_metallic_roughness.png-0556cdd0693acde0b44971e8117b4021.bptc.ctex"
+path.astc="res://.godot/imported/Meshy_AI_Hooded_Harlequin_biped_Animation_Walking_withSkin_texture_0_metallic_roughness.png-0556cdd0693acde0b44971e8117b4021.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "713fc1a9fb08fba60e0f1f9e7a97ef79"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/harlequin/Meshy_AI_Hooded_Harlequin_biped_Animation_Walking_withSkin_texture_0_metallic_roughness.png"
-dest_files=["res://.godot/imported/Meshy_AI_Hooded_Harlequin_biped_Animation_Walking_withSkin_texture_0_metallic_roughness.png-0556cdd0693acde0b44971e8117b4021.ctex"]
+dest_files=["res://.godot/imported/Meshy_AI_Hooded_Harlequin_biped_Animation_Walking_withSkin_texture_0_metallic_roughness.png-0556cdd0693acde0b44971e8117b4021.bptc.ctex", "res://.godot/imported/Meshy_AI_Hooded_Harlequin_biped_Animation_Walking_withSkin_texture_0_metallic_roughness.png-0556cdd0693acde0b44971e8117b4021.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

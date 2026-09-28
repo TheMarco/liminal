@@ -1,0 +1,68 @@
+{
+  "product": "It wants you to stay",
+  "version": "steam-store-assets-v1",
+  "files": [
+    {
+      "file": "UPLOAD-README.txt",
+      "bytes": 935,
+      "sha256": "2cb175779c0b3d4420c03e931cc25f9c257d65e4971565b36a90b7ae57587bfd"
+    },
+    {
+      "file": "header-capsule-920x430.png",
+      "bytes": 598092,
+      "sha256": "467e0bb2d651249016ee6efb079a98ebdc4a9af2f21ad150f86d25e7f3b2a42d",
+      "width": 920,
+      "height": 430,
+      "mode": "RGB",
+      "format": "PNG"
+    },
+    {
+      "file": "it-wants-you-to-stay-player-guide.pdf",
+      "bytes": 989119,
+      "sha256": "da97437ff5228bb44d8b0dc004b5439c9b65d1883da276a919556882f4163ce0",
+      "pages": 4
+    },
+    {
+      "file": "it-wants-you-to-stay-quick-reference.pdf",
+      "bytes": 53094,
+      "sha256": "77aa623962b97cdf5d24f82974ddff3e8cfdfe6071ff9194280dbe56e01d0d45",
+      "pages": 1
+    },
+    {
+      "file": "main-capsule-1232x706.png",
+      "bytes": 1390811,
+      "sha256": "c7e2a52a04f5f5981472eb069642f3625a9a9f9b8b0065b7a897cc5b9f7110ec",
+      "width": 1232,
+      "height": 706,
+      "mode": "RGB",
+      "format": "PNG"
+    },
+    {
+      "file": "page-background-1438x810.png",
+      "bytes": 1629236,
+      "sha256": "3db2ce629c22be47533859866a5b7b5d155dd1696f62e7e07ec1b7a04c16b901",
+      "width": 1438,
+      "height": 810,
+      "mode": "RGB",
+      "format": "PNG"
+    },
+    {
+      "file": "small-capsule-462x174.png",
+      "bytes": 111170,
+      "sha256": "02945cd8cf2db953524a6ea6db8be29fc937bec0535a2824b99664f5d86128ae",
+      "width": 462,
+      "height": 174,
+      "mode": "RGB",
+      "format": "PNG"
+    },
+    {
+      "file": "vertical-capsule-748x896.png",
+      "bytes": 1028762,
+      "sha256": "20f0751d4778cd392aa59670f00dd33a44218c4d706dbd59d2a1bf1426f2bfae",
+      "width": 748,
+      "height": 896,
+      "mode": "RGB",
+      "format": "PNG"
+    }
+  ]
+}

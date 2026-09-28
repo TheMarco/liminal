@@ -204,9 +204,16 @@ func try_kind_at_cell(shape_kind: String, cell: Vector2i) -> bool:
 			and b.face.mesh.get_instance_id() == _last_mesh_id)
 	for candidate in candidates:
 		if not Placement.visible(candidate, chunk, player.cam): continue
-		candidate.depth = _rng.randf_range(0.20, 0.35)
-		candidate.size *= Vector2(_rng.randf_range(0.80, 1.0),
-			_rng.randf_range(0.85, 1.0))
+		if shape_kind == "breath" or shape_kind == "ceiling":
+			# Let the fitted wall or ceiling panel dominate, with modest variation between
+			# encounters. Placement has already checked the full swept volume.
+			candidate.depth *= _rng.randf_range(0.85, 1.0)
+			candidate.size *= Vector2(_rng.randf_range(0.85, 1.0),
+				_rng.randf_range(0.88, 1.0))
+		else:
+			candidate.depth = _rng.randf_range(0.20, 0.35)
+			candidate.size *= Vector2(_rng.randf_range(0.80, 1.0),
+				_rng.randf_range(0.85, 1.0))
 		if start_event(chunk, candidate, shape_kind): return true
 	return false
 
@@ -287,7 +294,8 @@ func actor_clear() -> bool:
 		# approach withdraws the entire bulge before it can push or trap them.
 		var a: Vector3 = inverse * (position + Vector3.UP * 0.9)
 		var b: Vector3 = inverse * (position + velocity * 0.5 + Vector3.UP * 0.9)
-		var region := AABB(Vector3(-size.x/2-0.65, -size.y/2-1.1, -0.65), Vector3(size.x+1.3, size.y+2.2, 1.85))
+		var region := AABB(Vector3(-size.x/2-0.65, -size.y/2-1.1, -0.65),
+			Vector3(size.x+1.3, size.y+2.2, float(selection.depth)+1.55))
 		if face.normal.y < -0.98:
 			# On a ceiling, body height extends along the surface NORMAL, not
 			# its in-plane v axis. Reserve standing/swept headroom accordingly.

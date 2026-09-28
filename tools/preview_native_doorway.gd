@@ -1,7 +1,7 @@
 extends SceneTree
 ## Native Office doorway proof only. No campaign, saves, monsters or topology writes.
 const Room := preload("res://tools/lib/doorway_preview_chunk.gd")
-const Effect := preload("res://tools/lib/native_doorway_proof.gd")
+const Effect := preload("res://scripts/native_doorway_surface.gd")
 var world: Node3D
 var effect: Node3D
 var player: Player

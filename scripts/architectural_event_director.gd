@@ -1,11 +1,11 @@
 class_name ArchitecturalEventDirector
 extends Node
-## One cadence and memory for the five architectural sights. Effect directors
+## One cadence and memory for the optional architectural sights. Effect directors
 ## still own geometry, visibility, collision, audio and their final safety gate.
 
-const KINDS := ["breath", "travel", "ceiling", "wave", "doorway"]
-const WEIGHTS := {"breath": 0.31, "travel": 0.19, "ceiling": 0.19,
-	"wave": 0.18, "doorway": 0.13}
+const KINDS := ["breath", "travel", "ceiling", "wave", "doorway", "return"]
+const WEIGHTS := {"breath": 0.29, "travel": 0.18, "ceiling": 0.18,
+	"wave": 0.17, "doorway": 0.12, "return": 0.06}
 const FIRST_DELAY := Vector2(9.0, 13.0)
 const DOOR_FIRST_DELAY := Vector2(30.0, 45.0)
 const DOOR_REPEAT_DELAY := Vector2(75.0, 105.0)
@@ -15,11 +15,14 @@ const OPPORTUNITY_POLL := 0.5
 const OPPORTUNITY_FIRST := 12.0
 const OPPORTUNITY_GAP := 24.0
 const WAVE_ATTEMPT_GAP := 35.0
+const RETURN_FIRST_DELAY := Vector2(50.0, 85.0)
+const RETURN_FLOOR_GAP := Vector2(95.0, 155.0)
 
 var manager: ChunkManager
 var player: Player
 var breathing: Node
 var doorways: Node
+var returns: SelfReturnDoorDirector
 var pacing: HorrorDirector
 var allowed: Callable
 var clock_allowed: Callable
@@ -40,21 +43,33 @@ var _cells: Array[Vector2i] = []
 var _pending := ""
 var _opportunity_left := 0.0
 var _wave_ready_at := 0.0
+var _return_ready_at := 0.0
+var _last_return_at := -INF
+var _floor_returns := 0
 
 
 func configure(cm: ChunkManager, actor: Player, breath_director: Node,
-		door_director: Node, horror: HorrorDirector, gate: Callable,
+		door_director: Node, return_director: SelfReturnDoorDirector,
+		horror: HorrorDirector, gate: Callable,
 		cadence_gate := Callable()) -> void:
 	manager = cm
 	player = actor
 	breathing = breath_director
 	doorways = door_director
+	if is_instance_valid(returns) and returns != return_director:
+		if returns.noticed.is_connected(_on_return_noticed):
+			returns.noticed.disconnect(_on_return_noticed)
+		if returns.returned.is_connected(_on_return_noticed):
+			returns.returned.disconnect(_on_return_noticed)
+	returns = return_director
 	pacing = horror
 	allowed = gate
 	clock_allowed = cadence_gate if cadence_gate.is_valid() else gate
 	breathing.managed = true
 	doorways.managed = true
+	returns.managed = true
 	_floor_doors = 0
+	_floor_returns = 0
 	_reset_search()
 	_pending = ""
 	_opportunity_left = 0.0
@@ -63,6 +78,14 @@ func configure(cm: ChunkManager, actor: Player, breath_director: Node,
 		_door_ready_at = _rng.randf_range(DOOR_FIRST_DELAY.x,
 			DOOR_FIRST_DELAY.y)
 		_configured = true
+	_return_ready_at = maxf(
+		_clock + _rng.randf_range(RETURN_FIRST_DELAY.x, RETURN_FIRST_DELAY.y),
+		_last_return_at + _rng.randf_range(RETURN_FLOOR_GAP.x,
+			RETURN_FLOOR_GAP.y))
+	if not returns.noticed.is_connected(_on_return_noticed):
+		returns.noticed.connect(_on_return_noticed)
+	if not returns.returned.is_connected(_on_return_noticed):
+		returns.returned.connect(_on_return_noticed)
 	# A floor change does not reset variety or make two sightings consecutive.
 	cooldown = maxf(_rng.randf_range(FIRST_DELAY.x, FIRST_DELAY.y),
 		OPPORTUNITY_GAP - (_clock - _last_event_at))
@@ -72,7 +95,8 @@ func _physics_process(dt: float) -> void:
 	if not _configured or not is_instance_valid(manager) \
 			or not is_instance_valid(player) \
 			or not is_instance_valid(breathing) \
-			or not is_instance_valid(doorways): return
+			or not is_instance_valid(doorways) \
+			or not is_instance_valid(returns): return
 	# Exploration pays down the wait even while the camera or a threat owns
 	# the screen. The independent safety gate still controls every start.
 	if clock_allowed.is_valid() and clock_allowed.call():
@@ -103,6 +127,7 @@ func _physics_process(dt: float) -> void:
 		return
 	if is_instance_valid(breathing.active) or is_instance_valid(doorways.active):
 		return
+	if returns.awaiting_notice_near_player(): return
 	# A rare site may be traversed in only a few seconds. Check it while the
 	# player is actually there, independently of the broader wall-search timer.
 	var opportunity_ready := _clock >= OPPORTUNITY_FIRST if events_started == 0 \
@@ -122,6 +147,13 @@ func _physics_process(dt: float) -> void:
 			cooldown = SEARCH_RETRY
 			return
 		_kind = _order.pop_front()
+		if _kind == "return":
+			if returns.try_visible_site():
+				cooldown = maxf(cooldown, OPPORTUNITY_GAP)
+				_reset_search()
+			else:
+				_kind = ""
+			return
 		if _kind == "doorway":
 			if doorways.try_visible_site():
 				_pending = "doorway"
@@ -153,6 +185,10 @@ func ordered_kinds() -> Array[String]:
 		var kind: String = candidate
 		if kind == "doorway" and (_clock < _door_ready_at \
 				or (manager != null and manager.descent and _floor_doors >= MAX_FLOOR_DOORS)):
+			continue
+		if kind == "return" and (_clock < _return_ready_at \
+				or _floor_returns > 0 or returns.used \
+				or is_instance_valid(returns.site)):
 			continue
 		var score := float(events_started) * float(WEIGHTS[kind]) \
 			- float(counts.get(kind, 0)) + _rng.randf_range(-0.36, 0.36)
@@ -192,6 +228,12 @@ func _try_rare_opportunity() -> bool:
 		_pending = "doorway"
 		_reset_search()
 		return true
+	if _clock >= _return_ready_at and _floor_returns == 0 \
+			and not returns.used and not is_instance_valid(returns.site) \
+			and returns.try_visible_site():
+		cooldown = maxf(cooldown, OPPORTUNITY_GAP)
+		_reset_search()
+		return true
 	var here := Vector2i(floori(player.global_position.x / ChunkManager.CELL),
 		floori(player.global_position.z / ChunkManager.CELL))
 	# Opportunistic waves must not bypass the mix on every eligible corridor
@@ -222,12 +264,22 @@ func _commit(kind: String) -> void:
 		_door_ready_at = _clock + _rng.randf_range(
 			DOOR_REPEAT_DELAY.x, DOOR_REPEAT_DELAY.y)
 		cooldown = _rng.randf_range(30.0, 42.0)
+	elif kind == "return":
+		_floor_returns += 1
+		_last_return_at = _clock
+		_return_ready_at = INF
+		cooldown = _rng.randf_range(34.0, 46.0)
 	elif kind == "wave":
 		cooldown = _rng.randf_range(28.0, 40.0)
 	else:
 		cooldown = _rng.randf_range(24.0, 36.0)
 	print("ARCHITECTURE SEEN: %s; total %d" % [kind, events_started])
 	_reset_search()
+
+
+func _on_return_noticed() -> void:
+	if not _configured or returns == null or _floor_returns > 0: return
+	_commit("return")
 
 
 func _reset_search() -> void:

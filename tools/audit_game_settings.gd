@@ -10,9 +10,11 @@ func _init() -> void:
 	_assert(settings.get_value("dialogue_volume") == 1.0, "dialogue default")
 	_assert(settings.get_value("vhs_enabled") == true, "vhs default")
 	_assert(settings.get_value("crt_enabled") == true, "CRT effect default")
+	_assert(settings.get_value("crt_curvature") == false, "CRT curvature default")
 	_assert(settings.get_value("hdr_enabled") == true, "HDR default")
 	_assert(settings.get_value("hdr_brightness") == 1.0, "HDR brightness default")
 	_assert(settings.get_value("vhs_distortion") == 0.5, "VHS effect strength default")
+	_assert(settings.get_value("film_grain") == 0.4, "film grain default")
 	_assert(settings.get_value("handheld_camera") == true, "handheld camera default")
 	_assert(is_equal_approx(settings.get_value("handheld_strength"), 0.55),
 		"handheld strength default")
@@ -20,9 +22,11 @@ func _init() -> void:
 	settings.set_value("reduced_flashing", true)
 	settings.set_value("vhs_enabled", false)
 	settings.set_value("crt_enabled", true)
+	settings.set_value("crt_curvature", true)
 	settings.set_value("dialogue_volume", 0.35)
 	settings.set_value("hdr_enabled", false)
 	settings.set_value("hdr_brightness", 1.25)
+	settings.set_value("film_grain", 0.68)
 	settings.set_value("handheld_camera", false)
 	settings.set_value("handheld_strength", 0.72)
 	for key: String in ["invert_y", "toggle_sprint"]:
@@ -36,6 +40,10 @@ func _init() -> void:
 		_assert(roundtrip.get_value(key) == true, key + " invalid string rejected")
 	_assert(roundtrip.get_value("vhs_enabled") == false, "vhs roundtrip")
 	_assert(roundtrip.get_value("crt_enabled") == true, "CRT effect roundtrip")
+	_assert(roundtrip.get_value("crt_curvature") == true, "CRT curvature roundtrip")
+	roundtrip.set_value("crt_curvature", "false")
+	_assert(roundtrip.get_value("crt_curvature") == true,
+		"CRT curvature invalid string rejected")
 	_assert(roundtrip.get_value("hdr_enabled") == false, "HDR roundtrip")
 	_assert(roundtrip.get_value("handheld_camera") == false,
 		"handheld camera roundtrip")
@@ -52,6 +60,12 @@ func _init() -> void:
 		"handheld strength lower clamp")
 	_assert(is_equal_approx(roundtrip.get_value("hdr_brightness"), 1.25),
 		"HDR brightness roundtrip")
+	_assert(is_equal_approx(roundtrip.get_value("film_grain"), 0.68),
+		"film grain roundtrip")
+	roundtrip.set_value("film_grain", 2.0)
+	_assert(roundtrip.get_value("film_grain") == 1.0, "film grain upper clamp")
+	roundtrip.set_value("film_grain", -1.0)
+	_assert(roundtrip.get_value("film_grain") == 0.0, "film grain lower clamp")
 	roundtrip.set_value("vhs_enabled", "false")
 	_assert(roundtrip.get_value("vhs_enabled") == false, "vhs invalid string rejected")
 	roundtrip.set_value("crt_enabled", "false")
@@ -82,11 +96,13 @@ func _init() -> void:
 	_assert(roundtrip.get_value("sensitivity") == 1.0 and not roundtrip.get_value("reduced_flashing"), "reset")
 	_assert(roundtrip.get_value("vhs_enabled") == true, "vhs reset")
 	_assert(roundtrip.get_value("crt_enabled") == true, "CRT effect reset")
+	_assert(roundtrip.get_value("crt_curvature") == false, "CRT curvature reset")
 	_assert(roundtrip.get_value("hdr_enabled") == true, "HDR reset")
 	_assert(roundtrip.get_value("hdr_brightness") == 1.0,
 		"HDR brightness reset")
 	_assert(roundtrip.get_value("vhs_distortion") == 0.5,
 		"VHS effect strength reset")
+	_assert(roundtrip.get_value("film_grain") == 0.4, "film grain reset")
 	_assert(roundtrip.get_value("handheld_camera") == true,
 		"handheld camera reset")
 	_assert(is_equal_approx(roundtrip.get_value("handheld_strength"), 0.55),

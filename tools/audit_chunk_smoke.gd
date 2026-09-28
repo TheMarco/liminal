@@ -40,6 +40,7 @@ const EXPECTED_STYLES := {
 		WorldGen.ANNEX_QUIET,
 		WorldGen.ANNEX_PASSAGE,
 		WorldGen.ANNEX_LOBBY,
+		WorldGen.ANNEX_FLOODED_HALL,
 	],
 	4: [
 		WorldGen.AIR_GATE,
@@ -174,6 +175,7 @@ const STYLE_NAMES := {
 	WorldGen.ANNEX_QUIET: "quiet",
 	WorldGen.ANNEX_PASSAGE: "passage",
 	WorldGen.ANNEX_LOBBY: "lobby",
+	WorldGen.ANNEX_FLOODED_HALL: "flooded_hall",
 	WorldGen.AIR_GATE: "gate",
 	WorldGen.AIR_CONCOURSE: "concourse",
 	WorldGen.AIR_CHECKIN: "checkin",

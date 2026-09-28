@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cvs1jvoqo5wo6"
-path="res://.godot/imported/casino_bar_marble.png-324526a020ad35528a18e0b77d470af8.ctex"
+path.bptc="res://.godot/imported/casino_bar_marble.png-324526a020ad35528a18e0b77d470af8.bptc.ctex"
+path.astc="res://.godot/imported/casino_bar_marble.png-324526a020ad35528a18e0b77d470af8.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "26b81d4a94f0eebee9e54c1897b3920d"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/casino_bar/casino_bar_marble.png"
-dest_files=["res://.godot/imported/casino_bar_marble.png-324526a020ad35528a18e0b77d470af8.ctex"]
+dest_files=["res://.godot/imported/casino_bar_marble.png-324526a020ad35528a18e0b77d470af8.bptc.ctex", "res://.godot/imported/casino_bar_marble.png-324526a020ad35528a18e0b77d470af8.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

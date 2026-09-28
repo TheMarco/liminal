@@ -272,8 +272,10 @@ func _build_preview() -> void:
 	game._photo_director.realm_preview_ready = true
 	game._photo_director._register_photo_doors()
 	_refresh_binding()
-	print("REALM VISIT READY: %s -> %s; C, Space, then walk through" % [
-		DescentRun.THEME_NAMES[game.active_level], DescentRun.THEME_NAMES[destination_theme]])
+	print("REALM VISIT READY: %s -> %s; %s, %s, then walk through" % [
+		DescentRun.THEME_NAMES[game.active_level],
+		DescentRun.THEME_NAMES[destination_theme],
+		GameInput.primary_hint("camera"), GameInput.primary_hint("shutter")])
 
 
 func _refresh_binding() -> void:
@@ -501,6 +503,8 @@ func _process(dt: float) -> void:
 		if looking and _door_leak.visible and not _discovery_started and not held:
 			_discovery_started = true
 			game._figures.hold_new_spawns(4.5)
+			if game._director != null:
+				game._director.hold_story_discovery(4.5)
 			print("REALM DISCOVERY SEEN: floor %d; %.1fm" % [source_floor + 1, offset.length()])
 		if nearby:
 			var cell := Vector2i(floori(player.global_position.x / 12.0), floori(player.global_position.z / 12.0))
@@ -654,7 +658,8 @@ func enter() -> void:
 	game.player.set_process_unhandled_input(true)
 	game._photo_camera.enabled = true
 	threats.suspended = false
-	game._show_event_message("PHOTOGRAPH THE BOLT (C + SPACE) — SURVIVE TO KEEP ITS FLASH" \
+	game._show_event_message("PHOTOGRAPH THE BOLT (%s + %s) — SURVIVE TO KEEP ITS FLASH" % [
+		GameInput.primary_label("camera"), GameInput.primary_label("shutter")] \
 		if is_instance_valid(bounty) else "THIS PLACE IS NOT HOLDING", false, 5.0)
 	print("REALM VISIT ENTERED: 30 seconds; source floor unchanged")
 

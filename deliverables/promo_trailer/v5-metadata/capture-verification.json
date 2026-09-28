@@ -1,0 +1,238 @@
+[
+  {
+    "shot": "annex_traverse",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "movement": {
+      "metres": 13.366352337763018,
+      "body_vertical_range_metres": 0.0,
+      "camera_vertical_range_metres": 0.12874031066893998,
+      "native_walk_speed": 3.4,
+      "head_bob_strength": 1.0,
+      "handheld_strength": 0.55,
+      "camera_yaw_span_degrees": 92.60218527731388,
+      "max_route_error_metres": 1.34869912926661e-06,
+      "route": "continuous native walking around a 90-degree corner"
+    },
+    "capture_version": 5
+  },
+  {
+    "shot": "breath",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "reused_from_version": 3
+  },
+  {
+    "shot": "casino_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ],
+    "enemy": {
+      "theme": 0,
+      "model": 0,
+      "asset": "res://models/provided/hollow_watcher/Meshy_AI_The_Hollow_Watcher_Walking.glb"
+    },
+    "reused_from_version": 3
+  },
+  {
+    "shot": "casino_traverse",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "movement": {
+      "metres": 15.067740183820552,
+      "body_vertical_range_metres": 0.0,
+      "camera_vertical_range_metres": 0.12872445583342995,
+      "native_walk_speed": 3.4,
+      "head_bob_strength": 1.0,
+      "handheld_strength": 0.55,
+      "camera_yaw_span_degrees": 89.67177625646922,
+      "max_route_error_metres": 4.76837158203125e-07,
+      "route": "continuous native walking around a 90-degree corner"
+    },
+    "capture_version": 5
+  },
+  {
+    "shot": "cross_stay",
+    "reused_from_version": 2,
+    "capture_completed": true,
+    "presentation": "full screen; VHS on, CRT off"
+  },
+  {
+    "shot": "cross_warning",
+    "reused_from_version": 2,
+    "capture_completed": true,
+    "presentation": "full screen; VHS on, CRT off"
+  },
+  {
+    "shot": "death",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "enemy": {
+      "theme": 2,
+      "model": 4,
+      "asset": "res://models/provided/trenchwalker/Meshy_AI_Ashen_Trenchwalker_biped_Animation_Walking_withSkin.glb"
+    },
+    "capture_version": 5,
+    "presentation": "Native caught sequence with camera fall enabled; eight phases visually checked, no model interior"
+  },
+  {
+    "shot": "doors",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "reused_from_version": 3
+  },
+  {
+    "shot": "office_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ],
+    "enemy": {
+      "theme": 1,
+      "model": 9,
+      "asset": "res://models/provided/hound/monster6-dog.glb"
+    },
+    "reused_from_version": 3
+  },
+  {
+    "shot": "office_traverse",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "movement": {
+      "metres": 15.06776871351456,
+      "body_vertical_range_metres": 0.0,
+      "camera_vertical_range_metres": 0.12872445583342995,
+      "native_walk_speed": 3.4,
+      "head_bob_strength": 1.0,
+      "handheld_strength": 0.55,
+      "camera_yaw_span_degrees": 89.67177625646922,
+      "max_route_error_metres": 9.61096020546393e-07,
+      "route": "continuous native walking around a 90-degree corner"
+    },
+    "capture_version": 5
+  },
+  {
+    "shot": "pool_floaties",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "reused_from_version": 3
+  },
+  {
+    "shot": "pool_girl",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "enemy": {
+      "theme": 9,
+      "model": 10,
+      "asset": "res://models/provided/horror_girl/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin.glb"
+    },
+    "reused_from_version": 3
+  },
+  {
+    "shot": "pool_grand",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "movement": {
+      "metres": 9.1347236633301,
+      "body_vertical_range_metres": 0.0,
+      "camera_vertical_range_metres": 0.1290977001190199,
+      "native_walk_speed": 3.4,
+      "head_bob_strength": 1.0,
+      "handheld_strength": 0.55,
+      "camera_yaw_span_degrees": 51.899837861218515,
+      "max_route_error_metres": 1.52587890625e-05,
+      "route": "walk, stop, turn across grand hall"
+    },
+    "capture_version": 5
+  },
+  {
+    "shot": "portal",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "reused_from_version": 3
+  },
+  {
+    "shot": "school_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ],
+    "enemy": {
+      "theme": 6,
+      "model": 8,
+      "asset": "res://models/provided/veiled_matron/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin.glb"
+    },
+    "reused_from_version": 3
+  },
+  {
+    "shot": "school_traverse",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "movement": {
+      "metres": 13.36464579128782,
+      "body_vertical_range_metres": 0.0,
+      "camera_vertical_range_metres": 0.1286431550979601,
+      "native_walk_speed": 3.4,
+      "head_bob_strength": 1.0,
+      "handheld_strength": 0.55,
+      "camera_yaw_span_degrees": 92.60222625844852,
+      "max_route_error_metres": 2.98023223876953e-08,
+      "route": "continuous native walking around a 90-degree corner"
+    },
+    "capture_version": 5
+  },
+  {
+    "shot": "server_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ],
+    "enemy": {
+      "theme": 10,
+      "model": 2,
+      "asset": "res://models/provided/model3/Meshy_AI_The_Hollow_Watcher_biped_Animation_Walking_withSkin.glb"
+    },
+    "reused_from_version": 3
+  },
+  {
+    "shot": "server_traverse",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "movement": {
+      "metres": 13.358737875237551,
+      "body_vertical_range_metres": 0.0,
+      "camera_vertical_range_metres": 0.12849438190460005,
+      "native_walk_speed": 3.4,
+      "head_bob_strength": 1.0,
+      "handheld_strength": 0.55,
+      "camera_yaw_span_degrees": 89.72139225804412,
+      "max_route_error_metres": 2.13248063118954e-06,
+      "route": "continuous native walking around a 90-degree corner"
+    },
+    "capture_version": 5
+  },
+  {
+    "shot": "wave",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "reused_from_version": 3
+  }
+]

@@ -72,6 +72,8 @@ var breathing := false
 var hallway_wave := false
 ## Manual generated-doorway check on any level: F6 requests a prepared opening.
 var doorway := false
+## One-command, checkpoint-free Office previews for the two one-shot sights.
+var living_preview := "" # "return" or "corridor"
 ## QA: start directly facing the selected first-floor photographic doorway.
 var first_door := false
 var first_obstruction := false
@@ -99,6 +101,8 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.breathing = true
 		elif arg == "--doorway":
 			o.doorway = true
+		elif arg == "--living-preview=return" or arg == "--living-preview=corridor":
+			o.living_preview = arg.get_slice("=", 1)
 		elif arg.begins_with("--seed="):
 			o.world_seed = int(arg.substr(7))
 		elif arg.begins_with("--pos="):
@@ -199,6 +203,17 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			o.whispers = true
 		elif arg == "--heartbeat":
 			o.heartbeat = true
+	if not o.living_preview.is_empty():
+		o.test_mode = true
+		o.descent_floor = 3
+		if o.world_seed == 0: o.world_seed = 20260807
+		if not o.spawn_given:
+			o.spawn = Vector3(486, 0.15, 378) if o.living_preview == "return" \
+				else Vector3(498, 0.15, 279)
+			o.spawn_given = true
+		if not o.yaw_given:
+			o.yaw = 0.0
+			o.yaw_given = true
 	if o.test_mode:
 		o.descent = true
 		o.nologo = true

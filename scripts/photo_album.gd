@@ -107,7 +107,7 @@ func _ready() -> void:
 	_previous = _button("← PREVIOUS", func(): show_photo(index - 1), _controls)
 	_next = _button("NEXT →", func(): show_photo(index + 1), _controls)
 	_save = _button("SAVE PHOTOGRAPH", _choose_export_path, _controls)
-	_close = _button("CLOSE · P / ESC", dismiss, _controls)
+	_close = _button("CLOSE · %s / ESC" % GameInput.primary_label("album"), dismiss, _controls)
 	_export_status = VhsOsd.make_label(22, VhsOsd.INK_DIM)
 	_export_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_export_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -208,7 +208,8 @@ func show_photo(requested: int) -> void:
 	_sync_inspection_controls()
 	_photo_ratio = float(image.get_width()) / image.get_height() if image != null else 1.6
 	_empty.visible = image == null
-	_empty.text = "Your album is empty.\nC raises the camera. Space takes a photograph." \
+	_empty.text = "Your album is empty.\n%s raises the camera. %s takes a photograph." % [
+		GameInput.primary_hint("camera"), GameInput.primary_hint("shutter")] \
 		if total == 0 else "This photograph could not be loaded."
 	_detail.text = "Every photograph you take is kept here."
 	if total > 0:
@@ -273,6 +274,10 @@ func _input(event: InputEvent) -> void:
 	if _export_open:
 		return  # Native save dialog owns its cancel/navigation keys.
 	if event is InputEventKey and event.pressed and not event.echo:
+		if GameInput.matches(event, "album"):
+			get_viewport().set_input_as_handled()
+			dismiss()
+			return
 		match event.physical_keycode:
 			KEY_EQUAL, KEY_PLUS, KEY_KP_ADD:
 				get_viewport().set_input_as_handled()
@@ -287,7 +292,7 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				var motion := {KEY_W: Vector2(0, 40), KEY_A: Vector2(40, 0), KEY_S: Vector2(0, -40), KEY_D: Vector2(-40, 0)}
 				_active_view.pan_by(motion[event.physical_keycode])
-			KEY_P, KEY_ESCAPE:
+			KEY_ESCAPE:
 				get_viewport().set_input_as_handled()
 				dismiss()
 			KEY_LEFT, KEY_PAGEUP:

@@ -1,0 +1,23 @@
+[
+  {
+    "shot": "office_kill",
+    "timeline_frame": 268,
+    "time_seconds": 8.933333333333334,
+    "source_frame": 37,
+    "replacement_source_frame": 36
+  },
+  {
+    "shot": "server_kill",
+    "timeline_frame": 769,
+    "time_seconds": 25.633333333333333,
+    "source_frame": 41,
+    "replacement_source_frame": 40
+  },
+  {
+    "shot": "annex_kill",
+    "timeline_frame": 1213,
+    "time_seconds": 40.43333333333333,
+    "source_frame": 48,
+    "replacement_source_frame": 47
+  }
+]

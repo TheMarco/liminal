@@ -1,0 +1,222 @@
+{
+  "version": 6,
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "duration": 77.06666666666666,
+  "vhs": true,
+  "crt": false,
+  "enemy_roster_source": "ShadowFigures.THEME_WALKER / DARK_ROSTER",
+  "camera": "native walking controller, 90-degree mouse turns, head bob 1.0, handheld enabled 0.55",
+  "source_omissions": {
+    "portal": {
+      "raw_frames": [
+        115,
+        116,
+        117,
+        118,
+        119
+      ],
+      "reason": "Editorial cut over source-world flash at native realm handoff; destination fade-in retained"
+    }
+  },
+  "feature_cards": {
+    "card_explore": {
+      "headline": "EXPLORE / THE IMPOSSIBLE.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_fight": {
+      "headline": "FIGHT / WITH LIGHT.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_alive": {
+      "headline": "THE BUILDING / IS ALIVE.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_preview": {
+      "headline": "PREVIEW YOUR / NEXT NIGHTMARE.",
+      "description": "",
+      "hold_seconds": 1.5
+    }
+  },
+  "shots": [
+    {
+      "shot": "intro",
+      "in_seconds": 0.0,
+      "out_seconds": 2.0,
+      "source_frame_in": 0,
+      "source_frame_out": 60
+    },
+    {
+      "shot": "cross_warning",
+      "in_seconds": 2.0,
+      "out_seconds": 3.966666666666667,
+      "source_frame_in": 5,
+      "source_frame_out": 64
+    },
+    {
+      "shot": "casino_kill",
+      "in_seconds": 3.966666666666667,
+      "out_seconds": 6.466666666666667,
+      "source_frame_in": 30,
+      "source_frame_out": 105
+    },
+    {
+      "shot": "card_explore",
+      "in_seconds": 6.466666666666667,
+      "out_seconds": 7.966666666666667,
+      "source_frame_in": 0,
+      "source_frame_out": 45
+    },
+    {
+      "shot": "casino_traverse",
+      "in_seconds": 7.966666666666667,
+      "out_seconds": 11.966666666666667,
+      "source_frame_in": 12,
+      "source_frame_out": 132
+    },
+    {
+      "shot": "office_traverse",
+      "in_seconds": 11.966666666666667,
+      "out_seconds": 15.966666666666667,
+      "source_frame_in": 12,
+      "source_frame_out": 132
+    },
+    {
+      "shot": "pool_grand",
+      "in_seconds": 15.966666666666667,
+      "out_seconds": 19.966666666666665,
+      "source_frame_in": 12,
+      "source_frame_out": 132
+    },
+    {
+      "shot": "pool_floaties",
+      "in_seconds": 19.966666666666665,
+      "out_seconds": 21.966666666666665,
+      "source_frame_in": 10,
+      "source_frame_out": 70
+    },
+    {
+      "shot": "pool_girl",
+      "in_seconds": 21.966666666666665,
+      "out_seconds": 25.466666666666665,
+      "source_frame_in": 12,
+      "source_frame_out": 117
+    },
+    {
+      "shot": "card_fight",
+      "in_seconds": 25.466666666666665,
+      "out_seconds": 26.966666666666665,
+      "source_frame_in": 0,
+      "source_frame_out": 45
+    },
+    {
+      "shot": "office_kill",
+      "in_seconds": 26.966666666666665,
+      "out_seconds": 29.466666666666665,
+      "source_frame_in": 30,
+      "source_frame_out": 105
+    },
+    {
+      "shot": "school_traverse",
+      "in_seconds": 29.466666666666665,
+      "out_seconds": 32.96666666666667,
+      "source_frame_in": 12,
+      "source_frame_out": 117
+    },
+    {
+      "shot": "school_kill",
+      "in_seconds": 32.96666666666667,
+      "out_seconds": 35.46666666666667,
+      "source_frame_in": 30,
+      "source_frame_out": 105
+    },
+    {
+      "shot": "server_traverse",
+      "in_seconds": 35.46666666666667,
+      "out_seconds": 38.96666666666667,
+      "source_frame_in": 12,
+      "source_frame_out": 117
+    },
+    {
+      "shot": "server_kill",
+      "in_seconds": 38.96666666666667,
+      "out_seconds": 40.96666666666667,
+      "source_frame_in": 48,
+      "source_frame_out": 108
+    },
+    {
+      "shot": "annex_traverse",
+      "in_seconds": 40.96666666666667,
+      "out_seconds": 44.46666666666667,
+      "source_frame_in": 12,
+      "source_frame_out": 117
+    },
+    {
+      "shot": "card_alive",
+      "in_seconds": 44.46666666666667,
+      "out_seconds": 45.96666666666667,
+      "source_frame_in": 0,
+      "source_frame_out": 45
+    },
+    {
+      "shot": "wave",
+      "in_seconds": 45.96666666666667,
+      "out_seconds": 50.46666666666667,
+      "source_frame_in": 15,
+      "source_frame_out": 150
+    },
+    {
+      "shot": "annex_flood",
+      "in_seconds": 50.46666666666667,
+      "out_seconds": 54.46666666666667,
+      "source_frame_in": 12,
+      "source_frame_out": 132
+    },
+    {
+      "shot": "doors",
+      "in_seconds": 54.46666666666667,
+      "out_seconds": 58.06666666666667,
+      "source_frame_in": 0,
+      "source_frame_out": 108
+    },
+    {
+      "shot": "card_preview",
+      "in_seconds": 58.06666666666667,
+      "out_seconds": 59.56666666666667,
+      "source_frame_in": 0,
+      "source_frame_out": 45
+    },
+    {
+      "shot": "portal",
+      "in_seconds": 59.56666666666667,
+      "out_seconds": 66.56666666666666,
+      "source_frame_in": 0,
+      "source_frame_out": 210
+    },
+    {
+      "shot": "cross_stay",
+      "in_seconds": 66.56666666666666,
+      "out_seconds": 70.06666666666666,
+      "source_frame_in": 35,
+      "source_frame_out": 140
+    },
+    {
+      "shot": "death",
+      "in_seconds": 70.06666666666666,
+      "out_seconds": 72.56666666666666,
+      "source_frame_in": 0,
+      "source_frame_out": 75
+    },
+    {
+      "shot": "title",
+      "in_seconds": 72.56666666666666,
+      "out_seconds": 77.06666666666666,
+      "source_frame_in": 0,
+      "source_frame_out": 135
+    }
+  ]
+}

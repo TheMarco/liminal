@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bcu21k3hqdtt0"
-path="res://.godot/imported/Meshy_AI_The_Faceless_Enforcer_biped_Animation_Walking_withSkin_normal.png-f30254738343fe024eb77cc7195ce6c4.ctex"
+path.bptc="res://.godot/imported/Meshy_AI_The_Faceless_Enforcer_biped_Animation_Walking_withSkin_normal.png-f30254738343fe024eb77cc7195ce6c4.bptc.ctex"
+path.astc="res://.godot/imported/Meshy_AI_The_Faceless_Enforcer_biped_Animation_Walking_withSkin_normal.png-f30254738343fe024eb77cc7195ce6c4.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "025fbc2645227f6a9883da052d5f5a10"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/faceless_enforcer/Meshy_AI_The_Faceless_Enforcer_biped_Animation_Walking_withSkin_normal.png"
-dest_files=["res://.godot/imported/Meshy_AI_The_Faceless_Enforcer_biped_Animation_Walking_withSkin_normal.png-f30254738343fe024eb77cc7195ce6c4.ctex"]
+dest_files=["res://.godot/imported/Meshy_AI_The_Faceless_Enforcer_biped_Animation_Walking_withSkin_normal.png-f30254738343fe024eb77cc7195ce6c4.bptc.ctex", "res://.godot/imported/Meshy_AI_The_Faceless_Enforcer_biped_Animation_Walking_withSkin_normal.png-f30254738343fe024eb77cc7195ce6c4.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

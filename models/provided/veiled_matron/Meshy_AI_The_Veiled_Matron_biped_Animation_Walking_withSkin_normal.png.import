@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://d0isuld0oryc6"
-path="res://.godot/imported/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin_normal.png-484e80fee05b42d9355cb3f3f2ad8514.ctex"
+path.bptc="res://.godot/imported/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin_normal.png-484e80fee05b42d9355cb3f3f2ad8514.bptc.ctex"
+path.astc="res://.godot/imported/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin_normal.png-484e80fee05b42d9355cb3f3f2ad8514.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "1735b7b1a6ae94f5f3088a0bf6483e43"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/veiled_matron/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin_normal.png"
-dest_files=["res://.godot/imported/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin_normal.png-484e80fee05b42d9355cb3f3f2ad8514.ctex"]
+dest_files=["res://.godot/imported/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin_normal.png-484e80fee05b42d9355cb3f3f2ad8514.bptc.ctex", "res://.godot/imported/Meshy_AI_The_Veiled_Matron_biped_Animation_Walking_withSkin_normal.png-484e80fee05b42d9355cb3f3f2ad8514.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

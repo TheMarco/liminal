@@ -1,0 +1,190 @@
+[
+  {
+    "shot": "annex",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "annex_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "annex_run",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "breath",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "casino",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "casino_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "cross_stay",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "presentation": "full-screen 16:9 crop, native VHS, CRT off",
+    "version": 2,
+    "playback_clock": [
+      {
+        "frame": 0,
+        "seconds": 23.3666666666667
+      },
+      {
+        "frame": 30,
+        "seconds": 24.3666666666668
+      },
+      {
+        "frame": 60,
+        "seconds": 25.3666666666668
+      },
+      {
+        "frame": 90,
+        "seconds": 26.3666666666669
+      },
+      {
+        "frame": 120,
+        "seconds": 27.3666666666669
+      },
+      {
+        "frame": 150,
+        "seconds": 28.366666666667
+      }
+    ]
+  },
+  {
+    "shot": "cross_warning",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [],
+    "presentation": "full-screen 16:9 crop, native VHS, CRT off",
+    "version": 2,
+    "playback_clock": [
+      {
+        "frame": 0,
+        "seconds": 1.83333333333334
+      },
+      {
+        "frame": 30,
+        "seconds": 2.83333333333333
+      },
+      {
+        "frame": 60,
+        "seconds": 3.83333333333333
+      },
+      {
+        "frame": 90,
+        "seconds": 4.83333333333333
+      },
+      {
+        "frame": 120,
+        "seconds": 5.83333333333332
+      }
+    ]
+  },
+  {
+    "shot": "death",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "doors",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "office",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "office_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "pool",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "pool_hero",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "portal",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "school",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "school_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "school_run",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "server",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "server_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "wave",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  }
+]

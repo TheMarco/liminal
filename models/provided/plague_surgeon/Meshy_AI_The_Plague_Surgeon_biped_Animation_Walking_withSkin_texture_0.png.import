@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cq2ktky1rgh2e"
-path="res://.godot/imported/Meshy_AI_The_Plague_Surgeon_biped_Animation_Walking_withSkin_texture_0.png-21b1c4098a2dda9f3f721ea008fc6bb7.ctex"
+path.bptc="res://.godot/imported/Meshy_AI_The_Plague_Surgeon_biped_Animation_Walking_withSkin_texture_0.png-21b1c4098a2dda9f3f721ea008fc6bb7.bptc.ctex"
+path.astc="res://.godot/imported/Meshy_AI_The_Plague_Surgeon_biped_Animation_Walking_withSkin_texture_0.png-21b1c4098a2dda9f3f721ea008fc6bb7.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "891b69769f989b8d7e40b6b0c618b64c"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/plague_surgeon/Meshy_AI_The_Plague_Surgeon_biped_Animation_Walking_withSkin_texture_0.png"
-dest_files=["res://.godot/imported/Meshy_AI_The_Plague_Surgeon_biped_Animation_Walking_withSkin_texture_0.png-21b1c4098a2dda9f3f721ea008fc6bb7.ctex"]
+dest_files=["res://.godot/imported/Meshy_AI_The_Plague_Surgeon_biped_Animation_Walking_withSkin_texture_0.png-21b1c4098a2dda9f3f721ea008fc6bb7.bptc.ctex", "res://.godot/imported/Meshy_AI_The_Plague_Surgeon_biped_Animation_Walking_withSkin_texture_0.png-21b1c4098a2dda9f3f721ea008fc6bb7.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

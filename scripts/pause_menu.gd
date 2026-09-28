@@ -22,10 +22,13 @@ var _reset_prompt: ReturnPrompt
 var _quit_emitted := false
 var _scroll: ScrollContainer
 var _hdr_status: Label
+var _binding_buttons: Dictionary = {}
+var _binding_status: Label
+var _capturing := ""
 
 const SLIDER_KEYS := ["sensitivity", "field_of_view", "head_bob", "handheld_strength",
 	"music_volume", "effects_volume", "dialogue_volume", "vhs_distortion",
-	"hdr_brightness"]
+	"film_grain", "hdr_brightness"]
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -40,6 +43,7 @@ func setup(model: GameSettings, only_options: bool = false) -> void:
 
 func open() -> void:
 	_quit_emitted = false
+	_capturing = ""
 	visible = true
 	call_deferred("_focus_resume")
 
@@ -100,15 +104,24 @@ func _build_ui() -> void:
 		elif key == "handheld_strength":
 			(_controls["handheld_strength"][0] as HSlider).tooltip_text = \
 				"Scales calm drift, sprint jostle and event-driven fear shake together."
+		elif key == "film_grain":
+			(_controls["film_grain"][0] as HSlider).tooltip_text = \
+				"Fine, gently moving film texture. Works independently of VHS and CRT."
 	_add_toggle(rows, "vhs_enabled", "VHS EFFECT")
 	(_controls["vhs_enabled"] as CheckButton).tooltip_text = \
 		"Tape smearing, colour separation, signal noise and tracking damage."
 	_add_toggle(rows, "crt_enabled", "CRT EFFECT")
 	(_controls["crt_enabled"] as CheckButton).tooltip_text = \
-		"Tube curvature, scan beam, phosphor mask, halation and glass falloff."
+		"Scan beam, phosphor mask, halation and glass falloff."
+	_add_toggle(rows, "crt_curvature", "SCREEN CURVATURE")
+	(_controls["crt_curvature"] as CheckButton).tooltip_text = \
+		"Bends the CRT image like a curved tube. Off keeps a flat, square Trinitron-style screen."
 	_add_toggle(rows, "reduced_flashing", "REDUCE FLASHING")
 	_add_toggle(rows, "fullscreen", "FULLSCREEN")
 	_add_toggle(rows, "death_hints", "EXPLAIN CAUSE OF DEATH")
+	_add_toggle(rows, "story_subtitles", "STORY SUBTITLES")
+	(_controls["story_subtitles"] as CheckButton).tooltip_text = \
+		"Spoken dialogue from the recordings, synchronized to playback."
 	_add_toggle(rows, "hdr_enabled", "HDR OUTPUT")
 	(_controls["hdr_enabled"] as CheckButton).tooltip_text = \
 		"Uses true HDR output on supported HDR/XDR displays; otherwise falls back to SDR."
@@ -119,6 +132,7 @@ func _build_ui() -> void:
 	_hdr_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hdr_status.custom_minimum_size.y = 26
 	rows.add_child(_hdr_status)
+	_add_controls_section(rows)
 	var buttons := GridContainer.new()
 	buttons.columns = 2
 	buttons.add_theme_constant_override("h_separation", 8)
@@ -161,8 +175,9 @@ func _add_slider(parent: VBoxContainer, key: String) -> void:
 	var label := VhsOsd.make_label(24)
 	label.text = "MOUSE SENSITIVITY" if key == "sensitivity" \
 		else ("VHS EFFECT STRENGTH" if key == "vhs_distortion" \
+		else ("FILM GRAIN" if key == "film_grain" \
 		else ("HANDHELD STRENGTH" if key == "handheld_strength" \
-		else key.replace("_", " ").to_upper()))
+		else key.replace("_", " ").to_upper())))
 	line.add_child(label)
 	var value_label := VhsOsd.make_label(24, Color(0.9, 0.75, 0.42))
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -191,10 +206,94 @@ func _add_toggle(parent: VBoxContainer, key: String, text: String) -> void:
 	check.custom_minimum_size.y = 44
 	check.focus_mode = Control.FOCUS_ALL
 	if key == "toggle_sprint":
-		check.tooltip_text = "Tap Shift to sprint; tap again or stop moving to walk. Pausing and exhaustion reset the toggle."
+		check.tooltip_text = _sprint_tooltip()
 	check.toggled.connect(func(value: bool): settings.set_value(key, value))
 	parent.add_child(check)
 	_controls[key] = check
+
+func _sprint_tooltip() -> String:
+	return "Tap %s to sprint; tap again or stop moving to walk. Pausing and exhaustion reset the toggle." % GameInput.primary_hint("sprint", settings)
+
+func _add_controls_section(parent: VBoxContainer) -> void:
+	var heading := VhsOsd.make_label(24, Color(0.9, 0.75, 0.42))
+	heading.text = "CONTROLS"
+	parent.add_child(heading)
+	var note := VhsOsd.make_label(18, Color(0.66, 0.72, 0.70))
+	note.text = "ARROWS ALSO WALK · RIGHT CLICK RAISES THE CAMERA · LEFT CLICK TAKES THE PHOTO · ESC IS FIXED"
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(note)
+	for action in GameInput.ACTIONS:
+		_add_binding_row(parent, action)
+	_binding_status = VhsOsd.make_label(18, Color(0.95, 0.55, 0.45))
+	_binding_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_binding_status.custom_minimum_size.y = 26
+	parent.add_child(_binding_status)
+
+func _add_binding_row(parent: VBoxContainer, action: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var label := VhsOsd.make_label(24)
+	label.text = str(GameInput.DISPLAY_NAMES.get(action, action.to_upper()))
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	var button := Button.new()
+	button.focus_mode = Control.FOCUS_ALL
+	button.custom_minimum_size = Vector2(150, 44)
+	button.size_flags_horizontal = Control.SIZE_SHRINK_END
+	button.add_theme_font_override("font", VhsOsd.FONT)
+	button.add_theme_font_size_override("font_size", 24)
+	button.pressed.connect(_start_capture.bind(action))
+	row.add_child(button)
+	parent.add_child(row)
+	_binding_buttons[action] = button
+
+func _refresh_binding_buttons() -> void:
+	for action in GameInput.ACTIONS:
+		var button := _binding_buttons.get(action) as Button
+		if not is_instance_valid(button):
+			continue
+		button.text = "PRESS KEY..." if _capturing == action \
+			else GameInput.primary_label(action, settings)
+
+func _start_capture(action: String) -> void:
+	if is_instance_valid(_reset_prompt):
+		return
+	_capturing = action
+	_refresh_binding_buttons()
+	if is_instance_valid(_binding_status):
+		_binding_status.text = "PRESS A KEY FOR %s · ESC CANCELS" % GameInput.DISPLAY_NAMES.get(action, action)
+	var button := _binding_buttons.get(action) as Button
+	if is_instance_valid(button):
+		button.grab_focus()
+
+## True when the event belonged to key capture. Escape cancels; a rejected
+## key keeps capturing so the user can pick another free key.
+func _capture_key(event: InputEvent) -> bool:
+	if _capturing.is_empty():
+		return false
+	if not (event is InputEventKey):
+		return false
+	var key := event as InputEventKey
+	if not key.pressed or key.echo:
+		return true
+	var code: Key = key.physical_keycode \
+		if key.physical_keycode != KEY_NONE else key.keycode
+	if code == KEY_ESCAPE or code == KEY_NONE:
+		_capturing = ""
+		if is_instance_valid(_binding_status):
+			_binding_status.text = "REBIND CANCELLED"
+		_refresh_binding_buttons()
+		return true
+	var error := settings.set_binding(_capturing, code)
+	if error.is_empty():
+		_capturing = ""
+		if is_instance_valid(_binding_status):
+			_binding_status.text = ""
+	else:
+		if is_instance_valid(_binding_status):
+			_binding_status.text = error.to_upper()
+	_refresh_binding_buttons()
+	return true
 
 func _button(text: String, parent: Control) -> Button:
 	var button := Button.new()
@@ -210,6 +309,8 @@ func _button(text: String, parent: Control) -> Button:
 func _ask_reset() -> void:
 	if is_instance_valid(_reset_prompt):
 		return
+	_capturing = ""
+	_refresh_binding_buttons()
 	_reset_prompt = ReturnPrompt.new()
 	_reset_prompt.heading_text = "RESET DEFAULTS?"
 	_reset_prompt.warning_text = "ALL SETTINGS WILL RETURN TO THEIR DEFAULT VALUES."
@@ -218,6 +319,8 @@ func _ask_reset() -> void:
 	_reset_prompt.confirmed.connect(func() -> void:
 		if is_instance_valid(settings):
 			settings.reset_defaults()
+		if is_instance_valid(_binding_status):
+			_binding_status.text = "DEFAULTS RESTORED"
 		_reset_prompt.queue_free()
 		_reset_prompt = null
 		_reset_button.call_deferred("grab_focus"))
@@ -249,6 +352,11 @@ func _refresh_controls() -> void:
 		if not _controls.has(key):
 			continue
 		(_controls[key] as CheckButton).set_pressed_no_signal(bool(settings.get_value(key)))
+	if _controls.has("toggle_sprint"):
+		(_controls["toggle_sprint"] as CheckButton).tooltip_text = _sprint_tooltip()
+	_refresh_binding_buttons()
+	if is_instance_valid(_binding_status) and _capturing.is_empty():
+		_binding_status.text = ""
 	_refresh_video_controls()
 	_refresh_motion_controls()
 	_refresh_hdr_controls()
@@ -263,6 +371,8 @@ func _refresh_video_controls() -> void:
 	slider.editable = bool(settings.get_value("vhs_enabled"))
 	slider.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
 	value_label.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
+	var curvature_toggle := _controls["crt_curvature"] as CheckButton
+	curvature_toggle.disabled = not bool(settings.get_value("crt_enabled"))
 
 
 func _refresh_motion_controls() -> void:
@@ -318,6 +428,10 @@ static func is_pause_event(event: InputEvent) -> bool:
 
 func _input(event: InputEvent) -> void:
 	if not visible or is_instance_valid(_reset_prompt):
+		return
+	if not _capturing.is_empty():
+		if _capture_key(event):
+			get_viewport().set_input_as_handled()
 		return
 	if is_pause_event(event):
 		_close_resume()

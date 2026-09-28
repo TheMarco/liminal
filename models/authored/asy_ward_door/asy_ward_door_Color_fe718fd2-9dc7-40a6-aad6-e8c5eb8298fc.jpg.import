@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://btjnid65wtjvv"
-path="res://.godot/imported/asy_ward_door_Color_fe718fd2-9dc7-40a6-aad6-e8c5eb8298fc.jpg-b3a6727c94f7fcd504191204f7f1e6a8.ctex"
+path.bptc="res://.godot/imported/asy_ward_door_Color_fe718fd2-9dc7-40a6-aad6-e8c5eb8298fc.jpg-b3a6727c94f7fcd504191204f7f1e6a8.bptc.ctex"
+path.astc="res://.godot/imported/asy_ward_door_Color_fe718fd2-9dc7-40a6-aad6-e8c5eb8298fc.jpg-b3a6727c94f7fcd504191204f7f1e6a8.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "f57bac8e7abb643e91826fc4a084e4e9"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/asy_ward_door/asy_ward_door_Color_fe718fd2-9dc7-40a6-aad6-e8c5eb8298fc.jpg"
-dest_files=["res://.godot/imported/asy_ward_door_Color_fe718fd2-9dc7-40a6-aad6-e8c5eb8298fc.jpg-b3a6727c94f7fcd504191204f7f1e6a8.ctex"]
+dest_files=["res://.godot/imported/asy_ward_door_Color_fe718fd2-9dc7-40a6-aad6-e8c5eb8298fc.jpg-b3a6727c94f7fcd504191204f7f1e6a8.bptc.ctex", "res://.godot/imported/asy_ward_door_Color_fe718fd2-9dc7-40a6-aad6-e8c5eb8298fc.jpg-b3a6727c94f7fcd504191204f7f1e6a8.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

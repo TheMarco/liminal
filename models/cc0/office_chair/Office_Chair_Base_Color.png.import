@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c233fid3no0y"
-path="res://.godot/imported/Office_Chair_Base_Color.png-16d20358376eaa6c4eef754ce686188f.ctex"
+path.bptc="res://.godot/imported/Office_Chair_Base_Color.png-16d20358376eaa6c4eef754ce686188f.bptc.ctex"
+path.astc="res://.godot/imported/Office_Chair_Base_Color.png-16d20358376eaa6c4eef754ce686188f.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://models/cc0/office_chair/Office_Chair_Base_Color.png"
-dest_files=["res://.godot/imported/Office_Chair_Base_Color.png-16d20358376eaa6c4eef754ce686188f.ctex"]
+dest_files=["res://.godot/imported/Office_Chair_Base_Color.png-16d20358376eaa6c4eef754ce686188f.bptc.ctex", "res://.godot/imported/Office_Chair_Base_Color.png-16d20358376eaa6c4eef754ce686188f.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b5c2u613hvln5"
-path="res://.godot/imported/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin_normal.png-e9358af88693d1b9ad9baf69fd6b960b.ctex"
+path.bptc="res://.godot/imported/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin_normal.png-e9358af88693d1b9ad9baf69fd6b960b.bptc.ctex"
+path.astc="res://.godot/imported/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin_normal.png-e9358af88693d1b9ad9baf69fd6b960b.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "d21bac797a0976da7d455df87c375396"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/horror_girl/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin_normal.png"
-dest_files=["res://.godot/imported/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin_normal.png-e9358af88693d1b9ad9baf69fd6b960b.ctex"]
+dest_files=["res://.godot/imported/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin_normal.png-e9358af88693d1b9ad9baf69fd6b960b.bptc.ctex", "res://.godot/imported/Meshy_AI_horror_girl_hair_cove_biped_Animation_Walking_withSkin_normal.png-e9358af88693d1b9ad9baf69fd6b960b.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

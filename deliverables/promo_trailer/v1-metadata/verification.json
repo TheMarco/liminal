@@ -1,0 +1,23 @@
+{
+  "duration_seconds": 60.0,
+  "video": "H.264",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "frames": 1800,
+  "audio": "AAC stereo, 48000 Hz, 320 kbps",
+  "integrated_loudness_lufs": -14.25,
+  "true_peak_dbtp": -1.14,
+  "full_decode": "passed",
+  "unexpected_black_intervals": [],
+  "intentional_death_black_interval": [
+    54.2,
+    54.466667
+  ],
+  "confirmed_monster_kills": 5,
+  "vhs": true,
+  "crt": false,
+  "file_bytes": 170580613
+}

@@ -208,10 +208,10 @@ func run() -> void:
 	var ceiling := Mats.airport_ceiling() as StandardMaterial3D
 	check(ceiling.uv1_world_triplanar and ceiling.uv1_triplanar, "airport material is not world-triplanar")
 	check(ceiling.uv1_scale.is_equal_approx(Vector3.ONE / PITCH), "airport material scale changed: %s" % ceiling.uv1_scale)
-	var office := Mats.office_ceiling() as StandardMaterial3D
-	check(office != ceiling and office.uv1_scale.is_equal_approx(Vector3.ONE / 0.75),
-		"Airport changed the Office material")
-	check(ceiling.albedo_texture == office.albedo_texture and ceiling.normal_enabled
+	var office := Mats.office_ceiling() as ShaderMaterial
+	check(office != null and office.shader.resource_path == "res://shaders/office_ceiling.gdshader",
+		"Airport changed the separate procedural Office ceiling")
+	check(ceiling.albedo_texture == load("res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_0.jpg") and ceiling.normal_enabled
 		and ceiling.normal_texture != null and ceiling.roughness_texture != null,
 		"Airport no longer uses the authored acoustic panel PBR maps")
 	for seed in [1, 240721, 9137]:

@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bcc2eckrbab6m"
-path="res://.godot/imported/asy_table_1.png-79206d78b4e1e873a52c3562dfe814ce.ctex"
+path.bptc="res://.godot/imported/asy_table_1.png-79206d78b4e1e873a52c3562dfe814ce.bptc.ctex"
+path.astc="res://.godot/imported/asy_table_1.png-79206d78b4e1e873a52c3562dfe814ce.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "12d3a205d178d29e8bd8402c34d13362"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/asy_table/asy_table_1.png"
-dest_files=["res://.godot/imported/asy_table_1.png-79206d78b4e1e873a52c3562dfe814ce.ctex"]
+dest_files=["res://.godot/imported/asy_table_1.png-79206d78b4e1e873a52c3562dfe814ce.bptc.ctex", "res://.godot/imported/asy_table_1.png-79206d78b4e1e873a52c3562dfe814ce.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

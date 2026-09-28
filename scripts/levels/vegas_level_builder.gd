@@ -60,6 +60,7 @@ func _hall_lighting() -> void:
 			light = OmniLight3D.new()
 			light.light_energy = 0.58
 		light.light_color = Color(1.0, 0.72, 0.46)
+		light.light_volumetric_fog_energy = 0.0 if i == flick_i else 1.5
 		light.omni_range = 5.6
 		light.position = at - Vector3(0, 0.30, 0)
 		light.shadow_enabled = i == 1
@@ -928,12 +929,13 @@ func _hall_bay_returns(o: Vector3, yw: float, side: float, t: float, width: floa
 
 func _hall_open_casing(o: Vector3, yw: float, side: float, t: float, width: float) -> void:
 	var inn = side - signf(side) * 0.11
+	var jamb_width := 0.11
 	for edge in [t - width * 0.5, t + width * 0.5]:
 		var jamb = scene.model_box(null, scene.world_point(o, Vector3(edge, Chunk.DOOR_TOP * 0.5, inn), yw),
-			Vector3(0.11, Chunk.DOOR_TOP, 0.25), Mats.darkwood())
+			Vector3(jamb_width, Chunk.DOOR_TOP, 0.25), Mats.darkwood())
 		jamb.rotation.y = yw
 	var head = scene.model_box(null, scene.world_point(o, Vector3(t, Chunk.DOOR_TOP + 0.06, inn), yw),
-		Vector3(width + 0.16, 0.12, 0.25), Mats.darkwood())
+		Vector3(width + jamb_width, 0.12, 0.25), Mats.darkwood())
 	head.rotation.y = yw
 
 

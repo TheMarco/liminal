@@ -160,8 +160,9 @@ func mesh_bounds(node: Node, parent: Transform3D = Transform3D.IDENTITY) -> AABB
 
 func check_asylum() -> void:
 	var combinations := {}
+	var expected_combinations := 4 * Chunk.ASY_DOOR_PATHS.size()
 	for base in [RUN_SEED] + range(1, 128):
-		if combinations.size() == 16:
+		if combinations.size() == expected_combinations:
 			break
 		var ws := WorldGen.level_seed(base, 5)
 		var pending: Array[int] = []
@@ -183,11 +184,23 @@ func check_asylum() -> void:
 			var box := mesh_bounds(door)
 			var depth := box.size.x if dir < 2 else box.size.z
 			var width := box.size.z if dir < 2 else box.size.x
-			check(depth < 0.35 and width > 1.0, "asylum mesh protrudes sideways from wall")
-			check(absf(box.position.y) < 0.02, "asylum leaf is not grounded")
 			var leaf := door.get_child(0)
-			combinations[Vector2i(dir, int(leaf.get_meta("asylum_authored_leaf")))] = true
+			var pick := int(leaf.get_meta("asylum_authored_leaf"))
+			if pick < Chunk.ASY_FIRST_NEW_LEAF:
+				check(depth < 0.35 and width > 1.0, "asylum mesh protrudes sideways from wall")
+			else:
+				# The newer leaves include deeper handles and are narrower than
+				# the hospital set. Verify their authored axes in every direction.
+				var cell_leaf := pick == Chunk.ASY_FIRST_NEW_LEAF
+				var fit := Chunk.ASY_CELL_FACADE_FIT if cell_leaf else Chunk.ASY_WARD_FACADE_FIT
+				var expected_width := (Chunk.ASY_CELL_LEAF_W if cell_leaf else Chunk.ASY_WARD_LEAF_W) * fit.x
+				var expected_depth := (Chunk.ASY_CELL_LEAF_D if cell_leaf else Chunk.ASY_WARD_LEAF_D) * fit.z
+				check(absf(width - expected_width) < 0.01 and absf(depth - expected_depth) < 0.01,
+					"asylum authored leaf has incorrect wall alignment: %d/%d" % [pick, dir])
+			check(absf(box.position.y) < 0.02, "asylum leaf is not grounded")
+			combinations[Vector2i(dir, pick)] = true
 			doors += 1
 		check(int(chunk.asylum_authored_audit()["violations"]) == 0, "asylum authored audit failed")
 		chunk.free()
-	check(combinations.size() == 16, "asylum regression missed some model/direction combinations: %d/16" % combinations.size())
+	check(combinations.size() == expected_combinations,
+		"asylum regression missed some model/direction combinations: %d/%d" % [combinations.size(), expected_combinations])

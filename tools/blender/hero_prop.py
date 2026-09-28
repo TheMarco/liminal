@@ -82,7 +82,7 @@ def join(objects,name):
     bpy.context.view_layer.objects.active=objects[0];bpy.ops.object.join();ob=bpy.context.object;ob.name=name
     bpy.ops.object.transform_apply(location=True,rotation=True,scale=True);return ob
 
-def finish(name,art,out,budget,specials=(),metadata=None,scale=3,camera=(3,-4,2.7),target=(0,0,1),surface_normals=None):
+def finish(name,art,out,budget,specials=(),metadata=None,scale=3,camera=(3,-4,2.7),target=(0,0,1),surface_normals=None,preview=None):
     art.mkdir(parents=True,exist_ok=True);out.mkdir(parents=True,exist_ok=True);(art/'.gdignore').write_text('')
     special_objs=[ob for group in specials for ob in group[1]]
     opaque=[ob for ob in parts if ob not in special_objs]
@@ -120,5 +120,6 @@ def finish(name,art,out,budget,specials=(),metadata=None,scale=3,camera=(3,-4,2.
     stats=dict(triangles=total,meshes=len(final),surfaces=surfaces,bounds_godot_m=dict(min=lo,max=hi),front_axis='+Z',**(metadata or {}))
     (out/'mesh_stats.json').write_text(json.dumps(stats,indent=2)+'\n')
     print('HERO_PROP_STATS',name,json.dumps(stats),flush=True)
-    studio(prop,art,name,target=target,camera_at=camera,scale=scale,light_scale=2)
+    # Floor-standing props use the shared studio; ceiling fixtures bring their own.
+    (preview or studio)(prop,art,name,target=target,camera_at=camera,scale=scale,light_scale=2)
     return stats

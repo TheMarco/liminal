@@ -19,6 +19,7 @@ uniform float mask_triad_size : hint_range(2.0, 8.0) = 3.0;
 uniform bool slot_mask = true;
 uniform float convergence : hint_range(0.0, 1.0) = 0.18;
 uniform vec2 curvature = vec2(0.055, 0.08);
+uniform bool curvature_enabled = true;
 uniform float overscan = 0.018;
 uniform float diffusion_weight = 0.075;
 uniform float halation_weight = 0.025;
@@ -28,7 +29,9 @@ uniform float display_time = -1.0;
 
 vec2 glass_uv(vec2 uv) {
     vec2 p = (uv - 0.5) * 2.0;
-    p *= 1.0 + p.yx * p.yx * curvature;
+    if (curvature_enabled) {
+        p *= 1.0 + p.yx * p.yx * curvature;
+    }
     return p * 0.5 + 0.5;
 }
 

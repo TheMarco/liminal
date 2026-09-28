@@ -46,6 +46,7 @@ func check_entry(chunk: Chunk, ramp: CollisionShape3D, dir: int) -> void:
 	var bottom := lip - outward * 3.1 + Vector3.UP * 0.03
 	var top := lip + outward * 0.75 + Vector3.UP * (Chunk.POOL_DECK_Y + 0.03)
 	var player := Player.new()
+	player.level_theme = 9
 	player.water_y = Chunk.POOL_WATER_Y
 	player.position = bottom
 	root.add_child(player)

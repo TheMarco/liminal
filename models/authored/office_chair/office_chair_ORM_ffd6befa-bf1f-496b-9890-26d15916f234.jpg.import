@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ba4in13mu27i0"
-path="res://.godot/imported/office_chair_ORM_ffd6befa-bf1f-496b-9890-26d15916f234.jpg-e8eb192c57461b92b25133da6610bb26.ctex"
+path.bptc="res://.godot/imported/office_chair_ORM_ffd6befa-bf1f-496b-9890-26d15916f234.jpg-e8eb192c57461b92b25133da6610bb26.bptc.ctex"
+path.astc="res://.godot/imported/office_chair_ORM_ffd6befa-bf1f-496b-9890-26d15916f234.jpg-e8eb192c57461b92b25133da6610bb26.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "db9a34716b48b90bbdc240c0cb6ead80"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/office_chair/office_chair_ORM_ffd6befa-bf1f-496b-9890-26d15916f234.jpg"
-dest_files=["res://.godot/imported/office_chair_ORM_ffd6befa-bf1f-496b-9890-26d15916f234.jpg-e8eb192c57461b92b25133da6610bb26.ctex"]
+dest_files=["res://.godot/imported/office_chair_ORM_ffd6befa-bf1f-496b-9890-26d15916f234.jpg-e8eb192c57461b92b25133da6610bb26.bptc.ctex", "res://.godot/imported/office_chair_ORM_ffd6befa-bf1f-496b-9890-26d15916f234.jpg-e8eb192c57461b92b25133da6610bb26.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

@@ -513,18 +513,36 @@ func run() -> void:
 		"OUT passage is missing approach/finish triggers")
 	final_target.free()
 
-	var dead_chunk := Chunk.new(game._level_seed(game.active_level),
+	# Legacy dead-cell requests are ignored: anomaly 0 must not rebuild a
+	# permanently black ceiling segment, and the blackout it streams in under
+	# must restore every authored light exactly when power returns.
+	var anomaly_seed: int = game._level_seed(game.active_level)
+	var dead_chunk := Chunk.new(anomaly_seed,
 		Vector2i.ZERO, game.active_level, {
 			"descent": true,
 			"anomaly": 0,
 			"blackout": true,
 		})
+	expect(dead_chunk.anomaly_kind == -1,
+		"legacy dead-cell anomaly request was not ignored")
 	dead_chunk.set_blackout(false)
-	for node in dead_chunk.find_children("*", "Light3D", true, false):
-		var dead_light := node as Light3D
-		expect(not dead_light.visible and dead_light.light_energy == 0.0,
-			"dead-cell anomaly revived after blackout")
+	var clean_chunk := Chunk.new(anomaly_seed,
+		Vector2i.ZERO, game.active_level, {
+			"descent": true,
+		})
+	var dead_lights := dead_chunk.find_children("*", "Light3D", true, false)
+	var clean_lights := clean_chunk.find_children("*", "Light3D", true, false)
+	expect(dead_lights.size() == clean_lights.size(),
+		"legacy anomaly changed the authored fixture set")
+	for i in mini(dead_lights.size(), clean_lights.size()):
+		var dead_light := dead_lights[i] as Light3D
+		var clean_light := clean_lights[i] as Light3D
+		expect(dead_light.visible == clean_light.visible \
+				and is_equal_approx(dead_light.light_energy,
+					clean_light.light_energy),
+			"reversible blackout did not restore authored lights")
 	dead_chunk.free()
+	clean_chunk.free()
 
 	# The office carries substantial environment fill in addition to its room
 	# fixtures. A blackout must suppress that fill and restore every authored

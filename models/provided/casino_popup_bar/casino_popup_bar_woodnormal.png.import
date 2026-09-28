@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://de2god7mbb10t"
-path="res://.godot/imported/casino_popup_bar_woodnormal.png-acfad437b0bb3aa87dff74e7e54ae097.ctex"
+path.bptc="res://.godot/imported/casino_popup_bar_woodnormal.png-acfad437b0bb3aa87dff74e7e54ae097.bptc.ctex"
+path.astc="res://.godot/imported/casino_popup_bar_woodnormal.png-acfad437b0bb3aa87dff74e7e54ae097.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "286bfff1c5aabec7c14684d50d624b4d"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/casino_popup_bar/casino_popup_bar_woodnormal.png"
-dest_files=["res://.godot/imported/casino_popup_bar_woodnormal.png-acfad437b0bb3aa87dff74e7e54ae097.ctex"]
+dest_files=["res://.godot/imported/casino_popup_bar_woodnormal.png-acfad437b0bb3aa87dff74e7e54ae097.bptc.ctex", "res://.godot/imported/casino_popup_bar_woodnormal.png-acfad437b0bb3aa87dff74e7e54ae097.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

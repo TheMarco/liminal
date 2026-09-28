@@ -5,6 +5,7 @@ render_mode blend_mix, depth_draw_never, cull_disabled, diffuse_burley;
 // to its supporting face. No screen-space noise or clock: wear stays put.
 uniform int motif = 0;
 uniform bool damp_spread = false;
+uniform bool authored_mask = false;
 uniform sampler2D stain_mask : source_color, filter_linear_mipmap_anisotropic;
 instance uniform float wear_seed = 0.0;
 instance uniform float strength = 0.5;
@@ -234,6 +235,12 @@ void fragment() {
         mask *= smoothstep(0.36, 0.72, broad) * 0.5;
     }
 
+    if (authored_mask) {
+        // Fixed photographic-style leak shapes follow their actual wall face.
+        // Fine material noise remains in the stain without animating it.
+        mask = smoothstep(0.035, 0.75, texture(stain_mask, uv).r)
+            * (0.82 + fine * 0.18);
+    }
     ALBEDO = clamp(color, vec3(0.0), vec3(1.0));
     ROUGHNESS = surface_roughness;
     METALLIC = 0.0;

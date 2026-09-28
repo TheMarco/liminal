@@ -44,6 +44,32 @@ const POOL_PIER_MIN_SPAN := 6.0
 const POOL_PIER_SHORE_GAP := 0.90
 const POOL_PIER_CROSSING_HALF_WIDTH := 0.80
 const POOL_PIER_PAIR_GAP := 1.40
+const POOL_GRAND_CISTERN_DECK := 3.0
+const POOL_FLOAT_OPEN_CHANCE := 0.84
+const POOL_FLOAT_NARROW_CHANCE := 0.68
+const POOL_FLOAT_SECOND_CHANCE := 0.50
+const POOL_RING_WATER_OFFSET := 0.055
+const POOL_MATTRESS_WATER_OFFSET := -0.02
+const POOL_STRIPED_WATER_OFFSET := -0.04
+const PoolFloatMotion = preload("res://scripts/pool_float_motion.gd")
+const PoolStripedShader = preload("res://shaders/pool_striped_float.gdshader")
+const POOL_MATTRESS_TINTS := [
+	Color(0.97, 0.30, 0.10), Color(0.92, 0.66, 0.12),
+	Color(0.66, 0.76, 0.23), Color(0.20, 0.71, 0.48),
+	Color(0.16, 0.69, 0.75), Color(0.22, 0.48, 0.82),
+	Color(0.45, 0.36, 0.74), Color(0.71, 0.37, 0.70),
+	Color(0.88, 0.43, 0.57), Color(0.76, 0.30, 0.27),
+]
+const POOL_STRIPED_PAIRS := [
+	[Color(0.75, 0.91, 0.82), Color(0.08, 0.33, 0.27)], # mint / pine
+	[Color(0.85, 0.91, 0.98), Color(0.12, 0.29, 0.56)], # ice / navy
+	[Color(0.99, 0.81, 0.70), Color(0.55, 0.18, 0.24)], # peach / burgundy
+	[Color(0.91, 0.85, 0.97), Color(0.34, 0.20, 0.49)], # lilac / plum
+	[Color(0.97, 0.91, 0.66), Color(0.44, 0.30, 0.12)], # cream / ochre
+	[Color(0.78, 0.91, 0.95), Color(0.06, 0.39, 0.49)], # sky / teal
+	[Color(0.97, 0.80, 0.82), Color(0.55, 0.14, 0.30)], # rose / wine
+	[Color(0.88, 0.94, 0.69), Color(0.25, 0.40, 0.12)], # lime / olive
+]
 # The imported Bath mesh measures 2.655 x 2.088 m after scaling. Its authored
 # origin includes a separate step at one end, so the bath itself is offset
 # 0.326 m toward local -Z. The structural opening is smaller than the outer
@@ -59,10 +85,15 @@ const POOL_JACUZZI_EXIT_SIZE := Vector2(2.32, 1.72)
 const POOL_JACUZZI_WATER_INSET := 0.12
 
 static var _buoy_material_cache := {}
+static var _mattress_material_cache := {}
+static var _striped_material_cache := {}
 static var _jacuzzi_water_mesh: PlaneMesh
+var _pool_float_spots: Array[Dictionary] = []
 
 static func clear_runtime_cache() -> void:
 	_buoy_material_cache.clear()
+	_mattress_material_cache.clear()
+	_striped_material_cache.clear()
 	_jacuzzi_water_mesh = null
 	PoolEquipment.clear_runtime_cache()
 	PoolCornerMesh.clear_runtime_cache()
@@ -103,6 +134,9 @@ func _pool_channel_axis_x(_c: Vector2i) -> bool:
 
 
 func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
+	if pool_style == WorldGen.POOL_CISTERN \
+			and WorldGen.pool_grand_cistern(ctx.world_seed, c):
+		return _pool_grand_cistern_layout(c)
 	var size := Vector2(6.0, 6.0)
 	var center := Vector2(WorldGen.CELL_SIZE * 0.5, WorldGen.CELL_SIZE * 0.5)
 	var connected := false
@@ -234,6 +268,31 @@ func _pool_water_layout_for(c: Vector2i, pool_style: int) -> Dictionary:
 		"rounded_corner": rounded_corner,
 		"corner_radius": corner_radius,
 		"equipment_side": equipment_side,
+	}
+
+
+func _pool_grand_cistern_layout(c: Vector2i) -> Dictionary:
+	# Four 9 m water quadrants meet edge-to-edge inside a 24 m hall. The
+	# surrounding 3 m tiled rim remains dry, including its doorway approaches.
+	var root := WorldGen.room_id(ctx.world_seed, c)
+	var offset := c - root
+	var x0 := POOL_GRAND_CISTERN_DECK if offset.x == 0 else 0.0
+	var x1 := WorldGen.CELL_SIZE if offset.x == 0 else \
+		WorldGen.CELL_SIZE - POOL_GRAND_CISTERN_DECK
+	var z0 := POOL_GRAND_CISTERN_DECK if offset.y == 0 else 0.0
+	var z1 := WorldGen.CELL_SIZE if offset.y == 0 else \
+		WorldGen.CELL_SIZE - POOL_GRAND_CISTERN_DECK
+	var links: Array[int] = [0 if offset.x == 0 else 1,
+		2 if offset.y == 0 else 3]
+	return {
+		"center": Vector2((x0 + x1) * 0.5, (z0 + z1) * 0.5),
+		"size": Vector2(x1 - x0, z1 - z0),
+		"connected": true,
+		"axis_x": true,
+		"edge_links": links,
+		"rounded_corner": -1,
+		"corner_radius": 0.0,
+		"equipment_side": -1,
 	}
 
 
@@ -384,6 +443,20 @@ func _pool_floor_ceiling() -> void:
 		_pool_walk_in_stairs(layout)
 	_pool_place_equipment(layout)
 	_pool_edge_steps()
+	if WorldGen.pool_grand_cistern(ctx.world_seed, ctx.cell):
+		_pool_grand_cistern_piers()
+		var offset := ctx.cell - WorldGen.room_id(ctx.world_seed, ctx.cell)
+		if offset == Vector2i.ONE:
+			_pool_mattress_float(2380, true)
+		elif offset == Vector2i.RIGHT:
+			_pool_striped_float(2381, true)
+		elif offset == Vector2i.DOWN:
+			_pool_float(2382, true)
+		if ctx.random01(2384) < 0.45:
+			if ctx.random01(2385) < 0.5:
+				_pool_striped_float(2386, true)
+			else:
+				_pool_float(2387, true)
 
 
 func _pool_place_equipment(layout: Dictionary) -> void:
@@ -1194,6 +1267,7 @@ func _pool_round_window(
 	var lamp = SpotLight3D.new()
 	lamp.light_color = Color(1.0, 0.98, 0.90)
 	lamp.light_energy = 3.8
+	lamp.light_volumetric_fog_energy = 1.8
 	lamp.spot_range = 17.0
 	lamp.spot_angle = 46.0
 	lamp.shadow_enabled = false
@@ -1414,6 +1488,7 @@ func _pool_round_ceiling_fixture(at: Vector2, index: int) -> void:
 	var height_scale := clampf(
 		(ctx.ceiling_height - 5.0) / 7.5, 0.0, 1.0)
 	lamp.light_energy = lerpf(1.58, 2.35, height_scale)
+	lamp.light_volumetric_fog_energy = 1.3
 	lamp.omni_range = maxf(
 		8.2, ctx.ceiling_height - Chunk.POOL_DRY_Y + 1.8)
 	lamp.shadow_enabled = false
@@ -1485,6 +1560,7 @@ func _pool_wall_orb_fixture(salt: int) -> bool:
 	var height_scale := clampf(
 		(ctx.ceiling_height - 5.0) / 7.5, 0.0, 1.0)
 	lamp.light_energy = lerpf(1.36, 2.05, height_scale)
+	lamp.light_volumetric_fog_energy = 1.2
 	lamp.omni_range = maxf(
 		6.3, ctx.ceiling_height - Chunk.POOL_DRY_Y + 1.5)
 	lamp.shadow_enabled = false
@@ -1725,9 +1801,60 @@ func _pool_cove_colliders(center: Vector2, radial_start: Vector2,
 		scene.add_collision_shape(cs)
 
 
-func _pool_float(salt: int) -> void:
-	if _pool_dry() or ctx.random01(salt) > 0.16:
+func _pool_float_mix(salt: int, narrow := false) -> void:
+	var chance := POOL_FLOAT_NARROW_CHANCE if narrow else POOL_FLOAT_OPEN_CHANCE
+	if _pool_dry() or ctx.random01(salt) > chance:
 		return
+	var choice := ctx.random01(salt + 1)
+	var placed := false
+	if narrow:
+		if choice < 0.35:
+			placed = _pool_striped_float(salt + 10, true)
+		elif choice < 0.65:
+			placed = _pool_mattress_float(salt + 10, true)
+		else:
+			placed = _pool_float(salt + 10, true)
+	else:
+		if choice < 0.17:
+			placed = _pool_flamingo_float(salt + 10, true)
+		elif choice < 0.46:
+			placed = _pool_mattress_float(salt + 10, true)
+		elif choice < 0.78:
+			placed = _pool_striped_float(salt + 10, true)
+		else:
+			placed = _pool_float(salt + 10, true)
+	if not placed:
+		placed = _pool_float(salt + 30, true)
+	if narrow or not placed:
+		return
+	var layout := _pool_water_layout()
+	var size: Vector2 = layout["size"]
+	if size.x * size.y < 40.0 or ctx.random01(salt + 2) > POOL_FLOAT_SECOND_CHANCE:
+		return
+	var second := ctx.random01(salt + 3)
+	if second < 0.40:
+		_pool_striped_float(salt + 50, true)
+	elif second < 0.70:
+		_pool_mattress_float(salt + 50, true)
+	else:
+		_pool_float(salt + 50, true)
+
+
+func _pool_float_spot_clear(point: Vector2, radius: float,
+		height: float) -> bool:
+	if not _pool_clear_of_access(point, radius + 0.25) \
+			or not scene.floor_spot_clear(Vector3(point.x, 0.0, point.y),
+				radius, height):
+		return false
+	for spot in _pool_float_spots:
+		if point.distance_to(spot["point"]) < radius + float(spot["radius"]) + 0.45:
+			return false
+	return true
+
+
+func _pool_float(salt: int, guaranteed := false) -> bool:
+	if _pool_dry() or (not guaranteed and ctx.random01(salt) > 0.16):
+		return false
 	var layout := _pool_water_layout()
 	var center: Vector2 = layout["center"]
 	var size: Vector2 = layout["size"]
@@ -1737,24 +1864,268 @@ func _pool_float(salt: int) -> void:
 	var z0 := center.y - size.y * 0.5 + inset
 	var z1 := center.y + size.y * 0.5 - inset
 	if x1 <= x0 or z1 <= z0:
-		return
-	var at := Vector3(
-		lerpf(x0, x1, ctx.random01(salt + 1)),
-		Chunk.POOL_WATER_Y - 0.05,
-		lerpf(z0, z1, ctx.random01(salt + 2)))
-	if not scene.floor_spot_clear(Vector3(at.x, 0.0, at.z), 0.6, 0.4):
-		return
-	var pivot = scene.furnishing_pivot(at, ctx.random01(salt + 3) * TAU, "pool_float", false)
-	var inst = scene.attributed_prop_local(pivot, Chunk.POOL_BUOY_PATH, Vector3.ZERO, 0.0,
-		Vector3.ONE * 0.55)
-	if inst == null:
-		return
-	var tint: Color = Chunk.POOL_BUOY_TINTS[
-		WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + 7) % Chunk.POOL_BUOY_TINTS.size()]
-	for node in inst.find_children("*", "MeshInstance3D", true, false):
-		var mi = node as MeshInstance3D
-		mi.material_override = _buoy_material(tint)
-	inst.set_meta("pool_float_tint", tint)
+		return false
+	for i in 8:
+		var point := Vector2(
+			lerpf(x0, x1, ctx.random01(salt + 1 + i * 2)),
+			lerpf(z0, z1, ctx.random01(salt + 2 + i * 2)))
+		if not _pool_float_spot_clear(point, 0.60, 0.4):
+			continue
+		var at := Vector3(point.x, Chunk.POOL_WATER_Y + POOL_RING_WATER_OFFSET,
+			point.y)
+		var body := _pool_pushable_float(at, ctx.random01(salt + 20) * TAU,
+			"pool_float", 0.47, 0.25, 0.25, Vector3.ZERO, true)
+		var inst = scene.attributed_prop_local(body.get_node("FloatVisual"),
+			Chunk.POOL_BUOY_PATH, Vector3.ZERO, 0.0, Vector3.ONE * 0.55)
+		if inst == null:
+			body.get_parent().free()
+			return false
+		var tint: Color = Chunk.POOL_BUOY_TINTS[
+			WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + 7) \
+				% Chunk.POOL_BUOY_TINTS.size()]
+		for node in inst.find_children("*", "MeshInstance3D", true, false):
+			var mi = node as MeshInstance3D
+			mi.material_override = _buoy_material(tint)
+		inst.set_meta("pool_float_tint", tint)
+		body.set_meta("pool_ring_float", true)
+		_pool_float_spots.append({"point": point, "radius": 0.60})
+		return true
+	return false
+
+
+func _pool_flamingo_float(salt: int, guaranteed := false) -> bool:
+	if _pool_dry() or (not guaranteed and ctx.random01(salt) > 0.09):
+		return false
+	var layout := _pool_water_layout()
+	var center: Vector2 = layout["center"]
+	var size: Vector2 = layout["size"]
+	var inset := 1.36
+	var x0 := center.x - size.x * 0.5 + inset
+	var x1 := center.x + size.x * 0.5 - inset
+	var z0 := center.y - size.y * 0.5 + inset
+	var z1 := center.y + size.y * 0.5 - inset
+	if x1 <= x0 or z1 <= z0:
+		return false
+	var candidates: Array[Vector2] = []
+	if guaranteed:
+		# The room's inner corner overlooks the whole 18 m basin and is clear
+		# of both the perimeter ladders and its tiled column grid.
+		candidates.append(Vector2(10.2, 10.2))
+	for i in 8:
+		candidates.append(Vector2(
+			lerpf(x0, x1, ctx.random01(salt + 1 + i * 2)),
+			lerpf(z0, z1, ctx.random01(salt + 2 + i * 2))))
+	for point in candidates:
+		if not _pool_float_spot_clear(point, 1.30, 2.9):
+			continue
+		var at := Vector3(point.x, Chunk.POOL_WATER_Y - 0.17, point.y)
+		var body := _pool_pushable_float(at,
+			ctx.random01(salt + 20) * TAU,
+			"pool_flamingo_float", 1.06, 0.46, 0.45)
+		var inst := scene.attributed_prop_local(
+			body.get_node("FloatVisual"), Chunk.POOL_FLAMINGO_PATH, Vector3.ZERO, 0.0)
+		if inst == null:
+			body.get_parent().free()
+			return false
+		body.set_meta("pool_flamingo_float", true)
+		_pool_float_spots.append({"point": point, "radius": 1.30})
+		return true
+	return false
+
+
+func _pool_mattress_float(salt: int, guaranteed := false) -> bool:
+	if _pool_dry() or (not guaranteed and ctx.random01(salt) > 0.22):
+		return false
+	var layout := _pool_water_layout()
+	var center: Vector2 = layout["center"]
+	var size: Vector2 = layout["size"]
+	var inset := 1.10
+	var x0 := center.x - size.x * 0.5 + inset
+	var x1 := center.x + size.x * 0.5 - inset
+	var z0 := center.y - size.y * 0.5 + inset
+	var z1 := center.y + size.y * 0.5 - inset
+	if x1 <= x0 or z1 <= z0:
+		return false
+	var candidates: Array[Vector2] = []
+	if guaranteed:
+		candidates.append(Vector2(5.8, 2.0))
+	for i in 8:
+		candidates.append(Vector2(
+			lerpf(x0, x1, ctx.random01(salt + 1 + i * 2)),
+			lerpf(z0, z1, ctx.random01(salt + 2 + i * 2))))
+	for point in candidates:
+		if not _pool_float_spot_clear(point, 1.10, 1.5):
+			continue
+		var at := Vector3(point.x,
+			Chunk.POOL_WATER_Y + POOL_MATTRESS_WATER_OFFSET, point.y)
+		var body := _pool_pushable_float(at,
+			ctx.random01(salt + 20) * TAU,
+			"pool_mattress_float", 1.03, 0.20, 0.35,
+			Vector3(0.79, 0.20, 1.85))
+		var inst := scene.attributed_prop_local(
+			body.get_node("FloatVisual"), Chunk.POOL_MATTRESS_PATH, Vector3.ZERO, 0.0)
+		if inst == null:
+			body.get_parent().free()
+			return false
+		var color_index := posmod(WorldGen.h(
+			ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + 31),
+			POOL_MATTRESS_TINTS.size())
+		for node in inst.find_children("*", "MeshInstance3D", true, false):
+			var mesh_instance := node as MeshInstance3D
+			if mesh_instance.mesh == null:
+				continue
+			for surface in mesh_instance.mesh.get_surface_count():
+				var source := mesh_instance.mesh.surface_get_material(surface) \
+					as StandardMaterial3D
+				if source != null:
+					mesh_instance.set_surface_override_material(surface,
+						_pool_mattress_material(source, color_index))
+		body.set_meta("pool_mattress_float", true)
+		body.set_meta("pool_mattress_color", color_index)
+		_pool_float_spots.append({"point": point, "radius": 1.10})
+		return true
+	return false
+
+
+static func _pool_mattress_material(source: StandardMaterial3D,
+		color_index: int) -> StandardMaterial3D:
+	var key := "%d:%d" % [source.get_instance_id(), color_index]
+	var material := _mattress_material_cache.get(key) as StandardMaterial3D
+	if material != null:
+		return material
+	material = source.duplicate() as StandardMaterial3D
+	var tint: Color = POOL_MATTRESS_TINTS[color_index]
+	# The source's two orange materials distinguish inflated chambers from
+	# darker welds. Keep that contrast while changing hue and preserving the
+	# authored roughness and normal texture.
+	material.albedo_color = tint.darkened(0.18) \
+		if source.albedo_color.g < 0.12 else tint
+	_mattress_material_cache[key] = material
+	return material
+
+
+func _pool_striped_float(salt: int, guaranteed := false) -> bool:
+	if _pool_dry() or (not guaranteed and ctx.random01(salt) > 0.23):
+		return false
+	var layout := _pool_water_layout()
+	var center: Vector2 = layout["center"]
+	var size: Vector2 = layout["size"]
+	var inset := 0.95
+	var x0 := center.x - size.x * 0.5 + inset
+	var x1 := center.x + size.x * 0.5 - inset
+	var z0 := center.y - size.y * 0.5 + inset
+	var z1 := center.y + size.y * 0.5 - inset
+	if x1 <= x0 or z1 <= z0:
+		return false
+	var candidates: Array[Vector2] = []
+	if guaranteed:
+		candidates.append(Vector2(2.0, 5.8))
+	for i in 8:
+		candidates.append(Vector2(
+			lerpf(x0, x1, ctx.random01(salt + 1 + i * 2)),
+			lerpf(z0, z1, ctx.random01(salt + 2 + i * 2))))
+	for point in candidates:
+		if not _pool_float_spot_clear(point, 0.80, 1.3):
+			continue
+		var at := Vector3(point.x,
+			Chunk.POOL_WATER_Y + POOL_STRIPED_WATER_OFFSET, point.y)
+		var body := _pool_pushable_float(at,
+			ctx.random01(salt + 20) * TAU,
+			"pool_striped_float", 0.56, 0.27, 0.28)
+		var inst := scene.attributed_prop_local(body.get_node("FloatVisual"),
+			Chunk.POOL_STRIPED_PATH, Vector3.ZERO, 0.0)
+		if inst == null:
+			body.get_parent().free()
+			return false
+		var color_index := posmod(WorldGen.h(
+			ctx.world_seed, ctx.cell.x, ctx.cell.y, salt + 31),
+			POOL_STRIPED_PAIRS.size())
+		for node in inst.find_children("*", "MeshInstance3D", true, false):
+			var mesh_instance := node as MeshInstance3D
+			if mesh_instance.mesh == null:
+				continue
+			for surface in mesh_instance.mesh.get_surface_count():
+				var source := mesh_instance.mesh.surface_get_material(surface) \
+					as StandardMaterial3D
+				if source != null:
+					var material := _pool_striped_material(source, color_index)
+					if material != source:
+						mesh_instance.set_surface_override_material(surface, material)
+		body.set_meta("pool_striped_float", true)
+		body.set_meta("pool_striped_colors", color_index)
+		_pool_float_spots.append({"point": point, "radius": 0.80})
+		return true
+	return false
+
+
+static func _pool_striped_material(source: StandardMaterial3D,
+		color_index: int) -> Material:
+	var name := source.resource_name
+	if name != "vinyl" and name != "mint_weld" and name != "green_weld":
+		return source
+	var key := "%d:%d" % [source.get_instance_id(), color_index]
+	if _striped_material_cache.has(key):
+		return _striped_material_cache[key]
+	var colors: Array = POOL_STRIPED_PAIRS[color_index]
+	var material: Material
+	if name == "vinyl":
+		var vinyl := ShaderMaterial.new()
+		vinyl.shader = PoolStripedShader
+		vinyl.set_shader_parameter("stripe_tex", source.albedo_texture)
+		vinyl.set_shader_parameter("normal_tex", source.normal_texture)
+		vinyl.set_shader_parameter("orm_tex", source.roughness_texture)
+		vinyl.set_shader_parameter("light_color", colors[0])
+		vinyl.set_shader_parameter("dark_color", colors[1])
+		material = vinyl
+	else:
+		var weld := source.duplicate() as StandardMaterial3D
+		weld.albedo_color = colors[0].darkened(0.08) \
+			if name == "mint_weld" else colors[1].darkened(0.08)
+		material = weld
+	_striped_material_cache[key] = material
+	return material
+
+
+func _pool_pushable_float(at: Vector3, yaw: float, kind: String,
+		radius: float, height: float, mass: float,
+		box_size: Vector3 = Vector3.ZERO,
+		centered_vertical := false) -> RigidBody3D:
+	var pivot := scene.furnishing_pivot(at, yaw, kind, false)
+	var body := RigidBody3D.new()
+	body.name = "PushablePoolFloat"
+	body.mass = mass
+	body.gravity_scale = 0.0
+	body.linear_damp = 1.05
+	body.angular_damp = 1.4
+	body.axis_lock_linear_y = true
+	body.axis_lock_angular_x = true
+	body.axis_lock_angular_z = true
+	body.collision_layer = 1
+	body.collision_mask = 1
+	var vinyl_physics := PhysicsMaterial.new()
+	vinyl_physics.friction = 0.12
+	vinyl_physics.bounce = 0.05
+	body.physics_material_override = vinyl_physics
+	body.add_to_group("pool_pushable_floats")
+	body.set_meta("pool_float_radius", radius)
+	pivot.add_child(body)
+	var shape := CollisionShape3D.new()
+	if box_size == Vector3.ZERO:
+		var cylinder := CylinderShape3D.new()
+		cylinder.radius = radius
+		cylinder.height = height
+		shape.shape = cylinder
+	else:
+		var box := BoxShape3D.new()
+		box.size = box_size
+		shape.shape = box
+	shape.position.y = 0.0 if centered_vertical else height * 0.5
+	body.add_child(shape)
+	var visual := Node3D.new()
+	visual.name = "FloatVisual"
+	visual.set_script(PoolFloatMotion)
+	body.add_child(visual)
+	return body
 
 
 ## Handrail along a dry edge — the detail that most says "municipal pool".
@@ -1981,7 +2352,7 @@ func _pool_basin_room() -> void:
 		_pool_window(
 			0 if ctx.random01(2303) < 0.5 else 1,
 			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2304)))
-	_pool_float(2305)
+	_pool_float_mix(2305)
 
 
 func _pool_channel_room() -> void:
@@ -1991,7 +2362,7 @@ func _pool_channel_room() -> void:
 		_pool_window(
 			2 if along_x else 0,
 			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2311)))
-	_pool_float(2312)
+	_pool_float_mix(2312, true)
 
 
 func _pool_dry_prop_spot(salt: int, radius: float,
@@ -2253,7 +2624,7 @@ func _pool_stairs_room() -> void:
 		_pool_window(
 			int(ctx.random01(2357) * 4.0) % 4,
 			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2358)))
-	_pool_float(2353)
+	_pool_float_mix(2353, true)
 
 
 func _pool_gallery_room() -> void:
@@ -2265,10 +2636,62 @@ func _pool_gallery_room() -> void:
 
 
 func _pool_cistern_room() -> void:
+	if WorldGen.pool_grand_cistern(ctx.world_seed, ctx.cell):
+		_pool_flamingo_float(2376, true)
+		return
 	var piers := _pool_piers(2370, 2 + int(ctx.random01(2372) * 1.99))
 	_pool_pier_island(piers)
 	if ctx.random01(2373) < 0.55:
 		_pool_window(
 			int(ctx.random01(2374) * 4.0) % 4,
 			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2375)))
-	_pool_float(2371)
+	_pool_float_mix(2371)
+
+
+func _pool_grand_cistern_piers() -> void:
+	# Round columns rise out of the basin and one more anchors each outer deck
+	# corner. The central seams remain broad water corridors; ladders can claim
+	# a water position without stripping the architectural rhythm from the hall.
+	var has_portal := WorldGen.portal(ctx.world_seed, ctx.cell, ctx.theme) >= 0
+	var offset := ctx.cell - WorldGen.room_id(ctx.world_seed, ctx.cell)
+	var outer_x := 4.7 if offset.x == 0 else 7.3
+	var inner_x := 8.2 if offset.x == 0 else 3.8
+	var outer_z := 4.7 if offset.y == 0 else 7.3
+	var inner_z := 8.2 if offset.y == 0 else 3.8
+	for point in [Vector2(outer_x, outer_z), Vector2(inner_x, outer_z),
+			Vector2(outer_x, inner_z), Vector2(inner_x, inner_z)]:
+		if has_portal and point.distance_to(Vector2(6, 6)) < 2.4:
+			continue
+		if not _pool_clear_of_access(point, 0.86):
+			continue
+		_pool_grand_cistern_column(point, 0.0, true)
+	var edge_x := 1.45 if offset.x == 0 else 10.55
+	var edge_z := 1.45 if offset.y == 0 else 10.55
+	# The deck columns are slimmer than the submerged supports so both sides
+	# of the 3 m perimeter path remain walkable. Slide a column along that
+	# path when a doorway happens to occupy its corner.
+	for point in [Vector2(edge_x, edge_z),
+			Vector2(edge_x, 5.0 if offset.y == 0 else 7.0),
+			Vector2(7.0 if offset.x == 0 else 5.0, edge_z),
+			Vector2(edge_x, 6.0), Vector2(6.0, edge_z)]:
+		if _pool_clear_of_access(point, 0.58):
+			_pool_grand_cistern_column(point, Chunk.POOL_DECK_Y, false)
+			break
+
+
+func _pool_grand_cistern_column(point: Vector2, base_y: float,
+		in_water: bool) -> void:
+	var height := ctx.ceiling_height - base_y
+	var shaft := scene.cylinder(
+		Vector3(point.x, base_y + height * 0.5, point.y),
+		Chunk.POOL_PILLAR_RADIUS if in_water else 0.44,
+		height, Mats.pool_tile())
+	if in_water:
+		shaft.set_meta("pool_pier", true)
+	else:
+		shaft.set_meta("pool_grand_cistern_deck_pier", true)
+	shaft.set_meta("pool_grand_cistern_pier", true)
+	for y in [base_y + 0.12, ctx.ceiling_height - 0.12]:
+		var collar := scene.cylinder(Vector3(point.x, y, point.y),
+			0.86 if in_water else 0.58, 0.24, Mats.pool_coping())
+		collar.set_meta("pool_grand_cistern_collar", true)

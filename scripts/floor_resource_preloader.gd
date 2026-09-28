@@ -11,6 +11,27 @@ static var _pending: String = ""
 static var _ready: Dictionary = {}
 static var _ready_order: Array[String] = []
 
+## Called only behind a floor-transition fade. Retain this floor's complete
+## manifest before streaming starts, so the first gate/slot room cannot block
+## on a decode. Inactive floors have no strong-cache allowance. Live scenes
+## keep their own resources (including actors and realm previews) alive.
+static func prepare_floor(paths: Array[String]) -> void:
+	if not _pending.is_empty():
+		var status := ResourceLoader.load_threaded_get_status(_pending)
+		if status in [ResourceLoader.THREAD_LOAD_IN_PROGRESS, ResourceLoader.THREAD_LOAD_LOADED]:
+			ResourceLoader.load_threaded_get(_pending)
+		_pending = ""
+	_queue.clear()
+	for path in _ready.keys():
+		if not paths.has(path):
+			_ready.erase(path)
+			_ready_order.erase(path)
+	for path in paths:
+		if not _ready.has(path):
+			var scene := load(path) as PackedScene
+			if scene != null:
+				_store(path, scene)
+
 static func configure(paths: Array[String]) -> void:
 	var next: Array[String] = []
 	for path in paths:
@@ -55,6 +76,13 @@ static func request_next() -> void:
 static func cached_scene(path: String) -> PackedScene:
 	var resource = _ready.get(path)
 	return resource as PackedScene
+
+## Also retain synchronous first-use loads. ResourceLoader's cache is weak:
+## instantiating a scene retains its meshes, but not the PackedScene itself.
+static func retain_scene(path: String, scene: PackedScene) -> PackedScene:
+	if scene != null:
+		_store(path, scene)
+	return scene
 
 static func finish() -> void:
 	if not _pending.is_empty():

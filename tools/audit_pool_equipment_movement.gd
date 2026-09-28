@@ -34,6 +34,7 @@ func ride(kind: int, quarter: int, config: Dictionary) -> void:
 	var top := PoolEquipment._vec(config["ladder_top"]) if kind != 0 else Vector3(0,.52,-1.22)
 	var direction := Vector3(top.x-bottom.x, 0, top.z-bottom.z).normalized()
 	var player := Player.new()
+	player.level_theme = 9
 	player.position = prop.to_global(bottom - direction*.3 + Vector3.UP*.02)
 	player.water_y = 1.05
 	root.add_child(player)

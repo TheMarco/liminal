@@ -37,6 +37,7 @@ var props: Array[Dictionary] = []
 var growth_contacts: Array[Vector3] = []
 var vents: Array[Vector3] = []
 var annex_carpet_stains: Array[Vector3] = []
+var annex_ceiling_stains: Array[Vector3] = []
 var wall_fixings: Array[Vector3] = []
 var attempted_causes := {}
 var placed_causes := {}
@@ -157,6 +158,8 @@ func _scan(node: Node, parent_transform: Transform3D, prop: int) -> void:
 		if mesh.mesh != null:
 			if mesh.has_meta("annex_carpet_damage"):
 				annex_carpet_stains.append(xf.origin)
+			if mesh.has_meta("annex_moisture_tile"):
+				annex_ceiling_stains.append(xf.origin)
 			if mesh.has_meta("bloom_growth"):
 				# Real vine endpoints, rather than the empty parent at the origin.
 				var box := mesh.mesh.get_aabb()
@@ -306,11 +309,22 @@ func _patch(face: Face, at: Vector3, requested: Vector2, motif: int,
 	mark.mesh = quad
 	var damp := motif == Motif.SPILL and not cause.begins_with("drink_spill")
 	var mask_id := _hash(center, 28211) % 8 if damp else -1
-	var material := Mats._shader("surface_wear_%d_%d" % [motif, mask_id],
+	var authored_mask := ""
+	if ctx.theme == 2 and cause == "annex_connected_moisture_wall":
+		authored_mask = "res://textures/annex/wall_seep_%02d.png" % (
+			1 + _hash(center, 28212) % 2)
+	elif ctx.theme == 2 and cause == "annex_connected_moisture_tide":
+		authored_mask = "res://textures/annex/wall_tide_%02d.png" % (
+			1 + _hash(center, 28213) % 2)
+	var material_key := "surface_wear_%d_%d_%s" % [motif, mask_id, authored_mask]
+	var material := Mats._shader(material_key,
 		"res://shaders/surface_wear.gdshader")
 	material.set_shader_parameter("motif", motif)
 	material.set_shader_parameter("damp_spread", damp)
-	if damp:
+	material.set_shader_parameter("authored_mask", not authored_mask.is_empty())
+	if not authored_mask.is_empty():
+		material.set_shader_parameter("stain_mask", load(authored_mask))
+	elif damp:
 		material.set_shader_parameter("stain_mask",
 			load("res://textures/annex/moisture_mask_%02d.png" % (mask_id + 1)))
 	mark.material_override = material
@@ -375,12 +389,19 @@ func _architectural_wear() -> void:
 	# Large readable interventions are deliberately sparse, with quiet walls
 	# between clusters. The Annex keeps its existing ceiling/carpet masks.
 	var n := mini(walls.size(), 1 + district)
-	if ctx.theme == 2 and not annex_carpet_stains.is_empty():
-		var source := annex_carpet_stains[0] + Vector3.UP * 0.7
-		var damp_wall := _nearest_wall(source, 3.2)
-		if damp_wall != null:
-			walls.erase(damp_wall)
-			walls.push_front(damp_wall)
+	var annex_leak_wall: Face = null
+	var annex_leak_at := Vector3.ZERO
+	if ctx.theme == 2:
+		if not annex_ceiling_stains.is_empty():
+			var ceiling_site := annex_ceiling_stains[0]
+			annex_leak_at = Vector3(ceiling_site.x, 1.4, ceiling_site.z)
+			annex_leak_wall = _nearest_wall(annex_leak_at, 4.2)
+		if annex_leak_wall == null and not annex_carpet_stains.is_empty():
+			annex_leak_at = annex_carpet_stains[0] + Vector3.UP * 0.7
+			annex_leak_wall = _nearest_wall(annex_leak_at, 3.2)
+		if annex_leak_wall != null:
+			walls.erase(annex_leak_wall)
+			walls.push_front(annex_leak_wall)
 	for i in n:
 		var f := walls[i]
 		var at := f.center + f.u * ((_roll(f.center, 28301) - 0.5) * f.size.x * 0.5)
@@ -403,13 +424,13 @@ func _architectural_wear() -> void:
 					"office_repaint" if i % 2 == 0 else "office_removed_notice", 0.65)
 			2:
 				if i == 0:
-					if not annex_carpet_stains.is_empty():
-						at = annex_carpet_stains[0] + Vector3.UP * f.center.y
-					_linked_leak(f, at, "annex_connected_moisture", Color(0.28, 0.20, 0.065))
-				else:
-					_patch(f, low, Vector2(1.0, 0.85), Motif.MOLD,
-						Color(0.095, 0.14, 0.045), "annex_damp_seam", 1.2)
-				if i == 0 and _roll(at, 28306) < 0.22:
+					if annex_leak_wall != null:
+						at = Vector3(annex_leak_at.x, f.center.y, annex_leak_at.z)
+						_linked_leak(f, at, "annex_connected_moisture", Color(0.28, 0.20, 0.065))
+					else:
+						_patch(f, low, Vector2(1.0, 0.85), Motif.MOLD,
+							Color(0.095, 0.14, 0.045), "annex_damp_seam", 1.2)
+				if i == 0 and _roll(at, 28306) < 0.52:
 					var paper := f.material.ends_with("_3") or f.material.ends_with("_4")
 					_lifted_finish(f, low + Vector3.UP * 0.5, "wallpaper" if paper else "paint")
 			4:
@@ -483,18 +504,41 @@ func _architectural_wear() -> void:
 
 
 func _linked_leak(f: Face, at: Vector3, cause: String, ink: Color) -> void:
-	# Align all parts with one position on the real supporting wall, including
-	# when the source is a carpet stain a few metres out from that wall.
-	at -= f.normal * (at - f.center).dot(f.normal)
+	# The chosen wall can be a short partition segment. Clamp the shared leak
+	# anchor to the area that can actually hold its wall mask; otherwise the
+	# wall mark clips at one end while its floor and ceiling marks stay metres
+	# away at the original carpet/ceiling source coordinate.
+	var visible_width := minf(1.3, f.size.x - 0.08)
+	var travel := maxf(0.0, (f.size.x - visible_width) * 0.5 - 0.015)
+	at = f.center + f.u * clampf((at - f.center).dot(f.u), -travel, travel)
 	var top := f.center.y + f.size.y * 0.5
 	var bottom := f.center.y - f.size.y * 0.5
 	_patch(f, Vector3(at.x, (top + bottom) * 0.5, at.z),
-		Vector2(1.0, f.size.y - 0.1), Motif.LEAK, ink, cause + "_wall", 1.25)
-	_floor_patch(Vector3(at.x, bottom + 0.1, at.z) + f.normal * 0.55,
-		Vector2(1.6, 1.5), Motif.SPILL, ink, cause + "_floor", 1.1)
+		Vector2(1.3, f.size.y - 0.1), Motif.LEAK, ink, cause + "_wall", 1.5)
+	if ctx.theme == 2:
+		_patch(f, Vector3(at.x, bottom + 0.56, at.z), Vector2(1.65, 0.72),
+			Motif.WATERLINE, Color(0.42, 0.35, 0.16), cause + "_tide", 1.2)
+	var floor_at := Vector3(at.x, bottom + 0.1, at.z) + f.normal * 0.55
+	var broad_floor_marked := false
+	if ctx.theme == 2:
+		# Annex floor strips and room inserts may contain this point but clamp
+		# a 1.6m stain metres away. The 12m carpet slab is the real support.
+		for floor in floors:
+			if floor.material == "annex_carpet" and floor.size.x > 10.0 \
+					and floor.size.y > 10.0:
+				var delta := floor_at - floor.center
+				if absf(delta.dot(floor.u)) > floor.size.x * 0.5 - 0.1 \
+						or absf(delta.dot(floor.v)) > floor.size.y * 0.5 - 0.1:
+					continue
+				broad_floor_marked = _patch(floor, floor_at, Vector2(1.6, 1.5),
+					Motif.SPILL, ink, cause + "_floor", 1.1) != null
+				break
+	if not broad_floor_marked:
+		_floor_patch(floor_at, Vector2(1.6, 1.5), Motif.SPILL, ink,
+			cause + "_floor", 1.1)
 	_patch(f, Vector3(at.x, bottom + 0.16, at.z), Vector2(1.2, 0.32),
 		Motif.MOLD, ink * Color(0.65, 0.85, 0.65), cause + "_skirting", 1.2)
-	if ctx.theme == 2 and _roll(at, 28620) < 0.22:
+	if ctx.theme == 2 and _roll(at, 28620) < 0.58:
 		_swollen_skirting(f, at)
 	for ceiling in ceilings:
 		var target := Vector3(at.x, ceiling.center.y, at.z) + f.normal * 0.55

@@ -27,18 +27,22 @@ enum Page {
 
 const UI_FONT: Font = preload("res://fonts/VT323-Regular.ttf")
 const TITLE_ART: Texture2D = preload("res://textures/ui/title_screen.png")
-const INSTRUCTION_ROWS := [
-	["WASD  /  ARROWS", "Walk"],
-	["SHIFT", "Run  ·  Draws attention in Descent"],
-	["E", "Use terminals, lifts, doors and charging stations"],
-	["F", "Toggle the flashlight"],
-	["C  /  SPACE  /  P", "Raise camera  /  Take photograph  /  Photo album"],
-	["1  —  9", "Move between the original floors  ·  Wander only"],
-	["0", "Enter the Data Center  ·  Wander only"],
-	["−", "Enter the Bloom  ·  Wander only"],
-	["Q", "Ask to leave the current mode"],
-	["ESC", "Pause / settings"],
-]
+## Instruction rows with live key labels; identical to the historical table on
+## default bindings. Built at page time so a rebind shows on return.
+static func instruction_rows() -> Array:
+	return [
+		[GameInput.movement_label(), "Walk"],
+		[GameInput.primary_label("sprint"), "Run  ·  Draws attention in Descent"],
+		[GameInput.primary_label("interact"), "Use terminals, lifts, doors and charging stations"],
+		[GameInput.primary_label("torch"), "Toggle the flashlight"],
+		["%s  /  %s  /  %s" % [GameInput.primary_label("camera"), GameInput.primary_label("shutter"), GameInput.primary_label("album")],
+			"Raise camera  /  Take photograph  /  Photo album"],
+		["1  —  9", "Move between the original floors  ·  Wander only"],
+		["0", "Enter the Data Center  ·  Wander only"],
+		["−", "Enter the Bloom  ·  Wander only"],
+		[GameInput.primary_label("return_to_title"), "Ask to leave the current mode"],
+		["ESC", "Pause / settings"],
+	]
 ## Creators of the third-party models and surfaces used by the current game.
 ## The canonical record carries individual titles, links and modifications.
 const CREDIT_SECTIONS := [
@@ -93,6 +97,9 @@ var _descent_ready := false
 var _has_descent_progress := false
 var _checkpoint_floor := 0
 var _checkpoint_name := ""
+var _recovered_backup := false
+var _recovery_notice: Label
+var _instruction_keys: Array[Label] = []
 var _descent_entry := DescentEntry.NEW
 var _entry_confirmation: ReturnPrompt
 var _page_trigger: Control
@@ -188,6 +195,11 @@ func _build_main() -> void:
 		14, Color(0.68, 0.70, 0.66))
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_main_dock.add_child(_prompt)
+	if _has_descent_progress and _recovered_backup:
+		_recovery_notice = _paragraph(
+			"BACKUP RECOVERED\nYour latest save could not be read.\nContinue uses the last valid checkpoint.",
+			14, Color(0.88, 0.76, 0.52), 360)
+		page.add_child(_recovery_notice)
 
 	_title_button(_main_dock, "WANDER", _select_wander)
 	if _has_descent_progress:
@@ -234,13 +246,15 @@ func _build_instructions() -> void:
 	controls.add_theme_constant_override("separation", 3)
 	controls.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	page.add_child(controls)
-	for instruction in INSTRUCTION_ROWS:
+	for instruction in instruction_rows():
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_BEGIN
 		row.add_theme_constant_override("separation", 30)
 		row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		var key := _label(str(instruction[0]), 17, CREAM, 210)
 		key.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		key.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_instruction_keys.append(key)
 		var action := _label(str(instruction[1]), 17, BODY, 500)
 		row.add_child(key)
 		row.add_child(action)
@@ -578,6 +592,15 @@ func _relayout() -> void:
 		var height := float(entry[3]) * scale
 		if width > 0.0 or height > 0.0:
 			control.custom_minimum_size = Vector2(width, height)
+	if is_instance_valid(_recovery_notice) and is_instance_valid(_main_dock):
+		# Keep all nine saved-run actions in place. The recovery explanation
+		# sits beside them, switching sides in tall/narrow windows.
+		_recovery_notice.reset_size()
+		var notice_size := _recovery_notice.get_combined_minimum_size()
+		var x := _main_dock.position.x + 220.0 * scale + 24.0 * scale
+		if x + notice_size.x > float(viewport.x) - safe.x:
+			x = maxf(safe.x, _main_dock.position.x - notice_size.x - 24.0 * scale)
+		_recovery_notice.position = Vector2(x, _main_dock.position.y + 22.0 * scale)
 
 
 func _process(dt: float) -> void:
@@ -627,6 +650,10 @@ func _unhandled_input(_event: InputEvent) -> void:
 func _set_page(page: Page) -> void:
 	if _descent_selected and page != Page.DESCENT:
 		return
+	if page == Page.INSTRUCTIONS:
+		var rows := instruction_rows()
+		for i in mini(rows.size(), _instruction_keys.size()):
+			_instruction_keys[i].text = str(rows[i][0])
 	var focused := get_viewport().gui_get_focus_owner()
 	var restore_focus := focused != null and is_ancestor_of(focused)
 	if restore_focus:
@@ -715,8 +742,9 @@ func set_descent_ready() -> void:
 ## Called before this node enters the tree, so the main menu can be built with
 ## the saved run as a first-class choice rather than changing labels afterward.
 func configure_descent_progress(has_progress: bool, floor_idx := 0,
-		floor_name := "") -> void:
+		floor_name := "", recovered_backup := false) -> void:
 	_has_descent_progress = has_progress
+	_recovered_backup = recovered_backup
 	_checkpoint_floor = maxi(0, floor_idx)
 	_checkpoint_name = floor_name
 

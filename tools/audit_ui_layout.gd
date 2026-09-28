@@ -24,8 +24,10 @@ func run() -> void:
 	var view := SubViewport.new()
 	root.add_child(view)
 	var title := TitleScreen.new()
-	title.configure_descent_progress(true, 6, "the asylum")
+	title.configure_descent_progress(true, 6, "the asylum", true)
 	view.add_child(title)
+	expect(is_instance_valid(title._recovery_notice) and title._recovery_notice.text.contains("last valid checkpoint"),
+		"Continue did not explain backup recovery")
 	var summary := DescentSummary.new()
 	summary.floor_display = "THE DATA CENTER"
 	view.add_child(summary)
@@ -41,6 +43,7 @@ func run() -> void:
 		await settle()
 		var safe := VhsOsd.safe_inset(Vector2(size))
 		var bounds := Rect2(safe, Vector2(size) - safe * 2.0)
+		contained(title._recovery_notice, bounds, "%s backup notice" % size)
 		expect(is_zero_approx(title._background.position.x),
 			"%s title art is not pinned to the logo edge" % size)
 		expect(title._background.size.x >= float(size.x)

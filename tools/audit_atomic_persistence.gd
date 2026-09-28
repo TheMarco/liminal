@@ -38,9 +38,11 @@ func _test_descent() -> void:
 	var recovered := DescentProgress.new(path)
 	check(recovered.load_from_disk(), "descent backup recovery")
 	check(recovered.run_seed == 12345, "descent recovered seed")
+	check(recovered.recovered_from_backup, "recovery notice flag was not set")
 	var backup_before := FileAccess.get_file_as_bytes(path + ".bak")
 	recovered.deepest_floor = 4
 	check(recovered.save_to_disk() == OK, "descent post-recovery save")
+	check(not recovered.recovered_from_backup, "recovery notice survived a healthy new save")
 	check(FileAccess.get_file_as_bytes(path + ".bak") == backup_before, "corrupt live did not rotate backup")
 
 func _test_atomic() -> void:

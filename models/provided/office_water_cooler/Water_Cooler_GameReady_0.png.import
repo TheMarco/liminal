@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c7yaiw81o5h5p"
-path="res://.godot/imported/Water_Cooler_GameReady_0.png-526847a37af34aff59d191678369a912.ctex"
+path.bptc="res://.godot/imported/Water_Cooler_GameReady_0.png-526847a37af34aff59d191678369a912.bptc.ctex"
+path.astc="res://.godot/imported/Water_Cooler_GameReady_0.png-526847a37af34aff59d191678369a912.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "7843d37a2f1dc9948fbb38d86f9b8d12"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/office_water_cooler/Water_Cooler_GameReady_0.png"
-dest_files=["res://.godot/imported/Water_Cooler_GameReady_0.png-526847a37af34aff59d191678369a912.ctex"]
+dest_files=["res://.godot/imported/Water_Cooler_GameReady_0.png-526847a37af34aff59d191678369a912.bptc.ctex", "res://.godot/imported/Water_Cooler_GameReady_0.png-526847a37af34aff59d191678369a912.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

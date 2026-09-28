@@ -179,7 +179,8 @@ func _allowed() -> bool:
 		and not run.blackout and not run.watching
 
 
-## Trackpad-first controls: C toggles the camera, Space is the shutter.
+## Trackpad-first controls: the camera key toggles, the shutter key shoots
+## (C and Space by default; both remappable in settings).
 ## Mouse users get the same through hold-RMB / LMB. Listens in _input, not
 ## _unhandled_input: Space doubles as ui_accept, so any Control that
 ## happened to hold focus swallowed the shutter before it arrived
@@ -187,14 +188,14 @@ func _allowed() -> bool:
 ## mouse gameplay, so menus never see a stolen key.
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_C:
+		if GameInput.matches(event, "camera"):
 			if _raised:
 				_lower()
 				get_viewport().set_input_as_handled()
 			elif _allowed():
 				_raise(true)
 				get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_SPACE and _can_shoot():
+		elif GameInput.matches(event, "shutter") and _can_shoot():
 			_take_photo()
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:

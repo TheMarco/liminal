@@ -2,7 +2,7 @@ extends Node
 ## A seed-prepared solid wall tears into an actual generated doorway. The
 ## endpoint assemblies belong to Chunk; this node only owns the transition.
 
-const Surface := preload("res://tools/lib/native_doorway_proof.gd")
+const Surface := preload("res://scripts/native_doorway_surface.gd")
 const MOVE_SECONDS := Surface.TRANSITION_SECONDS
 const OPEN_SECONDS := 5.5
 # Prepared walls may be common; the supernatural reveal should not be.

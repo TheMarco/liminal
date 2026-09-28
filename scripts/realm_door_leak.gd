@@ -15,6 +15,7 @@ var pulses := 0
 var _patch: MeshInstance3D
 var _light: OmniLight3D
 var _material: ShaderMaterial
+var _doorway_outline := false
 
 
 func configure(centre: Vector3, forward: Vector3, world_seed: int) -> void:
@@ -39,6 +40,23 @@ func configure(centre: Vector3, forward: Vector3, world_seed: int) -> void:
 	_light.set_meta("visible_source", "realm_leak_patch")
 	add_child(_light)
 	visible = false
+
+
+## Keep the same data-glyph/light cue around an open doorway without painting
+## over the live view in its centre. The ordinary sealed-wall leak is unchanged.
+func configure_doorway_outline(centre: Vector3, forward: Vector3,
+		world_seed: int, opening: Vector2) -> void:
+	configure(centre, forward, world_seed)
+	_doorway_outline = true
+	global_position = centre - forward * 0.16 + Vector3.UP * opening.y * 0.5
+	# Keep the effect close to the threshold. A wide patch reads as a rectangular
+	# projection screen on the wall rather than light escaping from the gap.
+	var patch_size := opening + Vector2(0.5, 0.5)
+	(_patch.mesh as QuadMesh).size = patch_size
+	_material.set_shader_parameter("patch_size", patch_size)
+	_material.set_shader_parameter("opening_size", opening)
+	_light.omni_range = 3.0
+	_light.shadow_enabled = false
 
 
 ## The environmental signal must invite a glance, not require one to start.
@@ -69,7 +87,9 @@ func update_cue(dt: float, eligible: bool, held: bool) -> bool:
 	var comfort := 0.45 if GameSettings.flashing_reduced() else 1.0
 	_material.set_shader_parameter("progress", amount)
 	_material.set_shader_parameter("strength", comfort)
-	_light.light_energy = (0.12 + (sin(amount * PI) * 0.65 if active else 0.0)) * comfort
+	_light.light_energy = ((0.24 if _doorway_outline else 0.12)
+		+ (sin(amount * PI) * (0.48 if _doorway_outline else 0.65)
+			if active else 0.0)) * comfort
 	return started
 
 

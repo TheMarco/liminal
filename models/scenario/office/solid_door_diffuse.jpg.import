@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b1xy58ovddw5a"
-path="res://.godot/imported/solid_door_diffuse.jpg-9c7f44f108bab04962f900f0a1db44fc.ctex"
+path.bptc="res://.godot/imported/solid_door_diffuse.jpg-9c7f44f108bab04962f900f0a1db44fc.bptc.ctex"
+path.astc="res://.godot/imported/solid_door_diffuse.jpg-9c7f44f108bab04962f900f0a1db44fc.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "d194efd80d017c8a7b082c7e47ce7582"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/scenario/office/solid_door_diffuse.jpg"
-dest_files=["res://.godot/imported/solid_door_diffuse.jpg-9c7f44f108bab04962f900f0a1db44fc.ctex"]
+dest_files=["res://.godot/imported/solid_door_diffuse.jpg-9c7f44f108bab04962f900f0a1db44fc.bptc.ctex", "res://.godot/imported/solid_door_diffuse.jpg-9c7f44f108bab04962f900f0a1db44fc.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

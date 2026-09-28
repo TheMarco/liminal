@@ -74,6 +74,8 @@ var _done := false
 var _playback_state: IntroPlaybackState
 var _playback_identity := ""
 var _watch_hint: CanvasLayer
+var _subtitles: StorySubtitles
+var _hint_settings: GameSettings
 
 static var _scenes := {}
 
@@ -312,6 +314,10 @@ func _begin_watch(viewer: Player) -> void:
 	else:
 		_playback_state.load_from_disk()
 	_show_watch_hint()
+	if is_instance_valid(_video):
+		_subtitles = StorySubtitles.new()
+		add_child(_subtitles)
+		_subtitles.attach(_video)
 	_viewer = viewer
 	set_process_unhandled_input(true)
 	get_tree().call_group("descent_listener", "descent_tape_watch", true)
@@ -437,8 +443,8 @@ func _show_watch_hint() -> void:
 	_watch_hint.add_child(panel)
 	var label := Label.new()
 	label.name = "Controls"
-	label.text = "E — SKIP RECORDING  ·  ESC — PAUSE" if can_skip \
-		else "E — STOP AND REWIND  ·  ESC — PAUSE"
+	label.text = "%s — SKIP RECORDING  ·  ESC — PAUSE" % GameInput.primary_label("interact") if can_skip \
+		else "%s — STOP AND REWIND  ·  ESC — PAUSE" % GameInput.primary_label("interact")
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	label.add_theme_font_size_override("font_size", 28)
 	label.add_theme_color_override("font_color", Color(0.88, 0.91, 0.88))
@@ -447,9 +453,21 @@ func _show_watch_hint() -> void:
 	label.add_theme_constant_override("shadow_offset_y", 2)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(label)
+	_hint_settings = GameSettings.current
+	if _hint_settings != null:
+		_hint_settings.changed.connect(_refresh_watch_hint)
 	get_viewport().size_changed.connect(_layout_watch_hint)
 	_layout_watch_hint()
 	# Containers settle their child sizes at the end of the frame.
+	_layout_watch_hint.call_deferred()
+
+
+func _refresh_watch_hint() -> void:
+	if not is_instance_valid(_watch_hint):
+		return
+	var label := _watch_hint.get_node("Backing/Controls") as Label
+	label.text = "%s — %s  ·  ESC — PAUSE" % [GameInput.primary_label("interact"),
+		"SKIP RECORDING" if _skip_available() else "STOP AND REWIND"]
 	_layout_watch_hint.call_deferred()
 
 
@@ -465,6 +483,13 @@ func _layout_watch_hint() -> void:
 
 
 func _clear_watch_hint() -> void:
+	if _hint_settings != null and _hint_settings.changed.is_connected(_refresh_watch_hint):
+		_hint_settings.changed.disconnect(_refresh_watch_hint)
+	_hint_settings = null
+	if is_instance_valid(_subtitles):
+		_subtitles.hide()
+		_subtitles.queue_free()
+	_subtitles = null
 	if get_viewport() != null and get_viewport().size_changed.is_connected(_layout_watch_hint):
 		get_viewport().size_changed.disconnect(_layout_watch_hint)
 	if is_instance_valid(_watch_hint):
@@ -479,9 +504,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var can_skip := _skip_available()
 	if intro and not can_skip:
 		return
-	var key := event as InputEventKey
-	if key != null and key.pressed and not key.echo \
-			and key.physical_keycode == KEY_E:
+	if GameInput.matches(event, "interact"):
 		get_viewport().set_input_as_handled()
 		if can_skip:
 			_finish_tape()

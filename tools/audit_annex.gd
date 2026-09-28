@@ -4,15 +4,15 @@ extends SceneTree
 ## Run:
 ##   godot --headless --path . --script tools/audit_annex.gd -- [seeds] [radius]
 ##
-## The floor must stay low, yellow and mixed-scale: long narrow corridors,
-## mostly human-sized rooms, rare larger chambers, selective wallpaper, sparse
-## furniture hoards only in 24x24 spaces, no sewer effects, and occasional CCTV.
+## Mostly low, yellow rooms with rare tall flooded halls, mixed-scale corridors,
+## selective wallpaper, sparse furniture hoards, and occasional CCTV.
 
 const DIRV := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 const OPP := [1, 0, 3, 2]
 const VALID_STYLES := [
 	WorldGen.ANNEX_OPEN, WorldGen.ANNEX_MAZE, WorldGen.ANNEX_LONG,
 	WorldGen.ANNEX_QUIET, WorldGen.ANNEX_PASSAGE, WorldGen.ANNEX_LOBBY,
+	WorldGen.ANNEX_FLOODED_HALL,
 ]
 
 
@@ -36,6 +36,12 @@ func _damage_asset_violations() -> Array[String]:
 			if coverage < 0.08 or coverage > 0.82:
 				failures.append("Annex damage mask has unusable coverage %.3f: %s" % [
 					coverage, path])
+	for prefix in ["ceiling_ring", "carpet_bloom", "wall_seep", "wall_tide"]:
+		for index in range(1, 3):
+			var path := "res://textures/annex/%s_%02d.png" % [prefix, index]
+			var image := Image.load_from_file(ProjectSettings.globalize_path(path))
+			if image.is_empty() or image.get_width() < 1024 or image.get_height() < 1024:
+				failures.append("Annex deterioration mask missing or undersized: %s" % path)
 	var shader := load("res://shaders/environment_mask_overlay.gdshader") as Shader
 	if shader == null or shader.code.find("boundary_fade") < 0 \
 			or shader.code.find("surface_breakup") < 0:
@@ -59,6 +65,8 @@ func _decorative_occlusion_violations(node: Node) -> int:
 func _moisture_fixture_violations(chunk: Chunk) -> int:
 	var moisture: Array[Node] = chunk.find_children("*", "MeshInstance3D", true, false) \
 		.filter(func(node: Node) -> bool: return node.has_meta("annex_moisture_tile"))
+	var sagging: Array[Node] = chunk.find_children("*", "MeshInstance3D", true, false) \
+		.filter(func(node: Node) -> bool: return node.has_meta("annex_sagging_tile"))
 	var fixtures: Array[Node] = chunk.find_children("*", "MeshInstance3D", true, false) \
 		.filter(func(node: Node) -> bool: return node.has_meta("annex_ceiling_light_size"))
 	var bad := 0
@@ -71,7 +79,42 @@ func _moisture_fixture_violations(chunk: Chunk) -> int:
 			if Vector2(at.x, at.z).distance_squared_to(
 					Vector2(light_at.x, light_at.z)) < 0.01:
 				bad += 1
+	for panel in sagging:
+		var panel_at := (panel as Node3D).position
+		if not chunk._annex_fixture_clear(panel_at):
+			bad += 1
+		var has_source := false
+		for tile in moisture:
+			var tile_at := (tile as Node3D).position
+			if Vector2(panel_at.x, panel_at.z).distance_squared_to(
+					Vector2(tile_at.x, tile_at.z)) < 0.001 \
+					and str(panel.get_meta("annex_sagging_source")) == str(tile.get_meta(
+						"annex_moisture_placement")):
+				has_source = true
+				break
+		if not has_source:
+			bad += 1
 	return bad
+
+
+func _linked_damage_violations(chunk: Chunk) -> int:
+	var marks := {}
+	for node in chunk.find_children("*", "MeshInstance3D", true, false):
+		var cause := str(node.get_meta("surface_wear_cause", ""))
+		if cause.begins_with("annex_connected_moisture_"):
+			var part := cause.trim_prefix("annex_connected_moisture_")
+			marks[part] = node.get_meta(
+				"surface_wear_center")
+	if not marks.has("wall"):
+		return 0
+	var wall: Vector3 = marks["wall"]
+	for part in ["tide", "floor", "skirting", "ceiling"]:
+		if not marks.has(part):
+			return 1
+		var at: Vector3 = marks[part]
+		if Vector2(wall.x, wall.z).distance_to(Vector2(at.x, at.z)) > 1.15:
+			return 1
+	return 0
 
 
 func _walk(node: Node, report: Dictionary) -> void:
@@ -163,6 +206,8 @@ func _walk(node: Node, report: Dictionary) -> void:
 		var asset := str(node.get_meta("annex_moisture_asset", ""))
 		report["moisture_assets"][asset] = \
 			int(report["moisture_assets"].get(asset, 0)) + 1
+		if asset.contains("ceiling_ring_"):
+			report["ceiling_rings"] += 1
 		var strength := float(node.get_meta("annex_moisture_strength", -1.0))
 		if not is_equal_approx(float(node.get_meta(
 				"annex_moisture_tile_size", 0.0)), 1.20) \
@@ -174,13 +219,27 @@ func _walk(node: Node, report: Dictionary) -> void:
 			var geometry := node as GeometryInstance3D
 			if geometry.cast_shadow \
 					!= GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
-				or geometry.gi_mode != GeometryInstance3D.GI_MODE_DISABLED:
+					or geometry.gi_mode != GeometryInstance3D.GI_MODE_DISABLED:
 				report["bad_moisture_tiles"] += 1
+	if node.has_meta("annex_sagging_tile"):
+		report["sagging_tiles"] += 1
+		if str(node.get_meta("annex_sagging_source", "")).is_empty() \
+				or not node is MeshInstance3D \
+				or (node as MeshInstance3D).mesh == null \
+				or (node as MeshInstance3D).mesh.get_aabb().size.y < 0.07:
+			report["bad_sagging_tiles"] += 1
+		if node is GeometryInstance3D:
+			var panel := node as GeometryInstance3D
+			if panel.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
+					or panel.gi_mode != GeometryInstance3D.GI_MODE_DISABLED:
+				report["bad_sagging_tiles"] += 1
 	if node.has_meta("annex_carpet_damage"):
 		report["carpet_damage"] += 1
 		var carpet_asset := str(node.get_meta("annex_carpet_damage_asset", ""))
 		report["carpet_damage_assets"][carpet_asset] = \
 			int(report["carpet_damage_assets"].get(carpet_asset, 0)) + 1
+		if carpet_asset.contains("carpet_bloom_"):
+			report["carpet_blooms"] += 1
 		var carpet_size := float(node.get_meta("annex_carpet_damage_size", 0.0))
 		var carpet_strength := float(node.get_meta("annex_carpet_damage_strength", -1.0))
 		var edge_clearance := float(node.get_meta("annex_carpet_edge_clearance", -INF))
@@ -304,6 +363,8 @@ func _walk(node: Node, report: Dictionary) -> void:
 			report["small_room_piles"] += 1
 	if node.has_meta("annex_architecture"):
 		report["architecture_assemblies"] += 1
+		if node.has_meta("annex_flood_pillar"):
+			report["flood_pillars"] += 1
 		var finish_idx := int(node.get_meta("annex_finish", -1))
 		var wallpapered := bool(node.get_meta("annex_wallpaper", false))
 		var expected := bool(node.get_meta(
@@ -494,10 +555,13 @@ func _init() -> void:
 	var room_cells := 0
 	var large_rooms := 0
 	var furniture_pile_roots := 0
+	var flooded_hall_roots := 0
+	var hall_example_seed := 0
+	var hall_example_root := Vector2i.ZERO
 	var dim_cells := 0
 	var light_gap_cells := 0
 	var room_roots := 0
-	var room_sizes := {1: 0, 2: 0, 3: 0, 4: 0}
+	var room_sizes := {1: 0, 2: 0, 3: 0, 4: 0, 9: 0}
 	var open_edges := 0
 	var baseboard_edges := 0
 	var plain_base_edges := 0
@@ -548,15 +612,30 @@ func _init() -> void:
 						room_roots += 1
 						var room_size := WorldGen.annex_room_size(ws, root)
 						room_sizes[room_size] = int(room_sizes.get(room_size, 0)) + 1
-						if room_size > 4:
+						if room_size > 4 and room_size != 9:
 							failures.append("oversized Annex room seed=%d root=%s size=%d" % [
 								base_seed, root, room_size])
+						if room_size == 9 and style != WorldGen.ANNEX_FLOODED_HALL:
+							failures.append("nine-cell Annex room has wrong style seed=%d root=%s" % [
+								base_seed, root])
 						if room_size >= 4:
 							large_rooms += 1
+							if style == WorldGen.ANNEX_FLOODED_HALL:
+								flooded_hall_roots += 1
+								if hall_example_seed == 0:
+									hall_example_seed = ws
+									hall_example_root = root
 							if WorldGen.annex_furniture_pile(ws, root):
 								furniture_pile_roots += 1
 				var h := WorldGen.room_height(ws, root, 2)
-				if h < 2.70 or h > 2.90:
+				if style == WorldGen.ANNEX_FLOODED_HALL:
+					if WorldGen.annex_room_size(ws, root) != 9 \
+							or absf(h - 5.4) > 0.001 \
+							or absf(Chunk.cell_ceil_h(ws, cell, 2) - 5.4) > 0.001 \
+							or WorldGen.owning_room_members(ws, root, 2).size() != 9:
+						failures.append("flooded hall shape/height invalid seed=%d cell=%s" % [
+							base_seed, cell])
+				elif h < 2.70 or h > 2.90:
 					failures.append("ceiling outside Annex band seed=%d cell=%s h=%.2f" % [
 						base_seed, cell, h])
 				for dir in 4:
@@ -623,6 +702,8 @@ func _init() -> void:
 	for style in VALID_STYLES:
 		if int(style_counts.get(style, 0)) == 0:
 			failures.append("Annex style never generated: %d" % style)
+	if flooded_hall_roots == 0:
+		failures.append("no full-size flooded Annex hall generated")
 	for wallpaper in [3, 4]:
 		if int(finish_counts.get(wallpaper, 0)) == 0:
 			failures.append("wallpaper finish never generated: %d" % wallpaper)
@@ -651,7 +732,7 @@ func _init() -> void:
 	if large_room_ratio > 0.18:
 		failures.append("large rooms too common: %.3f" % large_room_ratio)
 	var furniture_pile_ratio := float(furniture_pile_roots) / float(
-		maxi(large_rooms, 1))
+		maxi(large_rooms - flooded_hall_roots, 1))
 	if furniture_pile_ratio < 0.06:
 		failures.append("large-room furniture piles too rare: %.3f" % [
 			furniture_pile_ratio])
@@ -727,10 +808,13 @@ func _init() -> void:
 		"ceiling_lights": 0, "bad_ceiling_lights": 0,
 		"unlit_ceiling_fixtures": 0, "misaligned_ceiling_lights": 0,
 		"moisture_tiles": 0, "bad_moisture_tiles": 0,
+		"ceiling_rings": 0, "carpet_blooms": 0,
+		"sagging_tiles": 0, "bad_sagging_tiles": 0,
 		"moisture_fixture_intersections": 0,
 		"moisture_placements": {}, "moisture_assets": {},
 		"carpet_damage": 0, "bad_carpet_damage": 0,
 		"carpet_baseboard_creep": 0, "carpet_damage_assets": {},
+		"linked_leaks": 0, "incomplete_linked_leaks": 0,
 		"fixture_architecture_intersections": 0,
 		"wall_segments": 0, "seam_safe_wall_segments": 0,
 		"unstable_wall_meshes": 0,
@@ -748,6 +832,7 @@ func _init() -> void:
 		"dim_zones": 0, "light_gaps": 0,
 		"bad_light_zones": 0,
 		"furniture_piles": 0, "small_room_piles": 0,
+		"flood_pillars": 0,
 		"tunnels": 0, "wall_mass_tunnels": 0,
 		"deep_mass_candidates": 0, "bad_deep_mass_candidates": 0,
 		"deep_mass_tunnels": 0,
@@ -763,6 +848,14 @@ func _init() -> void:
 				var chunk := Chunk.new(ws, Vector2i(x, z), 2)
 				runtime_chunks += 1
 				_walk(chunk, runtime)
+				var wear: Dictionary = chunk.get_meta("surface_wear_summary", {})
+				var causes: Dictionary = wear.get("placed_causes", {})
+				if causes.has("annex_connected_moisture_wall"):
+					runtime["linked_leaks"] += 1
+					for part in ["tide", "floor", "skirting", "ceiling"]:
+						if not causes.has("annex_connected_moisture_" + part):
+							runtime["incomplete_linked_leaks"] += 1
+					runtime["incomplete_linked_leaks"] += _linked_damage_violations(chunk)
 				var door_bad := chunk.doorway_clearance_violations()
 				if door_bad > 0:
 					failures.append("doorway obstruction seed=%d cell=%s count=%d" % [
@@ -781,6 +874,89 @@ func _init() -> void:
 					_baseboard_backing_violations(chunk)
 				chunk.free()
 
+	# Build one complete flooded hall so its uncommon style receives a direct
+	# geometry check even if the compact runtime window happens to miss it.
+	var hall_pillar_total := 0
+	if hall_example_seed != 0:
+		for dx in 3:
+			for dz in 3:
+				var member := hall_example_root + Vector2i(dx, dz)
+				var chunk := Chunk.new(hall_example_seed, member, 2)
+				var water_count := 0
+				var pillar_count := 0
+				var probe_count := 0
+				var floor_count := 0
+				for node in chunk.find_children("*", "Node", true, false):
+					if node.has_meta("annex_flood_water"):
+						water_count += 1
+						var water := node as MeshInstance3D
+						if water == null or absf(water.position.y \
+								- Chunk.ANNEX_FLOOD_WATER_Y) > 0.001 \
+								or (water.mesh as PlaneMesh).size != Vector2(12.0, 12.0) \
+								or not water.is_in_group("pool_water_surfaces") \
+								or water.material_override != Mats.annex_shallow_water() \
+								or (water.get_meta("pool_water_outline", PackedVector2Array()) \
+									as PackedVector2Array).size() != 4:
+							failures.append("invalid flooded hall water seed=%d cell=%s" % [
+								hall_example_seed, member])
+					if node.has_meta("annex_flood_pillar"):
+						pillar_count += 1
+						hall_pillar_total += 1
+						if not bool(node.get_meta("annex_wallpaper", false)) \
+								or int(node.get_meta("annex_finish", -1)) != 3 \
+								or absf((node as Node3D).position.y \
+									- Chunk.ANNEX_BASIN_FLOOR_Y) > 0.001:
+							failures.append("flooded pillar finish/base invalid seed=%d cell=%s" % [
+								hall_example_seed, member])
+						var pillar_faces := (node as Node3D).find_children(
+							"*", "MeshInstance3D", true, false).filter(
+								func(face: Node) -> bool:
+									return face.has_meta("annex_architecture_wall"))
+						if pillar_faces.size() != 1 \
+								or absf((pillar_faces[0] as MeshInstance3D).scale.x - 1.18) > 0.001 \
+								or (pillar_faces[0] as MeshInstance3D).material_override \
+									!= Mats.annex_wall_variant(3):
+							failures.append("flooded pillar width/wallpaper invalid seed=%d cell=%s" % [
+								hall_example_seed, member])
+					if node.has_meta("annex_basin_floor"):
+						floor_count += 1
+						var floor_node := node as MeshInstance3D
+						var bounds := floor_node.mesh.get_aabb()
+						if absf(bounds.position.y - Chunk.ANNEX_BASIN_FLOOR_Y) > 0.001:
+							failures.append("flooded basin depth invalid seed=%d cell=%s" % [
+								hall_example_seed, member])
+					if node.has_meta("pool_water_reflection"):
+						probe_count += 1
+				if water_count != 1 or pillar_count < 7 or floor_count != 1 \
+						or absf(chunk.ceil_h - 5.4) > 0.001 \
+						or chunk._room_span() != Vector2(36.0, 36.0) \
+						or (probe_count != 1 if member == hall_example_root else probe_count != 0):
+					failures.append("flooded hall incomplete seed=%d cell=%s water=%d floor=%d pillars=%d probes=%d" % [
+						hall_example_seed, member, water_count, floor_count,
+						pillar_count, probe_count])
+				var floor_colliders := chunk.body.get_children().filter(
+					func(node: Node) -> bool:
+						return node.has_meta("annex_basin_collider"))
+				var outer_edges: Array[bool] = []
+				for node in chunk.find_children("*", "MeshInstance3D", true, false):
+					if node.has_meta("annex_basin_floor"):
+						outer_edges = node.get_meta("annex_basin_outer_edges")
+				var expected_colliders := 1
+				for edge in outer_edges:
+					if edge:
+						expected_colliders += 1
+				if floor_colliders.size() != expected_colliders \
+						or not (floor_colliders[0] as CollisionShape3D).shape is BoxShape3D:
+					failures.append("flooded basin has no walkable ramp collider seed=%d cell=%s" % [
+						hall_example_seed, member])
+				if chunk.doorway_clearance_violations() > 0 \
+						or _baseboard_backing_violations(chunk) > 0:
+					failures.append("flooded hall obstructs doorway or leaves floating trim seed=%d cell=%s" % [
+						hall_example_seed, member])
+				chunk.free()
+	if hall_example_seed != 0 and hall_pillar_total < 75:
+		failures.append("flooded hall pillar grid too sparse: %d" % hall_pillar_total)
+
 	if int(runtime["legacy"]) > 0:
 		failures.append("legacy sewer nodes/materials generated: %d" % runtime["legacy"])
 	if int(runtime["particles"]) > 0:
@@ -792,7 +968,8 @@ func _init() -> void:
 	var camera_density := float(runtime["cameras"]) / float(maxi(runtime_chunks, 1))
 	if camera_density > 0.32:
 		failures.append("surveillance cameras too dense: %.3f/chunk" % camera_density)
-	var architecture_density := float(runtime["architecture_assemblies"]) \
+	var architecture_density := float(runtime["architecture_assemblies"] \
+		- runtime["flood_pillars"]) \
 		/ float(maxi(runtime_chunks, 1))
 	if architecture_density < 0.12:
 		failures.append("interior architecture too sparse: %.3f/chunk" % architecture_density)
@@ -931,6 +1108,15 @@ func _init() -> void:
 			or int(runtime["moisture_fixture_intersections"]) > 0:
 		failures.append("Annex moisture violates tile/fixture contract: bad=%d conflicts=%d" % [
 			runtime["bad_moisture_tiles"], runtime["moisture_fixture_intersections"]])
+	if int(runtime["sagging_tiles"]) == 0 or int(runtime["bad_sagging_tiles"]) > 0:
+		failures.append("Annex bowed ceiling panels missing or invalid: built=%d bad=%d" % [
+			runtime["sagging_tiles"], runtime["bad_sagging_tiles"]])
+	if int(runtime["ceiling_rings"]) == 0 or int(runtime["carpet_blooms"]) == 0:
+		failures.append("Annex new damage variations never appeared: rings=%d blooms=%d" % [
+			runtime["ceiling_rings"], runtime["carpet_blooms"]])
+	if int(runtime["linked_leaks"]) == 0 or int(runtime["incomplete_linked_leaks"]) > 0:
+		failures.append("Annex connected leaks missing a surface: sites=%d incomplete=%d" % [
+			runtime["linked_leaks"], runtime["incomplete_linked_leaks"]])
 	var single_placements := 0
 	var block_placements := 0
 	for placement in runtime["moisture_placements"]:
@@ -1010,10 +1196,13 @@ func _init() -> void:
 
 	print("Annex audit: %d seeds, radius %d, %d topology cells" % [
 		seed_count, radius, checked])
-	print("  styles open/maze/long/quiet/passage/lobby: %s" % [[
+	print("  styles open/maze/long/quiet/passage/lobby/flooded: %s" % [[
 		style_counts[WorldGen.ANNEX_OPEN], style_counts[WorldGen.ANNEX_MAZE],
 		style_counts[WorldGen.ANNEX_LONG], style_counts[WorldGen.ANNEX_QUIET],
-		style_counts[WorldGen.ANNEX_PASSAGE], style_counts[WorldGen.ANNEX_LOBBY]]])
+		style_counts[WorldGen.ANNEX_PASSAGE], style_counts[WorldGen.ANNEX_LOBBY],
+		style_counts[WorldGen.ANNEX_FLOODED_HALL]]])
+	print("  flooded halls: %d nine-cell rooms | sample pillars: %d" % [
+		flooded_hall_roots, hall_pillar_total])
 	print("  plain wall ratio: %.3f | room finishes: %s | wall-line finishes: %s" % [
 		plain_ratio, finish_counts, wall_finish_counts])
 	print("  mixed scale: %d corridors / %d rooms | widths %s (2.2m %.3f) | room sizes %s | large-room ratio %.3f | pile ratio %.3f (%d roots) | dim %.3f / gaps %.3f | baseboards %.3f | %d open edges" % [
@@ -1033,6 +1222,9 @@ func _init() -> void:
 		runtime["furniture_piles"], runtime["tunnels"],
 		runtime["wall_segments"], runtime["partitions"],
 		runtime["architecture_assemblies"], runtime["kinds"]])
+	print("  deterioration: %d ceiling rings / %d carpet blooms / %d bowed tiles / %d linked leaks" % [
+		runtime["ceiling_rings"], runtime["carpet_blooms"],
+		runtime["sagging_tiles"], runtime["linked_leaks"]])
 	if failures.is_empty():
 		print("  PASS — full-tile unobstructed fixtures, substantial seamless walls, deliberate dim zones, warm-yellow rooms, ambient-only audio, rare furniture piles, sparse CCTV")
 		quit(0)

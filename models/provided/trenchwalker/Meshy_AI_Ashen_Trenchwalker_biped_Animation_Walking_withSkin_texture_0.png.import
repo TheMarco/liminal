@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://brbrsa2vihi6l"
-path="res://.godot/imported/Meshy_AI_Ashen_Trenchwalker_biped_Animation_Walking_withSkin_texture_0.png-b4d9f55b5ab493c65870a9e3c3278f66.ctex"
+path.bptc="res://.godot/imported/Meshy_AI_Ashen_Trenchwalker_biped_Animation_Walking_withSkin_texture_0.png-b4d9f55b5ab493c65870a9e3c3278f66.bptc.ctex"
+path.astc="res://.godot/imported/Meshy_AI_Ashen_Trenchwalker_biped_Animation_Walking_withSkin_texture_0.png-b4d9f55b5ab493c65870a9e3c3278f66.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "a5cffc139d5b34bf3e2f883147b0878c"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/trenchwalker/Meshy_AI_Ashen_Trenchwalker_biped_Animation_Walking_withSkin_texture_0.png"
-dest_files=["res://.godot/imported/Meshy_AI_Ashen_Trenchwalker_biped_Animation_Walking_withSkin_texture_0.png-b4d9f55b5ab493c65870a9e3c3278f66.ctex"]
+dest_files=["res://.godot/imported/Meshy_AI_Ashen_Trenchwalker_biped_Animation_Walking_withSkin_texture_0.png-b4d9f55b5ab493c65870a9e3c3278f66.bptc.ctex", "res://.godot/imported/Meshy_AI_Ashen_Trenchwalker_biped_Animation_Walking_withSkin_texture_0.png-b4d9f55b5ab493c65870a9e3c3278f66.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

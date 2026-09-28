@@ -1,0 +1,297 @@
+[
+  {
+    "source": "music/lim9.mp3",
+    "at": 0,
+    "source_in": 60,
+    "duration": 60,
+    "target_rms_db": -20
+  },
+  {
+    "source": "videos/tapes/short_beginning_00.ogv",
+    "at": 0,
+    "source_in": 0,
+    "duration": 3.966666666666667,
+    "target_rms_db": -16,
+    "speed": 1
+  },
+  {
+    "source": "videos/tapes/short_beginning_02.ogv",
+    "at": 46.4333,
+    "source_in": 22.5,
+    "duration": 5.533333,
+    "target_rms_db": -16,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-jumpscare3.mp3",
+    "at": 0,
+    "source_in": 0,
+    "duration": 0.43,
+    "target_rms_db": -18,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-demondeath1.mp3",
+    "at": 5.4719,
+    "source_in": 0,
+    "duration": 1.35,
+    "target_rms_db": -17.5,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-walking-carpet.mp3",
+    "at": 3.9667,
+    "source_in": 0,
+    "duration": 2.8333333333333335,
+    "target_rms_db": -27,
+    "speed": 1.3
+  },
+  {
+    "source": "sounds/sound-demondeath4.mp3",
+    "at": 9.9634,
+    "source_in": 0,
+    "duration": 1.35,
+    "target_rms_db": -17.5,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-walking-carpet.mp3",
+    "at": 8.3,
+    "source_in": 0,
+    "duration": 3.0,
+    "target_rms_db": -27,
+    "speed": 1.3
+  },
+  {
+    "source": "sounds/sound-walking-concrete.mp3",
+    "at": 11.3,
+    "source_in": 0,
+    "duration": 1.4,
+    "target_rms_db": -24,
+    "speed": 1.45
+  },
+  {
+    "source": "sounds/sound-breathing.mp3",
+    "at": 11.3,
+    "source_in": 3.5,
+    "duration": 1.4,
+    "target_rms_db": -27,
+    "speed": 1.08
+  },
+  {
+    "source": "sounds/sound-demondeath6.mp3",
+    "at": 22.0362,
+    "source_in": 0,
+    "duration": 1.35,
+    "target_rms_db": -17.5,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-walking-carpet.mp3",
+    "at": 20.6,
+    "source_in": 0,
+    "duration": 2.7,
+    "target_rms_db": -27,
+    "speed": 1.3
+  },
+  {
+    "source": "sounds/sound-demondeath2.mp3",
+    "at": 26.6105,
+    "source_in": 0,
+    "duration": 1.35,
+    "target_rms_db": -17.5,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-walking-carpet.mp3",
+    "at": 25.0,
+    "source_in": 0,
+    "duration": 3.0,
+    "target_rms_db": -27,
+    "speed": 1.3
+  },
+  {
+    "source": "sounds/sound-walking-concrete.mp3",
+    "at": 38.5,
+    "source_in": 0,
+    "duration": 1.1,
+    "target_rms_db": -24,
+    "speed": 1.45
+  },
+  {
+    "source": "sounds/sound-breathing.mp3",
+    "at": 38.5,
+    "source_in": 3.5,
+    "duration": 1.1,
+    "target_rms_db": -27,
+    "speed": 1.08
+  },
+  {
+    "source": "sounds/sound-demondeath7.mp3",
+    "at": 41.1355,
+    "source_in": 0,
+    "duration": 1.35,
+    "target_rms_db": -17.5,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-walking-carpet.mp3",
+    "at": 39.6,
+    "source_in": 0,
+    "duration": 2.8,
+    "target_rms_db": -27,
+    "speed": 1.3
+  },
+  {
+    "source": "sounds/sound-walking-concrete.mp3",
+    "at": 43.1,
+    "source_in": 0,
+    "duration": 0.7,
+    "target_rms_db": -24,
+    "speed": 1.45
+  },
+  {
+    "source": "sounds/sound-breathing.mp3",
+    "at": 43.1,
+    "source_in": 3.5,
+    "duration": 0.7,
+    "target_rms_db": -27,
+    "speed": 1.08
+  },
+  {
+    "source": "sounds/sound-walking-concrete.mp3",
+    "at": 46.0,
+    "source_in": 0,
+    "duration": 1.3,
+    "target_rms_db": -24,
+    "speed": 1.45
+  },
+  {
+    "source": "sounds/sound-breathing.mp3",
+    "at": 46.0,
+    "source_in": 3.5,
+    "duration": 1.3,
+    "target_rms_db": -27,
+    "speed": 1.08
+  },
+  {
+    "source": "sounds/sound-jumpscare8.mp3",
+    "at": 3.97,
+    "source_in": 0,
+    "duration": 0.65,
+    "target_rms_db": -23,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-jumpscare2.mp3",
+    "at": 8.3,
+    "source_in": 0,
+    "duration": 0.65,
+    "target_rms_db": -23,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-jumpscare7.mp3",
+    "at": 20.6,
+    "source_in": 0,
+    "duration": 0.65,
+    "target_rms_db": -23,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-jumpscare4.mp3",
+    "at": 25,
+    "source_in": 0,
+    "duration": 0.65,
+    "target_rms_db": -23,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-jumpscare6.mp3",
+    "at": 39.6,
+    "source_in": 0,
+    "duration": 0.65,
+    "target_rms_db": -23,
+    "speed": 1
+  },
+  {
+    "source": "sounds/supernatural/sn2.mp3",
+    "at": 12.7,
+    "source_in": 1,
+    "duration": 3.7,
+    "target_rms_db": -22,
+    "speed": 1
+  },
+  {
+    "source": "sounds/supernatural/sn4.mp3",
+    "at": 28,
+    "source_in": 1,
+    "duration": 3.6,
+    "target_rms_db": -24,
+    "speed": 1
+  },
+  {
+    "source": "sounds/supernatural/sn1.mp3",
+    "at": 31.6,
+    "source_in": 2,
+    "duration": 2.4,
+    "target_rms_db": -23,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-breathing.mp3",
+    "at": 31.6,
+    "source_in": 2,
+    "duration": 2.4,
+    "target_rms_db": -26,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-water-wade.mp3",
+    "at": 16.4,
+    "source_in": 0,
+    "duration": 2.7,
+    "target_rms_db": -27,
+    "speed": 1
+  },
+  {
+    "source": "sounds/data-center-ambient.mp3",
+    "at": 23.3,
+    "source_in": 0,
+    "duration": 1.7,
+    "target_rms_db": -28,
+    "speed": 1
+  },
+  {
+    "source": "build/promo-trailer/audio/portal.wav",
+    "at": 34,
+    "source_in": 0,
+    "duration": 4.5,
+    "target_rms_db": -24,
+    "speed": 1
+  },
+  {
+    "source": "build/promo-trailer/audio/shutter.wav",
+    "at": 35,
+    "source_in": 0,
+    "duration": 0.35,
+    "target_rms_db": -17,
+    "speed": 1.4
+  },
+  {
+    "source": "sounds/sound-playerdeath3.mp3",
+    "at": 51.9667,
+    "source_in": 0,
+    "duration": 2.5,
+    "target_rms_db": -16,
+    "speed": 1
+  },
+  {
+    "source": "sounds/sound-jumpscare10.mp3",
+    "at": 54.4667,
+    "source_in": 0,
+    "duration": 2.6,
+    "target_rms_db": -20,
+    "speed": 1
+  }
+]

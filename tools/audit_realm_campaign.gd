@@ -69,9 +69,15 @@ func run_test() -> void:
 	game.player.cam.rotation.y = game.player.rotation.y
 	game.player.force_update_transform()
 	game.player.cam.force_update_transform()
+	# Keep encounter AI silent but exercise the normal Descent pacing response
+	# to the first visible glow, even though arrival grace is still active.
+	game._director.enabled = true
 	visit._process(0.05)
 	check(visit._door_leak.active and visit._door_leak.pulses == pulses + 1, "visible sealed wall has no glyph leak")
 	check(game._figures._new_spawn_hold > 0.0, "first leak did not hold new arrivals")
+	check(game._director.snapshot()["visual"] > 4.0,
+		"first leak did not hold competing optional scares")
+	game._director.enabled = false
 	game.run.arrival_grace = 0.0
 	game._photo_camera._raise(true)
 	visit._process(0.05)

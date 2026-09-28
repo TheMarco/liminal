@@ -1,0 +1,138 @@
+[
+  {
+    "shot": "annex",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "annex_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "annex_run",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "breath",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "casino",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "casino_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "cross_stay",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "cross_warning",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "death",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "doors",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "office",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "office_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "pool",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "pool_hero",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "portal",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "school",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "school_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "school_run",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "server",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  },
+  {
+    "shot": "server_kill",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": [
+      72
+    ]
+  },
+  {
+    "shot": "wave",
+    "capture_completed": true,
+    "script_errors": 0,
+    "kill_frames": []
+  }
+]

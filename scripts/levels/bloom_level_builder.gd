@@ -374,7 +374,7 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 		light.omni_range = 8.2
 		light.omni_attenuation = 0.72
 		light.shadow_enabled = true
-		light.light_volumetric_fog_energy = 0.36
+		light.light_volumetric_fog_energy = 0.65
 		light.set_meta("bloom_fixture_light", true)
 		light.set_meta("visible_source", "fluorescent_fixture")
 		pivot.add_child(light)

@@ -250,6 +250,7 @@ func save_to_disk() -> Error:
 	var backup_existing := previous.load(_save_path) == OK and _valid_checkpoint(previous)
 	var error := AtomicConfig.save_config(config, _save_path, backup_existing)
 	if error == OK:
+		recovered_from_backup = false
 		saved.emit()
 	else:
 		save_failed.emit(error)

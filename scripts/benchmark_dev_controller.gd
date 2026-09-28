@@ -22,6 +22,7 @@ var _static_peak := 0
 var _nodes_start := 0
 var _resources_start := 0
 var _vram_max := 0
+var _frame_times: Array[float] = []
 
 
 func start_benchmark(player: Player, auto_move := true) -> void:
@@ -41,6 +42,7 @@ func update(delta: float) -> void:
 		return
 	_elapsed += delta
 	_frames += 1
+	_frame_times.append(delta * 1000.0)
 	_worst = maxf(_worst, delta)
 	_sample_monitors()
 	if delta > 1.0 / 55.0:
@@ -142,6 +144,12 @@ func _print_report() -> void:
 	print("fps %.1f | frame avg %.2fms worst %.2fms | frames over 18ms: %d/%d | physics %d Hz" % [
 		float(_frames) / _elapsed, 1000.0 * _elapsed / float(_frames),
 		1000.0 * _worst, _slow, _frames, Engine.physics_ticks_per_second])
+	_frame_times.sort()
+	if not _frame_times.is_empty():
+		print("  frame percentiles: p95 %.2fms p99 %.2fms (rendered-frame deltas, %d samples)" % [
+			_frame_times[clampi(ceili(_frame_times.size() * 0.95) - 1, 0, _frame_times.size() - 1)],
+			_frame_times[clampi(ceili(_frame_times.size() * 0.99) - 1, 0, _frame_times.size() - 1)],
+			_frame_times.size()])
 	print("  render stress: CPU process worst %.2fms, physics worst %.2fms | draws %d, primitives %d | collision pairs %d" % [
 		1000.0 * _process_worst, 1000.0 * _physics_worst,
 		_draws_max, _primitives_max, _collision_pairs_max])
@@ -156,6 +164,7 @@ func _print_report() -> void:
 
 
 func _reset_monitors() -> void:
+	_frame_times.clear()
 	_process_worst = 0.0
 	_physics_worst = 0.0
 	_draws_max = 0

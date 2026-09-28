@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cdh50fqlmrpdo"
-path="res://.godot/imported/coffee_maker_orm.jpg-eac5037abeee0dd55f4092848d194e54.ctex"
+path.bptc="res://.godot/imported/coffee_maker_orm.jpg-eac5037abeee0dd55f4092848d194e54.bptc.ctex"
+path.astc="res://.godot/imported/coffee_maker_orm.jpg-eac5037abeee0dd55f4092848d194e54.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "58d878b1801b2f86afcb70067a2ef990"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/scenario/office/coffee_maker_orm.jpg"
-dest_files=["res://.godot/imported/coffee_maker_orm.jpg-eac5037abeee0dd55f4092848d194e54.ctex"]
+dest_files=["res://.godot/imported/coffee_maker_orm.jpg-eac5037abeee0dd55f4092848d194e54.bptc.ctex", "res://.godot/imported/coffee_maker_orm.jpg-eac5037abeee0dd55f4092848d194e54.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

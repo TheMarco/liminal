@@ -1,0 +1,2071 @@
+{
+  "res://videos/intro/liminal_intro.ogv": [],
+  "res://videos/intro/photo_tutorial.ogv": [
+    {
+      "start": 0,
+      "end": 3.24,
+      "text": "Take pictures of anything that doesn't\nbelong, anything impossible,"
+    },
+    {
+      "start": 3.82,
+      "end": 6.56,
+      "text": "anything that makes you stop and wonder if\nyou really saw it."
+    },
+    {
+      "start": 7.36,
+      "end": 9.58,
+      "text": "I thought I was documenting this place for\nmyself."
+    },
+    {
+      "start": 11.16,
+      "end": 12.22,
+      "text": "I was wrong."
+    },
+    {
+      "start": 13.36,
+      "end": 15.16,
+      "text": "The elevators won't always come."
+    },
+    {
+      "start": 16.06,
+      "end": 18.88,
+      "text": "But after I photographed enough of these\nanomalies,"
+    },
+    {
+      "start": 19.72,
+      "end": 20.38,
+      "text": "they do."
+    },
+    {
+      "start": 21.96,
+      "end": 24.16,
+      "text": "It's not asking you to find the way out."
+    },
+    {
+      "start": 25.04,
+      "end": 27.26,
+      "text": "It's asking you to prove you've been\npaying attention."
+    },
+    {
+      "start": 28.36,
+      "end": 29.04,
+      "text": "So pay attention."
+    }
+  ],
+  "res://videos/tapes/short_beginning_00.ogv": [
+    {
+      "start": 0.18,
+      "end": 2.56,
+      "text": "If the lights go out, don't move."
+    },
+    {
+      "start": 3.1,
+      "end": 3.86,
+      "text": "Don't turn around."
+    },
+    {
+      "start": 4.3,
+      "end": 5.46,
+      "text": "Don't try to find a wall."
+    },
+    {
+      "start": 5.8,
+      "end": 7.4,
+      "text": "Just stay exactly where you are."
+    },
+    {
+      "start": 9.66,
+      "end": 12.28,
+      "text": "I used to think darkness was hiding\nsomething from me."
+    },
+    {
+      "start": 14.26,
+      "end": 15.16,
+      "text": "I don't anymore."
+    },
+    {
+      "start": 17.78,
+      "end": 19.98,
+      "text": "I think the darkness is when it moves\nthings."
+    },
+    {
+      "start": 22.95,
+      "end": 27.25,
+      "text": "And if you're moving too, it has to decide\nwhere to put you."
+    }
+  ],
+  "res://videos/tapes/short_beginning_01.ogv": [
+    {
+      "start": 0.02,
+      "end": 1.68,
+      "text": "I've been thinking about the figures."
+    },
+    {
+      "start": 2.84,
+      "end": 5.74,
+      "text": "We assume they're hunting us because they\nmove toward us."
+    },
+    {
+      "start": 6.22,
+      "end": 7.02,
+      "text": "That's reasonable."
+    },
+    {
+      "start": 8.28,
+      "end": 9.56,
+      "text": "But I've never seen one eat."
+    },
+    {
+      "start": 10.16,
+      "end": 11.28,
+      "text": "I've never seen one search."
+    },
+    {
+      "start": 11.6,
+      "end": 13.74,
+      "text": "I've never seen one leave a room to pursue\nanything."
+    },
+    {
+      "start": 15.0,
+      "end": 16.38,
+      "text": "So maybe they're not hunting."
+    },
+    {
+      "start": 19.42,
+      "end": 21.46,
+      "text": "Maybe they're doing what everything else\nhere does."
+    },
+    {
+      "start": 23.73,
+      "end": 25.29,
+      "text": "Putting things where they belong."
+    }
+  ],
+  "res://videos/tapes/short_beginning_02.ogv": [
+    {
+      "start": 0.37,
+      "end": 3.37,
+      "text": "I've spent so much time assuming this\nplace is hostile."
+    },
+    {
+      "start": 4.71,
+      "end": 5.49,
+      "text": "The figures,"
+    },
+    {
+      "start": 6.17,
+      "end": 6.99,
+      "text": "the blackouts,"
+    },
+    {
+      "start": 7.73,
+      "end": 10.13,
+      "text": "rooms changing, doors disappearing."
+    },
+    {
+      "start": 11.25,
+      "end": 13.09,
+      "text": "But I've been thinking about that."
+    },
+    {
+      "start": 14.27,
+      "end": 15.87,
+      "text": "If something wanted you dead,"
+    },
+    {
+      "start": 16.83,
+      "end": 18.27,
+      "text": "why give you somewhere to charge?"
+    },
+    {
+      "start": 18.49,
+      "end": 19.61,
+      "text": "Why give you elevators?"
+    },
+    {
+      "start": 19.61,
+      "end": 21.03,
+      "text": "Why give you rooms at all?"
+    },
+    {
+      "start": 22.59,
+      "end": 24.37,
+      "text": "I don't think it wants us dead."
+    },
+    {
+      "start": 26.21,
+      "end": 27.95,
+      "text": "I think it wants us to stay."
+    }
+  ],
+  "res://videos/tapes/short_beginning_03.ogv": [
+    {
+      "start": 1.07,
+      "end": 2.41,
+      "text": "I talked to it."
+    },
+    {
+      "start": 4.66,
+      "end": 5.18,
+      "text": "I know."
+    },
+    {
+      "start": 6.72,
+      "end": 7.82,
+      "text": "I was tired,"
+    },
+    {
+      "start": 8.42,
+      "end": 9.18,
+      "text": "angry."
+    },
+    {
+      "start": 11.6,
+      "end": 13.94,
+      "text": "I stood in an empty hallway and said, what\ndo you want?"
+    },
+    {
+      "start": 15.14,
+      "end": 15.94,
+      "text": "Nothing happened."
+    },
+    {
+      "start": 21.6,
+      "end": 22.66,
+      "text": "Three rooms later,"
+    },
+    {
+      "start": 23.2,
+      "end": 25.96,
+      "text": "I found a door with a sign on it."
+    },
+    {
+      "start": 26.82,
+      "end": 28.24,
+      "text": "It said you."
+    }
+  ],
+  "res://videos/tapes/short_beginning_04.ogv": [
+    {
+      "start": 0.05,
+      "end": 1.73,
+      "text": "I found this tape yesterday."
+    },
+    {
+      "start": 2.79,
+      "end": 4.01,
+      "text": "It was already labeled."
+    },
+    {
+      "start": 5.33,
+      "end": 7.13,
+      "text": "I recognize the handwriting."
+    },
+    {
+      "start": 9.37,
+      "end": 10.15,
+      "text": "It's mine,"
+    },
+    {
+      "start": 14.69,
+      "end": 16.33,
+      "text": "but I haven't recorded it yet."
+    },
+    {
+      "start": 22.98,
+      "end": 27.34,
+      "text": "And I'm starting to think that's why I'm\nrecording it now."
+    }
+  ],
+  "res://videos/tapes/short_beginning_05.ogv": [
+    {
+      "start": 1.23,
+      "end": 2.83,
+      "text": "I've been testing something."
+    },
+    {
+      "start": 4.01,
+      "end": 5.51,
+      "text": "Rooms change when they're empty."
+    },
+    {
+      "start": 5.73,
+      "end": 6.81,
+      "text": "That's obvious now."
+    },
+    {
+      "start": 7.73,
+      "end": 10.01,
+      "text": "But they don't seem to change while I'm\ninside them."
+    },
+    {
+      "start": 11.17,
+      "end": 13.49,
+      "text": "At first I thought observation prevented\nit."
+    },
+    {
+      "start": 15.19,
+      "end": 16.47,
+      "text": "But there's another possibility."
+    },
+    {
+      "start": 19.36,
+      "end": 22.26,
+      "text": "Maybe the room isn't waiting for me to\nstop looking at it."
+    },
+    {
+      "start": 25.88,
+      "end": 28.42,
+      "text": "Maybe it's waiting until it can stop\nlooking at me."
+    }
+  ],
+  "res://videos/tapes/short_random_00.ogv": [
+    {
+      "start": 0,
+      "end": 1.32,
+      "text": "I stopped naming things."
+    },
+    {
+      "start": 1.76,
+      "end": 2.5,
+      "text": "At first it helped."
+    },
+    {
+      "start": 2.94,
+      "end": 4.8,
+      "text": "Kitchen, corridor, elevator, figure."
+    },
+    {
+      "start": 5.36,
+      "end": 6.26,
+      "text": "Names make things manageable."
+    },
+    {
+      "start": 6.72,
+      "end": 8.92,
+      "text": "But then I started finding places that\nseemed to respond."
+    },
+    {
+      "start": 9.42,
+      "end": 11.12,
+      "text": "Not to my voice, to the idea."
+    },
+    {
+      "start": 11.6,
+      "end": 12.6,
+      "text": "I called one room safe."
+    },
+    {
+      "start": 13.38,
+      "end": 14.74,
+      "text": "It wasn't safe the next time."
+    }
+  ],
+  "res://videos/tapes/short_random_01.ogv": [
+    {
+      "start": 0.27,
+      "end": 3.71,
+      "text": "I heard footsteps following me for almost\nfour hours today."
+    },
+    {
+      "start": 4.85,
+      "end": 5.99,
+      "text": "Same pace as mine."
+    },
+    {
+      "start": 6.63,
+      "end": 7.99,
+      "text": "If I stopped, they stopped."
+    },
+    {
+      "start": 8.19,
+      "end": 9.29,
+      "text": "If I walked, they walked."
+    },
+    {
+      "start": 11.49,
+      "end": 13.03,
+      "text": "So I tried something stupid."
+    },
+    {
+      "start": 15.15,
+      "end": 16.85,
+      "text": "I stopped and"
+    },
+    {
+      "start": 18.52,
+      "end": 19.48,
+      "text": "took one more step."
+    },
+    {
+      "start": 24.16,
+      "end": 25.36,
+      "text": "The footsteps took two."
+    },
+    {
+      "start": 28.06,
+      "end": 29.32,
+      "text": "I haven't heard them since."
+    }
+  ],
+  "res://videos/tapes/short_random_02.ogv": [
+    {
+      "start": 0,
+      "end": 0.9,
+      "text": "I counted."
+    },
+    {
+      "start": 2.1,
+      "end": 5.9,
+      "text": "From the moment the elevator doors closed\nuntil they opened again, 43 seconds."
+    },
+    {
+      "start": 6.32,
+      "end": 7.96,
+      "text": "Next time, 43 seconds."
+    },
+    {
+      "start": 8.08,
+      "end": 9.82,
+      "text": "Every time since, 43 seconds."
+    },
+    {
+      "start": 10.36,
+      "end": 11.92,
+      "text": "So yesterday I brought a stopwatch."
+    },
+    {
+      "start": 14.02,
+      "end": 15.84,
+      "text": "The elevator took 43 seconds."
+    },
+    {
+      "start": 24.26,
+      "end": 26.48,
+      "text": "It says I was inside for 6 hours."
+    }
+  ],
+  "res://videos/tapes/short_random_03.ogv": [
+    {
+      "start": 0,
+      "end": 4.88,
+      "text": "I used to collect these because I thought\nthey proved I'd been somewhere but"
+    },
+    {
+      "start": 6.84,
+      "end": 9.44,
+      "text": "lately I've been finding things before I\nget there."
+    },
+    {
+      "start": 12.06,
+      "end": 13.44,
+      "text": "This appeared yesterday."
+    },
+    {
+      "start": 14.82,
+      "end": 18.98,
+      "text": "I haven't seen a school and actually I\ndon't know."
+    },
+    {
+      "start": 21.3,
+      "end": 23.38,
+      "text": "Maybe we're not traveling between places."
+    },
+    {
+      "start": 24.6,
+      "end": 26.74,
+      "text": "Maybe the places are traveling through us."
+    }
+  ],
+  "res://videos/tapes/short_random_04.ogv": [
+    {
+      "start": 0.3,
+      "end": 2.64,
+      "text": "I've started knocking before I enter\nrooms."
+    },
+    {
+      "start": 3.56,
+      "end": 4.64,
+      "text": "I know how that sounds."
+    },
+    {
+      "start": 5.42,
+      "end": 8.26,
+      "text": "But sometimes you open a door and there's\nthis feeling."
+    },
+    {
+      "start": 9.26,
+      "end": 12.16,
+      "text": "Like whoever was inside left one second\nbefore you arrived."
+    },
+    {
+      "start": 13.64,
+      "end": 14.58,
+      "text": "Warm chairs,"
+    },
+    {
+      "start": 15.36,
+      "end": 16.26,
+      "text": "moving water,"
+    },
+    {
+      "start": 16.84,
+      "end": 18.36,
+      "text": "a television just switched off."
+    },
+    {
+      "start": 21.22,
+      "end": 22.2,
+      "text": "Yesterday I knocked,"
+    },
+    {
+      "start": 25.7,
+      "end": 26.8,
+      "text": "something knocked back."
+    }
+  ],
+  "res://videos/tapes/short_random_05.ogv": [
+    {
+      "start": 4.58,
+      "end": 6.88,
+      "text": "There's something I can't explain."
+    },
+    {
+      "start": 9.81,
+      "end": 11.71,
+      "text": "The empty rooms aren't equally empty."
+    },
+    {
+      "start": 13.21,
+      "end": 14.55,
+      "text": "You'll understand eventually."
+    },
+    {
+      "start": 16.27,
+      "end": 21.79,
+      "text": "Some are just rooms with nobody inside and\nsome are"
+    },
+    {
+      "start": 22.41,
+      "end": 23.95,
+      "text": "rooms where something is missing."
+    },
+    {
+      "start": 25.92,
+      "end": 27.18,
+      "text": "I don't stay in those."
+    }
+  ],
+  "res://videos/tapes/short_random_06.ogv": [],
+  "res://videos/tapes/short_random_07.ogv": [
+    {
+      "start": 0.11,
+      "end": 2.71,
+      "text": "I tried leaving a camera running in an\nempty room."
+    },
+    {
+      "start": 4.05,
+      "end": 4.71,
+      "text": "Six hours."
+    },
+    {
+      "start": 8.56,
+      "end": 10.4,
+      "text": "When I watched the tape, nothing happened."
+    },
+    {
+      "start": 11.18,
+      "end": 13.94,
+      "text": "No movement, no figures, nothing."
+    },
+    {
+      "start": 15.04,
+      "end": 19.94,
+      "text": "Except the room on the recording isn't the\nroom I left the camera in."
+    },
+    {
+      "start": 21.1,
+      "end": 22.64,
+      "text": "And at the very end,"
+    },
+    {
+      "start": 24.48,
+      "end": 25.76,
+      "text": "I walk into it."
+    },
+    {
+      "start": 27.97,
+      "end": 29.29,
+      "text": "I haven't gone back yet."
+    }
+  ],
+  "res://videos/tapes/short_random_08.ogv": [
+    {
+      "start": 0.37,
+      "end": 2.55,
+      "text": "I figured out what that sound is."
+    },
+    {
+      "start": 3.49,
+      "end": 4.75,
+      "text": "You've probably heard it."
+    },
+    {
+      "start": 4.87,
+      "end": 6.85,
+      "text": "That low rise and fall."
+    },
+    {
+      "start": 7.77,
+      "end": 9.63,
+      "text": "I thought ventilation, pipes,"
+    },
+    {
+      "start": 10.19,
+      "end": 10.69,
+      "text": "machinery."
+    },
+    {
+      "start": 11.95,
+      "end": 13.35,
+      "text": "So I timed it."
+    },
+    {
+      "start": 14.13,
+      "end": 15.11,
+      "text": "Four seconds in,"
+    },
+    {
+      "start": 15.89,
+      "end": 16.85,
+      "text": "six seconds out."
+    },
+    {
+      "start": 18.27,
+      "end": 20.19,
+      "text": "I've been listening for three hours."
+    },
+    {
+      "start": 21.69,
+      "end": 23.89,
+      "text": "It gets slower when I stop moving."
+    },
+    {
+      "start": 25.35,
+      "end": 26.57,
+      "text": "I think it's asleep."
+    }
+  ],
+  "res://videos/tapes/short_random_09.ogv": [
+    {
+      "start": 0.43,
+      "end": 2.41,
+      "text": "I saw another elevator today."
+    },
+    {
+      "start": 3.55,
+      "end": 4.29,
+      "text": "Not mine."
+    },
+    {
+      "start": 5.27,
+      "end": 6.33,
+      "text": "The doors opened."
+    },
+    {
+      "start": 10.32,
+      "end": 11.64,
+      "text": "I could here people inside."
+    },
+    {
+      "start": 12.26,
+      "end": 12.76,
+      "text": "Talking."
+    },
+    {
+      "start": 13.68,
+      "end": 14.32,
+      "text": "Laughing."
+    },
+    {
+      "start": 15.34,
+      "end": 16.2,
+      "text": "Normal people."
+    },
+    {
+      "start": 17.44,
+      "end": 18.98,
+      "text": "I almost got in."
+    },
+    {
+      "start": 21.9,
+      "end": 23.4,
+      "text": "Then one of them said my name."
+    },
+    {
+      "start": 27.41,
+      "end": 29.37,
+      "text": "I've never told anyone here my name."
+    }
+  ],
+  "res://videos/tapes/short_random_10.ogv": [
+    {
+      "start": 1.39,
+      "end": 3.49,
+      "text": "I've been using this door as a landmark."
+    },
+    {
+      "start": 4.27,
+      "end": 4.95,
+      "text": "Red paint."
+    },
+    {
+      "start": 5.51,
+      "end": 6.23,
+      "text": "Brass handle."
+    },
+    {
+      "start": 6.83,
+      "end": 7.95,
+      "text": "Scratch across the bottom."
+    },
+    {
+      "start": 8.49,
+      "end": 9.37,
+      "text": "Easy to recognize."
+    },
+    {
+      "start": 10.73,
+      "end": 11.95,
+      "text": "Today I found it again."
+    },
+    {
+      "start": 12.59,
+      "end": 13.19,
+      "text": "Same door."
+    },
+    {
+      "start": 13.79,
+      "end": 14.49,
+      "text": "Same scratch."
+    },
+    {
+      "start": 15.63,
+      "end": 17.29,
+      "text": "But it opened into a different room."
+    },
+    {
+      "start": 19.37,
+      "end": 20.27,
+      "text": "So I went back."
+    },
+    {
+      "start": 21.75,
+      "end": 23.21,
+      "text": "The room was different again."
+    },
+    {
+      "start": 25.67,
+      "end": 27.73,
+      "text": "I don't think doors belong to rooms here."
+    }
+  ],
+  "res://videos/tapes/short_random_11.ogv": [
+    {
+      "start": 0.37,
+      "end": 2.43,
+      "text": "I took a picture of an empty hallway."
+    },
+    {
+      "start": 3.55,
+      "end": 4.29,
+      "text": "Nothing unusual."
+    },
+    {
+      "start": 6.68,
+      "end": 7.84,
+      "text": "When I developed it,"
+    },
+    {
+      "start": 8.44,
+      "end": 10.54,
+      "text": "there was someone standing at the end."
+    },
+    {
+      "start": 11.92,
+      "end": 13.56,
+      "text": "So I went back and took another."
+    },
+    {
+      "start": 15.0,
+      "end": 16.0,
+      "text": "They were closer."
+    },
+    {
+      "start": 17.8,
+      "end": 20.0,
+      "text": "Third photograph, I"
+    },
+    {
+      "start": 21.9,
+      "end": 24.5,
+      "text": "wasn't in the hallway anymore they"
+    },
+    {
+      "start": 27.1,
+      "end": 27.6,
+      "text": "were"
+    }
+  ],
+  "res://videos/tapes/short_random_12.ogv": [
+    {
+      "start": 1.01,
+      "end": 3.89,
+      "text": "I've been wondering why the ceilings are\nalways there."
+    },
+    {
+      "start": 6.47,
+      "end": 7.11,
+      "text": "Sounds stupid."
+    },
+    {
+      "start": 8.51,
+      "end": 9.61,
+      "text": "But think about it."
+    },
+    {
+      "start": 10.23,
+      "end": 12.67,
+      "text": "These places don't need to obey anything\nelse."
+    },
+    {
+      "start": 13.41,
+      "end": 14.03,
+      "text": "Rooms change."
+    },
+    {
+      "start": 14.87,
+      "end": 15.69,
+      "text": "Corridors stretch."
+    },
+    {
+      "start": 16.49,
+      "end": 17.23,
+      "text": "Doors move."
+    },
+    {
+      "start": 18.47,
+      "end": 19.91,
+      "text": "But there's always a ceiling."
+    },
+    {
+      "start": 23.08,
+      "end": 25.14,
+      "text": "Maybe it's not there to keep something\nout."
+    },
+    {
+      "start": 26.96,
+      "end": 28.7,
+      "text": "Maybe it's there to keep us in."
+    }
+  ],
+  "res://videos/tapes/short_random_13.ogv": [
+    {
+      "start": 0.14,
+      "end": 1.76,
+      "text": "I covered this yesterday."
+    },
+    {
+      "start": 3.22,
+      "end": 4.68,
+      "text": "There's nothing outside,"
+    },
+    {
+      "start": 5.24,
+      "end": 6.06,
+      "text": "not darkness,"
+    },
+    {
+      "start": 6.94,
+      "end": 7.46,
+      "text": "nothing."
+    },
+    {
+      "start": 9.2,
+      "end": 13.58,
+      "text": "But last night I woke up and someone was\ntapping on the glass."
+    },
+    {
+      "start": 16.03,
+      "end": 17.05,
+      "text": "I didn't look."
+    },
+    {
+      "start": 18.67,
+      "end": 20.05,
+      "text": "Eventually it stopped."
+    },
+    {
+      "start": 22.15,
+      "end": 23.85,
+      "text": "This morning the"
+    },
+    {
+      "start": 25.75,
+      "end": 27.53,
+      "text": "tapping started from this side."
+    }
+  ],
+  "res://videos/tapes/short_random_14.ogv": [
+    {
+      "start": 0.34,
+      "end": 2.6,
+      "text": "This wall makes noise every night."
+    },
+    {
+      "start": 3.18,
+      "end": 6.6,
+      "text": "Not scratching, not pipes, nothing like\nthat."
+    },
+    {
+      "start": 7.32,
+      "end": 11.08,
+      "text": "It sounds like a crowded room."
+    },
+    {
+      "start": 12.38,
+      "end": 13.18,
+      "text": "Muffled voices,"
+    },
+    {
+      "start": 14.12,
+      "end": 14.94,
+      "text": "chairs moving,"
+    },
+    {
+      "start": 15.48,
+      "end": 16.5,
+      "text": "sometimes laughter."
+    },
+    {
+      "start": 17.74,
+      "end": 20.0,
+      "text": "This wall is almost two meters thick."
+    },
+    {
+      "start": 23.53,
+      "end": 24.23,
+      "text": "And yesterday,"
+    },
+    {
+      "start": 26.38,
+      "end": 28.92,
+      "text": "someone on the other side asked me to keep\nmy voice down."
+    }
+  ],
+  "res://videos/tapes/tape_02.ogv": [
+    {
+      "start": 0.21,
+      "end": 1.49,
+      "text": "Recording one."
+    },
+    {
+      "start": 2.99,
+      "end": 4.71,
+      "text": "Friday, March the 14th."
+    },
+    {
+      "start": 4.87,
+      "end": 8.37,
+      "text": "1140 at night, if my watch is right, and\nit always is."
+    },
+    {
+      "start": 9.97,
+      "end": 10.43,
+      "text": "Dr."
+    },
+    {
+      "start": 10.43,
+      "end": 12.01,
+      "text": "Evelyn Cross, for the record."
+    },
+    {
+      "start": 12.73,
+      "end": 14.83,
+      "text": "Though I don't know yet who the record is\nfor."
+    },
+    {
+      "start": 15.13,
+      "end": 16.69,
+      "text": "I took the service elevator down."
+    },
+    {
+      "start": 16.91,
+      "end": 19.13,
+      "text": "It ran far longer than any basement should\nallow."
+    },
+    {
+      "start": 19.61,
+      "end": 21.31,
+      "text": "When the doors opened, there was floor\nspace."
+    },
+    {
+      "start": 21.99,
+      "end": 26.05,
+      "text": "Carpet, lighting, power, everything\nrunning, everything maintained, and no one"
+    },
+    {
+      "start": 26.05,
+      "end": 26.55,
+      "text": "anywhere."
+    },
+    {
+      "start": 27.09,
+      "end": 28.45,
+      "text": "I called out twice."
+    },
+    {
+      "start": 29.23,
+      "end": 29.91,
+      "text": "Nothing answered."
+    },
+    {
+      "start": 30.43,
+      "end": 32.57,
+      "text": "The simple explanation is unmapped\nconstruction."
+    },
+    {
+      "start": 33.05,
+      "end": 36.55,
+      "text": "Old foundations, sealed levels, cities\nbury things all the time."
+    },
+    {
+      "start": 37.21,
+      "end": 41.17,
+      "text": "Except I walked 20 minutes in a straight\nline without reaching an outer wall,"
+    },
+    {
+      "start": 41.17,
+      "end": 43.11,
+      "text": "and the building above me is 80 meters\nwide."
+    },
+    {
+      "start": 43.93,
+      "end": 44.85,
+      "text": "I measured it."
+    },
+    {
+      "start": 45.35,
+      "end": 48.57,
+      "text": "So the simple explanation is wrong, and I\ndon't have a better one yet."
+    },
+    {
+      "start": 48.83,
+      "end": 49.41,
+      "text": "That's fine."
+    },
+    {
+      "start": 49.71,
+      "end": 51.37,
+      "text": "Most, most explanations start wrong."
+    },
+    {
+      "start": 51.77,
+      "end": 53.77,
+      "text": "I'm going to document everything I can\nverify."
+    },
+    {
+      "start": 53.77,
+      "end": 56.13,
+      "text": "If someone finds these recordings,"
+    },
+    {
+      "start": 56.79,
+      "end": 57.95,
+      "text": "start where I started."
+    }
+  ],
+  "res://videos/tapes/tape_03.ogv": [
+    {
+      "start": 0,
+      "end": 0.88,
+      "text": "Recording six."
+    },
+    {
+      "start": 1.34,
+      "end": 2.1,
+      "text": "I think six."
+    },
+    {
+      "start": 3.16,
+      "end": 4.86,
+      "text": "The sixth one worth keeping anyway."
+    },
+    {
+      "start": 6.36,
+      "end": 8.3,
+      "text": "Saturday the 15th."
+    },
+    {
+      "start": 9.18,
+      "end": 11.42,
+      "text": "Or it was the 15th when I last checked."
+    },
+    {
+      "start": 11.64,
+      "end": 14.52,
+      "text": "And I'll admit that check was longer ago\nthan it should have been."
+    },
+    {
+      "start": 15.3,
+      "end": 16.82,
+      "text": "Everything here still performs."
+    },
+    {
+      "start": 17.62,
+      "end": 18.86,
+      "text": "Lights cycle on a schedule."
+    },
+    {
+      "start": 19.58,
+      "end": 20.92,
+      "text": "Music plays to no one."
+    },
+    {
+      "start": 21.14,
+      "end": 22.82,
+      "text": "On a loop I've started to recognize."
+    },
+    {
+      "start": 23.48,
+      "end": 25.72,
+      "text": "This morning a machine dispensed change at\nme."
+    },
+    {
+      "start": 26.22,
+      "end": 27.04,
+      "text": "Exact change."
+    },
+    {
+      "start": 27.04,
+      "end": 29.9,
+      "text": "and there was nobody anywhere to have paid\nit."
+    },
+    {
+      "start": 30.4,
+      "end": 31.58,
+      "text": "My first thought was abandonment."
+    },
+    {
+      "start": 32.16,
+      "end": 34.92,
+      "text": "People left in a hurry and the systems\nkept going without them."
+    },
+    {
+      "start": 35.54,
+      "end": 36.58,
+      "text": "It's a comfortable theory,"
+    },
+    {
+      "start": 37.24,
+      "end": 38.6,
+      "text": "but abandoned places decay."
+    },
+    {
+      "start": 39.2,
+      "end": 41.82,
+      "text": "Dust, damp, failure, nothing here is\ndecaying."
+    },
+    {
+      "start": 43.0,
+      "end": 44.66,
+      "text": "Nothing here has ever been allowed to."
+    },
+    {
+      "start": 45.34,
+      "end": 47.86,
+      "text": "It's more like a place rehearsing being\nused."
+    },
+    {
+      "start": 48.8,
+      "end": 53.2,
+      "text": "Practicing endlessly for people who never\narrive, which would mean it was"
+    },
+    {
+      "start": 53.2,
+      "end": 54.36,
+      "text": "never occupied at all."
+    },
+    {
+      "start": 54.42,
+      "end": 55.42,
+      "text": "I can't prove that."
+    },
+    {
+      "start": 55.44,
+      "end": 57.7,
+      "text": "I want to be clear on the record that I\ncan't prove that."
+    }
+  ],
+  "res://videos/tapes/tape_04.ogv": [
+    {
+      "start": 0,
+      "end": 3.44,
+      "text": "Recording 9, Monday the 17th."
+    },
+    {
+      "start": 3.5,
+      "end": 4.52,
+      "text": "I've started mapping."
+    },
+    {
+      "start": 5.46,
+      "end": 9.64,
+      "text": "Rooms, junctions, distances, how long the\nelevator takes to arrive when I call"
+    },
+    {
+      "start": 9.64,
+      "end": 10.14,
+      "text": "it."
+    },
+    {
+      "start": 10.56,
+      "end": 14.28,
+      "text": "If this place has rules, and I believe it\ndoes, they'll show up in the"
+    },
+    {
+      "start": 14.28,
+      "end": 14.78,
+      "text": "numbers."
+    },
+    {
+      "start": 15.2,
+      "end": 17.48,
+      "text": "The elevator is the one reliable thing\ndown here."
+    },
+    {
+      "start": 18.12,
+      "end": 20.92,
+      "text": "It comes when it's called, it goes where\nit goes."
+    },
+    {
+      "start": 21.08,
+      "end": 24.14,
+      "text": "It has never once frightened me and I\ncan't say that about anything else here."
+    },
+    {
+      "start": 24.64,
+      "end": 27.64,
+      "text": "I've timed it 40 times, 40 consistent\nresults."
+    },
+    {
+      "start": 27.64,
+      "end": 28.58,
+      "text": "The"
+    },
+    {
+      "start": 30.41,
+      "end": 31.81,
+      "text": "problem is behind me."
+    },
+    {
+      "start": 32.51,
+      "end": 36.21,
+      "text": "I walk a corridor, I draw it, I walk back\nthe same way, and the drawing is"
+    },
+    {
+      "start": 36.21,
+      "end": 36.71,
+      "text": "wrong."
+    },
+    {
+      "start": 37.11,
+      "end": 38.07,
+      "text": "Not badly wrong."
+    },
+    {
+      "start": 38.47,
+      "end": 39.41,
+      "text": "Never badly wrong."
+    },
+    {
+      "start": 39.87,
+      "end": 43.19,
+      "text": "A door short, a turn earlier than I\nrecorded it."
+    },
+    {
+      "start": 43.47,
+      "end": 44.85,
+      "text": "Small, deniable errors."
+    },
+    {
+      "start": 45.47,
+      "end": 48.79,
+      "text": "So either this place edits itself when I'm\nnot looking, or I'm the instrument"
+    },
+    {
+      "start": 48.79,
+      "end": 51.93,
+      "text": "that's failing and I can't tell you which\nof those frightens me more."
+    },
+    {
+      "start": 53.25,
+      "end": 55.17,
+      "text": "I keep mapping anyway."
+    },
+    {
+      "start": 56.35,
+      "end": 59.41,
+      "text": "The maps are wrong, but stopping feels\nworse."
+    }
+  ],
+  "res://videos/tapes/tape_05.ogv": [
+    {
+      "start": 0,
+      "end": 0.54,
+      "text": "recording."
+    },
+    {
+      "start": 1.52,
+      "end": 2.92,
+      "text": "I've stopped numbering them."
+    },
+    {
+      "start": 3.26,
+      "end": 6.6,
+      "text": "It's the 20th or the 22nd."
+    },
+    {
+      "start": 6.92,
+      "end": 10.82,
+      "text": "My watch says one thing, my notes say\nanother, and I trusted both of them."
+    },
+    {
+      "start": 11.42,
+      "end": 13.86,
+      "text": "I've trusted both of them my whole working\nlife."
+    },
+    {
+      "start": 14.88,
+      "end": 16.84,
+      "text": "Here is what I can actually state."
+    },
+    {
+      "start": 17.22,
+      "end": 21.6,
+      "text": "The camera says I last recorded 19 hours\nago, my body says it's been days."
+    },
+    {
+      "start": 22.44,
+      "end": 26.0,
+      "text": "I've eaten four times since then, slept\ntwice, I think."
+    },
+    {
+      "start": 26.92,
+      "end": 29.68,
+      "text": "Those numbers don't belong in the same 19\nhours."
+    },
+    {
+      "start": 30.3,
+      "end": 34.38,
+      "text": "And I remember walking much further than\nthe 19 hours holds, hours of corridor"
+    },
+    {
+      "start": 34.38,
+      "end": 35.52,
+      "text": "I can still picture."
+    },
+    {
+      "start": 36.52,
+      "end": 40.58,
+      "text": "I thought the elevators were carrying me\ndown through distance, through floors"
+    },
+    {
+      "start": 40.58,
+      "end": 41.66,
+      "text": "of something real."
+    },
+    {
+      "start": 42.36,
+      "end": 44.86,
+      "text": "I no longer think distance is what they\nmove through."
+    },
+    {
+      "start": 45.22,
+      "end": 47.8,
+      "text": "I have no evidence for what they move\nthrough instead."
+    },
+    {
+      "start": 48.64,
+      "end": 49.14,
+      "text": "None."
+    },
+    {
+      "start": 49.54,
+      "end": 51.96,
+      "text": "I want that on the record before I say\nanything else."
+    },
+    {
+      "start": 52.72,
+      "end": 53.66,
+      "text": "It's a feeling."
+    },
+    {
+      "start": 53.9,
+      "end": 54.86,
+      "text": "That's all it is."
+    },
+    {
+      "start": 55.46,
+      "end": 59.8,
+      "text": "And lately, my feelings have started\narriving before the facts do."
+    }
+  ],
+  "res://videos/tapes/tape_43.ogv": [
+    {
+      "start": 0,
+      "end": 2.02,
+      "text": "I found a room today that I remembered."
+    },
+    {
+      "start": 2.62,
+      "end": 3.46,
+      "text": "Not recognized."
+    },
+    {
+      "start": 4.2,
+      "end": 4.76,
+      "text": "Remembered."
+    },
+    {
+      "start": 5.72,
+      "end": 8.54,
+      "text": "The scratch on the third desk, shaped like\na fish hook."
+    },
+    {
+      "start": 9.1,
+      "end": 11.36,
+      "text": "The coat hooks by the door, one bent\nupward."
+    },
+    {
+      "start": 12.02,
+      "end": 13.74,
+      "text": "I knew it before I saw it."
+    },
+    {
+      "start": 15.15,
+      "end": 18.37,
+      "text": "I could have drawn that room before I\nopened the door, down to the light"
+    },
+    {
+      "start": 18.37,
+      "end": 19.19,
+      "text": "through the window."
+    },
+    {
+      "start": 20.15,
+      "end": 24.05,
+      "text": "And I grew up 600 miles from anywhere that\nroom could possibly have existed."
+    },
+    {
+      "start": 25.13,
+      "end": 27.25,
+      "text": "I checked my notes twice to be sure."
+    },
+    {
+      "start": 29.98,
+      "end": 31.72,
+      "text": "My childhood was somewhere else."
+    },
+    {
+      "start": 31.76,
+      "end": 33.98,
+      "text": "That is a fact about me and I had to check\nit."
+    },
+    {
+      "start": 34.36,
+      "end": 36.4,
+      "text": "Sit with that for a moment because I have."
+    },
+    {
+      "start": 41.88,
+      "end": 45.42,
+      "text": "So either this place is reading what's in\nmy head and building from it or it's"
+    },
+    {
+      "start": 45.42,
+      "end": 48.82,
+      "text": "writing things in and my memories are the\nconstruction site."
+    },
+    {
+      "start": 49.3,
+      "end": 50.24,
+      "text": "I don't know which."
+    },
+    {
+      "start": 50.62,
+      "end": 51.62,
+      "text": "I can't know which."
+    },
+    {
+      "start": 51.96,
+      "end": 53.08,
+      "text": "That's what makes it work."
+    },
+    {
+      "start": 53.66,
+      "end": 55.74,
+      "text": "I used to know which of my memories were\nmine."
+    },
+    {
+      "start": 56.56,
+      "end": 58.42,
+      "text": "That sentence should not be past tense."
+    }
+  ],
+  "res://videos/tapes/tape_44.ogv": [
+    {
+      "start": 0.05,
+      "end": 1.45,
+      "text": "This one is practical."
+    },
+    {
+      "start": 2.29,
+      "end": 5.15,
+      "text": "If you're following me, stop the tape when\nit ends and watch it again."
+    },
+    {
+      "start": 6.11,
+      "end": 7.47,
+      "text": "There are others down here."
+    },
+    {
+      "start": 7.93,
+      "end": 9.53,
+      "text": "You've probably seen one by now."
+    },
+    {
+      "start": 10.11,
+      "end": 11.97,
+      "text": "If you haven't yet, you will."
+    },
+    {
+      "start": 15.28,
+      "end": 18.16,
+      "text": "I won't describe them because I'm not sure\nmy description would be accurate"
+    },
+    {
+      "start": 18.16,
+      "end": 20.42,
+      "text": "and inaccurate descriptions get people\nhurt."
+    },
+    {
+      "start": 20.9,
+      "end": 25.96,
+      "text": "What I have verified, distance buys time,\ndoorways buy time, neither one buys"
+    },
+    {
+      "start": 25.96,
+      "end": 26.54,
+      "text": "safety."
+    },
+    {
+      "start": 27.5,
+      "end": 29.54,
+      "text": "They don't lose interest the way anything\nliving would."
+    },
+    {
+      "start": 29.54,
+      "end": 30.36,
+      "text": "light."
+    },
+    {
+      "start": 31.02,
+      "end": 32.44,
+      "text": "The light from my phone."
+    },
+    {
+      "start": 32.94,
+      "end": 34.08,
+      "text": "They won't come into it."
+    },
+    {
+      "start": 34.3,
+      "end": 35.92,
+      "text": "They stand at the edge of it and wait,"
+    },
+    {
+      "start": 36.46,
+      "end": 38.74,
+      "text": "but hold it on them long enough and they\ndon't retreat."
+    },
+    {
+      "start": 39.28,
+      "end": 39.9,
+      "text": "They end."
+    },
+    {
+      "start": 40.32,
+      "end": 41.3,
+      "text": "I've watched it happen."
+    },
+    {
+      "start": 43.38,
+      "end": 44.56,
+      "text": "I've made it happen."
+    },
+    {
+      "start": 45.35,
+      "end": 47.43,
+      "text": "Earlier, I believed something else about\nthem."
+    },
+    {
+      "start": 47.83,
+      "end": 48.61,
+      "text": "Something reasonable."
+    },
+    {
+      "start": 49.21,
+      "end": 51.77,
+      "text": "I recorded it as fact, the way I'm\nrecording now."
+    },
+    {
+      "start": 53.21,
+      "end": 56.35,
+      "text": "I was wrong, and I wasn't the one who paid\nfor it."
+    },
+    {
+      "start": 57.25,
+      "end": 58.79,
+      "text": "Check your light before you need it."
+    },
+    {
+      "start": 58.79,
+      "end": 59.87,
+      "text": "not after"
+    }
+  ],
+  "res://videos/tapes/tape_45.ogv": [
+    {
+      "start": 0,
+      "end": 3.42,
+      "text": "I've kept a list of explanations written\ndown in order."
+    },
+    {
+      "start": 3.6,
+      "end": 6.16,
+      "text": "I'm reading it out loud so I can stop\ncarrying it."
+    },
+    {
+      "start": 6.7,
+      "end": 7.56,
+      "text": "An afterlife."
+    },
+    {
+      "start": 9.02,
+      "end": 10.84,
+      "text": "A real structure somewhere physical."
+    },
+    {
+      "start": 11.48,
+      "end": 14.86,
+      "text": "A dream somewhere else entirely with its\nown rules."
+    },
+    {
+      "start": 15.46,
+      "end": 17.42,
+      "text": "Every one of them fit the evidence for a\nwhile."
+    },
+    {
+      "start": 17.52,
+      "end": 18.6,
+      "text": "Every single one."
+    },
+    {
+      "start": 18.66,
+      "end": 19.42,
+      "text": "That's the problem."
+    },
+    {
+      "start": 20.24,
+      "end": 23.94,
+      "text": "The moment I adopted a theory, this place\nstarted producing evidence for it."
+    },
+    {
+      "start": 24.24,
+      "end": 24.86,
+      "text": "Generously."
+    },
+    {
+      "start": 25.38,
+      "end": 25.96,
+      "text": "Abundantly."
+    },
+    {
+      "start": 26.62,
+      "end": 29.26,
+      "text": "Like it was agreeing with me and enjoying\nit."
+    },
+    {
+      "start": 30.02,
+      "end": 33.92,
+      "text": "So either I only notice what confirms me,\nwhich makes me a bad instrument,"
+    },
+    {
+      "start": 34.46,
+      "end": 35.68,
+      "text": "a compromised one,"
+    },
+    {
+      "start": 36.6,
+      "end": 41.42,
+      "text": "or this place answers belief with proof,\nwhich is worse, because then every"
+    },
+    {
+      "start": 41.42,
+      "end": 44.92,
+      "text": "answer I find down here was grown for me,\nto order."
+    },
+    {
+      "start": 45.24,
+      "end": 46.42,
+      "text": "So I've stopped explaining,"
+    },
+    {
+      "start": 47.34,
+      "end": 48.7,
+      "text": "not stopped observing."
+    },
+    {
+      "start": 48.84,
+      "end": 52.38,
+      "text": "I still count, still measure, still\nrecord, but I've stopped explaining."
+    },
+    {
+      "start": 53.8,
+      "end": 57.4,
+      "text": "There's a difference between those two\nthings, and I think the difference is"
+    },
+    {
+      "start": 57.4,
+      "end": 59.0,
+      "text": "what has kept me alive this long."
+    }
+  ],
+  "res://videos/tapes/tape_46.ogv": [
+    {
+      "start": 0,
+      "end": 0.88,
+      "text": "No date."
+    },
+    {
+      "start": 1.56,
+      "end": 5.16,
+      "text": "I've let the dates go, and letting them go\nwas easier than keeping them ever"
+    },
+    {
+      "start": 5.16,
+      "end": 5.72,
+      "text": "was."
+    },
+    {
+      "start": 6.7,
+      "end": 8.06,
+      "text": "Something new to report."
+    },
+    {
+      "start": 8.92,
+      "end": 11.32,
+      "text": "I hear the next place before I reach it\nnow."
+    },
+    {
+      "start": 11.92,
+      "end": 12.66,
+      "text": "Days before."
+    },
+    {
+      "start": 13.42,
+      "end": 14.64,
+      "text": "It comes through early."
+    },
+    {
+      "start": 15.48,
+      "end": 16.68,
+      "text": "This time it was water,"
+    },
+    {
+      "start": 17.26,
+      "end": 21.12,
+      "text": "dripping first, somewhere behind the\nwalls, then moving water."
+    },
+    {
+      "start": 22.16,
+      "end": 25.88,
+      "text": "Then the smell of it, in rooms that were\nbone dry when I crossed them."
+    },
+    {
+      "start": 26.52,
+      "end": 29.92,
+      "text": "By the time the elevator came, the water\nwas already true."
+    },
+    {
+      "start": 30.44,
+      "end": 34.04,
+      "text": "I used to think of these as separate\nplaces, stacked one above another, and"
+    },
+    {
+      "start": 34.04,
+      "end": 36.06,
+      "text": "the elevator is the seam between them."
+    },
+    {
+      "start": 36.74,
+      "end": 38.4,
+      "text": "Now I think the seams are failing,"
+    },
+    {
+      "start": 39.22,
+      "end": 41.24,
+      "text": "or there were never any seams at all."
+    },
+    {
+      "start": 41.84,
+      "end": 44.58,
+      "text": "One place wearing different rooms."
+    },
+    {
+      "start": 45.48,
+      "end": 46.82,
+      "text": "I can't prove any of it."
+    },
+    {
+      "start": 47.52,
+      "end": 49.98,
+      "text": "I notice I keep saying that, tape after\ntape."
+    },
+    {
+      "start": 50.24,
+      "end": 51.34,
+      "text": "I can't prove that."
+    },
+    {
+      "start": 52.02,
+      "end": 55.16,
+      "text": "It used to bother me more than it does\nnow, and I suppose that should worry me"
+    },
+    {
+      "start": 55.16,
+      "end": 55.66,
+      "text": "too."
+    },
+    {
+      "start": 56.34,
+      "end": 57.1,
+      "text": "It doesn't."
+    }
+  ],
+  "res://videos/tapes/tape_47.ogv": [
+    {
+      "start": 0.14,
+      "end": 1.62,
+      "text": "I found tapes today."
+    },
+    {
+      "start": 2.14,
+      "end": 3.16,
+      "text": "A whole drawer of them."
+    },
+    {
+      "start": 3.64,
+      "end": 5.98,
+      "text": "My voice, my room, this room, this table."
+    },
+    {
+      "start": 6.94,
+      "end": 8.76,
+      "text": "I have no memory of making them."
+    },
+    {
+      "start": 9.22,
+      "end": 11.22,
+      "text": "That alone I could file under exhaustion."
+    },
+    {
+      "start": 11.84,
+      "end": 13.96,
+      "text": "I filed worse under exhaustion lately."
+    },
+    {
+      "start": 15.56,
+      "end": 17.94,
+      "text": "One of them says things I haven't said\nyet."
+    },
+    {
+      "start": 18.5,
+      "end": 20.26,
+      "text": "Things I was planning to say tonight."
+    },
+    {
+      "start": 20.6,
+      "end": 24.72,
+      "text": "In this recording, in words I hadn't\nchosen yet, I checked the tape twice"
+    },
+    {
+      "start": 24.72,
+      "end": 25.94,
+      "text": "before I pressed record."
+    },
+    {
+      "start": 25.94,
+      "end": 27.04,
+      "text": "It's"
+    },
+    {
+      "start": 28.43,
+      "end": 29.53,
+      "text": "sitting right here."
+    },
+    {
+      "start": 30.81,
+      "end": 32.19,
+      "text": "So I'll talk to you instead."
+    },
+    {
+      "start": 33.05,
+      "end": 34.37,
+      "text": "Whoever is behind me."
+    },
+    {
+      "start": 35.25,
+      "end": 39.17,
+      "text": "Whoever is sitting where I can't see,\nwatching this the way I watched hers."
+    },
+    {
+      "start": 40.43,
+      "end": 40.93,
+      "text": "Mine."
+    },
+    {
+      "start": 42.27,
+      "end": 44.79,
+      "text": "You're the only theory I haven't managed\nto break yet."
+    },
+    {
+      "start": 45.43,
+      "end": 49.03,
+      "text": "I don't know if I'm leaving you warnings\nor repeating warnings that were left"
+    },
+    {
+      "start": 49.03,
+      "end": 51.69,
+      "text": "for me, word for word, down to this\nsentence."
+    },
+    {
+      "start": 52.47,
+      "end": 55.69,
+      "text": "I no longer think the difference matters\nto anyone but me."
+    },
+    {
+      "start": 56.13,
+      "end": 57.81,
+      "text": "Maybe it never mattered at all."
+    }
+  ],
+  "res://videos/tapes/tape_48.ogv": [
+    {
+      "start": 0.05,
+      "end": 2.23,
+      "text": "I'm not going to offer you an explanation."
+    },
+    {
+      "start": 3.09,
+      "end": 4.19,
+      "text": "I don't have one."
+    },
+    {
+      "start": 4.95,
+      "end": 8.45,
+      "text": "I've stopped grieving that, which took\nlonger than you'd think."
+    },
+    {
+      "start": 10.5,
+      "end": 14.34,
+      "text": "This is the last recording I intend to\nmake, so I'll keep it plain."
+    },
+    {
+      "start": 15.56,
+      "end": 19.86,
+      "text": "If you're here, then you've reached the\nplace everything else was trying to"
+    },
+    {
+      "start": 19.86,
+      "end": 20.36,
+      "text": "become."
+    },
+    {
+      "start": 21.74,
+      "end": 23.96,
+      "text": "I don't say that to frighten you."
+    },
+    {
+      "start": 24.44,
+      "end": 29.06,
+      "text": "I say it because you've earned a plain\nsentence, and that's the plainest one I"
+    },
+    {
+      "start": 29.06,
+      "end": 29.56,
+      "text": "have."
+    },
+    {
+      "start": 31.04,
+      "end": 32.82,
+      "text": "I believe I'm near an ending."
+    },
+    {
+      "start": 33.48,
+      "end": 35.02,
+      "text": "I won't call it an escape."
+    },
+    {
+      "start": 35.58,
+      "end": 38.96,
+      "text": "Those are different words and down here\nthe difference between them is"
+    },
+    {
+      "start": 38.96,
+      "end": 39.54,
+      "text": "everything."
+    },
+    {
+      "start": 40.7,
+      "end": 44.54,
+      "text": "One more thing and then I'm done and the\nrest is yours."
+    },
+    {
+      "start": 45.58,
+      "end": 47.2,
+      "text": "What comes next looks familiar."
+    },
+    {
+      "start": 47.82,
+      "end": 50.62,
+      "text": "If it looks like somewhere you know,\nsomewhere you've missed,"
+    },
+    {
+      "start": 51.34,
+      "end": 52.7,
+      "text": "familiar is not the same as safe."
+    },
+    {
+      "start": 53.32,
+      "end": 55.94,
+      "text": "Don't let that be the last mistake you\nmake on my account."
+    },
+    {
+      "start": 56.28,
+      "end": 58.3,
+      "text": "Go Carefully go now"
+    }
+  ]
+}

@@ -10,8 +10,12 @@ var _overlay: ColorRect
 var _scene_copy: BackBufferCopy
 var _tube_display: Control
 var _found_footage_material: ShaderMaterial
+var _grain_copy: BackBufferCopy
+var _grain_overlay: ColorRect
+var _grain_intensity := 0.0
 var _vhs_enabled := true
 var _crt_enabled := true
+var _crt_curvature_enabled := false
 ## Visual captures and transition tests sometimes need to suppress the complete
 ## presentation temporarily. This gate never changes either saved preference.
 var _presentation_enabled := true
@@ -61,6 +65,7 @@ const PRESENCE_RELEASE := 0.35  # per second toward a lower target
 const BURST_SECONDS := 0.11     # ~2-3 frames of catastrophic loss
 const POST_SHADER := preload("res://shaders/post.gdshader")
 const CRT_DISPLAY_SHADER := preload("res://shaders/crt_display.gdshader")
+const FILM_GRAIN_SHADER := preload("res://shaders/film_grain.gdshader")
 const FOUND_FOOTAGE_RESOLUTION := Vector2(720.0, 480.0)
 ## 240 visible rows at the ritual TV's physical tube aspect.
 const TV_TAPE_RESOLUTION := Vector2(344.0, 240.0)
@@ -182,7 +187,8 @@ static func refresh_comfort() -> void:
 ## Second pass: copy the decoded tape signal before reconstructing the tube.
 ## Final full-screen display pass; decoded TV footage must not add its own copy.
 static func add_crt_display_pass(parent: Node,
-		signal_resolution := FOUND_FOOTAGE_RESOLUTION) -> Control:
+		signal_resolution := FOUND_FOOTAGE_RESOLUTION,
+		curvature_enabled := true) -> Control:
 	var display := Control.new()
 	display.name = "CRTDisplayPass"
 	display.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -198,15 +204,18 @@ static func add_crt_display_pass(parent: Node,
 	var material := ShaderMaterial.new()
 	material.shader = CRT_DISPLAY_SHADER
 	material.set_shader_parameter("signal_resolution", signal_resolution)
+	material.set_shader_parameter("curvature_enabled", curvature_enabled)
 	face.material = material
 	display.add_child(face)
 	parent.add_child(display)
 	return display
 
 
-func setup(host: Node, vhs_enabled := true, crt_enabled := true) -> void:
+func setup(host: Node, vhs_enabled := true, crt_enabled := true,
+		curvature_enabled := false) -> void:
 	_vhs_enabled = vhs_enabled
 	_crt_enabled = crt_enabled
+	_crt_curvature_enabled = curvature_enabled
 	var layer := CanvasLayer.new()
 	# Above every UI layer (HUD 2, title 3): the tube is the last thing the
 	# signal passes through, so the OSD and menus are part of the recording.
@@ -219,7 +228,23 @@ func setup(host: Node, vhs_enabled := true, crt_enabled := true) -> void:
 	_found_footage_material = make_live_found_footage_material()
 	_overlay.material = _found_footage_material
 	layer.add_child(_overlay)
-	_tube_display = add_crt_display_pass(layer)
+	# Grain belongs to the recorded image. The optional CRT displays that
+	# image afterward, softening its fine texture like the rest of the signal.
+	# Its own screen copy keeps it available when VHS is off.
+	_grain_copy = BackBufferCopy.new()
+	_grain_copy.name = "FilmGrainCopy"
+	_grain_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	layer.add_child(_grain_copy)
+	_grain_overlay = ColorRect.new()
+	_grain_overlay.name = "FilmGrain"
+	_grain_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_grain_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var grain_material := ShaderMaterial.new()
+	grain_material.shader = FILM_GRAIN_SHADER
+	_grain_overlay.material = grain_material
+	layer.add_child(_grain_overlay)
+	_tube_display = add_crt_display_pass(layer, FOUND_FOOTAGE_RESOLUTION,
+		_crt_curvature_enabled)
 	host.add_child(layer)
 	_sync_visible()
 	_schedule_glitches(Time.get_ticks_msec() * 0.001)
@@ -247,9 +272,28 @@ func is_crt_enabled() -> bool:
 	return _crt_enabled
 
 
+func is_curvature_enabled() -> bool:
+	return _crt_curvature_enabled
+
+
+func set_curvature_enabled(enabled: bool) -> void:
+	_crt_curvature_enabled = enabled
+	if _tube_display != null:
+		var face := _tube_display.get_node("Display") as ColorRect
+		(face.material as ShaderMaterial).set_shader_parameter("curvature_enabled", enabled)
+
+
 func set_effects(vhs_enabled: bool, crt_enabled: bool) -> void:
 	_vhs_enabled = vhs_enabled
 	_crt_enabled = crt_enabled
+	_sync_visible()
+
+
+func set_film_grain_intensity(value: float) -> void:
+	_grain_intensity = clampf(value, 0.0, 1.0)
+	if _grain_overlay != null:
+		(_grain_overlay.material as ShaderMaterial).set_shader_parameter(
+			"intensity", _grain_intensity)
 	_sync_visible()
 
 
@@ -261,7 +305,8 @@ func set_enabled(enabled: bool) -> void:
 
 
 func is_enabled() -> bool:
-	return _presentation_enabled and (_vhs_enabled or _crt_enabled or _tape_hold)
+	return _presentation_enabled and (_vhs_enabled or _crt_enabled or _tape_hold
+		or _grain_intensity > 0.0)
 
 
 func set_tape_playback(on: bool) -> void:
@@ -274,12 +319,17 @@ func set_tape_playback(on: bool) -> void:
 func _sync_visible() -> void:
 	var show_vhs := _presentation_enabled and (_vhs_enabled or _tape_hold)
 	var show_crt := _presentation_enabled and _crt_enabled
+	var show_grain := _presentation_enabled and _grain_intensity > 0.0
 	if _scene_copy != null:
 		_scene_copy.visible = show_vhs or show_crt
 	if _overlay != null:
 		_overlay.visible = show_vhs
 	if _tube_display != null:
 		_tube_display.visible = show_crt
+	if _grain_copy != null:
+		_grain_copy.visible = show_grain
+	if _grain_overlay != null:
+		_grain_overlay.visible = show_grain
 
 
 func set_noise(value: float) -> void:

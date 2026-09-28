@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bqsvkbf6js0tb"
-path="res://.godot/imported/others_0001_normal_opengl_2k.png-e0da1c65809d0993d81cb6476e232e9a.ctex"
+path.bptc="res://.godot/imported/others_0001_normal_opengl_2k.png-e0da1c65809d0993d81cb6476e232e9a.bptc.ctex"
+path.astc="res://.godot/imported/others_0001_normal_opengl_2k.png-e0da1c65809d0993d81cb6476e232e9a.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://textures/bloom/cellular_flesh/others_0001_normal_opengl_2k.png"
-dest_files=["res://.godot/imported/others_0001_normal_opengl_2k.png-e0da1c65809d0993d81cb6476e232e9a.ctex"]
+dest_files=["res://.godot/imported/others_0001_normal_opengl_2k.png-e0da1c65809d0993d81cb6476e232e9a.bptc.ctex", "res://.godot/imported/others_0001_normal_opengl_2k.png-e0da1c65809d0993d81cb6476e232e9a.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

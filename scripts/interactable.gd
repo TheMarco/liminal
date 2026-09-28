@@ -17,7 +17,12 @@ var prompt_provider: Callable
 
 
 func get_prompt() -> String:
-	return str(prompt_provider.call()) if prompt_provider.is_valid() else prompt_text
+	var text := str(prompt_provider.call()) if prompt_provider.is_valid() else prompt_text
+	# Authored prop text keeps its canonical action prefix; resolve it when
+	# displayed so even an already-focused object follows a new binding.
+	if text.begins_with("E —"):
+		return GameInput.primary_label("interact") + text.substr(1)
+	return text
 
 
 func _init() -> void:

@@ -113,6 +113,7 @@ func _office_lighting() -> void:
 		"office_troffer_grid")
 	light.light_color = Color(0.93, 1.0, 0.95)
 	light.omni_range = 12.5
+	light.light_volumetric_fog_energy = 1.6
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 24.0
@@ -124,6 +125,8 @@ func _office_lighting() -> void:
 		flutter.light_energy = 1.0 / 8.0
 		flutter.light_color = Color(0.93, 1.0, 0.95)
 		flutter.omni_range = 4.5
+		# Short pulses ghost in Godot's temporally reprojected volumetric fog.
+		flutter.light_volumetric_fog_energy = 0.0
 		flutter.shadow_enabled = false
 		flutter.distance_fade_enabled = true
 		flutter.distance_fade_begin = 18.0
@@ -175,6 +178,7 @@ func _office_corridor_lighting() -> void:
 			ctx.ceiling_height - 0.48, 0), yw), "office_troffer_grid")
 	light.light_color = Color(0.91, 1.0, 0.94)
 	light.omni_range = 10.5
+	light.light_volumetric_fog_energy = 1.6
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 22.0
@@ -187,6 +191,7 @@ func _office_corridor_lighting() -> void:
 		flutter.light_energy = flicker_energy
 		flutter.light_color = Color(0.91, 1.0, 0.94)
 		flutter.omni_range = 4.0
+		flutter.light_volumetric_fog_energy = 0.0
 		flutter.shadow_enabled = false
 		flutter.distance_fade_enabled = true
 		flutter.distance_fade_begin = 18.0
@@ -547,9 +552,12 @@ func _office_corridor_bay_returns(o: Vector3, yw: float, side: float,
 func _office_corridor_open_casing(o: Vector3, yw: float, side: float,
 		t: float, width: float) -> void:
 	var inn = side - signf(side) * 0.105
+	# The corrected GLB is 2.51m wide at the jambs instead of 2.56m at the
+	# overhanging header. Preserve the existing jamb scale and opening width.
+	var casing_width := (width + 0.16) * (2.51 / 2.56)
 	scene.fitted_model("res://models/scenario/office/open_doorway_casing.glb",
 		null, scene.world_point(o, Vector3(t, 0, inn), yw),
-		Vector3(width + 0.16, Chunk.DOOR_TOP + 0.12, 0.24), yw)
+		Vector3(casing_width, Chunk.DOOR_TOP + 0.12, 0.24), yw)
 
 
 ## A sealed office door installed in a real wall opening. The collider and
@@ -612,25 +620,29 @@ func _office_corridor_directory(o: Vector3, yw: float, side: float, t: float) ->
 	v.add_child(body_label)
 
 
+## Positions are built around the anchor and then shifted by Chunk. Undo that
+## future shift here so every member cell of an L-shaped room gets its own
+## furniture island. A 12m span alone cannot describe a three-cell room.
+func _office_room_member_centres() -> Array[Vector3]:
+	var s := WorldGen.CELL_SIZE
+	var rc := WorldGen.room_centre(ctx.world_seed, ctx.room_root)
+	var shift := Vector3(rc.x - (float(ctx.cell.x) * s + s * 0.5), 0,
+		rc.y - (float(ctx.cell.y) * s + s * 0.5))
+	var centres: Array[Vector3] = []
+	for member in scene.room_members():
+		centres.append(Vector3(float(member.x - ctx.cell.x) * s + s * 0.5,
+			0, float(member.y - ctx.cell.y) * s + s * 0.5) - shift)
+	return centres
+
+
 ## MDR-style desk cluster: cross divider, four desks facing outward, each
 ## with a CRT terminal, keyboard and chair. The room's reason to exist.
-
-
 func _office_cubicles() -> void:
-	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
-	var span = scene.room_span()
-	var centres = [c]
-	if span.x > 12.1 and span.y > 12.1:
-		centres = [c + Vector3(-5.4, 0, -5.4), c + Vector3(5.4, 0, -5.4),
-			c + Vector3(-5.4, 0, 5.4), c + Vector3(5.4, 0, 5.4)]
-	elif span.x > 12.1:
-		centres = [c + Vector3(-5.6, 0, 0), c + Vector3(5.6, 0, 0)]
-	elif span.y > 12.1:
-		centres = [c + Vector3(0, 0, -5.6), c + Vector3(0, 0, 5.6)]
+	var centres := _office_room_member_centres()
 	for ci in centres.size():
 		_office_cubicle_cluster(centres[ci], ci * 12)
 	var snd = OfficeSounds.new()
-	snd.position = c + Vector3(0, 1.2, 0)
+	snd.position = Vector3(WorldGen.CELL_SIZE * 0.5, 1.2, WorldGen.CELL_SIZE * 0.5)
 	scene.add_node(snd)
 
 
@@ -640,12 +652,15 @@ func _office_cubicles() -> void:
 
 func _office_cubicle_cluster(c: Vector3, qi_base: int) -> void:
 	# cross divider
-	scene.fitted_model("res://models/scenario/office/cubicle_divider.glb", null,
+	var divider_mark := scene.collider_mark()
+	var divider := scene.furnishing_pivot(Vector3.ZERO, 0.0, "office_cubicle_divider")
+	scene.fitted_model("res://models/scenario/office/cubicle_divider.glb", divider,
 		c, Vector3(3.7, 1.38, 0.36))
-	scene.fitted_model("res://models/scenario/office/cubicle_divider.glb", null,
+	scene.fitted_model("res://models/scenario/office/cubicle_divider.glb", divider,
 		c, Vector3(3.7, 1.38, 0.36), PI / 2.0)
 	scene.collider_box(c + Vector3(0, 0.675, 0), Vector3(3.6, 1.35, 0.08))
 	scene.collider_box(c + Vector3(0, 0.675, 0), Vector3(0.08, 1.35, 3.6))
+	scene.bind_furnishing_colliders(divider, divider_mark)
 	var qi = 0
 	for q in [Vector2(-1, -1), Vector2(-1, 1), Vector2(1, -1), Vector2(1, 1)]:
 		_office_desk(c + Vector3(q.x * 1.5, 0, 0), Vector2(0, q.y), qi_base + qi)
@@ -657,11 +672,10 @@ func _office_cubicle_cluster(c: Vector3, qi_base: int) -> void:
 
 
 func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
-	# One top-level pivot makes doorway clearance atomic: the desk, terminal,
-	# keyboard and loose items are culled together or survive together.
-	var workstation = Node3D.new()
+	# Desk, chair, desktop props and all their colliders are one clearance unit.
+	var workstation_mark := scene.collider_mark()
+	var workstation := scene.furnishing_pivot(Vector3.ZERO, 0.0, "office_workstation")
 	workstation.set_meta("office_workstation", true)
-	scene.add_node(workstation)
 	var dv = Vector3(d.x, 0, d.y)
 	var deskc = c + dv * 1.05
 	var top_size = Vector3(0.8, 0.035, 1.5) if d.x != 0.0 else Vector3(1.5, 0.035, 0.8)
@@ -700,8 +714,11 @@ func _office_desk(c: Vector3, d: Vector2, qi = 0) -> void:
 	# so the two never share the same corner of the desk.
 	_office_desk_phone(workstation, deskc, yaw, qi)
 	# chair facing the desk, never perfectly parked
-	scene.modern_task_chair(c + dv * 1.95 + Vector3((ctx.random01(97 + qi) - 0.5) * 0.2, 0, 0),
+	var chair := scene.modern_task_chair(
+		c + dv * 1.95 + Vector3((ctx.random01(97 + qi) - 0.5) * 0.2, 0, 0),
 		yaw + (ctx.random01(87 + qi) - 0.5) * 0.5)
+	scene.adopt_local(workstation, chair)
+	scene.bind_furnishing_colliders(workstation, workstation_mark)
 
 
 ## A desk phone at the worker's elbow.
@@ -802,6 +819,10 @@ func _copier(p: Vector3, salt: int) -> void:
 	scene.bind_furnishing_colliders(printer, body0)
 
 func _office_storage() -> void:
+	var rc := WorldGen.room_centre(ctx.world_seed, ctx.room_root)
+	var shift := Vector3(rc.x - (float(ctx.cell.x) * WorldGen.CELL_SIZE
+		+ WorldGen.CELL_SIZE * 0.5), 0, rc.y -
+		(float(ctx.cell.y) * WorldGen.CELL_SIZE + WorldGen.CELL_SIZE * 0.5))
 	# The floor-standing copier, parked against a wall with its finisher trays
 	# out. It is the one machine everyone walked to, so the storage room is
 	# where it ends up when the floor is stripped.
@@ -809,7 +830,7 @@ func _office_storage() -> void:
 		for d in 4:
 			if not scene.solid_wall(d):
 				continue
-			var pp = scene.wall_point(d, 9.1, 0.45)
+			var pp = scene.wall_point(d, 9.1, 0.45) - shift
 			var pyaw = scene.wall_facing(d)
 			if scene.attributed_floor_prop(Chunk.OFFICE_PRINTER_PATH, pp, pyaw,
 					Chunk.OFFICE_PRINTER_SCALE, Chunk.OFFICE_PRINTER_CENTRE,
@@ -817,39 +838,25 @@ func _office_storage() -> void:
 				scene.collider_yaw_box(pp + Vector3(0, 0.68, 0),
 					Vector3(1.22, 1.36, 0.72), pyaw)
 			break
-	scene.shelf_unit(Vector3(3.5, 0, 6.0), false, 30)
-	if ctx.random01(33) < 0.55:
-		# a real steel rack (model ships 10x life size — scaled to 2.1m)
-		scene.cc0_prop("steel_frame_shelves_01", Vector3(8.5, 0, 6.0), PI / 2.0, 0.1)
-		scene.collider_box(Vector3(8.5, 1.1, 6.0), Vector3(0.6, 2.2, 1.15))
-	else:
-		scene.shelf_unit(Vector3(8.5, 0, 6.0), false, 34)
-	if ctx.random01(36) < 0.45:
+	# Two approved metal-and-wood archive racks per member cell. Their central
+	# footprints stay outside the 3.6m doorway clearance on all four edges.
+	var centres := _office_room_member_centres()
+	for i in centres.size():
+		var centre := centres[i]
+		scene.shelf_unit(centre + Vector3(-1.7, 0, 0), false, 30 + i * 8)
+		scene.shelf_unit(centre + Vector3(1.7, 0, 0), false, 34 + i * 8)
+	if ctx.room_size == 1 and ctx.random01(36) < 0.45:
 		var dy = (ctx.random01(37) - 0.5) * 0.2
 		scene.cc0_prop("drawer_cabinet", Vector3(2.2, 0, 1.1), dy)
 		scene.collider_yaw_box(Vector3(2.2, 0.95, 1.1), Vector3(1.2, 1.9, 0.55), dy)
-	if ctx.random01(38) < 0.4:
-		scene.shelf_unit(Vector3(6.0, 0, 2.0), true, 39)
 
 
 func _office_break() -> void:
-	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
-	# round table with four chairs
-	var table := scene.fitted_model(
-		"res://models/scenario/office/breakroom_table.glb", null, c,
-		Vector3(1.10, 0.745, 1.10))
-	if table != null:
-		table.set_meta("surface_wear_prop", "office_break_table")
-	scene.collider_cylinder(c + Vector3(0, 0.4, 0), 0.6, 0.8)
-	for i in 4:
-		var ang = TAU * float(i) / 4.0 + 0.4
-		var cp = c + Vector3(cos(ang) * 1.15, 0, sin(ang) * 1.15)
-		# The task chair's seat faces local -Z, so aim the facing (not the
-		# position angle) at the table centre.
-		scene.modern_task_chair(cp, atan2(cos(ang), sin(ang)) + (ctx.random01(98 + i) - 0.5) * 0.7)
-	# Keep the counter clear of a south-wall entrance before the doorway pass.
-	# Room props are shifted to the merged-room centre after construction, so
-	# test the same shifted footprint that the clearance pass will inspect.
+	var centres := _office_room_member_centres()
+	for i in centres.size():
+		_office_break_table(centres[i], 98 + i * 8)
+	# Keep the counter on this member cell's actual south wall, including in a
+	# merged room. Undo Chunk's later room-centre shift for wall-mounted props.
 	var room_centre := WorldGen.room_centre(ctx.world_seed, ctx.room_root)
 	var shift := Vector2(room_centre.x - (float(ctx.cell.x) * WorldGen.CELL_SIZE
 		+ WorldGen.CELL_SIZE * 0.5), room_centre.y -
@@ -857,8 +864,7 @@ func _office_break() -> void:
 	var coffee_x := 4.5
 	var doorway_zones := scene.doorway_clearance_rects()
 	for candidate_x in [4.5, 2.5, 9.5]:
-		var footprint := Rect2(candidate_x - 1.5 + shift.x,
-			0.45 + shift.y, 3.0, 0.6)
+		var footprint := Rect2(candidate_x - 1.5, 0.45, 3.0, 0.6)
 		var blocked := false
 		for zone in doorway_zones:
 			if footprint.intersects(zone):
@@ -871,18 +877,20 @@ func _office_break() -> void:
 	# layout mutation can never leave the machine floating by itself.
 	var station_mark := scene.collider_mark()
 	var coffee_station := scene.furnishing_pivot(
-		Vector3(coffee_x, 0, 0.75), 0.0, "office_coffee_station")
+		Vector3(coffee_x - shift.x, 0, 0.75 - shift.y), 0.0, "office_coffee_station")
 	var coffee_counter := scene.fitted_model(
 		"res://models/scenario/office/breakroom_counter.glb", coffee_station,
 		Vector3.ZERO, Vector3(3.0, 0.9, 0.6))
 	if coffee_counter != null:
 		coffee_counter.set_meta("surface_wear_prop", "office_coffee_counter")
-	scene.collider_box(Vector3(coffee_x, 0.45, 0.75), Vector3(3.0, 0.9, 0.6))
+	scene.collider_box(Vector3(coffee_x - shift.x, 0.45, 0.75 - shift.y),
+		Vector3(3.0, 0.9, 0.6))
 	scene.fitted_model("res://models/scenario/office/coffee_maker.glb", coffee_station,
 		Vector3(-0.9, 0.9, 0), Vector3(0.3, 0.36, 0.3))
 	scene.bind_furnishing_colliders(coffee_station, station_mark)
 	# water cooler in the corner
-	var wc = Vector3(1.0 if coffee_x > 8.0 else 10.5, 0, 1.0)
+	var wc = Vector3((1.0 if coffee_x > 8.0 else 10.5) - shift.x,
+		0, 1.0 - shift.y)
 	var wc_body0 = scene.collider_mark()
 	var cooler = scene.attributed_floor_prop(Chunk.OFFICE_WATER_COOLER_PATH, wc, PI,
 		Chunk.OFFICE_WATER_COOLER_SCALE, Chunk.OFFICE_WATER_COOLER_CENTRE,
@@ -894,14 +902,37 @@ func _office_break() -> void:
 	# the catering cart that never gets restocked
 	if ctx.random01(103) < 0.5:
 		var cy2 = PI / 2.0 + (ctx.random01(104) - 0.5) * 0.3
-		scene.cc0_prop("CoffeeCart_01", Vector3(10.4, 0, 8.6), cy2)
-		scene.collider_yaw_box(Vector3(10.4, 0.85, 8.6), Vector3(2.2, 1.7, 1.1), cy2)
+		var cart_p := Vector3(10.4 - shift.x, 0, 8.6 - shift.y)
+		scene.cc0_prop("CoffeeCart_01", cart_p, cy2)
+		scene.collider_yaw_box(cart_p + Vector3(0, 0.85, 0),
+			Vector3(2.2, 1.7, 1.1), cy2)
 	# a dead CRT television on a low table, facing the chairs
 	if ctx.random01(106) < 0.4:
-		var tvp = Vector3(1.6, 0, 9.8)
+		var tvp = Vector3(1.6 - shift.x, 0, 9.8 - shift.y)
 		scene.cc0_prop("coffee_table_round_01", tvp, 0.0)
 		scene.collider_cylinder(tvp + Vector3(0, 0.25, 0), 0.66, 0.5)
 		scene.cc0_prop("television_02", tvp + Vector3(0, 0.49, 0), PI * 0.78 + (ctx.random01(107) - 0.5) * 0.3)
+
+
+func _office_break_table(c: Vector3, salt: int) -> void:
+	# A doorway can remove a seating island only as a complete table-and-chairs set.
+	var mark := scene.collider_mark()
+	var group := scene.furnishing_pivot(Vector3.ZERO, 0.0, "office_break_table_set")
+	var table := scene.fitted_model(
+		"res://models/scenario/office/breakroom_table.glb", group, c,
+		Vector3(1.10, 0.745, 1.10))
+	if table != null:
+		table.set_meta("surface_wear_prop", "office_break_table")
+	scene.collider_cylinder(c + Vector3(0, 0.4, 0), 0.6, 0.8)
+	for i in 4:
+		var ang = TAU * float(i) / 4.0 + 0.4
+		var cp = c + Vector3(cos(ang) * 1.15, 0, sin(ang) * 1.15)
+		# The task chair's seat faces local -Z, so aim the facing (not the
+		# position angle) at the table centre.
+		var chair := scene.modern_task_chair(cp,
+			atan2(cos(ang), sin(ang)) + (ctx.random01(salt + i) - 0.5) * 0.7)
+		scene.adopt_local(group, chair)
+	scene.bind_furnishing_colliders(group, mark)
 
 
 ## Landmark: a boardroom far larger than the company could have needed. The
@@ -912,16 +943,21 @@ func _office_break() -> void:
 func _office_boardroom() -> void:
 	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
 	var ln = 11.5
-	scene.fitted_model("res://models/scenario/office/boardroom_table.glb", null,
+	var table_mark := scene.collider_mark()
+	var table_set := scene.furnishing_pivot(Vector3.ZERO, 0.0, "office_boardroom_table_set")
+	scene.fitted_model("res://models/scenario/office/boardroom_table.glb", table_set,
 		c, Vector3(ln, 0.8, 2.15))
 	scene.collider_box(c + Vector3(0, 0.48, 0), Vector3(ln, 0.96, 2.2))
 	for side in [-1.0, 1.0]:
 		for i in 8:
 			var x = -4.9 + 1.4 * float(i)
 			var cp = c + Vector3(x, 0, side * 1.75)
-			scene.modern_task_chair(cp, PI if side < 0.0 else 0.0)
+			var chair := scene.modern_task_chair(cp, PI if side < 0.0 else 0.0)
+			scene.adopt_local(table_set, chair)
 	# One chair sits conspicuously far from the head of the table.
-	scene.modern_task_chair(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18)
+	var head_chair := scene.modern_task_chair(c + Vector3(7.0, 0, 0), -PI / 2.0 + 0.18)
+	scene.adopt_local(table_set, head_chair)
+	scene.bind_furnishing_colliders(table_set, table_mark)
 	# Dark wall-sized presentation display with a stubborn status line.
 	scene.fitted_model("res://models/scenario/office/wall_display.glb", null,
 		c + Vector3(-8.9, 1.75, 0), Vector3(5.8, 2.3, 0.10), PI / 2.0, false)

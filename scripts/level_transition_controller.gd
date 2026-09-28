@@ -103,7 +103,7 @@ func jump_to(level: int, requested_position: Vector3,
 	var outgoing: Node3D = _port.level_root.call()
 	_port.detach_level.call(outgoing)
 	outgoing.queue_free()
-	_port.reset_floor_presence.call()
+	await _port.reset_floor_presence.call()
 	_port.switch_music.call(level)
 	_port.set_active_level.call(level)
 	await get_tree().physics_frame

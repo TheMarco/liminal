@@ -19,23 +19,27 @@ func run() -> void:
 	var chunk: Chunk
 	for candidate_chunk: Chunk in game.cm.chunks.values():
 		var options := Placement.candidates(candidate_chunk)
-		if not options.is_empty():
-			chunk = candidate_chunk
-			choice = options[0]
-			break
+		for option: Dictionary in options:
+			var point: Vector3 = candidate_chunk.to_global(option.center)
+			var facing: Vector3 = candidate_chunk.global_basis * option.face.normal
+			game.player.global_position = point + facing * 4.0
+			game.player.global_position.y = candidate_chunk.global_position.y + candidate_chunk._floor_h() + 0.15
+			game.player.velocity = Vector3.ZERO
+			game.player.cam.global_position = game.player.global_position + Vector3.UP * 1.5
+			game.player.cam.look_at(point)
+			await physics_frame
+			if Placement.visible(option, candidate_chunk, game.player.cam):
+				chunk = candidate_chunk
+				choice = option
+				break
+		if not choice.is_empty(): break
 	if choice.is_empty():
-		fail("fixture has no clear wall")
+		fail("fixture has no visible clear wall")
 		await teardown_game(game)
 		finish()
 		return
 	var normal: Vector3 = chunk.global_basis * choice.face.normal
 	var focus: Vector3 = chunk.to_global(choice.center)
-	game.player.global_position = focus + normal * 4.0
-	game.player.global_position.y = chunk.global_position.y + chunk._floor_h() + 0.15
-	game.player.velocity = Vector3.ZERO
-	game.player.cam.global_position = game.player.global_position + Vector3.UP * 1.5
-	game.player.cam.look_at(focus)
-	await physics_frame
 	expect(game._breathing_allowed(), "normal Wander exploration is blocked")
 	expect(Placement.visible(choice, chunk, game.player.cam), "clear visible wall was rejected")
 	var scheduler: Node = game._architectural_events

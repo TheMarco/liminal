@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bsuwpqwr6ei3g"
-path="res://.godot/imported/asy_door_frame_NormalGL_4fb46b03-b282-4d65-9dd0-ebea94514036.jpg-96eda68610c48245c3e93c7fe41d721b.ctex"
+path.bptc="res://.godot/imported/asy_door_frame_NormalGL_4fb46b03-b282-4d65-9dd0-ebea94514036.jpg-96eda68610c48245c3e93c7fe41d721b.bptc.ctex"
+path.astc="res://.godot/imported/asy_door_frame_NormalGL_4fb46b03-b282-4d65-9dd0-ebea94514036.jpg-96eda68610c48245c3e93c7fe41d721b.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "25d39ce89b9f6f43effc3081ceb9d034"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/asy_door_frame/asy_door_frame_NormalGL_4fb46b03-b282-4d65-9dd0-ebea94514036.jpg"
-dest_files=["res://.godot/imported/asy_door_frame_NormalGL_4fb46b03-b282-4d65-9dd0-ebea94514036.jpg-96eda68610c48245c3e93c7fe41d721b.ctex"]
+dest_files=["res://.godot/imported/asy_door_frame_NormalGL_4fb46b03-b282-4d65-9dd0-ebea94514036.jpg-96eda68610c48245c3e93c7fe41d721b.bptc.ctex", "res://.godot/imported/asy_door_frame_NormalGL_4fb46b03-b282-4d65-9dd0-ebea94514036.jpg-96eda68610c48245c3e93c7fe41d721b.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

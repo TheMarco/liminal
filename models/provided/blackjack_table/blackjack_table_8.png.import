@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dowmr0qg5e7bq"
-path="res://.godot/imported/blackjack_table_8.png-365f2047d25f141ad4ca3f399205b49f.ctex"
+path.bptc="res://.godot/imported/blackjack_table_8.png-365f2047d25f141ad4ca3f399205b49f.bptc.ctex"
+path.astc="res://.godot/imported/blackjack_table_8.png-365f2047d25f141ad4ca3f399205b49f.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "6ab47a0bdcaa1655cdda2acbd2d44aba"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/blackjack_table/blackjack_table_8.png"
-dest_files=["res://.godot/imported/blackjack_table_8.png-365f2047d25f141ad4ca3f399205b49f.ctex"]
+dest_files=["res://.godot/imported/blackjack_table_8.png-365f2047d25f141ad4ca3f399205b49f.bptc.ctex", "res://.godot/imported/blackjack_table_8.png-365f2047d25f141ad4ca3f399205b49f.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

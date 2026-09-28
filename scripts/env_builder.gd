@@ -7,8 +7,8 @@ extends RefCounted
 ## scrolling past seven others. The base is applied once here and each floor is a
 ## named function, so a floor's look is one place to look.
 ##
-## Values are carried over unchanged. The extraction was checked by dumping every
-## stored Environment property for every theme before and after.
+## Each theme now keeps its own haze and glow balance so the air has depth
+## without making lit and unlit rooms look alike.
 ##
 ## Theme ids are sparse (3 was the cut theme park). Themes without a function of
 ## their own fall through to _vegas, which is the original else-branch.
@@ -24,6 +24,15 @@ static func build(theme: int) -> Environment:
 	env.fog_enabled = true
 	env.fog_sky_affect = 0.0
 	env.volumetric_fog_enabled = true
+	# A little forward scattering makes nearby practical lights visible in the
+	# air. Keep ambient injection low so unlit rooms retain their dark pockets.
+	env.volumetric_fog_anisotropy = 0.3
+	env.volumetric_fog_ambient_inject = 0.04
+	env.volumetric_fog_gi_inject = 0.5
+	# A little of the wide, HDR-thresholded glow levels gives practical
+	# lights a soft lens halo without lifting the rest of the frame.
+	env.set_glow_level(4, 0.06)
+	env.set_glow_level(5, 0.02)
 	# real-time GI: bounce light, color bleed, emissive surfaces lighting rooms
 	env.sdfgi_enabled = true
 	env.sdfgi_use_occlusion = true
@@ -78,10 +87,10 @@ static func _bloom(env: Environment) -> void:
 	env.glow_intensity = 0.40
 	env.glow_bloom = 0.040
 	env.glow_hdr_threshold = 1.04
-	env.fog_light_color = Color(0.055, 0.070, 0.095)
-	env.fog_density = 0.0032
+	env.fog_light_color = Color(0.13, 0.16, 0.20)
+	env.fog_density = 0.008
 	env.fog_light_energy = 0.62
-	env.volumetric_fog_density = 0.0016
+	env.volumetric_fog_density = 0.0038
 	env.volumetric_fog_albedo = Color(0.36, 0.43, 0.54)
 	env.volumetric_fog_emission = Color(0.003, 0.005, 0.008)
 	env.volumetric_fog_length = 42.0
@@ -107,9 +116,9 @@ static func _brutalist(env: Environment) -> void:
 	env.glow_intensity = 0.38
 	env.glow_bloom = 0.045
 	env.glow_hdr_threshold = 1.0
-	env.fog_light_color = Color(0.055, 0.072, 0.082)
-	env.fog_density = 0.0042
-	env.volumetric_fog_density = 0.0024
+	env.fog_light_color = Color(0.14, 0.18, 0.20)
+	env.fog_density = 0.009
+	env.volumetric_fog_density = 0.0055
 	env.volumetric_fog_albedo = Color(0.56, 0.65, 0.70)
 	env.volumetric_fog_emission = Color(0.006, 0.010, 0.013)
 	env.volumetric_fog_length = 62.0
@@ -144,13 +153,13 @@ static func _pool(env: Environment) -> void:
 	# A shallow chlorine-white distance veil starts gently in the room and is
 	# strong enough by the 36-48m streaming horizon to dissolve geometry into
 	# the tile-colored clear background before chunk pop-in becomes legible.
-	env.fog_density = 0.010
+	env.fog_density = 0.015
 	env.fog_light_energy = 0.65
-	env.volumetric_fog_density = 0.0045
+	env.volumetric_fog_density = 0.006
 	env.volumetric_fog_albedo = Color(0.94, 0.97, 0.95)
 	env.volumetric_fog_emission = Color(0.10, 0.12, 0.11)
 	env.volumetric_fog_length = 48.0
-	env.volumetric_fog_gi_inject = 0.15
+	env.volumetric_fog_gi_inject = 0.2
 	# Chlorine glare. The windows are emissive well past white, so the
 	# bloom is what sells them as daylight instead of as lit panels.
 	#
@@ -182,9 +191,9 @@ static func _mall(env: Environment) -> void:
 	env.glow_enabled = true
 	env.glow_intensity = 0.44
 	env.glow_bloom = 0.035
-	env.fog_light_color = Color(0.105, 0.095, 0.080)
-	env.fog_density = 0.0035
-	env.volumetric_fog_density = 0.0015
+	env.fog_light_color = Color(0.18, 0.16, 0.13)
+	env.fog_density = 0.009
+	env.volumetric_fog_density = 0.0048
 	env.volumetric_fog_albedo = Color(0.72, 0.66, 0.55)
 	env.volumetric_fog_length = 54.0
 	env.ssao_radius = 1.45
@@ -203,9 +212,9 @@ static func _prison(env: Environment) -> void:
 	env.glow_enabled = true
 	env.glow_intensity = 0.36
 	env.glow_bloom = 0.025
-	env.fog_light_color = Color(0.055, 0.070, 0.060)
-	env.fog_density = 0.0045
-	env.volumetric_fog_density = 0.0018
+	env.fog_light_color = Color(0.13, 0.16, 0.13)
+	env.fog_density = 0.01
+	env.volumetric_fog_density = 0.0055
 	env.volumetric_fog_albedo = Color(0.52, 0.62, 0.54)
 	env.volumetric_fog_length = 50.0
 	env.ssao_radius = 1.65
@@ -225,9 +234,9 @@ static func _school(env: Environment) -> void:
 	env.glow_enabled = true
 	env.glow_intensity = 0.30
 	env.glow_bloom = 0.03
-	env.fog_light_color = Color(0.12, 0.13, 0.14)
-	env.fog_density = 0.006
-	env.volumetric_fog_density = 0.0025
+	env.fog_light_color = Color(0.23, 0.24, 0.27)
+	env.fog_density = 0.011
+	env.volumetric_fog_density = 0.0055
 	env.volumetric_fog_albedo = Color(0.80, 0.82, 0.86)
 	env.volumetric_fog_length = 48.0
 	env.ssao_radius = 1.4
@@ -245,9 +254,9 @@ static func _asylum(env: Environment) -> void:
 	env.glow_enabled = true
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.04
-	env.fog_light_color = Color(0.05, 0.065, 0.045)
-	env.fog_density = 0.011
-	env.volumetric_fog_density = 0.005
+	env.fog_light_color = Color(0.12, 0.15, 0.11)
+	env.fog_density = 0.014
+	env.volumetric_fog_density = 0.007
 	env.volumetric_fog_albedo = Color(0.62, 0.72, 0.55)
 	env.volumetric_fog_length = 30.0
 	env.ssao_radius = 1.6
@@ -265,9 +274,9 @@ static func _airport(env: Environment) -> void:
 	env.glow_enabled = true
 	env.glow_intensity = 0.4
 	env.glow_bloom = 0.03
-	env.fog_light_color = Color(0.10, 0.12, 0.16)
-	env.fog_density = 0.005
-	env.volumetric_fog_density = 0.002
+	env.fog_light_color = Color(0.20, 0.23, 0.29)
+	env.fog_density = 0.01
+	env.volumetric_fog_density = 0.005
 	env.volumetric_fog_albedo = Color(0.75, 0.82, 0.95)
 	env.volumetric_fog_length = 56.0
 	env.ssao_radius = 1.3
@@ -285,12 +294,23 @@ static func _annex(env: Environment) -> void:
 	env.tonemap_exposure = 1.16
 	env.sdfgi_energy = 1.15
 	env.glow_enabled = true
-	env.glow_intensity = 0.26
-	env.glow_bloom = 0.018
-	env.fog_light_color = Color(0.69, 0.60, 0.33)
-	env.fog_density = 0.0022
-	env.volumetric_fog_density = 0.0012
+	# Keep the fluorescent core crisp while two wide glow levels make a
+	# faint lens veil around it. The broad levels remain thresholded to emitters.
+	env.glow_intensity = 0.36
+	env.glow_bloom = 0.04
+	env.set_glow_level(4, 0.14)
+	env.set_glow_level(5, 0.055)
+	env.fog_light_color = Color(0.82, 0.75, 0.52)
+	# Gentle distance falloff plus light-reactive air: the fixtures and SDFGI
+	# illuminate this mist, while dark gaps retain contrast.
+	env.fog_density = 0.015
+	env.fog_light_energy = 0.8
+	env.volumetric_fog_density = 0.021
 	env.volumetric_fog_albedo = Color(0.88, 0.78, 0.49)
+	env.volumetric_fog_anisotropy = 0.3
+	env.volumetric_fog_gi_inject = 0.65
+	env.volumetric_fog_ambient_inject = 0.04
+	env.volumetric_fog_emission = Color(0.001, 0.001, 0.0005)
 	env.volumetric_fog_length = 52.0
 	# Even contact-scale SSAO turned the two-centimetre skirting projection
 	# into a detached dark wedge across the carpet. The Annex already has
@@ -311,12 +331,20 @@ static func _office(env: Environment) -> void:
 	env.tonemap_exposure = 1.25
 	env.sdfgi_energy = 1.3
 	env.glow_enabled = true
-	env.glow_intensity = 0.3
-	env.glow_bloom = 0.02
+	# Cooler, lighter air than the Annex: fluorescent fixtures remain distinct
+	# while the long corridors lose a little contrast with distance.
+	env.glow_intensity = 0.35
+	env.glow_bloom = 0.035
+	env.set_glow_level(4, 0.10)
+	env.set_glow_level(5, 0.035)
 	env.fog_light_color = Color(0.72, 0.76, 0.72)
-	env.fog_density = 0.003
-	env.volumetric_fog_density = 0.0012
+	env.fog_density = 0.011
+	env.fog_light_energy = 0.65
+	env.volumetric_fog_density = 0.008
 	env.volumetric_fog_albedo = Color(0.9, 0.95, 0.9)
+	env.volumetric_fog_anisotropy = 0.3
+	env.volumetric_fog_gi_inject = 0.55
+	env.volumetric_fog_ambient_inject = 0.04
 	env.volumetric_fog_length = 48.0
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 1.0
@@ -333,9 +361,9 @@ static func _vegas(env: Environment) -> void:
 	env.glow_enabled = true
 	env.glow_intensity = 0.55
 	env.glow_bloom = 0.05
-	env.fog_light_color = Color(0.23, 0.15, 0.11)
-	env.fog_density = 0.009
-	env.volumetric_fog_density = 0.004
+	env.fog_light_color = Color(0.30, 0.21, 0.16)
+	env.fog_density = 0.014
+	env.volumetric_fog_density = 0.0065
 	env.volumetric_fog_albedo = Color(0.9, 0.78, 0.62)
 	env.volumetric_fog_length = 48.0
 	env.ssao_radius = 1.5

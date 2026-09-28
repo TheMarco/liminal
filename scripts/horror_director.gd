@@ -119,6 +119,26 @@ func try_start_visual(seconds: float, recovery_seconds := VISUAL_RECOVERY) -> bo
 	return true
 
 
+## The owner of an active visual beat may keep its lease through an interaction
+## or authored sound sequence. A priority blackout still takes precedence.
+func extend_visual(seconds: float, recovery_seconds := VISUAL_RECOVERY) -> void:
+	if not enabled or scripted_hold or _blackout_active or _visual_left <= 0.0:
+		return
+	_visual_left = maxf(_visual_left, seconds)
+	_recovery_left = maxf(_recovery_left,
+		_visual_left + maxf(0.0, recovery_seconds))
+
+
+## Route discoveries happen where the player walks, rather than when a random
+## timer grants a slot. Once witnessed, prevent fresh optional beats from
+## competing with the clue. Arrival grace can still be active at first sight;
+## the lease then outlives it. Existing threats and a due blackout retain priority.
+func hold_story_discovery(seconds: float) -> void:
+	if not enabled or _blackout_active: return
+	_visual_left = maxf(_visual_left, seconds)
+	_recovery_left = maxf(_recovery_left, _visual_left + ARCHITECTURE_RECOVERY)
+
+
 ## The viewer walked past a prepared beat before any legible motion. No other
 ## quiet channel can own this lease while visual time is still reserved.
 func abandon_unseen_visual() -> void:

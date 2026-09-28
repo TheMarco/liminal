@@ -63,8 +63,8 @@ const FLASH_MIN_START := 2.2
 const FLASH_WARN := 2.5       # it starts to fail this long before it goes out
 
 ## Chest-deep water halves your pace and takes the spring out of the step. The
-## Poolrooms are the only floor that sets `water_y`; everywhere else it stays
-## far below the world and none of this costs anything.
+## Poolrooms and the Annex can set `water_y`; only water deep enough to reach
+## the player's chest applies the slower swimming pace.
 const WADE_SPEED := 0.52
 const WADE_ACCEL := 0.45
 ## Physics layer the pool ladders register on. Climbing is resolved with a
@@ -268,19 +268,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		_apply_mouse_look(event.relative)
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		grab_look()
-	elif event is InputEventKey and event.pressed and not event.echo \
-			and event.physical_keycode == KEY_E:
+	elif GameInput.matches(event, "interact"):
 		if is_charging():
 			stop_charging()
 		elif is_instance_valid(_focused):
 			_focused.interact(self)
-	elif event is InputEventKey and event.pressed and not event.echo \
-			and event.physical_keycode == KEY_SHIFT and toggle_sprint:
+	elif GameInput.matches(event, "sprint") and toggle_sprint:
 		if allow_sprint and not _sprint_spent and _stamina > 0.0:
 			_sprint_toggle_active = not _sprint_toggle_active
 			_sprint_toggle_moved = false
-	elif event is InputEventKey and event.pressed and not event.echo \
-			and event.physical_keycode == KEY_F:
+	elif GameInput.matches(event, "torch"):
 		set_flashlight(not flashlight.visible)
 	elif event is InputEventKey and event.pressed and not event.echo \
 			and event.physical_keycode == KEY_F7:
@@ -538,15 +535,15 @@ func _physics_process(dt: float) -> void:
 	if dev_walk:
 		input.y -= 1.0
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP): input.y -= 1.0
-		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN): input.y += 1.0
-		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT): input.x -= 1.0
-		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT): input.x += 1.0
+		if GameInput.is_held("forward"): input.y -= 1.0
+		if GameInput.is_held("back"): input.y += 1.0
+		if GameInput.is_held("left"): input.x -= 1.0
+		if GameInput.is_held("right"): input.x += 1.0
 	else:
 		clear_sprint_toggle()
 	if _sprint_spent and _stamina >= STAMINA_REARM:
 		_sprint_spent = false
-	var sprinting := _sprint_requested(input != Vector2.ZERO, Input.is_physical_key_pressed(KEY_SHIFT))
+	var sprinting := _sprint_requested(input != Vector2.ZERO, GameInput.is_held("sprint"))
 	if sprinting:
 		_stamina = maxf(0.0, _stamina - dt)
 		if _stamina <= 0.0:
@@ -576,7 +573,7 @@ func _physics_process(dt: float) -> void:
 	_slide_rearm = maxf(0.0, _slide_rearm - dt)
 	if not is_pool_sliding() and is_instance_valid(_slide_collision):
 		_cancel_pool_slide()
-	if water_y < -1.0e8:
+	if level_theme != 9 or water_y < -1.0e8:
 		_cancel_pool_slide()
 	elif not is_pool_sliding() and _slide_rearm <= 0.0:
 		_try_board_pool_slide()
@@ -591,7 +588,8 @@ func _physics_process(dt: float) -> void:
 	velocity.z = flat.z
 	# On a ladder the world stops pulling: forward climbs, back descends, and
 	# stepping off the top is just walking forward onto the deck.
-	_on_ladder = not sliding and water_y > -1.0e8 and _ladder_here()
+	_on_ladder = level_theme == 9 and not sliding \
+		and water_y > -1.0e8 and _ladder_here()
 	if sliding:
 		var tangent := _pool_slide.tangent_at(_slide_distance)
 		_slide_speed = minf(PoolSlide.MAX_SPEED,
@@ -616,6 +614,8 @@ func _physics_process(dt: float) -> void:
 			velocity.y = lerpf(velocity.y, -2.2, minf(1.0, dt * 6.0))
 	var vy_before := velocity.y
 	move_and_slide()
+	if level_theme == 9 and not sliding and flat.length_squared() > 0.01:
+		_push_pool_floats(flat)
 	_record_traversal_sample()
 	if sliding:
 		var target := _pool_slide.point_at(_slide_distance) + Vector3.UP * PoolSlide.FOOT_CLEARANCE
@@ -657,6 +657,24 @@ func _physics_process(dt: float) -> void:
 		_step_acc += hs * dt
 	else:
 		_cam_y = lerpf(_cam_y, CAM_H - _land, minf(1.0, dt * 6.0))
+
+
+func _push_pool_floats(intended: Vector3) -> void:
+	var direction := Vector3(intended.x, 0.0, intended.z).normalized()
+	var strength := 18.0 * minf(1.0, intended.length() / WALK_SPEED)
+	for i in get_slide_collision_count():
+		var hit := get_slide_collision(i)
+		var body := hit.get_collider() as RigidBody3D
+		if body == null or not body.is_in_group("pool_pushable_floats"):
+			continue
+		var away := -hit.get_normal()
+		away.y = 0.0
+		if away.length_squared() < 0.01:
+			continue
+		away = away.normalized()
+		var alignment := direction.dot(away)
+		if alignment > 0.05:
+			body.apply_central_force(away * strength * alignment)
 
 
 func is_pool_sliding() -> bool:
@@ -803,7 +821,7 @@ func _scan_interaction() -> void:
 
 
 ## What you are walking on, per floor and per room — terrazzo in a terminal,
-## carpet in the office and Annex, tile and concrete in institutions.
+## carpet in the office and dry Annex, tile and concrete in institutions.
 func _surface() -> String:
 	var cellv := Vector2i(floori(global_position.x / WorldGen.CELL_SIZE), floori(global_position.z / WorldGen.CELL_SIZE))
 	if world_seed == 0:
@@ -812,7 +830,8 @@ func _surface() -> String:
 		1:
 			return "carpet"
 		2:
-			return "carpet"
+			return "wet" if WorldGen.cell_style(world_seed, cellv, 2) \
+				== WorldGen.ANNEX_FLOODED_HALL else "carpet"
 		4:
 			return "carpet" if WorldGen.cell_style(world_seed, cellv, 4) == WorldGen.AIR_GATE else "marble"
 		5:

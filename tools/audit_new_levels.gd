@@ -18,8 +18,10 @@ const REQUIRED_ENRICHMENT := {
 		"industrial_storage_cart", "metal_trash_can"],
 	8: ["double_bunk", "detention_toilet_sink", "detention_shower_head",
 		"cell_personal_effects", "sanitation_clutter",
-		"industrial_storage_cart", "metal_trash_can", "visitation_phone"],
+		"industrial_storage_cart", "metal_trash_can"],
 }
+# Visitation phones are now integral booth meshes. Their two complete
+# handsets and cords are required by prison_visitation_phone_audit below.
 
 
 func _init() -> void:

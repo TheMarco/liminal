@@ -9,6 +9,8 @@ const MOISTURE_MASKS := [
 	"res://textures/annex/moisture_mask_06.png",
 	"res://textures/annex/moisture_mask_07.png",
 	"res://textures/annex/moisture_mask_08.png",
+	"res://textures/annex/ceiling_ring_01.png",
+	"res://textures/annex/ceiling_ring_02.png",
 ]
 const CARPET_DAMAGE_MASKS := [
 	"res://textures/annex/carpet_damage_01.png",
@@ -19,9 +21,13 @@ const CARPET_DAMAGE_MASKS := [
 	"res://textures/annex/carpet_damage_06.png",
 	"res://textures/annex/carpet_damage_07.png",
 	"res://textures/annex/carpet_damage_08.png",
+	"res://textures/annex/carpet_bloom_01.png",
+	"res://textures/annex/carpet_bloom_02.png",
 ]
 static var _carpet_damage_quad: QuadMesh
 static var _moisture_quad: QuadMesh
+var _annex_carpet_site := Vector3.INF
+var _annex_basin_outer: Array[bool] = []
 
 static func clear_runtime_cache() -> void:
 	_carpet_damage_quad = null
@@ -29,11 +35,132 @@ static func clear_runtime_cache() -> void:
 
 
 func _annex_floor_ceiling() -> void:
-	scene.box(Vector3(WorldGen.CELL_SIZE / 2.0, -0.15, WorldGen.CELL_SIZE / 2.0), Vector3(WorldGen.CELL_SIZE, 0.3, WorldGen.CELL_SIZE),
-		Mats.annex_carpet())
+	var flooded := ctx.style == WorldGen.ANNEX_FLOODED_HALL
+	if flooded:
+		_annex_flooded_floor()
+	else:
+		scene.box(Vector3(WorldGen.CELL_SIZE / 2.0, -0.15, WorldGen.CELL_SIZE / 2.0),
+			Vector3(WorldGen.CELL_SIZE, 0.3, WorldGen.CELL_SIZE), Mats.annex_carpet())
 	scene.box(Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height + 0.15, WorldGen.CELL_SIZE / 2.0), Vector3(WorldGen.CELL_SIZE, 0.3, WorldGen.CELL_SIZE),
 		Mats.annex_ceiling())
-	_annex_carpet_damage()
+	if flooded:
+		_annex_flood_water()
+	else:
+		_annex_carpet_damage()
+
+
+## The basin is 38cm below the surrounding Annex. Its perimeter rises back to
+## ordinary floor height over 1.75m, so every doorway remains walkable without
+## a step the player cannot climb. All nine cells sample the same edge rule.
+func _annex_flooded_floor() -> void:
+	const STEPS := 12
+	const RAMP_RUN := 1.75
+	var outer: Array[bool] = [
+		WorldGen.annex_room_id(ctx.world_seed, ctx.cell + Vector2i(-1, 0)) != ctx.room_root,
+		WorldGen.annex_room_id(ctx.world_seed, ctx.cell + Vector2i(1, 0)) != ctx.room_root,
+		WorldGen.annex_room_id(ctx.world_seed, ctx.cell + Vector2i(0, -1)) != ctx.room_root,
+		WorldGen.annex_room_id(ctx.world_seed, ctx.cell + Vector2i(0, 1)) != ctx.room_root,
+	]
+	_annex_basin_outer = outer
+	var vertices: Array[Vector3] = []
+	for z in range(STEPS + 1):
+		for x in range(STEPS + 1):
+			var px := float(x) * WorldGen.CELL_SIZE / float(STEPS)
+			var pz := float(z) * WorldGen.CELL_SIZE / float(STEPS)
+			var edge_distance := INF
+			if outer[0]: edge_distance = minf(edge_distance, px)
+			if outer[1]: edge_distance = minf(edge_distance, WorldGen.CELL_SIZE - px)
+			if outer[2]: edge_distance = minf(edge_distance, pz)
+			if outer[3]: edge_distance = minf(edge_distance, WorldGen.CELL_SIZE - pz)
+			var lowered := clampf(edge_distance / RAMP_RUN, 0.0, 1.0)
+			vertices.append(Vector3(px, Chunk.ANNEX_BASIN_FLOOR_Y * lowered, pz))
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for z in STEPS:
+		for x in STEPS:
+			var i := z * (STEPS + 1) + x
+			var a := vertices[i]
+			var b := vertices[i + 1]
+			var c := vertices[i + STEPS + 1]
+			var d := vertices[i + STEPS + 2]
+			for triangle in [[a, c, b], [b, c, d]]:
+				var normal: Vector3 = (triangle[1] - triangle[0]).cross(
+					triangle[2] - triangle[0]).normalized()
+				for vertex: Vector3 in triangle:
+					surface.set_normal(normal)
+					surface.set_uv(Vector2(vertex.x, vertex.z) / WorldGen.CELL_SIZE)
+					surface.add_vertex(vertex)
+	var floor_mesh := surface.commit()
+	var floor_node := MeshInstance3D.new()
+	floor_node.mesh = floor_mesh
+	floor_node.material_override = Mats.annex_flooded_floor()
+	floor_node.set_meta("annex_basin_floor", true)
+	floor_node.set_meta("annex_basin_outer_edges", outer)
+	scene.add_node(floor_node)
+	# Broad box colliders are reliable as chunks stream around a falling player.
+	# Overlapping sloped slabs follow the same nearest-edge height as the mesh,
+	# including at corners where two exterior ramps meet.
+	_annex_basin_collider(Vector3(6.0, Chunk.ANNEX_BASIN_FLOOR_Y - 0.15, 6.0),
+		Vector3(12.0, 0.3, 12.0), Vector3.ZERO)
+	var angle := atan2(-Chunk.ANNEX_BASIN_FLOOR_Y, RAMP_RUN)
+	var ramp_length := Vector2(RAMP_RUN, Chunk.ANNEX_BASIN_FLOOR_Y).length()
+	var ramp_y := Chunk.ANNEX_BASIN_FLOOR_Y * 0.5 - 0.15 * cos(angle)
+	if outer[0]:
+		_annex_basin_collider(Vector3(RAMP_RUN * 0.5, ramp_y, 6.0),
+			Vector3(ramp_length, 0.3, 12.0), Vector3(0, 0, -angle))
+	if outer[1]:
+		_annex_basin_collider(Vector3(12.0 - RAMP_RUN * 0.5, ramp_y, 6.0),
+			Vector3(ramp_length, 0.3, 12.0), Vector3(0, 0, angle))
+	if outer[2]:
+		_annex_basin_collider(Vector3(6.0, ramp_y, RAMP_RUN * 0.5),
+			Vector3(12.0, 0.3, ramp_length), Vector3(angle, 0, 0))
+	if outer[3]:
+		_annex_basin_collider(Vector3(6.0, ramp_y, 12.0 - RAMP_RUN * 0.5),
+			Vector3(12.0, 0.3, ramp_length), Vector3(-angle, 0, 0))
+
+
+func _annex_basin_collider(pos: Vector3, size: Vector3,
+		rotation_euler: Vector3) -> void:
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	collision.position = pos
+	collision.rotation = rotation_euler
+	collision.set_meta("annex_basin_collider", true)
+	scene.add_collision_shape(collision)
+
+
+func _annex_flood_water() -> void:
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(WorldGen.CELL_SIZE, WorldGen.CELL_SIZE)
+	plane.subdivide_width = 28
+	plane.subdivide_depth = 28
+	var water := MeshInstance3D.new()
+	water.mesh = plane
+	water.material_override = Mats.annex_shallow_water()
+	water.layers = preload("res://scripts/pool_reflection_probe.gd").WATER_LAYER
+	water.position = Vector3(WorldGen.CELL_SIZE * 0.5,
+		Chunk.ANNEX_FLOOD_WATER_Y, WorldGen.CELL_SIZE * 0.5)
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water.extra_cull_margin = 0.03
+	water.set_meta("pool_water_surface", true)
+	water.set_meta("annex_flood_water", true)
+	# WaterInteraction uses the actual wet footprint. The plane itself extends
+	# under the dry entry slope, but that slope must not trigger wet footsteps.
+	var half := WorldGen.CELL_SIZE * 0.5
+	var left := 1.07 if _annex_basin_outer[0] else 0.0
+	var right := 1.07 if _annex_basin_outer[1] else 0.0
+	var back := 1.07 if _annex_basin_outer[2] else 0.0
+	var front := 1.07 if _annex_basin_outer[3] else 0.0
+	water.set_meta("pool_water_outline", PackedVector2Array([
+		Vector2(-half + left, -half + back),
+		Vector2(half - right, -half + back),
+		Vector2(half - right, half - front),
+		Vector2(-half + left, half - front),
+	]))
+	water.add_to_group("pool_water_surfaces")
+	scene.add_node(water)
 
 
 func _annex_carpet_damage() -> void:
@@ -79,6 +206,7 @@ func _annex_carpet_damage() -> void:
 		overlay.free()
 		return
 	overlay.position = chosen
+	_annex_carpet_site = chosen
 	var half_size := STAIN_SIZE * 0.5
 	var clearance := minf(minf(chosen.x - half_size, WorldGen.CELL_SIZE - chosen.x - half_size),
 		minf(chosen.z - half_size, WorldGen.CELL_SIZE - chosen.z - half_size))
@@ -157,8 +285,28 @@ func _annex_moisture_damage(fixtures: Array[Vector2]) -> void:
 	var candidate_count := grid_span * grid_span
 	var start := posmod(WorldGen.h(
 		ctx.world_seed, ctx.cell.x, ctx.cell.y, 19406), candidate_count)
+	# When carpet and ceiling are both damaged, try the tile above the same
+	# leak site first. The ordinary seeded search remains a fixture-safe fallback.
+	var preferred := -1
+	if _annex_carpet_site != Vector3.INF:
+		var px := clampi(roundi(_annex_carpet_site.x / Chunk.ANNEX_CEILING_TILE), 1, grid_span)
+		var pz := clampi(roundi(_annex_carpet_site.z / Chunk.ANNEX_CEILING_TILE), 1, grid_span)
+		# Edge stains creep to a baseboard. Put the roof source on that side of
+		# the footprint so its wall run-off can join the same damage cluster.
+		if _annex_carpet_site.x < 3.0:
+			px = 1
+		elif _annex_carpet_site.x > WorldGen.CELL_SIZE - 3.0:
+			px = grid_span
+		elif _annex_carpet_site.z < 3.0:
+			pz = 1
+		elif _annex_carpet_site.z > WorldGen.CELL_SIZE - 3.0:
+			pz = grid_span
+		preferred = (pz - 1) * grid_span + px - 1
+	var sagging := posmod(WorldGen.h(
+		ctx.world_seed, ctx.cell.x, ctx.cell.y, 19407), 3) == 0
 	for attempt in candidate_count:
-		var candidate := (start + attempt) % candidate_count
+		var candidate := preferred if attempt == 0 and preferred >= 0 \
+			else (start + attempt - (1 if preferred >= 0 else 0)) % candidate_count
 		var gx := candidate % grid_span + 1
 		var gz := candidate / grid_span + 1
 		var origin := Vector2(float(gx), float(gz)) * Chunk.ANNEX_CEILING_TILE
@@ -181,16 +329,59 @@ func _annex_moisture_damage(fixtures: Array[Vector2]) -> void:
 						mask_path, Vector2(0.5, 0.5),
 						Vector2(float(qx), float(qz)) * 0.5,
 						strength, rotation, placement_id)
+			if sagging:
+				_annex_sagging_tile(origin, placement_id)
 			return
 		if not _annex_moisture_spot_clear(origin, fixtures):
 			continue
 		_annex_moisture_tile(origin, mask_path, Vector2.ONE, Vector2.ZERO,
 			strength, rotation, "%s:%s:%s:1x1" % [
 				ctx.world_seed, ctx.cell, asset_idx])
+		if sagging:
+			_annex_sagging_tile(origin, "%s:%s:%s:1x1" % [
+				ctx.world_seed, ctx.cell, asset_idx])
 		return
 
 
+func _annex_sagging_tile(center: Vector2, source: String) -> void:
+	# A displaced panel sits below the intact ceiling slab. Its bowed mesh
+	# catches light from the side while remaining decorative and collision-free.
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	const STEPS := 4
+	var width := Chunk.ANNEX_CEILING_TILE - 0.08
+	for z in STEPS:
+		for x in STEPS:
+			var corners := [Vector2i(x, z), Vector2i(x + 1, z),
+				Vector2i(x, z + 1), Vector2i(x + 1, z + 1)]
+			for idx in [0, 1, 2, 1, 3, 2]:
+				var grid: Vector2i = corners[idx]
+				var uv := Vector2(float(grid.x), float(grid.y)) / float(STEPS)
+				var ax := uv.x * 2.0 - 1.0
+				var az := uv.y * 2.0 - 1.0
+				var pull := (1.0 - ax * ax) * (1.0 - az * az)
+				var slope_x := 0.38 * ax * (1.0 - az * az) / width
+				var slope_z := 0.38 * az * (1.0 - ax * ax) / width
+				surface.set_uv(uv)
+				surface.set_normal(Vector3(slope_x, -1.0, slope_z).normalized())
+				surface.add_vertex(Vector3((uv.x - 0.5) * width,
+					-0.035 - pull * 0.095, (uv.y - 0.5) * width))
+	var panel := MeshInstance3D.new()
+	panel.name = "AnnexSaggingTile"
+	panel.mesh = surface.commit()
+	panel.material_override = Mats.annex_sagging_tile()
+	panel.position = Vector3(center.x, ctx.ceiling_height, center.y)
+	panel.set_meta("annex_sagging_tile", true)
+	panel.set_meta("annex_sagging_source", source)
+	panel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	panel.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	scene.add_node(panel)
+
+
 func _annex_lighting() -> void:
+	if ctx.style == WorldGen.ANNEX_FLOODED_HALL:
+		_annex_flooded_lighting()
+		return
 	var is_spawn = ctx.cell == Vector2i.ZERO
 	var axis = WorldGen.annex_corridor_axis(ctx.world_seed, ctx.cell)
 	var dim_zone = WorldGen.annex_dim_zone(ctx.world_seed, ctx.cell)
@@ -254,11 +445,43 @@ func _annex_lighting() -> void:
 	var light = scene.fixture_light(false, pmat, 0.24 if dim_zone else 1.42, source)
 	light.light_color = Color(1.0, 0.91, 0.64)
 	light.omni_range = 7.4 if dim_zone else 12.8
+	light.light_volumetric_fog_energy = 2.2
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 25.0
 	light.distance_fade_length = 9.0
 	scene.add_node(light)
+
+
+func _annex_flooded_lighting() -> void:
+	scene.set_chunk_meta("annex_dim_zone", false)
+	scene.set_chunk_meta("annex_light_gap", false)
+	var fixtures: Array[Vector2] = []
+	var pmat := Mats.annex_panel()
+	# Troffers hang in the clear bays between the tighter column rows.
+	for z in [4.0, 8.0]:
+		for x in [4.0, 8.0]:
+			var at := Vector3(_annex_tile_center(x, ctx.cell.x), 0.0,
+				_annex_tile_center(z, ctx.cell.y))
+			if not scene.annex_fixture_clear(at):
+				continue
+			_annex_troffer(at, pmat)
+			fixtures.append(Vector2(at.x, at.z))
+	scene.set_chunk_meta("annex_ceiling_fixture_count", fixtures.size())
+	scene.set_chunk_meta("annex_light_gap", fixtures.is_empty())
+	_annex_moisture_damage(fixtures)
+	for index in mini(fixtures.size(), 2):
+		var at := fixtures[index]
+		var light := scene.fixture_light(false, pmat, 1.35,
+			Vector3(at.x, ctx.ceiling_height - 0.5, at.y))
+		light.light_color = Color(1.0, 0.93, 0.72)
+		light.omni_range = 14.5
+		light.light_volumetric_fog_energy = 2.2
+		light.shadow_enabled = false
+		light.distance_fade_enabled = true
+		light.distance_fade_begin = 25.0
+		light.distance_fade_length = 9.0
+		scene.add_node(light)
 
 
 ## Snap a local fixture coordinate to the centre of the world-space drop-
@@ -667,6 +890,9 @@ func _annex_cross_corner_tunnel(p: Vector3, yaw: float, width: float,
 
 
 func _annex_room_member_architecture() -> void:
+	if ctx.style == WorldGen.ANNEX_FLOODED_HALL:
+		_annex_flooded_hall()
+		return
 	if ctx.room_size < 2 or ctx.portal_destination >= 0:
 		return
 	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
@@ -679,6 +905,20 @@ func _annex_room_member_architecture() -> void:
 		_annex_block(c + Vector3((ctx.random01(527) - 0.5) * 4.4, 0,
 			(ctx.random01(528) - 0.5) * 4.4), 0.0,
 			0.94, 0.94, ctx.ceiling_height, "annex_column")
+
+
+func _annex_flooded_hall() -> void:
+	# Nine supports per cell form a uniform 4m grid across the 36m hall.
+	# Keep their original 1.18m width; the repeated wallpaper and narrow bays
+	# now carry the scale instead of oversized individual columns.
+	for z in [2.0, 6.0, 10.0]:
+		for x in [2.0, 6.0, 10.0]:
+			var pillar := _annex_block(
+				Vector3(x, Chunk.ANNEX_BASIN_FLOOR_Y, z), 0.0,
+				1.18, 1.18, ctx.ceiling_height - Chunk.ANNEX_BASIN_FLOOR_Y,
+				"annex_column", 3)
+			if pillar != null:
+				pillar.set_meta("annex_flood_pillar", true)
 
 
 func _annex_open() -> void:
@@ -774,7 +1014,8 @@ func _annex_quiet() -> void:
 
 
 func _annex_lived_in_dressing() -> void:
-	if ctx.portal_destination >= 0 or ctx.style == WorldGen.ANNEX_PASSAGE:
+	if ctx.portal_destination >= 0 or ctx.style == WorldGen.ANNEX_PASSAGE \
+			or ctx.style == WorldGen.ANNEX_FLOODED_HALL:
 		return
 	# The Backrooms VR download is one baked environment, not a modular kit.
 	# Its complete authored exit assembly was spatially extracted into a

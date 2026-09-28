@@ -40,6 +40,9 @@ func _ready() -> void:
 	_video.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_video.finished.connect(func(): _finish(true))
 	add_child(_video)
+	var subtitles := StorySubtitles.new()
+	add_child(subtitles)
+	subtitles.attach(_video)
 
 	if _skip_allowed:
 		_skip_button = Button.new()

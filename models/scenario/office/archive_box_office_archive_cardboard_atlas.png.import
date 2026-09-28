@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b0yt273kbnbcn"
-path="res://.godot/imported/archive_box_office_archive_cardboard_atlas.png-04aebbad6ab8c8073bca0afdb8d6a787.ctex"
+path.bptc="res://.godot/imported/archive_box_office_archive_cardboard_atlas.png-04aebbad6ab8c8073bca0afdb8d6a787.bptc.ctex"
+path.astc="res://.godot/imported/archive_box_office_archive_cardboard_atlas.png-04aebbad6ab8c8073bca0afdb8d6a787.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "70d89cf9290c89763cd5d1b96343d856"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/scenario/office/archive_box_office_archive_cardboard_atlas.png"
-dest_files=["res://.godot/imported/archive_box_office_archive_cardboard_atlas.png-04aebbad6ab8c8073bca0afdb8d6a787.ctex"]
+dest_files=["res://.godot/imported/archive_box_office_archive_cardboard_atlas.png-04aebbad6ab8c8073bca0afdb8d6a787.bptc.ctex", "res://.godot/imported/archive_box_office_archive_cardboard_atlas.png-04aebbad6ab8c8073bca0afdb8d6a787.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

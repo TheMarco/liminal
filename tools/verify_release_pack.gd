@@ -21,6 +21,13 @@ func _verify() -> void:
 	_expect(FileAccess.file_exists("res://models/authored/pool_equipment/collision.json"),
 		"pool-equipment collision data absent")
 	_expect(FileAccess.file_exists("res://THIRD_PARTY_ASSETS.md"), "asset credits absent")
+	_expect(FileAccess.file_exists("res://subtitles/en.json"), "story subtitle tracks absent")
+	var subtitles_script := load("res://scripts/story_subtitles.gd") as GDScript
+	_expect(subtitles_script != null and subtitles_script.can_instantiate(), "subtitle player absent or cannot compile")
+	if subtitles_script != null and subtitles_script.can_instantiate():
+		var tracks: Dictionary = subtitles_script.tracks()
+		for path in load("res://scripts/vhs_tape_library.gd").all_paths():
+			_expect(tracks.has(path), "packed recording lacks its subtitle track: " + path)
 	var walker_script = load("res://scripts/shadow_walker_visual.gd")
 	_expect(walker_script != null, "animated monster presentation absent")
 	if walker_script != null:
@@ -106,6 +113,18 @@ func _verify() -> void:
 	_expect(station_cells == 2, "extra Data Center charging point missing from exported code")
 	var main_scene: PackedScene = load("res://scenes/main.tscn")
 	_expect(main_scene != null, "packed main scene does not load")
+	var main_script := load("res://scripts/main.gd") as GDScript
+	_expect(main_script != null and main_script.can_instantiate(),
+		"packed main script does not compile")
+	var doorway_surface := load("res://scripts/native_doorway_surface.gd") as GDScript
+	_expect(doorway_surface != null and doorway_surface.can_instantiate(),
+		"runtime doorway surface is missing or cannot compile")
+	for shader_path in ["res://shaders/doorway_sparks.gdshader",
+			"res://shaders/doorway_mist.gdshader",
+			"res://shaders/doorway_soft_edge.gdshader",
+			"res://shaders/doorway_magic.gdshaderinc"]:
+		_expect(ResourceLoader.exists(shader_path),
+			"runtime doorway shader missing: " + shader_path)
 	chunk_script.clear_runtime_caches()
 	load("res://scripts/mats.gd").clear_runtime_caches()
 	load("res://scripts/sound_bank.gd")._c.clear()

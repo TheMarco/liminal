@@ -89,9 +89,17 @@ func _run() -> void:
 	_expect(manager._wanted.has(outer), "fixture lacks ordinary wanted outer cell", failures)
 	manager.queued[outer] = true
 	manager.set_hostile_cells([Vector2i(30, 0)])
+	var completed: Array[Vector2i] = []
+	manager.chunk_built.connect(func(chunk: Chunk): completed.append(chunk.cell))
 	manager._process(1.0 / 60.0)
-	_expect(manager._hostile_cells.has(manager._pending_cell),
+	# A cached chunk may finish within this frame's budget. Its collision is
+	# already resident then, so requiring a pending chunk invents a failure.
+	var selected := completed[0] if not completed.is_empty() else manager._pending_cell
+	_expect(manager._hostile_cells.has(selected),
 		"distant hostile collision lost priority to ordinary player scenery", failures)
+	_expect(manager.queued.has(outer) and not manager.chunks.has(outer),
+		"ordinary scenery was built before the distant hostile collision", failures)
+	print("enemy streaming priority: selected=%s completed=%s" % [selected, not completed.is_empty()])
 	manager.free()
 
 	# Integration: one managed actor leases both its current and next route cell;

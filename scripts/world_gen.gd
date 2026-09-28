@@ -27,9 +27,10 @@ static func owning_room_members(seed: int, at: Vector2i,
 		return [at]
 	var root := annex_room_id(seed, at) if theme == 2 else room_id(seed, at)
 	var out: Array[Vector2i] = []
-	# Generated room merges extend at most one lattice cell from their root.
-	for x in range(root.x - 1, root.x + 2):
-		for y in range(root.y - 1, root.y + 2):
+	# Ordinary merges extend one cell; the Annex's flooded hall extends two.
+	var reach := 3 if theme == 2 and annex_room_size(seed, root) == 9 else 2
+	for x in range(root.x - 1, root.x + reach):
+		for y in range(root.y - 1, root.y + reach):
 			var member := Vector2i(x, y)
 			var member_root := annex_room_id(seed, member) if theme == 2 \
 				else room_id(seed, member)
@@ -58,6 +59,7 @@ const ANNEX_LONG := 22       # long uninterrupted sight lines
 const ANNEX_QUIET := 23      # mostly empty, with deliberately sparse lighting
 const ANNEX_PASSAGE := 24    # the narrow circulation spine
 const ANNEX_LOBBY := 25      # rare open landmark with low partitions
+const ANNEX_FLOODED_HALL := 26 # rare tall, pillared 36x36 chamber
 ## Dedicated Annex circulation grid. A one-cell band every six columns / five
 ## rows becomes a long corridor; the spaces between are subdivided into mostly
 ## 12x12 and 12x24 rooms, with only rare 24x24 chambers.
@@ -453,11 +455,19 @@ const POOL_HEIGHT_DOUBLE := 2
 const POOL_HEIGHT_TRIPLE := 3
 
 
+## The four-cell cistern is a single architectural basin; smaller cisterns
+## retain their compact, irregular pools.
+static func pool_grand_cistern(ws: int, cell: Vector2i) -> bool:
+	var root := room_id(ws, cell)
+	return room_size(ws, root) == 4 and cell_style(ws, root, 9) == POOL_CISTERN
+
+
 ## Pick equipment before sizing the room so slides get usable headroom and
 ## a staging deck. Kind indices match PoolEquipment.KINDS; -1 is a quiet pool.
 static func pool_equipment_kind(ws: int, root: Vector2i) -> int:
 	if root != room_id(ws, root) \
-			or cell_style(ws, root, 9) not in [POOL_BASIN, POOL_CISTERN]:
+			or cell_style(ws, root, 9) not in [POOL_BASIN, POOL_CISTERN] \
+			or pool_grand_cistern(ws, root):
 		return -1
 	var roll := r01(ws, root.x, root.y, 2470)
 	if roll < 0.24: return 1
@@ -487,8 +497,9 @@ static func room_height(ws: int, root: Vector2i, theme: int) -> float:
 	var n := room_size(ws, root)
 	var r := r01(ws, root.x, root.y, 612)
 	if theme == 2:
-		# The Annex never rewards a large room with height. A low, almost
-		# invariant drop ceiling makes every opening feel like the same building.
+		if cell_style(ws, root, 2) == ANNEX_FLOODED_HALL:
+			return 5.4
+		# Ordinary Annex rooms retain their low drop ceiling.
 		return 2.76 if n < 4 else 2.84
 	if theme == 4:
 		if n >= 4: return 6.2
@@ -720,37 +731,59 @@ static func _stagger_room_opening(ws: int, cell: Vector2i, dir: int,
 		"t": CELL_SIZE - margin if high else margin, "w": w, "exit_sign": false}
 
 
-## Theme-local room identity. This graph is intentionally unrelated to the
-## generic Vegas/office rooms: most spaces are one cell, some are paired, and
-## a controlled minority become 2x2 chambers. That produces a noticeable jump
-## from compressed hallways to wider rooms without returning to hangar-sized
-## floor plates.
+## One rare 3x3 flooded hall can occupy the interior of a corridor block.
+## Reserving it before ordinary merges gives all nine cells one owner and leaves
+## the surrounding circulation grid intact, including negative coordinates.
+static func _annex_flooded_hall_root(ws: int, cell: Vector2i) -> Vector2i:
+	var bx := cell.x - posmod(cell.x, ANNEX_CORRIDOR_X)
+	var bz := cell.y - posmod(cell.y, ANNEX_CORRIDOR_Z)
+	var root := Vector2i(bx + 1, bz + 1)
+	if cell.x < root.x or cell.x > root.x + 2 \
+			or cell.y < root.y or cell.y > root.y + 2 \
+			or posmod(h(ws, bx, bz, 29131), 100) >= 14:
+		return Vector2i.ZERO
+	return root
+
+
+## Theme-local room identity. Most spaces are one cell, some are paired,
+## a minority are 2x2, and the flooded hall is a rare 3x3 exception.
 static func annex_room_id(ws: int, cell: Vector2i) -> Vector2i:
 	if annex_corridor_axis(ws, cell) != 0:
 		return cell
+	var flood_root := _annex_flooded_hall_root(ws, cell)
+	if flood_root != Vector2i.ZERO:
+		return flood_root
 	var bx := cell.x - posmod(cell.x, 2)
 	var bz := cell.y - posmod(cell.y, 2)
 	var mode := h(ws, bx, bz, 2813) % 100
 	if mode < 28:
 		for dx in 2:
 			for dz in 2:
-				if annex_corridor_axis(ws, Vector2i(bx + dx, bz + dz)) != 0:
+				var member := Vector2i(bx + dx, bz + dz)
+				if annex_corridor_axis(ws, member) != 0 \
+						or _annex_flooded_hall_root(ws, member) != Vector2i.ZERO:
 					return cell
 		return Vector2i(bx, bz)
 	if mode < 56:
 		var hx := Vector2i(bx, cell.y)
 		if annex_corridor_axis(ws, hx) == 0 \
-				and annex_corridor_axis(ws, hx + Vector2i(1, 0)) == 0:
+				and annex_corridor_axis(ws, hx + Vector2i(1, 0)) == 0 \
+				and _annex_flooded_hall_root(ws, hx) == Vector2i.ZERO \
+				and _annex_flooded_hall_root(ws, hx + Vector2i(1, 0)) == Vector2i.ZERO:
 			return hx
 	if mode < 84:
 		var vz := Vector2i(cell.x, bz)
 		if annex_corridor_axis(ws, vz) == 0 \
-				and annex_corridor_axis(ws, vz + Vector2i(0, 1)) == 0:
+				and annex_corridor_axis(ws, vz + Vector2i(0, 1)) == 0 \
+				and _annex_flooded_hall_root(ws, vz) == Vector2i.ZERO \
+				and _annex_flooded_hall_root(ws, vz + Vector2i(0, 1)) == Vector2i.ZERO:
 			return vz
 	return cell
 
 
 static func annex_room_size(ws: int, root: Vector2i) -> int:
+	if _annex_flooded_hall_root(ws, root) == root:
+		return 9
 	var total := 0
 	for dx in 2:
 		for dz in 2:
@@ -764,6 +797,7 @@ static func annex_room_size(ws: int, root: Vector2i) -> int:
 ## across the complete Annex rather than becoming another standard prop kit.
 static func annex_furniture_pile(ws: int, root: Vector2i) -> bool:
 	return annex_room_size(ws, root) >= 4 \
+		and cell_style(ws, root, 2) != ANNEX_FLOODED_HALL \
 		and r01(ws, root.x, root.y, 2867) < 0.13
 
 
@@ -773,6 +807,8 @@ static func annex_furniture_pile(ws: int, root: Vector2i) -> bool:
 ## other rooms inherit a dim macro-block.
 static func annex_dim_zone(ws: int, cell: Vector2i) -> bool:
 	if cell == Vector2i.ZERO:
+		return false
+	if cell_style(ws, cell, 2) == ANNEX_FLOODED_HALL:
 		return false
 	if annex_corridor_axis(ws, cell) == 0 \
 			and cell_style(ws, cell, 2) == ANNEX_QUIET:
@@ -1182,6 +1218,8 @@ static func cell_style(ws: int, cell: Vector2i, theme := 0) -> int:
 		var aroot := annex_room_id(ws, cell)
 		var asize := annex_room_size(ws, aroot)
 		var ar := r01(ws, aroot.x, aroot.y, 2941)
+		if asize == 9:
+			return ANNEX_FLOODED_HALL
 		# Wide rooms should actually exploit their footprint: they favour open
 		# plans and the column/half-wall lobby grammar. Single cells stay more
 		# restrained and are where quiet rooms and compressed mazes concentrate.

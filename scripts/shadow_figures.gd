@@ -19,6 +19,9 @@ const TURN_OFF_MAX := 44.0
 # volume at spawn time so a camera-facing quad cannot straddle a wall edge.
 const FIGURE_CLEAR_RADIUS := 0.68
 const FIGURE_CLEAR_HEIGHT := 2.55
+## The Office hound is only 1.55m tall. A sightline to 1.4m can clear a
+## cubicle partition while its whole body is hidden behind that partition.
+const SPAWN_BODY_SIGHT_HEIGHT := 0.75
 ## Encounters should read as separate threats, never as two bodies authored in
 ## the same spot. This applies to every runtime spawn path, including directed
 ## and developer encounters.
@@ -181,7 +184,7 @@ func try_realm_encounter(front_first: bool = false) -> bool:
 			continue
 		if not _figure_volume_clear(ground):
 			continue
-		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
+		if not _spawn_body_visible(ground):
 			continue
 		if not _spawn_separated(ground):
 			continue
@@ -232,7 +235,7 @@ func _forced_spawn() -> bool:
 			continue
 		if not _spawn_separated(ground):
 			continue
-		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
+		if not _spawn_body_visible(ground):
 			continue
 		if not _spawn_at(ground, behind, 1.2):
 			continue
@@ -411,7 +414,7 @@ func _turn_spawn() -> bool:
 			continue
 		if not _spawn_separated(ground):
 			continue
-		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
+		if not _spawn_body_visible(ground):
 			continue
 		if not _spawn_at(ground, false, 1.7):
 			continue
@@ -450,7 +453,7 @@ func _try_spawn() -> bool:
 		# Every encounter starts on a route that is physically open — corridors
 		# included, which the old same-room gate made impossible: a corridor
 		# cell is 12m and spawns want 7-16m. Line of sight is the real test.
-		if not _clear_line(player.cam.global_position, ground + Vector3(0, 1.4, 0)):
+		if not _spawn_body_visible(ground):
 			continue
 		if not _spawn_at(ground, behind, 0.9):
 			continue
@@ -603,13 +606,16 @@ func _flat_fwd() -> Vector3:
 	return fwd.normalized() if fwd.length() > 0.01 else Vector3.ZERO
 
 
+func _spawn_body_visible(ground: Vector3) -> bool:
+	return _clear_line(player.cam.global_position,
+		ground + Vector3.UP * SPAWN_BODY_SIGHT_HEIGHT)
+
+
 func _clear_line(a: Vector3, b: Vector3) -> bool:
-	var q := PhysicsRayQueryParameters3D.create(a, b)
+	var q := PhysicsRayQueryParameters3D.create(a, b, 1)
 	q.exclude = [player.get_rid()]
 	var hit := player.get_world_3d().direct_space_state.intersect_ray(q)
-	if hit.is_empty():
-		return true
-	return hit["position"].distance_to(b) < 1.2
+	return hit.is_empty()
 
 
 func _figure_volume_clear(ground: Vector3) -> bool:

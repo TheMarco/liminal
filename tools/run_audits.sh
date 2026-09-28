@@ -6,6 +6,7 @@
 #   tools/run_audits.sh -j 4         # limit concurrency (default: cores - 2)
 #   tools/run_audits.sh -f corridor  # only audits whose name matches a filter
 #   tools/run_audits.sh --no-import  # skip the import pass
+#   tools/run_audits.sh --log-dir DIR  # write logs beneath DIR (default: mktemp)
 #
 # Audits are independent processes, so they run in parallel. Each writes its
 # output to a log; failures are replayed at the end.
@@ -41,6 +42,7 @@ DO_IMPORT=1
 TIMEOUT=${TIMEOUT:-300}
 BASELINE=""
 SAVE_BASELINE=""
+LOGDIR_ARG=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-j) JOBS="$2"; shift 2 ;;
@@ -48,14 +50,20 @@ while [ $# -gt 0 ]; do
 		-t) TIMEOUT="$2"; shift 2 ;;
 		--baseline) BASELINE="$2"; shift 2 ;;
 		--save-baseline) SAVE_BASELINE="$2"; shift 2 ;;
+		--log-dir) LOGDIR_ARG="$2"; shift 2 ;;
 		--no-import) DO_IMPORT=0; shift ;;
-		-h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+		-h|--help) sed -n '2,31p' "$0"; exit 0 ;;
 		*) echo "unknown option: $1" >&2; exit 2 ;;
 	esac
 done
 
 GODOT=${GODOT:-godot}
-LOGDIR=$(mktemp -d /tmp/liminal-audits.XXXXXX)
+if [ -n "$LOGDIR_ARG" ]; then
+	LOGDIR="$LOGDIR_ARG"
+	mkdir -p "$LOGDIR"
+else
+	LOGDIR=$(mktemp -d /tmp/liminal-audits.XXXXXX)
+fi
 
 # name|script|extra args
 # Kept in the order the CI workflow runs them, with the audits that CI does not
@@ -63,6 +71,7 @@ LOGDIR=$(mktemp -d /tmp/liminal-audits.XXXXXX)
 AUDITS=(
 	"environment_breath|tools/audit_environment_breath.gd|"
 	"breathing_runtime|tools/audit_breathing_runtime.gd|--nologo"
+	"living_environment|tools/audit_living_environment.gd|"
 	"visible_light_sources|tools/audit_visible_light_sources.gd|"
 	"pool_enemy_ground|tools/audit_pool_enemy_ground.gd|"
 	"corridors|tools/audit_corridors.gd|"
@@ -88,6 +97,7 @@ AUDITS=(
 	"casino_bar|tools/audit_casino_bar.gd|"
 	"casino_distribution|tools/audit_casino_distribution.gd|"
 	"office_phone|tools/audit_office_phone.gd|"
+	"room_population|tools/audit_room_population.gd|"
 	"new_levels|tools/audit_new_levels.gd|"
 	"brutalist|tools/audit_brutalist.gd|"
 	"chase_clearance|tools/audit_chase_clearance.gd|"
@@ -98,6 +108,7 @@ AUDITS=(
 	"airport_colliders|tools/audit_airport_colliders.gd|"
 	"airport_ceiling_grid|tools/audit_airport_ceiling_grid.gd|"
 	"office_ceiling_grid|tools/audit_office_ceiling_grid.gd|"
+	"office_wall_joints|tools/audit_office_wall_joints.gd|"
 	"airport_passages|tools/audit_airport_passages.gd|"
 	"wall_art|tools/audit_wall_art.gd|"
 	"lift_access|tools/audit_lift_access.gd|"
@@ -125,6 +136,7 @@ AUDITS=(
 	"comfort_runtime|tools/audit_comfort_runtime.gd|--mode=descent --nologo"
 	"casino_landmarks|tools/audit_casino_landmarks.gd|"
 	"intro_playback|tools/audit_intro_playback.gd|"
+	"story_subtitles|tools/audit_story_subtitles.gd|"
 	"video_replay_skip|tools/audit_video_replay_skip.gd|"
 	"cross_video_review|tools/audit_cross_video_review.gd|"
 	"descent_ritual|tools/audit_descent_ritual.gd|"
@@ -135,12 +147,14 @@ AUDITS=(
 	"surface_wear|tools/audit_surface_wear.gd|"
 	"render_resource_cache|tools/audit_render_resource_cache.gd|"
 	"floor_resource_preloader|tools/audit_floor_resource_preloader.gd|"
+	"floor_resource_lifetime|tools/audit_floor_resource_lifetime.gd|"
 	"incremental_streaming|tools/audit_incremental_streaming.gd|"
 	"light_distance|tools/audit_light_distance.gd|"
 	"blackout_presentation|tools/audit_blackout_presentation.gd|"
 	"ghost_room_contract|tools/audit_ghost_room_contract.gd|"
 	"enemy_pursuit|tools/audit_enemy_pursuit.gd|"
 	"navigation_budget|tools/audit_navigation_budget.gd|"
+	"shadow_spawn_visibility|tools/audit_shadow_spawn_visibility.gd|"
 	"walker_spawn_loading|tools/audit_walker_spawn_loading.gd|"
 	"walker_arrival|tools/audit_walker_arrival.gd|"
 	"enemy_streaming|tools/audit_enemy_streaming.gd|"
@@ -172,6 +186,7 @@ AUDITS=(
 	"return_prompt|tools/audit_return_prompt.gd|"
 	"descent_summary|tools/audit_descent_summary.gd|"
 	"controls_input|tools/audit_controls_input.gd|"
+	"key_bindings|tools/audit_key_bindings.gd|"
 	"test_mode|tools/audit_test_mode.gd|--test-mode"
 	"focus_save_runtime|tools/audit_focus_save_runtime.gd|--mode=descent --nologo"
 	"round3_menu_controls|tools/audit_round3_menu_controls.gd|"
@@ -207,7 +222,7 @@ AUDITS=(
 	"blackout_lighting|tools/audit_blackout_lighting.gd|"
 	"mutation_reveal|tools/audit_mutation_reveal.gd|"
 	"wander_mode|tools/audit_wander_mode.gd|--nologo"
-	# Not just a generation fingerprint: it builds 522 chunks across every theme
+	# Not just a generation fingerprint: it builds chunks across every theme
 	# and style, so a method reached through the wrong level builder shows up here
 	# as a SCRIPT ERROR, which run_one treats as a failure.
 	"world_hash|tools/audit_world_hash.gd|--check=tools/golden/world_hash.txt"
@@ -225,10 +240,25 @@ AUDITS=(
 # machinery below, but do not exempt failures from the suite.
 NONGATING=""
 
+MATCHING_AUDITS=0
+for entry in "${AUDITS[@]}"; do
+	name=${entry%%|*}
+	if [ -z "$FILTER" ] || [[ "$name" == *"$FILTER"* ]]; then
+		MATCHING_AUDITS=$((MATCHING_AUDITS + 1))
+	fi
+done
+if [ "$MATCHING_AUDITS" -eq 0 ] && [[ "generation_performance" != *"$FILTER"* ]]; then
+	echo "No audit matches the literal name filter: $FILTER" >&2
+	exit 2
+fi
+
 if [ "$DO_IMPORT" = "1" ]; then
 	printf 'import pass ... '
 	if $GODOT --headless --log-file "$LOGDIR/import-godot.log" \
 			--path . --editor --quit >"$LOGDIR/import.log" 2>&1; then
+		if grep -q 'SCRIPT ERROR' "$LOGDIR/import.log"; then
+			echo "FAILED"; cat "$LOGDIR/import.log"; exit 1
+		fi
 		echo "ok"
 	else
 		echo "FAILED"; cat "$LOGDIR/import.log"; exit 1
@@ -239,9 +269,10 @@ fi
 # whole Chunk class down and every audit below fails for the same reason. Say so
 # once instead of 29 times.
 printf 'compile check ... '
+compile_rc=0
 $GODOT --headless --log-file "$LOGDIR/compile-godot.log" \
-	--path . --script tools/check_compile.gd >"$LOGDIR/compile.log" 2>&1
-if grep -qE "Parse Error|Compile Error" "$LOGDIR/compile.log"; then
+	--path . --script tools/check_compile.gd >"$LOGDIR/compile.log" 2>&1 || compile_rc=$?
+if [ "$compile_rc" -ne 0 ] || grep -qE "SCRIPT ERROR|Parse Error|Compile Error" "$LOGDIR/compile.log"; then
 	echo "FAILED"
 	echo
 	grep -E "Parse Error|Compile Error|GDScript::reload" "$LOGDIR/compile.log" | head -12
@@ -259,6 +290,10 @@ if [ -z "$FILTER" ] || [[ "generation_performance" == *"$FILTER"* ]]; then
 	if $GODOT --headless --log-file "$LOGDIR/generation-performance-godot.log" \
 			--path . --script tools/audit_generation_performance.gd \
 			>"$LOGDIR/generation-performance.log" 2>&1; then
+		if grep -qE 'SCRIPT ERROR|ObjectDB instances leaked|resources still in use at exit' "$LOGDIR/generation-performance.log" \
+				|| ! grep -q 'generation performance audit: PASS' "$LOGDIR/generation-performance.log"; then
+			echo "FAILED"; cat "$LOGDIR/generation-performance.log"; exit 1
+		fi
 		echo "ok"
 	else
 		echo "FAILED"
@@ -274,7 +309,8 @@ fi
 run_one() {
 	local name="$1" script="$2" extra="$3" log="$LOGDIR/$1.log"
 	if [ ! -f "$script" ]; then
-		echo "SKIP" >"$LOGDIR/$name.status"; return
+		echo "Missing required audit: $script" >"$log"
+		echo "2" >"$LOGDIR/$name.status"; return
 	fi
 	# An `extends SceneTree` audit that hits an error mid-run never reaches its
 	# quit(), so it idles forever instead of failing. Cap every audit.
@@ -289,6 +325,13 @@ run_one() {
 	local pid=$!
 	local waited=0
 	while kill -0 "$pid" 2>/dev/null; do
+		if grep -q 'SCRIPT ERROR' "$log"; then
+			kill -9 "$pid" 2>/dev/null || true
+			wait "$pid" 2>/dev/null || true
+			echo "--- stopped after script error" >>"$log"
+			echo "90" >"$LOGDIR/$name.status"
+			return
+		fi
 		if [ "$waited" -ge "$TIMEOUT" ]; then
 			kill -9 "$pid" 2>/dev/null
 			echo "--- killed after ${TIMEOUT}s (hung)" >>"$log"
@@ -309,7 +352,7 @@ run_one() {
 	fi
 	if [ $rc -eq 0 ]; then
 		grep '^ERROR:' "$log" | grep -Ev \
-			'^ERROR: (Parameter "(material|t)" is null\.|Condition "ret != noErr" is true\. Returning: ""|Error saving editor settings to |Cannot save file .*/editor_settings-4\.6\.tres)' \
+			'^ERROR: (Parameter "(material|t)" is null\.|Condition "ret != noErr" is true\. Returning: ""|Error saving editor settings to |Cannot save file .*/editor_settings-4\.[0-9]+\.tres)' \
 			| { if [ "$name" = "photo_album_store" ]; then
 				# This audit deliberately writes beneath a file and decodes a
 				# corrupt JPEG. Only those exact fixture errors are expected.
@@ -323,7 +366,7 @@ run_one() {
 	echo "$rc" >"$LOGDIR/$name.status"
 }
 
-echo "running ${#AUDITS[@]} audits, $JOBS at a time"
+echo "running $MATCHING_AUDITS audits, $JOBS at a time"
 active=0
 for entry in "${AUDITS[@]}"; do
 	IFS='|' read -r name script extra <<<"$entry"

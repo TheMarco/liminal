@@ -1086,11 +1086,12 @@ func _asy_corridor_open_casing(o: Vector3, yw: float, side: float,
 		Vector3(0, Chunk.ASY_BAY_FRAME_LIFT, 0), 0.0,
 		Vector3(sx, Chunk.ASY_BAY_FRAME_SCALE, Chunk.ASY_BAY_FRAME_SCALE))
 	if frame == null:
+		var jamb_width := 0.12
 		for edge in [-width * 0.5, width * 0.5]:
 			scene.model_box(v, Vector3(edge, Chunk.DOOR_TOP * 0.5, 0),
-				Vector3(0.12, Chunk.DOOR_TOP, 0.3), Mats.asy_metal_green())
+				Vector3(jamb_width, Chunk.DOOR_TOP, 0.3), Mats.asy_metal_green())
 		scene.model_box(v, Vector3(0, Chunk.DOOR_TOP + 0.065, 0),
-			Vector3(width + 0.18, 0.13, 0.3), Mats.asy_metal_green())
+			Vector3(width + jamb_width, 0.13, 0.3), Mats.asy_metal_green())
 	else:
 		frame.set_meta("asylum_door_frame", true)
 

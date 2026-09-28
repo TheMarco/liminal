@@ -1,0 +1,49 @@
+{
+  "product": "It wants you to stay",
+  "files": [
+    {
+      "file": "library-capsule-600x900.png",
+      "width": 600,
+      "height": 900,
+      "mode": "RGB",
+      "bytes": 879375,
+      "sha256": "a6808f9e4ad61da5ef95ab81a2108afc56acec0096403445df65edee7aab08d4"
+    },
+    {
+      "file": "library-header-920x430.png",
+      "width": 920,
+      "height": 430,
+      "mode": "RGB",
+      "bytes": 598092,
+      "sha256": "467e0bb2d651249016ee6efb079a98ebdc4a9af2f21ad150f86d25e7f3b2a42d"
+    },
+    {
+      "file": "library-hero-3840x1240.png",
+      "width": 3840,
+      "height": 1240,
+      "mode": "RGB",
+      "bytes": 5433939,
+      "sha256": "4cc9948c0fc83e6094d4a53a7fbecb66184bbf4e0f5e4dd03f13a377256d4c17"
+    },
+    {
+      "file": "library-logo-1280x480.png",
+      "width": 1280,
+      "height": 480,
+      "mode": "RGBA",
+      "bytes": 58898,
+      "sha256": "8e01a3201867ae40f45dcadf48312d956f751056276b25b47ead851c30351c21",
+      "transparent_pixels": 456322,
+      "opaque_pixels": 128534,
+      "transparent_background_verified": true
+    }
+  ],
+  "recommended_logo_position": "left bottom",
+  "hero_safe_area": {
+    "x": 1490,
+    "y": 430,
+    "width": 860,
+    "height": 380,
+    "review": "Inner office doorway fully visible in safe-area proof."
+  },
+  "capsule_half_size_review": "Readable at 300 x 450."
+}

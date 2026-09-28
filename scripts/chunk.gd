@@ -178,6 +178,8 @@ const PRISON_EXECUTION_TABLE_PATH := \
 	"res://models/provided/execution_table/execution_table.glb"
 const PRISON_EXECUTION_TABLE_SCALE := 1.0
 const PRISON_EXECUTION_TABLE_CENTRE := Vector3.ZERO
+const PRISON_EXECUTION_DAIS_PATH := \
+	"res://models/provided/execution_dais_and_rail/execution_dais_and_rail_fixed.glb"
 const PRISON_BENCH_PATH := \
 	"res://models/provided/prison_bench/prison_bench.glb"
 const PRISON_BENCH_SCALE := 1.0
@@ -190,6 +192,30 @@ const PRISON_BENCH_CENTRE := Vector3.ZERO
 ## bench's long axis, so it tips up instead of rolling sideways.
 const PRISON_BENCH_PITCH := -PI / 2.0
 const PRISON_EXECUTION_CHANCE := 0.12
+const PRISON_ROTUNDA_CAGE_PATH := \
+	"res://models/provided/caged_control_booth/caged_control_booth.glb"
+
+# Scenario-approved hard-surface replacements for the former Prison procedural
+# assemblies. The source assets are intentionally kept in a separate generated
+# tree so their provenance and the remaining procedural fallbacks stay clear.
+const PRISON_GEN_CELL_GATE_PATH := \
+	"res://models/generated/prison/cell_gate_bar_assembly.glb"
+const PRISON_GEN_SHAKEDOWN_TABLE_PATH := \
+	"res://models/generated/prison/shakedown_table.glb"
+const PRISON_GEN_SINK_PATH := \
+	"res://models/generated/prison/detention_sink_fixture.glb"
+const PRISON_GEN_SHOWER_BENCH_PATH := \
+	"res://models/generated/prison/shower_bench.glb"
+const PRISON_GEN_SERVING_COUNTER_PATH := \
+	"res://models/generated/prison/mess_serving_counter.glb"
+const PRISON_GEN_KEY_CABINET_PATH := \
+	"res://models/generated/prison/guard_key_cabinet.glb"
+const PRISON_GEN_MONITOR_CONSOLE_PATH := \
+	"res://models/generated/prison/guard_monitor_console.glb"
+const PRISON_GEN_WORKBENCH_PATH := \
+	"res://models/generated/prison/industry_workbench.glb"
+const PRISON_GEN_VISITATION_BOOTH_PATH := \
+	"res://models/generated/prison/visitation_booth.glb"
 const SOLITARY_CELL_DOOR_PATH := \
 	"res://models/cc_by/solitary_cell_door/solitary_cell_door.glb"
 
@@ -875,6 +901,8 @@ const MALL_FOOD := ["GOLDEN WOK", "PRETZEL TIME", "BURGER BARN", "TACO FIESTA",
 # Pool measurements are part of Chunk's public geometry contract. In
 # particular main.gd reads POOL_WATER_Y to determine the active water plane.
 const POOL_WATER_Y := 1.05
+const ANNEX_BASIN_FLOOR_Y := -0.38
+const ANNEX_FLOOD_WATER_Y := ANNEX_BASIN_FLOOR_Y + 0.1524 # six-inch depth
 const POOL_DECK_Y := 1.42
 const POOL_DRY_Y := 1.42
 const POOL_DOOR_TOP := POOL_DRY_Y + 2.15
@@ -925,6 +953,12 @@ const BLOOM_VINES_PATH := "res://models/cc_by/modular_vines/modular_vines.glb"
 const BLOOM_FLESH_BLOB_PATH := "res://models/cc_by/flesh_blob/flesh_blob.glb"
 const POOL_LADDER_SCALE := 1.0
 const POOL_BUOY_PATH := "res://models/cc_by/pool_buoy/pool_buoy.glb"
+const POOL_FLAMINGO_PATH := \
+	"res://models/provided/flamingo_floatie/flamingo_floatie.glb"
+const POOL_MATTRESS_PATH := \
+	"res://models/provided/orange_pool_float/orange_pool_float.glb"
+const POOL_STRIPED_PATH := \
+	"res://models/provided/striped_pool_float/striped_pool_float_game.glb"
 const POOL_BUOY_TINTS := [
 	Color(0.62, 0.24, 0.72), Color(0.86, 0.32, 0.30),
 	Color(0.28, 0.52, 0.80), Color(0.92, 0.74, 0.26),
@@ -1059,7 +1093,14 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(PRISON_DOOR_OLD_PATH)
 	paths.append(PRISON_EXECUTION_CHAIR_PATH)
 	paths.append(PRISON_EXECUTION_TABLE_PATH)
+	paths.append(PRISON_EXECUTION_DAIS_PATH)
 	paths.append(PRISON_BENCH_PATH)
+	paths.append(PRISON_ROTUNDA_CAGE_PATH)
+	paths.append_array([PRISON_GEN_CELL_GATE_PATH, PRISON_GEN_SHAKEDOWN_TABLE_PATH,
+		PRISON_GEN_SINK_PATH, PRISON_GEN_SHOWER_BENCH_PATH,
+		PRISON_GEN_SERVING_COUNTER_PATH, PRISON_GEN_KEY_CABINET_PATH,
+		PRISON_GEN_MONITOR_CONSOLE_PATH, PRISON_GEN_WORKBENCH_PATH,
+		PRISON_GEN_VISITATION_BOOTH_PATH])
 	paths.append(SOLITARY_CELL_DOOR_PATH)
 	paths.append(ASY_BED_PATH)
 	paths.append(ASY_GURNEY_PATH)
@@ -1233,7 +1274,13 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 		8:
 			paths.append_array([PRISON_DOOR_OLD_PATH, PRISON_BUNK_PATH, PRISON_TOILET_PATH,
 				PRISON_SHOWER_PATH, PRISON_MESS_TABLE_PATH, PRISON_EXECUTION_CHAIR_PATH,
-			PRISON_EXECUTION_TABLE_PATH, PRISON_BENCH_PATH])
+			PRISON_EXECUTION_TABLE_PATH, PRISON_EXECUTION_DAIS_PATH,
+			PRISON_BENCH_PATH, PRISON_ROTUNDA_CAGE_PATH])
+			paths.append_array([PRISON_GEN_CELL_GATE_PATH, PRISON_GEN_SHAKEDOWN_TABLE_PATH,
+				PRISON_GEN_SINK_PATH, PRISON_GEN_SHOWER_BENCH_PATH,
+				PRISON_GEN_SERVING_COUNTER_PATH, PRISON_GEN_KEY_CABINET_PATH,
+				PRISON_GEN_MONITOR_CONSOLE_PATH, PRISON_GEN_WORKBENCH_PATH,
+				PRISON_GEN_VISITATION_BOOTH_PATH])
 			paths.append_array([PRISON_WALL_PHONE_PATH, DESK_PHONE_PATH, VT100_MONITOR_PATH, VT100_KEYBOARD_PATH])
 			paths.append("res://models/cc0/book_encyclopedia_set_01/book_encyclopedia_set_01_1k.gltf")
 			paths.append("res://models/cc0/can_rusted/can_rusted_1k.gltf")
@@ -1245,7 +1292,9 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/cc0/old_tyre/old_tyre_1k.gltf")
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
 		9:
-			paths.append_array([POOL_BUOY_PATH, POOL_LADDER_PATH, POOL_CHAIR_PATH])
+			paths.append_array([POOL_BUOY_PATH, POOL_FLAMINGO_PATH,
+				POOL_MATTRESS_PATH, POOL_STRIPED_PATH,
+				POOL_LADDER_PATH, POOL_CHAIR_PATH])
 			paths.append_array([POOL_LOUNGE_CHAIR_PATH, POOL_JACUZZI_PATH])
 			paths.append_array(PoolEquipment.PATHS)
 		10:
@@ -1290,6 +1339,7 @@ static func prewarm_theme_content(ws: int, p_theme: int) -> void:
 		wanted.assign([
 			WorldGen.ANNEX_OPEN, WorldGen.ANNEX_MAZE, WorldGen.ANNEX_LONG,
 			WorldGen.ANNEX_QUIET, WorldGen.ANNEX_PASSAGE, WorldGen.ANNEX_LOBBY,
+			WorldGen.ANNEX_FLOODED_HALL,
 		])
 	else:
 		wanted.assign([
@@ -1319,15 +1369,29 @@ static func prewarm_theme_content(ws: int, p_theme: int) -> void:
 				found[candidate_style] = true
 
 
-## Audit/test teardown for process-lifetime scene/prototype caches.
+## Main calls this once, under the opaque transition, before constructing a
+## destination floor. Dropping cache references never mutates live resources;
+## active actors/previews keep their own references. Same-floor streaming
+## retains shared materials and models throughout play.
+static func prepare_floor_resources(p_theme: int) -> void:
+	_release_floor_caches()
+	Mats.clear_runtime_caches()
+	FloorResourcePreloader.prepare_floor(theme_prop_paths(p_theme))
+
+
+## Audit/test teardown additionally consumes outstanding diagnostic requests.
 static func clear_runtime_caches() -> void:
+	finish_prop_preloads()
+	FloorResourcePreloader.finish()
+	_prop_preloads_requested = false
+	_release_floor_caches()
+
+
+static func _release_floor_caches() -> void:
 	preload("res://scripts/blackout_surfaces.gd").clear_cache()
 	preload("res://scripts/environment_breath_surface.gd").clear_runtime_cache()
 	ProceduralDetails.clear_runtime_cache()
 	AirportGrandCeiling.clear_runtime_cache()
-	finish_prop_preloads()
-	FloorResourcePreloader.finish()
-	_prop_preloads_requested = false
 	_attributed_scenes.clear()
 	_scrawl_fonts.clear()
 	_asy_scenes.clear()
@@ -1335,12 +1399,13 @@ static func clear_runtime_caches() -> void:
 	_prewarmed_themes.clear()
 	BLOOM_LEVEL_BUILDER.clear_runtime_cache()
 	ANNEX_LEVEL_BUILDER.clear_runtime_cache()
+	AIRPORT_LEVEL_BUILDER.clear_runtime_cache()
 	MALL_LEVEL_BUILDER.clear_runtime_cache()
 	BRUTALIST_LEVEL_BUILDER.clear_runtime_cache()
 	POOL_LEVEL_BUILDER.clear_runtime_cache()
 
 
-## Named process-lifetime asset cache APIs used by the construction façade.
+## Named floor-lifetime asset cache APIs used by the construction façade.
 ## Builders never receive the mutable dictionaries or PackedScene slots.
 static func cached_asylum_scene(key: String, path: String) -> PackedScene:
 	var cached: PackedScene = _asy_scenes.get(key)
@@ -1456,7 +1521,7 @@ func build_next_stage() -> bool:
 		2:
 			if theme == 2:
 				_build_props()
-				if not is_room_anchor:
+				if style == WorldGen.ANNEX_FLOODED_HALL or not is_room_anchor:
 					_level_builder._annex_room_member_architecture()
 			else:
 				_build_lighting()
@@ -2150,7 +2215,7 @@ func _maybe_probe() -> void:
 		# Annex member-cell architecture is built before its lighting, above,
 		# so fixtures can reserve an unobstructed ceiling tile.
 		return
-	if theme == 9:
+	if theme == 9 or (theme == 2 and style == WorldGen.ANNEX_FLOODED_HALL):
 		_maybe_pool_probe()
 		return
 	var want := false
@@ -2250,6 +2315,8 @@ func _wall_h() -> float:
 ## chunk. This is the one place the rule lives.
 static func cell_ceil_h(ws: int, c: Vector2i, p_theme: int) -> float:
 	if p_theme == 2:
+		if WorldGen.cell_style(ws, c, 2) == WorldGen.ANNEX_FLOODED_HALL:
+			return 5.4
 		return HANNEX
 	if WorldGen.corridor(ws, c) != 0:
 		return 3.5 if p_theme == 4 else (HASY if p_theme == 5 else \
@@ -2321,6 +2388,8 @@ static func _plan_project(box: Dictionary, axis: Vector2) -> float:
 ## slab on every entry to floor 9, and Godot's depenetration quietly pushed them
 ## out again.
 static func cell_floor_h(ws: int, c: Vector2i, p_theme: int) -> float:
+	if p_theme == 2 and WorldGen.cell_style(ws, c, 2) == WorldGen.ANNEX_FLOODED_HALL:
+		return ANNEX_BASIN_FLOOR_Y
 	if p_theme == 9 and pool_style_dry(WorldGen.cell_style(ws, c, p_theme)):
 		return POOL_DRY_Y
 	return 0.0
@@ -2884,7 +2953,7 @@ func _build_walls() -> void:
 		# black slit above the wall top: the void between the two ceiling
 		# planes. Build every shared wall to the taller of the two.
 		var wtop := _wall_h()
-		if theme == 9:
+		if theme == 9 or theme == 2:
 			wtop = maxf(wtop, cell_ceil_h(
 				wseed, cell + WorldGen.DIRV[dir], theme))
 		if info.has("photo_door_id"):
@@ -3291,8 +3360,7 @@ func _pool_profile_prism_collider(
 ## unbuilt void — a huge black slab hanging over the opening, with the cut
 ## edge of the low room's ceiling slab exposed beneath it. The taller cell
 ## seals the band with a fascia in its own wall plane, flush from the
-## neighbour's ceiling up to its own. The Annex never needs one: its drop
-## ceiling is a single height everywhere.
+## neighbour's ceiling up to its own. The rare tall Annex hall uses this too.
 func _open_edge_fascia(dir: int, plane: float) -> void:
 	var nb_h := cell_ceil_h(wseed, cell + WorldGen.DIRV[dir], theme)
 	if ceil_h - nb_h < 0.1:
@@ -3737,6 +3805,14 @@ func _door_rebuild_key(pivot: Node3D) -> String:
 ## laying a differently finished rectangle (and sometimes a trim fragment)
 ## over it.
 func _annex_corner_rule(dir: int, at_max: bool) -> Dictionary:
+	return _wall_corner_rule(dir, at_max, ANNEX_WALL_T * 0.5)
+
+
+## Shared butt-joint layout. Office keeps its two inward wall halves, so
+## their combined thickness is 2*T and each endpoint uses T as its offset.
+## Extending the Z run and retracting the X run closes the outside corner
+## without overlapping visible faces or moving either room's wall plane.
+func _wall_corner_rule(dir: int, at_max: bool, half_thickness: float) -> Dictionary:
 	var collinear: Array
 	var perp_a: Array
 	var perp_b: Array
@@ -3775,12 +3851,12 @@ func _annex_corner_rule(dir: int, at_max: bool) -> Dictionary:
 			"kind": "free",
 			"needs_cap": true,
 		}
-	var h := ANNEX_WALL_T * 0.5
+	var h := half_thickness
 	# Both perpendicular halves being solid makes them one longer continuous
 	# wall. Retract this terminating stub to its near face regardless of axis.
 	if has_perp_a and has_perp_b:
 		var winner_finish := WorldGen.annex_wall_finish(
-			wseed, perp_a[0], perp_a[1])
+			wseed, perp_a[0], perp_a[1]) if theme == 2 else -1
 		return {
 			"shift": -h if at_max else h,
 			"t_stub": true,
@@ -4229,6 +4305,11 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 	var annex_cap_max := false
 	var annex_endpoint_kind_min := ""
 	var annex_endpoint_kind_max := ""
+	if theme == 1:
+		if is_zero_approx(from):
+			from += float(_wall_corner_rule(dir, false, T)["shift"])
+		if is_equal_approx(to, S):
+			to += float(_wall_corner_rule(dir, true, T)["shift"])
 	if theme == 2:
 		if is_zero_approx(from):
 			var min_rule := _annex_corner_rule(dir, false)
@@ -4816,6 +4897,10 @@ func _exit_alarm(face_pos: Vector3, yaw: float, sign_top: float,
 	pivot.set_meta("alarm_sign_top", sign_top)
 	pivot.set_meta("alarm_opening_head", opening_head)
 	model.set_meta("authored_model", "alarm_light")
+	# Prison's small alarm lens is already emissive. Its shadowless Omni can
+	# spill red into an adjacent room with no visible fixture in that room.
+	if theme == 8:
+		return pivot
 
 	var light := OmniLight3D.new()
 	light.set_meta("structural_exit_light", true)
@@ -5511,6 +5596,7 @@ func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float,
 		l.set_meta("visible_source", source_name)
 		l.set_meta("visible_source_position", source_position)
 		l.light_energy = energy
+		l.light_volumetric_fog_energy = 1.5
 		l.position = source_position
 		l.set_meta("visible_source_name", source_name)
 		return l
@@ -5519,6 +5605,8 @@ func _make_main_light(flicker: bool, pmat: StandardMaterial3D, energy: float,
 	fl.set_meta("visible_source", source_name)
 	fl.set_meta("visible_source_position", source_position)
 	fl.base_energy = energy
+	# Brief ballast pulses leave a long trail in reprojected volumetric fog.
+	fl.light_volumetric_fog_energy = 0.0
 	fl.position = source_position
 	fl.set_meta("visible_source_name", source_name)
 	fl.mats = [pmat]
@@ -5723,13 +5811,12 @@ func _build_props() -> void:
 		WorldGen.OFFICE_BOARDROOM:
 			_level_builder._office_boardroom()
 		WorldGen.OFFICE_EMPTY:
-			if portal_dest < 0 and _r(20) < 0.15:
-				_planter(Vector3(2.6 + 6.8 * _r(21), 0, 2.6 + 6.8 * _r(22)))
-			if _r(250) < 0.35:
-				_level_builder._copier(Vector3(3.0, 0, 8.8), 252)
-			elif portal_dest < 0 and _r(254) < 0.62:
-				_level_builder._office_floor_files(Vector3(2.2 if _r(255) < 0.5 else 9.8, 0,
-					2.1 if _r(256) < 0.5 else 9.9), 257)
+			# Keep this style id stable for saved rooms, but give it a real use.
+			# Sparse large Office shells read as missing generation, not liminal.
+			if room_n >= 2:
+				_level_builder._office_cubicles()
+			else:
+				_level_builder._office_storage()
 		WorldGen.ANNEX_OPEN:
 			_level_builder._annex_open()
 		WorldGen.ANNEX_MAZE:
@@ -6857,9 +6944,9 @@ func _descent_sound(parent: Node, stream: AudioStream, volume: float,
 
 
 func _open_descent_doors(left: AnimatableBody3D,
-		right: AnimatableBody3D, owner: Node, seconds := 0.62) -> void:
+		right: AnimatableBody3D, owner: Node, seconds := 0.62) -> Tween:
 	if owner.has_meta("opened"):
-		return
+		return null
 	owner.set_meta("opened", true)
 	var sound := AudioStreamPlayer3D.new()
 	sound.bus = SoundBank.HALL_BUS
@@ -6871,6 +6958,7 @@ func _open_descent_doors(left: AnimatableBody3D,
 	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_property(left, "position:x", -1.02, seconds)
 	tw.parallel().tween_property(right, "position:x", 1.02, seconds)
+	return tw
 
 
 ## The story tape is the objective. Charge affects survival on the way to the
@@ -7011,10 +7099,13 @@ func _descent_arrival_car(dir: int) -> void:
 	if descent_arrival_used:
 		_descent_kill_arrival(rig)
 		return
-	var inside := _local_area(rig["root"], Vector3(0, 1.05, 1.15),
-		Vector3(2.05, 2.10, 1.95))
+	# Include the threshold in the safety sensor: someone turning back must
+	# stop the doors before their capsule reaches the moving leaves.
+	var inside := _local_area(rig["root"], Vector3(0, 1.05, 1.5),
+		Vector3(2.05, 2.10, 3.0))
 	inside.name = "DescentArrivalInterior"
 	rig["inside"] = inside
+	inside.body_entered.connect(_descent_arrival_reentered.bind(rig, inside))
 	inside.body_exited.connect(_descent_arrival_left.bind(rig, inside))
 
 
@@ -7022,50 +7113,82 @@ func has_descent_arrival() -> bool:
 	return not _descent_arrival_rig.is_empty() and not descent_arrival_used
 
 
-func open_descent_arrival() -> void:
+func open_descent_arrival(seconds := 1.15) -> void:
 	if _descent_arrival_rig.is_empty() or descent_arrival_used:
 		return
 	var root: Node3D = _descent_arrival_rig["root"]
-	if not is_instance_valid(root):
+	if not is_instance_valid(root) or root.has_meta("opened"):
 		return
 	# Slower than a call: this is the reveal of a floor, not a door operating.
-	_open_descent_doors(_descent_arrival_rig["left"],
-		_descent_arrival_rig["right"], root, 1.15)
+	_descent_arrival_rig["opening"] = _open_descent_doors(
+		_descent_arrival_rig["left"], _descent_arrival_rig["right"], root, seconds)
+
+
+func _cancel_arrival_tween(rig: Dictionary, key: String) -> void:
+	var tween: Tween = rig.get(key)
+	if tween != null and tween.is_valid():
+		tween.kill()
+	rig.erase(key)
+
+
+func _descent_arrival_reentered(actor: Node, rig: Dictionary, inside: Area3D) -> void:
+	if not actor is Player or descent_arrival_used or not inside.has_meta("spent"):
+		return
+	# Cancel both the delayed close and an already moving door. A killed tween
+	# has no completion callback, so it cannot retire this occupied car later.
+	_cancel_arrival_tween(rig, "closing")
+	_cancel_arrival_tween(rig, "opening")
+	inside.remove_meta("spent")
+	rig["root"].remove_meta("opened")
+	open_descent_arrival(0.35)
 
 
 func _descent_arrival_left(actor: Node, rig: Dictionary, inside: Area3D) -> void:
-	if not actor is Player or inside.has_meta("spent"):
+	if not actor is Player or inside.has_meta("spent") or descent_arrival_used \
+			or not is_inside_tree() or is_queued_for_deletion() \
+			or not actor.is_inside_tree() or actor.is_queued_for_deletion():
 		return
 	inside.set_meta("spent", true)
-	# Area exits also fire while a streamed floor is being dismantled. Defer one
-	# frame and require both actors to survive before spending the arrival car.
-	await get_tree().process_frame
-	if not is_inside_tree() or not is_instance_valid(actor) \
-			or not actor.is_inside_tree() or not is_instance_valid(inside):
-		return
-	get_tree().call_group("descent_listener", "descent_arrival_spent")
+	# The chunk owns this delay, so unloading it cancels the callback. Do not
+	# persist arrival_used until the empty car has actually finished closing.
 	var delay := create_tween()
+	rig["closing"] = delay
 	delay.tween_interval(1.7)
 	delay.tween_callback(_finish_descent_arrival_left.bind(rig, inside))
 
 
 func _finish_descent_arrival_left(rig: Dictionary, inside: Area3D) -> void:
-	if not is_inside_tree() or not is_instance_valid(inside):
+	if not is_inside_tree() or is_queued_for_deletion() \
+			or not is_instance_valid(inside) or descent_arrival_used:
 		return
 	# Never seal a player who stepped back in — the car has no inside control,
 	# and a shut arrival car with someone in it is an unrecoverable run.
 	for body in inside.get_overlapping_bodies():
 		if body is Player:
-			inside.remove_meta("spent")
+			_descent_arrival_reentered(body, rig, inside)
 			return
+	_cancel_arrival_tween(rig, "opening")
 	var root: Node3D = rig["root"]
 	_descent_sound(root, SoundBank.elev(), -13.0)
 	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	rig["closing"] = tw
 	tw.tween_property(rig["left"], "position:x", -0.54, 0.9)
 	tw.parallel().tween_property(rig["right"], "position:x", 0.54, 0.9)
-	await tw.finished
-	if is_inside_tree():
-		_descent_kill_arrival(rig)
+	tw.tween_callback(_complete_descent_arrival_left.bind(rig, inside))
+
+
+func _complete_descent_arrival_left(rig: Dictionary, inside: Area3D) -> void:
+	if not is_inside_tree() or is_queued_for_deletion() \
+			or not is_instance_valid(inside) or descent_arrival_used:
+		return
+	for body in inside.get_overlapping_bodies():
+		if body is Player:
+			_descent_arrival_reentered(body, rig, inside)
+			return
+	descent_arrival_used = true
+	rig.erase("closing")
+	_descent_kill_arrival(rig)
+	get_tree().call_group("descent_listener", "descent_arrival_spent")
 
 
 func _descent_kill_arrival(rig: Dictionary) -> void:
@@ -8225,6 +8348,8 @@ func _room_members() -> Array[Vector2i]:
 
 func _room_span() -> Vector2:
 	if theme == 2:
+		if room_n == 9:
+			return Vector2(36.0, 36.0)
 		var width := 12.0
 		var depth := 12.0
 		if WorldGen.annex_room_id(wseed, room_root + Vector2i(1, 0)) == room_root:
@@ -8269,6 +8394,10 @@ func _partition(along_x: bool, off: float) -> void:
 	var h := ceil_h
 	var dt := lerpf(2.6, 9.4, _r(620))     # doorway centre along the partition
 	var dw := 1.15
+	# The jambs are centred on the opening edges, so the header adds one
+	# jamb width in total to finish flush with both outside faces.
+	var jamb_width := 0.1
+	var casing_width := dw + jamb_width
 	var segs := [[0.0, dt - dw / 2.0], [dt + dw / 2.0, S]]
 	for sg in segs:
 		var a: float = sg[0]
@@ -8311,26 +8440,26 @@ func _partition(along_x: bool, off: float) -> void:
 		var gm := Mats.asy_metal_green()
 		for sside in [-1.0, 1.0]:
 			if along_x:
-				_box(Vector3(dt + sside * dw / 2.0, DOOR_TOP / 2.0, off), Vector3(0.1, DOOR_TOP, 0.2), gm, false)
+				_box(Vector3(dt + sside * dw / 2.0, DOOR_TOP / 2.0, off), Vector3(jamb_width, DOOR_TOP, 0.2), gm, false)
 			else:
-				_box(Vector3(off, DOOR_TOP / 2.0, dt + sside * dw / 2.0), Vector3(0.2, DOOR_TOP, 0.1), gm, false)
+				_box(Vector3(off, DOOR_TOP / 2.0, dt + sside * dw / 2.0), Vector3(0.2, DOOR_TOP, jamb_width), gm, false)
 		if along_x:
-			_box(Vector3(dt, DOOR_TOP + 0.06, off), Vector3(dw + 0.2, 0.12, 0.2), gm, false)
+			_box(Vector3(dt, DOOR_TOP + 0.06, off), Vector3(casing_width, 0.12, 0.2), gm, false)
 		else:
-			_box(Vector3(off, DOOR_TOP + 0.06, dt), Vector3(0.2, 0.12, dw + 0.2), gm, false)
+			_box(Vector3(off, DOOR_TOP + 0.06, dt), Vector3(0.2, 0.12, casing_width), gm, false)
 		return
 	var cmat: Material = Mats.paint_white() if theme == 1 else (Mats.steel() if theme == 4 else \
 		(Mats.sch_red() if theme == 6 else (Mats.mall_trim() if theme == 7 else \
 		(Mats.prison_iron() if theme == 8 else Mats.darkwood()))))
 	for sside in [-1.0, 1.0]:
 		if along_x:
-			_box(Vector3(dt + sside * dw / 2.0, DOOR_TOP / 2.0, off), Vector3(0.1, DOOR_TOP, 0.2), cmat, false)
+			_box(Vector3(dt + sside * dw / 2.0, DOOR_TOP / 2.0, off), Vector3(jamb_width, DOOR_TOP, 0.2), cmat, false)
 		else:
-			_box(Vector3(off, DOOR_TOP / 2.0, dt + sside * dw / 2.0), Vector3(0.2, DOOR_TOP, 0.1), cmat, false)
+			_box(Vector3(off, DOOR_TOP / 2.0, dt + sside * dw / 2.0), Vector3(0.2, DOOR_TOP, jamb_width), cmat, false)
 	if along_x:
-		_box(Vector3(dt, DOOR_TOP + 0.06, off), Vector3(dw + 0.2, 0.12, 0.2), cmat, false)
+		_box(Vector3(dt, DOOR_TOP + 0.06, off), Vector3(casing_width, 0.12, 0.2), cmat, false)
 	else:
-		_box(Vector3(off, DOOR_TOP + 0.06, dt), Vector3(0.2, 0.12, dw + 0.2), cmat, false)
+		_box(Vector3(off, DOOR_TOP + 0.06, dt), Vector3(0.2, 0.12, casing_width), cmat, false)
 
 
 ## Furniture scaled to a small room: a couple of pieces against the walls,
@@ -8421,11 +8550,9 @@ func _small_room_props(along_x: bool, off: float) -> void:
 ## A single desk with the same authored terminal as the cubicle clusters — for
 ## rooms too small for a cluster.
 func _small_desk(p: Vector3, yaw: float) -> void:
-	var v := Node3D.new()
+	var body0 := body.get_child_count()
+	var v := _furnishing_pivot(p, yaw, "office_small_workstation")
 	v.set_meta("office_workstation", true)
-	v.position = p
-	v.rotation.y = yaw
-	add_child(v)
 	_mrbox(v, Vector3(0, 0.73, 0), Vector3(1.4, 0.035, 0.72), Mats.desk_white(), 0.012)
 	for sx in [-0.62, 0.62]:
 		_mrbox(v, Vector3(sx, 0.355, 0), Vector3(0.04, 0.71, 0.66), Mats.desk_white(), 0.008)
@@ -8444,10 +8571,13 @@ func _small_desk(p: Vector3, yaw: float) -> void:
 	# task chair's seat faces local -Z, so desk yaw already aims it home.
 	var chair_pos := p + Vector3(sin(yaw) * 0.95, 0, cos(yaw) * 0.95)
 	# School shares this helper; the new chair is an Office-only replacement.
+	var chair: Node3D
 	if theme == 1:
-		_modern_task_chair(chair_pos, yaw)
+		chair = _modern_task_chair(chair_pos, yaw)
 	else:
-		_task_chair(chair_pos, yaw)
+		chair = _task_chair(chair_pos, yaw)
+	_adopt_local(v, chair)
+	_bind_furnishing_colliders(v, body0)
 
 
 # --- vegas: grand chandelier is above; shared below --------------------------
@@ -8479,12 +8609,13 @@ static func _prop_scene(path: String) -> PackedScene:
 	if prepared != null:
 		return prepared
 	if not _prop_preloads_requested:
-		return load(path) as PackedScene
+		return FloorResourcePreloader.retain_scene(path, load(path) as PackedScene)
 	var status := ResourceLoader.load_threaded_get_status(path)
 	if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS \
 			or status == ResourceLoader.THREAD_LOAD_LOADED:
-		return ResourceLoader.load_threaded_get(path) as PackedScene
-	return load(path) as PackedScene
+		return FloorResourcePreloader.retain_scene(path,
+			ResourceLoader.load_threaded_get(path) as PackedScene)
+	return FloorResourcePreloader.retain_scene(path, load(path) as PackedScene)
 
 
 ## Instance a downloaded glTF prop. Scenes are load()-cached, so each model's
@@ -8985,9 +9116,10 @@ func exit_sign_fixture_audit() -> Dictionary:
 					"sign_bottom": sign_bottom, "opening_head": opening_head,
 					"normal_half": normal_half, "wall_half": T * 0.5,
 				}
-	var expected_lights := 0 if theme == 7 else int(report["housings"]) * 2
+	var expected_alarms := 0 if theme == 7 else int(report["housings"]) * 2
+	var expected_lights := 0 if theme == 7 or theme == 8 else expected_alarms
 	if int(report["labels"]) != int(report["housings"]) * 2 \
-			or int(report["alarms"]) != expected_lights \
+			or int(report["alarms"]) != expected_alarms \
 			or int(report["lights"]) != expected_lights:
 		report["violations"] += 1
 	return report
@@ -9403,16 +9535,20 @@ func prison_visitation_phone_audit() -> Dictionary:
 			continue
 		report["booths"] = int(report["booths"]) + 1
 		var booth_phones := 0
-		for child in node.find_children("*", "Node3D", true, false):
-			if child.has_meta("prison_visitation_phone"):
-				booth_phones += 1
-				var authored_phones := 0
-				for model in child.find_children("*", "Node3D", true, false):
-					if str(model.get_meta("authored_model", "")) == "visitation_phone" \
-							and str(model.get_meta("attributed_asset", "")) == PRISON_WALL_PHONE_PATH:
-						authored_phones += 1
-				if authored_phones != 1:
-					report["violations"] = int(report["violations"]) + 1
+		# The generated booth contains both handsets, cradles and armoured
+		# cords. Check their actual meshes rather than the retired standalone
+		# wall-phone metadata, which is no longer emitted by the builder.
+		for model in node.get_children():
+			if str(model.get_meta("scenario_generated_path", "")) != PRISON_GEN_VISITATION_BOOTH_PATH:
+				continue
+			for side in ["L", "R"]:
+				var complete := true
+				for part in ["TelephoneBackplate", "ReceiverCradle", "EarpieceBody",
+						"MouthpieceBody", "HandsetGrip", "ArmoredCordCore", "SpiralCordArmor"]:
+					var mesh := model.find_child(part + "_" + side, true, false) as MeshInstance3D
+					if mesh == null or mesh.mesh == null or mesh.get_aabb().size == Vector3.ZERO:
+						complete = false
+				booth_phones += int(complete)
 		report["phones"] = int(report["phones"]) + booth_phones
 		if booth_phones != 2:
 			report["violations"] = int(report["violations"]) + 1

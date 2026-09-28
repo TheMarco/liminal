@@ -16,37 +16,65 @@ static func candidates(chunk: Chunk, kind := "breath", compact := false, camera:
 		if not (face.mesh.mesh is BoxMesh or face.mesh.mesh is QuadMesh): continue
 		if face.size.x < 2.3 or face.size.y < 1.7: continue
 		var bands := wall_bands(face, blockers, chunk)
-		var size := Vector2(minf(3.8, face.size.x - 0.3), minf(2.4, face.size.y - 0.3))
-		if compact: size *= 0.65
+		var base_size := Vector2(minf(3.8, face.size.x - 0.3), minf(2.4, face.size.y - 0.3))
+		if compact: base_size *= 0.65
 		for lateral in [0.0, -0.22, 0.22]:
-			var center: Vector3 = face.center + face.u * (face.size.x - size.x) * float(lateral)
-			center.y = clampf(chunk._floor_h() + (2.1 if compact else 1.5), face.center.y - (face.size.y - size.y) * 0.5 + 0.05, face.center.y + (face.size.y - size.y) * 0.5 - 0.05)
-			var frame := Transform3D(Basis(face.u, face.v, face.normal), center)
-			var candidate := {"face": face, "center": center, "size": size, "depth": 0.35, "companions": bands}
-			# Filter before the bounded result fills. Outer shell walls and the
-			# backs of corridor walls otherwise consume every candidate slot.
-			if camera != null and not visible(candidate, chunk, camera): continue
-			# Keep 1.6m of empty space in front of the maximum live 35cm bow.
-			var envelope := AABB(Vector3(-size.x/2, -size.y/2, -0.015), Vector3(size.x, size.y, 1.965))
-			var clear := true
-			for blocker in blockers:
-				if blocker.mesh == face.mesh or bands.has(blocker): continue
-				var bounds: AABB = frame.affine_inverse() * blocker.transform * blocker.bounds
-				if envelope.intersects(bounds):
-					clear = false
-					break
-			if clear:
+			var center: Vector3 = face.center + face.u * (face.size.x - base_size.x) * float(lateral)
+			var heights := [face.center.y, chunk._floor_h() + (2.1 if compact else 1.5)] if kind == "breath" else [chunk._floor_h() + (2.1 if compact else 1.5)]
+			for height: float in heights:
+				center.y = clampf(height, face.center.y - (face.size.y - base_size.y) * 0.5 + 0.05, face.center.y + (face.size.y - base_size.y) * 0.5 - 0.05)
+				# Visibility depends on the surface and center, not the fitted size.
+				# Skip unseen walls before checking every size against room meshes.
+				if camera != null and not visible({"face": face, "center": center}, chunk, camera): continue
+				var fitted := fit_wall(face, center, blockers, bands, kind, compact)
+				if fitted.is_empty(): continue
+				var candidate := {"face": face, "center": center, "size": fitted.size,
+					"depth": fitted.depth, "companions": bands}
+				# Filter before the bounded result fills. Outer shell walls and the
+				# backs of corridor walls otherwise consume every candidate slot.
 				result.append(candidate)
 				if result.size() >= 12: return result
 	return candidates(chunk, kind, true, camera) if result.is_empty() and not compact else result
+
+
+static func fit_wall(face: SurfaceWear.Face, center: Vector3,
+		blockers: Array[Dictionary], bands: Array[Dictionary], kind: String,
+		compact: bool) -> Dictionary:
+	var offset := center - face.center
+	var limit := Vector2(face.size.x - 2.0 * absf(offset.dot(face.u)) - 0.3,
+		face.size.y - 2.0 * absf(offset.dot(face.v)) - 0.3)
+	var sizes := [Vector2(2.47, 1.56)] if compact else (
+		[Vector2(6.0, 3.6), Vector2(5.0, 3.0), Vector2(3.8, 2.4)]
+		if kind == "breath" else [Vector2(3.8, 2.4)])
+	var depths := [0.35] if compact or kind != "breath" else [0.65, 0.50, 0.35]
+	var frame := Transform3D(Basis(face.u, face.v, face.normal), center)
+	var inverse := frame.affine_inverse()
+	# Fill the wall first; if the deepest bow is blocked, keep the panel broad
+	# and try a shallower breath before reducing its footprint.
+	for desired: Vector2 in sizes:
+		var size := Vector2(minf(desired.x, limit.x), minf(desired.y, limit.y))
+		if size.x < 1.5 or size.y < 1.2: continue
+		for depth: float in depths:
+			# The moving surface retains 1.6 m of space beyond the deepest bow.
+			var envelope := AABB(Vector3(-size.x/2, -size.y/2, -0.015),
+				Vector3(size.x, size.y, depth + 1.615))
+			var clear := true
+			for blocker in blockers:
+				if blocker.mesh == face.mesh or bands.has(blocker): continue
+				var bounds: AABB = inverse * blocker.transform * blocker.bounds
+				if envelope.intersects(bounds):
+					clear = false
+					break
+			if clear: return {"size": size, "depth": depth}
+	return {}
 
 static func ceiling_candidates(scanner: SurfaceWear, blockers: Array[Dictionary], chunk: Chunk, camera: Camera3D = null) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for face: SurfaceWear.Face in scanner.ceilings:
 		if not (face.mesh.mesh is BoxMesh or face.mesh.mesh is QuadMesh): continue
-		# Preserve standing headroom even at the maximum runtime depth.
-		if face.normal.y > -0.98 or face.center.y - 0.35 < chunk._floor_h() + 2.25: continue
-		for desired in [Vector2(3.0, 2.5), Vector2(2.0, 1.8)]:
+		if face.normal.y > -0.98: continue
+		for desired in [Vector2(5.0, 4.0), Vector2(4.0, 3.2),
+				Vector2(3.0, 2.5), Vector2(2.0, 1.8)]:
 			var size := Vector2(minf(desired.x, face.size.x - 0.3), minf(desired.y, face.size.y - 0.3))
 			if size.x < 1.5 or size.y < 1.5: continue
 			for ox in [0.0, -0.25, 0.25]:
@@ -54,21 +82,25 @@ static func ceiling_candidates(scanner: SurfaceWear, blockers: Array[Dictionary]
 					var offset := Vector2(ox, oy) * face.size
 					if absf(offset.x) + size.x / 2 + 0.1 > face.size.x / 2 or absf(offset.y) + size.y / 2 + 0.1 > face.size.y / 2: continue
 					var center := face.center + face.u * offset.x + face.v * offset.y
-					var candidate := {"face": face, "center": center, "size": size, "depth": 0.35, "companions": []}
-					if camera != null and not visible(candidate, chunk, camera): continue
+					if camera != null and not visible({"face": face, "center": center}, chunk, camera): continue
 					var frame := Transform3D(Basis(face.u, face.v, face.normal), center)
-					# Leave lights, vents, beams, wear overlays and wall junctions
-					# completely untouched; do not deform through attached fixtures.
-					var envelope := AABB(Vector3(-size.x/2-0.08, -size.y/2-0.08, -0.02), Vector3(size.x+0.16, size.y+0.16, 0.57))
-					var clear := true
-					for blocker in blockers:
-						if blocker.mesh == face.mesh: continue
-						if envelope.intersects(frame.affine_inverse() * blocker.transform * blocker.bounds):
-							clear = false
+					for depth in [0.45, 0.35]:
+						# Preserve 2.25 m of standing headroom at the peak.
+						if center.y - float(depth) < chunk._floor_h() + 2.25: continue
+						# Leave lights, vents, beams, wear overlays and junctions untouched.
+						var envelope := AABB(Vector3(-size.x/2-0.08, -size.y/2-0.08, -0.02),
+							Vector3(size.x+0.16, size.y+0.16, float(depth)+0.22))
+						var clear := true
+						for blocker in blockers:
+							if blocker.mesh == face.mesh: continue
+							if envelope.intersects(frame.affine_inverse() * blocker.transform * blocker.bounds):
+								clear = false
+								break
+						if clear:
+							result.append({"face": face, "center": center, "size": size,
+								"depth": depth, "companions": []})
+							if result.size() >= 6: return result
 							break
-					if clear:
-						result.append(candidate)
-						if result.size() >= 6: return result
 	return result
 
 static func visible(selection: Dictionary, chunk: Chunk, camera: Camera3D) -> bool:

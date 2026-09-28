@@ -4,6 +4,7 @@ shader_type spatial;
 // ceiling lattice. The structural slab remains one mesh per generated cell.
 uniform sampler2D scenario_ceiling_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float pitch = 0.75;
+uniform float mains_power = 1.0;
 
 varying vec3 wpos;
 
@@ -23,5 +24,5 @@ void fragment() {
 	ALBEDO = c;
 	ROUGHNESS = 0.95;
 	SPECULAR = 0.22;
-	EMISSION = c * 0.18;
+	EMISSION = c * 0.18 * mains_power;
 }

@@ -1,9 +1,9 @@
 # Environment behavior rollout assessment
 
 **Current rollout:** breath and travelling pressure are integrated across all 11
-themes, using clear visible walls and shared horror pacing. The historical
-assessment below is followed by implementation
-and validation notes.
+themes. The same-room return door is eligible across all Descent themes.
+The historical assessment below describes the recovered
+hidden-link versions; implementation and validation notes follow it.
 
 Assessed September 21, 2026 against main `3aa66e7` and recovery snapshot
 `b3792e9`. The initial ranking was a source assessment; the subsequent
@@ -340,3 +340,81 @@ Evidence: `/tmp/liminal-gates-mutations.log`, `/tmp/liminal-gates-progress.log`,
 `/tmp/liminal-gates-school.log`. Both reported gating failures are resolved.
 This follow-up does not claim a new full-suite
 pass; it covers the two reported gates and the affected persistence dependency.
+
+### Larger gameplay wall breaths — 2026-09-25
+
+Wall breaths now fit the previously reviewed large profile into actual generated
+walls, up to 6.0 × 3.6 m and 65 cm outward. Clear panels stay broad, with modest
+per-encounter size and depth variation. The placement check reserves 1.6 m beyond
+the full bow and chooses a smaller patch when trim, fixtures or furniture prevent
+the larger one. Travel retains its earlier scale. Actor
+clearance includes the selected depth, and the wall still restores before contact.
+
+The focused geometry/collision audit passed in all 11 environments. A Mall sample
+supports 6.0 × 3.6 m at 65 cm; Casino and School samples also reach 6.0 m wide.
+The runtime audit passed pacing, visibility, actor withdrawal and teardown after
+its fixture was updated to choose a genuinely visible wall. GPU capture was
+unavailable in this session, so the larger live presentation still needs a visual
+playthrough.
+
+### Larger gameplay ceiling breaths — 2026-09-25
+
+Ceiling breaths now fit up to 5.0 × 4.0 m and 45 cm downward, falling back to
+smaller footprints or 35 cm depth when the room requires it. The placement check
+preserves at least 2.25 m of standing headroom and excludes lights, vents, beams,
+wear overlays and wall junctions. Live encounters vary slightly below the fitted
+maximum. School, Asylum and Mall samples fit 5.0 × 4.0 m at 45 cm; the sampled
+Office ceiling remains 3.0 × 2.5 m because of its fixtures.
+
+The focused ceiling geometry, collision, fixture and restoration audit passed,
+with the same nine-theme coverage in the five-cell sample. The runtime audit
+passed live ceiling selection, peak motion and swept-head withdrawal. A fresh
+GPU capture was unavailable in this session; the larger presentation still
+needs an in-game visual check.
+
+### Same-room return door — 2026-09-25
+
+The return loop now follows the simpler same-room idea. Its doorway reuses the
+temporary next-level visit's blue coded wall leak and hum, with a live viewport
+through the opening. That viewport shares the source world and looks from a
+checked landing at the far wall of the *same* streamed room. The camera and
+player preserve the approach heading, so the furniture keeps its left/right
+layout through the view and after crossing. The opaque view hides the solid
+source wall until crossing. The doorway disappears; the latch and knocks come
+from solid wall behind the player. A faint trace there fades when first seen,
+and the last knock waits for a look back. Both walls keep their collision.
+There is no side passage, new route edge or second room.
+`--living-preview=return` starts on Office floor 3 facing the door, so the
+effect can be tried without waiting for its normal event delay.
+
+All 11 Descent themes now create the return director. Its placement searches
+for a real opposing wall and a clear same-cell landing, and skips rooms where
+those checks fail. Poolrooms and Annex can use an existing west/south boundary
+whose mesh belongs to the adjacent streamed chunk. Taller rooms suspend the
+landmark lamp at a visible height. The shared chair and flickering lamp remain
+the recognizable feature on either side of the crossing.
+
+The first growing-corridor attempt used a false end wall that appeared,
+retreated and lifted. In live play it read as a moving wall rather than the
+hallway growing, so that encounter was removed pending a new design.
+
+`tools/audit_living_environment.gd` passed on a representative Office route:
+the return crossed into the same room instance and safe cell, the original
+wall and topology remained unchanged, and the consumed state survived
+runtime-state serialization. The focused check also covers preview orientation,
+shared source-world rendering and afterimage cleanup. A live Main boot set up
+the portal viewport in front of the player; a live crossing kept the actor in
+the same cell. Headless rendering does not provide a window frame, so the
+view through the aperture still needs a windowed visual playthrough.
+`tools/audit_return_all_levels.gd` passed one representative route per Descent
+theme, checking safe staging, preview/crossing orientation, same-room topology,
+the forward landmark and the vanished doorway behind the player.
+
+The return door now shares the architecture director's cadence and cross-floor
+memory. A first sighting spends its event quota; the opening and sound sequence
+hold a visual lease so an unrelated optional scare does not start during the
+reveal. The next-level doorway remains tied to its planned route edge. Its first
+visible wall glow starts a brief quiet lease, including during arrival grace.
+Physical realm approach checks passed for 70 doorway/state combinations on seed
+21 and 10 each on seeds 20260807 and 1021555651. No late furnishing rejection
+appeared in those samples, so the existing reserved doorway lane was kept.

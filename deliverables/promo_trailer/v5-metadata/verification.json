@@ -1,0 +1,64 @@
+{
+  "version": 5,
+  "duration_seconds": 74.56666666666666,
+  "video": "H.264",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "frames": 2237,
+  "audio": "AAC stereo, 48000 Hz, 320 kbps",
+  "integrated_loudness_lufs": -14.27,
+  "true_peak_dbtp": -1.01,
+  "full_decode": "passed",
+  "pause_menu_scan": {
+    "frames_scanned": 2237,
+    "positive_control_score": 3.3434789180755615,
+    "match_threshold": 5,
+    "remaining_matches": [],
+    "closest_frame": {
+      "frame": 2092,
+      "score": 16.34222984313965
+    }
+  },
+  "black_intervals": [
+    {
+      "start": 69.833333,
+      "end": 70.066667,
+      "duration": 0.233333
+    }
+  ],
+  "unexpected_black_intervals": [],
+  "feature_cards": {
+    "card_explore": {
+      "headline": "EXPLORE / THE IMPOSSIBLE.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_fight": {
+      "headline": "FIGHT / WITH LIGHT.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_alive": {
+      "headline": "THE BUILDING / IS ALIVE.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_preview": {
+      "headline": "PREVIEW YOUR / NEXT NIGHTMARE.",
+      "description": "",
+      "hold_seconds": 1.5
+    }
+  },
+  "all_footage_at_captured_speed": true,
+  "confirmed_monster_kills": 4,
+  "vhs": true,
+  "crt": false,
+  "intro_seconds": 2,
+  "dr_cross": "both excerpts full-screen; dialogue aligned to native tape clocks",
+  "enemy_assignments": "verified against production roster for all six encounters",
+  "traversal": "six native walking-controller shots; five continuous 90-degree turns and a pool approach with stop-and-look; native head bob and handheld motion enabled",
+  "file_bytes": 213519688
+}

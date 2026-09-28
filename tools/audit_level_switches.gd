@@ -11,6 +11,7 @@ const SAVED_POSITION := Vector3(-6.0, 0.0, 6.0)
 
 func run() -> void:
 	var game := await boot_game(REGRESSION_SEED)
+	var casino_environment: Environment = game.we.environment
 
 	# Theme 10 intentionally lives on 0 rather than becoming an awkward tenth
 	# item in the 1-N arithmetic used by the original floors.
@@ -21,6 +22,10 @@ func run() -> void:
 	await await_until(func(): return not game._switching)
 	expect(game.active_level == 10,
 		"0 key did not enter the Data Center")
+	expect(not casino_environment.sdfgi_enabled,
+		"outgoing Casino indirect-light cache was not retired")
+	expect(game.we.environment != casino_environment and game.we.environment.sdfgi_enabled,
+		"Data Center did not restore its own indirect lighting")
 	var filter_before: bool = game._post_process.is_enabled()
 	var video := InputEventKey.new()
 	video.pressed = true
@@ -30,8 +35,13 @@ func run() -> void:
 		"V changed the title-selected video filter in Wander")
 	game._unhandled_input(video)
 
+	var data_center_environment: Environment = game.we.environment
 	game._jump_to(6, SAVED_POSITION, false)
 	await await_until(func(): return not game._switching)
+	expect(not data_center_environment.sdfgi_enabled,
+		"outgoing Data Center indirect-light cache was not retired")
+	expect(game.we.environment != data_center_environment and game.we.environment.sdfgi_enabled,
+		"School did not restore its own indirect lighting")
 
 	if game._switching or game.active_level != 6:
 		fail("school transition did not complete")

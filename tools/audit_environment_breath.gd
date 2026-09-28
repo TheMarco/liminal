@@ -384,6 +384,10 @@ func _audit_environments() -> void:
 			chunk = null
 		expect(chunk != null, "theme %d has no usable patch" % theme)
 		if chunk == null: continue
+		if theme == 7:
+			expect(choices[0].size.x >= 5.5 and choices[0].size.y >= 3.2
+				and choices[0].depth >= 0.6,
+				"clear Mall wall no longer supports a full panel breath")
 		root.add_child(chunk)
 		for kind in ["breath", "travel"]:
 			var effect: Node3D = Surface.new()
@@ -443,6 +447,10 @@ func _audit_ceilings() -> void:
 		chunk.position = ROOM_OFFSET
 		root.add_child(chunk)
 		var choice := choices[0]
+		if theme == 6:
+			expect(choice.size.x >= 4.8 and choice.size.y >= 3.8
+				and choice.depth >= 0.4,
+				"clear School ceiling no longer supports a broad breath")
 		var face: SurfaceWear.Face = choice.face
 		expect(face.normal.y < -0.98, "ceiling selector returned a wall")
 		expect(choice.center.y - choice.depth >= chunk._floor_h() + 2.25, "ceiling lost standing headroom")

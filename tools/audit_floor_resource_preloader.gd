@@ -64,6 +64,22 @@ func run() -> void:
 	FloorResourcePreloader.configure([PATHS[0]])
 	FloorResourcePreloader.request_next()
 	check(FloorResourcePreloader.cached_scene(PATHS[0]) == fixture, "engine cache was not adopted")
+	# Transition preparation retains only the destination manifest. A live
+	# resource remains usable after its cache reference is retired.
+	FloorResourcePreloader.prepare_floor([PATHS[1]])
+	check(FloorResourcePreloader.cached_scene(PATHS[0]) == null,
+		"inactive-floor scene retained by transition cache")
+	check(FloorResourcePreloader.cached_scene(PATHS[1]) != null,
+		"destination was not prepared before streaming")
+	var still_live := fixture.instantiate()
+	check(still_live != null, "cache retirement invalidated a live scene reference")
+	still_live.free()
+	FloorResourcePreloader.retain_scene(PATHS[0], fixture)
+	check(FloorResourcePreloader.cached_scene(PATHS[0]) == fixture,
+		"synchronous first-use model was not retained")
+	for theme in WorldGen.THEMES:
+		check(Chunk.theme_prop_paths(theme).size() <= FloorResourcePreloader.CACHE_LIMIT,
+			"floor %d manifest exceeds its preparation allowance" % theme)
 	FloorResourcePreloader.finish()
 	check(FloorResourcePreloader._pending.is_empty() and FloorResourcePreloader._queue.is_empty()
 		and FloorResourcePreloader._ready.is_empty(), "finish left pending work or cache entries")

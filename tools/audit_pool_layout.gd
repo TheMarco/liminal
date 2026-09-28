@@ -13,6 +13,10 @@ var _small_basins := 0
 var _channels := 0
 var _stairs := 0
 var _wet_pier_chunks := 0
+var _float_rooms := {}
+var _float_occupied := {}
+var _float_types := {}
+var _float_multi := 0
 
 func _init() -> void:
 	call_deferred("_run")
@@ -56,8 +60,27 @@ func _run() -> void:
 			or _checked_styles.get(WorldGen.POOL_CISTERN, 0) == 0 \
 			or _wet_pier_chunks == 0:
 		_failures.append("inert pool style coverage: %s" % _checked_styles)
+	var open_rooms := int(_float_rooms.get(WorldGen.POOL_BASIN, 0)) \
+		+ int(_float_rooms.get(WorldGen.POOL_CISTERN, 0))
+	var open_floats := int(_float_occupied.get(WorldGen.POOL_BASIN, 0)) \
+		+ int(_float_occupied.get(WorldGen.POOL_CISTERN, 0))
+	var narrow_rooms := int(_float_rooms.get(WorldGen.POOL_CHANNEL, 0)) \
+		+ int(_float_rooms.get(WorldGen.POOL_STAIRS, 0))
+	var narrow_floats := int(_float_occupied.get(WorldGen.POOL_CHANNEL, 0)) \
+		+ int(_float_occupied.get(WorldGen.POOL_STAIRS, 0))
+	if open_rooms == 0 or float(open_floats) / open_rooms < 0.65:
+		_failures.append("floats have become rare in open pools")
+	if narrow_rooms == 0 or float(narrow_floats) / narrow_rooms < 0.52:
+		_failures.append("floats have become rare in channels and stairs")
+	for kind in ["ring", "striped", "mattress", "flamingo"]:
+		if int(_float_types.get(kind, 0)) < 8:
+			_failures.append("too few %s floats across sampled pools" % kind)
+	if _float_multi < 8:
+		_failures.append("larger pools never receive enough float pairs")
 	print("POOL_LAYOUT checked=%s small=%d channels=%d stairs=%d wet_piers=%d" %
 		[_checked_styles, _small_basins, _channels, _stairs, _wet_pier_chunks])
+	print("POOL_FLOAT_DENSITY rooms=%s occupied=%s types=%s multi=%d" % [
+		_float_rooms, _float_occupied, _float_types, _float_multi])
 	for failure in _failures:
 		push_error("POOL_LAYOUT FAIL: " + failure)
 	if _failures.is_empty():
@@ -65,6 +88,33 @@ func _run() -> void:
 	quit(1 if not _failures.is_empty() else 0)
 
 func _check_chunk(chunk: Chunk, style: int, seed: int, cell: Vector2i) -> void:
+	var floats: Array[RigidBody3D] = []
+	for node in chunk.find_children("*", "RigidBody3D", true, false):
+		var body := node as RigidBody3D
+		if not body.is_in_group("pool_pushable_floats"):
+			continue
+		floats.append(body)
+		var kind := "ring"
+		if body.has_meta("pool_flamingo_float"):
+			kind = "flamingo"
+		elif body.has_meta("pool_mattress_float"):
+			kind = "mattress"
+		elif body.has_meta("pool_striped_float"):
+			kind = "striped"
+		_float_types[kind] = int(_float_types.get(kind, 0)) + 1
+	_float_rooms[style] = int(_float_rooms.get(style, 0)) + 1
+	if not floats.is_empty():
+		_float_occupied[style] = int(_float_occupied.get(style, 0)) + 1
+	if floats.size() > 1:
+		_float_multi += 1
+	for i in floats.size():
+		for j in range(i + 1, floats.size()):
+			var a := Vector2(floats[i].global_position.x, floats[i].global_position.z)
+			var b := Vector2(floats[j].global_position.x, floats[j].global_position.z)
+			var min_gap := float(floats[i].get_meta("pool_float_radius", 0.5)) \
+				+ float(floats[j].get_meta("pool_float_radius", 0.5)) + 0.2
+			if a.distance_to(b) < min_gap:
+				_failures.append("seed %d cell %s: floats overlap" % [seed, cell])
 	if chunk.doorway_clearance_violations() != 0:
 		_failures.append("seed %d cell %s: doorway clearance violation" % [seed, cell])
 	var waters := _with_meta(chunk, "pool_water_surface")
@@ -72,6 +122,7 @@ func _check_chunk(chunk: Chunk, style: int, seed: int, cell: Vector2i) -> void:
 		_failures.append("seed %d cell %s: expected exactly one water footprint" % [seed, cell])
 		return
 	var piers := _with_meta(chunk, "pool_pier")
+	var grand_cistern := WorldGen.pool_grand_cistern(seed, cell)
 	var water_area := 0.0
 	var water_size := Vector2.ZERO
 	var water_center := Vector2.ZERO
@@ -92,7 +143,7 @@ func _check_chunk(chunk: Chunk, style: int, seed: int, cell: Vector2i) -> void:
 		_failures.append("seed %d cell %s: small basin has piers" % [seed, cell])
 	if water_area < 70.0 and piers.size() > 1:
 		_failures.append("seed %d cell %s: compact basin has %d piers" % [seed, cell, piers.size()])
-	if water_area >= 70.0 and piers.size() > 2:
+	if water_area >= 70.0 and piers.size() > (4 if grand_cistern else 2):
 		_failures.append("seed %d cell %s: basin has %d piers" % [seed, cell, piers.size()])
 	var supports := piers.duplicate()
 	supports.append_array(_with_meta(chunk, "pool_rounded_pier_island"))
@@ -109,8 +160,8 @@ func _check_chunk(chunk: Chunk, style: int, seed: int, cell: Vector2i) -> void:
 	for i in supports.size():
 		var a := _pier_center(supports[i])
 		var radius := _pier_radius(supports[i])
-		if absf(a.x - water_center.x) < 0.8 + radius - 0.001 \
-				or absf(a.y - water_center.y) < 0.8 + radius - 0.001:
+		if not grand_cistern and (absf(a.x - water_center.x) < 0.8 + radius - 0.001 \
+				or absf(a.y - water_center.y) < 0.8 + radius - 0.001):
 			_failures.append("seed %d cell %s: pier crosses center band" % [seed, cell])
 		var edge_gap := minf(minf(a.x - radius - (water_center.x - water_size.x * 0.5),
 			water_center.x + water_size.x * 0.5 - a.x - radius),

@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c5adtqqhoxnv4"
-path="res://.godot/imported/Meshy_AI_The_Silent_Visitor_biped_Animation_Walking_withSkin_texture_0.png-04d7184be449540aa1032ae28edc15dc.ctex"
+path.bptc="res://.godot/imported/Meshy_AI_The_Silent_Visitor_biped_Animation_Walking_withSkin_texture_0.png-04d7184be449540aa1032ae28edc15dc.bptc.ctex"
+path.astc="res://.godot/imported/Meshy_AI_The_Silent_Visitor_biped_Animation_Walking_withSkin_texture_0.png-04d7184be449540aa1032ae28edc15dc.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "8edaa0d329fd729e3da2509bb535d6f6"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/silent_visitor/Meshy_AI_The_Silent_Visitor_biped_Animation_Walking_withSkin_texture_0.png"
-dest_files=["res://.godot/imported/Meshy_AI_The_Silent_Visitor_biped_Animation_Walking_withSkin_texture_0.png-04d7184be449540aa1032ae28edc15dc.ctex"]
+dest_files=["res://.godot/imported/Meshy_AI_The_Silent_Visitor_biped_Animation_Walking_withSkin_texture_0.png-04d7184be449540aa1032ae28edc15dc.bptc.ctex", "res://.godot/imported/Meshy_AI_The_Silent_Visitor_biped_Animation_Walking_withSkin_texture_0.png-04d7184be449540aa1032ae28edc15dc.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

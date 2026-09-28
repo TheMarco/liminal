@@ -586,8 +586,23 @@ static func model_count() -> int:
 	return MODEL_PATHS.size()
 
 
-## Audit/test teardown only. Normal play keeps decoded scenes and extracted
-## animation clips for the process lifetime. A short headless run can exit
+## Under an opaque floor transition, retain the shared shadow roster and the
+## destination's signature model only. Already-instantiated actors own their
+## meshes and runtime animations; cache retirement cannot invalidate them.
+static func retain_models(indices: Array[int]) -> void:
+	for index in MODEL_PATHS.size():
+		if indices.has(index):
+			continue
+		_finish_threaded_request(MODEL_PATHS[index])
+		_model_scenes.erase(index)
+		if RUN_MODEL_PATHS.has(index):
+			_finish_threaded_request(str(RUN_MODEL_PATHS[index]))
+		_run_model_scenes.erase(index)
+	_walking_clips.clear()
+	_running_clips.clear()
+
+
+## Audit/test teardown. A short headless run can exit
 ## while the signature model requested by ShadowFigures is still decoding;
 ## consume those requests before clearing the caches so Godot does not report
 ## the loader's zero-ref bookkeeping object as leaked.

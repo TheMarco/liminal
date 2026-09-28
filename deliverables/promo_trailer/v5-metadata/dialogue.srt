@@ -1,0 +1,15 @@
+1
+00:00:00,180 --> 00:00:02,560
+If the lights go out, don't move.
+
+2
+00:00:03,100 --> 00:00:03,860
+Don't turn around.
+
+3
+00:01:02,123 --> 00:01:03,903
+I don't think it wants us dead.
+
+4
+00:01:05,743 --> 00:01:07,483
+I think it wants us to stay.

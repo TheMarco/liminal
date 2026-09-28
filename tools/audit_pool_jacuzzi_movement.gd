@@ -38,6 +38,7 @@ func _jacuzzi_center(chunk: Node) -> Variant:
 func _exercise_fixture(fixture: Dictionary) -> void:
 	var center: Vector3 = fixture["center"]
 	var player := Player.new()
+	player.level_theme = 9
 	player.water_y = Chunk.POOL_WATER_Y
 	root.add_child(player)
 	player.set_physics_process(false)

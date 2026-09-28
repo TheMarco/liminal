@@ -8,8 +8,9 @@ static var _wall_art_textures := {}
 static var _wall_art_preloads_requested := false
 
 
-## Audit/test teardown only. Production keeps these shared materials alive for
-## the process lifetime so streamed chunks never rebuild identical resources.
+## Called at the opaque floor transition and at audit teardown. Streamed
+## chunks share these for the floor's lifetime; live nodes retain their own
+## references when the cache relinquishes an inactive floor.
 static func clear_runtime_caches() -> void:
 	_c.clear()
 	_wall_art_textures.clear()
@@ -655,6 +656,37 @@ static func annex_carpet() -> StandardMaterial3D:
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
 
 
+## The carpet remains visible under the shallow water as a dark, soaked floor.
+static func annex_flooded_floor() -> StandardMaterial3D:
+	return _std("annex_flooded_floor", func(m: StandardMaterial3D):
+		m.albedo_texture = load("res://textures/annex/backrooms_carpet_01_color.jpg")
+		m.albedo_color = Color(0.16, 0.18, 0.14)
+		m.roughness = 1.0
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE / 1.75
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
+
+
+## Poolrooms' shader, normals and interaction parameters with a thinner,
+## darker optical layer and smaller waves for an ankle-deep flooded hall.
+static func annex_shallow_water() -> ShaderMaterial:
+	if _c.has("annex_shallow_water"):
+		return _c["annex_shallow_water"]
+	var m := pool_water().duplicate() as ShaderMaterial
+	m.resource_name = "annex_shallow_water"
+	m.set_shader_parameter("wave_height", 0.010)
+	m.set_shader_parameter("normal_strength", 1.1)
+	m.set_shader_parameter("depth_fade", 0.28)
+	m.set_shader_parameter("shallow_colour", Color(0.065, 0.14, 0.12))
+	m.set_shader_parameter("deep_colour", Color(0.018, 0.055, 0.05))
+	m.set_shader_parameter("opacity_min", 0.38)
+	m.set_shader_parameter("opacity_max", 0.70)
+	m.set_shader_parameter("refraction", 0.035)
+	_c["annex_shallow_water"] = m
+	return m
+
+
 static func annex_wall_variant(idx: int) -> StandardMaterial3D:
 	idx = posmod(idx, 5)
 	var key := "annex_wall_%d" % idx
@@ -723,6 +755,18 @@ static func annex_ceiling() -> Material:
 		# measured footprint.
 		m.uv1_scale = Vector3.ONE / 1.20
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
+
+
+static func annex_sagging_tile() -> StandardMaterial3D:
+	if _c.has("annex_sagging_tile"):
+		return _c["annex_sagging_tile"]
+	var m := annex_ceiling().duplicate() as StandardMaterial3D
+	m.resource_name = "annex_sagging_tile"
+	m.albedo_color = Color(0.69, 0.61, 0.43)
+	m.emission_energy_multiplier = 0.015
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_c["annex_sagging_tile"] = m
+	return m
 
 
 static func annex_moisture_overlay(mask_path: String) -> ShaderMaterial:

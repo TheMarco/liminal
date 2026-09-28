@@ -45,6 +45,17 @@ func run() -> void:
 		"title still exposes video-effect switches")
 	expect(game._post_process.is_vhs_enabled() and game._post_process.is_crt_enabled(),
 		"default did not restore the combined VHS + CRT presentation")
+	expect(not game._post_process.is_curvature_enabled(),
+		"default flat CRT preference did not reach the display stage")
+	settings.set_value("crt_curvature", true)
+	game._apply_game_settings()
+	expect(game._post_process.is_crt_enabled()
+		and game._post_process.is_curvature_enabled(),
+		"curved CRT preference did not apply while CRT stayed on")
+	settings.set_value("crt_curvature", false)
+	game._apply_game_settings()
+	expect(not game._post_process.is_curvature_enabled(),
+		"flat CRT preference did not reapply while CRT stayed on")
 	settings.set_value("crt_enabled", false)
 	settings.save_to_disk()
 	game._apply_game_settings()
@@ -67,9 +78,13 @@ func run() -> void:
 		and game._post_enabled, "saved CRT switch did not apply independently")
 	expect(bool(GameSettings.new(path).get_value("crt_enabled")),
 		"CRT choice was not persisted")
+	expect(not game._post_process.is_curvature_enabled()
+		and not bool(GameSettings.new(path).get_value("crt_curvature")),
+		"flat CRT choice was lost while toggling CRT")
 	game._open_settings(true)
 	expect(game._pause_menu._controls.has("vhs_enabled")
-		and game._pause_menu._controls.has("crt_enabled"),
+		and game._pause_menu._controls.has("crt_enabled")
+		and game._pause_menu._controls.has("crt_curvature"),
 		"settings omitted independent video options")
 	game._close_settings()
 	await process_frame
@@ -92,7 +107,8 @@ func run() -> void:
 			"Escape did not show Wander pause (physical_only=%s)" % physical_only)
 		if is_instance_valid(game._pause_menu):
 			expect(game._pause_menu._controls.has("vhs_enabled")
-				and game._pause_menu._controls.has("crt_enabled"),
+				and game._pause_menu._controls.has("crt_enabled")
+				and game._pause_menu._controls.has("crt_curvature"),
 				"gameplay settings omitted independent video options")
 		key(KEY_ESCAPE, physical_only, true, true)
 		expect(paused, "held Escape immediately dismissed pause")

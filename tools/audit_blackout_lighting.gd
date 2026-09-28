@@ -124,6 +124,18 @@ func _run() -> void:
 		surfaces[mesh] = mesh.material_override
 	office.activate_anomaly(0)
 	office.set_blackout(true)
+	var ceiling_found := false
+	for mesh in surfaces:
+		if surfaces[mesh] != Mats.office_ceiling():
+			continue
+		ceiling_found = true
+		var dark := mesh.material_override as ShaderMaterial
+		if dark == null or dark == Mats.office_ceiling() \
+				or not is_zero_approx(float(dark.get_shader_parameter("mains_power"))):
+			_fail("Office ceiling retained its emissive fill during blackout")
+			break
+	if not ceiling_found:
+		_fail("Office blackout fixture has no ceiling material to verify")
 	office.set_blackout(false)
 	if office.anomaly_kind != -1 or not _same_light_state(office_before):
 		_fail("legacy Office dead-light state survived blackout restoration")

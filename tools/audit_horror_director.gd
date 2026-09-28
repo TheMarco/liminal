@@ -71,6 +71,15 @@ func _init() -> void:
 	director.advance(HorrorDirector.BLACKOUT_RECOVERY_LATE + 0.1)
 	_expect(director.try_start_whisper(2.0),
 		"late-run blackout recovery did not release quiet beats")
+	director.advance(5.0)
+	director.hold_story_discovery(4.5)
+	_expect(not director.try_start_visual(2.0),
+		"story discovery allowed a competing optional visual")
+	_expect(not director.can_start_hostile(),
+		"story discovery allowed a new hostile arrival")
+	director.advance(4.5 + HorrorDirector.ARCHITECTURE_RECOVERY + 0.1)
+	_expect(director.can_start_hostile(),
+		"story discovery did not release the quiet channel")
 
 	# Scripted video/card presentation is always authoritative.
 	director.set_scripted_hold(true)
@@ -78,7 +87,10 @@ func _init() -> void:
 		"hostile encounter ignored a scripted presentation")
 	_expect(not director.try_start_ambient(1.0),
 		"ambient sound ignored a scripted presentation")
+	director.hold_story_discovery(4.5)
 	director.set_scripted_hold(false)
+	_expect(not director.can_start_hostile(),
+		"first view during arrival grace lost its quiet window")
 	director.advance(10.0)
 	_expect(director.can_start_hostile(),
 		"scripted presentation permanently held the director")

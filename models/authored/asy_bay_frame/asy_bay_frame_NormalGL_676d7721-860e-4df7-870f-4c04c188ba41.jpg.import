@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://d313uffbv64de"
-path="res://.godot/imported/asy_bay_frame_NormalGL_676d7721-860e-4df7-870f-4c04c188ba41.jpg-ac30a6c51ed87600294b41ad19cb3056.ctex"
+path.bptc="res://.godot/imported/asy_bay_frame_NormalGL_676d7721-860e-4df7-870f-4c04c188ba41.jpg-ac30a6c51ed87600294b41ad19cb3056.bptc.ctex"
+path.astc="res://.godot/imported/asy_bay_frame_NormalGL_676d7721-860e-4df7-870f-4c04c188ba41.jpg-ac30a6c51ed87600294b41ad19cb3056.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "9919ed5c098357daef1639748df4fada"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/asy_bay_frame/asy_bay_frame_NormalGL_676d7721-860e-4df7-870f-4c04c188ba41.jpg"
-dest_files=["res://.godot/imported/asy_bay_frame_NormalGL_676d7721-860e-4df7-870f-4c04c188ba41.jpg-ac30a6c51ed87600294b41ad19cb3056.ctex"]
+dest_files=["res://.godot/imported/asy_bay_frame_NormalGL_676d7721-860e-4df7-870f-4c04c188ba41.jpg-ac30a6c51ed87600294b41ad19cb3056.bptc.ctex", "res://.godot/imported/asy_bay_frame_NormalGL_676d7721-860e-4df7-870f-4c04c188ba41.jpg-ac30a6c51ed87600294b41ad19cb3056.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

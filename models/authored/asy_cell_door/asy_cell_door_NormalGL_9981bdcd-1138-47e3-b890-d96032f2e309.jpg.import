@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b0cfuxvc0wlip"
-path="res://.godot/imported/asy_cell_door_NormalGL_9981bdcd-1138-47e3-b890-d96032f2e309.jpg-ede50f17af652d62f447cffe41e1ae3e.ctex"
+path.bptc="res://.godot/imported/asy_cell_door_NormalGL_9981bdcd-1138-47e3-b890-d96032f2e309.jpg-ede50f17af652d62f447cffe41e1ae3e.bptc.ctex"
+path.astc="res://.godot/imported/asy_cell_door_NormalGL_9981bdcd-1138-47e3-b890-d96032f2e309.jpg-ede50f17af652d62f447cffe41e1ae3e.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "7efff3963844575e5662c3417b3728b2"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/asy_cell_door/asy_cell_door_NormalGL_9981bdcd-1138-47e3-b890-d96032f2e309.jpg"
-dest_files=["res://.godot/imported/asy_cell_door_NormalGL_9981bdcd-1138-47e3-b890-d96032f2e309.jpg-ede50f17af652d62f447cffe41e1ae3e.ctex"]
+dest_files=["res://.godot/imported/asy_cell_door_NormalGL_9981bdcd-1138-47e3-b890-d96032f2e309.jpg-ede50f17af652d62f447cffe41e1ae3e.bptc.ctex", "res://.godot/imported/asy_cell_door_NormalGL_9981bdcd-1138-47e3-b890-d96032f2e309.jpg-ede50f17af652d62f447cffe41e1ae3e.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

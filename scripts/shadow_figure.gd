@@ -1079,6 +1079,7 @@ func pursuit_speed(observed: bool, distance: float) -> float:
 
 func _pool_girl_in_water() -> bool:
 	return walker_model_index == POOL_GIRL_MODEL_INDEX and player != null \
+		and player.level_theme == 9 \
 		and player.water_y > -1.0e8 \
 		and global_position.y + POOL_GIRL_WATER_SAMPLE_HEIGHT < player.water_y
 

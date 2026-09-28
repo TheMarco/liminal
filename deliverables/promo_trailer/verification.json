@@ -1,0 +1,66 @@
+{
+  "version": 6,
+  "duration_seconds": 77.06666666666666,
+  "video": "H.264",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "frames": 2312,
+  "audio": "AAC stereo, 48000 Hz, 320 kbps",
+  "integrated_loudness_lufs": -14.29,
+  "true_peak_dbtp": -1.05,
+  "full_decode": "passed",
+  "pause_menu_scan": {
+    "frames_scanned": 2312,
+    "positive_control_score": 3.3434789180755615,
+    "match_threshold": 5,
+    "remaining_matches": [],
+    "closest_frame": {
+      "frame": 2167,
+      "score": 16.338542938232422
+    }
+  },
+  "black_intervals": [
+    {
+      "start": 72.333333,
+      "end": 72.566667,
+      "duration": 0.233333
+    }
+  ],
+  "unexpected_black_intervals": [],
+  "feature_cards": {
+    "card_explore": {
+      "headline": "EXPLORE / THE IMPOSSIBLE.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_fight": {
+      "headline": "FIGHT / WITH LIGHT.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_alive": {
+      "headline": "THE BUILDING / IS ALIVE.",
+      "description": "",
+      "hold_seconds": 1.5
+    },
+    "card_preview": {
+      "headline": "PREVIEW YOUR / NEXT NIGHTMARE.",
+      "description": "",
+      "hold_seconds": 1.5
+    }
+  },
+  "all_footage_at_captured_speed": true,
+  "portal_handoff_edit": "raw frames 115\u2013119 omitted; native destination fade-in retained",
+  "new_scenes": "Flooded Annex hall walk and complete portal crossing into Office",
+  "confirmed_monster_kills": 4,
+  "vhs": true,
+  "crt": false,
+  "intro_seconds": 2,
+  "dr_cross": "both excerpts full-screen; dialogue aligned to native tape clocks",
+  "enemy_assignments": "verified against production roster for all six encounters",
+  "traversal": "Original six native walking-controller shots retained; new flooded Annex walk and native portal approach/destination walk added; head bob and handheld motion enabled",
+  "file_bytes": 221155836
+}

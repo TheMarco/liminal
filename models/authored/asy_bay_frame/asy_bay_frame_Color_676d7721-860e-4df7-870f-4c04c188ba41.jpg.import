@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b6oxv1m6b44py"
-path="res://.godot/imported/asy_bay_frame_Color_676d7721-860e-4df7-870f-4c04c188ba41.jpg-2de66e144960bbe4a24d5aa15a85bc91.ctex"
+path.bptc="res://.godot/imported/asy_bay_frame_Color_676d7721-860e-4df7-870f-4c04c188ba41.jpg-2de66e144960bbe4a24d5aa15a85bc91.bptc.ctex"
+path.astc="res://.godot/imported/asy_bay_frame_Color_676d7721-860e-4df7-870f-4c04c188ba41.jpg-2de66e144960bbe4a24d5aa15a85bc91.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "6df966a5480d2c2dbf19a00af2019521"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/asy_bay_frame/asy_bay_frame_Color_676d7721-860e-4df7-870f-4c04c188ba41.jpg"
-dest_files=["res://.godot/imported/asy_bay_frame_Color_676d7721-860e-4df7-870f-4c04c188ba41.jpg-2de66e144960bbe4a24d5aa15a85bc91.ctex"]
+dest_files=["res://.godot/imported/asy_bay_frame_Color_676d7721-860e-4df7-870f-4c04c188ba41.jpg-2de66e144960bbe4a24d5aa15a85bc91.bptc.ctex", "res://.godot/imported/asy_bay_frame_Color_676d7721-860e-4df7-870f-4c04c188ba41.jpg-2de66e144960bbe4a24d5aa15a85bc91.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

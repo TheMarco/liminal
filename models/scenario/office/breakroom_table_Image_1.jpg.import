@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://11lo4tjv7v2y"
-path="res://.godot/imported/breakroom_table_Image_1.jpg-742e285e0dae18fe1c5e9ff7f91a6a9f.ctex"
+path.bptc="res://.godot/imported/breakroom_table_Image_1.jpg-742e285e0dae18fe1c5e9ff7f91a6a9f.bptc.ctex"
+path.astc="res://.godot/imported/breakroom_table_Image_1.jpg-742e285e0dae18fe1c5e9ff7f91a6a9f.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "7514c271fafbab84cc1333496956cb45"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/scenario/office/breakroom_table_Image_1.jpg"
-dest_files=["res://.godot/imported/breakroom_table_Image_1.jpg-742e285e0dae18fe1c5e9ff7f91a6a9f.ctex"]
+dest_files=["res://.godot/imported/breakroom_table_Image_1.jpg-742e285e0dae18fe1c5e9ff7f91a6a9f.bptc.ctex", "res://.godot/imported/breakroom_table_Image_1.jpg-742e285e0dae18fe1c5e9ff7f91a6a9f.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

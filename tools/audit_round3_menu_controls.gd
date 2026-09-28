@@ -37,16 +37,33 @@ func run() -> void:
 	menu.open()
 	paused = true
 	await settle()
-	check(menu._controls.has("vhs_enabled") and menu._controls.has("crt_enabled"),
-		"gameplay settings do not expose separate VHS and CRT toggles")
+	check(menu._controls.has("vhs_enabled") and menu._controls.has("crt_enabled")
+		and menu._controls.has("crt_curvature"),
+		"gameplay settings do not expose separate VHS, CRT and curvature toggles")
 	check((menu._controls["vhs_enabled"] as CheckButton).button_pressed
-		and (menu._controls["crt_enabled"] as CheckButton).button_pressed,
-		"gameplay settings do not present the restored VHS + CRT defaults")
+		and (menu._controls["crt_enabled"] as CheckButton).button_pressed
+		and not (menu._controls["crt_curvature"] as CheckButton).button_pressed,
+		"gameplay settings do not present the VHS + flat CRT defaults")
+	settings.set_value("crt_enabled", false)
+	check((menu._controls["crt_curvature"] as CheckButton).disabled,
+		"curvature remains interactive while CRT is off")
+	settings.set_value("crt_enabled", true)
+	check(not (menu._controls["crt_curvature"] as CheckButton).disabled,
+		"curvature does not reactivate with CRT")
 	var settings_labels := ""
 	for label in menu.find_children("*", "Label", true, false):
 		settings_labels += (label as Label).text + "\n"
 	check(settings_labels.contains("VHS EFFECT STRENGTH"),
 		"settings still use the old VHS distortion label")
+	check(settings_labels.contains("FILM GRAIN") and menu._controls.has("film_grain"),
+		"settings do not expose the film grain slider")
+	settings.set_value("vhs_enabled", false)
+	var grain_slider := menu._controls["film_grain"][0] as HSlider
+	check(grain_slider.editable, "film grain became unavailable with VHS off")
+	grain_slider.value = 0.72
+	check(is_equal_approx(settings.get_value("film_grain"), 0.72),
+		"film grain slider did not update settings")
+	settings.set_value("vhs_enabled", true)
 	var resumes: Array[bool] = []
 	var quits: Array[bool] = []
 	menu.resumed.connect(func(): resumes.append(true))

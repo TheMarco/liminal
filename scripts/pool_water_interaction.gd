@@ -37,6 +37,7 @@ var _sheet_cursor := 0
 var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
+	add_to_group("pool_water_interaction")
 	top_level = true
 	global_transform = Transform3D.IDENTITY
 	_rng.seed = 74219

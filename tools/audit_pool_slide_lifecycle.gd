@@ -17,7 +17,7 @@ func run() -> void:
 		var prop := PoolEquipment.build(chunk._scene_writer,kind,Vector3(0,1.42,0),0)
 		var config: Dictionary = data["pool_"+PoolEquipment.KINDS[kind]]
 		var entry := prop.to_global(PoolEquipment._vec(config["entry"]))
-		player = Player.new(); player.water_y = 1.05; root.add_child(player)
+		player = Player.new(); player.level_theme = 9; player.water_y = 1.05; root.add_child(player)
 		player.set_physics_process(false); player.set_process(false)
 		await physics_frame
 		player.teleport(Vector3(entry.x,1.43,entry.z)); await ticks(60)

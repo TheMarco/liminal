@@ -27,12 +27,40 @@ func _run() -> void:
 	expect(controller._tube_display != null and controller._tube_display.visible,
 		"default CRT stage is hidden")
 	expect(controller._scene_copy.visible, "default VHS stage did not retain its scene copy")
+	expect(not controller._grain_copy.visible and not controller._grain_overlay.visible,
+		"film grain should remain off until the saved preference is applied")
+	expect(controller._grain_overlay.get_index() < controller._tube_display.get_index(),
+		"film grain should be part of the signal before CRT display")
+	controller.set_film_grain_intensity(0.68)
+	expect(controller._grain_copy.visible and controller._grain_overlay.visible,
+		"film grain pass did not enable")
+	expect(approx((controller._grain_overlay.material as ShaderMaterial).get_shader_parameter(
+		"intensity"), 0.68), "film grain slider did not reach the shader")
+	controller.set_effects(false, false)
+	expect(controller._grain_overlay.visible and controller.is_enabled(),
+		"film grain should work with VHS and CRT disabled")
+	controller.set_film_grain_intensity(0.0)
+	expect(not controller._grain_copy.visible and not controller._grain_overlay.visible,
+		"zero film grain did not remove the pass")
+	controller.set_effects(true, true)
 	expect(controller._tube_display.get_child_count() == 2, "tube display pass has wrong child count")
 	var tube_copy: BackBufferCopy = controller._tube_display.get_child(0)
 	var tube_face: ColorRect = controller._tube_display.get_child(1)
 	expect(tube_copy.name == "TapeSignalCopy" and tube_face.name == "Display", "tube pass ordering or names are wrong")
 	expect(tube_copy.copy_mode == BackBufferCopy.COPY_MODE_VIEWPORT, "tube copy is not viewport mode")
 	expect((tube_face.material as ShaderMaterial).shader == CONTROLLER.CRT_DISPLAY_SHADER, "tube display shader mismatch")
+	var tube_material := tube_face.material as ShaderMaterial
+	expect(tube_material.get_shader_parameter("curvature_enabled") == false,
+		"CRT curvature should default off")
+	controller.set_curvature_enabled(true)
+	expect(controller.is_curvature_enabled()
+		and tube_material.get_shader_parameter("curvature_enabled") == true,
+		"curved CRT did not enable the warp")
+	controller.set_curvature_enabled(false)
+	expect(not controller.is_curvature_enabled()
+		and tube_material.get_shader_parameter("curvature_enabled") == false
+		and controller._tube_display.visible,
+		"flat CRT did not retain the display stage")
 	expect(full_material.get_shader_parameter("tape_signal") == true, "full-screen tape_signal is not true")
 	expect(full_material.get_shader_parameter("resolution") == CONTROLLER.FOUND_FOOTAGE_RESOLUTION, "full-screen resolution mismatch")
 	var tv_material := CONTROLLER.make_found_footage_material(CONTROLLER.TV_TAPE_RESOLUTION)
@@ -46,12 +74,18 @@ func _run() -> void:
 	controller.set_effects(false, true)
 	expect(not controller._overlay.visible and controller._tube_display.visible,
 		"CRT-only combination is not independent")
+	expect(tube_material.get_shader_parameter("curvature_enabled") == false,
+		"CRT-only mode restored curvature unexpectedly")
 	controller.set_effects(true, false)
 	expect(controller._overlay.visible and not controller._tube_display.visible,
 		"VHS-only combination is not independent")
 	controller.set_effects(true, true)
 	expect(controller._overlay.visible and controller._tube_display.visible,
 		"combined VHS + CRT pipeline is not stacked")
+	controller.set_curvature_enabled(true)
+	expect(controller.is_curvature_enabled()
+		and tube_material.get_shader_parameter("curvature_enabled") == true,
+		"curved CRT mode did not restore the warp")
 	controller.set_enabled(false)
 	expect(not controller.is_enabled() and not controller._overlay.visible
 		and not controller._tube_display.visible and not controller._scene_copy.visible,
@@ -85,6 +119,8 @@ func _run() -> void:
 	var tv_face_material := (tv_display.get_child(1) as ColorRect).material as ShaderMaterial
 	expect(tv_face_material.shader == CONTROLLER.CRT_DISPLAY_SHADER, "TV display shader mismatch")
 	expect(tv_face_material.get_shader_parameter("signal_resolution") == CONTROLLER.TV_TAPE_RESOLUTION, "TV display resolution mismatch")
+	expect(tv_face_material.get_shader_parameter("curvature_enabled") == true,
+		"player curvature preference changed in-world TV glass")
 	expect(CONTROLLER.TV_TAPE_RESOLUTION == Vector2(344.0, 240.0), "TV tape resolution changed")
 	var tv_baseline := {
 		"noise_level": tv_material.get_shader_parameter("noise_level"),

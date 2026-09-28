@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c44o26bkklsqa"
-path="res://.godot/imported/casino_stool_Image_1.jpg-fdc960464d17d2b06976a27bd768bab1.ctex"
+path.bptc="res://.godot/imported/casino_stool_Image_1.jpg-fdc960464d17d2b06976a27bd768bab1.bptc.ctex"
+path.astc="res://.godot/imported/casino_stool_Image_1.jpg-fdc960464d17d2b06976a27bd768bab1.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "9663027c518c32cd83684219e941be80"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/casino_stool/casino_stool_Image_1.jpg"
-dest_files=["res://.godot/imported/casino_stool_Image_1.jpg-fdc960464d17d2b06976a27bd768bab1.ctex"]
+dest_files=["res://.godot/imported/casino_stool_Image_1.jpg-fdc960464d17d2b06976a27bd768bab1.bptc.ctex", "res://.godot/imported/casino_stool_Image_1.jpg-fdc960464d17d2b06976a27bd768bab1.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

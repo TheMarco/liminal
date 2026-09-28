@@ -1,8 +1,19 @@
 extends "res://tools/lib/audit_base.gd"
 ## Real lift targets, four orientations: room membership, occlusion and stale E.
+
+class ArrivalObserver extends Node:
+	var spent_count := 0
+
+	func descent_arrival_spent() -> void:
+		spent_count += 1
+
+
 func run() -> void:
 	var stage := Node3D.new()
 	root.add_child(stage)
+	var observer := ArrivalObserver.new()
+	stage.add_child(observer)
+	observer.add_to_group("descent_listener")
 	var player := Player.new()
 	stage.add_child(player)
 	player.set_process(false)
@@ -65,5 +76,88 @@ func run() -> void:
 		expect(not hit.enabled, "valid visible call did not activate lift")
 		chunk.free()
 		await process_frame
+		await _audit_arrival_reentry(stage, player, observer, direction)
 	await teardown_game(stage)
-	finish("lift access: four facings, same room, wall occlusion, stale press, valid call")
+	finish("lift access: four facings, call access, arrival re-entry before/during closure and empty retirement")
+
+
+func _walk_car(player: Player, car: Node3D, z: float, label: String) -> void:
+	var target := car.to_global(Vector3(0.0, 0.15, z))
+	var blocker := "none"
+	for step in 180:
+		await physics_frame
+		var offset := target - player.global_position
+		if offset.length() < 0.025:
+			return
+		var collision := player.move_and_collide(offset.limit_length(Player.WALK_SPEED / 60.0))
+		if collision != null:
+			blocker = str(collision.get_collider().get_path())
+	fail("arrival walk blocked: %s at %s by %s" % [
+		label, car.to_local(player.global_position), blocker])
+
+
+func _audit_arrival_reentry(stage: Node3D, player: Player,
+		observer: ArrivalObserver, direction: int) -> void:
+	observer.spent_count = 0
+	var chunk := Chunk.new(21, Vector2i.ZERO, 0, {
+		"descent": true, "arrival": true, "arrival_wall": direction,
+		"floor_idx": 0}, true)
+	stage.add_child(chunk)
+	# Build the production car in isolation; an arbitrary generated room can
+	# put unrelated furniture in this test's straight approach path.
+	chunk._descent_arrival_car(direction)
+	var rig: Dictionary = chunk._descent_arrival_rig
+	var car: Node3D = rig["root"]
+	var left: AnimatableBody3D = rig["left"]
+	var light: OmniLight3D = rig["light"]
+	player.global_position = car.to_global(Vector3(0.0, 0.15, 1.12))
+	await physics_frame
+	await physics_frame
+	chunk.open_descent_arrival()
+	expect(await await_until(func(): return left.position.x <= -1.01),
+		"arrival failed to open in facing %d" % direction)
+
+	# Reverse course during the delay, then stay inside past both timers.
+	await _walk_car(player, car, 3.6, "first exit %d" % direction)
+	await _walk_car(player, car, 1.12, "return before closing %d" % direction)
+	await create_timer(2.8).timeout
+	expect(left.position.x <= -1.01 and light.visible and observer.spent_count == 0,
+		"arrival retired after returning during delay, facing %d" % direction)
+
+	# Start back after the leaves are actually moving. Stop in the doorway:
+	# the player must not need to reach the cabin centre to stop the doors.
+	await _walk_car(player, car, 3.6, "second exit %d" % direction)
+	expect(await await_until(func(): return left.position.x > -1.0),
+		"empty arrival never started closing, facing %d" % direction)
+	await _walk_car(player, car, 2.3, "return during closing %d" % direction)
+	await create_timer(1.2).timeout
+	expect(left.position.x <= -1.01 and light.visible and observer.spent_count == 0,
+		"arrival sealed an occupied doorway, facing %d" % direction)
+	await _walk_car(player, car, 1.12, "back into cabin %d" % direction)
+	await create_timer(1.8).timeout
+	expect(left.position.x <= -1.01 and observer.spent_count == 0,
+		"stale close retired a reoccupied arrival, facing %d" % direction)
+
+	await _walk_car(player, car, 3.6, "final escape %d" % direction)
+	expect(await await_until(func(): return not light.visible),
+		"empty arrival did not retire, facing %d" % direction)
+	await physics_frame
+	await physics_frame
+	expect(is_equal_approx(left.position.x, -0.54) and observer.spent_count == 1 \
+			and chunk.descent_arrival_used,
+		"arrival retirement facing %d: leaf %.4f, spent %d, used %s" % [
+			direction, left.position.x, observer.spent_count, chunk.descent_arrival_used])
+	chunk.free()
+	await physics_frame
+	var rebuilt := Chunk.new(21, Vector2i.ZERO, 0, {
+		"descent": true, "arrival": true, "arrival_wall": direction,
+		"floor_idx": 0, "arrival_used": true}, true)
+	stage.add_child(rebuilt)
+	rebuilt._descent_arrival_car(direction)
+	rebuilt.open_descent_arrival()
+	var retired: Dictionary = rebuilt._descent_arrival_rig
+	expect(not rebuilt.has_descent_arrival() and not retired["light"].visible \
+			and is_equal_approx(retired["left"].position.x, -0.54),
+		"retired arrival reopened after rebuilding, facing %d" % direction)
+	rebuilt.free()
+	await physics_frame

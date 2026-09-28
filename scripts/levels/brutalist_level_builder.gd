@@ -239,6 +239,7 @@ func _brutalist_lighting() -> void:
 		var shaft := SpotLight3D.new()
 		shaft.light_color = Color(0.62, 0.78, 0.90)
 		shaft.light_energy = 4.0
+		shaft.light_volumetric_fog_energy = 1.6
 		shaft.spot_range = ctx.ceiling_height + 3.0
 		shaft.spot_angle = 38.0
 		shaft.position = Vector3(6.0, ctx.ceiling_height - 0.35, 6.0)

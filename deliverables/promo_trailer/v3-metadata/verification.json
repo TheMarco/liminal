@@ -1,0 +1,41 @@
+{
+  "version": 3,
+  "duration_seconds": 60.0,
+  "video": "H.264",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "frames": 1800,
+  "audio": "AAC stereo, 48000 Hz, 320 kbps",
+  "integrated_loudness_lufs": -14.14,
+  "true_peak_dbtp": -1.07,
+  "full_decode": "passed",
+  "pause_menu_scan": {
+    "frames_scanned": 1800,
+    "positive_control_score": 3.3434789180755615,
+    "match_threshold": 5,
+    "remaining_matches": [],
+    "closest_frame": {
+      "frame": 1685,
+      "score": 15.899457931518555
+    }
+  },
+  "black_intervals": [
+    {
+      "start": 56.266667,
+      "end": 56.5,
+      "duration": 0.233333
+    }
+  ],
+  "unexpected_black_intervals": [],
+  "confirmed_monster_kills": 4,
+  "vhs": true,
+  "crt": false,
+  "intro_seconds": 2,
+  "dr_cross": "both excerpts full-screen; dialogue aligned to native tape clocks",
+  "enemy_assignments": "verified against production roster for all six encounters",
+  "traversal": "six native walking-controller shots; added bob/roll removed; camera trajectories checked",
+  "file_bytes": 172665679
+}

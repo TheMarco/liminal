@@ -7,6 +7,11 @@ static var _walkway_glass_material: StandardMaterial3D
 const WALKWAY_RAMP_OVERHANG := 0.56
 const WALKWAY_END_AISLE := 1.24
 
+static func clear_runtime_cache() -> void:
+	_carousel_belt_material = null
+	_walkway_fitted_meshes.clear()
+	_walkway_glass_material = null
+
 
 func _air_zone_sign(salt: int) -> String:
 	var zone = WorldGen.macro_zone(ctx.world_seed, ctx.cell, ctx.theme)
@@ -977,12 +982,13 @@ func _air_transit_header(o: Vector3, yw: float, side: float,
 func _air_transit_open_casing(o: Vector3, yw: float, side: float,
 		t: float, width: float) -> void:
 	var inn = side - signf(side) * (Chunk.T * 0.5 + 0.025)
+	var jamb_width := 0.2
 	for edge in [t - width * 0.5, t + width * 0.5]:
 		var jamb = scene.model_box(null, scene.world_point(o, Vector3(edge, Chunk.AIR_DOOR * 0.5, inn), yw),
-			Vector3(0.2, Chunk.AIR_DOOR, Chunk.T + 0.2), Mats.steel())
+			Vector3(jamb_width, Chunk.AIR_DOOR, Chunk.T + 0.2), Mats.steel())
 		jamb.rotation.y = yw
 	var lintel = scene.model_box(null, scene.world_point(o, Vector3(t, Chunk.AIR_DOOR + 0.1, inn), yw),
-		Vector3(width + 0.22, 0.2, Chunk.T + 0.2), Mats.steel())
+		Vector3(width + jamb_width, 0.2, Chunk.T + 0.2), Mats.steel())
 	lintel.rotation.y = yw
 	# Small backlit identifier fixed to the portal head, facing the transit lane.
 	var v = Node3D.new()
@@ -1344,16 +1350,20 @@ func _escalator_flight(o: Vector3, yw: float, cx: float) -> void:
 
 
 func _air_hall() -> void:
-	# the overflow hall: seating for a delay that outlived its passengers
-	# (a portal claims the middle of the room when one is open here)
-	var span = scene.room_span()
-	var mx = span.x / 2.0 - 2.4
-	var mz = span.y / 2.0 - 2.4
-	if ctx.portal_destination < 0 and ctx.random01(400) < 0.6 and mx > 0.5 and mz > 0.5:
-		# rows sit square to the room and clear of its walls
-		_seat_row(Vector3(WorldGen.CELL_SIZE / 2.0 + (ctx.random01(401) - 0.5) * 2.0 * mx, 0,
-			WorldGen.CELL_SIZE / 2.0 + (ctx.random01(402) - 0.5) * 2.0 * mz),
-			float(int(ctx.random01(403) * 3.99)) * PI / 2.0, 5, 404)
+	# Overflow seating defines this room even when the optional scatter misses.
+	# One row in a multi-cell shell looked like an unfinished airport terminal.
+	var span := scene.room_span()
+	var yaw := 0.0 if span.x >= span.y else PI / 2.0
+	var s := WorldGen.CELL_SIZE
+	var rc := WorldGen.room_centre(ctx.world_seed, ctx.room_root)
+	var shift := Vector3(rc.x - (float(ctx.cell.x) * s + s * 0.5), 0,
+		rc.y - (float(ctx.cell.y) * s + s * 0.5))
+	var index := 0
+	for member in scene.room_members():
+		var centre := Vector3(float(member.x - ctx.cell.x) * s + s * 0.5,
+			0, float(member.y - ctx.cell.y) * s + s * 0.5) - shift
+		_seat_row(centre, yaw, 5, 404 + index * 3)
+		index += 1
 	if ctx.random01(405) < 0.4:
 		scene.planter(Vector3(2.6 + 6.8 * ctx.random01(406), 0, 2.6 + 6.8 * ctx.random01(407)))
 	if ctx.portal_destination < 0 and ctx.random01(408) < 0.3:

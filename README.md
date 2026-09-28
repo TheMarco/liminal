@@ -339,8 +339,12 @@ and combined modes.
 ### Breathing architecture
 
 During quiet exploration, a clear wall can slowly swell and settle. Attached
-stripes, rails and lower panels follow it. After the first two breaths, occasional
+stripes, rails and lower panels follow it. A clear wall can move as a broad panel
+up to 6 × 3.6 m and 65 cm deep; tighter spaces use smaller fitted patches.
+After the first two breaths, occasional
 travelling pressure can cross the wall, or a clear ceiling patch can breathe.
+Clear ceilings can use a broad area up to 5 × 4 m and bow downward up to 45 cm;
+overhead fixtures and headroom limit the fitted size in tighter rooms.
 An occasional walkable hallway wave also passes through native walls, ceiling,
 floor and fixtures. Its collision follows the same motion. Eligible straight
 passages are supported across levels; Airport uses ordinary halls, not moving
@@ -350,6 +354,24 @@ Ceilings keep their native finish, avoid lights/vents/beams and preserve standin
 headroom; rooms without a suitable patch skip the effect. Events have long quiet gaps, share the
 horror director's pacing, and withdraw when an actor approaches. Recordings,
 chases, blackouts, realm visits and transitions suppress them.
+
+Across Descent's 11 themes, a rare doorway can appear on a solid room wall
+with the blue coded wall leak, low hum and live view used by the temporary
+next-level visit. This view looks into the same room from its far wall, keeping
+the room's left and right layout unchanged. Walking into the opening returns
+you there facing the same direction; the doorway vanishes, then a latch and
+knocks sound behind you. The last knock waits until you look back at the wall,
+where a faint trace fades on first view. This one-shot floor event saves its
+consumed state in the checkpoint without changing the route graph. To try it
+directly without using a campaign save:
+
+`godot --path . -- --living-preview=return`
+
+The preview starts on the Office floor facing the door. Walk into the glow,
+then turn back to inspect the wall.
+In normal play, the architecture director schedules this rare door with the
+wall and ceiling effects. Its first sighting counts toward their shared cadence;
+opening it holds that cadence through the latch and knocks.
 
 `--breathing` enables **F6** requests cycling through wall breath, travelling pressure,
 ceiling breath and hallway wave. Look up for the ceiling request. Requests still require a
@@ -375,6 +397,11 @@ Game audio bus; music and monster audio are unchanged. The mix level is
 
 Focused checks: `tools/audit_hallway_wave.gd -- --nologo --level=1` and
 `tools/audit_breathing_runtime.gd -- --nologo`, both via `godot --headless --path . --script`.
+The return door requires a safe wall pair and landing. The focused checks are
+`tools/audit_living_environment.gd`, `tools/audit_return_all_levels.gd`, and
+`tools/audit_return_preview_start.gd` (with `-- --living-preview=return`).
+The next-level doorway remains on the planned route. Its first visible glow
+briefly holds optional scares while the player recognizes it.
 See [wave integration notes](docs/HALLWAY_WAVE_PROOF.md) for coverage and limitations.
 
 ## Building
@@ -386,14 +413,14 @@ export templates installed):
   with Developer ID under the hardened runtime, **notarized by Apple and
   stapled**, so it opens on any Mac with no Gatekeeper warning. Notarization
   uses the stored `AC_PASSWORD` notarytool profile; `NOTARIZE=0 ./build.sh`
-  skips it for a quick local build.
+  produces an offline, ad-hoc-signed local build without notarization.
 - `build/windows/It wants you to stay.exe` — single self-contained x86_64 binary,
   no installer and no DLLs beside it. Windows uses Godot's Forward+ renderer
   through the native Direct3D 12 driver, with Vulkan retained as the automatic
   fallback on unsupported systems.
 - `build/linux/It wants you to stay.x86_64` — single self-contained x86_64
   executable with its PCK embedded, distributed as
-  `build/linux/It wants you to stay-Linux.zip`. Linux uses the Forward+
+  `build/linux/It wants you to stay-Linux-0.5.3.zip`. Linux uses the Forward+
   renderer through Vulkan.
 
 ## Controls

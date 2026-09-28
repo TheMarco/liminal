@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "duration_seconds": 60.0,
+  "video": "H.264",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "frames": 1800,
+  "audio": "AAC stereo, 48000 Hz, 320 kbps",
+  "integrated_loudness_lufs": -14.26,
+  "true_peak_dbtp": -1.12,
+  "full_decode": "passed",
+  "pause_menu_scan": {
+    "frames_scanned": 1800,
+    "positive_control_score": 3.3434789180755615,
+    "match_threshold": 5,
+    "remaining_matches": [],
+    "closest_frame": {
+      "frame": 1624,
+      "score": 15.894500732421875
+    }
+  },
+  "black_intervals": [
+    {
+      "start": 54.233333,
+      "end": 54.466667,
+      "duration": 0.233333
+    }
+  ],
+  "unexpected_black_intervals": [],
+  "confirmed_monster_kills": 5,
+  "vhs": true,
+  "crt": false,
+  "intro_seconds": 2,
+  "dr_cross": "both excerpts full-screen; original playback clocks and dialogue timing retained",
+  "file_bytes": 167539532
+}

@@ -1,0 +1,25 @@
+{
+  "triangles": 1302,
+  "meshes": 2,
+  "surfaces": 2,
+  "bounds_godot_m": {
+    "min": [
+      -0.6100000143051147,
+      -0.012000000104308128,
+      -0.0949999988079071
+    ],
+    "max": [
+      0.6100000143051147,
+      0.10999999940395355,
+      0.0949999988079071
+    ]
+  },
+  "front_axis": "+Z",
+  "mount": "ceiling plane at Y=0, diffuser faces -Y",
+  "lens_node": "DiffuserLens",
+  "lens_size_m": [
+    1.166,
+    0.136
+  ],
+  "emission_energy": 2.4
+}

@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://clmyntpvq3vwf"
-path="res://.godot/imported/wood_shelf_Image_2.jpg-82e2c6f82b1fc1944c7c0d676293489e.ctex"
+path.bptc="res://.godot/imported/wood_shelf_Image_2.jpg-82e2c6f82b1fc1944c7c0d676293489e.bptc.ctex"
+path.astc="res://.godot/imported/wood_shelf_Image_2.jpg-82e2c6f82b1fc1944c7c0d676293489e.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "31cbdbfa1b79577bd2d639666da1b5da"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/scenario/office/wood_shelf_Image_2.jpg"
-dest_files=["res://.godot/imported/wood_shelf_Image_2.jpg-82e2c6f82b1fc1944c7c0d676293489e.ctex"]
+dest_files=["res://.godot/imported/wood_shelf_Image_2.jpg-82e2c6f82b1fc1944c7c0d676293489e.bptc.ctex", "res://.godot/imported/wood_shelf_Image_2.jpg-82e2c6f82b1fc1944c7c0d676293489e.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
