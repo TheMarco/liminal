@@ -68,7 +68,7 @@ const AC_SIZES := [
 
 func _brutalist_floor_ceiling() -> void:
 	scene.box(Vector3(WorldGen.CELL_SIZE * 0.5, -0.18, WorldGen.CELL_SIZE * 0.5),
-		Vector3(WorldGen.CELL_SIZE, 0.36, WorldGen.CELL_SIZE), Mats.brutal_floor())
+		Vector3(WorldGen.CELL_SIZE, 0.36, WorldGen.CELL_SIZE), Mats.data_center_access_floor())
 	scene.box(Vector3(WorldGen.CELL_SIZE * 0.5, ctx.ceiling_height + 0.24, WorldGen.CELL_SIZE * 0.5),
 		Vector3(WorldGen.CELL_SIZE, 0.48, WorldGen.CELL_SIZE), Mats.brutal_structure())
 	# Deep coffers turn every ceiling into load-bearing mass, not a flat lid.
@@ -89,6 +89,90 @@ func _brutalist_floor_ceiling() -> void:
 			scene.box(Vector3(x, ctx.ceiling_height - 0.08, 6.0),
 				Vector3(0.20, 0.16, 3.35), Mats.brutal_steel(), false)
 	_monolith_incursion()
+	_data_center_structure()
+
+
+## Primary chilled-water mains are intentionally broad and high. Their color
+## separates the mechanical estate from the cold cabinet aisles below.
+func _data_center_structure() -> void:
+	if ctx.style == WorldGen.BRUTAL_PASSAGE: return
+	var root := Node3D.new()
+	root.name = "CoolingMains"
+	scene.add_node(root)
+	var h := ctx.ceiling_height
+	var elevation := minf(h - 0.95, 5.35)
+	root.position.y = elevation
+	var y := 0.0
+	ProceduralDetails.attach(root, "cooling_mains_template_v2", func(d: ProceduralDetails):
+		for x in [1.7, 10.3]:
+			for offset in [-0.20, 0.20]:
+				d.tube(Vector3(x + offset, y, 0), Vector3(x + offset, y, 12), 0.135, Mats.data_center_pipe())
+				for z in [0.4, 3.8, 8.2, 11.6]:
+					d.ring(Vector3(x + offset, y, z), 0.16, 0.033, Mats.data_center_porcelain(), Vector3.FORWARD)
+			for z in [1.0, 6.0, 11.0]:
+				d.box(Vector3(x, y - 0.18, z), Vector3(0.88, 0.07, 0.12), Mats.brutal_steel())
+		# Cross-room service gantries carry cable bundles and a grated underside.
+		for z in [1.1, 10.9]:
+			d.box(Vector3(6, y + 0.43, z), Vector3(12, 0.11, 0.64), Mats.brutal_steel())
+			for dz in [-0.31, 0.31]:
+				d.box(Vector3(6, y + 0.59, z + dz), Vector3(12, 0.23, 0.045), Mats.data_center_porcelain())
+			for dz in [-0.18, 0.0, 0.18]:
+				d.tube(Vector3(0, y + 0.54, z + dz), Vector3(12, y + 0.54, z + dz), 0.045, Mats.data_center_cable())
+			for i in 24:
+				d.box(Vector3(float(i) * 0.5 + 0.25, y + 0.36, z), Vector3(0.055, 0.025, 0.68), Mats.data_center_porcelain())
+	, true)
+	var hangers: Array[Transform3D] = []
+	var length := h - elevation + 0.06
+	for x in [1.7, 10.3]:
+		for z in [1.0, 6.0, 11.0]:
+			for dx in [-0.40, 0.40]:
+				hangers.append(Transform3D(Basis.from_scale(Vector3(1,length,1)),
+					Vector3(x+dx, -0.14+length*0.5, z)))
+	ProceduralDetails.attach_instances(root, "cooling_hanger_unit", func(d: ProceduralDetails):
+		d.tube(Vector3(0,-0.5,0), Vector3(0,0.5,0), 0.014, Mats.data_center_porcelain())
+	, hangers)
+
+
+func _data_center_wall_finish(dir: int, plane: float, from: float, to: float,
+		y0: float, y1: float) -> void:
+	var width := to - from
+	if width < 1.35 or y1 < 4.2 or y0 > 3.4: return
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var face := plane + n * (Chunk.T * 0.5 + 0.05)
+	var root := Node3D.new()
+	root.name = "MachineWallPanels"
+	root.position = Vector3(face, 0, (from + to) * 0.5) if dir < 2 else Vector3((from + to) * 0.5, 0, face)
+	root.rotation.y = -PI * 0.5 if dir == 0 else (PI * 0.5 if dir == 1 else (PI if dir == 2 else 0.0))
+	scene.add_node(root)
+	var height := minf(3.2, y1 - 4.1)
+	var count := maxi(1, int((width - 0.3) / 1.2))
+	var pitch := (width - 0.3) / float(count)
+	# A finite family of louver modules replaces dimension-specific wall bakes.
+	# Fit instances to the existing span; keep one material batch per wall.
+	var slats := maxi(2, int(height / 0.15))
+	var module_height := float(slats) * 0.15
+	var panels: Array[Transform3D] = []
+	for i in count:
+		var x := -width*0.5+0.15+pitch*(float(i)+0.5)
+		panels.append(Transform3D(Basis.from_scale(Vector3(pitch/1.2,height/module_height,1)),Vector3(x,3.9,0)))
+	scene.model_box(root, Vector3(0,3.65,0.12), Vector3(width,0.22,0.30), Mats.brutal_steel())
+	ProceduralDetails.attach_instances(root, "data_louver_module_%d" % slats, func(d: ProceduralDetails):
+		d.box(Vector3(0,module_height*0.5,0),Vector3(1.165,module_height,0.14),Mats.data_center_porcelain(),0.025)
+		d.box(Vector3(0,module_height*0.55,0.10),Vector3(0.98,module_height*0.68,0.06),Mats.brutal_steel(),0.015)
+		for j in slats:
+			d.box(Vector3(0,0.10+float(j)*0.115,0.15),Vector3(0.92,0.035,0.055),Mats.data_center_porcelain())
+		d.box(Vector3(-0.264,0.08,0.19),Vector3(0.08,0.045,0.025),Mats.data_center_amber())
+		d.box(Vector3(0.24,0.08,0.19),Vector3(0.07,0.035,0.025),Mats.data_center_status())
+	, panels)
+	if width > 3.5:
+		var label := Label3D.new()
+		label.text = "CHILLED WATER  /  %02d" % posmod(ctx.cell.x * 7 + ctx.cell.y * 3, 99)
+		label.font_size = 72
+		label.pixel_size = 0.0022
+		label.position = Vector3(0, 3.66, 0.29)
+		label.modulate = Color(0.83, 0.64, 0.37)
+		label.no_depth_test = false
+		root.add_child(label)
 
 
 ## The Bloom is beginning to cross the boundary, but it has not claimed this
@@ -481,49 +565,77 @@ func _aisle_floor_guides(axis_x: bool, centre: float = 6.0,
 
 func _overhead_busways(axis_x: bool, lanes: Array, height: float,
 		long_span: float = 12.0) -> void:
-	var bus_length := maxf(3.0, long_span - 1.2)
 	for lane in lanes:
-		var p := Vector3(6.0, height, float(lane)) if axis_x \
-			else Vector3(float(lane), height, 6.0)
-		var s := Vector3(bus_length, 0.12, 0.48) if axis_x \
-			else Vector3(0.48, 0.12, bus_length)
-		var tray := scene.box(p, s, Mats.brutal_steel(), false)
-		tray.set_meta("data_center_overhead_busway", true)
-		var glow_p := p - Vector3(0.0, 0.075, 0.0)
-		var glow_s := Vector3(bus_length - 0.35, 0.025, 0.065) if axis_x \
-			else Vector3(0.065, 0.025, bus_length - 0.35)
-		scene.box(glow_p, glow_s, Mats.data_center_status(), false)
-		# Two readable cable looms sit above each ladder tray.
-		for side in [-0.13, 0.13]:
-			var cp := p + (Vector3(0.0, 0.09, side) if axis_x \
-				else Vector3(side, 0.09, 0.0))
-			var cs := Vector3(bus_length - 0.20, 0.045, 0.055) if axis_x \
-				else Vector3(0.055, 0.045, bus_length - 0.20)
-			scene.box(cp, cs, Mats.data_center_cable(), false)
-		var t := 6.0 - long_span * 0.5 + 0.8
-		var last := 6.0 + long_span * 0.5 - 0.8
-		while t <= last + 0.01:
-			var rp := Vector3(t, height + 0.08, float(lane)) if axis_x \
-				else Vector3(float(lane), height + 0.08, t)
-			var rs := Vector3(0.055, 0.055, 0.58) if axis_x \
-				else Vector3(0.58, 0.055, 0.055)
-			scene.box(rp, rs, Mats.brutal_steel(), false)
-			t += 1.70
-		var hardware := Node3D.new()
-		hardware.position = p
-		hardware.rotation.y = 0.0 if axis_x else PI * 0.5
-		scene.add_node(hardware)
-		var drop := maxf(0.12, ctx.ceiling_height - height - 0.04)
-		ProceduralDetails.attach(hardware, "busway_%.4f_%.4f" % [bus_length, drop],
-			func(d: ProceduralDetails):
-				for x in [-bus_length * 0.33, bus_length * 0.33]:
-					d.box(Vector3(x, -0.082, 0), Vector3(0.08, 0.035, 0.58), Mats.brutal_steel())
-					for z in [-0.265, 0.265]:
-						d.tube(Vector3(x, -0.08, z), Vector3(x, drop, z), 0.011, Mats.brutal_steel())
-						d.box(Vector3(x, drop, z), Vector3(0.10, 0.018, 0.10), Mats.brutal_steel())
-				# Broad clamps read at player distance without a forest of fasteners.
-				for x in [-bus_length * 0.23, 0.0, bus_length * 0.23]:
-					d.box(Vector3(x, 0.117, 0), Vector3(0.038, 0.016, 0.35), Mats.charcoal()))
+		scene.build_job(_overhead_busway_lane.bind(axis_x, float(lane), height, long_span))
+
+
+func _overhead_busway_lane(axis_x: bool, lane: float, height: float, long_span: float) -> void:
+	var bus_length := maxf(3.0, long_span - 1.2)
+	var p := Vector3(6.0, height, float(lane)) if axis_x \
+		else Vector3(float(lane), height, 6.0)
+	var s := Vector3(bus_length, 0.12, 0.48) if axis_x \
+		else Vector3(0.48, 0.12, bus_length)
+	var tray := scene.box(p, s, Mats.brutal_steel(), false)
+	tray.set_meta("data_center_overhead_busway", true)
+	var glow_p := p - Vector3(0.0, 0.075, 0.0)
+	var glow_s := Vector3(bus_length - 0.35, 0.025, 0.065) if axis_x \
+		else Vector3(0.065, 0.025, bus_length - 0.35)
+	scene.box(glow_p, glow_s, Mats.data_center_status(), false)
+	# Two readable cable looms sit above each ladder tray.
+	for side in [-0.13, 0.13]:
+		var cp := p + (Vector3(0.0, 0.09, side) if axis_x \
+			else Vector3(side, 0.09, 0.0))
+		var cs := Vector3(bus_length - 0.20, 0.045, 0.055) if axis_x \
+			else Vector3(0.055, 0.045, bus_length - 0.20)
+		scene.box(cp, cs, Mats.data_center_cable(), false)
+	var t := 6.0 - long_span * 0.5 + 0.8
+	var last := 6.0 + long_span * 0.5 - 0.8
+	while t <= last + 0.01:
+		var rp := Vector3(t, height + 0.08, float(lane)) if axis_x \
+			else Vector3(float(lane), height + 0.08, t)
+		var rs := Vector3(0.055, 0.055, 0.58) if axis_x \
+			else Vector3(0.58, 0.055, 0.055)
+		scene.box(rp, rs, Mats.brutal_steel(), false)
+		t += 1.70
+	var hardware := Node3D.new()
+	hardware.position = p
+	hardware.rotation.y = 0.0 if axis_x else PI * 0.5
+	scene.add_node(hardware)
+	var drop := maxf(0.12, ctx.ceiling_height - height - 0.04)
+	_busway_hardware(hardware, bus_length, drop)
+
+
+## Room heights vary continuously. Keep the fixed brackets shared and stretch
+## only the suspension rods; baking a complete mesh per height is costly during streaming.
+static func _busway_hardware(root: Node3D, bus_length: float, drop: float) -> void:
+	ProceduralDetails.attach(root, "busway_brackets_%.4f" % bus_length,
+		func(d: ProceduralDetails):
+			for x in [-bus_length * 0.33, bus_length * 0.33]:
+				d.box(Vector3(x, -0.082, 0), Vector3(0.08, 0.035, 0.58), Mats.brutal_steel())
+			for x in [-bus_length * 0.23, 0.0, bus_length * 0.23]:
+				d.box(Vector3(x, 0.117, 0), Vector3(0.038, 0.016, 0.35), Mats.charcoal())
+	, true)
+	var rods: Array[Transform3D] = []
+	var plates: Array[Transform3D] = []
+	for x in [-bus_length * 0.33, bus_length * 0.33]:
+		for z in [-0.265, 0.265]:
+			rods.append(Transform3D(Basis.from_scale(Vector3(1, drop + 0.08, 1)),
+				Vector3(x, (drop - 0.08) * 0.5, z)))
+			plates.append(Transform3D(Basis.IDENTITY, Vector3(x, drop, z)))
+	ProceduralDetails.attach_instances(root, "busway_rod_unit", func(d: ProceduralDetails):
+		d.tube(Vector3(0, -0.5, 0), Vector3(0, 0.5, 0), 0.011, Mats.brutal_steel())
+	, rods)
+	ProceduralDetails.attach_instances(root, "busway_ceiling_plate", func(d: ProceduralDetails):
+		d.box(Vector3.ZERO, Vector3(0.10, 0.018, 0.10), Mats.brutal_steel())
+	, plates)
+
+
+static func prewarm_busways() -> void:
+	# Compact spawn banks, ordinary rooms and merged halls use these spans.
+	var temporary := Node3D.new()
+	for span in [5.6, 12.0, 24.0]:
+		_busway_hardware(temporary, span - 1.2, 1.0)
+	temporary.free()
 
 
 func _machine_room_light(at: Vector3, energy := 2.0) -> void:
@@ -577,19 +689,19 @@ func _rack_aisle(axis_x: bool, service_half_width := 1.60) -> void:
 		# footprint; the other rows can use the whole dense run.
 		var near_column := absf(lane - 1.70) < 0.95 \
 			or absf(lane - 10.30) < 0.95
-		_dense_rack_row(axis_x, lane, row_index % 2, long_span,
-			3.25 if near_column else 1.25, service_half_width)
+		scene.build_job(_dense_rack_row.bind(axis_x, lane, row_index % 2, long_span,
+			3.25 if near_column else 1.25, service_half_width))
 	# Guide and light every facing pair; the continuous transverse break through
 	# all rows remains the cross-route even in eight-row merged rooms.
 	for pair_start in range(0, rack_lanes.size() - 1, 2):
 		var aisle_lane: float = (rack_lanes[pair_start] \
 			+ rack_lanes[pair_start + 1]) * 0.5
-		_aisle_floor_guides(axis_x, aisle_lane, long_span)
-		_machine_room_light(
+		scene.build_job(_aisle_floor_guides.bind(axis_x, aisle_lane, long_span))
+		scene.build_job(_machine_room_light.bind(
 			Vector3(6.0, 0.0, aisle_lane) if axis_x \
-			else Vector3(aisle_lane, 0.0, 6.0), 2.15)
+			else Vector3(aisle_lane, 0.0, 6.0), 2.15))
 	var cable_y := minf(ctx.ceiling_height - 1.05, 3.55)
-	_overhead_busways(axis_x, rack_lanes, cable_y, long_span)
+	scene.build_job(_overhead_busways.bind(axis_x, rack_lanes, cable_y, long_span))
 
 
 func _dense_rack_row(axis_x: bool, lane: float, side: int,
@@ -610,7 +722,7 @@ func _dense_rack_row(axis_x: bool, lane: float, side: int,
 		while t <= float(limit.y) + 0.01:
 			var p := Vector3(t, 0.0, lane) if axis_x \
 				else Vector3(lane, 0.0, t)
-			_network_rack(p, rack_yaw)
+			scene.build_job(_network_rack.bind(p, rack_yaw))
 			points.append(t)
 			t += 3.05
 		# The slim enclosed rack precisely fills the safe gap between the wider
@@ -624,11 +736,11 @@ func _dense_rack_row(axis_x: bool, lane: float, side: int,
 				ctx.cell.y + side, 2260), 3)
 			match variant:
 				0:
-					_server_rack(sp, rack_yaw)
+					scene.build_job(_server_rack.bind(sp, rack_yaw))
 				1:
-					_glass_server_rack(sp, rack_yaw)
+					scene.build_job(_glass_server_rack.bind(sp, rack_yaw))
 				_:
-					_azure_server_rack(sp, rack_yaw)
+					scene.build_job(_azure_server_rack.bind(sp, rack_yaw))
 
 
 func _compact_server_field() -> void:
@@ -651,17 +763,17 @@ func _compact_server_field() -> void:
 				ctx.cell.x + position_index, ctx.cell.y + row_index, 2280), 3)
 			match variant:
 				0:
-					_server_rack(p, yaw)
+					scene.build_job(_server_rack.bind(p, yaw))
 				1:
-					_glass_server_rack(p, yaw)
+					scene.build_job(_glass_server_rack.bind(p, yaw))
 				_:
-					_azure_server_rack(p, yaw)
+					scene.build_job(_azure_server_rack.bind(p, yaw))
 	for guide_lane in [4.95, 7.25]:
-		_aisle_floor_guides(true, float(guide_lane), 5.6)
-	_overhead_busways(true, lanes,
-		minf(ctx.ceiling_height - 1.05, 3.55), 5.6)
-	_machine_room_light(Vector3(6.0, 0.0, 4.95), 2.35)
-	_machine_room_light(Vector3(6.0, 0.0, 7.25), 2.10)
+		scene.build_job(_aisle_floor_guides.bind(true, float(guide_lane), 5.6))
+	scene.build_job(_overhead_busways.bind(true, lanes,
+		minf(ctx.ceiling_height - 1.05, 3.55), 5.6))
+	scene.build_job(_machine_room_light.bind(Vector3(6.0, 0.0, 4.95), 2.35))
+	scene.build_job(_machine_room_light.bind(Vector3(6.0, 0.0, 7.25), 2.10))
 
 
 func _emergency_beacon(at: Vector3) -> void:
@@ -721,23 +833,24 @@ func _passage_server_rows(along_x: bool, side_data: Array[Dictionary]) -> void:
 				var variant := posmod(WorldGen.h(ctx.world_seed,
 					ctx.cell.x + int(round(t * 10.0)),
 					ctx.cell.y + (0 if side < 0.0 else 31), 2270), 3)
-				var rack: Node3D
-				match variant:
-					0:
-						rack = _server_rack(p, yaw)
-					1:
-						rack = _glass_server_rack(p, yaw)
-					_:
-						rack = _azure_server_rack(p, yaw)
-				if rack != null:
-					rack.set_meta("data_center_passage_rack", true)
-					rack.set_meta("data_center_passage_side", int(signf(side)))
+				scene.build_job(_passage_rack.bind(p, yaw, variant, side))
 				t += 1.02
+
+
+func _passage_rack(p: Vector3, yaw: float, variant: int, side: float) -> void:
+	var rack: Node3D
+	match variant:
+		0: rack = _server_rack(p, yaw)
+		1: rack = _glass_server_rack(p, yaw)
+		_: rack = _azure_server_rack(p, yaw)
+	if rack != null:
+		rack.set_meta("data_center_passage_rack", true)
+		rack.set_meta("data_center_passage_side", int(signf(side)))
 
 
 func _data_center_tunnel_dressing(along_x: bool) -> void:
 	var cable_y := TUNNEL_HEIGHT - 0.45
-	_overhead_busways(along_x, [5.28, 6.72], cable_y)
+	scene.build_job(_overhead_busways.bind(along_x, [5.28, 6.72], cable_y))
 
 
 func _brutal_passage() -> void:
@@ -777,8 +890,8 @@ func _brutal_passage() -> void:
 	var tray_s := Vector3(WorldGen.CELL_SIZE, 0.08, 0.34) if along_x \
 		else Vector3(0.34, 0.08, WorldGen.CELL_SIZE)
 	_tunnel_box(tray_p, tray_s, "cable_tray", false, Mats.brutal_steel())
-	_passage_server_rows(along_x, side_data)
-	_data_center_tunnel_dressing(along_x)
+	scene.build_job(_passage_server_rows.bind(along_x, side_data))
+	scene.build_job(_data_center_tunnel_dressing.bind(along_x))
 	# A long sealed wall gets one familiar Annex double door. It is a real
 	# authored facade backed by solid tunnel structure, never a fake route.
 	if ctx.random01(2190) < 0.72:
@@ -794,8 +907,8 @@ func _brutal_passage() -> void:
 			var plane := 6.0 + side * TUNNEL_HALF_WIDTH
 			var p := Vector3(6.0, 0.0, plane - side * 0.13) if along_x \
 				else Vector3(plane - side * 0.13, 0.0, 6.0)
-			_brutal_annex_door_at(p, scene.wall_facing(int(chosen["dir"])),
-				"tunnel")
+			scene.build_job(_brutal_annex_door_at.bind(p, scene.wall_facing(int(chosen["dir"])),
+				"tunnel"))
 
 
 func _tunnel_box(pos: Vector3, size: Vector3, part: String,
@@ -902,43 +1015,43 @@ func _maybe_brutal_annex_door(salt: int, chance := 0.44) -> bool:
 
 
 func _brutal_hall() -> void:
-	_perimeter_columns()
-	_maybe_brutal_annex_door(2200)
+	scene.build_job(_perimeter_columns)
+	scene.build_job(_maybe_brutal_annex_door.bind(2200))
 	var axis_x := ctx.random01(2143) < 0.5
-	_rack_aisle(axis_x)
+	scene.build_job(_rack_aisle.bind(axis_x))
 	if ctx.random01(2140) < 0.58:
-		_upper_gallery(ctx.random01(2141) < 0.5, -1.0 if ctx.random01(2142) < 0.5 else 1.0,
-			minf(ctx.ceiling_height * 0.58, ctx.ceiling_height - 2.5))
+		scene.build_job(_upper_gallery.bind(ctx.random01(2141) < 0.5, -1.0 if ctx.random01(2142) < 0.5 else 1.0,
+			minf(ctx.ceiling_height * 0.58, ctx.ceiling_height - 2.5)))
 
 
 func _brutal_gallery() -> void:
-	_perimeter_columns()
-	_maybe_brutal_annex_door(2204, 0.50)
+	scene.build_job(_perimeter_columns)
+	scene.build_job(_maybe_brutal_annex_door.bind(2204, 0.50))
 	var axis_x := ctx.random01(2150) < 0.5
-	_rack_aisle(axis_x)
-	_upper_gallery(axis_x, -1.0, minf(3.65, ctx.ceiling_height - 2.2))
+	scene.build_job(_rack_aisle.bind(axis_x))
+	scene.build_job(_upper_gallery.bind(axis_x, -1.0, minf(3.65, ctx.ceiling_height - 2.2)))
 	if ctx.ceiling_height > 8.0:
-		_upper_gallery(axis_x, 1.0, minf(6.9, ctx.ceiling_height - 2.2))
+		scene.build_job(_upper_gallery.bind(axis_x, 1.0, minf(6.9, ctx.ceiling_height - 2.2)))
 
 
 func _brutal_atrium() -> void:
-	_perimeter_columns()
-	_maybe_brutal_annex_door(2208, 0.34)
+	scene.build_job(_perimeter_columns)
+	scene.build_job(_maybe_brutal_annex_door.bind(2208, 0.34))
 	if ctx.cell == Vector2i.ZERO:
 		# Start inside the machine estate, not in a ceremonial empty lobby. Every
 		# row shares the x=6 transverse break, which keeps the safe-arrival sweep
 		# and a straight route out of the spawn while surrounding it with racks.
-		_compact_server_field()
+		scene.build_job(_compact_server_field)
 	else:
-		_rack_aisle(ctx.random01(2161) < 0.5)
+		scene.build_job(_rack_aisle.bind(ctx.random01(2161) < 0.5))
 	var axis_x := ctx.random01(2160) < 0.5
-	_upper_gallery(axis_x, -1.0, minf(3.8, ctx.ceiling_height - 2.4))
-	_upper_gallery(not axis_x, 1.0, minf(7.1, ctx.ceiling_height - 2.4))
-	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
+	scene.build_job(_upper_gallery.bind(axis_x, -1.0, minf(3.8, ctx.ceiling_height - 2.4)))
+	scene.build_job(_upper_gallery.bind(not axis_x, 1.0, minf(7.1, ctx.ceiling_height - 2.4)))
+	scene.build_job(_emergency_beacon.bind(Vector3(6.0, 0.0, 6.0)))
 
 
 func _brutal_water_court() -> void:
-	_maybe_brutal_annex_door(2212, 0.38)
+	scene.build_job(_maybe_brutal_annex_door.bind(2212, 0.38))
 	# The former reflecting court is now a server hall with cooling on its
 	# service spine, never a room made exclusively from condensers. The normal
 	# A compact room gets three banks; a merged hall gets eight full rack rows.
@@ -946,16 +1059,16 @@ func _brutal_water_court() -> void:
 	if span.x > 18.0 or span.y > 18.0:
 		# The network banks are 2.10m wide after their quarter-turn. Leave
 		# room for the 1.69m condenser plus 15cm beside each bank.
-		_rack_aisle(true, 2.05)
+		scene.build_job(_rack_aisle.bind(true, 2.05))
 	else:
-		_compact_server_field()
+		scene.build_job(_compact_server_field)
 	# Two individual condenser variants sit at the room ends. Both clear the
 	# nearest rack row while using the common x=6 transverse service break.
 	var cross_min := 6.0 - span.y * 0.5
 	var cross_max := 6.0 + span.y * 0.5
-	_cooling_unit(Vector3(6.0, 0.0, cross_min + 1.18), 0.0, 0)
-	_cooling_unit(Vector3(6.0, 0.0, cross_max - 1.18), PI, 2)
-	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
+	scene.build_job(_cooling_unit.bind(Vector3(6.0, 0.0, cross_min + 1.18), 0.0, 0))
+	scene.build_job(_cooling_unit.bind(Vector3(6.0, 0.0, cross_max - 1.18), PI, 2))
+	scene.build_job(_emergency_beacon.bind(Vector3(6.0, 0.0, 6.0)))
 
 
 func _brutal_ramp() -> void:
@@ -963,9 +1076,9 @@ func _brutal_ramp() -> void:
 	# staircase but reached nothing. It is now a dense switching floor: continuous
 	# server rows, a transverse service gap and overhead cable feeds.
 	var along_x := ctx.random01(2170) < 0.5
-	_rack_aisle(along_x)
-	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
-	_maybe_brutal_annex_door(2216, 0.48)
+	scene.build_job(_rack_aisle.bind(along_x))
+	scene.build_job(_emergency_beacon.bind(Vector3(6.0, 0.0, 6.0)))
+	scene.build_job(_maybe_brutal_annex_door.bind(2216, 0.48))
 
 
 func _brutal_service() -> void:
@@ -990,20 +1103,20 @@ func _brutal_service() -> void:
 					d.ring(Vector3(x, 0, 0), 0.115, 0.018, Mats.charcoal(), Vector3.RIGHT))
 	# Service rooms are still server rooms; the high pipe mains distinguish them
 	# without sacrificing the floor to two token cabinets and empty concrete.
-	_rack_aisle(axis_x)
-	_machine_room_light(Vector3(6.0, 0.0, 6.0), 2.10)
-	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
-	_maybe_brutal_annex_door(2220, 0.58)
+	scene.build_job(_rack_aisle.bind(axis_x))
+	scene.build_job(_machine_room_light.bind(Vector3(6.0, 0.0, 6.0), 2.10))
+	scene.build_job(_emergency_beacon.bind(Vector3(6.0, 0.0, 6.0)))
+	scene.build_job(_maybe_brutal_annex_door.bind(2220, 0.58))
 
 
 func _brutal_sanctum() -> void:
-	_maybe_brutal_annex_door(2224, 0.42)
-	_rack_aisle(true)
+	scene.build_job(_maybe_brutal_annex_door.bind(2224, 0.42))
+	scene.build_job(_rack_aisle.bind(true))
 	# One expensive hero rack anchors the far wall; the ordinary field does the
 	# visual work everywhere else. The central transverse break keeps it clear.
-	_detailed_server_rack(Vector3(6.0, 0.0, 10.90), PI)
-	_machine_room_light(Vector3(6.0, 0.0, 6.0), 2.35)
-	_emergency_beacon(Vector3(6.0, 0.0, 6.0))
+	scene.build_job(_detailed_server_rack.bind(Vector3(6.0, 0.0, 10.90), PI))
+	scene.build_job(_machine_room_light.bind(Vector3(6.0, 0.0, 6.0), 2.35))
+	scene.build_job(_emergency_beacon.bind(Vector3(6.0, 0.0, 6.0)))
 	if ctx.ceiling_height > 8.2:
-		_upper_gallery(true, -1.0, 4.0)
-		_upper_gallery(true, 1.0, 7.2)
+		scene.build_job(_upper_gallery.bind(true, -1.0, 4.0))
+		scene.build_job(_upper_gallery.bind(true, 1.0, 7.2))

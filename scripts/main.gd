@@ -172,6 +172,7 @@ const SaveFailureNotice = preload("res://scripts/save_failure_notice.gd")
 var _save_notice: CanvasLayer
 var _applied_fullscreen: Variant = null
 var _applied_hdr_output: Variant = null
+var _applied_graphics: Dictionary = {}
 var _quitting := false
 var _quit_prompt: ReturnPrompt
 var _pause_menu: PauseMenu
@@ -304,12 +305,12 @@ func _ready() -> void:
 	# stage without altering the player's profile.
 	_vhs_enabled = bool(_settings.get_value("vhs_enabled")) \
 		if opts.vhs_override < 0 else opts.vhs_override == 1
-	_crt_enabled = bool(_settings.get_value("crt_enabled")) \
-		if opts.crt_override < 0 else opts.crt_override == 1
+	_crt_enabled = _crt_requested()
 	_crt_curvature_enabled = bool(_settings.get_value("crt_curvature"))
 	_post_enabled = _vhs_enabled or _crt_enabled
 	_photo_debug = opts.photo_debug
 	_apply_scaling()
+	_apply_graphics_settings()
 	get_viewport().size_changed.connect(_apply_scaling)
 	_setup_audio_bus()
 
@@ -793,6 +794,7 @@ func _finish_transition_build(level: int) -> void:
 func _apply_game_settings() -> void:
 	if _settings == null:
 		return
+	_apply_graphics_settings()
 	var fullscreen := bool(_settings.get_value("fullscreen"))
 	if _applied_fullscreen != fullscreen:
 		_applied_fullscreen = fullscreen
@@ -824,8 +826,8 @@ func _apply_game_settings() -> void:
 		_post_process.set_film_grain_intensity(float(_settings.get_value("film_grain")))
 	var vhs_enabled := bool(_settings.get_value("vhs_enabled")) \
 		if opts.vhs_override < 0 else opts.vhs_override == 1
-	var crt_enabled := bool(_settings.get_value("crt_enabled")) \
-		if opts.crt_override < 0 else opts.crt_override == 1
+	var crt_enabled := _crt_requested()
+	var crt_changed := _crt_enabled != crt_enabled
 	var crt_curvature_enabled := bool(_settings.get_value("crt_curvature"))
 	var post_enabled := vhs_enabled or crt_enabled
 	if _post_process != null and (_vhs_enabled != vhs_enabled or _crt_enabled != crt_enabled):
@@ -836,12 +838,31 @@ func _apply_game_settings() -> void:
 	if _post_process != null and _crt_curvature_enabled != crt_curvature_enabled:
 		_crt_curvature_enabled = crt_curvature_enabled
 		_post_process.set_curvature_enabled(_crt_curvature_enabled)
-	if _post_enabled != post_enabled:
+	if _post_enabled != post_enabled or crt_changed:
 		_post_enabled = post_enabled
 		_apply_scaling()
 	for mat in [Mats.casino_slot_lights(), Mats.ticker()]:
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("reduced_flashing", GameSettings.flashing_reduced())
+
+
+func _apply_graphics_settings() -> void:
+	if _settings == null:
+		return
+	var next := {}
+	for key in GameSettings.QUALITY_KEYS + ["frame_limit", "vsync"]:
+		next[key] = _settings.get_value(key)
+	# Sensitivity, volume and effects sliders also emit changed. They must not
+	# recreate GPU buffers or reconfigure the shadow atlas on every drag.
+	if next == _applied_graphics:
+		return
+	_applied_graphics = next
+	GraphicsQuality.apply_viewport(get_viewport(), _settings, opts.notaa, _crt_requested())
+	GraphicsQuality.apply_global(_settings)
+	if is_instance_valid(we):
+		GraphicsQuality.apply_environment(we.environment, _settings)
+	if is_instance_valid(_realm_visit):
+		_realm_visit.refresh_graphics_quality(_settings)
 
 
 func _on_progress_save_failed(error: Error) -> void:
@@ -2479,18 +2500,18 @@ func _switch_music(level: int) -> void:
 		tw.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
 
 
-## With either video stage enabled, render the 3D source at 480 lines (about
-## 854x480 at 16:9). VHS targets a 720x480 signal; the optional CRT display
-## runs at the full viewport resolution, preserving fine phosphor detail.
-## scaling_3d_scale affects only the world, not the CanvasItem post passes.
-## With both stages off, the world returns to full native resolution.
+## The CRT always receives a 480-line world source. Without CRT, quality owns
+## world resolution; VHS supplies its own tape bandwidth and signal softness.
+## The saved resolution, menus and HUD retain their independent settings.
+func _crt_requested() -> bool:
+	if opts != null and opts.crt_override >= 0:
+		return opts.crt_override == 1
+	return _settings != null and bool(_settings.get_value("crt_enabled"))
+
+
 func _apply_scaling() -> void:
-	var vp := get_viewport()
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-	if _post_enabled:
-		vp.scaling_3d_scale = clampf(480.0 / float(vp.size.y), 0.05, 1.0)
-	else:
-		vp.scaling_3d_scale = 1.0
+	if _settings != null:
+		GraphicsQuality.apply_resolution(get_viewport(), _settings, _crt_requested())
 	_apply_hud_scaling()
 
 
@@ -2644,6 +2665,7 @@ func _set_tape_audio_hold(on: bool) -> void:
 ## runtime audits call it; the settings themselves live in EnvBuilder.
 func _build_env(theme: int) -> Environment:
 	var environment := EnvBuilder.build(theme)
+	GraphicsQuality.apply_environment(environment, _settings)
 	_apply_hdr_brightness(environment)
 	return environment
 

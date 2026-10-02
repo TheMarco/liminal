@@ -1448,7 +1448,11 @@ static func _asy_tex(key: String, folder: String, per_m: float, tint: Color,
 
 ## Peeling institutional-green paint over plaster and bare brick.
 static func asy_wall() -> StandardMaterial3D:
-	return _asy_tex("asy_wall", "PaintedPlaster016", 0.42, Color(0.62, 0.72, 0.55))
+	var m := _asy_tex("asy_wall", "PaintedPlaster016", 0.56, Color(0.87, 0.85, 0.74))
+	m.normal_scale = 0.48
+	m.roughness_texture = null
+	m.roughness = 0.95
+	return m
 
 
 ## The sicklier yellow variant — some rooms rotted differently.
@@ -1473,7 +1477,31 @@ static func asy_checker() -> StandardMaterial3D:
 
 ## Water-stained ceiling plaster.
 static func asy_ceiling() -> StandardMaterial3D:
-	return _asy_tex("asy_ceiling", "PaintedPlaster018", 0.3, Color(0.42, 0.42, 0.36))
+	var m := _asy_tex("asy_ceiling", "PaintedPlaster018", 0.56, Color(0.72, 0.70, 0.62))
+	m.normal_scale = 0.20
+	m.roughness_texture = null
+	m.roughness = 1.0
+	return m
+
+
+static func asy_wainscot() -> StandardMaterial3D:
+	var m := _asy_tex("asy_wainscot", "Tiles133C", 0.80, Color(0.32, 0.52, 0.46), 0.64)
+	m.normal_scale = 0.42
+	return m
+
+
+static func asy_moulding() -> StandardMaterial3D:
+	return _std("asy_moulding", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.66, 0.64, 0.55)
+		m.roughness = 0.91)
+
+
+static func asy_warm_glass() -> StandardMaterial3D:
+	return _std("asy_warm_glass", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.86, 0.74, 0.48)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.71, 0.38)
+		m.emission_energy_multiplier = 1.65)
 
 
 ## Rust-streaked bare steel — gurney frames, fixtures.
@@ -1695,8 +1723,11 @@ static func sch_chalkdust() -> StandardMaterial3D:
 # --- abandoned mall ----------------------------------------------------------
 
 static func mall_floor() -> StandardMaterial3D:
-	return _photo("mall_floor", "cc0", "Terrazzo005", 0.34,
-		Color(0.72, 0.68, 0.61), 0.42)
+	# Finer aggregate at believable scale, with a honed rather than wet finish.
+	var m := _photo("mall_floor", "cc0", "Terrazzo005", 0.82,
+		Color(0.87, 0.85, 0.78), 0.68)
+	m.normal_scale = 0.24
+	return m
 
 
 static func mall_wall() -> StandardMaterial3D:
@@ -1708,22 +1739,84 @@ static func mall_wall() -> StandardMaterial3D:
 
 
 static func mall_ceiling() -> Material:
-	# A real suspended T-bar grid like the office and airport, not a glossy
-	# slab: dingier tiles, heavy smoke staining, and more of them missing.
-	if _c.has("mall_ceiling"):
-		return _c["mall_ceiling"]
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/ceiling.gdshader")
-	m.set_shader_parameter("col", Color(0.72, 0.71, 0.66))
-	m.set_shader_parameter("stain", Color(0.30, 0.24, 0.16))
-	m.set_shader_parameter("stain_amount", 0.25)
-	m.set_shader_parameter("missing_amount", 1.6)
-	# grazing sodium light exaggerates the tile relief into pressed tin —
-	# keep the grid, flatten the surface
-	m.set_shader_parameter("bump_strength", 0.045)
-	m.resource_name = "mall_ceiling"
-	_c["mall_ceiling"] = m
+	# Real coffer geometry carries the relief. A quiet acoustic plaster finish
+	# avoids the former high-frequency tile noise covering the entire ceiling.
+	var m := _photo("mall_ceiling", "mall", "Plaster001", 0.65,
+		Color(0.75, 0.77, 0.72), 1.0)
+	m.normal_scale = 0.12
 	return m
+
+
+static func mall_rose_stone() -> StandardMaterial3D:
+	var m := _photo("mall_rose_stone", "cc0", "Marble012", 0.48,
+		Color(0.58, 0.35, 0.30), 0.76)
+	m.normal_scale = 0.16
+	return m
+
+
+static func mall_jade_stone() -> StandardMaterial3D:
+	var m := _photo("mall_jade_stone", "cc0", "Marble012", 0.62,
+		Color(0.15, 0.31, 0.28), 0.68)
+	m.normal_scale = 0.14
+	return m
+
+
+static func mall_ceramic(mosaic := false) -> ShaderMaterial:
+	var key := "mall_mosaic" if mosaic else "mall_ceramic"
+	if _c.has(key): return _c[key]
+	var m := _shader(key, "res://shaders/mall_ceramic.gdshader")
+	m.set_shader_parameter("detail_tex", detail_noise())
+	m.set_shader_parameter("tile_size", Vector2(0.065, 0.065) if mosaic else Vector2(0.30, 0.15))
+	m.set_shader_parameter("tile_color", Color(0.12, 0.32, 0.29) if mosaic else Color(0.19, 0.34, 0.30))
+	return m
+
+
+static func mall_brass() -> StandardMaterial3D:
+	return _std("mall_brass", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.53, 0.40, 0.22)
+		m.metallic = 0.72
+		m.roughness = 0.42)
+
+
+static func mall_cove() -> StandardMaterial3D:
+	return _std("mall_cove", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.88, 0.80, 0.62)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.83, 0.58)
+		m.emission_energy_multiplier = 1.25)
+
+
+static func mall_shutter_slat() -> StandardMaterial3D:
+	return _std("mall_shutter_slat", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.43, 0.46, 0.43)
+		m.metallic = 0.55
+		m.roughness = 0.57)
+
+
+static func mall_shop_floor() -> StandardMaterial3D:
+	var m := _photo("mall_shop_floor", "cc0", "Planks039", 0.42,
+		Color(0.59, 0.47, 0.36), 0.90)
+	m.normal_scale = 0.25
+	return m
+
+
+static func mall_cinema_velvet() -> StandardMaterial3D:
+	return _photo("mall_cinema_velvet", "cc0", "Fabric026", 1.0,
+		Color(0.34, 0.075, 0.065), 1.0)
+
+
+static func mall_palm_leaf() -> StandardMaterial3D:
+	return _std("mall_palm_leaf", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.25, 0.38, 0.14)
+		m.vertex_color_use_as_albedo = true
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.roughness = 0.69)
+
+
+static func mall_palm_stem() -> StandardMaterial3D:
+	return _std("mall_palm_stem", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.28, 0.25, 0.12)
+		m.roughness = 0.90)
 
 
 static func mall_shutter() -> StandardMaterial3D:
@@ -1741,11 +1834,11 @@ static func mall_brick() -> StandardMaterial3D:
 static func mall_skylight() -> StandardMaterial3D:
 	# Night sky through dirty laylight glass — barely-blue, faintly luminous.
 	return _std("mall_skylight", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.04, 0.06, 0.11)
-		m.roughness = 0.3
+		m.albedo_color = Color(0.16, 0.27, 0.34)
+		m.roughness = 0.48
 		m.emission_enabled = true
-		m.emission = Color(0.10, 0.16, 0.30)
-		m.emission_energy_multiplier = 0.9)
+		m.emission = Color(0.29, 0.48, 0.62)
+		m.emission_energy_multiplier = 1.1)
 
 
 static func mall_sign_face() -> StandardMaterial3D:
@@ -1771,8 +1864,8 @@ static func mall_sign_board() -> StandardMaterial3D:
 static func mall_trim() -> StandardMaterial3D:
 	return _std("mall_trim", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.12, 0.24, 0.24)
-		m.metallic = 0.72
-		m.roughness = 0.36)
+		m.metallic = 0.38
+		m.roughness = 0.44)
 
 
 static func mall_glass() -> StandardMaterial3D:
@@ -1787,8 +1880,8 @@ static func mall_panel() -> StandardMaterial3D:
 	return _std("mall_panel", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.82, 0.78, 0.66)
 		m.emission_enabled = true
-		m.emission = Color(1.0, 0.72, 0.38)
-		m.emission_energy_multiplier = 2.2)
+		m.emission = Color(1.0, 0.88, 0.68)
+		m.emission_energy_multiplier = 1.8)
 
 
 # --- island prison -----------------------------------------------------------
@@ -1796,25 +1889,49 @@ static func mall_panel() -> StandardMaterial3D:
 static func prison_wall() -> StandardMaterial3D:
 	# Smooth trowelled concrete, lighter than the old salt-black — the dark
 	# lives in the corners now, not in every surface
-	return _photo("prison_wall", "prison", "Concrete016", 0.40,
-		Color(0.68, 0.69, 0.66), 0.95)
+	var m := _photo("prison_wall", "prison", "Concrete016", 0.65,
+		Color(0.76, 0.74, 0.66), 0.95)
+	m.normal_scale = 0.38
+	return m
 
 
 static func prison_dado() -> StandardMaterial3D:
 	# The institutional green paint band every prison wall carries to
 	# shoulder height, worn semi-gloss
 	return _photo("prison_dado", "prison", "Concrete016", 0.40,
-		Color(0.42, 0.53, 0.43), 0.5)
+		Color(0.24, 0.35, 0.32), 0.72)
 
 
 static func prison_floor() -> StandardMaterial3D:
-	return _photo("prison_floor", "prison", "Concrete016", 0.55,
-		Color(0.45, 0.46, 0.44), 0.55)
+	var m := _photo("prison_floor", "prison", "Concrete016", 0.80,
+		Color(0.46, 0.47, 0.44), 0.79)
+	m.roughness_texture = null
+	m.normal_scale = 0.35
+	return m
 
 
 static func prison_ceiling() -> StandardMaterial3D:
-	return _asy_tex("prison_ceiling", "PaintedPlaster018", 0.28,
-		Color(0.35, 0.37, 0.34), 1.0)
+	var m := _asy_tex("prison_ceiling", "PaintedPlaster018", 0.56,
+		Color(0.62, 0.60, 0.53), 1.0)
+	m.roughness_texture = null
+	m.normal_scale = 0.25
+	return m
+
+
+static func prison_lantern() -> StandardMaterial3D:
+	return _std("prison_lantern", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.40, 0.53, 0.59)
+		m.roughness = 0.76
+		m.emission_enabled = true
+		m.emission = Color(0.30, 0.46, 0.57)
+		m.emission_energy_multiplier = 1.2)
+
+
+static func institutional_brass() -> StandardMaterial3D:
+	return _std("institutional_brass", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.38, 0.28, 0.12)
+		m.metallic = 0.72
+		m.roughness = 0.53)
 
 
 static func prison_iron() -> StandardMaterial3D:
@@ -1914,6 +2031,34 @@ static func data_center_floor_mark() -> StandardMaterial3D:
 		m.roughness = 0.74)
 
 
+static func data_center_access_floor() -> ShaderMaterial:
+	var m := _shader("data_center_access_floor", "res://shaders/data_center_floor.gdshader")
+	m.set_shader_parameter("detail_tex", detail_noise())
+	return m
+
+
+static func data_center_pipe() -> StandardMaterial3D:
+	return _std("data_center_pipe", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.48, 0.21, 0.075)
+		m.metallic = 0.42
+		m.roughness = 0.46)
+
+
+static func data_center_porcelain() -> StandardMaterial3D:
+	return _std("data_center_porcelain", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.50, 0.57, 0.57)
+		m.metallic = 0.32
+		m.roughness = 0.58)
+
+
+static func data_center_amber() -> StandardMaterial3D:
+	return _std("data_center_amber", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.78, 0.36, 0.065)
+		m.emission_enabled = true
+		m.emission = Color(0.90, 0.32, 0.035)
+		m.emission_energy_multiplier = 1.8)
+
+
 static func data_center_cable() -> StandardMaterial3D:
 	return _std("data_center_cable", func(m: StandardMaterial3D):
 		m.albedo_color = Color(0.025, 0.10, 0.15)
@@ -1959,7 +2104,7 @@ static func bloom_floor() -> StandardMaterial3D:
 		return _c["bloom_floor"]
 	var m := StandardMaterial3D.new()
 	m.albedo_texture = load(BLOOM_TEX_DIR + "mud_forest_diff_1k.jpg")
-	m.albedo_color = Color(0.24, 0.27, 0.29)
+	m.albedo_color = Color(0.34, 0.38, 0.41)
 	m.normal_enabled = true
 	m.normal_texture = load(BLOOM_TEX_DIR + "mud_forest_nor_gl_1k.jpg")
 	m.normal_scale = 0.72
@@ -2023,12 +2168,30 @@ static func bloom_flesh() -> StandardMaterial3D:
 
 static func bloom_wet() -> StandardMaterial3D:
 	return _std("bloom_wet", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.004, 0.008, 0.012)
-		m.metallic = 0.32
-		m.roughness = 0.055
+		m.albedo_color = Color(0.070, 0.083, 0.095)
+		m.albedo_texture = load(BLOOM_TEX_DIR + "mud_forest_diff_1k.jpg")
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE * 0.52
+		m.metallic = 0.12
+		m.roughness = 0.14
 		m.clearcoat_enabled = true
 		m.clearcoat = 1.0
 		m.clearcoat_roughness = 0.035)
+
+
+static func bloom_tissue() -> StandardMaterial3D:
+	return _std("bloom_tissue",func(m: StandardMaterial3D):
+		m.albedo_texture = load(BLOOM_FLESH_TEX_DIR + "others_0001_color_2k.jpg")
+		m.albedo_color = Color(0.24,0.055,0.058)
+		m.normal_enabled = true
+		m.normal_texture = load(BLOOM_FLESH_TEX_DIR + "others_0001_normal_opengl_2k.png")
+		m.normal_scale = 0.32
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE * 0.72
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.roughness = 0.56)
 
 
 static func bloom_metal() -> StandardMaterial3D:

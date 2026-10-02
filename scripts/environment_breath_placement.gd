@@ -127,7 +127,9 @@ static func wall_bands(face: SurfaceWear.Face, blockers: Array[Dictionary], chun
 	# direct room child, and a known architectural finish. Furniture stays solid.
 	var finishes: Array = {
 		0: ["darkwood", "crown"], 4: ["steel"], 5: ["asy_tile"],
-		6: ["sch_red", "charcoal"], 7: ["brass", "mall_trim"],
+		6: ["sch_red", "charcoal"],
+		7: ["brass", "mall_trim", "mall_ceramic", "mall_rose_stone",
+			"mall_wall", "mall_brass"],
 		8: ["prison_dado", "prison_iron"],
 	}.get(chunk.theme, [])
 	var bands: Array[Dictionary] = []
@@ -139,7 +141,12 @@ static func wall_bands(face: SurfaceWear.Face, blockers: Array[Dictionary], chun
 		if mesh.material_override == null or not mesh.material_override.resource_name in finishes:
 			continue
 		var bounds: AABB = wall_frame.affine_inverse() * item.transform * item.bounds
-		if bounds.position.z < -0.015 or bounds.position.z > 0.04 or bounds.end.z > 0.13:
+		# The Mall cornice and its brass lip project farther than a dado,
+		# but share the backing wall and must travel with that full panel.
+		var mall_cornice := chunk.theme == 7 and mesh.material_override.resource_name in ["mall_wall", "mall_brass"]
+		var max_front := 0.25 if mall_cornice else 0.13
+		var max_back := 0.22 if mall_cornice else 0.04
+		if bounds.position.z < -0.015 or bounds.position.z > max_back or bounds.end.z > max_front:
 			continue
 		if bounds.size.x < face.size.x * 0.95 or bounds.size.y >= bounds.size.x:
 			continue

@@ -1291,6 +1291,9 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/cc0/hanging_industrial_lamp/hanging_industrial_lamp_1k.gltf")
 			paths.append("res://models/cc0/old_tyre/old_tyre_1k.gltf")
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
+			for model in ["plunger", "drain_cleaner", "wall_clock", "industrial_storage_cart", "metal_trash_can", "security_camera_01"]:
+				paths.append("res://models/cc0/%s/%s_1k.gltf" % [model, model])
+
 		9:
 			paths.append_array([POOL_BUOY_PATH, POOL_FLAMINGO_PATH,
 				POOL_MATTRESS_PATH, POOL_STRIPED_PATH,
@@ -1377,6 +1380,18 @@ static func prepare_floor_resources(p_theme: int) -> void:
 	_release_floor_caches()
 	Mats.clear_runtime_caches()
 	FloorResourcePreloader.prepare_floor(theme_prop_paths(p_theme))
+	if p_theme in [5, 7, 8, 10, 11]:
+		SurfaceWear.prepare_floor()
+	if p_theme == 5:
+		ASYLUM_LEVEL_BUILDER.prewarm_templates()
+	elif p_theme == 7:
+		MALL_LEVEL_BUILDER.prewarm_resources()
+	elif p_theme == 8:
+		Mats.prison_tile()
+	elif p_theme == 10:
+		BRUTALIST_LEVEL_BUILDER.prewarm_busways()
+	if p_theme == 11:
+		BLOOM_LEVEL_BUILDER.ORGANIC.prewarm()
 
 
 ## Audit/test teardown additionally consumes outstanding diagnostic requests.
@@ -1507,6 +1522,42 @@ func _init(p_seed: int, p_cell: Vector2i, p_theme := 0,
 			pass
 
 
+## Cooperative, ordered construction work. A job may expand into smaller
+## jobs; insert those ahead of its continuation, preserving authored order.
+## Synchronous builds use exactly the same recipes without retaining jobs.
+var _build_jobs: Array[Callable] = []
+var _collect_build_jobs := false
+var _build_job_insert := 0
+var _slice_next_stage := 0
+
+func queue_build_job(job: Callable) -> void:
+	if _collect_build_jobs:
+		_build_jobs.insert(_build_job_insert, job)
+		_build_job_insert += 1
+	else:
+		job.call()
+
+
+func build_next_slice() -> bool:
+	if _build_stage == 8:
+		return true
+	_collect_build_jobs = true
+	_build_job_insert = 0
+	if _build_jobs.is_empty():
+		var stage := _build_stage
+		build_next_stage()
+		_slice_next_stage = _build_stage
+		if not _build_jobs.is_empty():
+			_build_stage = stage
+	else:
+		var job: Callable = _build_jobs.pop_front()
+		job.call()
+		if _build_jobs.is_empty():
+			_build_stage = _slice_next_stage
+	_collect_build_jobs = false
+	return _build_stage == 8
+
+
 ## Off-tree streaming can stop between authored stages. Direct constructors
 ## still finish synchronously, retaining the established tool/build contract.
 func build_next_stage() -> bool:
@@ -1533,21 +1584,21 @@ func build_next_stage() -> bool:
 				_build_props()
 			_profile_stage("lighting" if theme == 2 else "props", started)
 		4:
-			_build_optional_vhs_set()
-			_build_bleed_dressing()
-			_build_interactions()
+			queue_build_job(_build_optional_vhs_set)
+			queue_build_job(_build_bleed_dressing)
+			queue_build_job(_build_interactions)
 			_profile_stage("gameplay", started)
 		5:
 			if mutation_furniture_variant > 0:
 				_apply_furniture_variant(mutation_furniture_variant)
 				_profile_stage("furniture_mutation", started)
-			_ensure_slot_room_change_machine()
-			_ensure_casino_bar()
-			_ensure_casino_popup_bar()
-			NOSTALGIA_PROPS.dress(self)
-			_build_charging_station()
+			queue_build_job(_ensure_slot_room_change_machine)
+			queue_build_job(_ensure_casino_bar)
+			queue_build_job(_ensure_casino_popup_bar)
+			queue_build_job(NOSTALGIA_PROPS.dress.bind(self))
+			queue_build_job(_build_charging_station)
 			for entry in _deferred_wall_art:
-				_wall_art(entry[0], entry[1], 1060 + entry[0] * 7)
+				queue_build_job(_wall_art.bind(entry[0], entry[1], 1060 + entry[0] * 7))
 		6:
 			SurfaceWear.apply(self, _build_context)
 			_profile_stage("surface_wear", started)
@@ -2871,31 +2922,7 @@ func _build_floor_ceiling() -> void:
 		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.sch_ceiling())
 		return
 	if theme == 7:
-		var mall_floor: Material = Mats.mall_floor()
-		if style == WorldGen.MALL_SERVICE:
-			mall_floor = Mats.concrete_floor()
-		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), mall_floor)
-		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.mall_ceiling())
-		# Old brass terrazzo control joints make the gallery feel built at mall
-		# scale, rather than like a large beige room.
-		if style != WorldGen.MALL_SERVICE:
-			_box(Vector3(S / 2.0, 0.012, 3.0), Vector3(S, 0.018, 0.025), Mats.brass(), false)
-			_box(Vector3(S / 2.0, 0.012, 9.0), Vector3(S, 0.018, 0.025), Mats.brass(), false)
-		# Tall atria get night-sky skylight wells: a faint blue glow recessed
-		# in the dark grid, the only reminder there is an outside.
-		if style == WorldGen.MALL_ATRIUM and ceil_h > 5.5:
-			for wx in [3.9, 8.1]:
-				var sky := _box(Vector3(wx, ceil_h - 0.02, 6.0), Vector3(2.5, 0.02, 1.7),
-					Mats.mall_skylight(), false)
-				sky.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				for fz in [-0.88, 0.88]:
-					var fr := _box(Vector3(wx, ceil_h - 0.05, 6.0 + fz),
-						Vector3(2.62, 0.10, 0.06), Mats.mall_trim(), false)
-					fr.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				for fx in [-1.28, 1.28]:
-					var fr2 := _box(Vector3(wx + fx, ceil_h - 0.05, 6.0),
-						Vector3(0.06, 0.10, 1.76), Mats.mall_trim(), false)
-					fr2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_level_builder._mall_floor_ceiling()
 		return
 	if theme == 8:
 		var pf: Material = Mats.prison_tile() if style == WorldGen.PRISON_SHOWER \
@@ -2917,125 +2944,127 @@ func _build_floor_ceiling() -> void:
 
 
 func _build_walls() -> void:
-	var wall_t := ANNEX_WALL_T if theme == 2 else (POOL_WALL_T if theme == 9 else T)
 	for dir in 4:
-		var edge_visual_start := get_child_count()
-		var edge_shape_start := body.get_child_count()
-		var info := _edge_info(cell, dir)
-		var native_doorway := bool(info.get("native_latent", false)) \
-			and theme != 3 \
-			and (theme != 2 and theme != 9 or dir == 0 or dir == 2) \
-			and not bool(info.get("runtime_door", false)) \
-			and not info.has("photo_door_id") and not bool(info["wall"]) \
-			and not bool(info["full_open"]) and not bool(info["exit_sign"]) \
-			and float(info["w"]) >= 1.2 and float(info["w"]) <= 10.5 \
-			and not (theme == 0 and _casino_upper_band()) \
-			and (theme != 9 or (pool_style_dry(style) and pool_style_dry(
-				WorldGen.cell_style(wseed, cell + WorldGen.DIRV[dir], theme))))
-		var skip_doorway_utilities := native_doorway \
-			and bool(info.get("runtime_shortcut", false))
-		# Annex and pool shared boundaries have one canonical east/south owner
-		# and sit on the actual boundary plane. Previously both neighbouring
-		# chunks built an inward half, producing a compound double wall — in
-		# the Poolrooms that doubled every bullnose and jamb pillar and left a
-		# stepped seam at every convex corner between two cells' slabs. The
-		# non-owner still supplies room-side wall dressing below. Interior
-		# faces are unchanged: a 0.30 wall centred ON the boundary shows its
-		# face 0.15 into each room, exactly where the old inward slab's face
-		# was, so every cove/pillar tangency built against T still holds.
-		var owns_annex_wall := (theme != 2 and theme != 9) or dir == 0 or dir == 2
-		var plane := (S if (dir == 0 or dir == 2) else 0.0) \
-			if (theme == 2 or theme == 9) \
-			else ((S - wall_t / 2.0) if (dir == 0 or dir == 2) \
-				else (wall_t / 2.0))
-		# The one canonical pool wall serves BOTH rooms, whose ceilings can
-		# differ. Built only to the owner's ceiling, the taller room saw a
-		# black slit above the wall top: the void between the two ceiling
-		# planes. Build every shared wall to the taller of the two.
-		var wtop := _wall_h()
-		if theme == 9 or theme == 2:
-			wtop = maxf(wtop, cell_ceil_h(
-				wseed, cell + WorldGen.DIRV[dir], theme))
-		if info.has("photo_door_id"):
-			_build_photo_door_wall(dir, plane, wtop, owns_annex_wall, info)
-			continue
-		if info["wall"]:
-			if owns_annex_wall:
-				if theme == 9 \
-						and WorldGen.pool_wall_aperture(wseed, cell, dir) \
-						and not bool(info.get("runtime_seal", false)):
-					_pool_wall_with_circular_aperture(
-						dir, plane, wtop)
-				else:
-					_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
-			_wall_decor(dir, plane)
-			if not skip_doorway_utilities and (theme == 1 or theme == 2) \
-					and (theme != 2 or owns_annex_wall) \
-					and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
-					and not (theme == 1 and style == WorldGen.OFFICE_CORRIDOR):
-				_wall_utilities(dir, plane, info)
-		elif not info["full_open"]:
-			var a: float = info["t"] - info["w"] / 2.0
-			var b: float = info["t"] + info["w"] / 2.0
-			if owns_annex_wall:
-				if theme == 9:
-					_pool_shaped_doorway(
-						dir, plane, a, b, wtop)
-				else:
-					_wall_seg(dir, plane, 0.0, a, 0.0, wtop)
-					_wall_seg(dir, plane, b, S, 0.0, wtop)
-					var head: float = DOOR_TOP
-					if theme == 4 or theme == 7:
-						head = AIR_DOOR
-					elif theme == 10:
-						head = BRUTAL_DOOR_TOP
-					elif theme == 11:
-						head = BLOOM_DOOR_TOP
-					_wall_seg(dir, plane, a, b, head, wtop)
-				_door_casing(dir, plane, a, b)
-				# Generated realities explicitly decide whether a new opening is an
-				# impossible raw cut or a conventional door that was never there.
-				if not bool(info.get("runtime_shortcut", false)) \
-						or bool(info.get("runtime_door", false)):
-					_maybe_swing_door(dir, plane, a, b,
-						bool(info.get("runtime_door", false)))
-			if not skip_doorway_utilities and (theme == 1 or theme == 2) \
-					and (theme != 2 or owns_annex_wall) \
-					and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
-					and not (theme == 1 and style == WorldGen.OFFICE_CORRIDOR):
-				_wall_utilities(dir, plane, info)
-			if (dir == 0 or dir == 2) and info["exit_sign"]:
-				if theme == 4:
-					_level_builder._air_portal_sign(dir, info["t"])
-				else:
-					_exit_sign(dir, info["t"])
-		else:
-			_open_edge_fascia(dir, plane)
-		# Keep the exact scene roots created by a supernatural edge record
-		# discoverable. The blackout reveal can then outline the actual new wall,
-		# casing, or door leaf instead of drawing only a marker near it.
-		if bool(info.get("runtime_shortcut", false)) \
-				or bool(info.get("runtime_seal", false)):
-			_tag_mutation_edge_visuals(edge_visual_start, dir)
-		if native_doorway:
-			_register_native_doorway_site(dir, edge_visual_start, edge_shape_start,
-				float(info["t"]), float(info["w"]))
-			if not native_doorway_site(dir).is_empty():
-				# The hidden endpoint is the very same full-wall builder used by
-				# ordinary edges, including its finish, skirting and collider.
-				var closed_visual_start := get_child_count()
-				var closed_shape_start := body.get_child_count()
-				_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
-				_register_native_closed_wall(dir, closed_visual_start,
-					closed_shape_start)
-				show_native_doorway(dir,
-					native_doorway_plan.is_open(cell, dir))
+		queue_build_job(_build_wall_edge.bind(dir))
 	if theme == 9:
-		# Each grid vertex has one deterministic southwest owner.  This chunk
-		# therefore owns its north-east vertex and builds at most one curved
-		# L-turn there, after both incident straight runs have been shortened
-		# to their tangent points by _pool_boundary_rule.
-		_pool_rounded_corner()
+		# The southwest owner builds its rounded northeast vertex after both
+		# incident straight walls have been shortened to their tangent points.
+		queue_build_job(_pool_rounded_corner)
+
+
+func _build_wall_edge(dir: int) -> void:
+	var wall_t := ANNEX_WALL_T if theme == 2 else (POOL_WALL_T if theme == 9 else T)
+	var edge_visual_start := get_child_count()
+	var edge_shape_start := body.get_child_count()
+	var info := _edge_info(cell, dir)
+	var native_doorway := bool(info.get("native_latent", false)) \
+		and theme != 3 \
+		and (theme != 2 and theme != 9 or dir == 0 or dir == 2) \
+		and not bool(info.get("runtime_door", false)) \
+		and not info.has("photo_door_id") and not bool(info["wall"]) \
+		and not bool(info["full_open"]) and not bool(info["exit_sign"]) \
+		and float(info["w"]) >= 1.2 and float(info["w"]) <= 10.5 \
+		and not (theme == 0 and _casino_upper_band()) \
+		and (theme != 9 or (pool_style_dry(style) and pool_style_dry(
+			WorldGen.cell_style(wseed, cell + WorldGen.DIRV[dir], theme))))
+	var skip_doorway_utilities := native_doorway \
+		and bool(info.get("runtime_shortcut", false))
+	# Annex and pool shared boundaries have one canonical east/south owner
+	# and sit on the actual boundary plane. Previously both neighbouring
+	# chunks built an inward half, producing a compound double wall — in
+	# the Poolrooms that doubled every bullnose and jamb pillar and left a
+	# stepped seam at every convex corner between two cells' slabs. The
+	# non-owner still supplies room-side wall dressing below. Interior
+	# faces are unchanged: a 0.30 wall centred ON the boundary shows its
+	# face 0.15 into each room, exactly where the old inward slab's face
+	# was, so every cove/pillar tangency built against T still holds.
+	var owns_annex_wall := (theme != 2 and theme != 9) or dir == 0 or dir == 2
+	var plane := (S if (dir == 0 or dir == 2) else 0.0) \
+		if (theme == 2 or theme == 9) \
+		else ((S - wall_t / 2.0) if (dir == 0 or dir == 2) \
+			else (wall_t / 2.0))
+	# The one canonical pool wall serves BOTH rooms, whose ceilings can
+	# differ. Built only to the owner's ceiling, the taller room saw a
+	# black slit above the wall top: the void between the two ceiling
+	# planes. Build every shared wall to the taller of the two.
+	var wtop := _wall_h()
+	if theme == 9 or theme == 2:
+		wtop = maxf(wtop, cell_ceil_h(
+			wseed, cell + WorldGen.DIRV[dir], theme))
+	if info.has("photo_door_id"):
+		_build_photo_door_wall(dir, plane, wtop, owns_annex_wall, info)
+		return
+	if info["wall"]:
+		if owns_annex_wall:
+			if theme == 9 \
+					and WorldGen.pool_wall_aperture(wseed, cell, dir) \
+					and not bool(info.get("runtime_seal", false)):
+				_pool_wall_with_circular_aperture(
+					dir, plane, wtop)
+			else:
+				_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
+		_wall_decor(dir, plane)
+		if not skip_doorway_utilities and (theme == 1 or theme == 2) \
+				and (theme != 2 or owns_annex_wall) \
+				and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
+				and not (theme == 1 and style == WorldGen.OFFICE_CORRIDOR):
+			_wall_utilities(dir, plane, info)
+	elif not info["full_open"]:
+		var a: float = info["t"] - info["w"] / 2.0
+		var b: float = info["t"] + info["w"] / 2.0
+		if owns_annex_wall:
+			if theme == 9:
+				_pool_shaped_doorway(
+					dir, plane, a, b, wtop)
+			else:
+				_wall_seg(dir, plane, 0.0, a, 0.0, wtop)
+				_wall_seg(dir, plane, b, S, 0.0, wtop)
+				var head: float = DOOR_TOP
+				if theme == 4 or theme == 7:
+					head = AIR_DOOR
+				elif theme == 10:
+					head = BRUTAL_DOOR_TOP
+				elif theme == 11:
+					head = BLOOM_DOOR_TOP
+				_wall_seg(dir, plane, a, b, head, wtop)
+			_door_casing(dir, plane, a, b)
+			# Generated realities explicitly decide whether a new opening is an
+			# impossible raw cut or a conventional door that was never there.
+			if not bool(info.get("runtime_shortcut", false)) \
+					or bool(info.get("runtime_door", false)):
+				_maybe_swing_door(dir, plane, a, b,
+					bool(info.get("runtime_door", false)))
+		if not skip_doorway_utilities and (theme == 1 or theme == 2) \
+				and (theme != 2 or owns_annex_wall) \
+				and not (theme == 2 and style == WorldGen.ANNEX_PASSAGE) \
+				and not (theme == 1 and style == WorldGen.OFFICE_CORRIDOR):
+			_wall_utilities(dir, plane, info)
+		if (dir == 0 or dir == 2) and info["exit_sign"]:
+			if theme == 4:
+				_level_builder._air_portal_sign(dir, info["t"])
+			else:
+				_exit_sign(dir, info["t"])
+	else:
+		_open_edge_fascia(dir, plane)
+	# Keep the exact scene roots created by a supernatural edge record
+	# discoverable. The blackout reveal can then outline the actual new wall,
+	# casing, or door leaf instead of drawing only a marker near it.
+	if bool(info.get("runtime_shortcut", false)) \
+			or bool(info.get("runtime_seal", false)):
+		_tag_mutation_edge_visuals(edge_visual_start, dir)
+	if native_doorway:
+		_register_native_doorway_site(dir, edge_visual_start, edge_shape_start,
+			float(info["t"]), float(info["w"]))
+		if not native_doorway_site(dir).is_empty():
+			# The hidden endpoint is the very same full-wall builder used by
+			# ordinary edges, including its finish, skirting and collider.
+			var closed_visual_start := get_child_count()
+			var closed_shape_start := body.get_child_count()
+			_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
+			_register_native_closed_wall(dir, closed_visual_start,
+				closed_shape_start)
+			show_native_doorway(dir,
+				native_doorway_plan.is_open(cell, dir))
 
 
 func _edge_info(at: Vector2i, dir: int) -> Dictionary:
@@ -4510,10 +4539,17 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 		if y1 >= ceil_h - 0.01:
 			_level_builder._pool_crown_trims(dir, plane, from, to)
 		return
+	if theme == 10:
+		_level_builder._data_center_wall_finish(dir, plane, from, to, y0, y1)
+		return
+	if theme == 11:
+		_level_builder._bloom_wall_finish(dir, plane, from, to, y0, y1)
+		return
 	if theme == 5:
 		# tiled wainscot to shoulder height — unless the whole room is tiled
 		if y0 <= 0.01 and not _level_builder._asy_tiled_room():
-			_strip(dir, inner + n * 0.03, 0.7, c, ln, 0.05, 1.4, Mats.asy_tile())
+			_strip(dir, inner + n * 0.03, 0.7, c, ln, 0.05, 1.4, Mats.asy_wainscot())
+		_level_builder._asy_wall_finish(dir, plane, from, to, y0, y1)
 		return
 	if theme == 6:
 		# the red line, painted at the same height through the whole building,
@@ -4523,11 +4559,13 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 			_strip(dir, inner + n * 0.025, 0.06, c, ln, 0.05, 0.12, Mats.charcoal())
 		return
 	if theme == 7:
+		_level_builder._mall_wall_finish(dir, plane, from, to, y0, y1)
 		if y0 <= 0.01:
 			_strip(dir, inner + n * 0.025, 0.075, c, ln, 0.05, 0.15, Mats.mall_trim())
 			_strip(dir, inner + n * 0.018, 1.18, c, ln, 0.035, 0.045, Mats.brass())
 		return
 	if theme == 8:
+		_level_builder._prison_wall_finish(dir, plane, from, to, y0, y1)
 		if y0 <= 0.01:
 			# green paint to shoulder height over bare concrete, iron base
 			if style != WorldGen.PRISON_SHOWER:
@@ -5991,6 +6029,10 @@ func _build_props() -> void:
 			var setpiece := RouteSetpieces.new(_build_context, _scene_writer)
 			if not setpiece.is_native(): setpiece.build_landmark()
 		return
+	queue_build_job(_finish_room_props.bind(off, n0, b0))
+
+
+func _finish_room_props(off: Vector3, n0: int, b0: int) -> void:
 	_shift_props(off, n0, b0)
 	if style == WorldGen.STYLE_SLOTS:
 		# Cabinet banks belong at the complete room's centre. Their wall sign
@@ -8376,7 +8418,7 @@ func _partition(along_x: bool, off: float) -> void:
 	# `_resolved_room_split` has already slid/rotated this wall around every
 	# doorway. Keeping this function literal prevents furnishings and audits
 	# from disagreeing with the structure it actually builds.
-	var wmat: Material = Mats.wallpaper_variant(_finish_variant())
+	var wmat: Material
 	if theme == 1:
 		wmat = Mats.office_wall_variant(_finish_variant())
 	elif theme == 4:
@@ -8391,6 +8433,10 @@ func _partition(along_x: bool, off: float) -> void:
 		# concrete, not casino wallpaper — the fall-through default put
 		# damask flock inside a prison
 		wmat = Mats.prison_tile() if style == WorldGen.PRISON_SHOWER else Mats.prison_wall()
+	else:
+		# Select before loading: creating the discarded casino wallpaper here
+		# used to decode/upload its textures on the first prison partition.
+		wmat = Mats.wallpaper_variant(_finish_variant())
 	var h := ceil_h
 	var dt := lerpf(2.6, 9.4, _r(620))     # doorway centre along the partition
 	var dw := 1.15

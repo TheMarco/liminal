@@ -184,17 +184,17 @@ static func _mall(env: Environment) -> void:
 	# a fully saturated ambient painted every surface the same rust.
 	env.background_color = Color(0.010, 0.010, 0.011)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.59, 0.54)
-	env.ambient_light_energy = 0.46
+	env.ambient_light_color = Color(0.57, 0.64, 0.67)
+	env.ambient_light_energy = 0.48
 	env.tonemap_exposure = 1.24
 	env.sdfgi_energy = 1.22
 	env.glow_enabled = true
 	env.glow_intensity = 0.44
 	env.glow_bloom = 0.035
-	env.fog_light_color = Color(0.18, 0.16, 0.13)
-	env.fog_density = 0.009
-	env.volumetric_fog_density = 0.0048
-	env.volumetric_fog_albedo = Color(0.72, 0.66, 0.55)
+	env.fog_light_color = Color(0.15, 0.19, 0.20)
+	env.fog_density = 0.007
+	env.volumetric_fog_density = 0.0032
+	env.volumetric_fog_albedo = Color(0.65, 0.71, 0.73)
 	env.volumetric_fog_length = 54.0
 	env.ssao_radius = 1.45
 	env.ssao_intensity = 1.35
@@ -244,19 +244,19 @@ static func _school(env: Environment) -> void:
 
 
 static func _asylum(env: Environment) -> void:
-	# the asylum: bile-green dark, dust hanging in dead fluorescent light
+	# Cool abandoned wards; aged opal lamps warm the chapel and common rooms.
 	env.background_color = Color(0.005, 0.007, 0.004)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.58, 0.44)
-	env.ambient_light_energy = 0.17
+	env.ambient_light_color = Color(0.51, 0.61, 0.63)
+	env.ambient_light_energy = 0.24
 	env.tonemap_exposure = 1.25
 	env.sdfgi_energy = 1.15
 	env.glow_enabled = true
 	env.glow_intensity = 0.5
 	env.glow_bloom = 0.04
 	env.fog_light_color = Color(0.12, 0.15, 0.11)
-	env.fog_density = 0.014
-	env.volumetric_fog_density = 0.007
+	env.fog_density = 0.009
+	env.volumetric_fog_density = 0.0045
 	env.volumetric_fog_albedo = Color(0.62, 0.72, 0.55)
 	env.volumetric_fog_length = 30.0
 	env.ssao_radius = 1.6

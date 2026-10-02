@@ -1,11 +1,177 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 
+const MallPalm := preload("res://scripts/props/mall_palm.gd")
 static var _painted_sign_materials: Array[StandardMaterial3D] = []
 static var _fountain_meshes: Dictionary = {}
 
 static func clear_runtime_cache() -> void:
 	_painted_sign_materials.clear()
 	_fountain_meshes.clear()
+	MallPalm.clear_runtime_cache()
+
+
+## Prepare finite gallery, shop-sign and poster families behind the floor fade.
+static func prewarm_resources() -> void:
+	Mats.mall_brick()
+	for index in Chunk.MALL_SIGN_FACES.size():
+		_painted_sign_material(index)
+	for path in Chunk.POSTER_MALL:
+		Mats.wall_art_texture(path)
+	var holder := Node3D.new()
+	for bays in range(1, 5):
+		_attach_upper_gallery(holder, bays)
+	holder.free()
+
+
+static func _painted_sign_material(index: int) -> StandardMaterial3D:
+	while _painted_sign_materials.size() < Chunk.MALL_SIGN_FACES.size():
+		_painted_sign_materials.append(null)
+	if _painted_sign_materials[index] != null:
+		return _painted_sign_materials[index]
+	var path := Chunk.MALL_SIGN_DIR + "sign_%s.webp" % Chunk.MALL_SIGN_FACES[index][0]
+	if not ResourceLoader.exists(path):
+		return null
+	var tex := load(path) as Texture2D
+	if tex == null:
+		return null
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = tex
+	mat.roughness = 0.86
+	mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_painted_sign_materials[index] = mat
+	return mat
+
+
+## Architectural modules use baked detail meshes, keeping repeated mouldings,
+## joints and mullions to one draw per material rather than one per element.
+func _mall_floor_ceiling() -> void:
+	var service := ctx.style == WorldGen.MALL_SERVICE
+	var floor_material: Material = Mats.concrete_floor() if service else Mats.mall_floor()
+	if ctx.style == WorldGen.MALL_STORE: floor_material = Mats.mall_shop_floor()
+	scene.box(Vector3(6, -0.15, 6), Vector3(12, 0.3, 12),
+		floor_material)
+	scene.box(Vector3(6, ctx.ceiling_height + 0.15, 6), Vector3(12, 0.3, 12), Mats.mall_ceiling())
+	var architecture := Node3D.new()
+	architecture.name = "MallArchitecture"
+	architecture.set_meta("mall_architecture", true)
+	scene.add_node(architecture)
+	if service:
+		# Back of house keeps exposed services and a plain concrete floor.
+		architecture.position.y = ctx.ceiling_height
+		ProceduralDetails.attach(architecture, "mall_service_ceiling_template", func(d: ProceduralDetails):
+			for x in [2.5, 3.0]:
+				d.tube(Vector3(x, -0.22, 0),
+					Vector3(x, -0.22, 12), 0.055, Mats.mall_trim())
+			for z in [1.5, 4.5, 7.5, 10.5]:
+				d.box(Vector3(2.75, -0.32, z), Vector3(0.9, 0.06, 0.08), Mats.metal_gray())
+		, true)
+		return
+	var along_x := WorldGen.corridor(ctx.world_seed, ctx.cell) != 2
+	var cor := ctx.style == WorldGen.MALL_CORRIDOR
+	var sky := ctx.style == WorldGen.MALL_ATRIUM and ctx.ceiling_height > 5.5
+	var h := 0.0
+	ProceduralDetails.attach(architecture, "mall_floor_inlays_%s_%s" % [along_x, cor], func(d: ProceduralDetails):
+		# Flush stone ribbons and fine brass divider strips follow the public
+		# gallery; cross galleries continue on the same twelve-metre grid.
+		for t in [1.45, 10.55]:
+			var p := Vector3(6, 0.006, t) if along_x else Vector3(t, 0.006, 6)
+			var size := Vector3(12, 0.008, 0.44) if along_x else Vector3(0.44, 0.008, 12)
+			d.box(p, size, Mats.mall_rose_stone())
+			for offset in [-0.25, 0.25]:
+				var q := p + (Vector3(0, 0.002, offset) if along_x else Vector3(offset, 0.002, 0))
+				d.box(q, Vector3(12, 0.008, 0.022) if along_x else Vector3(0.022, 0.008, 12), Mats.mall_brass())
+			var j := p + (Vector3(0, 0.001, 0.36) if along_x else Vector3(0.36, 0.001, 0))
+			d.box(j, Vector3(12, 0.008, 0.12) if along_x else Vector3(0.12, 0.008, 12), Mats.mall_jade_stone())
+		if not cor:
+			for x in [1.45, 10.55]:
+				d.box(Vector3(x, 0.006, 6), Vector3(0.44, 0.008, 8.66), Mats.mall_rose_stone())
+				for side in [-0.25, 0.25]:
+					d.box(Vector3(x + side, 0.008, 6), Vector3(0.022, 0.008, 8.66), Mats.mall_brass())
+			# A diamond medallion is a flush inlay, never a platform.
+			d.box(Vector3(6, 0.011, 6), Vector3(1.15, 0.009, 1.15), Mats.mall_jade_stone(), 0, Vector3(0, PI / 4, 0))
+			d.box(Vector3(6, 0.016, 6), Vector3(0.88, 0.008, 0.88), Mats.mall_rose_stone(), 0, Vector3(0, PI / 4, 0))
+	, true)
+	# Public rooms keep a plain ceiling: a cross-room coffer grid cuts
+	# through the corridor's fluorescent panels. The atrium laylight has
+	# its own perimeter fixtures and can retain its fitted glazing frame.
+	if not sky:
+		return
+	var ceiling := Node3D.new()
+	ceiling.name = "MallCeilingModules"
+	ceiling.position.y = ctx.ceiling_height
+	architecture.add_child(ceiling)
+	ProceduralDetails.attach(ceiling, "mall_atrium_laylight", func(d: ProceduralDetails):
+		# Glazed laylight over the atrium, with three stepped perimeter frames.
+		d.box(Vector3(6, h - 0.035, 6), Vector3(7.8, 0.04, 7.8), Mats.mall_skylight())
+		for tier in 3:
+			var span := 8.1 + float(tier) * 0.46
+			var y := h - 0.14 - float(tier) * 0.16
+			for side in [-1.0, 1.0]:
+				d.box(Vector3(6 + side * span * 0.5, y, 6), Vector3(0.24, 0.20, span + 0.24), Mats.mall_wall())
+				d.box(Vector3(6, y, 6 + side * span * 0.5), Vector3(span, 0.20, 0.24), Mats.mall_wall())
+		for t in [2.1, 4.05, 6.0, 7.95, 9.9]:
+			d.box(Vector3(t, h - 0.09, 6), Vector3(0.065, 0.12, 7.8), Mats.mall_trim())
+			d.box(Vector3(6, h - 0.09, t), Vector3(7.8, 0.12, 0.065), Mats.mall_trim())
+	, true)
+
+
+## Segment-based finishes respect real openings and merged-room boundaries.
+func _mall_wall_finish(dir: int, plane: float, from: float, to: float,
+		y0: float, y1: float) -> void:
+	if ctx.style == WorldGen.MALL_SERVICE: return
+	var width := to - from
+	if width < 0.08: return
+	var c := (from + to) * 0.5
+	if y0 <= 0.01:
+		scene.surface_facing_box(dir, plane, 0.035, c, 0.61, width, 1.08, 0.055, Mats.mall_ceramic())
+		scene.surface_facing_box(dir, plane, 0.068, c, 1.16, width, 0.065, 0.11, Mats.mall_rose_stone())
+	if y1 >= ctx.ceiling_height - 0.01:
+		scene.surface_facing_box(dir, plane, 0.11, c, y1 - 0.19, width, 0.30, 0.22, Mats.mall_wall())
+		scene.surface_facing_box(dir, plane, 0.225, c, y1 - 0.34, width, 0.04, 0.03, Mats.mall_brass())
+		if ctx.style == WorldGen.MALL_ATRIUM and y1 > 5.5 and width > 3.0:
+			_mall_upper_gallery(dir, plane, c, width)
+
+
+func _mall_storefront_detail(dir: int, plane: float, uc: float, w: float,
+		gt: float, top: float, state: int) -> void:
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var inner := plane + n * Chunk.T * 0.5
+	var v := Node3D.new()
+	v.position = Vector3(inner, 0, uc) if dir < 2 else Vector3(uc, 0, inner)
+	v.rotation.y = scene.wall_facing(dir)
+	v.set_meta("mall_storefront_detail", true)
+	scene.add_node(v)
+	ProceduralDetails.attach(v, "mall_shopfront_%.3f_%.3f_%d" % [w, top, state], func(d: ProceduralDetails):
+		for side in [-1.0, 1.0]:
+			var x: float = side * (w * 0.5 - 0.12)
+			d.box(Vector3(x, top * 0.5, 0.51), Vector3(0.24, top, 0.16), Mats.mall_rose_stone(), 0.025)
+			d.box(Vector3(x, 0.14, 0.51), Vector3(0.30, 0.28, 0.18), Mats.mall_jade_stone(), 0.025)
+			d.box(Vector3(x - side * 0.15, gt * 0.5, 0.55), Vector3(0.04, gt, 0.06), Mats.mall_brass())
+		d.box(Vector3(0, top + 0.065, 0.45), Vector3(w + 0.10, 0.15, 0.74), Mats.mall_wall(), 0.025)
+		d.box(Vector3(0, top - 0.035, 0.74), Vector3(w, 0.028, 0.04), Mats.mall_brass())
+		d.box(Vector3(0, 0.035, 0.60), Vector3(w - 0.30, 0.06, 0.32), Mats.mall_jade_stone(), 0.01)
+	)
+	if state < 2:
+		var bottom := 0.15 if state == 0 else 1.14
+		var blades: Array[Transform3D] = []
+		for i in maxi(1,floori((gt-bottom)/0.085)):
+			blades.append(Transform3D(Basis.from_scale(Vector3((w-0.53)/6.0,1,1)),
+				Vector3(0,bottom+(float(i)+0.5)*0.085,0.553)))
+		ProceduralDetails.attach_instances(v, "mall_shutter_blade_module", func(d: ProceduralDetails):
+			d.box(Vector3.ZERO,Vector3(6.0,0.076,0.035),Mats.mall_shutter_slat(),0.009)
+		, blades)
+		var handles := Node3D.new()
+		handles.position.y = bottom
+		v.add_child(handles)
+		ProceduralDetails.attach(handles, "mall_shutter_handles", func(d: ProceduralDetails):
+			for x in [-0.5,0.5]:
+				d.box(Vector3(x,0.16,0.58),Vector3(0.12,0.035,0.035),Mats.mall_brass(),0.009)
+		, true)
+	if state == 2:
+		scene.model_box(v, Vector3(0, 1.57, 0.56), Vector3(0.58, 0.32, 0.014), Mats.mall_sign_face())
+		_mall_lettering(v, "C L O S E D", Vector3(0, 1.61, 0.571), 0.00085, 0.50, 0, Color(0.2, 0.22, 0.18))
+		_mall_lettering(v, "THANK YOU FOR VISITING", Vector3(0, 1.49, 0.572), 0.00030, 0.50, 0, Color(0.2, 0.22, 0.18))
 
 
 func _mall_payphone_bank(dir: int, count: int) -> bool:
@@ -150,20 +316,54 @@ func _mall_lighting() -> void:
 			scene.troffer(p, Vector2(1.65, 0.24) if along_x else Vector2(0.24, 1.65),
 				lens, Mats.mall_trim())
 	else:
-		for p in [Vector2(3.0, 3.0), Vector2(9.0, 3.0),
-				Vector2(3.0, 9.0), Vector2(9.0, 9.0)]:
-			scene.troffer(Vector3(p.x, 0, p.y), Vector2(1.25, 0.3), lens, Mats.mall_trim())
+		var inset := 1.1 if ctx.style == WorldGen.MALL_ATRIUM and ctx.ceiling_height > 5.5 else 3.0
+		source.x = inset
+		source.z = inset
+		for p in [Vector2(inset, inset), Vector2(12 - inset, inset),
+				Vector2(inset, 12 - inset), Vector2(12 - inset, 12 - inset)]:
+			if ctx.style == WorldGen.MALL_FOODCOURT:
+				var pendant_y := minf(3.35, ctx.ceiling_height - 0.55)
+				_mall_pendant(Vector3(p.x, pendant_y, p.y), lens)
+				source.y = pendant_y - 0.15
+			else:
+				scene.troffer(Vector3(p.x, 0, p.y), Vector2(1.25, 0.3), lens, Mats.mall_trim())
 	if dead:
 		return
 	var light = scene.fixture_light(flicker, lens, 1.08 if cor else 1.22,
 		source, "mall_troffer")
-	light.light_color = Color(1.0, 0.74, 0.48)
+	light.light_color = Color(1.0, 0.88, 0.71)
 	light.omni_range = 13.5
 	light.shadow_enabled = false
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 25.0
 	light.distance_fade_length = 8.0
 	scene.add_node(light)
+	if ctx.style == WorldGen.MALL_ATRIUM and ctx.ceiling_height > 5.5:
+		var skylight := OmniLight3D.new()
+		skylight.position = Vector3(6, ctx.ceiling_height - 0.5, 6)
+		skylight.light_color = Color(0.47, 0.69, 0.88)
+		skylight.light_energy = 1.8
+		skylight.omni_range = 11.0
+		skylight.omni_attenuation = 0.65
+		skylight.shadow_enabled = false
+		skylight.distance_fade_enabled = true
+		skylight.distance_fade_begin = 25.0
+		skylight.distance_fade_length = 8.0
+		skylight.set_meta("visible_source", "mall_laylight")
+		scene.add_node(skylight)
+
+
+func _mall_pendant(p: Vector3, lens: StandardMaterial3D) -> void:
+	var v := Node3D.new()
+	v.position = p
+	scene.add_node(v)
+	var drop := ctx.ceiling_height - p.y
+	ProceduralDetails.attach(v, "mall_pendant_%.3f" % drop, func(d: ProceduralDetails):
+		d.tube(Vector3(0, 0.08, 0), Vector3(0, drop, 0), 0.018, Mats.mall_brass())
+		d.ring(Vector3(0, 0.01, 0), 0.42, 0.055, Mats.mall_brass())
+		d.ring(Vector3(0, 0.12, 0), 0.32, 0.035, Mats.mall_trim())
+	)
+	scene.model_cylinder(v, Vector3(0, -0.035, 0), 0.40, 0.08, lens)
 
 
 func _mall_poster_case(dir: int, plane: float) -> void:
@@ -208,7 +408,7 @@ func _mall_unit(dir: int, plane: float, uc: float, w: float, salt: int) -> void:
 	var state = 0          # 0 shutter down, 1 three-quarters, 2 dead glass
 	if rs > 0.55: state = 1
 	if rs > 0.80: state = 2
-	var top = minf(3.6, ctx.ceiling_height - 0.05)
+	var top = minf(3.6, ctx.ceiling_height - 0.22)
 	var gt = top - 0.62    # glass / shutter head height under the fascia
 	# end piers and soffit lid
 	for side in [-1.0, 1.0]:
@@ -253,6 +453,7 @@ func _mall_unit(dir: int, plane: float, uc: float, w: float, salt: int) -> void:
 		scene.surface_facing_box(dir, plane, 0.53, uc, 1.05, bw - 0.3, 0.05, 0.03, Mats.brass())
 	# shutter housing above the head
 	scene.surface_facing_box(dir, plane, 0.44, uc, gt + 0.14, w - 0.4, 0.26, 0.30, Mats.charcoal())
+	_mall_storefront_detail(dir, plane, uc, w, gt, top, state)
 	# one solid collider across the unit
 	var n = -1.0 if dir == 0 or dir == 2 else 1.0
 	var p = plane + n * (Chunk.T * 0.5 + 0.30)
@@ -283,23 +484,13 @@ func _mall_painted_sign_index(giv: int) -> int:
 func _mall_painted_sign(dir: int, plane: float, uc: float, index: int,
 		y: float) -> bool:
 	var entry: Array = Chunk.MALL_SIGN_FACES[index]
-	var tex = load(Chunk.MALL_SIGN_DIR + "sign_%s.webp" % entry[0]) as Texture2D
-	if tex == null:
+	var mat := _painted_sign_material(index)
+	if mat == null:
 		return false
 	var aspect: float = entry[1]
 	# Fit to whichever bound binds first, never stretching the artwork.
 	var h: float = minf(Chunk.MALL_SIGN_MAX_H, Chunk.MALL_SIGN_MAX_W / aspect)
 	var w: float = h * aspect
-	while _painted_sign_materials.size() < Chunk.MALL_SIGN_FACES.size():
-		_painted_sign_materials.append(null)
-	var mat := _painted_sign_materials[index]
-	if mat == null:
-		mat = StandardMaterial3D.new()
-		mat.albedo_texture = tex
-		mat.roughness = 0.86
-		mat.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-		mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-		_painted_sign_materials[index] = mat
 	var n = -1.0 if dir == 0 or dir == 2 else 1.0
 	# The shutter housing's front face stands 0.665m off the plane. Anything
 	# shallower than that has its lower half swallowed by the housing, which is
@@ -482,13 +673,13 @@ func _mall_corridor() -> void:
 			scene.bind_furnishing_colliders(bin, bin_b0)
 	if ctx.random01(1630) < 0.72:
 		var plant_pos = Vector3(2.1, 0, 4.4) if along_x else Vector3(4.4, 0, 2.1)
-		scene.planter(plant_pos)
+		MallPalm.build(scene, plant_pos, ctx.random01(1631) * TAU)
 	if ctx.random01(1631) < 0.35:
 		scene.cc0_prop("WetFloorSign_01",
 			Vector3(9.4, 0, 5.0) if along_x else Vector3(5.0, 0, 9.4), yaw, 0.9)
 	var sign_p = Vector3(6.0, minf(3.35, ctx.ceiling_height - 0.5), 5.1) if along_x \
 		else Vector3(5.1, minf(3.35, ctx.ceiling_height - 0.5), 6.0)
-	_mall_sign(sign_p, yaw, Chunk.MALL_NAMES[WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, 1632) % Chunk.MALL_NAMES.size()])
+	_mall_sign(sign_p, yaw, "ORCHARD GALLERIA")
 	if ctx.random01(1636) < 0.58:
 		var cart_p = Vector3(8.8, 0, 2.3) if along_x \
 			else Vector3(2.3, 0, 8.8)
@@ -758,6 +949,14 @@ func _mall_foodcourt() -> void:
 			for x in [-2.45, 0.0, 2.45]:
 				detail.box(Vector3(x, 0.64, 4.238), Vector3(2.14, 0.86, 0.025),
 					Mats.mall_trim(), 0.025)
+			# Glazed tile faces, stone cap and a ribbed, wall-mounted canopy.
+			detail.box(Vector3(0, 0.65, 4.205), Vector3(7.15, 0.90, 0.03), Mats.mall_ceramic())
+			detail.box(Vector3(0, 1.28, 4.60), Vector3(7.60, 0.08, 0.95), Mats.mall_rose_stone(), 0.02)
+			detail.box(Vector3(0, 3.13, 4.98), Vector3(7.60, 0.22, 1.0), Mats.mall_wall(), 0.04)
+			detail.box(Vector3(0, 3.00, 4.47), Vector3(7.62, 0.05, 0.05), Mats.mall_brass())
+			for rib in 31:
+				detail.box(Vector3(-3.6 + float(rib) * 0.24, 3.06, 4.45),
+					Vector3(0.12, 0.21, 0.10), Mats.mall_trim(), 0.015)
 			detail.box(Vector3(0, 0.10, 4.22), Vector3(7.10, 0.20, 0.06), Mats.charcoal(), 0.012)
 			detail.box(Vector3(0, 1.315, 4.14), Vector3(7.55, 0.045, 0.09), Mats.sch_white(), 0.008)
 		)
@@ -794,15 +993,10 @@ func _mall_foodcourt() -> void:
 			var sx = -2.35 + float(si) * 2.35
 			scene.model_rounded_box(v, Vector3(sx, 2.05, 5.25),
 				Vector3(1.92, 0.72, 0.12), Mats.charcoal(), 0.025)
-			for line_idx in 4:
-				var line_w = lerpf(0.72, 1.45,
-					WorldGen.hr01(WorldGen.h(ctx.world_seed, ctx.cell.x + si,
-						ctx.cell.y + line_idx, 1694), 2))
-				scene.model_box(v, Vector3(sx - 0.18, 2.25 - float(line_idx) * 0.14,
-					5.178), Vector3(line_w, 0.025, 0.012),
-					Mats.mall_sign_face())
-				scene.model_box(v, Vector3(sx + 0.68, 2.25 - float(line_idx) * 0.14,
-					5.176), Vector3(0.16, 0.025, 0.012), Mats.brass())
+			_mall_lettering(v, ["F A V O U R I T E S", "L U N C H   S P E C I A L", "C O L D   D R I N K S"][si],
+				Vector3(sx, 2.24, 5.178), 0.00065, 1.60, PI)
+			_mall_lettering(v, ["CLASSIC COMBO   4.95\nSIDE ORDER   1.50\nEXTRA SAUCE   .25", "SERVED UNTIL 3 PM\nMEAL + DRINK   5.95\nKIDS MEAL   2.95", "FOUNTAIN SODA   .95\nFRESH LEMONADE   1.25\nICED TEA   .95"][si],
+				Vector3(sx, 1.98, 5.178), 0.0005, 1.52, PI)
 		scene.cc0_prop_local(v, "CashRegister_01",
 			Vector3(2.85, 1.32, 4.40), PI, 0.68)
 		v.set_meta("enrichment_prop", "CashRegister_01")
@@ -837,9 +1031,19 @@ func _mall_atrium() -> void:
 	var fc = Vector3(8.25, 0, 7.85)
 	var fountain_b0 = scene.collider_mark()
 	var fountain = scene.furnishing_pivot(fc, 0.0, "mall_fountain")
-	scene.model_cylinder(fountain, Vector3(0, 0.25, 0), 1.65, 0.50, Mats.marble_photo())
-	scene.model_cylinder(fountain, Vector3(0, 0.49, 0), 1.38, 0.08, Mats.mall_glass())
-	scene.model_cylinder(fountain, Vector3(0, 0.67, 0), 0.20, 0.36, Mats.brass())
+	# Turned stone plinth, tiled basin and a wide bullnose coping. Every piece
+	# remains inside the original 1.65m collision radius and 0.56m rim height.
+	scene.model_cylinder(fountain, Vector3(0, 0.08, 0), 1.65, 0.16, Mats.mall_rose_stone())
+	scene.model_cylinder(fountain, Vector3(0, 0.29, 0), 1.56, 0.36, Mats.mall_ceramic(true))
+	scene.model_cylinder(fountain, Vector3(0, 0.45, 0), 1.36, 0.08, Mats.mall_jade_stone())
+	var coping := MeshInstance3D.new()
+	coping.mesh = _mall_lathe(PackedVector2Array([
+		Vector2(1.32, 0.46), Vector2(1.32, 0.52), Vector2(1.36, 0.56),
+		Vector2(1.61, 0.56), Vector2(1.65, 0.52), Vector2(1.65, 0.46), Vector2(1.32, 0.46)]))
+	coping.material_override = Mats.mall_rose_stone()
+	fountain.add_child(coping)
+	# The dismantled central jet retains a tiered brass collar.
+	scene.model_cylinder(fountain, Vector3(0, 0.67, 0), 0.20, 0.36, Mats.mall_brass())
 	ProceduralDetails.attach(fountain, "mall_fountain_jet_collar_drain_r165_v1", func(d: ProceduralDetails):
 		d.ring(Vector3(0, 0.87, 0), 0.10, 0.018, Mats.brass())
 		d.ring(Vector3(0.82, 0.525, 0.28), 0.12, 0.012, Mats.charcoal())
@@ -861,24 +1065,92 @@ func _mall_atrium() -> void:
 	water.set_meta("mall_fountain_water_visual_only", true)
 	fountain.add_child(water)
 	scene.bind_furnishing_colliders(fountain, fountain_b0)
-	scene.planter(Vector3(2.2, 0, 8.8))
+	MallPalm.build(scene, Vector3(2.2, 0, 8.8), ctx.random01(1711) * TAU)
 	_mall_bench(Vector3(3.2, 0, 3.0), PI / 4.0)
 	_mall_bench(Vector3(8.25, 0, 5.3), PI)
 	_mall_directory_pylon(Vector3(3.6, 0, 6.4), ctx.random01(1710) * TAU)
 	for phone_dir in [1, 3, 0, 2]:
 		if _solid_wall(phone_dir) and _mall_payphone_bank(phone_dir, 1):
 			break
-	if ctx.ceiling_height > 5.5:
-		# False mezzanine: visible high above, deliberately not traversable.
-		for side in [-1.0, 1.0]:
-			scene.box(Vector3(6, 3.45, 6 + side * 5.25), Vector3(11, 0.18, 0.70),
-				Mats.mall_trim(), false)
-			for i in 9:
-				scene.box(Vector3(1.6 + float(i) * 1.1, 3.9, 6 + side * 4.95),
-					Vector3(0.045, 0.9, 0.045), Mats.brass(), false)
 	if ctx.random01(1718) < 0.72:
 		_mall_shopping_cart(Vector3(9.8, 0, 2.2),
 			-PI / 2.0 + (ctx.random01(1719) - 0.5) * 0.35, ctx.random01(1720) < 0.3)
+
+
+## Revolved architectural profile: a shared, smoothly rounded stone coping.
+func _mall_lathe(profile: PackedVector2Array) -> ArrayMesh:
+	var key := "lathe:" + str(profile)
+	if _fountain_meshes.has(key): return _fountain_meshes[key]
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	surface.set_material(Mats.mall_rose_stone())
+	for j in range(profile.size() - 1):
+		var tangent := (profile[j + 1] - profile[j]).normalized()
+		for i in 64:
+			# Godot uses clockwise front faces: the geometric cross product
+			# points opposite to the outward shading normal.
+			for corner in [Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 0),
+					Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)]:
+				var a := TAU * float(i + corner.x) / 64.0
+				var p := profile[j + corner.y]
+				surface.set_normal(Vector3(-cos(a) * tangent.y, tangent.x, -sin(a) * tangent.y))
+				surface.set_uv(Vector2(float(i + corner.x) / 64.0, p.y))
+				surface.add_vertex(Vector3(cos(a) * p.x, p.y, sin(a) * p.x))
+	var mesh := surface.commit()
+	_fountain_meshes[key] = mesh
+	return mesh
+
+
+func _mall_upper_gallery(dir: int, plane: float, along: float, width: float) -> void:
+	# Built with the actual wall segment, before furniture is relocated to the
+	# centre of a merged room. This keeps upper galleries fixed to the shell.
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var inner := plane + n * Chunk.T * 0.5
+	var v := Node3D.new()
+	v.position = Vector3(inner, 0, along) if dir < 2 else Vector3(along, 0, inner)
+	v.rotation.y = scene.wall_facing(dir)
+	v.set_meta("mall_upper_gallery", true)
+	scene.add_node(v)
+	var actual_span := width - 0.12
+	var bays := maxi(1, floori(actual_span / 2.4))
+	v.scale.x = actual_span / (2.4 * float(bays))
+	_attach_upper_gallery(v, bays)
+
+
+static func _attach_upper_gallery(parent: Node3D, bays: int) -> void:
+	var pitch := 2.4
+	var span := pitch * float(bays)
+	ProceduralDetails.attach(parent, "mall_upper_gallery_module_%d" % bays, func(d: ProceduralDetails):
+		d.box(Vector3(0, 4.20, 0.38), Vector3(span, 0.28, 0.85), Mats.mall_wall(), 0.025)
+		d.box(Vector3(0, 4.06, 0.80), Vector3(span, 0.045, 0.08), Mats.mall_brass())
+		for b in bays:
+			var x := -span * 0.5 + pitch * (float(b) + 0.5)
+			d.box(Vector3(x, 5.64, 0.08), Vector3(pitch - 0.16, 2.0, 0.07), Mats.mall_trim())
+			d.box(Vector3(x, 5.64, 0.125), Vector3(pitch - 0.32, 1.78, 0.035), Mats.mall_glass())
+			d.box(Vector3(x, 4.76, 0.65), Vector3(pitch - 0.08, 0.77, 0.035), Mats.mall_glass())
+		for b in bays + 1:
+			var x := -span * 0.5 + pitch * float(b)
+			d.box(Vector3(x, 4.80, 0.65), Vector3(0.06, 1.0, 0.07), Mats.mall_brass())
+		d.tube(Vector3(-span * 0.5, 5.30, 0.65), Vector3(span * 0.5, 5.30, 0.65), 0.045, Mats.mall_brass())
+	, true)
+
+
+func _mall_lettering(parent: Node3D, text: String, p: Vector3, pixel: float,
+		max_width: float, yaw := 0.0, color := Color(0.88, 0.82, 0.65)) -> Label3D:
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = 96
+	var width := ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 96).x
+	label.pixel_size = minf(pixel, max_width / maxf(width, 1))
+	label.width = ceili(width + 10)
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.outline_size = 0
+	label.double_sided = false
+	label.modulate = color
+	label.position = p
+	label.rotation.y = yaw
+	parent.add_child(label)
+	return label
 
 
 func _mall_fountain_water_disc(radius: float, segments: int) -> ArrayMesh:
@@ -958,7 +1230,7 @@ func _mall_kiosks() -> void:
 		_mall_kiosk(Vector3(8.8, 0, 3.0), ctx.random01(1725) * TAU, 1726)
 	_mall_bench(Vector3(2.8, 0, 8.6), PI / 2.0)
 	if ctx.random01(1727) < 0.5:
-		scene.planter(Vector3(5.9, 0, 10.2))
+		MallPalm.build(scene, Vector3(5.9, 0, 10.2), ctx.random01(1728) * TAU)
 
 
 func _mall_cinema() -> void:
@@ -974,7 +1246,11 @@ func _mall_cinema() -> void:
 			d.box(Vector3(x, 0.65, -0.371), Vector3(1.58, 0.78, 0.025), Mats.mall_trim(), 0.025)
 		d.box(Vector3(0, 0.10, -0.38), Vector3(5.46, 0.20, 0.06), Mats.charcoal(), 0.012)
 		d.box(Vector3(0, 1.37, -0.43), Vector3(5.72, 0.06, 0.12), Mats.sch_white(), 0.01)
+		for rib in 43:
+			d.box(Vector3(-2.7 + float(rib) * 0.129, 0.70, -0.40),
+				Vector3(0.028, 1.04, 0.045), Mats.mall_brass(), 0.007)
 	)
+	_mall_lettering(cv, "T I C K E T S", Vector3(0, 0.91, -0.441), 0.0016, 1.50, PI)
 	for rx in [-1.65, 1.65]:
 		scene.cc0_prop_local(cv, "CashRegister_01", Vector3(rx, 1.39, -0.12),
 			PI, 0.68)
@@ -984,7 +1260,7 @@ func _mall_cinema() -> void:
 	# the marquee: navy brick surround, bulb rows, one bulb still blinking
 	var marquee = scene.furnishing_pivot(Vector3.ZERO, 0.0, "mall_cinema_marquee", false)
 	var surround = scene.box(Vector3(6, 2.9, 9.55), Vector3(7.0, 1.7, 0.25),
-		Mats.mall_brick(), false)
+		Mats.mall_cinema_velvet(), false)
 	scene.adopt_local(marquee, surround)
 	# Narrow pilasters bridge the concession counter to the heavy masonry
 	# marquee. Without them the entire blue surround reads as a floating slab.
@@ -992,18 +1268,34 @@ func _mall_cinema() -> void:
 		var pier = scene.box(Vector3(mx, 1.70, 9.55), Vector3(0.22, 0.72, 0.25),
 			Mats.mall_trim(), false)
 		scene.adopt_local(marquee, pier)
-	var cinema_sign = _mall_sign(Vector3(6, 2.9, 9.38), PI,
-		"CINEMAS  1-6", 0.16, false)
-	scene.adopt_local(marquee, cinema_sign)
-	for bi in 14:
-		var bx = 2.9 + float(bi % 7) * 1.05
-		var by = 2.28 if bi < 7 else 3.52
-		var bulb = scene.sphere(Vector3(bx, by, 9.40), 0.045,
-			Mats.bulb() if bi == 3 else Mats.chrome())
-		bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		scene.adopt_local(marquee, bulb)
+	ProceduralDetails.attach(marquee, "mall_cinema_marquee_v2", func(d: ProceduralDetails):
+		# Stepped Deco crown, brass reveal, and an opal-glass letterboard.
+		d.box(Vector3(6, 2.89, 9.39), Vector3(6.35, 1.12, 0.10), Mats.mall_sign_face(), 0.035)
+		for y in [2.27, 3.51]:
+			d.box(Vector3(6, y, 9.32), Vector3(6.55, 0.055, 0.08), Mats.mall_brass(), 0.012)
+		for y in [3.65, 3.79]:
+			d.box(Vector3(6, y, 9.52), Vector3(7.25 if y < 3.7 else 6.9, 0.12, 0.55), Mats.mall_trim(), 0.025)
+		for i in 25:
+			var x := 2.92 + float(i) * 0.257
+			for y in [2.27, 3.51]:
+				d.box(Vector3(x, y, 9.245), Vector3(0.055, 0.055, 0.05),
+					Mats.chrome() if i % 7 == 0 else Mats.mall_cove(), 0.022)
+	)
+	_mall_lettering(marquee, "O R C H A R D", Vector3(6, 3.12, 9.325), 0.0047, 5.45, PI, Color(0.17, 0.21, 0.19))
+	_mall_lettering(marquee, "C I N E M A S   1 - 6", Vector3(6, 2.74, 9.325), 0.0021, 4.4, PI, Color(0.28, 0.20, 0.16))
+	var marquee_light := OmniLight3D.new()
+	marquee_light.position = Vector3(6, 3.0, 9.0)
+	marquee_light.light_color = Color(1.0, 0.80, 0.55)
+	marquee_light.light_energy = 0.8
+	marquee_light.omni_range = 6.5
+	marquee_light.shadow_enabled = false
+	marquee_light.distance_fade_enabled = true
+	marquee_light.distance_fade_begin = 22.0
+	marquee_light.distance_fade_length = 8.0
+	marquee_light.set_meta("visible_source", "mall_cinema_marquee")
+	marquee.add_child(marquee_light)
 	# red carpet approach between velvet queue ropes
-	scene.box(Vector3(6, 0.015, 5.4), Vector3(2.2, 0.02, 6.4), Mats.carpet_red(), false)
+	scene.box(Vector3(6, 0.025, 5.4), Vector3(2.8, 0.02, 6.4), Mats.mall_cinema_velvet(), false)
 	var queue_b0 = scene.collider_mark()
 	var queue = scene.furnishing_pivot(Vector3.ZERO, 0.0, "mall_cinema_queue")
 	for i in 2:
@@ -1028,7 +1320,19 @@ func _mall_poster_stand(p: Vector3) -> void:
 	scene.model_rounded_box(v, Vector3(0, 1.2, 0), Vector3(1.2, 2.1, 0.15),
 		Mats.mall_trim(), 0.04)
 	scene.model_box(v, Vector3(0, 1.2, -0.09), Vector3(1.03, 1.9, 0.025),
-		Mats.sch_chair(0.04 + ctx.random01(1704) * 0.48))
+		Mats.mall_sign_board())
+	# Original typeset film posters replace the former blank coloured inserts.
+	var title := "THE LAST\nSUMMER" if p.x < 6.0 else "AFTER\nHOURS"
+	_mall_lettering(v, "O R C H A R D   P I C T U R E S", Vector3(0, 1.97, -0.112), 0.00043, 0.90, PI)
+	_mall_lettering(v, title, Vector3(0, 1.46, -0.115), 0.00185, 0.87, PI)
+	_mall_lettering(v, "A PLACE YOU REMEMBER", Vector3(0, 0.92, -0.115), 0.00046, 0.88, PI)
+	_mall_lettering(v, "DAILY  12:30  3:15  6:00\nALL SEATS  $4.50", Vector3(0, 0.43, -0.115), 0.00055, 0.88, PI)
+	ProceduralDetails.attach(v, "mall_cinema_poster_graphic_%s" % (p.x < 6.0), func(d: ProceduralDetails):
+		# Sunset disc and a stepped horizon, printed as shallow coloured shapes.
+		for i in 7:
+			var width := 0.65 - absf(float(i) - 3.0) * 0.055
+			d.box(Vector3(0, 0.64 + float(i) * 0.024, -0.117), Vector3(width, 0.015, 0.002), Mats.mall_rose_stone())
+	)
 	scene.model_rounded_box(v, Vector3(0, 0.05, 0), Vector3(1.38, 0.10, 0.52),
 		Mats.mall_trim(), 0.025)
 	ProceduralDetails.attach(v, "mall_poster_stand120_210_inset_brace_v1", func(d: ProceduralDetails):

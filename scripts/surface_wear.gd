@@ -48,6 +48,31 @@ var district := 0
 var age := 0.6
 
 
+## Retain every shared damp mask while the floor transition is opaque.
+## Otherwise a first shower/fountain can decode a new texture during movement.
+static func prepare_floor() -> void:
+	for mask_id in 8:
+		_patch_material(Motif.SPILL, mask_id, "")
+
+
+static func _patch_material(motif: int, mask_id: int,
+		authored_mask: String) -> ShaderMaterial:
+	var material_key := "surface_wear_%d_%d_%s" % [motif, mask_id, authored_mask]
+	if Mats._c.has(material_key):
+		return Mats._c[material_key]
+	var material := Mats._shader(material_key,
+		"res://shaders/surface_wear.gdshader")
+	material.set_shader_parameter("motif", motif)
+	material.set_shader_parameter("damp_spread", mask_id >= 0)
+	material.set_shader_parameter("authored_mask", not authored_mask.is_empty())
+	if not authored_mask.is_empty():
+		material.set_shader_parameter("stain_mask", load(authored_mask))
+	elif mask_id >= 0:
+		material.set_shader_parameter("stain_mask",
+			load("res://textures/annex/moisture_mask_%02d.png" % (mask_id + 1)))
+	return material
+
+
 static func apply(chunk: Node3D, context: ChunkBuildContext) -> void:
 	if not enabled:
 		return
@@ -316,17 +341,7 @@ func _patch(face: Face, at: Vector3, requested: Vector2, motif: int,
 	elif ctx.theme == 2 and cause == "annex_connected_moisture_tide":
 		authored_mask = "res://textures/annex/wall_tide_%02d.png" % (
 			1 + _hash(center, 28213) % 2)
-	var material_key := "surface_wear_%d_%d_%s" % [motif, mask_id, authored_mask]
-	var material := Mats._shader(material_key,
-		"res://shaders/surface_wear.gdshader")
-	material.set_shader_parameter("motif", motif)
-	material.set_shader_parameter("damp_spread", damp)
-	material.set_shader_parameter("authored_mask", not authored_mask.is_empty())
-	if not authored_mask.is_empty():
-		material.set_shader_parameter("stain_mask", load(authored_mask))
-	elif damp:
-		material.set_shader_parameter("stain_mask",
-			load("res://textures/annex/moisture_mask_%02d.png" % (mask_id + 1)))
+	var material := _patch_material(motif, mask_id, authored_mask)
 	mark.material_override = material
 	# Compensate the complete supporting transform (including model scale).
 	mark.transform = face.transform.affine_inverse() * Transform3D(

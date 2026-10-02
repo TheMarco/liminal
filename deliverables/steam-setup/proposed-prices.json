@@ -1,0 +1,256 @@
+[
+  {
+    "prices": [],
+    "text": "Currency\nCurrent Price\nYour Proposed Price\nMax Discount\n "
+  },
+  {
+    "prices": [
+      "8.99"
+    ],
+    "text": "US Dollar\n--\nNEW\n$\n90 %"
+  },
+  {
+    "prices": [
+      "7.99"
+    ],
+    "text": "GB Pounds\n--\nNEW\n£\n90 %"
+  },
+  {
+    "prices": [
+      "9,19"
+    ],
+    "text": "Euros\n--\nNEW\n€\n90 %"
+  },
+  {
+    "prices": [
+      "7.95"
+    ],
+    "text": "Swiss Francs\n--\nNEW\nCHF\n90 %"
+  },
+  {
+    "prices": [
+      "420"
+    ],
+    "text": "Russian Rubles\n--\nNEW\nруб.\n90 %"
+  },
+  {
+    "prices": [
+      "37,99"
+    ],
+    "text": "Polish zloty\n--\nNEW\nzł\n90 %"
+  },
+  {
+    "prices": [
+      "33,99"
+    ],
+    "text": "Brazilian Reals\n--\nNEW\nR$\n90 %"
+  },
+  {
+    "prices": [
+      "1,150"
+    ],
+    "text": "Japanese Yen\n--\nNEW\n¥\n90 %"
+  },
+  {
+    "prices": [
+      "105,00"
+    ],
+    "text": "Norwegian Krone\n--\nNEW\nkr\n90 %"
+  },
+  {
+    "prices": [
+      "85 499"
+    ],
+    "text": "Indonesian Rupiah\n--\nNEW\nRp\n90 %"
+  },
+  {
+    "prices": [
+      "23.49"
+    ],
+    "text": "Malaysian Ringgit\n--\nNEW\nRM\n90 %"
+  },
+  {
+    "prices": [
+      "299.00"
+    ],
+    "text": "Philippine Peso\n--\nNEW\nP\n90 %"
+  },
+  {
+    "prices": [
+      "9.99"
+    ],
+    "text": "Singapore Dollar\n--\nNEW\nS$\n90 %"
+  },
+  {
+    "prices": [
+      "185.00"
+    ],
+    "text": "Thai Baht\n--\nNEW\n฿\n90 %"
+  },
+  {
+    "prices": [
+      "136.000"
+    ],
+    "text": "Vietnamese Dong\n--\nNEW\n₫\n90 %"
+  },
+  {
+    "prices": [
+      "9,650"
+    ],
+    "text": "Korean Won\n--\nNEW\n₩\n90 %"
+  },
+  {
+    "prices": [
+      "210"
+    ],
+    "text": "Ukrainian Hryvnia\n--\nNEW\n₴\n90 %"
+  },
+  {
+    "prices": [
+      "129.99"
+    ],
+    "text": "Mexican Peso\n--\nNEW\nMex$\n90 %"
+  },
+  {
+    "prices": [
+      "10.75"
+    ],
+    "text": "Canadian Dollar\n--\nNEW\nCDN$\n90 %"
+  },
+  {
+    "prices": [
+      "12.75"
+    ],
+    "text": "Australian Dollar\n--\nNEW\nA$\n90 %"
+  },
+  {
+    "prices": [
+      "14.25"
+    ],
+    "text": "New Zealand Dollar\n--\nNEW\nNZ$\n90 %"
+  },
+  {
+    "prices": [
+      "36.00"
+    ],
+    "text": "Chinese Yuan\n--\nNEW\n¥\n90 %"
+  },
+  {
+    "prices": [
+      "469"
+    ],
+    "text": "Indian Rupee\n--\nNEW\n₹\n90 %"
+  },
+  {
+    "prices": [
+      "5.999"
+    ],
+    "text": "Chilean Peso\n--\nNEW\nCLP$\n90 %"
+  },
+  {
+    "prices": [
+      "23.75"
+    ],
+    "text": "Peruvian Sol\n--\nNEW\nS/.\n90 %"
+  },
+  {
+    "prices": [
+      "24.499"
+    ],
+    "text": "Colombian Peso\n--\nNEW\nCOL$\n90 %"
+  },
+  {
+    "prices": [
+      "94.99"
+    ],
+    "text": "South African Rand\n--\nNEW\nR\n90 %"
+  },
+  {
+    "prices": [
+      "53.00"
+    ],
+    "text": "Hong Kong Dollar\n--\nNEW\nHK$\n90 %"
+  },
+  {
+    "prices": [
+      "198"
+    ],
+    "text": "Taiwanese Dollar\n--\nNEW\nNT$\n90 %"
+  },
+  {
+    "prices": [
+      "23.49"
+    ],
+    "text": "Saudi Arabian Riyal\n--\nNEW\nSR\n90 %"
+  },
+  {
+    "prices": [
+      "29.49"
+    ],
+    "text": "Emirati Dirham\n--\nNEW\nAED\n90 %"
+  },
+  {
+    "prices": [
+      "31.99"
+    ],
+    "text": "Israeli New Shekel\n--\nNEW\n₪\n90 %"
+  },
+  {
+    "prices": [
+      "2 860"
+    ],
+    "text": "Kazakhstani Tenge\n--\nNEW\n₸\n90 %"
+  },
+  {
+    "prices": [
+      "2.10"
+    ],
+    "text": "Kuwaiti Dinar\n--\nNEW\nKD\n90 %"
+  },
+  {
+    "prices": [
+      "24.99"
+    ],
+    "text": "Qatari Rial\n--\nNEW\nQR\n90 %"
+  },
+  {
+    "prices": [
+      "4.750"
+    ],
+    "text": "Costa Rican Colon\n--\nNEW\n₡\n90 %"
+  },
+  {
+    "prices": [
+      "313"
+    ],
+    "text": "Uruguayan Peso\n--\nNEW\n$U\n90 %"
+  },
+  {
+    "prices": [],
+    "text": "Region Specific Prices\nCurrency\nCurrent Price\nYour Proposed Price\nMax Discount\n "
+  },
+  {
+    "prices": [
+      "5.79"
+    ],
+    "text": "CIS  \nUS Dollar\n--\nNEW\n$\n90 %"
+  },
+  {
+    "prices": [
+      "5.79"
+    ],
+    "text": "SASIA  \nUS Dollar\n--\nNEW\n$\n90 %"
+  },
+  {
+    "prices": [
+      "5.79"
+    ],
+    "text": "LATAM  \nUS Dollar\n--\nNEW\n$\n90 %"
+  },
+  {
+    "prices": [
+      "5.79"
+    ],
+    "text": "MENA  \nUS Dollar\n--\nNEW\n$\n90 %"
+  }
+]

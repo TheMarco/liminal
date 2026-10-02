@@ -99,6 +99,17 @@ func is_away() -> bool:
 	return phase in [Phase.ENTERING, Phase.VISITING, Phase.CAUGHT, Phase.RETURNING]
 
 
+func refresh_graphics_quality(settings: GameSettings) -> void:
+	# The source and destination environments can both survive a visit. A
+	# quality change while away must also take effect when the source returns.
+	if is_instance_valid(_preview_environment):
+		GraphicsQuality.apply_environment(_preview_environment.environment, settings)
+	if _source.has("env"):
+		GraphicsQuality.apply_environment(_source["env"], settings)
+	if is_instance_valid(preview):
+		GraphicsQuality.apply_viewport_features(preview, settings, game.opts.notaa if is_instance_valid(game) else false)
+
+
 func allows_perception_effect() -> bool:
 	return phase == Phase.VISITING and not _prompt_hold \
 		and elapsed < DURATION - collapse_seconds()
@@ -203,6 +214,7 @@ func _build_preview() -> void:
 	# into an HDR main window.
 	preview.use_hdr_2d = true
 	preview.size = Vector2i(960, 600)
+	GraphicsQuality.apply_viewport_features(preview, game._settings, game.opts.notaa)
 	preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(preview)
 	_preview_environment = WorldEnvironment.new()
@@ -474,8 +486,8 @@ func _process(dt: float) -> void:
 		if show_preview:
 			var vp := game.get_viewport()
 			var view_size: Vector2i = vp.get_visible_rect().size
-			# Match the source world's 3D pixel density, including CRT scaling;
-			# retain the existing cap when playing with the CRT switched off.
+			# Match the source world's selected 3D pixel density; retain the
+			# preview cap even when the main window uses native resolution.
 			var scale := minf(vp.scaling_3d_scale, 1280.0 / maxf(1.0, view_size.x))
 			var aperture := (window.mesh as QuadMesh).size
 			var aspect := aperture.x / aperture.y

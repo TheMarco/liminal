@@ -54,10 +54,21 @@ func _run() -> void:
 	if manager._last_ahead != expected_ahead or not manager._ahead.has(expected_ahead) \
 			or not manager._ahead.has(expected_ahead + Vector2i(ChunkManager.LOAD_R, 0)):
 		failures.append("directional prefetch did not cover predicted cell")
-	var old_pending_id := manager._pending_chunk.get_instance_id() if manager._pending_chunk != null else 0
+	# Frame slicing changes which queued cell is pending after twelve frames.
+	# Use an explicitly unfinished cell outside the destination range so this
+	# checks stale-work cancellation rather than the machine's build speed.
+	manager._cancel_pending()
+	var stale_cell := Vector2i(-ChunkManager.LOAD_R, -ChunkManager.LOAD_R)
+	manager._pending_cell = stale_cell
+	manager._pending_chunk = Chunk.new(manager.world_seed, stale_cell, manager.theme, null, true)
+	manager._pending_chunk.build_next_slice()
+	manager._pending_chunk.build_next_slice()
+	var old_pending_id := manager._pending_chunk.get_instance_id()
 	player.position = Vector3(60.0, 1.0, 6.0)
 	manager._process(1.0 / 60.0)
-	if old_pending_id != 0 and is_instance_id_valid(old_pending_id):
+	if manager._wanted.has(stale_cell) or manager._ahead.has(stale_cell):
+		failures.append("center-change fixture is still inside the requested range")
+	if is_instance_id_valid(old_pending_id):
 		failures.append("center change did not cancel stale pending chunk")
 	for x in [48.0, 36.0, 24.0, 12.0, 0.0, -12.0]:
 		player.position.x = x
@@ -82,7 +93,10 @@ func _run() -> void:
 	manager._pending_cell = staged_cell
 	manager._pending_chunk = Chunk.new(manager.world_seed, staged_cell, manager.theme, null, true)
 	var staged_id := manager._pending_chunk.get_instance_id()
-	manager._pending_chunk.build_next_stage()
+	manager._pending_chunk.build_next_slice()
+	manager._pending_chunk.build_next_slice()
+	if manager._pending_chunk._build_jobs.is_empty():
+		failures.append("cancellation fixture did not retain unfinished wall jobs")
 	manager.set_blackout(true)
 	if is_instance_id_valid(staged_id) or not manager.queued.has(staged_cell):
 		failures.append("blackout did not discard and requeue incomplete content")
@@ -103,6 +117,30 @@ func _run() -> void:
 				if chunk.body == null or not is_instance_valid(chunk.body):
 					failures.append("warmup chunk lacks collision body")
 	warm_manager.free()
+	# Walking at 6 m/s and reversing must never enter an unfinished room.
+	# Check before processing the next frame, so the urgent fallback cannot
+	# conceal a gap in prefetch coverage.
+	for walking_theme in [8, 10]:
+		var walking := ChunkManager.new()
+		walking.world_seed = WorldGen.level_seed(1315734997, walking_theme)
+		walking.theme = walking_theme
+		root.add_child(walking)
+		walking.set_process(false)
+		var walker := CharacterBody3D.new()
+		walking.add_child(walker)
+		walking.player = walker
+		walking.warm_up(Vector2i.ZERO)
+		for frame in 1200:
+			var offset := 0.1 * frame if frame < 600 else 60.0 - 0.1 * (frame - 600)
+			walker.position = Vector3(6.0 + offset, 1.0, 2.0)
+			walker.velocity = Vector3(6.0 if frame < 600 else -6.0, 0, 0)
+			var at := Vector2i(floori(walker.position.x / ChunkManager.CELL), 0)
+			var floor_chunk := walking.chunk_at(at)
+			if floor_chunk == null or floor_chunk._build_stage != 8 or floor_chunk.body.get_child_count() == 0:
+				failures.append("walking outran complete collision at theme %d cell %s" % [walking_theme, at])
+				break
+			walking._process(1.0 / 60.0)
+		walking.free()
 	if failures.is_empty():
 		print("incremental streaming audit passed")
 	else:

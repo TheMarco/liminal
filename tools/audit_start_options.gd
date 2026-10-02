@@ -33,7 +33,10 @@ func run() -> void:
 	game._settings = settings
 	GameSettings.current = settings
 	settings.changed.connect(game._apply_game_settings)
+	settings.apply_quality_preset(3)
 	game._apply_game_settings()
+	expect(is_equal_approx(root.scaling_3d_scale, minf(480.0 / root.get_visible_rect().size.y, 1.0)),
+		"CRT on did not force its 480p source at Ultra")
 	game._build_title(true)
 	await process_frame
 	var title: TitleScreen = game._title
@@ -61,21 +64,25 @@ func run() -> void:
 	game._apply_game_settings()
 	expect(game._post_process.is_vhs_enabled() and not game._post_process.is_crt_enabled()
 		and game._post_enabled, "saved CRT switch did not isolate VHS")
+	expect(is_equal_approx(root.scaling_3d_scale, 1.0), "VHS-only did not restore selected Ultra resolution")
 	expect(not bool(GameSettings.new(path).get_value("crt_enabled")),
 		"CRT choice was not persisted")
 	settings.set_value("vhs_enabled", false)
+	var graphics_scale := root.scaling_3d_scale
 	settings.save_to_disk()
 	game._apply_game_settings()
 	expect(not game._post_process.is_vhs_enabled() and not game._post_process.is_crt_enabled()
 		and not game._post_enabled, "saved VHS switch did not apply independently")
-	expect(is_equal_approx(root.scaling_3d_scale, 1.0),
-		"disabling both effects did not restore native resolution")
+	expect(is_equal_approx(root.scaling_3d_scale, graphics_scale),
+		"disabling effects changed the selected graphics resolution")
 	expect(not bool(GameSettings.new(path).get_value("vhs_enabled")), "VHS choice was not persisted")
 	settings.set_value("crt_enabled", true)
 	settings.save_to_disk()
 	game._apply_game_settings()
 	expect(not game._post_process.is_vhs_enabled() and game._post_process.is_crt_enabled()
 		and game._post_enabled, "saved CRT switch did not apply independently")
+	expect(is_equal_approx(root.scaling_3d_scale, minf(480.0 / root.get_visible_rect().size.y, 1.0)),
+		"CRT-only did not force 480p while VHS stayed off")
 	expect(bool(GameSettings.new(path).get_value("crt_enabled")),
 		"CRT choice was not persisted")
 	expect(not game._post_process.is_curvature_enabled()

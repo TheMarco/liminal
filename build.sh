@@ -22,7 +22,7 @@ fi
 NOTARY_PROFILE="${NOTARY_PROFILE:-AC_PASSWORD}"
 NOTARIZE="${NOTARIZE:-1}"
 PRODUCT_NAME="It wants you to stay"
-RELEASE_VERSION="${RELEASE_VERSION:-0.5.3}"
+RELEASE_VERSION="${RELEASE_VERSION:-0.5.4}"
 if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	echo "Release version must be major.minor.patch (found $RELEASE_VERSION)." >&2
 	exit 1

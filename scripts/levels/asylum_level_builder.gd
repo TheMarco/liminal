@@ -36,6 +36,7 @@ func _asy_sounds() -> void:
 
 
 func _asy_lighting() -> void:
+	_asy_architecture()
 	var is_spawn = ctx.cell == Vector2i.ZERO
 	var dead = (not is_spawn) and ctx.random01(8) < 0.13
 	var flicker = (not is_spawn) and (not dead) and ctx.random01(9) < 0.30
@@ -60,7 +61,7 @@ func _asy_lighting() -> void:
 	var tall = ctx.ceiling_height > 4.0
 	var light = scene.fixture_light(flicker, pmat, 1.8 if tall else 1.35,
 		Vector3(pts[0].x, ctx.ceiling_height - 0.55, pts[0].y))
-	light.light_color = Color(0.8, 0.94, 0.72)
+	light.light_color = Color(0.80, 0.91, 0.90)
 	light.omni_range = 13.5 if tall else 11.5
 	light.shadow_enabled = true
 	# Hanging fluorescent panels are broad emitters, not a single bare bulb.
@@ -72,6 +73,110 @@ func _asy_lighting() -> void:
 	light.distance_fade_length = 8.0
 	light.distance_fade_shadow = 16.0
 	scene.add_node(light)
+	if ctx.style in [WorldGen.ASY_CHAPEL, WorldGen.ASY_DAYROOM]:
+		_asy_pendant(Vector3(6, 0, 6), ctx.style == WorldGen.ASY_CHAPEL)
+
+
+func _asy_architecture() -> void:
+	var root := Node3D.new()
+	root.name = "AsylumCeilingJoinery"
+	scene.add_node(root)
+	var corridor := ctx.style == WorldGen.ASY_CORRIDOR
+	var chapel := ctx.style == WorldGen.ASY_CHAPEL
+	if corridor and WorldGen.corridor(ctx.world_seed, ctx.cell) != 2:
+		root.rotation.y = PI * 0.5
+		root.position = Vector3(0, 0, 12)
+	root.position.y = ctx.ceiling_height
+	_attach_ceiling(root, corridor, chapel)
+
+
+## Both plain and gridded ceilings share small, prepared trim modules.
+static func prewarm_templates() -> void:
+	var holder := Node3D.new()
+	_attach_ceiling(holder, true, false)
+	_attach_ceiling(holder, false, false)
+	holder.free()
+
+
+static func _attach_ceiling(root: Node3D, corridor: bool, chapel: bool) -> void:
+	var h := 0.0
+	var plain := corridor or chapel
+	ProceduralDetails.attach(root, "asylum_ceiling_plain_%s" % plain, func(d: ProceduralDetails):
+		if not plain:
+			for x in [0.08, 6.0, 11.92]:
+				d.box(Vector3(x, h - 0.045, 6), Vector3(0.22, 0.09, 12), Mats.asy_moulding(), 0.012)
+				for dx in [-0.14, 0.14]:
+					d.box(Vector3(x + dx, h - 0.014, 6), Vector3(0.055, 0.025, 12), Mats.asy_moulding())
+			for z in [0.08, 4.0, 8.0, 11.92]:
+				d.box(Vector3(6, h - 0.045, z), Vector3(12, 0.09, 0.22), Mats.asy_moulding(), 0.012)
+				for dz in [-0.14, 0.14]:
+					d.box(Vector3(6, h - 0.014, z + dz), Vector3(12, 0.025, 0.055), Mats.asy_moulding())
+		# Vent rosettes are shallow relief; no low hanging obstructions.
+		for z in [2.0, 10.0]:
+			d.ring(Vector3(6,h-0.065,z), 0.34, 0.025, Mats.asy_moulding())
+			for i in 8:
+				var a := float(i) * TAU / 8.0
+				d.tube(Vector3(6+cos(a)*0.13,h-0.06,z+sin(a)*0.13), Vector3(6+cos(a)*0.30,h-0.06,z+sin(a)*0.30), 0.014, Mats.asy_metal())
+	, true)
+
+
+func _asy_pendant(at: Vector3, chapel: bool) -> void:
+	var h := ctx.ceiling_height
+	var y := maxf(2.48, h - (1.05 if chapel else 0.48))
+	var root := Node3D.new()
+	root.name = "AsylumOpalPendant"
+	root.position = at
+	scene.add_node(root)
+	ProceduralDetails.attach(root, "asylum_pendant_%.3f_%.3f" % [h,y], func(d: ProceduralDetails):
+		d.tube(Vector3(0,y,0), Vector3(0,h,0), 0.018, Mats.institutional_brass())
+		for r in [0.48, 0.54]:
+			d.ring(Vector3(0,y,0), r, 0.027, Mats.institutional_brass())
+		d.ring(Vector3(0,y+0.25,0), 0.38, 0.021, Mats.institutional_brass())
+		for i in 12:
+			var a := float(i)*TAU/12.0
+			var p := Vector3(cos(a)*0.45,y+0.13,sin(a)*0.45)
+			d.box(p,Vector3(0.23,0.23,0.035),Mats.asy_warm_glass(),0.01,Vector3(0,PI*0.5-a,0))
+	)
+	var lamp := scene.fixture_light(false, Mats.asy_warm_glass(), 0.85,
+		at + Vector3.UP * y, "asylum_opal_pendant")
+	lamp.light_color = Color(1.0,0.72,0.43)
+	lamp.omni_range = 7.0
+	scene.add_node(lamp)
+
+
+func _asy_wall_finish(dir: int, plane: float, from: float, to: float,
+		y0: float, y1: float) -> void:
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var face := plane + n * (Chunk.T * 0.5 + 0.05)
+	var p := Vector3(face,0,(from+to)*0.5) if dir < 2 else Vector3((from+to)*0.5,0,face)
+	var yaw := -PI*0.5 if dir == 0 else (PI*0.5 if dir == 1 else (PI if dir == 2 else 0.0))
+	_asy_moulded_wall(p, yaw, to-from, y0, y1)
+
+
+func _asy_moulded_wall(at: Vector3, yaw: float, width: float, y0: float, y1: float) -> void:
+	if width < 0.08: return
+	var root := Node3D.new()
+	root.name = "AsylumMouldings"
+	root.position = at
+	root.rotation.y = yaw
+	scene.add_node(root)
+	var h := ctx.ceiling_height
+	root.scale.x = width / 12.0
+	if y0 < 0.02:
+		ProceduralDetails.attach(root, "asylum_lower_moulding_module", func(d: ProceduralDetails):
+			d.box(Vector3(0,0.08,0.015),Vector3(12,0.16,0.075),Mats.asy_metal_green(),0.012)
+			d.box(Vector3(0,1.43,0.01),Vector3(12,0.075,0.085),Mats.asy_moulding(),0.012)
+			d.box(Vector3(0,1.385,0.012),Vector3(12,0.018,0.10),Mats.institutional_brass())
+			d.box(Vector3(0,0.008,0.11),Vector3(12,0.012,0.23),Mats.asy_wainscot())
+		, true)
+	if y1 >= h - 0.02:
+		var crown := Node3D.new()
+		crown.position.y = h
+		root.add_child(crown)
+		ProceduralDetails.attach(crown, "asylum_crown_module", func(d: ProceduralDetails):
+			for band in [Vector3(0.045,0.09,0.19),Vector3(0.13,0.06,0.12),Vector3(0.19,0.025,0.07)]:
+				d.box(Vector3(0,-band.x,0.02),Vector3(12,band.y,band.z),Mats.asy_moulding(),0.008)
+		, true)
 
 
 ## Real twin-tube fixture on rusted drop rods, lens panel underneath. Thin
@@ -107,6 +212,8 @@ func _asy_bed(p: Vector3, yaw: float, salt: int) -> void:
 		if authored != null:
 			scene.collider_yaw_box(p + Vector3(0, 0.6, 0),
 				Vector3(1.05, 1.2, 1.95), yaw)
+			if ctx.style == WorldGen.ASY_WARD:
+				_asy_privacy_track(authored, p, yaw)
 			return
 	scene.load_model("old_bed_frame", p, yaw)
 	scene.collider_yaw_box(p + Vector3(0, 0.6, 0), Vector3(0.95, 1.2, 2.05), yaw)
@@ -558,6 +665,36 @@ func _asy_cell_props() -> void:
 ## Two facing rows of beds down the room's long axis — a ward nobody closed.
 
 
+func _asy_privacy_track(parent: Node3D, at: Vector3, yaw: float) -> void:
+	var root := Node3D.new()
+	root.name = "WardPrivacyRail"
+	root.transform = parent.transform.affine_inverse() * Transform3D(Basis(Vector3.UP,yaw), at)
+	parent.add_child(root)
+	var h := ctx.ceiling_height
+	var y := maxf(2.43, h - 0.12)
+	var rail := Node3D.new()
+	rail.position.y = y
+	root.add_child(rail)
+	ProceduralDetails.attach(rail, "ward_rail_template", func(d: ProceduralDetails):
+		for x in [-0.64,0.64]:
+			d.tube(Vector3(x,0,-1.05),Vector3(x,0,1.05),0.018,Mats.asy_metal())
+			for z in [-0.95,0.95]:
+				d.tube(Vector3(x,0,z),Vector3(x,0.12,z),0.009,Mats.asy_metal())
+		d.tube(Vector3(-0.64,0,1.05),Vector3(0.64,0,1.05),0.018,Mats.asy_metal())
+		for i in 8:
+			d.ring(Vector3(-0.42+float(i)*0.07,-0.025,1.05),0.025,0.005,Mats.asy_metal(),Vector3.RIGHT)
+	, true)
+	var curtain := Node3D.new()
+	curtain.position.y = 1.20
+	curtain.scale.y = y - 1.20
+	root.add_child(curtain)
+	ProceduralDetails.attach(curtain, "ward_curtain_template", func(d: ProceduralDetails):
+		for i in 8:
+			d.box(Vector3(-0.42+float(i)*0.07,0.5,0.96+sin(float(i)*PI*0.5)*0.045),
+				Vector3(0.076,1,0.025),Mats.asy_cloth(),0.008)
+	, true)
+
+
 func _asy_ward() -> void:
 	var span = scene.room_span()
 	var long_x = span.x >= span.y
@@ -861,7 +998,25 @@ func _asy_office() -> void:
 func _asy_chapel() -> void:
 	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
 	# Shallow dais and plain altar at the north end.
-	var front = c + Vector3(0, 0, -8.0)
+	var front = c + Vector3(0, 0, -6.8)
+	var screen_mark := scene.collider_mark()
+	var screen := scene.furnishing_pivot(front + Vector3(0,0,-1.24),0.0,"chapel_reredos")
+	ProceduralDetails.attach(screen,"chapel_reredos",func(d: ProceduralDetails):
+		d.box(Vector3(0,2.0,0),Vector3(3.8,4.0,0.16),Mats.darkwood(),0.018)
+		for x in [-1.78,0.0,1.78]:
+			d.box(Vector3(x,2.08,0.10),Vector3(0.18,4.16,0.16),Mats.darkwood(),0.018)
+			for y in [0.30,3.84,4.14]:
+				d.box(Vector3(x,y,0.12),Vector3(0.27,0.09,0.20),Mats.institutional_brass(),0.012)
+		for x in [-0.95,0.95]:
+			d.box(Vector3(x,2.15,0.09),Vector3(1.35,3.24,0.08),Mats.asy_moulding(),0.03)
+			for dx in [-0.68,0.68]:
+				d.box(Vector3(x+dx,2.15,0.15),Vector3(0.05,3.30,0.04),Mats.institutional_brass())
+		d.ring(Vector3(0,3.3,0.17),0.83,0.023,Mats.institutional_brass(),Vector3.FORWARD)
+	)
+	scene.collider_box(screen.position+Vector3(0,2.0,0),Vector3(3.8,4.0,0.20))
+	scene.model_box(screen,Vector3(0,3.15,0.23),Vector3(0.20,1.70,0.09),Mats.darkwood())
+	scene.model_box(screen,Vector3(0,3.45,0.23),Vector3(1.20,0.20,0.09),Mats.darkwood())
+	scene.bind_furnishing_colliders(screen,screen_mark)
 	scene.rounded_box(front + Vector3(0, 0.16, 0), Vector3(8.0, 0.32, 2.8), Mats.darkwood(), 0.025)
 	if scene.prop_scene(Chunk.ASY_ALTAR_PATH) != null:
 		scene.attributed_floor_prop(Chunk.ASY_ALTAR_PATH, front + Vector3(0, 0.32, 0.1),
@@ -870,9 +1025,6 @@ func _asy_chapel() -> void:
 	else:
 		scene.rounded_box(front + Vector3(0, 0.88, 0.1), Vector3(2.2, 1.45, 0.75), Mats.asy_concrete(), 0.035)
 	scene.collider_box(front + Vector3(0, 0.48, 0), Vector3(8.1, 0.96, 2.9))
-	# A stark wall cross; it is architecture, not a glowing quest marker.
-	scene.box(front + Vector3(0, 3.45, -1.43), Vector3(0.30, 2.2, 0.09), Mats.darkwood(), false)
-	scene.box(front + Vector3(0, 3.70, -1.43), Vector3(1.45, 0.28, 0.09), Mats.darkwood(), false)
 	# Two banks of pews leave a generous central aisle. The supplied pews
 	# are 2.56m, so each side holds a pair; sitters face the altar (yaw PI
 	# turns the local +Z facing onto world -Z). The old procedural boxes
@@ -1027,11 +1179,13 @@ func _asy_corridor_wall_run(o: Vector3, yw: float, side: float,
 	scene.collider_yaw_box(wc, Vector3(ln, ctx.ceiling_height, 0.18), yw)
 	var inn = side - signf(side) * 0.115
 	var tile = scene.model_box(null, scene.world_point(o, Vector3(c, 0.69, inn), yw),
-		Vector3(ln, 1.38, 0.05), Mats.asy_tile())
+		Vector3(ln, 1.38, 0.05), Mats.asy_wainscot())
 	tile.rotation.y = yw
 	var rail = scene.model_box(null, scene.world_point(o, Vector3(c, 1.39, inn - signf(side) * 0.018), yw),
 		Vector3(ln, 0.07, 0.07), Mats.asy_metal_green())
 	rail.rotation.y = yw
+	_asy_moulded_wall(scene.world_point(o, Vector3(c,0,inn-signf(side)*0.03),yw),
+		yw + (PI if side > 0.0 else 0.0), ln, 0.0, ctx.ceiling_height)
 
 
 func _asy_corridor_header(o: Vector3, yw: float, side: float,
@@ -1061,7 +1215,7 @@ func _asy_corridor_bay_returns(o: Vector3, yw: float, side: float,
 		scene.collider_yaw_box(wp, Vector3(0.18, ctx.ceiling_height, depth), yw)
 		var tile_in = 0.115 if edge < t else -0.115
 		var tile = scene.model_box(null, scene.world_point(o, Vector3(edge + tile_in, 0.69, dc), yw),
-			Vector3(0.05, 1.38, depth), Mats.asy_tile())
+			Vector3(0.05, 1.38, depth), Mats.asy_wainscot())
 		tile.rotation.y = yw
 		var rail = scene.model_box(null, scene.world_point(o, Vector3(edge + tile_in, 1.39, dc), yw),
 			Vector3(0.07, 0.07, depth), Mats.asy_metal_green())

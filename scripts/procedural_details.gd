@@ -5,18 +5,15 @@ extends RefCounted
 ## Cache keys must include every parameter affecting geometry and materials.
 
 static var _cache: Dictionary = {}
+## Finite structural modules survive eviction of dimension-specific dressing.
+static var _floor_templates: Dictionary = {}
 const MAX_CACHED_DESIGNS := 192
 var _parts: Array[Dictionary] = []
 
 
-static func attach(parent: Node3D, key: String, builder: Callable) -> void:
-	if not _cache.has(key):
-		var detail := ProceduralDetails.new()
-		builder.call(detail)
-		if _cache.size() >= MAX_CACHED_DESIGNS:
-			_cache.erase(_cache.keys()[0])
-		_cache[key] = detail._bake()
-	for entry in _cache[key]:
+static func attach(parent: Node3D, key: String, builder: Callable,
+		floor_template := false) -> void:
+	for entry in _design(key, builder, floor_template):
 		var instance := MeshInstance3D.new()
 		instance.mesh = entry.mesh
 		instance.material_override = entry.material
@@ -24,8 +21,36 @@ static func attach(parent: Node3D, key: String, builder: Callable) -> void:
 		parent.add_child(instance)
 
 
+## Repeated panel/hanger modules retain one draw per material, not per part.
+static func attach_instances(parent: Node3D, key: String, builder: Callable,
+		transforms: Array[Transform3D]) -> void:
+	for entry in _design(key, builder, true):
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = entry.mesh
+		multi.instance_count = transforms.size()
+		for i in transforms.size(): multi.set_instance_transform(i, transforms[i])
+		var instance := MultiMeshInstance3D.new()
+		instance.multimesh = multi
+		instance.material_override = entry.material
+		instance.set_meta("procedural_detail", key)
+		parent.add_child(instance)
+
+
+static func _design(key: String, builder: Callable, floor_template: bool) -> Array:
+	var cache := _floor_templates if floor_template else _cache
+	if not cache.has(key):
+		var detail := ProceduralDetails.new()
+		builder.call(detail)
+		if not floor_template and cache.size() >= MAX_CACHED_DESIGNS:
+			cache.erase(cache.keys()[0])
+		cache[key] = detail._bake()
+	return cache[key]
+
+
 static func clear_runtime_cache() -> void:
 	_cache.clear()
+	_floor_templates.clear()
 
 
 func box(pos: Vector3, size: Vector3, material: Material,

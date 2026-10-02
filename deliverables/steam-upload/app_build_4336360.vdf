@@ -1,0 +1,36 @@
+"AppBuild"
+{
+    "AppID" "4336360"
+    "Desc" "It Wants You To Stay 0.5.3 - macOS Developer ID signing and notarization fix"
+    "ContentRoot" "../../build"
+    "BuildOutput" "../../build/steam-upload-output"
+    "Depots"
+    {
+        "4336364"
+        {
+            "FileMapping"
+            {
+                "LocalPath" "windows/It wants you to stay.exe"
+                "DepotPath" "."
+            }
+        }
+        "4336365"
+        {
+            "FileMapping"
+            {
+                "LocalPath" "linux/It wants you to stay.x86_64"
+                "DepotPath" "."
+            }
+        }
+        "4336366"
+        {
+            "FileMapping"
+            {
+                "LocalPath" "macos/It wants you to stay.app/*"
+                "DepotPath" "It wants you to stay.app/"
+                "Recursive" "1"
+            }
+            "FileExclusion" "*.DS_Store"
+        }
+    }
+}

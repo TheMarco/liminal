@@ -17,6 +17,12 @@ func _init(host: Chunk, body: StaticBody3D) -> void:
 	_body = body
 
 
+## Schedule one complete fixture while preserving recipe order. Direct
+## constructors execute immediately; streamed chunks yield between fixtures.
+func build_job(job: Callable) -> void:
+	_host.queue_build_job(job)
+
+
 func add_node(node: Node) -> void:
 	_host.add_child(node)
 

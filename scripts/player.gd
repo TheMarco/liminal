@@ -61,6 +61,7 @@ const FLASH_CHARGE_RATE := FLASH_MAX / FLASH_CHARGE_TIME
 ## than handing over a beam that dies in the half second you needed it.
 const FLASH_MIN_START := 2.2
 const FLASH_WARN := 2.5       # it starts to fail this long before it goes out
+const FLASH_BEAM_SHADER := preload("res://shaders/flashlight_beam.gdshader")
 
 ## Chest-deep water halves your pace and takes the spring out of the step. The
 ## Poolrooms and the Annex can set `water_y`; only water deep enough to reach
@@ -81,6 +82,7 @@ signal emergency_flash_used()
 
 var cam: Camera3D
 var flashlight: SpotLight3D
+var _flash_beam: MeshInstance3D
 var world_seed := 0   # set by main; used to pick footstep surface per cell
 var level_theme := 0  # set by main on level switch
 var _flash_charge := FLASH_MAX
@@ -173,15 +175,41 @@ func _init() -> void:
 	flashlight.spot_range = 21.0
 	flashlight.spot_angle = 46.0
 	flashlight.spot_attenuation = 1.15
-	# The global fog is deliberately thin on several floors. Give the torch a
-	# stronger local scattering contribution so its shaft remains readable in
-	# air without raising surface exposure, changing the aim cone, or adding a
-	# transparent fake-volume mesh that would clip through walls.
+	# High/Ultra retain the authored fog scattering. The depth-clipped shaft
+	# below also works when Low/Medium disable the scene's volumetric fog grid.
 	flashlight.light_volumetric_fog_energy = 1.25
 	flashlight.shadow_enabled = true
 	flashlight.visible = false
 	flashlight.set_meta("visible_source", "player_held_flashlight")
 	cam.add_child(flashlight)
+	_build_flashlight_beam()
+
+
+func _build_flashlight_beam() -> void:
+	_flash_beam = MeshInstance3D.new()
+	_flash_beam.name = "FlashlightBeam"
+	var quad := QuadMesh.new()
+	quad.size = Vector2(2.0, 2.0)
+	_flash_beam.mesh = quad
+	var material := ShaderMaterial.new()
+	material.shader = FLASH_BEAM_SHADER
+	material.set_shader_parameter("beam_colour", flashlight.light_color)
+	material.set_shader_parameter("beam_range", flashlight.spot_range)
+	# The visible shaft describes the bright core of the broader gameplay cone.
+	material.set_shader_parameter("cone_slope", tan(deg_to_rad(flashlight.spot_angle * 0.48)))
+	_flash_beam.material_override = material
+	_flash_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_flash_beam.extra_cull_margin = flashlight.spot_range * 2.0
+	_flash_beam.ignore_occlusion_culling = true
+	# Inherit the torch switch: no beam draw while it is off or charging.
+	flashlight.add_child(_flash_beam)
+
+
+func _set_flashlight_energy(energy: float) -> void:
+	if is_equal_approx(flashlight.light_energy, energy):
+		return
+	flashlight.light_energy = energy
+	_flash_beam.set_instance_shader_parameter("beam_energy", energy / FLASH_ENERGY)
 
 
 func _ready() -> void:
@@ -391,7 +419,7 @@ func set_flashlight(on: bool) -> void:
 			_flash_click.play()
 		return
 	if on:
-		flashlight.light_energy = FLASH_ENERGY
+		_set_flashlight_energy(FLASH_ENERGY)
 	flashlight.visible = on
 	if is_instance_valid(_flash_click):
 		_flash_click.pitch_scale = 1.08 if on else 0.86
@@ -443,7 +471,7 @@ func reset_descent_resources() -> void:
 		stop_charging()
 	if flashlight != null:
 		flashlight.visible = false
-		flashlight.light_energy = FLASH_ENERGY
+		_set_flashlight_energy(FLASH_ENERGY)
 	_flash_charge = FLASH_MAX
 	_flash_t = 0.0
 	_stamina = STAMINA_MAX
@@ -510,13 +538,13 @@ func _update_flashlight(dt: float) -> void:
 		return
 	var left := _flash_charge / FLASH_WARN
 	if left >= 1.0:
-		flashlight.light_energy = FLASH_ENERGY
+		_set_flashlight_energy(FLASH_ENERGY)
 		return
 	var dying := 1.0 - left
 	var stutter := 1.0
 	if not GameSettings.flashing_reduced():
 		stutter = 1.0 - 0.42 * dying * maxf(0.0, sin(_flash_t * 27.0))
-	flashlight.light_energy = FLASH_ENERGY * (0.48 + 0.52 * left) * stutter
+	_set_flashlight_energy(FLASH_ENERGY * (0.48 + 0.52 * left) * stutter)
 
 
 func _physics_process(dt: float) -> void:

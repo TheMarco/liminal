@@ -48,6 +48,7 @@ func _prison_generated_model(parent: Node3D, path: String, target_size: Vector3)
 
 
 func _prison_lighting() -> void:
+	_prison_architecture()
 	# The friend of the dark is the reader of nothing: this floor was crushed
 	# to black. Fewer dead fixtures, twice the energy, and a second fill light
 	# in the big set-piece rooms — still the coldest floor, but readable.
@@ -66,13 +67,89 @@ func _prison_lighting() -> void:
 	var big = ctx.style == WorldGen.PRISON_CELLBLOCK or ctx.style == WorldGen.PRISON_ROTUNDA
 	var light = scene.fixture_light(flicker, lens, 2.1 if big else 1.8,
 		Vector3(6, ctx.ceiling_height - 0.55, 6), "prison_troffer")
-	light.light_color = Color(0.78, 0.87, 0.79)
+	light.light_color = Color(0.83, 0.88, 0.91)
 	light.omni_range = 14.5
 	light.shadow_enabled = big
 	light.distance_fade_enabled = true
 	light.distance_fade_begin = 23.0
 	light.distance_fade_length = 8.0
 	scene.add_node(light)
+
+
+## Straight ceiling services and flush floor joints. Decorative roof arches
+## and their mounting plates are intentionally absent.
+func _prison_architecture() -> void:
+	var root := Node3D.new()
+	root.name = "PrisonRoofStructure"
+	scene.add_node(root)
+	var h := 0.0
+	var axis_x := WorldGen.corridor(ctx.world_seed, ctx.cell) != 2
+	if not axis_x:
+		root.position = Vector3(0, 0, 12)
+		root.rotation.y = PI * 0.5
+	root.position.y = ctx.ceiling_height
+	ProceduralDetails.attach(root, "prison_ceiling_services", func(d: ProceduralDetails):
+		for z in [2.0, 10.0]:
+			d.tube(Vector3(0, h - 0.16, z), Vector3(12, h - 0.16, z), 0.075, Mats.prison_iron())
+			for x in [1.0, 5.0, 9.0]:
+				d.ring(Vector3(x, h - 0.16, z), 0.09, 0.025, Mats.prison_iron(), Vector3.RIGHT)
+	, true)
+	var floor_detail := Node3D.new()
+	floor_detail.name = "PrisonFloorInlays"
+	floor_detail.transform = root.transform
+	floor_detail.position.y = 0.0
+	scene.add_node(floor_detail)
+	ProceduralDetails.attach(floor_detail, "prison_floor_inlays_v2", func(d: ProceduralDetails):
+		# Hairline expansion joints and brass survey studs. Flush to walking plane.
+		for t in [3.0, 6.0, 9.0]:
+			d.box(Vector3(t, 0.004, 6), Vector3(0.014, 0.005, 12), Mats.charcoal())
+			d.box(Vector3(6, 0.004, t), Vector3(12, 0.005, 0.014), Mats.charcoal())
+			for z in [3.0, 6.0, 9.0]:
+				d.box(Vector3(t, 0.008, z), Vector3(0.07, 0.008, 0.07), Mats.institutional_brass(), 0.008)
+	, true)
+
+
+func _prison_wall_finish(dir: int, plane: float, from: float, to: float,
+		y0: float, y1: float) -> void:
+	var width := to - from
+	if width < 0.12: return
+	var n := -1.0 if dir == 0 or dir == 2 else 1.0
+	var root := Node3D.new()
+	root.name = "PrisonMasonryFinish"
+	var face := plane + n * (Chunk.T * 0.5 + 0.045)
+	root.position = Vector3(face, 0, (from + to) * 0.5) if dir < 2 else Vector3((from + to) * 0.5, 0, face)
+	root.rotation.y = -PI * 0.5 if dir == 0 else (PI * 0.5 if dir == 1 else (PI if dir == 2 else 0.0))
+	scene.add_node(root)
+	var h := ctx.ceiling_height
+	if y0 < 0.02:
+		var rail := Node3D.new()
+		rail.scale.x = width / 12.0
+		root.add_child(rail)
+		ProceduralDetails.attach(rail, "prison_wall_rail_module", func(d: ProceduralDetails):
+			d.box(Vector3(0,1.47,0),Vector3(12,0.085,0.09),Mats.prison_iron(),0.009)
+		, true)
+	if y1 >= h - 0.02:
+		var crown := Node3D.new()
+		crown.position.y = h
+		crown.scale.x = width / 12.0
+		root.add_child(crown)
+		ProceduralDetails.attach(crown, "prison_wall_crown_module", func(d: ProceduralDetails):
+			d.box(Vector3(0,-0.18,0.025),Vector3(12,0.16,0.19),Mats.prison_wall(),0.02)
+			d.box(Vector3(0,-0.34,0),Vector3(12,0.065,0.10),Mats.prison_iron())
+		, true)
+	if width > 1.1 and y0 < 0.02:
+		var pillars: Array[Transform3D] = []
+		var joints: Array[Transform3D] = []
+		for x in [-width*0.5+0.24,width*0.5-0.24]:
+			pillars.append(Transform3D(Basis.from_scale(Vector3(1,h/4.4,1)),Vector3(x,h*0.5,0.055)))
+			for y in range(1,int(h)):
+				joints.append(Transform3D(Basis.IDENTITY,Vector3(x,float(y),0.15)))
+		ProceduralDetails.attach_instances(root, "prison_pilaster_module", func(d: ProceduralDetails):
+			d.box(Vector3.ZERO,Vector3(0.28,4.4,0.18),Mats.prison_wall(),0.012)
+		, pillars)
+		ProceduralDetails.attach_instances(root, "prison_pilaster_joint_module", func(d: ProceduralDetails):
+			d.box(Vector3.ZERO,Vector3(0.30,0.025,0.025),Mats.prison_iron())
+		, joints)
 
 
 func _prison_number_wall(dir: int, plane: float) -> void:
@@ -603,19 +680,33 @@ func _prison_guard() -> void:
 
 func _prison_industry() -> void:
 	for z in [3.6, 8.2]:
-		var p = Vector3(6, 0, z)
-		var bench_b0 = scene.collider_mark()
-		var bench = scene.furnishing_pivot(p, 0.0, "prison_industry_bench")
-		_prison_generated_model(bench, Chunk.PRISON_GEN_WORKBENCH_PATH, Vector3(4.6, 1.0, 1.15))
-		scene.collider_yaw_box(p + Vector3(0, 0.5, 0), Vector3(4.6, 1.0, 1.2), 0)
-		scene.bind_furnishing_colliders(bench, bench_b0)
+		scene.build_job(_prison_industry_bench.bind(z))
+	scene.build_job(_prison_industry_shelves)
+	for z in [3.6, 8.2]:
+		scene.build_job(_prison_industry_lamp.bind(z))
+	scene.build_job(_prison_industry_clutter)
+
+
+func _prison_industry_bench(z: float) -> void:
+	var p := Vector3(6, 0, z)
+	var first := scene.collider_mark()
+	var bench := scene.furnishing_pivot(p, 0.0, "prison_industry_bench")
+	_prison_generated_model(bench, Chunk.PRISON_GEN_WORKBENCH_PATH, Vector3(4.6, 1.0, 1.15))
+	scene.collider_yaw_box(p + Vector3(0, 0.5, 0), Vector3(4.6, 1.0, 1.2), 0)
+	scene.bind_furnishing_colliders(bench, first)
+
+
+func _prison_industry_shelves() -> void:
 	scene.cc0_prop("steel_frame_shelves_01", Vector3(10.7, 0, 6), -PI / 2.0, 0.1)
 	scene.collider_yaw_box(Vector3(10.7, 0.9, 6), Vector3(2.0, 1.8, 0.75), -PI / 2.0)
-	# work lamps low over the benches
-	for lz in [3.6, 8.2]:
-		var lamp = scene.cc0_prop("hanging_industrial_lamp", Vector3(6, ctx.ceiling_height - 0.06, lz),
-			0.0, 0.85)
-		scene.disable_shadows(lamp)
+
+
+func _prison_industry_lamp(z: float) -> void:
+	var lamp := scene.cc0_prop("hanging_industrial_lamp", Vector3(6, ctx.ceiling_height - 0.06, z), 0.0, 0.85)
+	scene.disable_shadows(lamp)
+
+
+func _prison_industry_clutter() -> void:
 	if ctx.random01(1897) < 0.6:
 		scene.cc0_prop("wooden_crate_02", Vector3(1.8, 0, 9.6), ctx.random01(1898) * TAU, 0.9)
 	if ctx.random01(1899) < 0.4:
@@ -705,6 +796,24 @@ func _prison_rotunda_cage_fallback(c: Vector3, radius: float) -> void:
 func _prison_rotunda() -> void:
 	var c = Vector3(6, 0, 6)
 	var radius = 2.45
+	# A flat inspection light replaces the large circular overhead frame.
+	# Keep the flush floor markers centred with the guard hub.
+	var lantern := Node3D.new()
+	lantern.name = "PanopticonLantern"
+	lantern.position = c
+	scene.add_node(lantern)
+	var roof := ctx.ceiling_height - 0.12
+	scene.model_box(lantern, Vector3(0, roof, 0), Vector3(3.2, 0.06, 3.2), Mats.prison_lantern())
+	ProceduralDetails.attach(lantern, "panopticon_floor_markers", func(d: ProceduralDetails):
+		for r in [2.9, 3.04, 5.5]:
+			d.ring(Vector3(0, 0.016, 0), r, 0.025, Mats.institutional_brass())
+	, true)
+	var skylight := scene.fixture_light(false, Mats.prison_lantern(), 1.6,
+		c + Vector3.UP * (roof - 1.3), "prison_inspection_lantern")
+	skylight.light_color = Color(0.55, 0.70, 0.88)
+	skylight.omni_range = 11.0
+	skylight.shadow_enabled = false
+	scene.add_node(skylight)
 	# The supplied model already includes its plinth, bars, gate, roof, desk,
 	# instruments and chair at the intended size and floor datum.
 	var cage = scene.attributed_prop_local(null, Chunk.PRISON_ROTUNDA_CAGE_PATH,

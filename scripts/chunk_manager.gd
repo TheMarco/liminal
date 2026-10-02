@@ -143,6 +143,7 @@ func set_hostile_cells(centers: Array[Vector2i]) -> void:
 func _process(_dt: float) -> void:
 	if player == null or not player.is_inside_tree():
 		return
+	var frame_started := Time.get_ticks_usec()
 	# A blackout gives us several fully obscured seconds. Spend at most one room
 	# per frame preparing the next reality, and do not stack ordinary streaming
 	# work on the same frame.
@@ -223,11 +224,17 @@ func _process(_dt: float) -> void:
 				_build_spec(closest), true)
 			_pending_chunk.position = Vector3(closest.x * CELL, 0.0, closest.y * CELL)
 	if _pending_chunk != null:
-		var started := Time.get_ticks_usec()
-		var urgent := _cheb(_pending_cell, pc) <= WARM_R or (descent_route != null and
-			(_pending_cell == descent_route.target or _pending_cell == descent_route.origin))
+		# Only a missing floor under the player may bypass the allowance.
+		# Neighbour/objective chunks keep their priority without finishing whole
+		# rooms in one frame. Warm-up/teleport preparation remains synchronous.
+		var urgent := _pending_cell == pc and not chunks.has(pc)
 		while true:
-			if _pending_chunk.build_next_stage():
+			if not urgent and Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
+				break
+			if _pending_chunk.build_next_slice():
+				# Installation gets the next allowance if generation used this one.
+				if not urgent and Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
+					break
 				var complete := _pending_chunk
 				var at := _pending_cell
 				_pending_chunk = null
@@ -235,7 +242,7 @@ func _process(_dt: float) -> void:
 				_install_chunk(at, complete)
 				_chunks_since_prefetch += 1
 				break
-			if not urgent and Time.get_ticks_usec() - started >= BUILD_BUDGET_USEC:
+			if not urgent and Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
 				break
 
 	for c in chunks.keys():

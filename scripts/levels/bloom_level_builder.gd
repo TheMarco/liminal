@@ -6,6 +6,7 @@ extends "res://scripts/levels/chunk_level_builder.gd"
 ## visible wounds, incubators, and the storm outside. Cell-local surface growth
 ## is built with the structure pass so merged rooms never leave bare quadrants.
 
+const ORGANIC := preload("res://scripts/props/organic_architecture.gd")
 const BLOOM_PULSE_SCRIPT := preload("res://scripts/bloom_pulse.gd")
 const BLOOM_FIXTURE_FLICKER_SCRIPT := preload(
 	"res://scripts/bloom_fixture_flicker.gd")
@@ -93,35 +94,36 @@ func _bloom_floor_ceiling() -> void:
 	if ctx.style != WorldGen.BLOOM_PASSAGE:
 		var puddle_x := 2.3 + ctx.random01(3100) * 5.4
 		var puddle_z := 2.0 + ctx.random01(3101) * 5.8
-		var puddle := scene.box(
-			Vector3(6.0 + (ctx.random01(3102) - 0.5) * 2.4, 0.012,
-				6.0 + (ctx.random01(3103) - 0.5) * 2.4),
-			Vector3(puddle_x, 0.018, puddle_z), Mats.bloom_wet(), false)
+		var puddle := MeshInstance3D.new()
+		puddle.mesh = ORGANIC.pool(Vector2(puddle_x, puddle_z), int(ctx.random01(3102) * 6))
+		puddle.material_override = Mats.bloom_wet()
+		puddle.position = Vector3(6.0 + (ctx.random01(3102) - 0.5) * 2.4, 0.018,
+			6.0 + (ctx.random01(3103) - 0.5) * 2.4)
+		scene.add_node(puddle)
 		puddle.set_meta("bloom_puddle", true)
-	# A biased canopy: one strong ceiling silhouette, then only a few secondary
-	# strands. All reachable clearances remain above 2.25m.
-	var root := _growth_root("BloomCanopy")
-	var side := -1.0 if ctx.random01(3110) < 0.5 else 1.0
-	var corner_x := 1.0 if side < 0.0 else 11.0
-	var corner_z := 1.0 if ctx.random01(3111) < 0.5 else 11.0
-	var y := maxf(2.30, ctx.ceiling_height - 0.34)
-	_vine_path(root, [
-		Vector3(corner_x, y - 0.35, corner_z),
-		Vector3(lerpf(corner_x, 6.0, 0.36), y + 0.04,
-			lerpf(corner_z, 6.0, 0.18)),
-		Vector3(lerpf(corner_x, 6.0, 0.70), y - 0.07,
-			lerpf(corner_z, 6.0, 0.42)),
-		Vector3(6.0 + side * 1.35, y + 0.08,
-			6.0 + (ctx.random01(3112) - 0.5) * 2.0),
-	], 0.19 + ctx.random01(3113) * 0.11)
-	for i in 3:
-		var start := Vector3(corner_x, y - 0.10,
-			clampf(corner_z + (float(i) - 1.0) * 0.55, 0.7, 11.3))
-		var end := Vector3(clampf(corner_x + side * -1.0 * (1.6 + i * 0.75),
-			0.7, 11.3), y - 0.12 - i * 0.05,
-			clampf(corner_z + (ctx.random01(3120 + i) - 0.5) * 2.8, 0.7, 11.3))
-		_vine_path(root, [start, (start + end) * 0.5 + Vector3(0, 0.13, 0), end],
-			0.055 + i * 0.012, 0.56)
+	var canopy := MeshInstance3D.new()
+	canopy.name = "VascularCanopy"
+	var narrow := ctx.style == WorldGen.BLOOM_PASSAGE
+	var height := PASSAGE_HEIGHT if narrow else ctx.ceiling_height
+	var canopy_height: float = ORGANIC.canopy_height(height - 0.08)
+	canopy.mesh = ORGANIC.canopy(canopy_height, int(ctx.random01(3110) * 6), narrow)
+	canopy.material_override = Mats.bloom_growth()
+	canopy.set_meta("bloom_growth", true)
+	canopy.set_meta("bloom_growth_root", true)
+	if narrow and WorldGen.corridor(ctx.world_seed, ctx.cell) != 2:
+		canopy.rotation.y = PI * 0.5
+		canopy.position = Vector3(0, 0, 12)
+	scene.add_node(canopy)
+	canopy.position.y = height - 0.08 - canopy_height
+	var tissue := MeshInstance3D.new()
+	tissue.name = "CanopyMembranes"
+	var membrane_height: float = ORGANIC.membrane_height(height - 0.08)
+	tissue.mesh = ORGANIC.membranes(membrane_height, int(ctx.random01(3110)*6), narrow)
+	tissue.material_override = Mats.bloom_tissue()
+	tissue.transform = canopy.transform
+	tissue.position.y = height - 0.08 - membrane_height
+	tissue.set_meta("bloom_growth",true)
+	scene.add_node(tissue)
 	# A single real thorn canopy is the visual anchor; the small generated
 	# strands above merely stitch it into the room. Large merged rooms instance
 	# it only on their furnishing anchor so it never repeats per quadrant.
@@ -169,6 +171,25 @@ func _bloom_wall_growth(dir: int, plane: float) -> void:
 		var door_p := Vector3(face + inward * 0.04, 0.0, 6.0) if dir < 2 \
 			else Vector3(6.0, 0.0, face + inward * 0.04)
 		_bloom_annex_door_at(door_p, scene.wall_facing(dir))
+
+
+## Infestation follows each solid segment, including the sides of real doors.
+func _bloom_wall_finish(dir: int, plane: float, from: float, to: float,
+		y0: float, y1: float) -> void:
+	if y0 > 0.02 or to - from < 1.1: return
+	var inward := -1.0 if dir == 0 or dir == 2 else 1.0
+	var face := plane + inward * (Chunk.T * 0.5 + 0.09)
+	var veins := MeshInstance3D.new()
+	veins.name = "WallVeinNetwork"
+	var width := to - from - 0.12
+	var module_width: float = ORGANIC.wall_width(width)
+	veins.mesh = ORGANIC.wall(module_width, 4.0, int(ctx.random01(3174 + dir) * 6))
+	veins.scale = Vector3(width/module_width,y1/4.0,1.0)
+	veins.material_override = Mats.bloom_growth()
+	veins.position = Vector3(face, 0, (from + to) * 0.5) if dir < 2 else Vector3((from + to) * 0.5, 0, face)
+	veins.rotation.y = -PI * 0.5 if dir == 0 else (PI * 0.5 if dir == 1 else (PI if dir == 2 else 0.0))
+	veins.set_meta("bloom_growth", true)
+	scene.add_node(veins)
 
 
 func _passage_box(pos: Vector3, size: Vector3, part: String,
@@ -452,7 +473,7 @@ func _bloom_spores() -> void:
 	_bloom_particle_layer("bloom_flakes",
 		12 if ctx.style == WorldGen.BLOOM_PASSAGE else \
 			(26 if ctx.room_size >= 4 else 19),
-		0.205, 0.18, 2.55, 0.018, 0.075, 18.0)
+		0.115, 0.18, 1.65, 0.018, 0.075, 18.0)
 
 
 func _bloom_particle_layer(tag: String, amount: int, quad_size: float,
@@ -538,6 +559,7 @@ func _pine_roots(pos: Vector3, yaw: float, scale: float) -> Node3D:
 
 
 static func clear_runtime_cache() -> void:
+	ORGANIC.clear_runtime_cache()
 	if _pine_roots_prototype != null:
 		_pine_roots_prototype.free()
 		_pine_roots_prototype = null

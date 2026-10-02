@@ -27,12 +27,10 @@ const CRT_SCREEN_SIZE := Vector2(0.578, 0.404)
 ## The old 550x384 target left only ~1.6 output pixels per scan line, which
 ## resampled into broad moire bands on high-DPI displays.
 const VIDEO_VIEWPORT_SIZE := Vector2i(1280, 894)
-## Leave enough space above and below the glass to see the physical cabinet.
-## At 93% the top/bottom bezel was almost entirely cropped during playback.
-const WATCH_SCREEN_HEIGHT := 0.72
-## The cabinet is wider on its control side. Aim slightly right of the glass
-## to center the complete television, including its speaker and controls.
-const WATCH_CAMERA_RIGHT_OFFSET := 0.065
+## Fit the complete cabinet, including its feet and control side. The lower
+## margin and slightly raised composition keep playback controls off the TV.
+const WATCH_CABINET_FILL := 0.82
+const WATCH_CENTRE_HEIGHT := 0.435
 ## The playback camera renders only this set. A clearance bug or neighbouring
 ## streamed chunk can no longer put a wall/prop between the lens and the tube;
 ## ordinary cameras still see the models through their original layer 1 bit.
@@ -66,6 +64,9 @@ var _cam: Camera3D
 var _prev_cam: Camera3D
 var _viewer: Player
 var _discovery_light: OmniLight3D
+var _watch_light: OmniLight3D
+var _tv_bounds := AABB()
+var _watch_tween: Tween
 var _tape_path := ""
 var _playing := false
 var _watching := false
@@ -107,6 +108,7 @@ func _ready() -> void:
 	_build_discovery_cue()
 	_build_interactable()
 	_add_watch_layer(self)
+	get_viewport().size_changed.connect(_resize_watch_camera)
 	set_process_unhandled_input(false)
 	_present_idle()
 
@@ -139,7 +141,8 @@ func _build_furniture() -> void:
 	# Feet rest below each model's origin; lift so the lowest point sits on
 	# the floor. Numbers come from the imported AABBs.
 	_model(TABLE_PATH, TABLE_SCALE, Vector3(0.0, 0.1131, 0.0))
-	_model(TV_PATH, TV_SCALE, Vector3(-0.35, 0.401, 0.02))
+	var television := _model(TV_PATH, TV_SCALE, Vector3(-0.35, 0.401, 0.02))
+	_tv_bounds = _cabinet_bounds(television, Transform3D.IDENTITY)
 	_model(VCR_PATH, VCR_SCALE, Vector3(0.55, 0.401, -0.029))
 	var body := StaticBody3D.new()
 	var cs := CollisionShape3D.new()
@@ -149,6 +152,20 @@ func _build_furniture() -> void:
 	cs.position = Vector3(0.0, 0.51, 0.0)
 	body.add_child(cs)
 	add_child(body)
+
+
+func _cabinet_bounds(node: Node, parent_xf: Transform3D) -> AABB:
+	var xf := parent_xf
+	if node is Node3D:
+		xf *= (node as Node3D).transform
+	var bounds := AABB()
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		bounds = xf * (node as MeshInstance3D).mesh.get_aabb()
+	for child in node.get_children():
+		var next := _cabinet_bounds(child, xf)
+		if next.size != Vector3.ZERO:
+			bounds = next if bounds.size == Vector3.ZERO else bounds.merge(next)
+	return bounds
 
 
 ## The tube rectangle, measured from the model's own screen sub-mesh
@@ -170,6 +187,21 @@ func _build_screen() -> void:
 	_screen.position = Vector3(-0.4146, 0.6603, 0.296)
 	_screen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_screen)
+	# Screen spill keeps the cabinet readable even with bounce lighting off.
+	# It affects only the television set's layer, and runs only during playback.
+	_watch_light = OmniLight3D.new()
+	_watch_light.name = "TapeScreenSpill"
+	_watch_light.position = _screen.position + Vector3(0.10, 0.05, 0.28)
+	_watch_light.light_color = Color(0.78, 0.86, 1.0)
+	_watch_light.light_energy = 0.85
+	_watch_light.omni_range = 1.4
+	_watch_light.layers = WATCH_LAYER
+	_watch_light.light_cull_mask = WATCH_LAYER
+	_watch_light.shadow_enabled = false
+	_watch_light.light_volumetric_fog_energy = 0.0
+	_watch_light.visible = false
+	_watch_light.set_meta("visible_source", "crt_screen")
+	add_child(_watch_light)
 
 
 func _build_audio() -> void:
@@ -333,22 +365,47 @@ func _begin_watch(viewer: Player) -> void:
 	if _cam == null:
 		_cam = Camera3D.new()
 		_cam.fov = 50.0
+		# This camera hides the room geometry. A dedicated dark environment
+		# prevents the floor's distance fog from becoming a flat bright backdrop.
+		# The screen spill supplies the cabinet's local lighting at every preset.
+		var environment := Environment.new()
+		environment.background_mode = Environment.BG_COLOR
+		environment.background_color = Color(0.003, 0.004, 0.006)
+		environment.tonemap_mode = Environment.TONE_MAPPER_AGX
+		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		environment.ambient_light_color = Color(0.55, 0.65, 0.8)
+		environment.ambient_light_energy = 0.08
+		_cam.environment = environment
 		add_child(_cam)
 	_cam.cull_mask = WATCH_LAYER
 	_cam.global_transform = _prev_cam.global_transform
 	_cam.make_current()
-	# Frame the tube with room for the cabinet instead of filling the viewport
-	# with glass. The bezel remains visible and the
-	# footage keeps its authored pillar/letterboxing.
-	var distance := (CRT_SCREEN_SIZE.y * 0.5) \
-		/ (tan(deg_to_rad(_cam.fov * 0.5)) * WATCH_SCREEN_HEIGHT)
-	var target := global_transform \
-		* Transform3D(Basis.IDENTITY, Vector3(
-			_screen.position.x + WATCH_CAMERA_RIGHT_OFFSET, _screen.position.y,
-			_screen.position.z + distance))
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC) \
+	_watch_light.visible = true
+	if _watch_tween != null and _watch_tween.is_valid():
+		_watch_tween.kill()
+	_watch_tween = create_tween().set_trans(Tween.TRANS_CUBIC) \
 		.set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(_cam, "global_transform", target, 1.2)
+	_watch_tween.tween_property(_cam, "global_transform",
+		_watch_camera_target(vp.get_visible_rect().size), 1.2)
+
+
+func _watch_camera_target(extent: Vector2) -> Transform3D:
+	var aspect := extent.x / maxf(extent.y, 1.0)
+	var half_fov := tan(deg_to_rad(_cam.fov * 0.5))
+	var distance := maxf(_tv_bounds.size.y, _tv_bounds.size.x / aspect) \
+		/ (2.0 * half_fov * WATCH_CABINET_FILL)
+	var centre := _tv_bounds.get_center()
+	centre.y -= (0.5 - WATCH_CENTRE_HEIGHT) * 2.0 * distance * half_fov
+	centre.z = _tv_bounds.end.z + distance
+	return global_transform * Transform3D(Basis.IDENTITY, centre)
+
+
+func _resize_watch_camera() -> void:
+	if not _watching or not is_instance_valid(_cam):
+		return
+	if _watch_tween != null and _watch_tween.is_valid():
+		_watch_tween.kill()
+	_cam.global_transform = _watch_camera_target(get_viewport().get_visible_rect().size)
 
 
 ## Converted archival 4:3 sources have small stored-height differences, so
@@ -377,16 +434,20 @@ func _refresh_video_aspect(expected_path: String) -> void:
 
 func _end_watch() -> void:
 	_clear_watch_hint()
+	if is_instance_valid(_watch_light):
+		_watch_light.visible = false
 	if not _watching:
 		return
 	_watching = false
 	set_process_unhandled_input(false)
+	if _watch_tween != null and _watch_tween.is_valid():
+		_watch_tween.kill()
 	if _cam != null and is_instance_valid(_prev_cam):
-		var tw := create_tween().set_trans(Tween.TRANS_CUBIC) \
+		_watch_tween = create_tween().set_trans(Tween.TRANS_CUBIC) \
 			.set_ease(Tween.EASE_IN_OUT)
-		tw.tween_property(_cam, "global_transform",
+		_watch_tween.tween_property(_cam, "global_transform",
 			_prev_cam.global_transform, 0.7)
-		tw.tween_callback(func():
+		_watch_tween.tween_callback(func():
 			if is_instance_valid(_prev_cam):
 				_prev_cam.make_current()
 			_restore_viewer())

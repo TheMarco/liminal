@@ -50,18 +50,19 @@ void fragment() {
 	float vessel_phase = world_pos.y * 4.25 + world_pos.x * 1.17
 		+ world_pos.z * 1.43 + (wrinkles - 0.5) * 7.5;
 	float vessel_line = abs(sin(vessel_phase));
-	float vessel = 1.0 - smoothstep(0.012, 0.052, vessel_line);
+	float vessel_aa = max(fwidth(vessel_line), 0.001);
+	float vessel = 1.0 - smoothstep(0.006 - vessel_aa, 0.026 + vessel_aa, vessel_line);
 	float travelling = 0.55 + 0.45 * sin(TIME * 2.35 - world_pos.y * 1.8
 		- world_pos.x * 0.32 + pulse_offset);
-	vec3 bruised = mix(vec3(0.003, 0.004, 0.006),
-		vec3(0.055, 0.008, 0.010), smoothstep(0.18, 0.86, wrinkles));
+	vec3 bruised = mix(vec3(0.009, 0.013, 0.018),
+		vec3(0.11, 0.024, 0.029), smoothstep(0.18, 0.86, wrinkles));
 	ALBEDO = bruised * mix(0.72, 1.10, smoothstep(0.26, 0.76, height_map));
-	ROUGHNESS = clamp(mix(0.12, 0.48, rough_map)
-		+ (0.5 - height_map) * 0.10, 0.08, 0.62);
-	METALLIC = 0.08;
-	SPECULAR = 0.82;
-	NORMAL = normalize((VIEW_MATRIX * vec4(normalize(mix(n, mapped_n, 0.68)), 0.0)).xyz);
+	ROUGHNESS = clamp(mix(0.43, 0.68, rough_map)
+		+ (0.5 - height_map) * 0.08, 0.34, 0.75);
+	METALLIC = 0.0;
+	SPECULAR = 0.45;
+	NORMAL = normalize((VIEW_MATRIX * vec4(normalize(mix(n, mapped_n, 0.26)), 0.0)).xyz);
 	AO = mix(0.54, 1.0, ao_map) * mix(0.84, 1.0, height_map);
 	AO_LIGHT_AFFECT = 0.62;
-	EMISSION = vessel_color * vessel * (0.04 + travelling * 0.34);
+	EMISSION = vessel_color * vessel * (0.018 + travelling * 0.14);
 }

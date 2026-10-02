@@ -1,0 +1,20 @@
+Apple accepted notarization: 578b959f-e60f-4ba4-bb90-b8f415864ee8
+Processing: /Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/It wants you to stay.app
+Processing: /Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/It wants you to stay.app
+The staple and validate action worked!
+/Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/It wants you to stay.app: valid on disk
+/Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/It wants you to stay.app: satisfies its Designated Requirement
+Processing: /Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/It wants you to stay.app
+The validate action worked!
+/Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/It wants you to stay.app: accepted
+source=Notarized Developer ID
+Mac distribution checks passed: /Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/It wants you to stay.app
+/Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/zip-verification/It wants you to stay.app: valid on disk
+/Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/zip-verification/It wants you to stay.app: satisfies its Designated Requirement
+Processing: /Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/zip-verification/It wants you to stay.app
+The validate action worked!
+/Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/zip-verification/It wants you to stay.app: accepted
+source=Notarized Developer ID
+Mac distribution checks passed: /Users/marcovhv/projects/GIT/liminal/build/macos-notary-0.5.3.gDTpiR/zip-verification/It wants you to stay.app
+
+Verified notarized Mac release is ready: /Users/marcovhv/projects/GIT/liminal/build/macos/It wants you to stay-MacOS-0.5.3.zip

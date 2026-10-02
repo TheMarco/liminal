@@ -28,12 +28,15 @@ tonemapping preserves each floor's authored exposure.
   nobody, anti-collision beacon flashing — and further out, parked heavies
   and one aircraft forever taxiing on the horizon.
 - **Floor 5 — the asylum**: an abandoned institution nobody decommissioned.
-  Peeling institutional-green paint over brick, cracked tile wainscots,
-  grimy checkerboard corridors lined with heavy green steel doors, rusty
+  Peeling ivory plaster over brick and deep jade tile wainscots sit beneath
+  moulded cornices, ceiling coffers and shallow ward arches. Grimy checkerboard
+  corridors run past heavy green steel doors, rusty
   bed frames with stained mattresses, parked gurneys and wheelchairs,
   straitjackets on wall hooks, restraint tables under surgical lamps, ECT
   carts, hydrotherapy tubs of black water — and writing on the walls that
-  nobody signed. Iron clangs somewhere down the ward. Sometimes it moans.
+  nobody signed. Privacy rails frame the ward beds; warm opal pendants and a
+  timber-and-brass altar screen distinguish the vaulted chapel. Iron clangs
+  somewhere down the ward. Sometimes it moans.
 - **Floor 6 — the school**: a high school after a last bell that never rang.
   Cream block walls under a red line that runs the whole building, a floor
   ground until it throws the strip lights back, and narrow locker-lined
@@ -47,13 +50,18 @@ tonemapping preserves each floor's authored exposure.
   chemistry labs built around full sink-and-tap islands, with supported
   glassware left on their black worktops.
 - **Floor 7 — the mall**: a dead indoor shopping centre. Broad terrazzo
-  galleries pass shuttered storefronts, deserted kiosks and planter islands;
-  beyond them are stripped department stores, a food court, service corridors,
-  a dry atrium fountain and a sealed six-screen cinema.
+  galleries follow rose-stone and brass inlays past jade-tiled walls, deep
+  shuttered storefronts and potted palms. Plaster coffers and warm cove lights
+  give way to cool glazed atrium roofs and sealed upper galleries. Beyond them
+  are timber-floored shops, stripped department stores, a food court under
+  brass pendants, exposed service corridors, a tiled fountain with still water,
+  and the illuminated Orchard six-screen cinema.
 - **Floor 8 — the prison**: a salt-eaten island penitentiary. Barred galleries,
   close cells and stacked bunks open into mess halls, communal showers, guard
-  cages, workshops and visitation booths. Rare cell blocks rise into false
-  upper tiers and a central rotunda watches every direction at once.
+  cages, workshops and visitation booths. Riveted steel roof ribs, masonry
+  pilasters, matte worn concrete and brass survey studs give the rooms a heavy
+  institutional scale. Rare cell blocks rise into false upper tiers; a radial
+  glazed inspection lantern crowns the central rotunda's guard cage.
 - **Floor 9 — the Poolrooms**: endless flooded bathing halls in white mosaic
   tile. One continuous body of chest-deep green water runs under the whole
   floor; you wade at half speed with the surface just below your eyeline, and
@@ -65,11 +73,15 @@ tonemapping preserves each floor's authored exposure.
   chair waits alone in a coved, windowless room.
 - **Key 0 — the Data Center**: monumental board-formed concrete halls occupied
   by dense server aisles, network racks, operations consoles, overhead cable
-  busways and condenser plants. Cold cyan service light cuts through the raw
-  structure while broad maintenance routes keep the machinery traversable.
+  busways and condenser plants. Perforated access-floor panels, copper-colored
+  chilled-water mains and high louver banks fill out the working infrastructure.
+  Cold cyan service light cuts through the raw structure while broad maintenance
+  routes keep the machinery traversable.
 - **Key − — the Bloom**: a dead civic campus colonized by glossy black roots,
-  animated flesh masses, thorn canopies and pulsing heart nodes. Locker tunnels
-  and compressed spore nests open into drowned gyms, root forests and
+  animated flesh masses, curved vascular vaults and pulsing heart nodes. Tapered
+  branches spread across solid walls; hanging membranes, irregular standing
+  water and drifting spores invade the building. Locker tunnels and compressed
+  spore nests open into drowned gyms, root forests and
   storm-lit atria; cold fluorescents describe the surviving building while red
   light marks wounds and sealed false exteriors.
 
@@ -110,8 +122,9 @@ approximates interlaced playback without storing previous fields. Choose
 **VHS EFFECT** and **CRT EFFECT** independently in Settings; both preferences
 are saved and no gameplay key changes them. In-world
 televisions retain their 344×240 signal in a 1280×894 render target. The
-optional full-screen CRT pass uses the full window resolution; when either
-effect is active, its 3D source is rendered at 480 lines.
+optional full-screen CRT pass uses the full window resolution to reconstruct a
+480-line world source. CRT always keeps that television resolution; with CRT
+off, graphics quality controls the world resolution, including in VHS-only mode.
 
 In Descent, you are not alone. **The figures belong to Descent and only to
 Descent** — Wander is a peaceful place to explore and photograph the building,
@@ -147,6 +160,10 @@ interruptible with **E**, **F**, or by stepping away, and partial progress is
 never lost. The persistent HUD bar shows remaining charge; a second green bar
 appears while connected. A clean figure burn refunds a small quarter-second,
 rewarding accuracy without making the stations optional.
+
+The torch has a soft, tapered shaft visible in the air even when the graphics
+preset disables volumetric fog. Its depth-clipped scattering stops at opaque
+surfaces and follows the battery's dimming without adding particles or lights.
 
 There are seven of them, and every one is animated — hooded wraiths of drifting
 smoke with lit eyes, all but one of them red. Two hang rather than walk and
@@ -414,13 +431,13 @@ export templates installed):
   stapled**, so it opens on any Mac with no Gatekeeper warning. Notarization
   uses the stored `AC_PASSWORD` notarytool profile; `NOTARIZE=0 ./build.sh`
   produces an offline, ad-hoc-signed local build without notarization.
-- `build/windows/It wants you to stay.exe` — single self-contained x86_64 binary,
-  no installer and no DLLs beside it. Windows uses Godot's Forward+ renderer
+- `build/windows/It wants you to stay.exe` — x86_64 binary with embedded game resources,
+  packaged with its runtime DLLs; no installer required. Windows uses Godot's Forward+ renderer
   through the native Direct3D 12 driver, with Vulkan retained as the automatic
   fallback on unsupported systems.
 - `build/linux/It wants you to stay.x86_64` — single self-contained x86_64
   executable with its PCK embedded, distributed as
-  `build/linux/It wants you to stay-Linux-0.5.3.zip`. Linux uses the Forward+
+  `build/linux/It wants you to stay-Linux-0.5.4.zip`. Linux uses the Forward+
   renderer through Vulkan.
 
 ## Controls
@@ -454,6 +471,29 @@ reduced flashing, and optional cause-of-death explanations. Reset Defaults asks 
 movement and Descent timers. Reduced flashing steadies fixtures and the low
 battery torch, removes the camera flash, and suppresses rapid signal glitches
 and slot-light pulses.
+
+The settings panel has **Graphics**, **Visual Effects**, **Controls**, **Audio**
+and **Accessibility** tabs. Changes apply live and save when the panel closes.
+Graphics offers four presets; changing an individual rendering option selects
+**Custom**. Existing profiles retain their controls, audio and effect choices.
+
+| Preset | World resolution | Lighting and effects |
+| --- | --- | --- |
+| Low | Up to 360p | FXAA, simple shadows, direct lighting and distance fog |
+| Medium (default) | Up to 480p | FXAA, soft shadows and contact shading; bounce light, screen reflections and volumetric fog off |
+| High | Up to 720p | TAA, balanced bounce light, screen reflections and volumetric fog |
+| Ultra | Native window resolution | TAA + 4× MSAA, full bounce light and reflections, higher-quality fog and shadows |
+
+The resolution column applies with CRT off. CRT always uses a 480p world source
+while keeping the preset's lighting, shadows and other rendering settings. The
+resolution selector shows the active 480p override and is disabled until CRT
+is turned off; the saved resolution is then restored. VHS alone does not force
+the world to 480p: its shader supplies tape bandwidth and softness.
+
+Advanced rendering exposes each option separately, including 1080p and 1440p
+world resolution. Menus and the HUD remain at full window resolution. VSync and
+the frame limit are independent of the preset; the default is VSync on with a
+60 FPS cap. HDR output and brightness live in the Graphics calibration foldout.
 
 The casino in Descent includes three fixed route landmarks: the mostly dark
 LAST CHANCE slot bank, the sunken Amber Lounge, and a ringing red telephone

@@ -54,7 +54,7 @@ func _verify() -> void:
 	_expect(is_equal_approx(pursuer.pursuit_speed(true, 10.0), 2.1 * 1.03),
 		"halved Pool Girl deck run speed missing")
 	pursuer.free()
-	for folder in ["res://art/ending_outside", "res://deliverables/ending_cutscene_final_kit",
+	for folder in ["res://art/ending_outside", "res://deliverables",
 			"res://models/cc_by_nc", "res://textures/cc_by_nc", "res://prototypes_shelved",
 			"res://tools"]:
 		_expect(not DirAccess.dir_exists_absolute(folder), "development/deprecated resources bundled: " + folder)

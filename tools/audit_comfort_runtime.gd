@@ -174,6 +174,8 @@ func _exercise_menu_inputs(game: Node) -> void:
 			and rect.size.y >= float(extent.y) * 0.65,
 			"pause panel is too small at %s: %s" % [extent, rect])
 		var slider: HSlider = menu._controls["sensitivity"][0]
+		menu._select_tab("Controls")
+		await process_frame
 		var before := slider.value
 		slider.grab_focus()
 		var key := InputEventKey.new()
