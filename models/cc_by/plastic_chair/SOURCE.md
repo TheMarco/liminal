@@ -1,6 +1,9 @@
 # Plastic chair
 
-- **Creator:** [SadiqKhan911](https://sketchfab.com/SadiqKhan911)
+- **Creator:** [KhanSaab / SadiqKhan911](https://sketchfab.com/KhanSaab)
+- **Verification:** The source model's Sketchfab API record lists KhanSaab
+  on 2026-10-08; its downloaded GLB retains the earlier SadiqKhan911 credit.
+  Both records specify CC BY 4.0.
 - **Source:** <https://sketchfab.com/3d-models/plastic-chair-38ed70a7e2914f7f834edc59b2ee0f10>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - **Local file:** `plastic_chair.glb`

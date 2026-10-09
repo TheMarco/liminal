@@ -40,7 +40,7 @@ const RETIRED_CREDITS := [
 	"morrrtu1o", "juliegraham178", "mtaesiri", "JackFarrand", "Katydid",
 	"Mette Aumala", "Madeleine Price Ball", "OpenClipart-Vectors", "Phil Bronnery", "Beao",
 	"Thibaut Rostagnat", "Doverlock", "Audrey Gonçalves", "nermin", "AdrianXY",
-	"shirlanne",
+	"shirlanne", "Kless Gyzen", "dannaki_",
 ]
 ## These include creators missed by the old screen, plus two creators whose
 ## other models were replaced but whose remaining assets still need credit.
@@ -49,11 +49,11 @@ const ACTIVE_CREDITS := {
 	"Tom Seddon": "res://models/cc_by/retro_television/retro_television.glb",
 	"Parth": "res://models/cc_by/tv_table/tv_table.glb",
 	"5CNG5": "res://models/cc_by/alarm_light/alarm_light.glb",
-	"SadiqKhan911": "res://models/cc_by/plastic_chair/plastic_chair.glb",
+	"KhanSaab / SadiqKhan911": "res://models/cc_by/plastic_chair/plastic_chair.glb",
 	"ApprenticeRaccoon": "res://models/cc_by/pool_buoy/pool_buoy.glb",
-	"Kless Gyzen": "res://models/cc_by/white_tiles/white_tiles_albedo.png",
+	"Alex Filip": "res://models/cc_by/white_tiles/white_tiles_albedo.png",
 	"maxdragonn": "res://models/cc_by/ibm_3278_terminal/ibm_3278_terminal.glb",
-	"varrocharlie": "res://models/cc_by/backrooms_ladderback_chair/backrooms_ladderback_chair.tscn",
+	"for_dev / varrocharlie": "res://models/cc_by/backrooms_ladderback_chair/backrooms_ladderback_chair.tscn",
 }
 
 var failures: Array[String] = []

@@ -43,16 +43,17 @@ static func instruction_rows() -> Array:
 		[GameInput.primary_label("return_to_title"), "Ask to leave the current mode"],
 		["ESC", "Pause / settings"],
 	]
-## Creators of the third-party models and surfaces used by the current game.
+## Creators of third-party models and surfaces used or retained by the game.
 ## The canonical record carries individual titles, links and modifications.
 const CREDIT_SECTIONS := [
 	["3D MODEL CREATORS",
 		[
 			"Poly Haven  ·  CC0     nisu / 3DModelsCC0  ·  CC0     WillowBoxArt",
-			"CASINO   Dudzy",
+			"EARLIER MODEL   Dudzy (replaced roulette table; source retained)",
 			"OFFICE   Red Fox / nokillnando · NotAnotherApocalypticCo. · AquaEquinox",
-			"    Rylae Shylna · maxdragonn · dannaki_",
-		"ANNEX   carlcapu9 · Avot · Drake · jimbogies · varrocharlie · Archer Sterling",
+			"    Rylae Shylna · maxdragonn",
+			"ANNEX   carlcapu9 · Avot · Drake · jimbogies · for_dev / varrocharlie",
+			"    Archer Sterling",
 			"AIRPORT   Bucks / Its_Bucks · Ellis Fossett · n.philipsen · assetfactory",
 			"ASYLUM   Veterock · loxfear · Ellie · creative_beast · Mehdi Shahsavan · Matt LeMoine",
 			"SCHOOL   Jawahar Yokesh · dercruz926 · barism09 · neverfollow81 · CAL21",
@@ -61,17 +62,17 @@ const CREDIT_SECTIONS := [
 			"    Some Random Mall Modeller · MaX3Dd",
 			"PRISON   neverfollow81 · Mark Peters · Mehdi Shahsavan / adventurer · dudecon",
 			"POOLROOMS   NXTLVLPLY · CadmiumCoffee (bsishir)",
-			"    SadiqKhan911 · ApprenticeRaccoon",
+			"    KhanSaab / SadiqKhan911 · ApprenticeRaccoon",
 			"SHARED PROPS   William Burke · Tom Seddon · Parth · 5CNG5",
 			"DATA CENTER   Mark Peters · carlcapu9 · FlevasGR · JamieDTran",
 			"    EntropyNine · Khoa Nguyen · Lora · wpanayides · JmPrsh153 · Network manager",
 			"BLOOM   Somersby · ChopperManiac · Mark Peters",
-			"CC BY 4.0 except  dannaki_, assetfactory, MaX3Dd  ·  Sketchfab Standard",
+			"CC BY 4.0 except  assetfactory, MaX3Dd  ·  Sketchfab Standard",
 		]],
 	["SURFACES & TYPE",
 		[
 			"ambientCG + Poly Haven + TextureCan  ·  CC0     Peter Hull / VT323  ·  SIL Open Font License",
-			"Kless Gyzen  —  Poolrooms tile textures  ·  CC BY 4.0",
+			"Alex Filip  —  Poolrooms tile textures  ·  CC BY 4.0",
 		]],
 ]
 

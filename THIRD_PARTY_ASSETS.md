@@ -4,6 +4,13 @@ It wants you to stay combines original procedural work with openly licensed art.
 file is the canonical attribution record; the in-game Credits screen provides
 the compact presentation appropriate to the game.
 
+The website's complete model inventory is maintained separately in
+`promo-site/model-credits.json`. On 2026-10-08, all 62 Sketchfab model IDs,
+47 Poly Haven model IDs and the OpenGameArt Office Chair listing were checked
+against their providers. This corrected White Tiles to Alex Filip and updated
+the current profiles for KhanSaab (formerly SadiqKhan911) and for_dev
+(downloaded credit: varrocharlie). Downloaded names remain in per-asset evidence.
+
 ## Asset policy
 
 New assets must have a recorded author, original source URL, license URL and a
@@ -249,7 +256,7 @@ and remove it from the distributed build.
 ### `backrooms_ladderback_chair.glb`
 
 - **Title:** `Backrooms Movie Ladderback Restaurant Chair`
-- **Creator:** [varrocharlie](https://sketchfab.com/varrocharlie)
+- **Creator:** [for_dev / varrocharlie](https://sketchfab.com/fordev3d)
 - **Source:** <https://sketchfab.com/3d-models/backrooms-movie-ladderback-restaurant-chair-1ce6e2e3f9914fa49e6b20264b52438f>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - **Modifications:** Original GLB unchanged; a scene wrapper turns its front to
@@ -831,7 +838,7 @@ supplied by the project owner and are used only as embedded game content.
 ### `plastic_chair.glb`
 
 - **Title:** `Plastic_Chair`
-- **Creator:** [SadiqKhan911](https://sketchfab.com/SadiqKhan911)
+- **Creator:** [KhanSaab / SadiqKhan911](https://sketchfab.com/KhanSaab)
 - **Source:** <https://sketchfab.com/3d-models/plastic-chair-38ed70a7e2914f7f834edc59b2ee0f10>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - **Modifications:** The chair mesh is selected from the source collection,
@@ -851,13 +858,27 @@ supplied by the project owner and are used only as embedded game content.
 ### White tiles — extracted PBR textures
 
 - **Title:** `Freebie Game Art White Tiles`
-- **Creator:** [Kless Gyzen](https://sketchfab.com/kless.gyzen)
+- **Creator:** [Alex Filip](https://sketchfab.com/filip.alecsandru)
 - **Source:** <https://sketchfab.com/3d-models/freebie-game-art-white-tiles-3c9fe794746847d8bf634eb61870e4e7>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - **Modifications:** Albedo, normal and packed ORM maps are extracted from the
   source GLB. The Poolrooms shader applies world-space mapping, waterline
   darkening and caustics; the original model is retained as the texture source.
 - **Local record:** [`models/cc_by/white_tiles/SOURCE.md`](models/cc_by/white_tiles/SOURCE.md)
+
+## Retained model sources
+
+### Earlier roulette table (no current gameplay placement)
+
+- **Title:** `Roulette Table 2 Downloadable`
+- **Creator:** [Dudzy](https://sketchfab.com/Dudzy)
+- **Source:** <https://sketchfab.com/3d-models/roulette-table-2-downloadable-b1d33eebb4f54b8aa250be2f49e87fbb>
+- **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
+- **Status:** The source GLB remains in the repository. Casino gameplay now
+  uses the project-owned `models/provided/royal_roulette/roulette_table_complete.glb`.
+- **Earlier modifications:** Scaled and floor-aligned to a three-metre table;
+  conservative collision and textures re-encoded at 1024 px.
+- **Local record:** [`models/cc_by/roulette_table/SOURCE.md`](models/cc_by/roulette_table/SOURCE.md)
 
 ## Public-domain and attribution-optional work
 

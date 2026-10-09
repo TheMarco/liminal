@@ -1,5 +1,10 @@
 # Roulette table 2
 
+- **Status (2026-10-08):** Retained source; no current gameplay placement.
+  Casino rooms now use the project-owned Royal Roulette model in
+  `models/provided/royal_roulette/roulette_table_complete.glb`. The adaptation
+  notes below describe the earlier use.
+
 - **Creator:** [Dudzy](https://sketchfab.com/Dudzy)
 - **Source:** <https://sketchfab.com/3d-models/roulette-table-2-downloadable-b1d33eebb4f54b8aa250be2f49e87fbb>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)

@@ -1,6 +1,9 @@
 # Backrooms Movie Ladderback Restaurant Chair
 
-- **Creator:** [varrocharlie](https://sketchfab.com/varrocharlie)
+- **Creator:** [for_dev / varrocharlie](https://sketchfab.com/fordev3d)
+- **Verification:** The source model's Sketchfab API record lists for_dev
+  on 2026-10-08; its downloaded GLB retains the earlier varrocharlie credit.
+  Both records specify CC BY 4.0.
 - **Source:** <https://sketchfab.com/3d-models/backrooms-movie-ladderback-restaurant-chair-1ce6e2e3f9914fa49e6b20264b52438f>
 - **License:** [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/)
 - **Provenance:** User-supplied `backrooms_movie_ladderback_restaurant_chair.glb`;
