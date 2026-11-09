@@ -8,6 +8,7 @@ signal cancelled
 var descent := false
 var heading_text := ""
 var warning_text := ""
+var acknowledgement_only := false
 var _done := false
 var _yes: Button
 var _no: Button
@@ -47,11 +48,12 @@ func _ready() -> void:
 	_buttons = HBoxContainer.new()
 	_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_column.add_child(_buttons)
-	_yes = _make_button("Y — YES", true)
-	_no = _make_button("N / ESC — NO", false)
+	_yes = _make_button("OK" if acknowledgement_only else "Y — YES", true)
+	if not acknowledgement_only:
+		_no = _make_button("N / ESC — NO", false)
 	get_viewport().size_changed.connect(_relayout)
 	_relayout()
-	_no.call_deferred("grab_focus")
+	(_yes if acknowledgement_only else _no).call_deferred("grab_focus")
 
 
 func _make_button(text: String, accept: bool) -> Button:
@@ -77,6 +79,7 @@ func _relayout() -> void:
 	_warning.add_theme_font_size_override("font_size", maxi(22, roundi(31.0 * scale)))
 	_buttons.add_theme_constant_override("separation", roundi(26.0 * scale))
 	for button in [_yes, _no]:
+		if button == null: continue
 		button.add_theme_font_size_override("font_size", maxi(22, roundi(30.0 * scale)))
 		button.custom_minimum_size = Vector2(180.0 * scale, maxf(44.0, 58.0 * scale))
 
@@ -95,6 +98,10 @@ func _finish(accept: bool) -> void:
 func _input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
+	if acknowledgement_only:
+		if event.physical_keycode == KEY_ESCAPE:
+			_finish(true)
+		return # Enter/Space activate the focused OK button through normal GUI input.
 	if event.physical_keycode == KEY_Y:
 		_finish(true)
 	elif event.physical_keycode == KEY_N or event.physical_keycode == KEY_ESCAPE:

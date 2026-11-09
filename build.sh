@@ -10,6 +10,7 @@
 #       --password "<app-specific-password>"
 # Skip notarization (fast local build) with:  NOTARIZE=0 ./build.sh
 # Skip standalone ZIP archives for Steam uploads with: BUILD_ARCHIVES=0 ./build.sh
+# Bound audit concurrency on busy hosts with: AUDIT_JOBS=4 ./build.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -24,7 +25,7 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-AC_PASSWORD}"
 NOTARIZE="${NOTARIZE:-1}"
 BUILD_ARCHIVES="${BUILD_ARCHIVES:-1}"
 PRODUCT_NAME="It wants you to stay"
-RELEASE_VERSION="${RELEASE_VERSION:-0.5.9}"
+RELEASE_VERSION="${RELEASE_VERSION:-0.5.10}"
 if [[ "$BUILD_ARCHIVES" != "0" && "$BUILD_ARCHIVES" != "1" ]]; then
 	echo "BUILD_ARCHIVES must be 0 or 1." >&2
 	exit 1
@@ -69,7 +70,15 @@ touch build/.gdignore
 godot --path . --editor --import
 
 echo "==> audits"
-tools/run_audits.sh --no-import --log-dir "$BUILD_LOG_DIR"
+AUDIT_ARGS=(--no-import --log-dir "$BUILD_LOG_DIR")
+if [ -n "${AUDIT_JOBS:-}" ]; then
+	if [[ ! "$AUDIT_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+		echo "AUDIT_JOBS must be a positive integer." >&2
+		exit 1
+	fi
+	AUDIT_ARGS+=(-j "$AUDIT_JOBS")
+fi
+tools/run_audits.sh "${AUDIT_ARGS[@]}"
 
 # Packed resources are verified against the staged exports before any
 # packaging, signing, or publishing. Each check runs from outside the source

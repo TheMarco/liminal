@@ -21,6 +21,8 @@ var _hitches := 0
 var _worst_gap := 0
 var _slow_last: Dictionary = {}
 var _slow_counts: Dictionary = {}
+var _last_write_usec := 0
+var _max_write_usec := 0
 
 
 func _ready() -> void:
@@ -38,7 +40,7 @@ func _ready() -> void:
 	_last_frame = Time.get_ticks_usec()
 	_last_sample = _last_frame
 	_write("session_start", {
-		"schema": 1, "diagnostics_revision": "frame-recovery-2", "utc": Time.get_datetime_string_from_system(true),
+		"schema": 1, "diagnostics_revision": "photo-contact-4", "utc": Time.get_datetime_string_from_system(true),
 		"engine": Engine.get_version_info().string, "os": OS.get_name(),
 		"game_version": ProjectSettings.get_setting("application/config/version", "unknown"),
 		"os_version": OS.get_version(), "cpu": OS.get_processor_name(),
@@ -103,6 +105,17 @@ func _snapshot() -> Dictionary:
 		"engine_texture_memory_bytes": _valid_memory_counter(Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED)),
 		"resources": Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
 		"nodes": Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
+		"frame_work": {
+			# These are engine counters, not GPU timestamps or wall-clock FPS.
+			"process_ms": Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+			"physics_ms": Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+			"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+			"rendered_objects": Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
+			"primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
+		},
+		# Include the previous write's snapshot/serialization/flush cost. Logging
+		# must not hide its own stalls or recursively log a slow write.
+		"diagnostic_write_ms": {"last": _last_write_usec / 1000.0, "max": _max_write_usec / 1000.0},
 		"pipelines": {
 			"canvas": Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_CANVAS),
 			"mesh": Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_MESH),
@@ -141,12 +154,15 @@ func _open_log() -> void:
 
 func _write(event: String, fields: Dictionary = {}, snapshot := false) -> void:
 	if _file == null: return
+	var started := Time.get_ticks_usec()
 	if _file.get_position() >= MAX_BYTES: _open_log()
 	if _file == null: return
 	var record := {"event": event, "uptime_ms": Time.get_ticks_msec(), "details": fields}
 	if snapshot: record["snapshot"] = _snapshot()
 	_file.store_line(JSON.stringify(record))
 	_file.flush()
+	_last_write_usec = Time.get_ticks_usec() - started
+	_max_write_usec = maxi(_max_write_usec, _last_write_usec)
 
 
 func _exit_tree() -> void:

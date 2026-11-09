@@ -516,10 +516,22 @@ func _ready() -> void:
 
 func _runtime_diagnostic_context() -> Dictionary:
 	var video := {}
+	var perception := {}
+	if is_instance_valid(_reality_aftershock) and _reality_aftershock._material != null:
+		perception = {
+			"enabled": _reality_aftershock.enabled,
+			"active": _reality_aftershock.visible,
+			"strength": _reality_aftershock._material.get_shader_parameter("strength"),
+			"pulse_active": _reality_aftershock.elapsed < _reality_aftershock.DURATION,
+			"architecture_phase": _reality_aftershock._architecture_phase,
+		}
 	if has_meta("ntscrt_video_host"):
 		var host = get_meta("ntscrt_video_host")
 		video["title_suspended"] = host._suspended
 		video["source_update_mode"] = host.source.render_target_update_mode
+		video["gpu_effects_active"] = host._gpu_wanted and not host._suspended and not host._gpu_failed
+		video["source_size"] = str(host.source.size)
+		video["world_resolution_scale"] = host.source.scaling_3d_scale
 		if host.presenter != null:
 			video["completed_effect_frames"] = host.presenter.ready_frames
 			video["last_effect_cpu_ms"] = host.presenter.cpu_usec / 1000.0
@@ -532,7 +544,13 @@ func _runtime_diagnostic_context() -> Dictionary:
 		"player_position": str(player.position) if is_instance_valid(player) else "",
 		"player_physics_enabled": player.is_physics_processing() if is_instance_valid(player) else false,
 		"mouse_mode": Input.mouse_mode,
+		"photo_reviewing": _photo_camera._review_left > 0.0 if is_instance_valid(_photo_camera) else false,
+		"photo_capturing": _photo_camera._capturing if is_instance_valid(_photo_camera) else false,
+		"architecture_kind": _breathing.kind if is_instance_valid(_breathing) and is_instance_valid(_breathing.active) else "",
+		"architecture_elapsed": _breathing.elapsed if is_instance_valid(_breathing) and is_instance_valid(_breathing.active) else 0.0,
+		"native_doorway_active": is_instance_valid(_native_doorways.active) if is_instance_valid(_native_doorways) else false,
 		"video": video,
+		"perception": perception,
 		"cached_prop_scenes": FloorResourcePreloader.cached_count(),
 		"ambient_event_busy": _events._busy if is_instance_valid(_events) else false,
 		"blackout": run.blackout if is_instance_valid(run) else false,
@@ -1031,7 +1049,10 @@ func _request_quit() -> void:
 		_quit_prompt.queue_free()
 		_quit_prompt = null
 		_quitting = false
-		if is_instance_valid(_pause_menu):
+		if is_instance_valid(_return_prompt) and _return_prompt.acknowledgement_only:
+			# A cancelled quit must return to the still-paused briefing.
+			_return_prompt._yes.grab_focus()
+		elif is_instance_valid(_pause_menu):
 			_pause_menu.open()
 		else:
 			_open_settings(is_instance_valid(_title)))
@@ -1411,21 +1432,16 @@ func descent_setup_tape_finished(setup_key: String, objective: bool) -> void:
 			_show_event_message("THE TAPE COUNTS THE ROOMS AHEAD")
 
 
-## Floor 1's mandatory arrival console ran its tutorial to the end. Teach
-## the two keys in plain words, then deliver the photo brief the arrival
-## card skipped while the console was still owed a viewing.
+## Floor 1's mandatory arrival console ran its tutorial to the end. Show the
+## camera controls and objective together once the TV releases its viewer.
 func descent_intro_tape_finished(setup_key: String) -> void:
 	if not descent or run == null or run.ended:
 		return
 	run.mark_setup_tape_completed(setup_key)
 	if _intro_state != null:
 		_intro_state.mark_tutorial_viewed()
-	_show_event_message(
-		"PRESS %s TO USE YOUR CAMERA. PRESS %s TO TAKE A PHOTO." % [
-		GameInput.primary_label("camera"),
-		GameInput.primary_label("shutter")])
 	var brief := create_tween()
-	brief.tween_interval(4.5)
+	brief.tween_interval(0.85) # The TV's return-camera tween takes 0.7 seconds.
 	var brief_run_id := run.get_instance_id()
 	brief.tween_callback(func():
 		if is_instance_valid(run) and run.get_instance_id() == brief_run_id:
@@ -1740,17 +1756,36 @@ func _show_photo_brief() -> void:
 	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
 		return
 	if not descent or run == null or run.ended or _photo_director == null \
-			or _photo_director.requirement_met():
+			or _photo_director.requirement_met() or _switching or _dying or _quitting:
+		return
+	if get_tree().paused or run.watching or is_instance_valid(_return_prompt) \
+			or is_instance_valid(_photo_album) or is_instance_valid(_title):
+		_queue_photo_brief()
 		return
 	var count := _photo_director.documented_count()
 	var required := _photo_director.required_count()
 	if run.floor_idx == 0 and count == 0:
-		_show_event_message(
-			"THE TAPE WANTS PROOF — PHOTOGRAPH AT LEAST %d THINGS THAT ARE WRONG"
-			% required)
+		_return_prompt = ReturnPrompt.new()
+		_return_prompt.acknowledgement_only = true
+		_return_prompt.heading_text = "THE TAPE WANTS PROOF"
+		_return_prompt.warning_text = (
+			"PHOTOGRAPH AT LEAST %d THINGS THAT ARE WRONG.\n\nPRESS %s TO USE YOUR CAMERA.\nPRESS %s TO TAKE A PHOTO."
+			% [required, GameInput.primary_label("camera"), GameInput.primary_label("shutter")])
+		_return_prompt.process_mode = Node.PROCESS_MODE_ALWAYS
+		_return_prompt.confirmed.connect(func():
+			_return_prompt.queue_free()
+			_return_prompt = null
+			get_tree().paused = false
+			player.grab_look())
+		add_child(_return_prompt)
+		player.clear_sprint_toggle()
+		player.velocity = Vector3.ZERO
+		player.stop_motion_audio()
+		get_tree().paused = true
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	else:
 		_show_event_message("PHOTOGRAPH WHAT IS WRONG — %d TAKEN · MIN %d"
-			% [count, required])
+			% [count, required], false, 7.0)
 
 
 func _connect_descent_run() -> void:
@@ -3108,7 +3143,9 @@ func _show_event_message(text: String, alert := false,
 	_event_tween.tween_property(_event_panel, "modulate:a", 0.96, 0.18)
 	_event_tween.tween_interval(hold_seconds)
 	_event_tween.tween_property(_event_panel, "modulate:a", 0.0, 0.7)
-	RuntimeDiagnostics.slow("event_caption_setup", started, {"text": text})
+	RuntimeDiagnostics.mark("event_caption_setup", {
+		"text": text, "elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0,
+	}, true)
 
 
 ## Screenshot-only helper for checking both caption styles without waiting for

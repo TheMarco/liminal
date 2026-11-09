@@ -22,12 +22,16 @@ func settle() -> void:
 		await process_frame
 
 func run() -> void:
-	for mode in [0, 1, 2]:
+	for mode in [0, 1, 2, 3]:
 		var prompt := ReturnPrompt.new()
 		prompt.descent = mode != 0
 		if mode == 2:
 			prompt.heading_text = "REPLACE THIS DESCENT?"
 			prompt.warning_text = "YOUR FLOOR 06 CHECKPOINT AND RUN PROGRESS WILL BE REPLACED.\nSTART AGAIN IN A NEW BUILDING?"
+		elif mode == 3:
+			prompt.acknowledgement_only = true
+			prompt.heading_text = "THE TAPE WANTS PROOF"
+			prompt.warning_text = "PHOTOGRAPH AT LEAST 3 THINGS THAT ARE WRONG.\n\nPRESS C TO USE YOUR CAMERA.\nPRESS SPACE TO TAKE A PHOTO."
 		root.add_child(prompt)
 		for extent in [Vector2i(640, 480), Vector2i(1280, 720), Vector2i(720, 1280),
 				Vector2i(1920, 1080), Vector2i(3840, 2160), Vector2i(640, 480)]:
@@ -36,14 +40,42 @@ func run() -> void:
 			var safe := VhsOsd.safe_inset(Vector2(extent))
 			var bounds := Rect2(safe - Vector2.ONE, Vector2(extent) - safe * 2 + Vector2.ONE * 2)
 			for control: Control in [prompt._heading, prompt._warning, prompt._yes, prompt._no]:
+				if control == null: continue
 				check(bounds.encloses(control.get_global_rect()), "mode %d %s: clipped %s %s" % [mode, extent, control.name, control.get_global_rect()])
 			check(prompt._heading.get_global_rect().end.y <= prompt._warning.global_position.y,
 				"heading overlaps warning at %s" % extent)
 			check(prompt._warning.get_global_rect().end.y <= prompt._yes.global_position.y,
 				"warning overlaps buttons at %s" % extent)
-			check(prompt._no.size.y >= 44, "click target below 44 px")
-		check(prompt._no.has_focus(), "safe No action is not focused by default")
+			check(prompt._yes.size.y >= 44, "click target below 44 px")
+		if mode == 3:
+			check(prompt._yes.has_focus() and prompt._no == null, "acknowledgement lacks one focused OK action")
+		else:
+			check(prompt._no.has_focus(), "safe No action is not focused by default")
 		prompt.free()
+	for action in ["Enter", "Space", "Escape", "click"]:
+		var prompt := ReturnPrompt.new()
+		prompt.acknowledgement_only = true
+		prompt.process_mode = Node.PROCESS_MODE_ALWAYS
+		root.add_child(prompt)
+		paused = true
+		await settle()
+		var results: Array[bool] = []
+		prompt.confirmed.connect(func(): results.append(true))
+		prompt.cancelled.connect(func(): results.append(false))
+		if action == "click":
+			for pressed in [true, false]:
+				var click := InputEventMouseButton.new()
+				click.button_index = MOUSE_BUTTON_LEFT
+				click.position = prompt._yes.get_global_rect().get_center()
+				click.pressed = pressed
+				root.push_input(click)
+		else:
+			var code: Key = {"Enter": KEY_ENTER, "Space": KEY_SPACE, "Escape": KEY_ESCAPE}[action]
+			root.push_input(key(code))
+			root.push_input(key(code, false))
+		check(results == [true], "paused acknowledgement action %s emitted %s" % [action, results])
+		prompt.free()
+		paused = false
 
 	root.size = Vector2i(1280, 720)
 	for action in ["Y", "N", "Escape", "default", "keyboard", "click"]:
@@ -81,5 +113,5 @@ func run() -> void:
 		prompt.free()
 	for failure in failures:
 		push_error("RETURN_PROMPT_AUDIT: " + failure)
-	print("RETURN_PROMPT_AUDIT: %d failures; 3 contexts, 6 live sizes, keyboard and mouse" % failures.size())
+	print("RETURN_PROMPT_AUDIT: %d failures; 4 contexts, 6 live sizes, keyboard and mouse" % failures.size())
 	quit(0 if failures.is_empty() else 1)

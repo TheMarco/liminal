@@ -151,6 +151,8 @@ var _focus_text := ""
 var _interaction_scan_left := 0.0
 var _obstructed_seconds := 0.0
 var _obstruction_report_at := 2.0
+var _floor_slide_recoveries := 0
+var _floor_recovery_report_after := 0
 
 
 func _init() -> void:
@@ -649,7 +651,10 @@ func _physics_process(dt: float) -> void:
 			velocity.y = lerpf(velocity.y, -2.2, minf(1.0, dt * 6.0))
 	var vy_before := velocity.y
 	var before_move := global_position
+	var intended_flat_motion := Vector3(velocity.x, 0.0, velocity.z) * dt
 	move_and_slide()
+	if not sliding and not _on_ladder:
+		_recover_flat_floor_contact(before_move, intended_flat_motion, dt)
 	_record_movement_obstruction(wish, global_position - before_move, dt, sliding)
 	if level_theme == 9 and not sliding and flat.length_squared() > 0.01:
 		_push_pool_floats(flat)
@@ -696,6 +701,35 @@ func _physics_process(dt: float) -> void:
 		_cam_y = lerpf(_cam_y, CAM_H - _land, minf(1.0, dt * 6.0))
 
 
+## At a floor/prop corner Godot can spend every slide iteration reporting the
+## floor's recovery margin, without advancing even when walking away. Recheck
+## only that exhausted, flat-floor case against the actual capsule. The sweep
+## still collides with furniture/walls; no teleport or collision exception.
+func _recover_flat_floor_contact(before: Vector3, motion: Vector3, dt: float) -> void:
+	if not is_on_floor() or get_slide_collision_count() < max_slides \
+			or motion.length_squared() < 0.000001 or dt <= 0.0:
+		return
+	var moved := global_position - before
+	if Vector2(moved.x, moved.z).length_squared() > 0.000001: return
+	for i in get_slide_collision_count():
+		var hit := get_slide_collision(i)
+		for contact in hit.get_collision_count():
+			if hit.get_normal(contact).dot(Vector3.UP) < 0.9999: return
+	var from := global_position
+	move_and_collide(motion.limit_length(SPRINT_SPEED / 30.0), false, 0.0, false, 6)
+	var recovered := global_position - from
+	velocity.x = recovered.x / dt
+	velocity.z = recovered.z / dt
+	if Vector2(recovered.x, recovered.z).length_squared() < 0.000001: return
+	_floor_slide_recoveries += 1
+	var now := Time.get_ticks_msec()
+	if now >= _floor_recovery_report_after:
+		_floor_recovery_report_after = now + 1000
+		RuntimeDiagnostics.mark("floor_slide_recovered", {
+			"position": str(from), "movement": str(recovered),
+			"recoveries": _floor_slide_recoveries, "level": level_theme})
+
+
 func _record_movement_obstruction(wish: Vector3, moved: Vector3, dt: float, sliding: bool) -> void:
 	# Ordinary walls also qualify: this is evidence of blocked motion, not an
 	# automatic stuck verdict. Never teleport or alter collisions here.
@@ -716,20 +750,54 @@ func _record_movement_obstruction(wish: Vector3, moved: Vector3, dt: float, slid
 	var contacts: Array[Dictionary] = []
 	for i in mini(get_slide_collision_count(), 4):
 		var hit := get_slide_collision(i)
-		var collider := hit.get_collider() as CollisionObject3D
-		if collider == null: continue
-		var owner := collider.shape_owner_get_owner(collider.shape_find_owner(hit.get_collider_shape_index())) as Node3D
-		var contact := {"body": str(collider.get_path()), "normal": str(hit.get_normal()),
-			"position": str(hit.get_position()), "shape_index": hit.get_collider_shape_index()}
-		if owner != null:
-			contact["shape_node"] = str(owner.get_path())
-			contact["shape_transform"] = str(owner.global_transform)
-			if owner is CollisionShape3D and owner.shape is BoxShape3D:
-				contact["box_size"] = str(owner.shape.size)
-		contacts.append(contact)
+		for j in mini(hit.get_collision_count(), 4):
+			var collider := hit.get_collider(j) as CollisionObject3D
+			if collider == null: continue
+			var owner := collider.shape_owner_get_owner(collider.shape_find_owner(hit.get_collider_shape_index(j))) as Node3D
+			var contact := {"body": str(collider.get_path()), "normal": str(hit.get_normal(j)),
+				"position": str(hit.get_position(j)), "shape_index": hit.get_collider_shape_index(j)}
+			if owner != null:
+				contact["shape_node"] = str(owner.get_path())
+				contact["shape_transform"] = str(owner.global_transform)
+				if owner is CollisionShape3D and owner.shape is BoxShape3D:
+					contact["box_size"] = str(owner.shape.size)
+			contacts.append(contact)
 	RuntimeDiagnostics.mark("movement_obstructed", {"seconds": _obstructed_seconds,
 		"level": level_theme, "position": str(global_position), "wish": str(wish),
-		"on_floor": is_on_floor(), "contacts": contacts}, true)
+		"on_floor": is_on_floor(), "contacts": contacts,
+		"overlaps": _movement_overlap_details(), "photo_aim": photo_aim,
+		"charging": is_charging()}, true)
+
+
+## Only queried when a sustained obstruction is reported, not every frame.
+## A slightly inset capsule omits ordinary floor/wall contact but finds shapes
+## that materialized inside the player and may produce no useful slide normal.
+func _movement_overlap_details() -> Array[Dictionary]:
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = BODY_RADIUS - 0.01
+	capsule.height = BODY_HEIGHT - 0.02
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = capsule
+	query.transform = Transform3D(Basis.IDENTITY, global_position + Vector3.UP * 0.9)
+	query.collision_mask = collision_mask
+	query.exclude = [get_rid()]
+	var overlaps: Array[Dictionary] = []
+	for hit in get_world_3d().direct_space_state.intersect_shape(query, 8):
+		var collider := hit.collider as CollisionObject3D
+		if collider == null: continue
+		var owner := collider.shape_owner_get_owner(collider.shape_find_owner(int(hit.shape))) as Node3D
+		var entry := {"body": str(collider.get_path()), "shape_index": int(hit.shape)}
+		if owner != null:
+			entry["shape_node"] = str(owner.get_path())
+			entry["shape_transform"] = str(owner.global_transform)
+			if owner is CollisionShape3D and owner.shape != null:
+				entry["shape_type"] = owner.shape.get_class()
+				if owner.shape is BoxShape3D: entry["box_size"] = str(owner.shape.size)
+				elif owner.shape is CylinderShape3D or owner.shape is CapsuleShape3D:
+					entry["radius"] = owner.shape.radius
+					entry["height"] = owner.shape.height
+		overlaps.append(entry)
+	return overlaps
 
 
 func _push_pool_floats(intended: Vector3) -> void:

@@ -5149,7 +5149,10 @@ func _office_wall_art_layout(member: Vector2i, dir: int) -> Dictionary:
 ## decoration and its audit so the two cannot drift.
 func _wall_mount_blockers(ignore: Node = null) -> Array[AABB]:
 	var volumes: Array[AABB] = []
-	_collect_mount_blockers(self, Transform3D.IDENTITY, true, ignore, volumes)
+	# Mount candidates are chunk-local. Streamed chunks already have their
+	# world position before decoration runs, unlike synchronous constructors.
+	for child in get_children():
+		_collect_mount_blockers(child, Transform3D.IDENTITY, visible, ignore, volumes)
 	return volumes
 
 

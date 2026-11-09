@@ -14,7 +14,7 @@ class_name Sfx
 const DIR := "res://sounds/%s.mp3"
 
 const BED_TARGET := -37.0    # ~9 dB under the music: present, never leading
-const WALK_TARGET := -37.0   # transient, so it still cuts through the bed
+const WALK_TARGET := -41.0   # softer self-footsteps; preserve each surface's relative balance
 
 # theme -> [file, measured mean dB]. The Annex uses the user-supplied 30-second
 # ambient loop as its only continuous score; main.gd explicitly suppresses

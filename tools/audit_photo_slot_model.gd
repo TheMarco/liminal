@@ -14,6 +14,7 @@ func models(node: Node) -> Array[Node3D]:
 
 
 func run() -> void:
+	await _check_live_landing_collision()
 	expect(Chunk.BLEED_PROPS[0][0] == Chunk.CASINO_SLOT_PATHS[0], "Casino bleed uses retired slot")
 	var cases := 0
 	var types := [PhotoAnomaly.Type.PLACEMENT, PhotoAnomaly.Type.DUPLICATE,
@@ -44,6 +45,8 @@ func run() -> void:
 						"Duplicate cabinets overlap or lack their 9cm gap")
 				if kind == PhotoAnomaly.Type.PLACEMENT:
 					var pivot := anomaly._placement_pivot
+					expect(anomaly.find_children("*", "StaticBody3D", true, false).is_empty(),
+						"ceiling-only cabinet blocks walking before landing")
 					var floor_y := Chunk.cell_floor_h(ws, cell, 0)
 					expect(anomaly._placement_rest_y >= floor_y and anomaly._placement_rest_y < floor_y + 0.02,
 						"Cabinet landing origin does not match floor")
@@ -52,7 +55,42 @@ func run() -> void:
 					expect(pivot.position.y < before and is_equal_approx(pivot.position.y, anomaly._placement_rest_y),
 						"Documented cabinet did not drop to floor")
 					expect(models(anomaly).size() == 2, "Dropped cabinet lost modern lens/eye copies")
+					var bodies := anomaly.find_children("*", "StaticBody3D", true, false)
+					expect(bodies.size() == 1 and pivot.has_node("LandedCollision"),
+						"landed eye-visible cabinet has no collision or lens copy gained collision")
+					expect(anomaly.occlusion_excludes().size() == 1,
+						"landed cabinet blocks the anomaly's own photo rays")
 				anomaly.free()
 				cases += 1
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	finish("%d modern casino evidence cases, ceiling cap, duplicate spacing and restored drops" % cases)
+
+
+func _check_live_landing_collision() -> void:
+	var anomaly := PhotoAnomaly.new()
+	anomaly.configure("live-slot-landing", PhotoAnomaly.Type.PLACEMENT,
+		Vector2i.ZERO, WorldGen.level_seed(21, 0), 0, 0, 6.0)
+	root.add_child(anomaly)
+	var pivot := anomaly._placement_pivot
+	anomaly.resolve()
+	expect(await await_until(func(): return pivot.has_node("LandedCollision"), 2000),
+		"animated cabinet landed without enabling collision")
+	await create_timer(0.2).timeout
+	await physics_frame
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = Player.BODY_RADIUS
+	capsule.height = Player.BODY_HEIGHT
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = capsule
+	query.collision_mask = 1
+	var forward := pivot.global_basis.z.normalized()
+	forward.y = 0.0
+	forward = forward.normalized()
+	query.transform.origin = pivot.global_position + forward * 3.0 + Vector3.UP * 0.9
+	query.motion = -forward * 6.0
+	expect(root.world_3d.direct_space_state.cast_motion(query)[0] < 0.5,
+		"player capsule walks through the landed photographed cabinet")
+	var lens := anomaly.get_node("DocumentedCeilingPose")
+	expect(lens.find_children("*", "CollisionObject3D", true, false).is_empty(),
+		"camera-only ceiling memory gained invisible collision")
+	await teardown_game(anomaly)

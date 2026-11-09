@@ -1,5 +1,5 @@
 extends SceneTree
-## Regression coverage for the three Sep 13 playtest screenshots.
+## Regression coverage for reported prop-placement screenshots.
 ## godot --headless --path . --script tools/audit_reported_placement.gd
 
 const RUN_SEED := 1898940031
@@ -22,6 +22,7 @@ func run() -> void:
 	await check_writing()
 	check_airport()
 	check_asylum()
+	check_school_support()
 	for failure in failures:
 		print("  FAIL " + failure)
 	print("reported placement audit: %d failures; %d phrases/poses, %d booths, %d doors" \
@@ -29,6 +30,64 @@ func run() -> void:
 	Chunk.finish_prop_preloads()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures.is_empty() else 1)
+
+
+func check_school_support() -> void:
+	var ws := WorldGen.level_seed(RUN_SEED, 6)
+	var chunk: Chunk
+	for x in 12:
+		for z in 12:
+			var cell := Vector2i(x, z)
+			if WorldGen.room_id(ws, cell) != cell or WorldGen.corridor(ws, cell) != 0:
+				continue
+			var candidate := Chunk.new(ws, cell, 6)
+			if not candidate._doorway_clearance_rects().is_empty():
+				chunk = candidate
+				break
+			candidate.free()
+		if chunk != null: break
+	check(chunk != null, "school regression found no room with a doorway")
+	if chunk == null: return
+	chunk._level_builder._sch_classroom()
+	var pieces := 0
+	for supplies in chunk.find_children("*", "Node3D", true, false):
+		if not supplies.has_meta("school_teacher_stationery"): continue
+		var station := supplies.get_parent()
+		var desk: Node3D
+		for sibling in station.get_children():
+			if str(sibling.get_meta("surface_wear_prop", "")) == "metal_office_desk":
+				desk = sibling
+		check(desk != null, "stationery lost its supporting desk")
+		if desk == null: continue
+		var top := mesh_bounds(desk).end.y
+		for mesh in supplies.find_children("*", "MeshInstance3D", true, false):
+			var xf := Transform3D.IDENTITY
+			var ancestor: Node = mesh.get_parent()
+			while ancestor != station:
+				if ancestor is Node3D: xf = ancestor.transform * xf
+				ancestor = ancestor.get_parent()
+			var bottom := mesh_bounds(mesh, xf).position.y
+			check(absf(bottom - top) < 0.004,
+				"school desk piece floats or sinks: %s gap=%.4f" % [mesh.name, bottom - top])
+			pieces += 1
+	check(pieces >= 9, "stationery regression did not inspect every loose component")
+	# Force the actual stage through a real doorway, then use the production
+	# cull. Its high lectern/microphone and both colliders must leave with it.
+	var centre: Vector2 = chunk._doorway_clearance_rects()[0].get_center()
+	var n0 := chunk.get_child_count()
+	var b0 := chunk.body.get_child_count()
+	var stage: Node3D = chunk._level_builder._sch_auditorium_stage(Vector3(centre.x, 0, centre.y))
+	check(chunk.get_child_count() == n0 + 1, "stage leaked independent supported props")
+	var deck := mesh_bounds(stage.get_node("StageDeck"))
+	var lectern := mesh_bounds(stage.get_node("Lectern"))
+	check(absf(deck.position.y) < 0.001 and absf(lectern.position.y - deck.end.y) < 0.001,
+		"stage or lectern lacks surface support")
+	check(not chunk._furniture_mutation_eligible(stage), "structural stage can move away from its curtains")
+	check(chunk.body.get_child_count() == b0 + 2, "stage collision was duplicated or omitted")
+	chunk._clear_furnishings_from_doorways(n0, b0)
+	check(chunk.get_child_count() == n0, "doorway cull left floating stage props")
+	check(chunk.body.get_child_count() == b0, "doorway cull left invisible stage collision")
+	chunk.free()
 
 
 func check_writing() -> void:

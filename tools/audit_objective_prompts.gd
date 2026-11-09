@@ -4,6 +4,25 @@ extends "res://tools/lib/audit_base.gd"
 func run() -> void:
 	var game := await boot_game(7)
 	expect(not game._progress_enabled and game.descent, "audit must use --mode=descent --nologo")
+	# The first photo objective must survive slow reading and pause danger.
+	game._show_photo_brief()
+	expect(is_instance_valid(game._return_prompt) and paused, "photo brief did not open a paused acknowledgement")
+	if is_instance_valid(game._return_prompt):
+		var before: Vector3 = game.player.position
+		var prompt: ReturnPrompt = game._return_prompt
+		var clock_before: float = game.run.elapsed
+		var grabbed_before: int = game.player._grabbed
+		await create_timer(3.0, true).timeout
+		expect(is_instance_valid(prompt) and game._return_prompt == prompt and paused,
+			"photo brief expired without acknowledgement")
+		expect(game.player.position == before and game.run.elapsed == clock_before,
+			"gameplay advanced while reading the photo brief")
+		root.push_input(_key(KEY_ENTER, true))
+		root.push_input(_key(KEY_ENTER, false))
+		expect(not paused and game._return_prompt == null and game.player._grabbed > grabbed_before,
+			"acknowledgement did not resume gameplay and request mouse look")
+		if DisplayServer.get_name() != "headless":
+			expect(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "acknowledgement did not capture the native mouse")
 	game._set_presence(game.Presence.SILENT)
 	game.run.set_process(false)
 	game.player.set_physics_process(false)
@@ -83,6 +102,13 @@ func run() -> void:
 	await _settle_realm(game)
 	await teardown_game(game)
 	finish("objective prompts and dynamic unlocks")
+
+func _key(code: Key, pressed: bool) -> InputEventKey:
+	var event := InputEventKey.new()
+	event.keycode = code
+	event.physical_keycode = code
+	event.pressed = pressed
+	return event
 
 func _settle_realm(game: Node) -> void:
 	var realm: RealmExcursion = game._realm_visit

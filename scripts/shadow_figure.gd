@@ -258,6 +258,7 @@ var suppressed := false
 var _approach_announced := false
 var _approach_hold := 0.0
 var _was_sighted := true
+var _unrenderable_contact_reported := false
 ## Whether the player could actually see it last frame — in frustum AND not
 ## behind anything. The seeing is what governs how fast it closes: watched,
 ## it creeps; unseen, it lunges.
@@ -750,6 +751,15 @@ func _advance(dt: float, observed := true) -> void:
 		if grace > 0.0 or _walker._manifestation < 0.95:
 			_travel_speed = 0.0
 			return
+		var rendering := _walker.body_render_state(player.cam)
+		if int(rendering.drawable_meshes) == 0 or float(rendering.fade) <= 0.01 \
+				or float(rendering.fragmented) >= 0.99:
+			if not _unrenderable_contact_reported:
+				RuntimeDiagnostics.mark("figure_contact_blocked", contact_diagnostics(), true)
+				_unrenderable_contact_reported = true
+			_travel_speed = 0.0
+			return
+		_unrenderable_contact_reported = false
 		# The lit torch is a ward. While the beam lives it comes to arm's
 		# length and looms there; the kill waits for the dark — a dead cell,
 		# or a hand that switches off too soon.
@@ -1442,6 +1452,18 @@ func _ignite(refund_torch := true, play_sound := true) -> void:
 			pl.play()
 
 
+## Capture eligibility and camera state at contact, before the caught shot changes them.
+func contact_diagnostics() -> Dictionary:
+	return {"variant": variant, "position": str(global_position),
+		"player_position": str(player.global_position),
+		"distance": global_position.distance_to(player.global_position),
+		"seen_before": _seen, "observed": _observed, "line_of_sight": _was_sighted,
+		"grace": grace, "appearance_delay": appearance_delay,
+		"camera_mask": player.cam.cull_mask,
+		"torch_on": player.flashlight != null and player.flashlight.visible,
+		"visual": _walker.body_render_state(player.cam) if _walker != null else {}}
+
+
 ## It got to you. The owning game mode decides the outcome.
 func _seize() -> void:
 	if _fade >= 0.0 or GameplayFrameGuard.is_recovering():
@@ -1450,6 +1472,7 @@ func _seize() -> void:
 	if is_instance_valid(player) and player.try_emergency_flash():
 		_ignite(false)
 		return
+	RuntimeDiagnostics.mark("figure_contact", contact_diagnostics(), true)
 	_fade = 0.45
 	_fade_len = 0.45
 	# The sound of this belongs to the player, not to the room, so the owner

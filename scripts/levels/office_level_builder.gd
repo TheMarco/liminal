@@ -939,8 +939,13 @@ func _office_boardroom() -> void:
 	scene.adopt_local(table_set, head_chair)
 	scene.bind_furnishing_colliders(table_set, table_mark)
 	# Dark wall-sized presentation display with a stubborn status line.
-	scene.fitted_model("res://models/scenario/office/wall_display.glb", null,
+	# Keep screen, caption and physics together if doorway clearance removes it.
+	var display_mark := scene.collider_mark()
+	var display_set := scene.furnishing_pivot(Vector3.ZERO, 0.0, "office_boardroom_display", false)
+	scene.fitted_model("res://models/scenario/office/wall_display.glb", display_set,
 		c + Vector3(-8.9, 1.75, 0), Vector3(5.8, 2.3, 0.10), PI / 2.0, false)
+	scene.collider_yaw_box(c + Vector3(-8.9, 1.75, 0), Vector3(5.8, 2.3, 0.10), PI / 2.0)
+	scene.bind_furnishing_colliders(display_set, display_mark)
 	var screen = Label3D.new()
 	screen.text = "QUARTER  48\nATTENDANCE  0"
 	screen.font_size = 92
@@ -948,7 +953,7 @@ func _office_boardroom() -> void:
 	screen.modulate = Color(0.42, 1.0, 0.66)
 	screen.position = c + Vector3(-8.82, 1.78, 0)
 	screen.rotation.y = PI / 2.0
-	scene.add_node(screen)
+	display_set.add_child(screen)
 	# Real models break up the procedural table geometry at the room edges.
 	scene.cc0_prop("drawer_cabinet", c + Vector3(8.8, 0, -7.7), -PI / 2.0)
 	scene.collider_yaw_box(c + Vector3(8.8, 0.95, -7.7), Vector3(1.15, 1.9, 0.52), -PI / 2.0)

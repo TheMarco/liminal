@@ -531,6 +531,23 @@ func set_manifestation(value: float) -> void:
 	manifestation_changed.emit(_manifestation)
 
 
+## Logical render eligibility, not proof of pixels reaching the GPU. Frustum
+## is intentionally excluded: an otherwise visible pursuer may attack from behind.
+func body_render_state(camera: Camera3D) -> Dictionary:
+	var meshes := 0
+	var drawable := 0
+	if is_instance_valid(_model):
+		for mesh in _meshes(_model):
+			if mesh.mesh == null: continue
+			meshes += 1
+			if mesh.is_visible_in_tree() and camera != null and (mesh.layers & camera.cull_mask) != 0:
+				drawable += 1
+	return {"model": model_index, "model_loaded": is_instance_valid(_model),
+		"meshes": meshes, "drawable_meshes": drawable, "manifestation": _manifestation,
+		"fade": _parameters.get(&"fade", 1.0),
+		"fragmented": _parameters.get(&"fragmented", 0.0)}
+
+
 func appear(duration := 0.7) -> void:
 	_transition_to(1.0, duration)
 

@@ -1169,19 +1169,13 @@ func _sch_gym() -> void:
 func _sch_auditorium() -> void:
 	var c = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
 	var stage = c + Vector3(0, 0, -8.2)
-	scene.rounded_box(stage + Vector3(0, 0.32, 0), Vector3(15.5, 0.64, 3.5), Mats.sch_desk(), 0.025)
-	scene.collider_box(stage + Vector3(0, 0.34, 0), Vector3(15.6, 0.68, 3.6))
+	_sch_auditorium_stage(stage)
 	# Heavy red curtains, closed except for an uneasy centre gap.
 	for side: float in [-1.0, 1.0]:
 		for i in 6:
 			var x = side * (1.0 + 1.15 * float(i))
 			scene.box(stage + Vector3(x, 3.1, -1.58), Vector3(0.72, 5.3, 0.10),
 				Mats.velvet() if i % 2 == 0 else Mats.velvet2(), false)
-	# Lectern and a microphone left facing the empty seats.
-	scene.rounded_box(stage + Vector3(-2.0, 1.05, 0.35), Vector3(1.1, 1.45, 0.65), Mats.darkwood(), 0.035)
-	var stem = scene.cylinder(stage + Vector3(1.6, 1.35, 0.35), 0.025, 1.9, Mats.charcoal(), false)
-	stem.rotation.z = -0.12
-	scene.sphere(stage + Vector3(1.72, 2.28, 0.35), 0.06, Mats.charcoal())
 	# Six rows, split by the centre aisle, using the same authored blue plastic
 	# chair as classrooms instead of simplified procedural seat blocks.
 	for row in 6:
@@ -1201,6 +1195,31 @@ func _sch_auditorium() -> void:
 	# Structural openings add their own housed EXIT cabinets. Decorative raw
 	# words on this back wall looked like floating navigation markers and could
 	# imply doors that do not exist, so the auditorium adds none of its own.
+
+
+func _sch_auditorium_stage(at: Vector3) -> Node3D:
+	# A doorway may remove this wide deck. Its supported props and colliders
+	# must leave with it, rather than surviving in mid-air over the floor.
+	var b0 := scene.collider_mark()
+	var group := scene.furnishing_pivot(at, 0.0, "school_auditorium_stage")
+	group.set_meta("fixed_furnishing", true)
+	const DECK_TOP := 0.64
+	var deck := scene.model_rounded_box(group, Vector3(0, DECK_TOP / 2.0, 0),
+		Vector3(15.5, DECK_TOP, 3.5), Mats.sch_desk(), 0.025)
+	deck.name = "StageDeck"
+	scene.collider_box(at + deck.position, Vector3(15.5, DECK_TOP, 3.5))
+	var lectern := scene.model_rounded_box(group, Vector3(-2.0, DECK_TOP + 1.45 / 2.0, 0.35),
+		Vector3(1.1, 1.45, 0.65), Mats.darkwood(), 0.035)
+	lectern.name = "Lectern"
+	scene.collider_box(at + lectern.position, Vector3(1.1, 1.45, 0.65))
+	var foot := Vector3(1.6, DECK_TOP, 0.35)
+	var axis := Vector3.UP.rotated(Vector3.FORWARD, 0.12)
+	var stem := scene.model_cylinder(group, foot + axis * 0.95, 0.025, 1.9, Mats.charcoal())
+	stem.rotation.z = -0.12
+	var head := scene.sphere(at + foot + axis * 1.9, 0.06, Mats.charcoal())
+	scene.adopt_local(group, head)
+	scene.bind_furnishing_colliders(group, b0)
+	return group
 
 
 ## Backboard, ring, and the folded arms holding it off the wall.

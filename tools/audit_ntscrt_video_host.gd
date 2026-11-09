@@ -165,6 +165,32 @@ func _run() -> void:
 		game._events._play_knocks()
 		await create_timer(0.8).timeout
 		check(game._event_hint.text=="THREE KNOCKS FROM BEHIND THE WALL" and host.presenter.last_error.is_empty(),"knocks event %d presents its caption without a video failure" % (attempt+1))
+	# Perception blur is independent of CRT/VHS. Verify the support A/B switch
+	# and its diagnostic state against the real presentation path.
+	var saved_video: Dictionary = game._settings.values.duplicate(true)
+	game._settings.values.vhs_enabled = false
+	game._settings.values.crt_enabled = false
+	game._settings.values.receiver_enabled = false
+	game._settings.changed.emit()
+	await frames(3)
+	clear_focus_pause()
+	var effect = game._reality_aftershock
+	var saved_debug: bool = effect.debug_controls
+	effect.debug_controls = true
+	effect.trigger()
+	await create_timer(0.15).timeout
+	var context: Dictionary = game._runtime_diagnostic_context()
+	check(not context.video.gpu_effects_active and context.perception.active and context.perception.strength > 0.0,
+		"diagnostics distinguish active perception blur from disabled CRT/VHS")
+	key(KEY_F9)
+	await frames(2)
+	context = game._runtime_diagnostic_context()
+	check(not context.perception.enabled and not context.perception.active and game._event_hint.text=="REALITY AFTERSHOCK: OFF",
+		"support A/B key disables perception blur and records its state")
+	effect.enabled = true
+	effect.debug_controls = saved_debug
+	game._settings.values = saved_video
+	game._settings.changed.emit()
 	# Preparing a new floor under the covered title must not depend on the
 	# suspended streamer's _process callback. CLI mode keeps saves isolated.
 	game._build_title(true)

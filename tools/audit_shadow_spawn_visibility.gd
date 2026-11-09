@@ -33,8 +33,28 @@ func run() -> void:
 	expect(not manager._spawn_body_visible(ground),
 		"hound body was accepted behind a low Office partition")
 	partition.queue_free()
+	# Exercise the creation boundary with a ready model, so a rejected spawn
+	# cannot accidentally pass because its model is still loading.
+	ShadowWalkerVisual.request_model(0)
+	while not ShadowWalkerVisual.is_model_ready(0): await process_frame
+	manager._dark_bag.assign([0])
+	expect(not manager._spawn_at(actor.global_position + Vector3(4.5, 0, 0), true, 1.2),
+		"directed encounter accepted a spawn inside the player safety radius")
+	actor.teleport(Vector3(5, 0, 6))
+	expect(not manager._spawn_at(ground, true, 1.2),
+		"spawn checked an old player position instead of the current position")
+	actor.teleport(Vector3(2, 0, 6))
+	manager.photo_reviewing = true
+	expect(not manager._spawn_at(ground, true, 1.2),
+		"arrival bypassed the opaque-photo hold")
+	manager.photo_reviewing = false
+	expect(not manager._spawn_at(ground, true, 1.2),
+		"arrival bypassed the post-photo reaction window")
+	manager._physics_process(ShadowFigures.PHOTO_REACTION_SECONDS + 0.1)
+	expect(manager._spawn_at(ground, true, 1.2),
+		"legal spawn did not resume at the minimum distance after review")
 	await teardown_game(world)
-	finish("shadow spawn visibility")
+	finish("shadow spawn visibility, current-player distance and photo hold")
 
 
 func _wall(parent: Node, at: Vector3, size: Vector3) -> StaticBody3D:

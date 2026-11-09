@@ -2,8 +2,8 @@ class_name PhotoCamera
 extends CanvasLayer
 ## The phone's other function. Hold right mouse to raise the camera, left
 ## mouse to take the picture. The torch is untouched — a lit torch keeps
-## warding while you shoot; the cost of a photograph is the seconds your eyes
-## spend on it.
+## warding while you shoot. Pursuit waits while the developed print hides the
+## world, then resumes after a brief chance to react.
 ##
 ## The camcorder is the detector. Within PROXIMITY_RANGE of an undocumented
 ## anomaly the OSD picks up interference (tracking bars, a stuttering REC
@@ -75,6 +75,7 @@ var _shutter: AudioStreamPlayer
 var _focus_tick: AudioStreamPlayer
 var _focus_scan_left := 0.0
 var _capturing := false
+var _review_figures: ShadowFigures
 var _static: AudioStreamPlayer
 var _click: AudioStreamPlayer
 var _click_left := 0.0
@@ -258,6 +259,7 @@ func _process(dt: float) -> void:
 			# camera down (owner, 2026-08-20). Whatever answers the
 			# photograph is met with bare eyes.
 			_lower()
+			_end_review_safety()
 			review_finished.emit()
 			_release_review_resolutions()
 			if _pending_risk:
@@ -436,6 +438,7 @@ func _take_photo() -> void:
 	if not _raised:
 		return
 	_capturing = true
+	_begin_review_safety()
 	_shutter.pitch_scale = randf_range(1.35, 1.5)
 	_shutter.play()
 	_flash.color = Color(1, 1, 1, 0.0 if GameSettings.flashing_reduced() else 0.85)
@@ -563,6 +566,28 @@ func finish_for_transition() -> void:
 	_marks.visible = false
 	_release_review_resolutions(false)
 	_lower()
+	_end_review_safety()
+
+
+func _begin_review_safety() -> void:
+	if not is_instance_valid(figures): return
+	_review_figures = figures
+	_review_figures.photo_reviewing = true
+	RuntimeDiagnostics.mark("photo_threat_hold_started", {
+		"figures": figures.active_figures().size(),
+		"player_position": str(player.global_position)})
+
+
+func _end_review_safety() -> void:
+	if not is_instance_valid(_review_figures): return
+	_review_figures.photo_reviewing = false
+	_review_figures = null
+	RuntimeDiagnostics.mark("photo_threat_hold_ended", {
+		"reaction_seconds": ShadowFigures.PHOTO_REACTION_SECONDS})
+
+
+func _exit_tree() -> void:
+	_end_review_safety()
 
 
 ## The developed print occupies the same window the player framed. Deriving
@@ -735,6 +760,7 @@ func _roll_risk() -> void:
 		if events != null:
 			events.photo_response()
 	elif figures != null:
+		RuntimeDiagnostics.mark("photo_encounter_queued", {"delay": ENCOUNTER_DELAY})
 		figures.force_encounter(ENCOUNTER_DELAY)
 
 

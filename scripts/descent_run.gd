@@ -295,6 +295,15 @@ func finish(won: bool, cause := DeathCause.UNKNOWN) -> void:
 	death_cause = DeathCause.UNKNOWN if won else cause
 	ended = true
 	suspended = true
+	RuntimeDiagnostics.mark("descent_run_ended", {
+		"won": won, "cause": DeathCause.keys()[death_cause],
+		"seed": world_seed, "floor": floor_idx, "elapsed": elapsed,
+		"blackout": blackout, "blackout_locate": _blackout_locate,
+		"blackout_seconds_left": _blackout_left, "blackout_grace": _blackout_grace,
+		"player_position": str(player.global_position) if is_instance_valid(player) and player.is_inside_tree() else "",
+		"player_velocity": str(player.velocity) if is_instance_valid(player) else "",
+		"torch_on": is_instance_valid(player) and player.flashlight != null and player.flashlight.visible,
+	}, true)
 	run_ended.emit(won)
 
 

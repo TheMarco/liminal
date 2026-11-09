@@ -27,6 +27,15 @@ func sign_support_checks(chunk: Chunk) -> int:
 			continue
 		signs += 1
 		var xf := local_transform(label, chunk)
+		for other in chunk.find_children("*", "Label3D", true, false):
+			var neon := false
+			for entry in Chunk.CASINO_NEON:
+				neon = neon or other.text == entry[0]
+			if not neon:
+				continue
+			var relative: Vector3 = xf.affine_inverse() * local_transform(other, chunk).origin
+			check(not (absf(relative.x) < 1.5 and absf(relative.y) < 0.5 and absf(relative.z) < 0.15),
+				"Overlapping casino signs: seed=%d cell=%s text=%s" % [chunk.wseed, chunk.cell, other.text])
 		# Probe behind both ends of the letters and their lower neon tube.
 		# Actual wall collision must support the complete sign, even when the
 		# room's cabinets have been shifted away from the furnishing anchor.
@@ -55,11 +64,126 @@ func no_detached_header_checks(chunk: Chunk) -> void:
 			"Detached slot-bank header light returned")
 
 
+func sign_art_checks(chunk: Chunk) -> void:
+	for label in chunk.find_children("*", "Label3D", true, false):
+		if label.text != "S L O T S": continue
+		var sign_xf := local_transform(label, chunk)
+		# Reserve the lettering and its underline in the wall plane. Label3D
+		# bounds can still be empty while streamed construction is off-tree.
+		var sign_rect := Rect2(-1.2, -0.36, 2.4, 0.72)
+		for mount in chunk.get_children():
+			if not mount.has_meta("wall_art_mount"): continue
+			var relative: Transform3D = sign_xf.affine_inverse() * mount.transform
+			if absf(relative.origin.z) > 0.3 or absf(relative.basis.z.z) < 0.99: continue
+			var size: Vector2 = mount.get_meta("wall_art_size")
+			var lo := Vector2(INF, INF)
+			var hi := Vector2(-INF, -INF)
+			for x in [-0.5, 0.5]:
+				for y in [-0.5, 0.5]:
+					var p := relative * Vector3(x * size.x, y * size.y, 0)
+					lo = lo.min(Vector2(p.x, p.y))
+					hi = hi.max(Vector2(p.x, p.y))
+			check(not sign_rect.intersects(Rect2(lo, hi - lo)),
+				"SLOTS overlaps painting: seed=%d cell=%s art=%s" % [chunk.wseed, chunk.cell, mount.position])
+
+
+func stool_collision_checks(chunk: Chunk) -> int:
+	var seats: Array[CollisionShape3D] = []
+	var count := 0
+	for node in chunk.get_children():
+		if str(node.get_meta("attributed_furnishing", "")) != "casino_slot_stool":
+			continue
+		count += 1
+		var group := int(node.get_meta("furnishing_group", -1))
+		check(group >= 0, "Stool has no atomic collision group")
+		if group < 0: continue
+		var shapes := 0
+		for collider in chunk.body.get_children():
+			if int(collider.get_meta("furnishing_group", -2)) != group: continue
+			shapes += 1
+			check(collider.shape is CylinderShape3D, "Stool must have a round collision footprint")
+			if collider.shape is CylinderShape3D: seats.append(collider)
+			check(Vector2(collider.position.x, collider.position.z).distance_to(
+				Vector2(node.position.x, node.position.z)) < 0.001,
+				"Stool collider detached from visible seat")
+		check(shapes == 1, "Visible stool has %d colliders" % shapes)
+	for i in seats.size():
+		for j in range(i + 1, seats.size()):
+			var separation := Vector2(seats[i].position.x, seats[i].position.z).distance_to(
+				Vector2(seats[j].position.x, seats[j].position.z))
+			var gap: float = separation - seats[i].shape.radius - seats[j].shape.radius
+			check(gap >= Player.BODY_RADIUS * 2.0 + 0.025,
+				"Stool gap too narrow for player: %.3fm, seed=%d cell=%s" % [gap, chunk.wseed, chunk.cell])
+	check(chunk.atomic_furnishing_support_violations() == 0,
+		"Casino furnishing lost its support or left orphan collision")
+	return count
+
+
+func stool_walk_checks() -> void:
+	var chunk := Chunk.new(WorldGen.level_seed(4242, 0), Vector2i.ZERO, 0)
+	# Outside the generated room: exercise the real imported stool and physics
+	# without unrelated walls/furniture blocking the player's sweep.
+	for i in 2:
+		chunk._level_builder._slot_stool(Vector3(50.0 + 1.32 * i, 0, 50.0), 0.25 * i)
+	root.add_child(chunk)
+	await physics_frame
+	await physics_frame
+	var query := PhysicsShapeQueryParameters3D.new()
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = Player.BODY_RADIUS
+	capsule.height = Player.BODY_HEIGHT
+	query.shape = capsule
+	query.collision_mask = 1
+	query.margin = 0.001
+	query.motion = Vector3(0, 0, 4)
+	var space := root.world_3d.direct_space_state
+	for x in [50.0, 51.32]:
+		query.transform = Transform3D(Basis.IDENTITY, Vector3(x, Player.BODY_HEIGHT * 0.5 + 0.01, 48))
+		var sweep := space.cast_motion(query)
+		check(sweep[0] < 0.5, "Player capsule can walk through slot stool")
+	query.transform.origin.x = 50.66
+	check(space.cast_motion(query)[0] > 0.99, "Player cannot pass between neighbouring stools")
+	chunk.free()
+
+
+func streamed_sign_checks() -> void:
+	# This generated room had overlapping SLOTS and BUFFET before the fix.
+	var layouts: Array = []
+	for sliced in [false, true]:
+		var chunk := Chunk.new(756105833, Vector2i(4, -4), 0, null, sliced)
+		if sliced:
+			while not chunk.build_next_slice(): pass
+		check(sign_support_checks(chunk) == 1, "reproducing room lost its SLOTS sign")
+		sign_art_checks(chunk)
+		var layout: Array[String] = []
+		for label in chunk.find_children("*", "Label3D", true, false):
+			layout.append(str(label.text) + str(local_transform(label, chunk)))
+		layout.sort()
+		layouts.append(layout)
+		chunk.free()
+	check(layouts[0] == layouts[1], "sliced construction changed casino sign placement")
+	# Production streaming assigns the world offset BEFORE the decoration pass.
+	# This room placed a painting over SLOTS only with that construction order.
+	for sliced in [false, true]:
+		var cell := Vector2i(-5, -4)
+		var chunk := Chunk.new(651258107, cell, 0, null, sliced)
+		chunk.position = Vector3(cell.x * WorldGen.CELL_SIZE, 0, cell.y * WorldGen.CELL_SIZE)
+		if sliced:
+			while not chunk.build_next_slice(): pass
+		sign_art_checks(chunk)
+		check(sign_support_checks(chunk) > 0, "painting overlap fixture lost its sign")
+		var moved_bounds := chunk._wall_mount_blockers()
+		chunk.position = Vector3.ZERO
+		check(moved_bounds == chunk._wall_mount_blockers(), "wall fixture bounds depend on chunk position")
+		chunk.free()
+
+
 func _init() -> void:
 	call_deferred("run")
 
 
 func run() -> void:
+	await stool_walk_checks()
 	var ws := WorldGen.level_seed(4242, 0)
 	var chunk := Chunk.new(ws, Vector2i.ZERO, 0)
 	var shared := {}
@@ -112,6 +236,7 @@ func run() -> void:
 	chunk.free()
 	var rooms := 0
 	var machines := 0
+	var stools := 0
 	var kinds := {}
 	var sign_rooms := {"single": 0, "merged": 0}
 	var fixture_probe := Chunk.new(WorldGen.level_seed(4242, 0), Vector2i.ZERO, 0)
@@ -127,9 +252,11 @@ func run() -> void:
 					continue
 				var generated := Chunk.new(ws, cell, 0)
 				var sign_count := sign_support_checks(generated)
+				sign_art_checks(generated)
 				var room_kind := "single" if generated.room_n == 1 else "merged"
 				sign_rooms[room_kind] += sign_count
 				check(generated.doorway_clearance_violations() == 0, "Casino doorway blocked")
+				stools += stool_collision_checks(generated)
 				check(generated.slot_back_violations() == 0 and generated.slot_front_violations() == 0, "Missing cabinet volume")
 				for node in generated.get_children():
 					if node.has_meta("slot_machine"):
@@ -140,7 +267,9 @@ func run() -> void:
 				rooms += 1
 				generated.free()
 	check(rooms > 0 and machines > 0 and kinds.size() == 4, "Missing generated cabinet variety")
+	check(stools > 0, "Missing generated stool collision coverage")
 	check(sign_rooms.single > 0 and sign_rooms.merged > 0, "Missing single/merged room sign coverage")
+	streamed_sign_checks()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	print("CASINO_SLOTS: triangles=%s, 16 orientation/ceiling cases, %d rooms, %d cabinets, variants=%s, failures=%d" % [totals, rooms, machines, kinds, failures])
 	print("SLOTS wall support: %s" % sign_rooms)

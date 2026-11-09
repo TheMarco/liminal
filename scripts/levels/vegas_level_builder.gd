@@ -1,5 +1,6 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
+var _neon_sign_walls: Dictionary = {}
 
 
 func _casino_flush_mount(at: Vector3, lens_mat: Material) -> MeshInstance3D:
@@ -191,13 +192,16 @@ func _slot_machine(x: float, z: float, f: float, idx: int) -> void:
 
 
 ## Worn red-vinyl slot stool (Scenario-authored GLB) pulled up to a machine.
-## Returns false when the asset fails to load, so callers skip its collider.
+## The fitted collider belongs to the stool, including during doorway culling.
 func _slot_stool(cpos: Vector3, yaw: float) -> bool:
 	var stool := scene.attributed_floor_prop(Chunk.CASINO_STOOL_PATH, cpos, yaw,
-		Chunk.CASINO_STOOL_SCALE, Chunk.CASINO_STOOL_CENTRE, "casino_slot_stool")
+		Chunk.CASINO_STOOL_SCALE, Chunk.CASINO_STOOL_CENTRE, "casino_slot_stool", null, true)
 	if stool == null:
 		push_error("Casino slot stool asset failed to load: " + Chunk.CASINO_STOOL_PATH)
 		return false
+	var b0 := scene.collider_mark()
+	scene.collider_cylinder(cpos + Vector3(0, 0.325, 0), 0.25, 0.65)
+	scene.bind_furnishing_colliders(stool, b0)
 	return true
 
 
@@ -239,11 +243,10 @@ func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 	scene.bind_furnishing_colliders(pivot, b0)
 	if ctx.random01(60 + idx) < 0.85:
 		var yaw := (0.0 if f > 0.0 else PI) + (ctx.random01(66 + idx) - 0.5) * 0.6
-		var cpos := Vector3(x + (ctx.random01(96 + idx) - 0.5) * 0.16,
-			0, z + f * 0.95)
+		# Keep the 0.82m gap between 0.50m seats clear for the 0.76m player.
+		# Lateral jitter used to pinch this gap below the player's width.
+		var cpos := Vector3(x, 0, z + f * 0.95)
 		_slot_stool(cpos, yaw)
-		# Casino stools are loose, light furniture. They must not turn each
-		# machine face into a solid wall or strand the player between banks.
 	return
 
 ## Compatibility entry point for the existing alternate-cabinet preview.
@@ -418,10 +421,9 @@ func _procedural_slot_machine(x: float, z: float, f: float, idx: int) -> void:
 			m.add_child(knob)
 	if ctx.random01(60 + idx) < 0.85:
 		var cyaw = (0.0 if f > 0.0 else PI) + (ctx.random01(66 + idx) - 0.5) * 0.6
-		var cpos = Vector3(x + (ctx.random01(96 + idx) - 0.5) * 0.16, 0, z + f * 0.95)
+		var cpos = Vector3(x, 0, z + f * 0.95)
 		# a real worn bar stool pulled up to the machine
-		if _slot_stool(cpos, cyaw):
-			scene.collider_cylinder(cpos + Vector3(0, 0.4, 0), 0.25, 0.8)
+		_slot_stool(cpos, cyaw)
 	scene.collider_box(Vector3(x, 1.42, z), Vector3(0.68, 2.85, 0.72))
 
 
@@ -440,7 +442,9 @@ func _slots_sign() -> void:
 		return
 	for dir in 4:
 		var info = scene.edge_info(ctx.cell, dir)
-		if not info["wall"]:
+		# Wall decor precedes room props in both direct and sliced builds.
+		# Use another wall rather than writing SLOTS over ROOMS/BUFFET/etc.
+		if not info["wall"] or _neon_sign_walls.has(dir):
 			continue
 		var plane = (WorldGen.CELL_SIZE - Chunk.T / 2.0) if (dir == 0 or dir == 2) else (Chunk.T / 2.0)
 		var n = -1.0 if (dir == 0 or dir == 2) else 1.0
@@ -469,6 +473,7 @@ func _slots_sign() -> void:
 
 
 func _casino_neon(dir: int, plane: float) -> void:
+	_neon_sign_walls[dir] = true
 	var n = -1.0 if (dir == 0 or dir == 2) else 1.0
 	var inner = plane + n * (Chunk.T * 0.5)
 	var off = inner + n * 0.05

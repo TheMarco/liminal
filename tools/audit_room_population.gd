@@ -9,11 +9,13 @@ const OFFICE_STYLES := [WorldGen.OFFICE_EMPTY, WorldGen.OFFICE_CUBICLES,
 const DESK_PATH := "res://models/scenario/office/office_desk.glb"
 const BREAK_PATH := "res://models/scenario/office/breakroom_table.glb"
 const BOARD_PATH := "res://models/scenario/office/boardroom_table.glb"
+const DISPLAY_PATH := "res://models/scenario/office/wall_display.glb"
 
 var failures: Array[String] = []
 var rooms := 0
 var large_offices := 0
 var airport_halls := 0
+var displays := 0
 
 
 func _init() -> void:
@@ -56,9 +58,44 @@ func _chairs_supported(chunk: Chunk, label: String) -> void:
 		_check(supported, label + " has a chair without its desk or table")
 
 
-func _check_office(ws: int, cell: Vector2i, style: int) -> void:
-	var chunk := Chunk.new(ws, cell, 1)
-	var label := "Office seed %d cell %s style %d" % [ws, cell, style]
+func _display_collision(chunk: Chunk, label: String) -> void:
+	for node in chunk.find_children("*", "Node3D", true, false):
+		if str(node.get_meta("office_model", "")) != DISPLAY_PATH:
+			continue
+		displays += 1
+		var parent_xf := Transform3D.IDENTITY
+		var ancestor: Node = node.get_parent()
+		while ancestor != chunk:
+			if ancestor is Node3D:
+				parent_xf = ancestor.transform * parent_xf
+			ancestor = ancestor.get_parent()
+		var state := [AABB(), false]
+		chunk._collect_model_bounds(node, parent_xf, state)
+		var bounds: AABB = state[0]
+		# Probe the centre and inset corners of the visible screen, after room
+		# recentering/culling. An unrotated or detached collider fails too.
+		for fraction in [Vector3.ZERO, Vector3(-0.45, -0.45, -0.45),
+				Vector3(0.45, 0.45, 0.45), Vector3(-0.45, 0.45, 0.45),
+				Vector3(0.45, -0.45, -0.45)]:
+			var point: Vector3 = bounds.get_center() + bounds.size * fraction
+			var solid := false
+			for shape in chunk.body.get_children():
+				if not shape is CollisionShape3D or not shape.shape is BoxShape3D:
+					continue
+				var local: Vector3 = shape.transform.affine_inverse() * point
+				var half: Vector3 = shape.shape.size * 0.5
+				if local.abs().x <= half.x + 0.001 and local.abs().y <= half.y + 0.001 \
+						and local.abs().z <= half.z + 0.001:
+					solid = true
+					break
+			_check(solid, label + " has a walk-through display at " + str(point))
+
+
+func _check_office(ws: int, cell: Vector2i, style: int, sliced := false) -> void:
+	var chunk := Chunk.new(ws, cell, 1, null, sliced)
+	if sliced:
+		while not chunk.build_next_slice(): pass
+	var label := "Office seed %d cell %s style %d sliced=%s" % [ws, cell, style, sliced]
 	var span := chunk._room_span()
 	var large := chunk.room_n >= 2 or span.x > 12.1 or span.y > 12.1
 	var workstations := _groups(chunk, "office_workstation")
@@ -81,6 +118,7 @@ func _check_office(ws: int, cell: Vector2i, style: int) -> void:
 		for table in tables:
 			_check(_contains_model(table, BREAK_PATH), label + " break table has only chairs")
 	elif style == WorldGen.OFFICE_BOARDROOM:
+		_display_collision(chunk, label)
 		_check(board_tables.size() == 1, label + " lost its boardroom table")
 		for table in board_tables:
 			_check(_contains_model(table, BOARD_PATH), label + " boardroom has only chairs")
@@ -128,11 +166,14 @@ func _run() -> void:
 						continue
 					if theme == 1:
 						_check_office(ws, cell, style)
+						if style == WorldGen.OFFICE_BOARDROOM and int(sampled.get(key, 0)) == 0:
+							_check_office(ws, cell, style, true)
 					else:
 						_check_airport(ws, cell)
 					sampled[key] = int(sampled.get(key, 0)) + 1
 	_check(large_offices > 0, "sample found no large Office room")
 	_check(airport_halls > 0, "sample found no Airport overflow hall")
+	_check(displays > 0, "sample found no surviving boardroom displays")
 	for failure in failures:
 		print("FAIL " + failure)
 	print("room population: %d rooms, %d large offices, %d airport halls, %d failures" % [

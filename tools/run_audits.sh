@@ -157,6 +157,7 @@ AUDITS=(
 	"render_resource_cache|tools/audit_render_resource_cache.gd|"
 	"floor_resource_preloader|tools/audit_floor_resource_preloader.gd|"
 	"runtime_diagnostics|tools/audit_runtime_diagnostics.gd|"
+	"player_floor_contact|tools/audit_player_floor_contact.gd|--mode=descent --nologo"
 	"floor_resource_lifetime|tools/audit_floor_resource_lifetime.gd|"
 	"incremental_streaming|tools/audit_incremental_streaming.gd|"
 	"light_distance|tools/audit_light_distance.gd|"

@@ -9,6 +9,12 @@ class Figure extends ShadowFigure:
 	var catches := 0
 	func _seize() -> void: catches += 1
 
+class ReviewCamera extends PhotoCamera:
+	# Substitute only the GPU readback; exercise the real shutter/review state.
+	func _render_snapshot() -> Image:
+		await get_tree().process_frame
+		return Image.create(4, 4, false, Image.FORMAT_RGB8)
+
 func _initialize() -> void: call_deferred("_run")
 
 func check(ok: bool, message: String) -> void:
@@ -96,11 +102,71 @@ func _run() -> void:
 	check(figure.catches == 0, "incomplete arrival can catch the player")
 	figure.grace = 0.0
 	visual.set_manifestation(1.0)
+	visual._presentation.visible = false
+	figure._physics_process(DT)
+	check(figure.catches == 0, "hidden monster can catch the player")
+	visual._presentation.visible = true
+	var mask := player.cam.cull_mask
+	player.cam.cull_mask = 0
+	figure._physics_process(DT)
+	check(figure.catches == 0, "monster excluded from the camera can catch the player")
+	player.cam.cull_mask = mask
 	figure._physics_process(DT)
 	check(figure.catches == 1, "completed arrival cannot catch the player")
+	await _check_photo_review(world, player, figure)
 	world.free()
 	watchdog.stop()
 	watchdog.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	print("WALKER ARRIVAL: %s" % ("PASS" if failures.is_empty() else "FAIL"))
 	quit(0 if failures.is_empty() else 1)
+
+
+func _check_photo_review(world: Node3D, player: Player, figure: Figure) -> void:
+	var manager := ShadowFigures.new()
+	manager.player = player
+	world.add_child(manager)
+	manager.set_physics_process(false)
+	manager.adopt(figure)
+	var camera := ReviewCamera.new()
+	camera.player = player
+	camera.figures = manager
+	world.add_child(camera)
+	camera.set_process(false)
+	figure.catches = 0
+	figure._walker.set_manifestation(1.0)
+	figure.position = player.position - Vector3.RIGHT * 3.0
+	camera._raised = true
+	camera._take_photo()
+	check(camera._capturing and manager.photo_reviewing, "shutter wait left pursuit live")
+	var start := figure.position
+	figure._physics_process(0.1)
+	check(figure.position == start, "pursuer advanced while shutter was waiting")
+	await process_frame
+	await process_frame
+	check(not camera._capturing and camera._review_left > 0.0,
+		"fixture did not enter the opaque print review")
+	manager.force_encounter(0.1)
+	var forced_left := manager._forced_left
+	manager._physics_process(1.0)
+	check(manager._forced_left == forced_left, "review spent a pending encounter timer")
+	figure.position = player.position - Vector3.RIGHT * 0.9
+	figure._physics_process(0.1)
+	check(figure.catches == 0, "pursuer killed through the opaque print")
+	camera._process(PhotoCamera.REVIEW_SECONDS + 0.1)
+	check(not manager.photo_reviewing and figure._approach_hold > 0.0,
+		"closing the print lost the reaction window")
+	figure._physics_process(0.1)
+	check(figure.catches == 0, "pursuer caught player on the first uncovered frame")
+	for frame in 90: figure._physics_process(DT)
+	check(figure.catches > 0, "pursuit never resumed after the reaction window")
+	manager.passive = true
+	camera._begin_review_safety()
+	camera.finish_for_transition()
+	check(not manager.photo_reviewing and figure.suppressed,
+		"transition cleanup released another system's passive hold")
+	manager.passive = false
+	camera._begin_review_safety()
+	camera.free()
+	check(not manager.photo_reviewing and not figure.suppressed,
+		"removing the camera stranded its threat hold")

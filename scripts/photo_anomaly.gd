@@ -141,6 +141,7 @@ var debug_visible := false
 ## slab; motion begins only when the developed print has left the screen.
 var _placement_pivot: Node3D
 var _placement_rest_y := 0.0
+var _placement_extents := Vector3.ZERO
 var _points: Array[Vector3] = []   # chunk-local sample points
 var _evidence_roots: Array[Node3D] = []
 var _evidence_corners: Array[Vector3] = []
@@ -689,6 +690,7 @@ func _release_ceiling_furniture(restoring := false) -> void:
 			if WorldGen.h(world_seed, cell.x, cell.y, 9383) % 2 == 0 else 1.0
 		pivot.rotation.x = sign_value * 0.06
 		pivot.rotation.z = -sign_value * 0.04
+		_add_landed_collision(pivot)
 		return
 	var distance := maxf(0.1, pivot.position.y - _placement_rest_y)
 	var duration := clampf(sqrt(2.0 * distance / 9.8), 0.32, 0.62)
@@ -718,6 +720,7 @@ func _release_ceiling_furniture(restoring := false) -> void:
 func _ceiling_furniture_impact(pivot: Node3D) -> void:
 	if not is_instance_valid(pivot):
 		return
+	_add_landed_collision(pivot)
 	var thud := AudioStreamPlayer3D.new()
 	thud.stream = SoundBank.thud()
 	thud.volume_db = -1.0
@@ -726,6 +729,23 @@ func _ceiling_furniture_impact(pivot: Node3D) -> void:
 	add_child(thud)
 	thud.play()
 	thud.finished.connect(thud.queue_free)
+
+
+func _add_landed_collision(pivot: Node3D) -> void:
+	if _placement_extents == Vector3.ZERO or pivot.has_node("LandedCollision"):
+		return
+	# Add only after duplicating the lens pose, and only when the physical
+	# cabinet lands. The impossible camera-only copy must never block walking.
+	var body := StaticBody3D.new()
+	body.name = "LandedCollision"
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = _placement_extents
+	shape.shape = box
+	shape.position.y = _placement_extents.y * 0.5
+	body.add_child(shape)
+	pivot.add_child(body)
+	_body_rids.append(body.get_rid())
 
 
 ## A doorway-shaped tear in the wall, camera-only, looking out onto
@@ -985,6 +1005,7 @@ func _build_props(floor_h: float, count: int) -> void:
 		# reading them as a centred AABB parked every dropped prop half its
 		# own box height in the air (reported 2026-08-20 — fallen furniture
 		# floated 0.4-0.95m off the carpet).
+		_placement_extents = extents
 		var inst := scene.instantiate() as Node3D
 		inst.scale = Vector3.ONE * scl
 		inst.position = -centre_off * scl

@@ -26,6 +26,10 @@ const SPAWN_BODY_SIGHT_HEIGHT := 0.75
 ## the same spot. This applies to every runtime spawn path, including directed
 ## and developer encounters.
 const SPAWN_SEPARATION := 4.0
+## All runtime arrivals reserve space relative to the player's current feet,
+## including directed photo/tape encounters and developer placements.
+const MIN_PLAYER_SPAWN_DISTANCE := 6.0
+const PHOTO_REACTION_SECONDS := 1.25
 
 # revenant, drowned, pilgrim, trailing, gaoler, reacher, drifter.
 # Seven animated wraiths, weighted close to evenly — none of them is a
@@ -76,6 +80,17 @@ var allow_reinforcements := false
 var passive := false:
 	set(value):
 		passive = value
+		_sync_suppression()
+## Separate from modal/blackout suppression so closing a print cannot release
+## a hold owned by another system. A raised viewfinder alone does not set this.
+var photo_reviewing := false:
+	set(value):
+		if photo_reviewing == value: return
+		photo_reviewing = value
+		if not value:
+			hold_new_spawns(PHOTO_REACTION_SECONDS)
+			for figure in active_figures():
+				figure.hold_approach(PHOTO_REACTION_SECONDS)
 		_sync_suppression()
 var interval_scale := 1.0
 ## Descent floor index, mirrored in by main on every level switch; gates the
@@ -133,7 +148,7 @@ func _can_add_figure() -> bool:
 
 func _sync_suppression() -> void:
 	for figure in active_figures():
-		figure.suppressed = passive or suspended
+		figure.suppressed = passive or suspended or photo_reviewing
 
 
 ## Broadcast a published topology change to every live pursuit immediately.
@@ -230,7 +245,7 @@ func _forced_spawn() -> bool:
 		var off := deg_to_rad(randf_range(12.0, 58.0)) * signf(randf() - 0.5)
 		var dirv := fwd.rotated(Vector3.UP, off + (PI if behind else 0.0))
 		var ground := _floor_at(player.global_position
-			+ dirv * randf_range(4.5, 11.0))
+			+ dirv * randf_range(MIN_PLAYER_SPAWN_DISTANCE, 11.0))
 		if ground == Vector3.INF:
 			continue
 		if not _figure_volume_clear(ground):
@@ -261,7 +276,7 @@ func adopt(f: ShadowFigure) -> void:
 	f.completed_levels = completed_levels
 	if f.is_inside_tree() and f.get_parent() != self:
 		f.reparent(self, true)
-	f.suppressed = passive or suspended
+	f.suppressed = passive or suspended or photo_reviewing
 	f.burned_away.connect(func(): burned_away.emit())
 	f.seen_by_player.connect(func(): seen_by_player.emit())
 	f.reached_player.connect(_on_figure_reached.bind(f))
@@ -316,7 +331,7 @@ func _physics_process(dt: float) -> void:
 		if not is_instance_valid(_figs[i]):
 			_figs.remove_at(i)
 	_sync_director_count()
-	if passive:
+	if passive or photo_reviewing:
 		_prev_yaw = NAN
 		return
 	if _new_spawn_hold > 0.0:
@@ -470,7 +485,9 @@ func _try_spawn() -> bool:
 func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	# Keep the invariant at the creation boundary too (including debug and
 	# authored spawns), rather than relying on every caller remembering it.
-	if not _can_add_figure() or not _spawn_separated(ground):
+	if photo_reviewing or _new_spawn_hold > 0.0 \
+			or not _player_spawn_clear(ground) \
+			or not _can_add_figure() or not _spawn_separated(ground):
 		return false
 	if not ShadowFigure.pool_deck_clear(player, ground, FIGURE_CLEAR_RADIUS):
 		return false
@@ -490,7 +507,7 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	f.appearance_delay = APPEARANCE_WARNING_SECONDS
 	f.announce = announce or randf() < 0.3
 	f.position = ground
-	f.suppressed = passive or suspended
+	f.suppressed = passive or suspended or photo_reviewing
 	add_child(f)
 	f.burned_away.connect(func(): burned_away.emit())
 	f.seen_by_player.connect(func(): seen_by_player.emit())
@@ -501,9 +518,20 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	_sync_director_count()
 	appearance_starting.emit(APPEARANCE_WARNING_SECONDS)
 	spawned.emit()
+	RuntimeDiagnostics.mark("figure_spawned", {
+		"position": str(f.global_position), "player_position": str(player.global_position),
+		"player_distance": f.global_position.distance_to(player.global_position),
+		"variant": f.variant, "model": walker_model, "grace": grace,
+		"announced": f.announce})
 	if _dev:
 		print("spawned variant %d at %s (player %s)" % [f.variant, ground, player.global_position])
 	return true
+
+
+func _player_spawn_clear(ground: Vector3) -> bool:
+	if not is_instance_valid(player): return false
+	var offset := ground - player.global_position
+	return Vector2(offset.x, offset.z).length() >= MIN_PLAYER_SPAWN_DISTANCE
 
 
 ## The level's signature stalker alternates with black shadow people, so both
