@@ -1,11 +1,11 @@
 class_name StorySubtitles
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 ## Dialogue captions use the movie's playback clock, so pause, rewind and
 ## replay cannot drift. The overlay is crisp above the VHS/CRT passes.
 
 const TRACK_PATH := "res://subtitles/en.json"
-static var _tracks: Dictionary = {}
-static var _loaded := false
+static var _catalogs: Dictionary = {}
+var _locale := ""
 
 var _video: VideoStreamPlayer
 var _track: Array = []
@@ -13,13 +13,13 @@ var _panel: PanelContainer
 var _label: Label
 
 
-static func tracks() -> Dictionary:
-	if not _loaded:
-		_loaded = true
-		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(TRACK_PATH))
-		if data is Dictionary:
-			_tracks = data
-	return _tracks
+static func tracks(locale: String = "") -> Dictionary:
+	var code := Localization.current_locale() if locale.is_empty() else Localization.normalize(locale)
+	if not _catalogs.has(code):
+		var path := "res://subtitles/%s.json" % code
+		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
+		_catalogs[code] = data if data is Dictionary else ({} if code == "en" else tracks("en"))
+	return _catalogs[code]
 
 
 static func caption_at(track: Array, seconds: float) -> String:
@@ -33,6 +33,7 @@ static func caption_at(track: Array, seconds: float) -> String:
 
 func attach(video: VideoStreamPlayer) -> void:
 	_video = video
+	_locale = Localization.current_locale()
 	_track = tracks().get(video.stream.resource_path, []) if video.stream != null else []
 	_update_caption()
 
@@ -51,7 +52,9 @@ func _ready() -> void:
 	add_child(_panel)
 	_label = Label.new()
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	_label.add_theme_font_override("font", ThemeDB.fallback_font)
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_label.add_theme_color_override("font_color", Color.WHITE)
 	_panel.add_child(_label)
@@ -69,6 +72,9 @@ func _process(_delta: float) -> void:
 func _update_caption() -> void:
 	if not is_instance_valid(_label):
 		return
+	if _locale != Localization.current_locale() and is_instance_valid(_video):
+		_locale = Localization.current_locale()
+		_track = tracks().get(_video.stream.resource_path, []) if _video.stream != null else []
 	var enabled := GameSettings.current != null \
 		and bool(GameSettings.current.get_value("story_subtitles"))
 	var text := ""
@@ -86,6 +92,8 @@ func _layout() -> void:
 	var extent := get_viewport().get_visible_rect().size
 	var factor := clampf(minf(extent.x / 1280.0, extent.y / 720.0), 0.6, 3.0)
 	_label.add_theme_font_size_override("font_size", roundi(28.0 * factor))
+	_panel.custom_minimum_size.x = minf(extent.x - 32.0, 1080.0 * factor)
+	_panel.size.x = _panel.custom_minimum_size.x
 	_panel.reset_size()
 	var size := _panel.get_combined_minimum_size()
 	_panel.position = Vector2((extent.x - size.x) * 0.5, extent.y - 116.0 * factor - size.y)

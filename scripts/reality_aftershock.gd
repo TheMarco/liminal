@@ -29,7 +29,7 @@ var _overlay: ColorRect
 
 
 func _ready() -> void:
-	layer = 1 # World only; the HUD begins at layer 2, camera/menus above that.
+	layer = 0 # World only, before the HUD at 2 and recording effects at 3.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_copy = BackBufferCopy.new()
 	_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT

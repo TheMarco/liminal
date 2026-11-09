@@ -92,6 +92,12 @@ func jump_to(level: int, requested_position: Vector3,
 		exact := false, yaw := NAN) -> void:
 	_switching = true
 	var player_node: Player = _port.player.call()
+	var restore_physics := player_node.is_physics_processing()
+	player_node.set_physics_process(false)
+	player_node.velocity = Vector3.ZERO
+	player_node.stop_motion_audio()
+	var started := Time.get_ticks_usec()
+	RuntimeDiagnostics.mark("floor_transition_start", {"destination": level})
 	if player_node.is_charging():
 		player_node.stop_charging()
 	if not bool(_port.descent_mode.call()):
@@ -148,7 +154,10 @@ func jump_to(level: int, requested_position: Vector3,
 	var fade_in := create_tween()
 	fade_in.tween_property(_fade, "color:a", 0.0, 0.5)
 	await fade_in.finished
+	player_node.set_physics_process(restore_physics)
 	_switching = false
+	RuntimeDiagnostics.mark("floor_transition_end", {"destination": level,
+		"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})
 
 
 func settle_initial_arrival() -> void:

@@ -1,145 +1,236 @@
-# Ending cutscene — “OUTSIDE”
+# Ending cutscene: "OUTSIDE"
 
-**Status:** Production script for SeeDance 2.5  
-**Format:** Four continuous first-person clips, 16:9, approximately 109 seconds through full black  
-**Dialogue:** None  
-**Visible player:** Never. No hands, body, shadow, reflection, or footprints.
+**Status:** Shipped in-game 2026-10-17 (`videos/outro/outside.ogv`, 94.7s).
+Supersedes the 2026-09-10 plan (warm-brown car, half-open doors, doors
+closing in the player's face).
+**Canon:** `docs/STORY.md`, "Outro sequence". Read it before changing the
+story of this sequence.
+**Format:** First person, 16:9, 1920x1080, 24 fps, no dialogue, no text.
+**Visible player:** Never. No hands, body, shadow, reflection or footprints.
 
-## Dramatic intent
+This document is the production record: what the film is, how every piece
+was made, and how to change any part of it without redoing the rest. Every
+prompt is in `art/ending_outside/v2/PROMPTS.md` (verbatim, with inputs and
+costs); every file is listed in `art/ending_outside/v2/README.md`.
 
-The outro begins inside the elevator exactly as it behaves during the game. The warm brown doors are closed. The car settles, the arrival chime sounds, and the two leaves open only halfway. Through the narrow opening is whatever remains of the real world.
+## What the ending says without saying it
 
-The player steps out facing away from the Desert Oasis hotel. The casino is not visible yet. Ahead is a drowned desert: a broken road that vanishes into black water, scattered wrecked cars, and the old remains of people who had nowhere to go. There is no active threat. The world has already ended.
+You got out. Nothing got better. The rooms were keeping you from this.
 
-Only after searching the exterior does the player turn around. The casino from the intro is behind them, recognizable but ruined and lightless. The elevator is set into its entrance. Its small warm interior is the only dry, finite, habitable-looking place left. The doors close before the player can return.
+The last beats carry the implication: the arrival chime calls from behind,
+the lift stands open and lit in the ruined entrance, and it waits. The player
+turns away anyway and walks to where the road goes under the water. Behind
+them, unseen, it closes. Nothing in picture, sound or text states the motive.
 
-The player finally turns away from the hotel and walks into the waste. Escape succeeded. Life was better in the rooms.
+## The film
 
-The horror comes from the loss of shelter, direction, community, and future—not from a monster, jump scare, lore reveal, or disaster spectacle.
+| Time | Shot | Picture | Sound |
+| --- | --- | --- | --- |
+| 0:00 | E1 Last stop (engine) | Inside the real brushed-steel arrival car, doors closed. Settle, stillness, doors open fully at the game's speed onto the underside of the ruined porte-cochère and a dead pale sedan where the intro's car parked. | Lift motor tail, cabin hum, the game's arrival ding (2.48s) and door chime (2.56s). |
+| 0:09.5 | E2 Outside | Walk out of the car and under the canopy, around the wreck. | Steps on the car floor (marble) then wet concrete; cabin hum recedes. |
+| 0:18 | E3 Road | Down the drowned access road. | Wet steps every 0.9s; a low exterior pressure bed fades in. |
+| 0:30.5 | E3b Drowned road | Light failing, the road runs into still floodwater that mirrors the sky; stop short of it, look left and right, face the water. | Steps stop when the camera stops. |
+| 0:46.2 | E4 The chime | Hold. Far behind, the arrival chime. Turn right: the Desert Oasis in the intro's hero framing, dead, except the open lit lift at the right-end entrance. Hold. | Distant ding + chime (low-passed, slapback), then the lift's faint hum. |
+| 1:00.9 | E5 Away | Hold on the lit lift. Turn left, back to the water. | The faint hum continues. |
+| 1:13.6 | E6 Waterline | Walk the last metres to where the yellow line goes under. Stop. | Steps; at 7.5s the door chime far behind, at 8.4s the leaves meet and the hum stops. |
+| 1:25.7 | Tail | Hold the last frame 4s, fade to black over 3s, 2s of silent black. | Silence under the fade. |
 
-## Current reference pack
+Then the game's `OUT` summary rises from black.
 
-| File | Use |
-| --- | --- |
-| `art/ending_outside/00_game_elevator_closed_reference.png` | Authoritative in-game closed-door geometry; HUD/CRT reference only |
-| `art/ending_outside/00_game_elevator_interior_reference.png` | Authoritative warm car, rails, jambs, threshold, and half-open travel |
-| `art/ending_outside/00_intro_casino_reference.png` | Authoritative Desert Oasis identity and intro geography |
-| `art/ending_outside/09_elevator_closed_clean.png` | Clean rectilinear starting frame, no HUD or CRT shader |
-| `art/ending_outside/10_elevator_half_open_wasteland.png` | Correct limited door travel and first exterior reveal |
-| `art/ending_outside/11_casino_lookback_open.png` | First look back: ruined casino, wrecks, remains, open elevator |
-| `art/ending_outside/12_casino_lookback_closing.png` | Same view with the last elevator light reduced to a slit |
-| `art/ending_outside/13_final_wasteland.png` | Final forward view, away from the hotel |
+## How it was made
 
-Use each previous clip's actual final frame as the next clip's start image whenever SeeDance permits. The stills establish continuity; they are not mandatory hard cuts.
+Anything that exists in the game comes from the game; everything outside is
+generated and chained frame to frame.
 
-## Global generation rules
+1. **Engine plate, E1** (`tools/outro_capture.gd`, on the trailer v7
+   director). The real arrival car at the real door speed and easing.
+   Everything outside the car is hidden, so the steel reflects nothing of the
+   casino; a cold spotlight stands in for the dead exterior. Through the doors
+   sits a screen-aligned backdrop carrying a painted exterior plate, sized to
+   the camera frustum so the plate lands pixel for pixel.
+2. **Stills** (Hedra, Nano Banana Pro). Made by editing real frames (the
+   engine render, intro movie frames, cut frames from earlier clips) so
+   camera, perspective and geography carry over. The exterior plate is a
+   three-step edit chain from the engine's grey-backdrop frame.
+3. **Clips** (Hedra, Seedance 2.5, "Use Frames"). Each clip starts on the
+   exact frame where the previous one is cut. Stills pin destinations as end
+   frames (`f_end.png`, `l1_lookback_matched.png`, `f_edge_matched.png`).
+4. **Edit and sound** (`tools/ending_outside_assemble.py`). Trims, joins, the
+   tail, and a mix built only from the game's own sounds. Seedance's audio is
+   discarded.
+5. **Encode and hook** (ffmpeg2theora to `videos/outro/outside.ogv`; played by
+   `main._play_descent_outro()`).
 
-Apply these to every generated clip:
+Total generation cost: 20,089 Hedra credits (97,865 to 77,776), including
+rejected takes.
 
-- One continuous first-person shot with no edits inside the segment.
-- Clean rectilinear 16:9 source plates. No CRT curvature, barrel distortion, fisheye, rounded television mask, vignette, scanlines, phosphor dots, chromatic fringing, VHS noise, or generated HUD. The game applies its CRT/camcorder shader after compositing.
-- Eye height approximately 1.65 m; 26–30 mm rectilinear lens; restrained human head movement without action-camera shake.
-- Photorealistic, physically grounded 3D survival-horror rendering compatible with the supplied game screenshots.
-- The elevator retains the actual warm orange-brown flat panels, inward-sloping jambs, chrome side rails, lower threshold, and limited door travel. It must not become a modern silver or luxury elevator.
-- On opening, each elevator leaf slides outward by roughly half its own width and stops. The central opening is only about half the total doorway width. Both leaves remain visibly framing it.
-- The Desert Oasis retains its intro massing, roadside sign, frontage, parking relationship, and mountain geography. It is seen only after the player turns back.
-- The exterior contains sparse car wrecks and scattered old human remains. They are evidence of extinction, never fresh gore, a foreground close-up, or the primary subject.
-- Exterior exposure is extremely dark but readable. A dirty gray-peach horizon may recall the intro sunset but cannot resemble a hopeful dawn.
-- No living people, standing figures, zombies, creatures, birds, active vehicles, headlights, traffic, rescue signals, city glow, fire, lightning, or habitable distant structures.
-- No text overlays, subtitles, watermarks, or added signs. Preserve only existing Desert Oasis signage when the casino is visible.
-- Stillness is the dominant rhythm. Nothing approaches the player.
+### Continuity chain
 
-## Picture and sound script
-
-### Segment 1 — “Last Stop” — 27 seconds
-
-**References:** Start on `09_elevator_closed_clean.png`; end at `10_elevator_half_open_wasteland.png` before stepping through.
-
-| Time | Picture | Sound |
-| --- | --- | --- |
-| 00:00–00:04 | Locked first-person view of the actual warm brown elevator doors, fully closed. The car finishes its final descent and settles by a few centimeters. | Familiar motor decelerates beneath the fluorescent ballast hum. No music. |
-| 00:04–00:07 | The car becomes still. Nothing happens for two beats. | Motor stops. One ordinary arrival chime at 00:06. |
-| 00:07–00:14 | The doors open at the game's normal speed, then stop at their real half-open position. Through the narrow central opening: broken road, black water, wet ash, wrecked cars, and distant human remains. The casino is behind the camera and completely absent. | Door motor and track rattle. Exterior contributes almost no ambience. |
-| 00:14–00:20 | Hold inside the elevator. Let the player search the revealed strip of exterior without moving. The warm panels and rails remain prominent around the opening. | Elevator hum is still the loudest and most familiar sound. A directionless exterior pressure sits below it. |
-| 00:20–00:27 | The camera advances through the half-width opening and takes three cautious steps onto the surviving road. The door leaves stay half-open behind the player. End fully outside, still facing away from the hotel. | Dry car floor becomes wet grit and shallow water. The fluorescent hum recedes behind the camera but remains audible. |
-
-**SeeDance prompt**
-
-```text
-Create one unbroken 27-second first-person shot using the supplied clean closed-elevator frame as the exact first frame and the supplied half-open wasteland frame as the door-opening target. Preserve the game's actual warm orange-brown flat door panels, dark vertical details, inward-sloping jambs, chrome side rails, lower threshold, camera position, and warm fluorescent light. Begin with the doors fully closed. The car completes a small final downward settle and becomes still. Hold for two quiet beats, then at seven seconds open the two center-splitting leaves at an ordinary mechanical speed. Each leaf slides outward by only roughly half its own width and stops. The central opening is only about half the total doorway width, with substantial warm brown door panels still visible on both sides. Never fully retract or redesign the doors. Through the opening reveal the dead real world facing away from the Desert Oasis hotel: a broken yellow-striped access road disappears beneath shallow black floodwater and wet charcoal ash; three or four old car wrecks sit at varied distances; a few scattered human remains appear as small, non-graphic prone forms or weathered bones. Hold inside the car for six seconds, then the unseen viewer passes through the narrow opening and takes three cautious steps onto the road. The casino and hotel are behind the camera and never visible in this shot. Photorealistic grounded 3D survival-horror game rendering, 1.65-meter eye-level camera, 28 mm rectilinear lens, warm dry elevator against a colder extremely dark exterior. Clean source plate only: no CRT curvature, barrel distortion, fisheye, rounded TV mask, vignette, scanlines, chromatic fringing, VHS noise, HUD, text, or watermark. No visible player, hands, body, shadow, reflection, footprints, living people, standing figures, zombies, creatures, birds, active cars, headlights, traffic, buildings, signs, city glow, rescue lights, fire, lightning, fresh blood, gore, or supernatural effects.
+```
+E1 engine ── last frame ──► E2 ── frame 204 ──► E3 ── frame 300 ──► E3b ──► f_end.png
+                                                                     ▲            │
+f_end.png ──► E4 ──► l1_lookback_matched.png ──► E5 ──► f_end.png ──► E6 ──► f_edge_matched.png
 ```
 
-### Segment 2 — “What Remains” — 26 seconds
+`f_end.png` (the road running into still water) is the hinge: E3b ends on it,
+E4 starts on it, E5 ends on it, E6 starts on it. Changing it means
+regenerating E3b, E4, E5 and E6.
 
-**References:** Begin on Segment 1's final rendered frame; use `13_final_wasteland.png` for terrain, wreck and remains treatment, but retain the slightly lighter initial exposure.
+## Rebuilding
 
-| Time | Picture | Sound |
-| --- | --- | --- |
-| 00:00–00:06 | Hold on the broken road. Exposure sinks slowly. One wrecked car rests to either side; the nearest remains are visible but not emphasized. | Elevator hum remains faintly behind. No insects, birds, traffic, voices, or recognizable wind. |
-| 00:06–00:13 | Walk five slow steps along the remaining yellow stripe. Asphalt passes under the camera, proving movement. The road then vanishes beneath black water. | Wet footsteps and small water displacement. No music. |
-| 00:13–00:19 | Slow pan left and right across other car shells and scattered remains. Nothing moves. There is no skyline, road continuation, shelter, or distant light. | A loose piece of metal shifts once far away, then never again. |
-| 00:19–00:26 | Return to the empty horizon and hold. The frame becomes darker, not because night falls visibly, but because the camera no longer has the elevator's warm spill. | Exterior pressure gradually overwhelms the last distant fluorescent hum. |
+All commands from the repo root.
 
-**SeeDance prompt**
+**1. E1, the engine shot** (only if the car, its timing, or the exterior plate
+changes). Renders 228 PNG frames at 24 fps; then encode them to the clip the
+edit reads:
 
-```text
-Create one unbroken 26-second first-person search facing away from the Desert Oasis hotel. Continue exactly from the prior clip's road position. Preserve the broken yellow-striped casino access road, shallow black floodwater, wet charcoal ash, wreck and remains locations, low horizon, camera height, and lighting continuity. Begin motionless while exposure falls slightly. The unseen viewer takes five slow steps along the last road stripe; foreground asphalt and water show real parallax, then the road visibly ends beneath the flood. Make one restrained searching pan left and right across three or four long-abandoned passenger-car wrecks, partly submerged or crooked in ash, and a few scattered old human remains. The remains are small, weathered, non-graphic, partially obscured, and never examined closely. Nothing moves. Reveal no functioning road, skyline, shelter, settlement, smoke, or light. Return to the empty horizon and hold. The casino stays behind the camera and never appears. Photorealistic grounded 3D survival-horror rendering, eye-level 1.65-meter camera, 28 mm rectilinear lens, extremely dark but readable. Clean source plate only: no CRT curvature, barrel distortion, fisheye, rounded TV mask, vignette, scanlines, chromatic fringing, VHS noise, HUD, subtitles, or watermark. No visible player, hands, body, shadow, reflection, footprints, living people, standing figures, zombies, creatures, birds, active cars, headlights, traffic, buildings, signs, city glow, rescue signal, fire, lightning, fresh blood, gore, or supernatural effects.
+```
+godot --path . --minimized --audio-driver Dummy --fixed-fps 24 \
+  --disable-render-loop --script tools/outro_capture.gd -- --nologo \
+  --test-mode --seed=21 --descent-floor=1 --shot=outro_open --frames=228 \
+  --out=/tmp/outro --look=clean --no-handheld --fov=77 --plate-gain=0.8 \
+  --fps=24 --plate=$PWD/art/ending_outside/v2/e1_plate.png
+ffmpeg -framerate 24 -i /tmp/outro/outro_open/frame-%04d.png -c:v libx264 \
+  -crf 13 -preset slow -pix_fmt yuv420p art/ending_outside/v2/clips/e1_engine.mp4
+cp /tmp/outro/outro_open/frame-0227.png art/ending_outside/v2/e1_last_frame.png
 ```
 
-### Segment 3 — “Looking Back” — 26 seconds
+Without `--plate`, the doorway shows flat grey: that is the base frame for
+painting a new exterior (`e1_base_open.png`). `--open-at=S` moves the door
+opening (default 2.6s); `--back=M` moves the eye back from the arrival stand
+point (default 0.75m). It must run with `--look=clean` (no tape pass, no NTSC
+signal) or the plate comes out at 540x360 signal resolution. If E1's last
+frame changes, E2 must be regenerated from it.
 
-**References:** Use Segment 2's final frame as the start; reach `11_casino_lookback_open.png`, then `12_casino_lookback_closing.png`.
+**2. The film.**
 
-| Time | Picture | Sound |
-| --- | --- | --- |
-| 00:00–00:07 | The camera turns around in one slow 180-degree movement. Only during the final third of the turn does the Desert Oasis appear. | The familiar elevator hum gradually returns during the turn. |
-| 00:07–00:13 | Hold on the revealed casino from the intro. It is ruined, flooded, and lightless. Wrecks and remains occupy the parking lot. At the center entrance, the elevator is still half-open and warm. | One weak sign-transformer buzz fails. The elevator ballast continues. |
-| 00:13–00:21 | The elevator doors begin closing from their half-open position. The camera moves back toward the hotel, increasingly urgent but never sprints. The ordinary doors do not react. | Wet steps quicken; quiet door motor and track rattle. No scare sting. |
-| 00:21–00:24 | The player stops well short as the last thin vertical slit closes. | Padded metal contact, latch, then immediate loss of the fluorescent hum. |
-| 00:24–00:26 | Hold on the casino. Its windows and entrance are completely black. | One relay click. Absolute silence. |
-
-**SeeDance prompt**
-
-```text
-Create one unbroken 26-second first-person shot beginning in the dead exterior facing away from the hotel. Turn around in one slow continuous 180-degree movement. Do not reveal the casino until the final third of the turn. Then match the supplied look-back reference: the exact Desert Oasis from the intro is behind the player, recognizable by its casino massing and tall roadside sign, but ruined, flooded, weather-beaten, and lightless; old wrecked cars and scattered non-graphic human remains sit across the drowned parking lot. The final elevator is physically inset beneath the central hotel entrance canopy. It is not freestanding. Its actual warm brown doors remain only half-open, and its small warm fluorescent interior is the only habitable-looking room. Hold for recognition. At thirteen seconds, close those same door leaves from the half-open position at an ordinary, indifferent speed. The unseen viewer walks back toward the hotel with restrained urgency but remains far short when the last thin vertical slit of warm light disappears. The doors do not pause or respond. Hold on the completely dark hotel entrance. Preserve the supplied Desert Oasis architecture, sign identity, wrecks, remains, flooded lot, road, mountains, low sky, elevator placement, and camera continuity. Photorealistic grounded 3D survival-horror rendering, 1.65-meter eye-level camera, 28 mm rectilinear lens, extremely dark but readable. Clean source plate only: no CRT curvature, barrel distortion, fisheye, rounded TV mask, vignette, scanlines, chromatic fringing, VHS noise, generated HUD, subtitles, or watermark. No player, hands, body, shadow, reflection, footprints, living people, standing figures, zombies, creatures, active cars, headlights, city lights, fire, lightning, fresh blood, gore, or supernatural effects.
+```
+python3 tools/ending_outside_assemble.py
 ```
 
-### Segment 4 — “Outside” — 25 seconds
+Writes `deliverables/ending-outside/outside.mp4` (intermediates in
+`build/ending-outside/`, both gitignored); about 4 minutes. `--upto E3`
+builds a partial cut for checking; `--out PATH` writes elsewhere.
 
-**References:** Begin on Segment 3's final rendered frame; end at `13_final_wasteland.png`.
+**3. Encode and import.**
 
-| Time | Picture | Sound |
-| --- | --- | --- |
-| 00:00–00:06 | Hold on the dead Desert Oasis. Nothing relights or opens. The building from the intro is now only another ruin containing no accessible shelter. | Silence. After four seconds, the exterior pressure returns. |
-| 00:06–00:12 | Turn away from the hotel in one slow 180-degree movement. Reframe the broken road, wrecks, remains, and empty horizon. The casino leaves the frame permanently. | Small wet pivot. No casino or elevator ambience remains. |
-| 00:12–00:19 | Take four slow steps forward. The last yellow stripe disappears under black water. There is no route to follow. | Four isolated wet footsteps. Remove rather than add environmental sound. |
-| 00:19–00:25 | Stop in the final reference composition. Hold without camera drift or environmental change. This is not a puzzle or another floor. | The last footfall decays into silence. No wind and no music. |
-| After clip | Hold the final frame for four additional seconds, fade to black over three seconds, then hold full black for two seconds before the normal `OUT` summary. | Let even the noise floor disappear during the fade. Full black is completely silent. |
-
-**SeeDance prompt**
-
-```text
-Create one unbroken 25-second final first-person shot. Begin on the ruined Desert Oasis after its inset elevator has closed and gone completely dark. Hold on the dead hotel for six seconds; nothing relights, opens, moves, or answers. Then turn away in one slow continuous 180-degree movement. The casino leaves the frame and never appears again. Match the supplied final wasteland reference: a last strip of cracked yellow-striped road disappears beneath shallow black floodwater and wet charcoal ash; three or four abandoned car wrecks sit at varied distances; a few scattered old human remains are small, non-graphic, weathered, and partially obscured; beyond them is only a flat empty horizon under a near-black low sky. Take four slow steps until the last road stripe passes beneath the water, then stop. Hold completely still. This is not a route, puzzle, or new level. It is where the player is now. Photorealistic grounded 3D survival-horror rendering, 1.65-meter eye-level camera, 28 mm rectilinear lens, near-black cold palette, extremely dark but readable, no dawn and no warm light. Clean source plate only: no CRT curvature, barrel distortion, fisheye, rounded TV mask, vignette, scanlines, chromatic fringing, VHS noise, HUD, subtitles, text, or watermark. No player, hands, body, shadow, reflection, footprints, living people, standing figures, zombies, creatures, birds, active cars, headlights, buildings after the turn, road continuing through water, city glow, rescue signal, sun, moon, stars, fire, lightning, fresh blood, gore, or supernatural effects.
+```
+ffmpeg2theora deliverables/ending-outside/outside.mp4 --videoquality 8 \
+  --audioquality 6 -o videos/outro/outside.ogv
+godot --headless --path . --import
+tools/run_audits.sh -f descent_outro
 ```
 
-## Edit and transition notes
+Homebrew ffmpeg cannot encode Theora. If ffmpeg2theora fails with a missing
+`libx265.NNN.dylib`, Homebrew has moved x265 under the `ffmpeg@4` it links:
+`HOMEBREW_NO_INSTALL_CLEANUP=1 brew upgrade ffmpeg@4` (this happened on
+2026-10-17; 4.4.8_2 fixed it).
 
-- Transition from live gameplay to Segment 1 on an exact match frame while the elevator doors are closed. Do not fade or cut to white.
-- The door action is canonical: closed first, then normal opening motion, then a hard stop at half-open. Both panels remain visible. Do not let interpolation finish opening them.
-- Use clean undistorted generated clips. Apply the game's CRT/camcorder shader once to the final composite so the outro matches gameplay without baking the effect twice.
-- Use straight cuts between clips on static or nearly static frames. Avoid dissolves, which make the exterior feel dreamlike instead of real.
-- Keep remains old and non-graphic. A few readable silhouettes are more disturbing than a field of bodies.
-- Keep wrecks sparse enough that the player cannot read them as cover, supplies, or navigational objectives.
-- The `OUT` summary appears only after full black. It should feel administrative and indifferent, never triumphant.
-- Roll credits without music for at least ten seconds. Any later score remains sparse, tonal, and unresolved.
+## Changing things later
+
+**Re-time or swap footsteps.** `WALKS` in the assembly script holds the
+spans where the camera moves, in seconds into each shot, with the surface
+(`marble`, `wet`). They were read off each clip's frame-difference motion
+profile:
+
+```
+python3 -c "import subprocess,numpy as np; f=np.frombuffer(subprocess.check_output(['ffmpeg','-v','error','-i','CLIP.mp4','-vf','scale=96:54,format=gray','-f','rawvideo','-']),np.uint8).reshape(-1,54,96).astype(float); d=np.abs(np.diff(f,axis=0)).mean(axis=(1,2)); print(' '.join(f'{d[i:i+12].mean():.1f}' for i in range(0,len(d),12)))"
+```
+
+Each number is half a second; motion shows as values well above the ~0.2
+noise floor. `STEP_INTERVAL` (0.9s) sets the pace and `STEP_GAIN` the level.
+Steps are single footfalls cut from the game's walking loops by
+`single_steps()` (the loops themselves walk every 0.44s, which read as too
+fast against Seedance's slow glide).
+
+**Move the chime or the close.** `CALL = ("E4", 1.5)` and `CLOSE = ("E6", 7.5)`
+are seconds into a shot. The close is the game's own sequence when you walk
+away from an arrival car (door chime, doors shut in 0.9s, the leaves meet);
+the distant hum runs between the call and the moment the leaves meet.
+
+**Change levels or the sound bed.** All in `sound()`: cabin hum envelope,
+arrival cues at E1, the far call/close filter chain
+(`lowpass=f=2600,aecho=...`), the exterior bed (shaped noise at 0.0045,
+around -63 dBFS). The final mix peaked at -9 dBFS.
+
+**Replace one generated shot.** Generate it with the same start frame (and
+end frame, if it has one) listed in `PROMPTS.md`, download it into
+`art/ending_outside/v2/clips/`, point its `SHOTS` entry at it, rebuild,
+encode. As long as the new take starts and ends on the same keyframes,
+nothing around it changes. If it does not land on its end frame, the next
+shot needs regenerating from its real last frame instead.
+
+**Trim a take.** `SHOTS` entries are `(name, file, first frame, frame
+count)`. If a trim moves, the next clip no longer starts on the right frame:
+export the new cut frame (`ffmpeg -i CLIP -vf "select='eq(n\,N)'"
+-fps_mode passthrough -frames:v 1 cut.png`) and regenerate the next shot from
+it.
+
+**Static joints.** At E3b-E4, E4-E5 and E5-E6 both sides are holds, and a
+take never lands exactly on its end frame, so a hard cut shows a small pop.
+`BLEND_IN` gives those shots an 8-frame cross-blend; joints in motion stay
+hard cuts. All joints were checked by frame difference: none exceeds the
+motion around it by more than ~0.5 on a 0-255 scale.
+
+**Change the look-back.** `l1_lookback.png` is the last of a three-step edit
+chain (S4 to S6 in `PROMPTS.md`). Its geography is fixed by the owner: the
+lift stands in the porte-cochère at the hotel's right end (the intro car's
+entrance, `ref_intro_canopy_from_lot.png`), never under the sign or in the
+lot. After editing, re-run the colour match against `f_end.png` (see the v2
+README) and regenerate E4 and E5.
+
+**Make the in-game version longer, shorter or later.** `HOLD`, `FADE`,
+`BLACK` set the tail. The summary appears after the movie, rising from black
+(`main._show_descent_summary(won, from_black)`).
+
+## In the game
+
+- `scripts/main.gd`: `OUTRO_PATH`, `_play_descent_outro()`, and
+  `_on_descent_ended()` awaits the ending before the summary when `won`.
+  The movie is loaded on demand, not preloaded.
+- `scripts/descent_intro.gd`: the prologue player takes an optional stream
+  and Skip label, so the ending inherits every gate built for the prologue
+  (pause, keyboard capture, presence). It is stored in `main._descent_intro`
+  while it plays.
+- Skip ("SKIP ENDING") appears only after one full viewing on that machine,
+  stored as a completed video in `IntroPlaybackState` (`user://intro_playback.cfg`).
+- `tools/audit_descent_outro.gd` (registered as `descent_outro`): a won run
+  starts the ending with the right stream, the summary waits for it, then
+  rises from black, and a full viewing unlocks Skip. Runs in test mode, so it
+  never touches the player's playback file.
+- Export: `videos/outro/outside.ogv` ships (about 41 MB). `art/ending_outside/*`
+  and `deliverables/*` are excluded from export.
+
+**Known seam.** The run ends at the Bloom exit door, and the film opens inside
+the elevator car with its doors closed. There is no shot connecting the two.
+Options if it jars: end Bloom in an elevator instead of a door, or add an
+engine-rendered beat of the door closing to black before E1.
+
+## Prompting rules learned
+
+- One paragraph per prompt: Enter in Hedra's box submits immediately.
+- Describe motion as the camera's ("the camera moves slowly forward at a tired
+  walking pace"). "The unseen viewer takes steps" produced a third-person
+  figure wading into the water.
+- Never ask for "black floodwater": it rendered as a matte black void. Ask
+  for "perfectly still shallow water that mirrors the sky and the mountains".
+- No wading: ripples were faked as rings ahead of the camera. End on dry
+  ground at the waterline instead.
+- Give every clip that must arrive somewhere an end frame, and say "arriving
+  exactly on the end frame". Without one, takes drift (E2 walked into the
+  wreck; E3 let the road run clear to the horizon).
+- Grade keyframes to the same exposure and colour as the neighbouring clip
+  before uploading, or the clip spends its seconds fading between them.
+- Edit real frames rather than generating from text: the engine render, intro
+  frames and cut frames keep perspective and geography consistent.
+- Seedance renders the steel car from a single frame well, but the engine is
+  the only source that gets the doors, their travel and their timing right.
 
 ## Acceptance test
 
-The ending works if viewers independently understand all four ideas:
+Viewers should understand, without words:
 
-1. The elevator genuinely returned the player to what remains of the real world.
-2. The Desert Oasis was behind the player and becomes visible only when they look back.
-3. The elevator and the rooms were terrible, but they were the last shelter.
-4. Outside contains evidence of humanity but no surviving community, route, rescue, enemy to defeat, or future.
-
-If the wrecks suggest loot or transport, damage and submerge them further. If the remains become spectacle, reduce their size and count. If the casino appears during the initial exit, the camera direction is wrong. If the doors fully retract, the animation is wrong. If straight walls bow at the edges, CRT distortion has been baked into the source and must be removed before the game's shader is applied.
+1. The lift brought the player back to what is left of the real world.
+2. The Desert Oasis is where it all started, and it is dead.
+3. The lift waited for them; they walked away; it closed.
+4. Outside has evidence of people but no one, no route, no rescue, no future.

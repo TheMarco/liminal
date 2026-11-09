@@ -226,8 +226,10 @@ func _build_preview() -> void:
 	pocket.chunk_built.connect(_configure_interactions)
 	preview.add_child(pocket)
 	pocket.set_process(false)
-	# Reuse normal streaming's staged builder. A whole furnished chunk can
-	# monopolize a frame; yield between stages while the player approaches.
+	# Reuse normal streaming's finer slice builder. A whole furnished chunk
+	# can monopolize a frame; yield between slices while the player approaches.
+	RuntimeDiagnostics.mark("realm_preview_build_start", {"theme": destination_theme})
+	var preview_build_started := Time.get_ticks_usec()
 	var cells := pocket._room_complete_cells(Vector2i.ZERO, PREVIEW_LOAD_R)
 	for cell in cells:
 		_preview_chunk = Chunk.new(pocket.world_seed, cell, destination_theme,
@@ -237,12 +239,25 @@ func _build_preview() -> void:
 		while not complete:
 			var started := Time.get_ticks_usec()
 			while true:
-				complete = _preview_chunk.build_next_stage()
-				if complete or Time.get_ticks_usec() - started >= PREVIEW_BUILD_BUDGET_USEC:
+				complete = _preview_chunk.build_next_slice()
+				if complete:
 					break
+				if Time.get_ticks_usec() - started >= PREVIEW_BUILD_BUDGET_USEC:
+					break
+			RuntimeDiagnostics.slow("realm_preview_slice", started,
+				{"theme": destination_theme, "cell": str(cell)})
 			if complete:
+				# Installation gets a fresh frame when generation exhausted
+				# this allowance, instead of stacking both in one frame.
+				if Time.get_ticks_usec() - started >= PREVIEW_BUILD_BUDGET_USEC:
+					await _preview_frame
+					if _preview_cancelled:
+						return
+				var install_started := Time.get_ticks_usec()
 				pocket._install_chunk(cell, _preview_chunk)
 				_preview_chunk = null
+				RuntimeDiagnostics.slow("realm_preview_install", install_started,
+					{"theme": destination_theme, "cell": str(cell)})
 			if game.opts.chunktime:
 				var ms := (Time.get_ticks_usec() - started) / 1000.0
 				if ms > 4.0:
@@ -250,6 +265,8 @@ func _build_preview() -> void:
 			await _preview_frame
 			if _preview_cancelled:
 				return
+	RuntimeDiagnostics.mark("realm_preview_build_end", {"theme": destination_theme,
+		"elapsed_ms": (Time.get_ticks_usec() - preview_build_started) / 1000.0})
 	await _preview_physics_frame
 	if _preview_cancelled:
 		return

@@ -1,5 +1,7 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
+
 
 func _prison_generated_bounds(inst: Node3D) -> AABB:
 	var found := false
@@ -49,31 +51,31 @@ func _prison_generated_model(parent: Node3D, path: String, target_size: Vector3)
 
 func _prison_lighting() -> void:
 	_prison_architecture()
-	# The friend of the dark is the reader of nothing: this floor was crushed
-	# to black. Fewer dead fixtures, twice the energy, and a second fill light
-	# in the big set-piece rooms — still the coldest floor, but readable.
+	# A row for passages; three rows across the rooms. Each suspended fitting
+	# exposes upper and lower diffusers so ceiling detail survives without GI.
 	var dead = ctx.cell != Vector2i.ZERO and ctx.random01(1800) < 0.08
 	var flicker = not dead and ctx.cell != Vector2i.ZERO and ctx.random01(1801) < 0.16
 	var lens: StandardMaterial3D = Mats.panel_dead() if dead else Mats.prison_panel()
 	if flicker:
 		lens = Mats.prison_panel().duplicate()
 	var along_x = WorldGen.corridor(ctx.world_seed, ctx.cell) != 2
-	for t in [-3.6, 0.0, 3.6]:
-		var p = Vector3(6 + t, 0, 6) if along_x else Vector3(6, 0, 6 + t)
-		scene.troffer(p, Vector2(1.25, 0.20) if along_x else Vector2(0.20, 1.25),
-			lens, Mats.prison_iron())
+	var rows := [6.0] if ctx.style == WorldGen.PRISON_CORRIDOR else [2.5,6.0,9.5]
+	var lights: Array[Light3D] = []
+	var body := Vector3(1.43,0.09,0.38) if along_x else Vector3(0.38,0.09,1.43)
+	var glass := Vector3(1.25,0.03,0.20) if along_x else Vector3(0.20,0.03,1.25)
+	for across in rows:
+		for t in [2.4,6.0,9.6]:
+			var p := Vector3(t,0,across) if along_x else Vector3(across,0,t)
+			var shadows := 1 if across == 6.0 and t == 6.0 else 4
+			lights.append_array(FIXTURE_LIGHTING.suspended_strip(scene,p,ctx.ceiling_height,
+				body,glass,Mats.prison_iron(),lens,dead,Color(0.83,0.88,0.91),
+				1.8,2.5,8.5,shadows,"prison_troffer"))
 	if dead:
 		return
-	var big = ctx.style == WorldGen.PRISON_CELLBLOCK or ctx.style == WorldGen.PRISON_ROTUNDA
-	var light = scene.fixture_light(flicker, lens, 2.1 if big else 1.8,
-		Vector3(6, ctx.ceiling_height - 0.55, 6), "prison_troffer")
-	light.light_color = Color(0.83, 0.88, 0.91)
-	light.omni_range = 14.5
-	light.shadow_enabled = big
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 23.0
-	light.distance_fade_length = 8.0
-	scene.add_node(light)
+	if flicker:
+		FIXTURE_LIGHTING.ballast(scene,lights,lens,
+			WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),
+			Vector3(6,ctx.ceiling_height-0.5,6))
 
 
 ## Straight ceiling services and flush floor joints. Decorative roof arches
@@ -836,7 +838,7 @@ func _prison_rotunda() -> void:
 	var pendant_bottom = c + Vector3(0, 2.88, 0)
 	scene.beam(pendant_top, pendant_bottom, 0.055, Mats.prison_iron())
 	scene.cylinder(c + Vector3(0, 2.78, 0), 0.34, 0.10, Mats.prison_panel(), false)
-	guard_light.position = c + Vector3(0, 2.75, 0)
+	guard_light.position = c + Vector3(0, 2.70, 0)
 	guard_light.light_color = Color(0.68, 0.88, 0.72)
 	guard_light.light_energy = 2.4
 	guard_light.omni_range = 9.5

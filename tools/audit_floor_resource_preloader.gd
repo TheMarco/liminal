@@ -55,6 +55,18 @@ func run() -> void:
 		"cache exceeded 64 entries")
 	check(FloorResourcePreloader.cached_scene("audit:64") != null,
 		"newest cache entry was not retained")
+	check(FloorResourcePreloader.cached_scene("audit:1") == fixture,
+		"oldest live cache entry missing before access")
+	FloorResourcePreloader._store("audit:65", fixture)
+	check(FloorResourcePreloader.cached_scene("audit:1") == fixture,
+		"recently accessed scene was evicted")
+	check(FloorResourcePreloader.cached_scene("audit:2") == null,
+		"coldest scene was not evicted")
+	FloorResourcePreloader.retain_scene("audit:3", fixture)
+	FloorResourcePreloader._store("audit:66", fixture)
+	check(FloorResourcePreloader.cached_scene("audit:3") == fixture
+		and FloorResourcePreloader.cached_count() == FloorResourcePreloader.CACHE_LIMIT,
+		"retained hot scene or bounded cache contract failed")
 	check(ResourceLoader.has_cached(PATHS[0]), "loaded fixture was not adopted by engine cache")
 	FloorResourcePreloader.finish()
 	check(FloorResourcePreloader.cached_scene(PATHS[0]) == null,
@@ -80,6 +92,9 @@ func run() -> void:
 	for theme in WorldGen.THEMES:
 		check(Chunk.theme_prop_paths(theme).size() <= FloorResourcePreloader.CACHE_LIMIT,
 			"floor %d manifest exceeds its preparation allowance" % theme)
+	for theme in [1, 5, 6, 7]:
+		check(Chunk.theme_prop_paths(theme).has("res://models/cc0/wall_clock/wall_clock_1k.gltf"),
+			"floor %d omitted its streamed wall clock" % theme)
 	FloorResourcePreloader.finish()
 	check(FloorResourcePreloader._pending.is_empty() and FloorResourcePreloader._queue.is_empty()
 		and FloorResourcePreloader._ready.is_empty(), "finish left pending work or cache entries")

@@ -1,4 +1,5 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 static var _carousel_belt_material: ShaderMaterial
 static var _walkway_fitted_meshes: Dictionary = {}
 static var _walkway_glass_material: StandardMaterial3D
@@ -44,8 +45,9 @@ func _air_ceiling_fixture(desired: Vector3, panels: Vector2i,
 	var rim := AirportCeilingGrid.FRAME
 	# The diffuser is recessed above a slim painted T-bar frame. Every outer
 	# edge, including the frame, lands exactly on the acoustic panel lattice.
-	scene.model_box(fixture, Vector3(0, -0.028, 0),
+	var lens := scene.model_box(fixture, Vector3(0, -0.028, 0),
 		Vector3(size.x - rim * 2.0, 0.025, size.y - rim * 2.0), material)
+	lens.name = "DiffuserLens"
 	for sign in [-1.0, 1.0]:
 		scene.model_box(fixture, Vector3(0, -0.052, sign * (size.y - rim) * 0.5),
 			Vector3(size.x, 0.045, rim), Mats.paint_white())
@@ -75,41 +77,32 @@ func _air_lighting() -> void:
 		pmat = lit_material
 	# Two-panel rectangular diffusers on a regular grid. Narrower gate rooms
 	# use single-panel squares; both share the exact same seams and trim.
+	var lights: Array[Light3D] = []
 	if grand:
 		var ceiling := Node3D.new()
 		ceiling.name = "GrandTerminalCeiling"
 		AirportGrandCeiling.attach(ceiling, ctx.ceiling_height, ctx.style, pmat)
 		scene.add_node(ceiling)
+		if not dead:
+			lights = AirportGrandCeiling.attach_lights(ceiling,ctx.ceiling_height)
 	else:
 		var panels := Vector2i.ONE if ctx.style == WorldGen.AIR_GATE else Vector2i(2, 1)
 		for gx in [3.0, 9.0]:
 			for gz in [2.5, 6.0, 9.5]:
-				_air_ceiling_fixture(Vector3(gx, 0, gz), panels, pmat, ctx.ceiling_height)
+				var fitting := _air_ceiling_fixture(Vector3(gx, 0, gz), panels, pmat, ctx.ceiling_height)
+				if not dead:
+					var height_scale := maxf(1.0,(ctx.ceiling_height-0.1)/4.1)
+					lights.append(scene.fixture_lower_face(fitting.get_node("DiffuserLens"),Color(0.94,0.97,1.0),
+						0.64*height_scale*height_scale,maxf(9.0,ctx.ceiling_height+3.0),
+						1 if gx == 3.0 and gz == 2.5 else (2 if gx == 9.0 and gz == 9.5 else 4),"airport_ceiling_fixture"))
 		for z in [3.6, 8.4]:
 			_air_ceiling_fixture(Vector3(6, 0, z), Vector2i.ONE,
 				Mats.charcoal(), ctx.ceiling_height, true)
 	if dead:
 		return
-	var energy := lerpf(1.35, 1.9, clampf((ctx.ceiling_height - 3.2) / 3.0, 0.0, 1.0))
-	var light_drop := AirportGrandCeiling.depth(ctx.ceiling_height, ctx.style) + 0.30 if grand else 0.6
-	var source := Vector3(6.0, ctx.ceiling_height - light_drop, 6.0)
-	if not grand:
-		source = Vector3(3.0, ctx.ceiling_height - 0.6, 2.5)
-	var light = scene.fixture_light(flicker, pmat, energy, source,
-		"airport_grand_coffer" if grand else "airport_ceiling_fixture")
-	light.light_color = Color(1.0, 0.95, 0.84) if grand else Color(0.94, 0.97, 1.0)
-	light.omni_attenuation = 0.85
-	light.omni_range = 14.5
-	light.shadow_enabled = true
-	# One point light represents a ceiling grid of broad diffusers. Its hard,
-	# fully opaque shadows made bright terminal walls turn abruptly black.
-	light.shadow_opacity = 0.55
-	light.shadow_blur = 3.0
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 24.0
-	light.distance_fade_length = 8.0
-	light.distance_fade_shadow = 18.0
-	scene.add_node(light)
+	if flicker:
+		FIXTURE_LIGHTING.ballast(scene,lights,pmat,WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),
+			Vector3(3.0,ctx.ceiling_height-0.1,2.5))
 
 
 ## Overhead wayfinding hung from the deck above: navy backlit box, yellow
@@ -887,20 +880,10 @@ func _air_transit() -> void:
 	for li in 2:
 		var lane = -1.7 if li == 0 else 1.7
 		for t in [-3.0, 0.0, 3.0]:
-			_air_ceiling_fixture(scene.world_point(o, Vector3(t, 0, lane), yw),
+			var fitting := _air_ceiling_fixture(scene.world_point(o, Vector3(t, 0, lane), yw),
 				Vector2i(2, 1) if along_x else Vector2i(1, 2), pmat, wh)
-	var l = OmniLight3D.new()
-	l.light_color = Color(0.94, 0.97, 1.0)
-	l.light_energy = 1.2
-	l.omni_range = 11.0
-	l.position = o + Vector3(0, wh - 0.5, 0)
-	l.shadow_enabled = false
-	l.distance_fade_enabled = true
-	l.distance_fade_begin = 22.0
-	l.distance_fade_length = 8.0
-	l.set_meta("stream_room_light", true)
-	l.set_meta("visible_source", "transit_ceiling_fixtures")
-	scene.add_node(l)
+			scene.fixture_lower_face(fitting.get_node("DiffuserLens"),Color(0.94,0.97,1.0),
+				0.64,9.0,4,"transit_ceiling_fixtures")
 	# Wayfinding over the two genuine walking lanes, tucked under the lid.
 	for ki in 2:
 		var sl = -1.7 if ki == 0 else 1.7

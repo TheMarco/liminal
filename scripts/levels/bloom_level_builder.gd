@@ -10,6 +10,7 @@ const ORGANIC := preload("res://scripts/props/organic_architecture.gd")
 const BLOOM_PULSE_SCRIPT := preload("res://scripts/bloom_pulse.gd")
 const BLOOM_FIXTURE_FLICKER_SCRIPT := preload(
 	"res://scripts/bloom_fixture_flicker.gd")
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 
 const PASSAGE_HALF_WIDTH := 1.90
 const PASSAGE_HEIGHT := 3.20
@@ -349,14 +350,16 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 		fixture_lights: Array[Light3D]) -> Node3D:
 	variant = clampi(variant, 0, 3)
 	var pivot := Node3D.new()
-	pivot.position = at
+	pivot.position = at + Vector3.DOWN*0.48
 	pivot.rotation.y = yaw
 	pivot.set_meta("bloom_fluorescent_fixture", true)
+	pivot.set_meta("practical_fixture", "fluorescent_fixture")
 	scene.add_node(pivot)
 	var centre: Vector3 = FIXTURE_CENTRES[variant]
 	var inst := scene.attributed_prop_local(pivot, Chunk.BRUTAL_LIGHT_PATH,
 		Vector3(-centre.x * FIXTURE_SCALE, 0.0, -centre.z * FIXTURE_SCALE),
 		0.0, Vector3.ONE * FIXTURE_SCALE)
+	var bounds := AABB(Vector3(-1.175,-0.03,-0.11),Vector3(2.35,0.06,0.22))
 	if inst == null:
 		scene.model_box(pivot, Vector3.ZERO, Vector3(2.35, 0.06, 0.22),
 			Mats.panel_dead() if dead else Mats.bloom_panel())
@@ -369,6 +372,8 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 			candidate.visible = i == variant
 			if i == variant:
 				selected = candidate
+		if selected != null:
+			bounds = FIXTURE_LIGHTING.bounds_in(selected,pivot)
 		if selected != null and (dead or flicker):
 			for found in selected.find_children("*", "MeshInstance3D", true, false):
 				var mesh_node := found as MeshInstance3D
@@ -384,22 +389,42 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 					mesh_node.set_surface_override_material(surface, local)
 					if flicker:
 						emission_mats.append(local)
+	# Imported metal grilles are not themselves luminous. Real opal lenses in
+	# their openings anchor both the direct illumination and wet-floor reflection.
+	var diffuser: StandardMaterial3D = Mats.panel_dead() if dead else Mats.bloom_panel()
+	if flicker:
+		diffuser = diffuser.duplicate()
+		emission_mats.append(diffuser)
+	var centre_xz := Vector3(bounds.get_center().x,0,bounds.get_center().z)
+	var size := Vector2(bounds.size.x,bounds.size.z)
+	var lower_at := centre_xz+Vector3.UP*(bounds.position.y+0.025)
+	var lower := scene.model_box(pivot,lower_at,Vector3(size.x*0.82,0.02,size.y*0.82),diffuser)
+	lower.name = "LowerDiffuser"
+	var upper_at := centre_xz+Vector3.UP*(bounds.end.y+0.025)
+	var upper := scene.model_box(pivot,upper_at,Vector3(size.x,0.05,size.y),diffuser)
+	upper.name = "UpperDiffuser"
+	for sign_value in [-1.0,1.0]:
+		var top := upper_at+Vector3.UP*0.025
+		if size.x > size.y: top.x += sign_value*size.x*0.32
+		else: top.z += sign_value*size.y*0.32
+		var length := maxf(0.01,0.505-top.y)
+		scene.model_box(pivot,top+Vector3.UP*length*0.5,Vector3(0.018,length,0.018),Mats.prison_iron())
 	if not dead:
-		# The only routine Bloom light lives inside this visible tube housing.
-		# Its wide, short falloff overlaps neighboring fixtures without producing
-		# the old hard-edged pools from detached room lights.
-		var light := OmniLight3D.new()
-		light.position = Vector3(0.0, -0.075, 0.0)
-		light.light_color = Color(0.68, 0.80, 0.94)
-		light.light_energy = 1.54
-		light.omni_range = 8.2
-		light.omni_attenuation = 0.72
-		light.shadow_enabled = true
-		light.light_volumetric_fog_energy = 0.65
-		light.set_meta("bloom_fixture_light", true)
-		light.set_meta("visible_source", "fluorescent_fixture")
-		pivot.add_child(light)
-		fixture_lights.append(light)
+		var color := Color(0.68,0.80,0.94)
+		# Recreation halls reach nine metres: their higher-output fittings must
+		# still reach the walking surface instead of cutting off above the floor.
+		var height_scale := maxf(1.0,(at.y-0.6)/4.2)
+		var down := FIXTURE_LIGHTING.rectangular(pivot,lower,size*0.82,
+			lower_at-Vector3.UP*0.01,false,color,2.4*height_scale*height_scale,
+			maxf(8.2,at.y+3.0),4,"fluorescent_fixture")
+		down.area_attenuation = 0.72
+		down.light_specular = 0.35
+		down.set_meta("bloom_fixture_light",true)
+		fixture_lights.append(down)
+		var up := FIXTURE_LIGHTING.rectangular(pivot,upper,size,
+			upper_at+Vector3.UP*0.025,true,color,3.2,5.0,4,"fluorescent_fixture")
+		up.set_meta("bloom_fixture_light",true)
+		fixture_lights.append(up)
 	return pivot
 
 
@@ -421,7 +446,8 @@ func _bloom_lighting() -> void:
 		# Corner-weighted layout keeps a central flesh mass from swallowing the
 		# entire room's illumination, and every pool still has a visible housing.
 		for xz in [Vector2(3.0, 3.0), Vector2(9.0, 3.0),
-				Vector2(3.0, 9.0), Vector2(9.0, 9.0)]:
+				Vector2(3.0, 9.0), Vector2(9.0, 9.0), Vector2(6.0,1.4),
+				Vector2(1.4,6.0), Vector2(10.6,6.0), Vector2(6.0,10.6)]:
 			fixture_positions.append(Vector3(xz.x, y, xz.y))
 	var fixture_pivots: Array[Node3D] = []
 	for i in fixture_positions.size():
@@ -430,14 +456,13 @@ func _bloom_lighting() -> void:
 			PI * 0.5 if axis_x else 0.0,
 			posmod(i + int(ctx.random01(3305 + i) * 4.0), 4),
 			dead, flicker, emission_mats, fixture_lights))
-	# Four overlapping shadowed omni lights multiply this room's geometry into
-	# thousands of shadow draws. One real shadow source preserves contact and
-	# silhouette depth; the remaining visible fixtures still provide fill.
+	# One lower face casts shadows per cell. Upper faces and the other lower
+	# lenses provide direct light without multiplying organic geometry in shadows.
 	if fixture_lights.size() > 1:
 		var shadow_index := 1 if passage else int(ctx.random01(3317) \
-			* float(fixture_lights.size())) % fixture_lights.size()
+			* float(fixture_pivots.size())) % fixture_pivots.size()
 		for i in fixture_lights.size():
-			fixture_lights[i].shadow_enabled = i == shadow_index
+			GraphicsQuality.configure_practical_light(fixture_lights[i],1 if i == shadow_index*2 else 4)
 	if flicker and not emission_mats.is_empty():
 		var controller = BLOOM_FIXTURE_FLICKER_SCRIPT.new()
 		controller.mats = emission_mats

@@ -102,29 +102,66 @@ doorway leaves can be opened and closed, and rare physical elevator panels
 carry you onward. Local lights occasionally sag, an unused lift may chime down
 the hall, and inaccessible rooms sometimes knock from the other side.
 
-The default presentation restores the original combined look: **VHS EFFECT**
-followed by **CRT EFFECT**. These are independent saved settings and may still
-be used alone, together, or both disabled. The VHS stage has separate brightness and color bandwidth,
-horizontal color bleed, fine field-paced noise, and gentle transport wobble.
-The live camera also has drifting red/blue separation, visible around bright
-edges and lettering while the underlying brightness detail stays aligned.
-The display uses gamma-aware Gaussian beam reconstruction, an RGB slot mask,
-beam misconvergence, phosphor bloom, glass diffusion, and curved edges. Its
-beam and mask are filtered for the output resolution. This is an original
-Godot implementation informed by [CRT-Royale's display model](https://docs.libretro.com/shader/crt_royale/).
+Tape processing and television presentation can be selected independently.
+Their world effects include separate brightness and color bandwidth,
+horizontal color bleed, field-paced noise, transport wobble, phosphor glow and
+scanlines. The in-game HUD, interaction prompts, Descent objectives and camera
+viewfinder are part of that recorded image. The title, settings, dialogs, photo
+album and subtitles draw afterward at full window resolution and remain crisp.
 
 Tape faults are brief events: tracking tears, momentary color loss, and
 compensated dropout streaks, with head-switch noise confined to the bottom
 edge. The full-screen feed adds RF snow bursts, sync slips, and short
 white/dark tape streaks. Minor disturbances occur about every 5–11 seconds;
-larger ones every 28–55 seconds, with quick attack and a settling recovery. The 720×480 signal
+larger ones every 28–55 seconds, with quick attack and a settling recovery. The tape signal
 approximates interlaced playback without storing previous fields. Choose
-**VHS EFFECT** and **CRT EFFECT** independently in Settings; both preferences
-are saved and no gameplay key changes them. In-world
+a tape look and an independent CRT screen switch in Settings.
+Both choices are saved and no gameplay key changes them. In-world
 televisions retain their 344×240 signal in a 1280×894 render target. The
-optional full-screen CRT pass uses the full window resolution to reconstruct a
-480-line world source. CRT always keeps that television resolution; with CRT
-off, graphics quality controls the world resolution, including in VHS-only mode.
+CRT screen reconstructs a world of up to 480 lines.
+Tape effects without CRT cap the world at 720p to avoid rendering detail that
+the recording discards. Lower graphics resolutions stay lower; turning both off
+restores the selected graphics resolution. Graphics quality also scales tape/TV work:
+Low uses a 360×240 tape buffer and up to 720p processed output, Medium 540×360
+and 1080p, High 720×480 and 1440p, and Ultra 720×480 with window-resolution
+output. Menus and dialogs stay full resolution on every tier; the gameplay HUD
+shares the recording's resolution and effects. No additional settings are required.
+
+**NTSCRT video effects** are under **Settings → Visual Effects → Recording look**.
+Choose one of [20 complete camera, tape and CRT looks](docs/CURATED_VIDEO_LOOKS.md).
+Each selection sets the whole picture, including color, noise, tape wear and CRT
+playback. **01 Clean reference** removes the effects; **09 Found footage · original
+tape** is a useful starting point. During play, **Preview & fine-tune looks** opens
+the live browser, optional adjustments, A/B comparison and preset captures.
+Title screens, settings and dialogs stay clear; the in-game HUD receives the effects.
+
+The former four tape buttons and separate main-menu CRT/damage controls are gone.
+Their styles are covered by Clean reference, VHS-C family holiday / living-room
+TV, Found footage original tape, and Found footage archive copy. Fine-tuning can
+bypass recording effects or CRT independently without resetting the selected signal.
+Saved custom settings and legacy preset files remain compatible.
+
+Selected original NTSCRT animations now run automatically: **Glitch pop** leads
+an enemy's appearance, and **Two blips** adds an occasional tape fault. They
+restore the selected look afterward, follow Tape damage, and respect Reduced
+flashing. They require no extra settings or receiver simulation.
+
+The normal menu has no technical video controls. For development, launch with
+`--video-lab` and expand **Developer video lab** to mix the Classic signal, the lighter NTSCRT approximation,
+or **Full ntsc-rs** with the original NTSCRT receiver and one of seven CRT models.
+The lab retains independent VHS and TV switches. Fine tuning is identified in the tape description.
+
+The full port exposes all 62 ntsc-rs controls, all 17 receiver controls and each
+CRT model's original parameters. In the developer lab, expand **Signal resolution and sampling** for
+six original resize filters, processing before downscaling, custom signal size,
+and original CRT supersampling/letterboxing. **Weave previous fields** adds real
+field history. High source resolutions and supersampling can cost substantially
+more. Settings stay above the processed image.
+
+`--ntscrt`, `--full-ntscrt` and `--classic-video` select a signal for one launch.
+The approximation also offers Clean transfer, Home video, Worn tape and Bad
+reception presets. See [implementation and performance notes](docs/NTSCRT_EXPERIMENT.md)
+for coverage, fidelity limits, measurements and checks.
 
 In Descent, you are not alone. **The figures belong to Descent and only to
 Descent** — Wander is a peaceful place to explore and photograph the building,
@@ -280,6 +317,47 @@ Or from the command line:
 ```sh
 godot --path .
 ```
+
+### Performance diagnostics
+
+Desktop builds write `user://logs/performance.jsonl` alongside `godot.log`.
+On Windows the default location is
+`%APPDATA%\Godot\app_userdata\It wants you to stay\logs\`.
+After a stall, include `performance.jsonl`, its `.1`/`.2` backups if present,
+and `godot.log` in a bug report. Each diagnostic file is capped at approximately
+1 MiB with two retained backups. Entries are flushed as they are written;
+this improves recovery after abrupt termination but cannot guarantee survival
+of a hard power reset.
+
+The log records the actual graphics driver (Direct3D 12 or Vulkan), hardware,
+graphics/video settings, startup and floor-loading milestones, slow resource
+loads/builds, video-pipeline setup/failure, ambient sound/caption timing,
+power-sag and blackout phases, realm-preview construction and floor transitions,
+wall-clock frame gaps of at least 100 ms, and a health sample every 30 seconds.
+Sustained walking attempts without displacement record collision contacts after
+two seconds, then at most once every ten seconds, plus when movement resumes or
+input stops. These include ordinary wall collisions and are not a stuck verdict.
+Hitch and slow-operation reports are rate-limited. Memory figures are system
+availability and Godot estimates, **not Windows process commit or dedicated
+VRAM capacity**; unavailable debug-only readings are not proof of zero usage.
+Invalid renderer memory counters are written as `null`.
+Temperatures and clock speeds are not recorded. No diagnostics are uploaded.
+
+Windows retains Direct3D 12 for display HDR, with a larger resource descriptor
+heap to address the allocation failures captured by a tester.
+For a driver comparison, use Steam launch option `--rendering-driver vulkan`;
+remove it to restore Direct3D 12. Vulkan uses SDR output on Windows in Godot 4.7.
+Keep settings and route
+the same and allow first-use loading to settle before comparing recurring
+stalls. For local audits, append `-- --diagnostics-log=/absolute/path/run.jsonl`
+to redirect only the diagnostic file.
+
+`threat_stall_recovery` records gaps of at least 250 ms. During recovery,
+enemy pursuit/contact, spawning and Descent timers wait for 750 ms of responsive
+frames while the player keeps control. Physics catch-up cannot spend this window.
+Video resize events settle for 200 ms before reallocating buffers; unchanged
+CRT shader source reuses a bounded bytecode cache. Failed video bindings disable
+the effects for the session instead of repeatedly submitting invalid commands.
 
 ### Descent test mode
 
@@ -437,7 +515,7 @@ export templates installed):
   fallback on unsupported systems.
 - `build/linux/It wants you to stay.x86_64` — single self-contained x86_64
   executable with its PCK embedded, distributed as
-  `build/linux/It wants you to stay-Linux-0.5.4.zip`. Linux uses the Forward+
+  `build/linux/It wants you to stay-Linux-0.5.5.zip`. Linux uses the Forward+
   renderer through Vulkan.
 
 ## Controls
@@ -459,14 +537,14 @@ export templates installed):
 | Q | Ask to end the current mode and return to the title |
 | Esc | Pause / settings; resume when already paused |
 | Click | Recapture mouse |
-| VHS EFFECT / CRT EFFECT (Settings) | Independently configure and save the two video stages |
+| Visual Effects (Settings) | Choose a complete look and adjust tape damage |
 | Tab / arrows, Enter (title screen) | Navigate and activate menu buttons |
 | Esc (opening movie) | Pause without skipping the first viewing |
 | E (opening movie, after watching once) | Skip the replay |
 
 Settings persist between launches: mouse sensitivity, field of view, head bob,
-invert Y, toggle sprint, fullscreen, music/effects/dialogue volume, independent
-VHS and CRT effects, VHS effect strength (50% by default),
+invert Y, toggle sprint, fullscreen, music/effects/dialogue volume, recording
+look, tape damage (50% by default),
 reduced flashing, and optional cause-of-death explanations. Reset Defaults asks for confirmation. Pause freezes
 movement and Descent timers. Reduced flashing steadies fixtures and the low
 battery torch, removes the camera flash, and suppresses rapid signal glitches
@@ -479,21 +557,42 @@ Graphics offers four presets; changing an individual rendering option selects
 
 | Preset | World resolution | Lighting and effects |
 | --- | --- | --- |
-| Low | Up to 360p | FXAA, simple shadows, direct lighting and distance fog |
-| Medium (default) | Up to 480p | FXAA, soft shadows and contact shading; bounce light, screen reflections and volumetric fog off |
-| High | Up to 720p | TAA, balanced bounce light, screen reflections and volumetric fog |
-| Ultra | Native window resolution | TAA + 4× MSAA, full bounce light and reflections, higher-quality fog and shadows |
+| Low | Up to 480p | FXAA, simple shadows, direct lighting and distance fog |
+| Medium (default) | Up to 720p | TAA, soft shadows, balanced bounce light, contact shading, screen reflections and volumetric haze |
+| High | Up to 1080p | TAA, finer shadows and contact shading, balanced bounce light, screen reflections and volumetric fog |
+| Ultra | Up to 1440p | TAA, full bounce light and reflections, higher-quality fog and shadows |
 
-The resolution column applies with CRT off. CRT always uses a 480p world source
-while keeping the preset's lighting, shadows and other rendering settings. The
-resolution selector shows the active 480p override and is disabled until CRT
-is turned off; the saved resolution is then restored. VHS alone does not force
-the world to 480p: its shader supplies tape bandwidth and softness.
+Native resolution and combined TAA + MSAA remain manual options. Ultra avoids
+automatically rendering every Retina pixel or stacking two antialiasing methods.
+Existing saved rendering values are preserved; older preset combinations may
+now show **Custom**. Selecting a preset applies the revised values.
+Custom graphics tweaks retain the previous preset's tape/TV processing budget;
+selecting a preset restores automatic video quality.
 
-Advanced rendering exposes each option separately, including 1080p and 1440p
-world resolution. Menus and the HUD remain at full window resolution. VSync and
+High and Ultra use revised shadow, ambient-shading and fog budgets to reduce
+frame time while preserving fixture lighting and reflections. See the
+[native fullscreen performance review](docs/performance/2026-10-09-gameplay-review.md)
+for before/after measurements, CRT coverage and remaining limits.
+
+The resolution column applies to **Clean reference**. Looks with CRT playback cap
+the world at 480p; recording effects without CRT cap it at 720p. Lower graphics choices
+stay lower, and lighting, shadows and antialiasing still follow the graphics
+preset. The resolution selector shows the active limit while a recording look
+is selected. Returning to Clean restores the saved resolution automatically.
+Custom tape/receiver modes and temporary full-screen tape playback use the same
+720p cap, with TV modes capped at 480p.
+
+Advanced rendering exposes each effect separately; 3D resolution, including
+Native, is directly accessible in Graphics. Menus remain at full window resolution; the HUD passes through
+the selected video effects along with the world. VSync and
 the frame limit are independent of the preset; the default is VSync on with a
 60 FPS cap. HDR output and brightness live in the Graphics calibration foldout.
+
+**Graphics → Show FPS counter** adds a small top-right readout of rendered FPS
+and average frame time in milliseconds, refreshed twice a second. It stays sharp
+outside the VHS/CRT effects and remains available while paused. The preference
+is saved independently of quality and recording presets; it is off by default.
+Frame time includes frame caps and waiting for VSync, rather than GPU work alone.
 
 The casino in Descent includes three fixed route landmarks: the mostly dark
 LAST CHANCE slot bank, the sunken Amber Lounge, and a ringing red telephone

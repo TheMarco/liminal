@@ -1,5 +1,5 @@
 class_name PoolTuner
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 ## Live tuning panel for the Poolrooms. Run the game with `--tune` and every
 ## number that decides how the water and the light look becomes a slider you
 ## can drag while standing in the room.

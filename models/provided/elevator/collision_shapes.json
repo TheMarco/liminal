@@ -1,0 +1,229 @@
+{
+  "units": "metres",
+  "coordinates": "+Y up; +Z into cabin; root origin at entrance floor",
+  "shape_type": "box",
+  "static_root_local": [
+    {
+      "name": "Floor",
+      "center": [
+        0,
+        -0.08,
+        1.178
+      ],
+      "size": [
+        2.84,
+        0.16,
+        2.56
+      ]
+    },
+    {
+      "name": "CabinBack",
+      "center": [
+        0,
+        1.23,
+        2.37
+      ],
+      "size": [
+        2.32,
+        2.46,
+        0.14
+      ]
+    },
+    {
+      "name": "CabinCeiling",
+      "center": [
+        0,
+        2.452,
+        1.33
+      ],
+      "size": [
+        2.3,
+        0.102,
+        2.075
+      ]
+    },
+    {
+      "name": "Header",
+      "center": [
+        0,
+        2.495,
+        0.124
+      ],
+      "size": [
+        2.879,
+        0.428,
+        0.473
+      ]
+    },
+    {
+      "name": "CabinSide_NegativeX",
+      "center": [
+        -1.153,
+        1.225,
+        1.335
+      ],
+      "size": [
+        0.076,
+        2.45,
+        2.08
+      ]
+    },
+    {
+      "name": "FrontColumn_NegativeX",
+      "center": [
+        -1.163,
+        1.3,
+        0.122
+      ],
+      "size": [
+        0.535,
+        2.6,
+        0.46
+      ]
+    },
+    {
+      "name": "ExteriorSide_NegativeX",
+      "center": [
+        -1.405,
+        1.3,
+        1.25
+      ],
+      "size": [
+        0.068,
+        2.6,
+        2.57
+      ]
+    },
+    {
+      "name": "CabinSide_PositiveX",
+      "center": [
+        1.153,
+        1.225,
+        1.335
+      ],
+      "size": [
+        0.076,
+        2.45,
+        2.08
+      ]
+    },
+    {
+      "name": "FrontColumn_PositiveX",
+      "center": [
+        1.163,
+        1.3,
+        0.122
+      ],
+      "size": [
+        0.535,
+        2.6,
+        0.46
+      ]
+    },
+    {
+      "name": "ExteriorSide_PositiveX",
+      "center": [
+        1.405,
+        1.3,
+        1.25
+      ],
+      "size": [
+        0.068,
+        2.6,
+        2.57
+      ]
+    },
+    {
+      "name": "ExteriorBack",
+      "center": [
+        0,
+        1.3,
+        2.47
+      ],
+      "size": [
+        2.84,
+        2.6,
+        0.09
+      ]
+    }
+  ],
+  "dynamic_node_local": [
+    {
+      "attach_to_node": "Door_Left",
+      "local_center": [
+        0,
+        1.147,
+        0
+      ],
+      "size": [
+        0.464,
+        2.262,
+        0.074
+      ]
+    },
+    {
+      "attach_to_node": "Door_Left_Outer",
+      "local_center": [
+        0,
+        1.147,
+        0
+      ],
+      "size": [
+        0.468,
+        2.262,
+        0.074
+      ]
+    },
+    {
+      "attach_to_node": "Door_Right",
+      "local_center": [
+        0,
+        1.147,
+        0
+      ],
+      "size": [
+        0.464,
+        2.262,
+        0.074
+      ]
+    },
+    {
+      "attach_to_node": "Door_Right_Outer",
+      "local_center": [
+        0,
+        1.147,
+        0
+      ],
+      "size": [
+        0.468,
+        2.262,
+        0.074
+      ]
+    }
+  ],
+  "doorway_trigger": {
+    "root_local_center": [
+      0,
+      1.1,
+      0.13
+    ],
+    "size": [
+      1.77,
+      2.18,
+      0.62
+    ]
+  },
+  "call_button_trigger": {
+    "root_local_center": [
+      -1.169,
+      1.16,
+      -0.145
+    ],
+    "size": [
+      0.18,
+      0.34,
+      0.12
+    ]
+  },
+  "note": "Not embedded physics objects. These match the optional Godot wrapper; use appropriate engine collision bodies."
+}

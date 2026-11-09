@@ -1,10 +1,13 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 
 
-func _casino_flush_mount(at: Vector3, lens_mat: Material) -> void:
+func _casino_flush_mount(at: Vector3, lens_mat: Material) -> MeshInstance3D:
 	var y = ctx.ceiling_height - 0.045
 	var detail = Node3D.new()
 	detail.position = Vector3(at.x, y, at.z)
+	detail.name = "CasinoOpalFitting"
+	detail.set_meta("practical_fixture","casino_flush_mount")
 	scene.add_node(detail)
 	ProceduralDetails.attach(detail, "casino_flush_mount_collar_r034_screws4", func(d: ProceduralDetails):
 		d.ring(Vector3(0, -0.065, 0), 0.31, 0.012, Mats.brass())
@@ -12,16 +15,17 @@ func _casino_flush_mount(at: Vector3, lens_mat: Material) -> void:
 			var q = Vector3(cos(a) * 0.265, -0.102, sin(a) * 0.265)
 			d.box(q, Vector3(0.025, 0.012, 0.025), Mats.darkwood(), 0.004)
 	)
-	var plate = scene.cylinder(Vector3(at.x, y, at.z), 0.34, 0.055, Mats.darkwood(), false)
+	var plate = scene.model_cylinder(detail, Vector3.ZERO, 0.34, 0.055, Mats.darkwood())
 	plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var ring = scene.cylinder(Vector3(at.x, y - 0.035, at.z), 0.285, 0.075, Mats.brass(), false)
+	var ring = scene.model_cylinder(detail, Vector3(0, -0.035, 0), 0.285, 0.075, Mats.brass())
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var glass = scene.cylinder(Vector3(at.x, y - 0.085, at.z), 0.205, 0.065, lens_mat, false)
+	var glass = scene.model_cylinder(detail, Vector3(0, -0.085, 0), 0.205, 0.065, lens_mat)
 	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# A small central finial makes the silhouette read as a fixture rather than
 	# another luminous disc pasted onto the ceiling.
-	var finial = scene.sphere(Vector3(at.x, y - 0.14, at.z), 0.055, Mats.brass())
+	var finial = scene.model_sphere(detail, Vector3(0, -0.14, 0), 0.055, Mats.brass())
 	finial.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return glass
 
 
 ## Hotel circulation is lit by a chain of warm flush mounts, not the four
@@ -46,39 +50,65 @@ func _hall_lighting() -> void:
 	for i in 3:
 		var t = -4.8 + 4.8 * float(i)
 		var at = scene.world_point(o, Vector3(t, ctx.ceiling_height - 0.08, 0), yw)
-		scene.cylinder(at + Vector3(0, 0.025, 0), 0.27, 0.08, Mats.brass(), false)
+		var frame := Node3D.new()
+		frame.name = "HotelMedallion"
+		frame.position = at
+		frame.set_meta("practical_fixture","hotel_ceiling_medallion")
+		scene.add_node(frame)
+		scene.model_cylinder(frame,Vector3(0,0.025,0),0.27,0.08,Mats.brass())
 		var lens_mat: StandardMaterial3D = Mats.panel_dead() if i == dead_i else Mats.panel_on()
+		if i == flick_i: lens_mat = Mats.panel_on().duplicate()
+		var lens := scene.model_cylinder(frame,Vector3(0,-0.035,0),0.20,0.035,lens_mat)
+		scene.disable_shadows(frame)
+		if i == dead_i: continue
+		var light := FIXTURE_LIGHTING.bulb(frame,lens,Color(1.0,0.82,0.64),
+			0.58,5.6,1 if i == 1 else 4,"hotel_ceiling_medallion")
 		if i == flick_i:
-			lens_mat = Mats.panel_on().duplicate()
-		scene.cylinder(at - Vector3(0, 0.035, 0), 0.20, 0.035, lens_mat, false)
-		if i == dead_i:
-			continue
-		var light: OmniLight3D
-		if i == flick_i:
-			light = scene.main_light(true, lens_mat, 0.58)
-		else:
-			light = OmniLight3D.new()
-			light.light_energy = 0.58
-		light.light_color = Color(1.0, 0.72, 0.46)
-		light.light_volumetric_fog_energy = 0.0 if i == flick_i else 1.5
-		light.omni_range = 5.6
-		light.position = at - Vector3(0, 0.30, 0)
-		light.shadow_enabled = i == 1
-		light.distance_fade_enabled = true
-		light.distance_fade_begin = 20.0
-		light.distance_fade_length = 7.0
-		light.distance_fade_shadow = 15.0
-		light.set_meta("stream_room_light", true)
-		light.set_meta("visible_source", "hotel_ceiling_medallion")
-		scene.add_node(light)
+			light.light_volumetric_fog_energy = 0.0
+			FIXTURE_LIGHTING.ballast(scene,[light],lens_mat,
+				WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),at)
 
 
-func _chandelier() -> void:
-	# a real ornate chandelier (CC0 model, hangs 1.04m below its origin) with
-	# a warm bulb glowing in its heart
-	var ch = scene.cc0_prop("Chandelier_03", Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.05, WorldGen.CELL_SIZE / 2.0), ctx.random01(30) * TAU, 1.35)
-	scene.disable_shadows(ch)
-	scene.sphere(Vector3(WorldGen.CELL_SIZE / 2.0, ctx.ceiling_height - 0.95, WorldGen.CELL_SIZE / 2.0), 0.13, Mats.bulb())
+func _casino_lighting() -> void:
+	var dead := ctx.cell != Vector2i.ZERO and ctx.random01(8)<0.07
+	var flicker := not dead and ctx.cell != Vector2i.ZERO and ctx.random01(9)<0.16
+	var material: StandardMaterial3D = Mats.panel_dead() if dead else Mats.panel_on()
+	if flicker: material = material.duplicate()
+	var grand := ctx.style in [WorldGen.STYLE_GRAND,WorldGen.STYLE_BALLROOM]
+	var lights: Array[Light3D] = []
+	var height_scale := maxf(1.0,(ctx.ceiling_height-0.15)/4.0)
+	var points := [Vector2(3.6,3.6),Vector2(8.4,3.6),Vector2(3.6,8.4),Vector2(8.4,8.4)]
+	for i in points.size():
+		var pt: Vector2 = points[i]
+		var lens := _casino_flush_mount(Vector3(pt.x,0,pt.y),material)
+		if dead: continue
+		lights.append(FIXTURE_LIGHTING.bulb(lens.get_parent(),lens,Color(1,0.82,0.64),
+			(0.55 if grand else 0.70)*height_scale*height_scale,
+			maxf(8.0,ctx.ceiling_height+3),1 if i==0 else 4,"casino_flush_mount"))
+	if grand:
+		var globe := _chandelier(material)
+		if not dead:
+			lights.append(FIXTURE_LIGHTING.bulb(globe.get_parent(),globe,Color(1,0.78,0.53),
+				1.3,16.0,2,"casino_chandelier"))
+	if flicker:
+		for light in lights: light.light_volumetric_fog_energy = 0.0
+		FIXTURE_LIGHTING.ballast(scene,lights,material,
+			WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),Vector3(3.6,ctx.ceiling_height-0.13,3.6))
+
+
+
+func _chandelier(material: StandardMaterial3D) -> MeshInstance3D:
+	var frame := Node3D.new()
+	frame.name = "CasinoChandelier"
+	frame.position = Vector3(6,ctx.ceiling_height-0.05,6)
+	frame.set_meta("practical_fixture","casino_chandelier")
+	scene.add_node(frame)
+	var chandelier := scene.cc0_prop("Chandelier_03",Vector3.ZERO,ctx.random01(30)*TAU,1.35)
+	chandelier.reparent(frame,false)
+	scene.disable_shadows(chandelier)
+	var globe := scene.model_sphere(frame,Vector3(0,-0.9,0),0.13,material)
+	globe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return globe
 
 
 # --- furnishing --------------------------------------------------------------
@@ -1161,15 +1191,10 @@ func _landmark_sign(text: String, at: Vector3, yaw: float, color: Color, pixel: 
 
 
 func _landmark_lighting() -> void:
-	# Steady, modest fill maintains navigation around the dim standby bank.
-	var light := OmniLight3D.new()
-	light.position = Vector3(6, ctx.ceiling_height - 0.4, 6)
-	light.omni_range = 10
-	light.light_energy = 0.42 if ctx.casino_landmark == CasinoLandmarks.LAST_CHANCE else 0.7
-	light.light_color = Color(0.70, 0.76, 0.85) if ctx.casino_landmark == CasinoLandmarks.LAST_CHANCE else Color(1, 0.70, 0.42)
-	light.set_meta("visible_source", "casino_flush_mount")
-	scene.add_node(light)
-	_casino_flush_mount(Vector3(6, 0, 6), Mats.panel_on())
+	var lens := _casino_flush_mount(Vector3(6,0,6),Mats.panel_on())
+	FIXTURE_LIGHTING.bulb(lens.get_parent(),lens,Color(1,0.82,0.64),
+		0.42 if ctx.casino_landmark == CasinoLandmarks.LAST_CHANCE else 0.7,
+		10,1,"casino_flush_mount")
 
 
 func _landmark_lounge_floor() -> void:

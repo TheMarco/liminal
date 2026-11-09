@@ -483,7 +483,7 @@ func resume_rules(grace := 1.0) -> void:
 
 func _physics_process(dt: float) -> void:
 	_update_passive()
-	if ended or suspended or player == null or not player.is_inside_tree():
+	if ended or suspended or GameplayFrameGuard.is_recovering() or player == null or not player.is_inside_tree():
 		return
 	# Held by the same gate as the rules: a paused run must not have a car
 	# quietly arriving behind the confirmation dialog.

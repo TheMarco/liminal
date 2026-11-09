@@ -847,6 +847,7 @@ class EvidenceMarks extends Control:
 ## Viewfinder framing marks while aiming — thin OSD brackets around the
 ## centre third, in the HUD's phosphor ink.
 class PhotoReticle extends Control:
+	var _feedback_label: Label
 	var feedback := "":
 		set(value):
 			if feedback != value:
@@ -867,6 +868,23 @@ class PhotoReticle extends Control:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		set_anchors_preset(Control.PRESET_FULL_RECT)
 
+	func _ready() -> void:
+		_feedback_label = VhsOsd.make_label(30)
+		add_child(_feedback_label)
+
+	func _process(_delta: float) -> void:
+		_feedback_label.visible = not feedback.is_empty() and is_visible_in_tree()
+		if not _feedback_label.visible: return
+		_feedback_label.text = feedback
+		var fs := roundi(30.0 * maxf(1.0, minf(size.x / 960.0, size.y / 720.0)))
+		var width := VhsOsd.FONT.get_string_size(Localization.text(feedback), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var h := size.y * lerpf(0.26, 0.21, 1.0 if focused else warmth)
+		_feedback_label.add_theme_font_size_override("font_size", fs)
+		_feedback_label.position = Vector2((size.x - width) * 0.5,
+			size.y * 0.5 + h * 0.5 + fs * 1.2 - VhsOsd.FONT.get_ascent(fs))
+		_feedback_label.size = Vector2(width, VhsOsd.FONT.get_height(fs))
+		VhsOsd.set_ink(_feedback_label, VhsOsd.INK if focused else VhsOsd.INK_DIM)
+
 	func _draw() -> void:
 		var s := size
 		var scale := VhsOsd.hud_scale(s)
@@ -878,14 +896,6 @@ class PhotoReticle extends Control:
 		var arm := minf(s.x, s.y) * 0.035
 		var cx := s.x * 0.5
 		var cy := s.y * 0.5
-		if not feedback.is_empty():
-			var f: Font = VhsOsd.FONT
-			var fs := roundi(30.0 * maxf(1.0, minf(s.x / 960.0, s.y / 720.0)))
-			var tw := f.get_string_size(feedback, HORIZONTAL_ALIGNMENT_LEFT,
-				-1, fs).x
-			VhsOsd.draw_osd_string(self, f,
-				Vector2(cx - tw * 0.5, cy + h * 0.5 + fs * 1.2),
-				feedback, fs, VhsOsd.INK if focused else VhsOsd.INK_DIM)
 		for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1),
 				Vector2(-1, 1), Vector2(1, 1)]:
 			var px := cx + w * 0.5 * corner.x

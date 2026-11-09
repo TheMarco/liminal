@@ -7,9 +7,16 @@ func _init() -> void:
 
 func run_test() -> void:
 	Engine.max_fps = 60
+	create_timer(60.0).timeout.connect(func(): push_error("Realm entry timed out"); quit(1))
 	game = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
+	process_frame.connect(_keep_audit_running)
 	var visit: RealmExcursion = game._realm_visit
+	# Preview construction is now proximity-triggered. Approach before waiting
+	# for it instead of waiting forever at the distant floor arrival.
+	game.player.set_physics_process(false)
+	game.player.teleport(visit.source_centre - visit.source_forward * 5.8 + Vector3.UP * 0.15)
+	game.cm.stream_focus = game.player.global_position
 	while visit.phase == RealmExcursion.Phase.PREPARING:
 		await process_frame
 	assert(visit.phase == RealmExcursion.Phase.WAITING)
@@ -73,6 +80,12 @@ func run_test() -> void:
 	game.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit()
+
+func _keep_audit_running() -> void:
+	if is_instance_valid(game) and is_instance_valid(game._pause_menu):
+		game._pause_menu.free()
+		game._pause_menu = null
+		paused = false
 
 func _has_id(nodes: Array[PhotoAnomaly], id: String) -> bool:
 	for node in nodes:

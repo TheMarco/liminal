@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://crubpenu6p7fn"
+path="res://.godot/imported/pipeline.glsl-015c89e184ad0a38bbacf82e5f74b2aa.res"
+
+[deps]
+
+source_file="res://shaders/ntscrt_downscale_gpu/pipeline.glsl"
+dest_files=["res://.godot/imported/pipeline.glsl-015c89e184ad0a38bbacf82e5f74b2aa.res"]
+
+[params]
+

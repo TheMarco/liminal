@@ -252,7 +252,7 @@ static func _asylum(env: Environment) -> void:
 	env.tonemap_exposure = 1.25
 	env.sdfgi_energy = 1.15
 	env.glow_enabled = true
-	env.glow_intensity = 0.5
+	env.glow_intensity = 0.36
 	env.glow_bloom = 0.04
 	env.fog_light_color = Color(0.12, 0.15, 0.11)
 	env.fog_density = 0.009
@@ -290,13 +290,13 @@ static func _annex(env: Environment) -> void:
 	env.background_color = Color(0.53, 0.47, 0.24)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.96, 0.84, 0.53)
-	env.ambient_light_energy = 0.20
+	env.ambient_light_energy = 0.17
 	env.tonemap_exposure = 1.16
 	env.sdfgi_energy = 1.15
 	env.glow_enabled = true
 	# Keep the fluorescent core crisp while two wide glow levels make a
 	# faint lens veil around it. The broad levels remain thresholded to emitters.
-	env.glow_intensity = 0.36
+	env.glow_intensity = 0.30
 	env.glow_bloom = 0.04
 	env.set_glow_level(4, 0.14)
 	env.set_glow_level(5, 0.055)
@@ -305,7 +305,7 @@ static func _annex(env: Environment) -> void:
 	# illuminate this mist, while dark gaps retain contrast.
 	env.fog_density = 0.015
 	env.fog_light_energy = 0.8
-	env.volumetric_fog_density = 0.021
+	env.volumetric_fog_density = 0.014
 	env.volumetric_fog_albedo = Color(0.88, 0.78, 0.49)
 	env.volumetric_fog_anisotropy = 0.3
 	env.volumetric_fog_gi_inject = 0.65

@@ -29,12 +29,12 @@ func _init() -> void:
 	settings.set_value("film_grain", 0.68)
 	settings.set_value("handheld_camera", false)
 	settings.set_value("handheld_strength", 0.72)
-	for key: String in ["invert_y", "toggle_sprint"]:
+	for key: String in ["invert_y", "toggle_sprint", "show_fps"]:
 		_assert(settings.get_value(key) == false, key + " default")
 		settings.set_value(key, true)
 	_assert(settings.save_to_disk() == OK, "save")
 	var roundtrip = GameSettingsType.new(path)
-	for key: String in ["invert_y", "toggle_sprint"]:
+	for key: String in ["invert_y", "toggle_sprint", "show_fps"]:
 		_assert(roundtrip.get_value(key) == true, key + " roundtrip")
 		roundtrip.set_value(key, "false")
 		_assert(roundtrip.get_value(key) == true, key + " invalid string rejected")

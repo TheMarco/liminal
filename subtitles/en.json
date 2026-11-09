@@ -1,5 +1,11 @@
 {
-  "res://videos/intro/liminal_intro.ogv": [],
+  "res://videos/intro/liminal_intro.ogv": [
+    {
+      "start": 50.0,
+      "end": 58.0,
+      "text": "[Nevada driver license]\nEvelyn Cross"
+    }
+  ],
   "res://videos/intro/photo_tutorial.ogv": [
     {
       "start": 0,
@@ -675,7 +681,7 @@
     {
       "start": 10.32,
       "end": 11.64,
-      "text": "I could here people inside."
+      "text": "I could hear people inside."
     },
     {
       "start": 12.26,
@@ -2065,7 +2071,9 @@
     {
       "start": 56.28,
       "end": 58.3,
-      "text": "Go Carefully go now"
+      "text": "Go carefully. Go now."
     }
-  ]
+  ],
+  "res://videos/outro/outside.ogv": [],
+  "res://videos/intro/startup.ogv": []
 }

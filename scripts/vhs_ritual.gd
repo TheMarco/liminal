@@ -486,9 +486,9 @@ func _show_watch_hint() -> void:
 	var can_skip := _skip_available()
 	if intro and not can_skip:
 		return
-	_watch_hint = CanvasLayer.new()
+	_watch_hint = preload("res://scripts/screen_ui.gd").new()
 	_watch_hint.name = "TapePlaybackHint"
-	# Playback controls stay crisp above the tape/CRT passes (layer 100).
+	# Playback controls remain a crisp interface above the recorded image.
 	_watch_hint.layer = 110
 	add_child(_watch_hint)
 	var panel := PanelContainer.new()

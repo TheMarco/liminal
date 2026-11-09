@@ -1,5 +1,5 @@
 class_name PhotoAlbum
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 ## A paused, run-scoped collection of the player's actual exposures.
 signal closed
 const Inspection = preload("res://scripts/photo_inspection.gd")
@@ -8,6 +8,7 @@ var index := 0
 var _mouse_mode := Input.MOUSE_MODE_CAPTURED
 var _was_paused := false
 var _layout: VBoxContainer
+var _title: Label
 var _image: TextureRect
 var _frame: Control
 var _paper: Control
@@ -47,10 +48,10 @@ func _ready() -> void:
 	add_child(_layout)
 	var heading := HBoxContainer.new()
 	_layout.add_child(heading)
-	var title := VhsOsd.make_label(36)
-	title.text = "PHOTOGRAPHS"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heading.add_child(title)
+	_title = VhsOsd.make_label(36)
+	_title.text = "PHOTOGRAPHS"
+	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_child(_title)
 	_counter = VhsOsd.make_label(24, VhsOsd.INK_DIM)
 	heading.add_child(_counter)
 	var inspection_controls := HBoxContainer.new()
@@ -139,7 +140,9 @@ func _resize() -> void:
 	# Short windows prioritize the photograph; Previous/Next remain available.
 	_strip.visible = logical_size.y >= 520.0
 	_inspection_help.visible = logical_size.y >= 520.0
-	_layout.add_theme_constant_override("separation", 8 if logical_size.y < 520.0 else 12)
+	# Reserve space for export feedback even with the taller CJK font metrics.
+	_title.add_theme_font_size_override("font_size", 28 if logical_size.y < 520.0 else 36)
+	_layout.add_theme_constant_override("separation", 4 if logical_size.y < 520.0 else 12)
 	# Keep all five thumbnails within narrow windows without shrinking text.
 	for thumbnail: Button in _strip.get_children():
 		var width := minf(144.0, (logical_size.x - 24.0) / 5.0)

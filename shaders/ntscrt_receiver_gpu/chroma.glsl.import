@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dmxgxab5vjxod"
+path="res://.godot/imported/chroma.glsl-96700903aeb26a42e079f366336b7144.res"
+
+[deps]
+
+source_file="res://shaders/ntscrt_receiver_gpu/chroma.glsl"
+dest_files=["res://.godot/imported/chroma.glsl-96700903aeb26a42e079f366336b7144.res"]
+
+[params]
+

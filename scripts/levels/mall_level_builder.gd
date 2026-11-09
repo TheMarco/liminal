@@ -1,6 +1,8 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 
 const MallPalm := preload("res://scripts/props/mall_palm.gd")
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
+var _laylight_lens: MeshInstance3D
 static var _painted_sign_materials: Array[StandardMaterial3D] = []
 static var _fountain_meshes: Dictionary = {}
 
@@ -101,9 +103,9 @@ func _mall_floor_ceiling() -> void:
 	ceiling.name = "MallCeilingModules"
 	ceiling.position.y = ctx.ceiling_height
 	architecture.add_child(ceiling)
+	_laylight_lens = scene.model_box(ceiling,Vector3(6,h-0.035,6),Vector3(7.8,0.04,7.8),Mats.mall_skylight())
 	ProceduralDetails.attach(ceiling, "mall_atrium_laylight", func(d: ProceduralDetails):
 		# Glazed laylight over the atrium, with three stepped perimeter frames.
-		d.box(Vector3(6, h - 0.035, 6), Vector3(7.8, 0.04, 7.8), Mats.mall_skylight())
 		for tier in 3:
 			var span := 8.1 + float(tier) * 0.46
 			var y := h - 0.14 - float(tier) * 0.16
@@ -245,6 +247,7 @@ func _mall_directory_pylon(p: Vector3, yaw: float) -> void:
 			Mats.mall_sign_face())
 	else:
 		board.set_meta("authored_model", "mall_directory")
+		LocalizedArt.mark(pylon, LocalizedArt.inscription("mall_directory"), Vector3(0, 1.32, 0.18))
 		# plinth, then a steel edge frame closing the blank sides and back
 		scene.model_rounded_box(pylon, Vector3(0, 0.21, 0), Vector3(1.12, 0.42, 0.30),
 			Mats.mall_trim(), 0.03)
@@ -306,56 +309,64 @@ func _mall_lighting() -> void:
 		lens = Mats.mall_panel().duplicate()
 	var cor = ctx.style == WorldGen.MALL_CORRIDOR
 	var cdir = WorldGen.corridor(ctx.world_seed, ctx.cell)
-	var source := Vector3(3.0, ctx.ceiling_height - 0.65, 3.0)
+	var emitters: Array[MeshInstance3D] = []
+	var lights: Array[Light3D] = []
 	if cor:
 		var along_x = cdir != 2
-		source = Vector3(4.6, ctx.ceiling_height - 0.65, 6.0) if along_x \
-			else Vector3(6.0, ctx.ceiling_height - 0.65, 4.6)
 		for t in [-4.2, -1.4, 1.4, 4.2]:
 			var p = Vector3(6.0 + t, 0, 6.0) if along_x else Vector3(6.0, 0, 6.0 + t)
-			scene.troffer(p, Vector2(1.65, 0.24) if along_x else Vector2(0.24, 1.65),
-				lens, Mats.mall_trim())
+			lights.append_array(_mall_suspended_panel(p,
+				Vector2(1.65,0.24) if along_x else Vector2(0.24,1.65),lens,dead,
+				1 if t == -4.2 else (2 if t == 4.2 else 4)))
 	else:
 		var inset := 1.1 if ctx.style == WorldGen.MALL_ATRIUM and ctx.ceiling_height > 5.5 else 3.0
-		source.x = inset
-		source.z = inset
 		for p in [Vector2(inset, inset), Vector2(12 - inset, inset),
 				Vector2(inset, 12 - inset), Vector2(12 - inset, 12 - inset)]:
 			if ctx.style == WorldGen.MALL_FOODCOURT:
 				var pendant_y := minf(3.35, ctx.ceiling_height - 0.55)
-				_mall_pendant(Vector3(p.x, pendant_y, p.y), lens)
-				source.y = pendant_y - 0.15
+				emitters.append(_mall_pendant(Vector3(p.x, pendant_y, p.y), lens))
 			else:
-				scene.troffer(Vector3(p.x, 0, p.y), Vector2(1.25, 0.3), lens, Mats.mall_trim())
+				lights.append_array(_mall_suspended_panel(Vector3(p.x,0,p.y),Vector2(1.25,0.3),
+					lens,dead,1 if p == Vector2(inset,inset) else (2 if p == Vector2(12-inset,12-inset) else 4)))
 	if dead:
 		return
-	var light = scene.fixture_light(flicker, lens, 1.08 if cor else 1.22,
-		source, "mall_troffer")
-	light.light_color = Color(1.0, 0.88, 0.71)
-	light.omni_range = 13.5
-	light.shadow_enabled = false
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 25.0
-	light.distance_fade_length = 8.0
-	scene.add_node(light)
-	if ctx.style == WorldGen.MALL_ATRIUM and ctx.ceiling_height > 5.5:
-		var skylight := OmniLight3D.new()
-		skylight.position = Vector3(6, ctx.ceiling_height - 0.5, 6)
-		skylight.light_color = Color(0.47, 0.69, 0.88)
-		skylight.light_energy = 1.8
-		skylight.omni_range = 11.0
-		skylight.omni_attenuation = 0.65
-		skylight.shadow_enabled = false
-		skylight.distance_fade_enabled = true
-		skylight.distance_fade_begin = 25.0
-		skylight.distance_fade_length = 8.0
-		skylight.set_meta("visible_source", "mall_laylight")
-		scene.add_node(skylight)
+	for i in emitters.size():
+		var light := scene.fixture_lower_face(emitters[i],Color(1.0,0.88,0.71),
+			0.85,9.0,
+			1 if i == 0 else (2 if i == emitters.size()-1 else 4),"mall_troffer")
+		if ctx.style == WorldGen.MALL_FOODCOURT:
+			# The actual pendant is round; use the same round emitting shape.
+			light.area_texture = FIXTURE_LIGHTING.round_mask()
+		lights.append(light)
+		# The opal pendant is exposed above as well as below its brass rim.
+		var bounds := FIXTURE_LIGHTING.mesh_bounds_in(emitters[i],emitters[i].get_parent())
+		var upper := FIXTURE_LIGHTING.rectangular(emitters[i].get_parent(),emitters[i],
+			Vector2(bounds.size.x,bounds.size.z),Vector3(bounds.get_center().x,bounds.end.y,bounds.get_center().z),
+			true,Color(1.0,0.88,0.71),0.65,5.0,4,"mall_pendant")
+		upper.area_texture = FIXTURE_LIGHTING.round_mask()
+		lights.append(upper)
+	if flicker:
+		FIXTURE_LIGHTING.ballast(scene,lights,lens,
+			WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),Vector3(3,ctx.ceiling_height-0.6,3))
+	if _laylight_lens != null:
+		var sky := scene.fixture_lower_face(_laylight_lens,Color(0.47,0.69,0.88),
+			0.35,15.0,4,"mall_laylight")
+		sky.area_attenuation = 0.65
 
 
-func _mall_pendant(p: Vector3, lens: StandardMaterial3D) -> void:
+func _mall_suspended_panel(at: Vector3, size: Vector2, material: StandardMaterial3D,
+		dead: bool, shadow_tier: int) -> Array[Light3D]:
+	var height_scale := maxf(1.0,(ctx.ceiling_height-0.6)/4.1)
+	return FIXTURE_LIGHTING.suspended_strip(scene,at,ctx.ceiling_height,
+		Vector3(size.x+0.1,0.08,size.y+0.1),Vector3(size.x,0.035,size.y),
+		Mats.mall_trim(),material,dead,Color(1.0,0.88,0.71),
+		0.85*height_scale*height_scale,0.65,maxf(9.0,ctx.ceiling_height+3.0),shadow_tier,"mall_troffer",5.0)
+
+
+func _mall_pendant(p: Vector3, lens: StandardMaterial3D) -> MeshInstance3D:
 	var v := Node3D.new()
 	v.position = p
+	v.set_meta("practical_fixture","mall_pendant")
 	scene.add_node(v)
 	var drop := ctx.ceiling_height - p.y
 	ProceduralDetails.attach(v, "mall_pendant_%.3f" % drop, func(d: ProceduralDetails):
@@ -363,7 +374,12 @@ func _mall_pendant(p: Vector3, lens: StandardMaterial3D) -> void:
 		d.ring(Vector3(0, 0.01, 0), 0.42, 0.055, Mats.mall_brass())
 		d.ring(Vector3(0, 0.12, 0), 0.32, 0.035, Mats.mall_trim())
 	)
-	scene.model_cylinder(v, Vector3(0, -0.035, 0), 0.40, 0.08, lens)
+	var diffuser := scene.model_cylinder(v, Vector3(0, -0.035, 0), 0.40, 0.08, lens)
+	# Area shadows are sampled at the lens centre: the small ring above it
+	# otherwise projects a huge false cutoff across the ceiling even though
+	# the broad opal surface emits around the ring. Keep structural blockers.
+	scene.disable_shadows(v)
+	return diffuser
 
 
 func _mall_poster_case(dir: int, plane: float) -> void:
@@ -509,6 +525,7 @@ func _mall_painted_sign(dir: int, plane: float, uc: float, index: int,
 		quad.rotation.y = PI if dir == 2 else 0.0
 	quad.set_meta("mall_painted_sign", entry[0])
 	quad.set_meta("mall_sign_fit", Vector2(w, h))
+	LocalizedArt.mark(quad, LocalizedArt.inscription("sign_%s.webp" % entry[0]), Vector3(0, 0, 0.025))
 	scene.add_node(quad)
 	return true
 
@@ -528,8 +545,7 @@ func _mall_unit_sign(dir: int, plane: float, uc: float, giv: int, y: float,
 	lab.text = text
 	lab.font_size = 84
 	var sign_font = ThemeDB.fallback_font
-	var text_px = sign_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT,
-		-1, lab.font_size).x
+	var text_px = Localization.max_text_width(sign_font, text, lab.font_size)
 	var safe_world_width = 3.95
 	lab.pixel_size = minf(0.0026, safe_world_width / maxf(text_px + 20.0, 1.0))
 	lab.width = ceili(text_px + 24.0)
@@ -978,8 +994,7 @@ func _mall_foodcourt() -> void:
 			WorldGen.h(ctx.world_seed, ctx.cell.x, ctx.cell.y, 1690) % Chunk.MALL_FOOD.size()]
 		brand.font_size = 78
 		var brand_font = ThemeDB.fallback_font
-		var brand_px = brand_font.get_string_size(brand.text,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, brand.font_size).x
+		var brand_px = Localization.max_text_width(brand_font, brand.text, brand.font_size)
 		brand.pixel_size = minf(0.0027, 5.8 / maxf(brand_px + 24.0, 1.0))
 		brand.width = ceili(brand_px + 28.0)
 		brand.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1140,7 +1155,7 @@ func _mall_lettering(parent: Node3D, text: String, p: Vector3, pixel: float,
 	var label := Label3D.new()
 	label.text = text
 	label.font_size = 96
-	var width := ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 96).x
+	var width := Localization.max_text_width(ThemeDB.fallback_font, text, 96)
 	label.pixel_size = minf(pixel, max_width / maxf(width, 1))
 	label.width = ceili(width + 10)
 	label.autowrap_mode = TextServer.AUTOWRAP_OFF

@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bx7ycgnwqsa28"
+path="res://.godot/imported/compose.glsl-ac0a1997442e46392585fb2408a71742.res"
+
+[deps]
+
+source_file="res://shaders/ntscrt_receiver_gpu/compose.glsl"
+dest_files=["res://.godot/imported/compose.glsl-ac0a1997442e46392585fb2408a71742.res"]
+
+[params]
+

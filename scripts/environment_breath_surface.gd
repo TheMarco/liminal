@@ -249,6 +249,9 @@ func sync_collision() -> void:
 	collision.disabled = false
 
 func restore() -> void:
+	# Cancellation restores synchronously; deferred _exit_tree must not write
+	# again after blackout (or another material owner) has taken over.
+	if not _installed: return
 	for piece in pieces:
 		var node: MeshInstance3D = piece.node
 		if is_instance_valid(node):

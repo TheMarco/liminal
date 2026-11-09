@@ -16,3 +16,8 @@ cross/
 
 # Godot web export build artifact (2GB, exceeds GitHub limits)
 iwyts.pck
+
+# Local secrets (Hedra API key for cutscene generation)
+.env
+art/intro_v2/upload/uploads.jsonl
+art/intro_v2/upload/downloads.txt

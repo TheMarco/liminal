@@ -99,6 +99,15 @@ func _check_materials(chunk: Node) -> void:
 func _scan(ws: int, cell: Vector2i) -> void:
 	var chunk := Chunk.new(ws, cell, 1)
 	var actual_style := WorldGen.cell_style(ws, cell, 1)
+	var ceiling_count := 0
+	for mesh in chunk.find_children("*","MeshInstance3D",true,false):
+		if mesh.material_override == Mats.office_ceiling():
+			ceiling_count += 1
+			check(mesh.layers == OfficeCeilingGrid.CEILING_RENDER_LAYER,
+				"ceiling receives downward troffers")
+			check(mesh.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+				"ceiling stopped blocking light")
+	check(ceiling_count == 1,"cell lost its ceiling")
 	var fixtures := _fixture_nodes(chunk)
 	var seen_lights := 0
 	var seen_vents := 0
@@ -145,6 +154,15 @@ func _scan(ws: int, cell: Vector2i) -> void:
 				flicker_material = fixture.material_override
 		else:
 			seen_vents += 1
+			var slat := fixture.get_parent().find_child(
+				"Evenly spaced louver 01", true, false) as MeshInstance3D
+			check(slat != null, "imported vent grille is missing")
+			if slat != null:
+				var offset := Vector3(cell.x * S, 0, cell.y * S)
+				var backing_box := _local_box(fixture, offset)
+				var slat_box := _local_box(slat, offset)
+				check(slat_box.end.y < backing_box.position.y - 0.002,
+					"vent backing faces the room and hides its grille")
 		check(kind == "light" or kind == "vent", "unknown fixture kind %s" % kind)
 	var expected := 4 if actual_style == WorldGen.OFFICE_CORRIDOR else 8
 	check(seen_lights == expected and seen_vents == 2,
@@ -173,19 +191,42 @@ func _scan(ws: int, cell: Vector2i) -> void:
 		else:
 			flicker_rooms += 1
 	var room_lights: Array[Node] = []
-	for candidate in chunk.find_children("*", "OmniLight3D", true, false):
+	for candidate in chunk.find_children("*", "AreaLight3D", true, false):
 		if str(candidate.get_meta("visible_source", "")) in [
 				"office_troffer_grid", "office_flickering_troffer"]:
 			room_lights.append(candidate)
-	check(room_lights.size() == (2 if expected_flicker else 1),
-		"cell %s has %d actual lights, expected %d" % [
-			cell, room_lights.size(), 2 if expected_flicker else 1])
+	check(room_lights.size() == seen_lights-dead_lights,
+		"cell %s has %d lights for %d working lenses" % [cell,room_lights.size(),seen_lights-dead_lights])
+	for light in room_lights:
+		var emitter := light.get_node_or_null(light.get_meta("fixture_emitter")) as MeshInstance3D
+		check(emitter != null,"ceiling light lost its actual diffuser")
+		if emitter == null: continue
+		var b := _local_box(emitter,Vector3.ZERO)
+		var face := b.get_center()
+		face.y = b.position.y-0.03
+		check(light.position.distance_to(face)<0.002,"light origin is not on the lower lens")
+		check((-light.basis.z).dot(Vector3.DOWN)>0.999,"light points into the ceiling")
+		check(light.area_size.distance_to(Vector2(b.size.x,b.size.z))<0.002,"reflection size differs from the actual lens")
+		check(light.light_specular>0.0,"office glass no longer reflects the actual panels")
+		check(is_equal_approx(light.area_range,6.5),"office light reach exceeds the grid budget")
+		check(light.light_cull_mask & 1 and not light.light_cull_mask & OfficeCeilingGrid.CEILING_RENDER_LAYER,
+			"troffer receiver mask changed")
+		check(light.shadow_caster_mask & OfficeCeilingGrid.CEILING_RENDER_LAYER,
+			"ceiling no longer casts a troffer shadow")
+		check(is_equal_approx(light.light_size,sqrt(light.area_size.x*light.area_size.y/PI)),
+			"office shadow softness does not follow the actual diffuser")
+		var energy: float = light.light_energy
+		GraphicsQuality.apply_practical_light(light,{"shadow_quality":0})
+		check(light.shadow_enabled and light.shadow_opacity==1.0 and light.light_energy==energy,
+			"Low loses wall blocking or direct illumination")
 	var flicker_nodes := 0
-	for room_light in room_lights:
-		if room_light is FlickerLight:
-			flicker_nodes += 1
-			check((room_light as FlickerLight).mats == [flicker_material],
-				"cell %s flicker drives more than its selected lens" % cell)
+	for ballast in chunk.find_children("*","Node",true,false):
+		if not ballast is BloomFixtureFlicker: continue
+		flicker_nodes += 1
+		check(ballast.mats==[flicker_material] and ballast.lights.size()==1,
+			"cell %s flicker drives more than its selected fixture"%cell)
+		check(ballast.lights[0].get_meta("visible_source")=="office_flickering_troffer",
+			"ballast drives a stable panel")
 	check(flicker_nodes == (1 if expected_flicker else 0),
 		"cell %s flicker nodes=%d expected %d" % [
 			cell, flicker_nodes, 1 if expected_flicker else 0])

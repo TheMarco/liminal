@@ -215,6 +215,7 @@ var _slide_distance := 0.0
 var _slide_speed := 0.0
 var _slide_rearm := 0.0
 var grace := 0.9            # arrival contact safety while it materializes
+var appearance_delay := 0.0 # committed spawn: warn before visual/pursuit starts
 var announce := false       # a soft footstep as it arrives
 
 ## The variant's row from TUNING, read once in _ready.
@@ -408,6 +409,8 @@ func _create_walker_visual() -> void:
 		_walker.rotation.y = atan2(direction.x, direction.z)
 	add_child(_walker)
 	_walker.manifestation_changed.connect(_on_walker_manifestation_changed)
+	if appearance_delay > 0.0:
+		_walker.disappear(0.0)
 	# This model has a grounded authored walk, so its feet stay on the real floor.
 	_eye_h = 1.66
 	_set_visual_parameter(&"fade", 1.0)
@@ -538,6 +541,15 @@ func _physics_process(dt: float) -> void:
 	if _walker != null:
 		_walker.begin_motion_frame()
 	ground_velocity = Vector3.ZERO
+	if GameplayFrameGuard.is_recovering(): return
+	# Keep the entire encounter dormant during its recording warning. Pause
+	# and passive beats preserve both this delay and the later contact grace.
+	if appearance_delay > 0.0:
+		if not suppressed:
+			appearance_delay = maxf(0.0, appearance_delay - dt)
+			if appearance_delay == 0.0 and _walker != null:
+				_walker.appear(ShadowWalkerVisual.APPEAR_SECONDS)
+		return
 	# Room crossings define the original encounter lifetime. Movement and path
 	# finding remain fully active until a clean, separated-room retirement.
 	_update_chase_lifetime()
@@ -710,7 +722,7 @@ func invalidate_navigation_for_topology_change() -> void:
 func _advance(dt: float, observed := true) -> void:
 	ground_velocity = Vector3.ZERO
 	_walker.begin_motion_frame()
-	if _approach_hold > 0.0 or dt <= 0.0:
+	if GameplayFrameGuard.is_recovering() or _approach_hold > 0.0 or dt <= 0.0:
 		return
 	# Bound both steering and travel on a hitch, rather than bounding yaw alone
 	# while letting the actor travel a full long frame in the wrong direction.
@@ -1432,7 +1444,7 @@ func _ignite(refund_torch := true, play_sound := true) -> void:
 
 ## It got to you. The owning game mode decides the outcome.
 func _seize() -> void:
-	if _fade >= 0.0:
+	if _fade >= 0.0 or GameplayFrameGuard.is_recovering():
 		return
 	# Consume the save here: only this exact catching figure is destroyed.
 	if is_instance_valid(player) and player.try_emergency_flash():

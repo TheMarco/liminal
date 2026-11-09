@@ -1,4 +1,5 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 static var _monolith_tendril_mesh: CylinderMesh
 
 static func clear_runtime_cache() -> void:
@@ -263,19 +264,20 @@ func _brutalist_lighting() -> void:
 	var corridor_axis := WorldGen.corridor(ctx.world_seed, ctx.cell)
 	var along_x := corridor_axis != 2
 	var emission_mats: Array[StandardMaterial3D] = []
+	var lights: Array[Light3D] = []
 	# Mark Peters' four real fixture designs replace the former glowing boxes.
 	# Passage cells get a single-file rhythm below their lower tunnel lid;
 	# monumental rooms use a sparse two-by-two ceiling field.
 	if ctx.style == WorldGen.BRUTAL_PASSAGE:
-		var fixture_y := TUNNEL_HEIGHT - 0.015
+		var fixture_y := TUNNEL_HEIGHT - 0.85
 		for i in 4:
 			var along := 1.5 + float(i) * 3.0
 			var p := Vector3(along, fixture_y, 6.0) if along_x \
 				else Vector3(6.0, fixture_y, along)
 			_brutal_fluorescent_fixture(p, PI * 0.5 if along_x else 0.0,
-				[1, 3, 2, 1][i], dead, flicker, emission_mats)
+				[1, 3, 2, 1][i], dead, flicker, emission_mats, lens, lights)
 	else:
-		var fixture_y := ctx.ceiling_height - 0.025
+		var fixture_y := ctx.ceiling_height - 0.85
 		var fi := 0
 		for x in [3.7, 8.3]:
 			for z in [3.7, 8.3]:
@@ -283,7 +285,7 @@ func _brutalist_lighting() -> void:
 					int(ctx.random01(2124 + fi) * 3.99) + fi, 4)
 				_brutal_fluorescent_fixture(Vector3(x, fixture_y, z),
 					PI * 0.5 if along_x else 0.0, variant,
-					dead, flicker, emission_mats)
+					dead, flicker, emission_mats, lens, lights)
 				fi += 1
 	if dead:
 		return
@@ -291,50 +293,46 @@ func _brutalist_lighting() -> void:
 		or ctx.style == WorldGen.BRUTAL_SANCTUM \
 		or ctx.style == WorldGen.BRUTAL_WATER_COURT
 	var passage := ctx.style == WorldGen.BRUTAL_PASSAGE
-	var light := scene.main_light(flicker, lens,
-		1.55 if passage else (2.35 if huge else 1.75))
-	if light is FlickerLight and not emission_mats.is_empty():
-		(light as FlickerLight).mats = emission_mats
-	light.light_color = Color(0.70, 0.82, 0.90)
-	light.omni_range = 10.5 if passage else (18.0 if huge else 14.0)
-	light.position = Vector3(6.0,
-		TUNNEL_HEIGHT - 0.62 if passage else ctx.ceiling_height - 1.15, 6.0)
-	# This central source used to float below four authored tubes. Give it a
-	# literal ceiling luminaire so the pool of light has a readable origin from
-	# anywhere in the room. The taller atria use this as the aperture for the
-	# downward shaft as well.
-	var source_y := TUNNEL_HEIGHT - 0.035 if passage else ctx.ceiling_height - 0.035
-	scene.box(Vector3(6.0, source_y + 0.035, 6.0),
-		Vector3(1.20 if passage else (1.45 if huge else 0.90), 0.10,
-			0.28 if passage else (1.45 if huge else 0.90)),
-		Mats.brutal_steel(), false)
-	var source_lens := scene.box(Vector3(6.0, source_y - 0.035, 6.0),
-		Vector3(1.02 if passage else (1.18 if huge else 0.68), 0.045,
-			0.16 if passage else (1.18 if huge else 0.68)),
-		Mats.brutal_panel(), false)
-	source_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	light.set_meta("visible_source", "central_brutalist_luminaire")
-	light.shadow_enabled = huge
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 28.0
-	light.distance_fade_length = 10.0
-	scene.add_node(light)
+	var ceiling := TUNNEL_HEIGHT if passage else ctx.ceiling_height
+	var frame := Node3D.new()
+	frame.name = "DataCenterCeilingLuminaire"
+	frame.position = Vector3(6,ceiling-0.035,6)
+	frame.set_meta("practical_fixture","central_brutalist_luminaire")
+	scene.add_node(frame)
+	scene.model_box(frame,Vector3(0,0.035,0),
+		Vector3(1.20 if passage else (1.45 if huge else 0.90),0.10,
+			0.28 if passage else (1.45 if huge else 0.90)),Mats.brutal_steel())
+	var source_lens := scene.model_box(frame,Vector3(0,-0.035,0),
+		Vector3(1.02 if passage else (1.18 if huge else 0.68),0.045,
+			0.16 if passage else (1.18 if huge else 0.68)),lens)
+	scene.disable_shadows(frame)
+	var height_scale := maxf(1.0,(ceiling-0.1)/6.0)
+	var light := FIXTURE_LIGHTING.lower_face(frame,source_lens,Color(0.70,0.82,0.90),
+		(1.55 if passage else 2.35)*height_scale*height_scale,
+		maxf(10.5,ceiling+4.0),1,"central_brutalist_luminaire")
+	lights.append(light)
 	if huge and ctx.ceiling_height > 7.0:
 		var shaft := SpotLight3D.new()
-		shaft.light_color = Color(0.62, 0.78, 0.90)
+		shaft.light_color = Color(0.62,0.78,0.90)
 		shaft.light_energy = 4.0
 		shaft.light_volumetric_fog_energy = 1.6
-		shaft.spot_range = ctx.ceiling_height + 3.0
+		shaft.spot_range = ctx.ceiling_height+3.0
 		shaft.spot_angle = 38.0
-		shaft.position = Vector3(6.0, ctx.ceiling_height - 0.35, 6.0)
-		shaft.rotation.x = -PI * 0.5
-		shaft.shadow_enabled = true
-		shaft.distance_fade_enabled = true
-		shaft.distance_fade_begin = 30.0
-		shaft.distance_fade_length = 12.0
-		shaft.set_meta("stream_room_light", true)
-		shaft.set_meta("visible_source", "central_brutalist_luminaire")
-		scene.add_node(shaft)
+		shaft.position = light.position
+		shaft.rotation.x = -PI*0.5
+		frame.add_child(shaft)
+		shaft.set_meta("visible_source","central_brutalist_luminaire")
+		shaft.set_meta("fixture_emitter",shaft.get_path_to(source_lens))
+		shaft.set_meta("fixture_face",light.get_meta("fixture_face"))
+		shaft.set_meta("fixture_upward",false)
+		GraphicsQuality.configure_practical_light(shaft,2)
+		lights.append(shaft)
+	if flicker:
+		for lamp in lights: lamp.light_volumetric_fog_energy = 0.0
+		var ballast := FIXTURE_LIGHTING.ballast(scene,lights,lens,
+			WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),frame.position)
+		ballast.mats.append_array(emission_mats)
+
 
 
 ## Select one of the four fixtures contained in the supplied Sketchfab scene,
@@ -343,7 +341,8 @@ func _brutalist_lighting() -> void:
 ## ballast state can never alter every fixture sharing the cached mesh.
 func _brutal_fluorescent_fixture(at: Vector3, yaw: float, variant: int,
 		dead: bool, flicker: bool,
-		emission_mats: Array[StandardMaterial3D]) -> void:
+		emission_mats: Array[StandardMaterial3D], upper_material: StandardMaterial3D,
+		lights: Array[Light3D]) -> void:
 	variant = clampi(variant, 0, FIXTURE_VARIANTS.size() - 1)
 	var pivot := Node3D.new()
 	pivot.position = at
@@ -368,8 +367,24 @@ func _brutal_fluorescent_fixture(at: Vector3, yaw: float, variant: int,
 		candidate.visible = i == variant
 		if i == variant:
 			selected = candidate
-	if selected == null or (not dead and not flicker):
-		return
+	if selected == null: return
+	# Retain the four authored tube/louvre designs. An exposed opal cap above
+	# each suspended housing supplies real ceiling bounce on every quality tier.
+	pivot.set_meta("practical_fixture","brutal_fluorescent_upper")
+	var bounds := FIXTURE_LIGHTING.bounds_in(selected,pivot)
+	var centre_at := bounds.get_center()
+	centre_at.y = bounds.end.y+0.025
+	var cap_size := Vector3(bounds.size.x*0.8,0.05,bounds.size.z*0.8)
+	var upper := scene.model_box(pivot,centre_at,cap_size,upper_material)
+	upper.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for sign_value in [-1.0,1.0]:
+		var stem := Vector3(centre_at.x,0.45,centre_at.z+sign_value*bounds.size.z*0.3)
+		scene.model_cylinder(pivot,stem,0.009,0.80,Mats.brutal_steel())
+	if not dead:
+		lights.append(FIXTURE_LIGHTING.rectangular(pivot,upper,Vector2(cap_size.x,cap_size.z),
+			centre_at+Vector3.UP*0.025,true,Color(0.70,0.82,0.90),1.4,9.0,4,
+			"brutal_fluorescent_upper"))
+	if not dead and not flicker: return
 	for found in selected.find_children("*", "MeshInstance3D", true, false):
 		var mesh_node := found as MeshInstance3D
 		if mesh_node.mesh == null:
@@ -639,33 +654,21 @@ static func prewarm_busways() -> void:
 
 
 func _machine_room_light(at: Vector3, energy := 2.0) -> void:
-	var light := OmniLight3D.new()
-	light.position = Vector3(at.x,
-		minf(ctx.ceiling_height - 1.05, 3.35), at.z)
-	# The aisle light is a suspended service strip, not a disembodied fill. Its
-	# diffuser sits immediately over the point source and the short steel drop
-	# makes the ceiling connection legible even above the racks.
-	var fixture_y := light.position.y + 0.18
-	scene.box(Vector3(at.x, fixture_y + 0.045, at.z),
-		Vector3(1.10, 0.10, 0.24), Mats.brutal_steel(), false)
-	var aisle_lens := scene.box(Vector3(at.x, fixture_y - 0.025, at.z),
-		Vector3(0.94, 0.035, 0.14), Mats.brutal_panel(), false)
-	aisle_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if ctx.ceiling_height > fixture_y + 0.10:
-		scene.beam(Vector3(at.x, fixture_y + 0.08, at.z),
-			Vector3(at.x, ctx.ceiling_height - 0.04, at.z),
-			0.018, Mats.brutal_steel())
-	light.light_color = Color(0.42, 0.72, 0.92)
-	light.light_energy = energy
-	light.omni_range = 10.5
-	light.shadow_enabled = false
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 22.0
-	light.distance_fade_length = 8.0
-	light.set_meta("data_center_aisle_light", true)
-	light.set_meta("stream_room_light", true)
-	light.set_meta("visible_source", "suspended_data_center_strip")
-	scene.add_node(light)
+	var fixture_y := minf(ctx.ceiling_height-1.05,3.35)+0.18
+	var frame := Node3D.new()
+	frame.name = "DataCenterServiceStrip"
+	frame.position = Vector3(at.x,fixture_y,at.z)
+	frame.set_meta("practical_fixture","suspended_data_center_strip")
+	scene.add_node(frame)
+	scene.model_box(frame,Vector3(0,0.045,0),Vector3(1.10,0.10,0.24),Mats.brutal_steel())
+	var lens := scene.model_box(frame,Vector3(0,-0.025,0),Vector3(0.94,0.035,0.14),Mats.brutal_panel())
+	scene.disable_shadows(frame)
+	if ctx.ceiling_height>fixture_y+0.10:
+		scene.beam(Vector3(at.x,fixture_y+0.08,at.z),
+			Vector3(at.x,ctx.ceiling_height-0.04,at.z),0.018,Mats.brutal_steel())
+	var light := FIXTURE_LIGHTING.lower_face(frame,lens,Color(0.42,0.72,0.92),
+		energy,7.0,2,"suspended_data_center_strip")
+	light.set_meta("data_center_aisle_light",true)
 
 
 func _rack_aisle(axis_x: bool, service_half_width := 1.60) -> void:

@@ -15,19 +15,38 @@ func _expect(ok: bool, detail: String) -> void:
 func _verify() -> void:
 	_expect(not FileAccess.file_exists("res://export_presets.cfg"), "source tree leaked into pack check")
 	for path in ["res://scripts/main.gd", "res://scripts/caught_sequence.gd",
+			"res://scripts/gameplay_frame_guard.gd",
+			"res://scripts/runtime_diagnostics.gd", "res://scripts/ntscrt_video_host.gd",
+			"res://scripts/ntscrt_gpu_presenter.gd",
 			"res://scripts/levels/school_level_builder.gd", "res://scripts/levels/brutalist_level_builder.gd",
 			"res://textures/annex/half_wall_cap_wood.png", "res://scenes/main.tscn"]:
 		_expect(ResourceLoader.exists(path), "missing packed runtime resource: " + path)
+	_expect(ProjectSettings.get_setting("autoload/StallGuard", "") == "*res://scripts/gameplay_frame_guard.gd",
+		"stall recovery is not enabled in exported startup")
+	_expect(ProjectSettings.get_setting("rendering/rendering_device/d3d12/max_resource_descriptors", 0) == 131072,
+		"D3D12 descriptor capacity fix absent")
+	var recovery = load("res://scripts/gameplay_frame_guard.gd")
+	_expect(recovery != null and recovery.STALL_USEC == 250000 and recovery.RECOVERY_USEC == 750000,
+		"stall recovery timing missing or stale")
+	var chain = load("res://scripts/ntscrt_slang_chain.gd")
+	_expect(chain != null and chain.COMPILED_CACHE_LIMIT == 64, "bounded CRT bytecode cache absent")
 	_expect(FileAccess.file_exists("res://models/authored/pool_equipment/collision.json"),
 		"pool-equipment collision data absent")
 	_expect(FileAccess.file_exists("res://THIRD_PARTY_ASSETS.md"), "asset credits absent")
-	_expect(FileAccess.file_exists("res://subtitles/en.json"), "story subtitle tracks absent")
+	for locale in ["en", "ja", "ko", "zh_CN", "zh_TW"]:
+		_expect(FileAccess.file_exists("res://subtitles/%s.json" % locale), "subtitle tracks absent: " + locale)
+		_expect(FileAccess.file_exists("res://localization/%s.json" % locale), "UI catalog absent: " + locale)
+	for region in ["jp", "kr", "sc", "tc"]:
+		_expect(ResourceLoader.exists("res://fonts/cjk/NotoSansCJK%s-Regular.otf" % region), "CJK font absent: " + region)
+	_expect(FileAccess.file_exists("res://fonts/cjk/LICENSE.txt"), "CJK font license absent")
+	_expect(FileAccess.file_exists("res://localization/art_text.json"), "art inscriptions absent")
 	var subtitles_script := load("res://scripts/story_subtitles.gd") as GDScript
 	_expect(subtitles_script != null and subtitles_script.can_instantiate(), "subtitle player absent or cannot compile")
 	if subtitles_script != null and subtitles_script.can_instantiate():
-		var tracks: Dictionary = subtitles_script.tracks()
-		for path in load("res://scripts/vhs_tape_library.gd").all_paths():
-			_expect(tracks.has(path), "packed recording lacks its subtitle track: " + path)
+		for locale in ["en", "ja", "ko", "zh_CN", "zh_TW"]:
+			var tracks: Dictionary = subtitles_script.tracks(locale)
+			for path in load("res://scripts/vhs_tape_library.gd").all_paths():
+				_expect(tracks.has(path), "packed recording lacks its subtitle track: " + locale + path)
 	var walker_script = load("res://scripts/shadow_walker_visual.gd")
 	_expect(walker_script != null, "animated monster presentation absent")
 	if walker_script != null:
@@ -54,7 +73,7 @@ func _verify() -> void:
 	_expect(is_equal_approx(pursuer.pursuit_speed(true, 10.0), 2.1 * 1.03),
 		"halved Pool Girl deck run speed missing")
 	pursuer.free()
-	for folder in ["res://art/ending_outside", "res://deliverables",
+	for folder in ["res://art/ending_outside", "res://deliverables", "res://experiments",
 			"res://models/cc_by_nc", "res://textures/cc_by_nc", "res://prototypes_shelved",
 			"res://tools"]:
 		_expect(not DirAccess.dir_exists_absolute(folder), "development/deprecated resources bundled: " + folder)

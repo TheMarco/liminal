@@ -1,8 +1,18 @@
 # Upload It Wants You To Stay to Steam
 
+Version **0.5.8** was uploaded on November 8, 2026 as [Build 26529262](https://partner.steamgames.com/apps/builddetails/4336360/26529262), covering Windows, Linux and macOS with startup/streaming improvements and runtime diagnostics. All three depots are confirmed in Steamworks. The build is **live on the default branch**, activated November 8 at 4:46 p.m. Pacific, replacing 0.5.7. The full release run passed **168/168 audits**; all three exported packs passed resource verification and 72 CRT asset checks each. The exported Mac app passed a native release smoke test. Apple accepted notarization submission `bc5c5ead-1b05-45a4-a477-10728f2e1d7d`; the Mac app passed Developer ID signature, stapled-ticket and Gatekeeper checks. Validated executable/game-pack hashes were unchanged before upload. Release evidence is under `build/steam-release-2026-11-08/`, including the final full audit run in `audits/` and archived Steam manifests/logs in `steam-upload/`.
+
+Version **0.5.7** was uploaded on October 25, 2026 as [Build 26204961](https://partner.steamgames.com/apps/builddetails/4336360/26204961), covering Windows, Linux and macOS with Japanese, Korean, Simplified Chinese and Traditional Chinese localization. All three depots are confirmed in Steamworks. The build was activated on the **default** branch on October 25 at 4:12 p.m. Pacific, replacing 0.5.6. Store revision 6 was published the same day; the public language table confirms interface and subtitle support for all five languages, with full audio only in English. All 167 release audit gates are satisfied by the full run and focused reruns, and all three exported packs passed resource verification. Apple accepted notarization submission `15e3eed2-8cbb-40fd-a134-a289b7989d33` on October 25, 2026. The Mac app passed Developer ID signature, stapled-ticket and Gatekeeper verification, and its game pack is byte-identical to the verified export. Release evidence is under `build/steam-release-2026-10-24/`; Steam upload logs are in `build/steam-upload-output/`.
+
+For this release, `notarytool` first timed out during upload and then crashed with SIGBUS. Xcode's Developer ID distribution uploader completed successfully using the same signing identity. The Xcode archive, notarization result and distribution checks are in `build/steam-release-2026-10-24/xcode-notarization/`; the accepted app is installed in the normal `build/macos/` upload location.
+
+Version **0.5.6** was uploaded on October 22, 2026 as [Build 26137367](https://partner.steamgames.com/apps/builddetails/4336360/26137367), covering Windows, Linux and macOS. It was live on the **default** branch until version 0.5.7 replaced it on October 25. Three full audit runs on October 21 each passed 165 of 166 audits; the single failure differed every run (`objective_prompts`, `test_mode`, `pool_enemy_ground`), and each was a headless dummy-renderer RID race rather than a failed assertion. With the owner's approval the release was exported without a fourth audit pass. All three exported packs passed resource verification. The Mac app passed Developer ID signature, stapled-ticket and Gatekeeper verification. Apple notarization submission: `3024d5b5-e13a-4c1e-b1ca-bd150ebf332e` (Accepted).
+
+Version **0.5.5** was uploaded and set live on the **default** branch on October 12, 2026 as [Build 25895508](https://partner.steamgames.com/apps/builddetails/4336360/25895508). Apple notarization submission: `0f0f91a9-cc98-4c49-83a2-9a191763d843` (Accepted).
+
 Double-click **Upload to Steam.command** and sign in to Steam in Terminal when prompted. The account defaults to `marcovhv`, matching the Steamworks session used for setup. Enter passwords and Steam Guard codes only in SteamCMD's prompt.
 
-The script checks the existing game files and requires the Mac app to pass Developer ID signature verification, stapled notarization-ticket validation, and Gatekeeper assessment. It then runs a SteamPipe preview and uploads to app **4336360**. The game files are version **0.5.3**, exported September 27, 2026. This does not export a new game build from the source code.
+The script checks the existing game files and requires the Mac app to pass Developer ID signature verification, stapled notarization-ticket validation, and Gatekeeper assessment. It then runs a SteamPipe preview and uploads to app **4336360**. The configuration targets version **0.5.9**. Run `./build.sh` successfully before uploading; the uploader itself does not export a new game build from the source code. `BUILD_ARCHIVES=0 ./build.sh` omits optional standalone ZIP archives when only a Steam upload is needed.
 
 | Platform | Depot | Installed executable/bundle |
 | --- | --- | --- |
@@ -10,10 +20,10 @@ The script checks the existing game files and requires the Mac app to pass Devel
 | Linux | 4336365 | `It wants you to stay.x86_64` |
 | macOS | 4336366 | `It wants you to stay.app` |
 
-Only the game executables and Mac bundle are mapped. The old ZIP archives, source code, and uploader files are excluded by the explicit mappings.
+Only the game executables, any exported Windows runtime DLLs (including their architecture subdirectories), and Mac bundle are mapped. The ZIP archives, source code, and uploader files are excluded by the explicit mappings.
 
 An upload does **not** release the game or make the build live on a branch. After Steam reports a successful BuildID, verify it on the [Builds page](https://partner.steamgames.com/apps/builds/4336360). Assigning a branch, testing the installation, and submitting for Valve's review are separate steps.
 
-SteamCMD comes from Valve's Steamworks SDK 1.65. Its local files are in `build/steam-tools/`; build logs and caches go to `build/steam-upload-output/`. Both are under the project's ignored build directory. Do not share SteamCMD's login/config files.
+SteamCMD is restored from Valve's official macOS installer and updates itself on launch. Its local files are in `build/steam-tools/`; build logs and caches go to `build/steam-upload-output/`. Both are under the project's ignored build directory. Do not share SteamCMD's login/config files.
 
 Reference: [Valve's SteamPipe upload documentation](https://partner.steamgames.com/doc/sdk/uploading).

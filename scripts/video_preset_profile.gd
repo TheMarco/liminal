@@ -1,0 +1,190 @@
+class_name NtscrtProfile
+extends Resource
+## Portable settings. Sharing one resource intentionally updates all its effects.
+const SETTINGS = preload("res://scripts/ntscrt_full_settings.gd")
+enum Tape { OFF, HOME_VIDEO, FOUND_FOOTAGE, WORN_TAPE }
+enum Quality { LOW, MEDIUM, HIGH, ULTRA }
+const CRT_NAMES := ["automatic", "aperture", "easymode", "glow_gauss", "glow_lanczos", "hyllian", "royale", "sim"]
+const SIGNAL_SIZES := [Vector2i(360,240), Vector2i(540,360), Vector2i(720,480), Vector2i(720,480)]
+const OUTPUT_HEIGHTS := [720,1080,1440,0]
+const CRT_CALIBRATION := preload("res://scripts/crt_calibration.gd").DEFAULTS
+
+static var _crt_presets: Dictionary = {}
+
+@export var tape: Tape = Tape.FOUND_FOOTAGE:
+	set(value):
+		tape = clampi(value,0,3) as Tape
+		emit_changed()
+@export_range(0.0,1.0,0.01) var tape_damage := 0.35:
+	set(value):
+		tape_damage = clampf(value,0.0,1.0) if is_finite(value) else 0.35
+		emit_changed()
+@export_range(0.0,1.0,0.01) var film_grain := 0.12:
+	set(value):
+		film_grain = clampf(value,0.0,1.0) if is_finite(value) else 0.12
+		emit_changed()
+## Camera color response, before transmission and CRT playback. Neutral defaults
+## preserve older presets. These share the existing grain pass.
+@export_range(0.0,1.5,0.01) var color_saturation := 1.0:
+	set(value):
+		color_saturation = clampf(value,0.0,1.5) if is_finite(value) else 1.0
+		emit_changed()
+@export_range(-1.0,1.0,0.01) var color_temperature := 0.0:
+	set(value):
+		color_temperature = clampf(value,-1.0,1.0) if is_finite(value) else 0.0
+		emit_changed()
+@export_range(0.0,0.12,0.001) var color_shadow_lift := 0.0:
+	set(value):
+		color_shadow_lift = clampf(value,0.0,0.12) if is_finite(value) else 0.0
+		emit_changed()
+## Brief recording defects are part of a look; encounter cues take priority.
+## Zero rate preserves the behavior of existing saved presets.
+@export_range(0.0,20.0,0.5) var ambient_fault_rate := 0.0:
+	set(value):
+		ambient_fault_rate = clampf(value,0.0,20.0) if is_finite(value) else 0.0
+		emit_changed()
+@export_range(0.0,1.0,0.01) var ambient_fault_strength := 0.5:
+	set(value):
+		ambient_fault_strength = clampf(value,0.0,1.0) if is_finite(value) else 0.5
+		emit_changed()
+@export_enum("Tracking","Color unlock","Dropout","RF static","Sync slip") var ambient_fault_kind := 2:
+	set(value):
+		ambient_fault_kind = clampi(value,0,4)
+		emit_changed()
+@export var crt_enabled := false:
+	set(value):
+		crt_enabled = value
+		emit_changed()
+@export var quality: Quality = Quality.MEDIUM:
+	set(value):
+		quality = clampi(value,0,3) as Quality
+		emit_changed()
+@export var reduced_flashing := false:
+	set(value):
+		reduced_flashing = value
+		emit_changed()
+@export_enum("Automatic","Aperture","EasyMode","Glow Gaussian","Glow Lanczos","Hyllian","Royale","Crtsim") var crt_model := 0:
+	set(value):
+		crt_model = clampi(value,0,7)
+		emit_changed()
+@export var receiver_enabled := false:
+	set(value):
+		receiver_enabled = value
+		emit_changed()
+@export var receiver_tape_coupling := false:
+	set(value):
+		receiver_tape_coupling = value
+		emit_changed()
+@export var field_history := false:
+	set(value):
+		field_history = value
+		emit_changed()
+@export var source_resolution := false:
+	set(value):
+		source_resolution = value
+		emit_changed()
+@export_enum("Fast bilinear","Nearest","Nearest+","Bilinear","Bicubic","Lanczos3","Area") var downscale_filter := 0:
+	set(value):
+		downscale_filter = clampi(value,0,6)
+		emit_changed()
+@export_enum("Automatic","Custom width","Source size") var signal_size_mode := 0:
+	set(value):
+		signal_size_mode = clampi(value,0,2)
+		emit_changed()
+@export_range(16,4096,2) var signal_width := 720:
+	set(value):
+		signal_width = clampi(value,16,4096)
+		emit_changed()
+@export_enum("Quality budget","Original supersampling","Original integer fit") var presentation_scale := 0:
+	set(value):
+		presentation_scale = clampi(value,0,2)
+		emit_changed()
+@export var auto_world_resolution := true:
+	set(value):
+		auto_world_resolution = value
+		emit_changed()
+## Canonical overrides. Assign a new dictionary or call emit_changed() after editing in place.
+@export var ntsc_overrides: Dictionary = {}:
+	set(value):
+		ntsc_overrides = value.duplicate(true)
+		emit_changed()
+@export var receiver_overrides: Dictionary = {}:
+	set(value):
+		receiver_overrides = value.duplicate(true)
+		emit_changed()
+## A dictionary per CRT model, e.g. {"royale": {"lcd_gamma": 2.8}}.
+@export var crt_parameters: Dictionary = {}:
+	set(value):
+		crt_parameters = value.duplicate(true)
+		emit_changed()
+
+func select_tape(look: Tape) -> void:
+	tape = look
+	tape_damage = [0.0,0.5,0.35,0.65][tape]
+	film_grain = [0.0,0.4,0.12,0.2][tape]
+	ntsc_overrides = {}
+	# The independent CRT and receiver choices are preserved.
+
+func active_crt() -> String:
+	if not crt_enabled: return "none"
+	return selected_crt_model()
+
+## The selected model remains editable even when the CRT stage is switched off.
+func selected_crt_model() -> String:
+	return ("royale" if quality>=Quality.HIGH else "aperture") if crt_model==0 else CRT_NAMES[crt_model]
+
+static func crt_descriptors(model: String) -> Dictionary:
+	if _crt_presets.is_empty():
+		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://third_party/ntscrt/slang/presets.json"))
+		if data is Dictionary: _crt_presets = data.get("presets",{})
+	return _crt_presets.get(model,{}).get("parameters",{}).duplicate(true)
+
+## Complete model values, including upstream defaults and this port's calibration.
+## Sending the complete set also restores shader defaults after removing overrides.
+func canonical_crt_parameters(model: String) -> Dictionary:
+	var result: Dictionary = {}
+	var overrides: Dictionary = CRT_CALIBRATION.get(model,{}).duplicate(true)
+	if crt_parameters.get(model,{}) is Dictionary:
+		overrides.merge(crt_parameters.get(model,{}),true)
+	for key: String in crt_descriptors(model):
+		var descriptor: Dictionary = _crt_presets[model].parameters[key]
+		var value: Variant = overrides.get(key,descriptor.default)
+		if not (value is int or value is float) or not is_finite(float(value)):
+			value = descriptor.default
+		result[key] = clampf(float(value),float(descriptor.min),float(descriptor.max))
+	return result
+
+func canonical_ntsc_settings() -> Dictionary:
+	var knobs := SETTINGS.ntsc_defaults()
+	if tape==Tape.WORN_TAPE:
+		knobs.merge({"vhs_edge_wave":1.1,"tracking_noise_height":24,
+			"tracking_noise_wave_intensity":20.0,"tracking_noise_noise_intensity":0.35,
+			"chroma_noise_intensity":0.14,"vhs_chroma_loss":0.00008,"snow_intensity":0.0008},true)
+	knobs.merge(ntsc_overrides,true)
+	return SETTINGS.sanitize_ntsc(knobs)
+
+func signal_settings() -> Dictionary:
+	var knobs := canonical_ntsc_settings()
+	if signal_size_mode==0 and not source_resolution and quality<Quality.HIGH:
+		knobs["scale_with_video_size"] = true
+	for key in ["composite_noise_intensity","luma_noise_intensity","chroma_noise_intensity","snow_intensity","chroma_phase_noise_intensity","vhs_edge_wave","vhs_chroma_loss","head_switching_horizontal_shift","tracking_noise_wave_intensity","tracking_noise_snow_intensity","tracking_noise_noise_intensity"]:
+		knobs[key] = float(knobs[key])*tape_damage*2.0
+	knobs["field_history"] = field_history and not reduced_flashing
+	if reduced_flashing:
+		knobs["use_field"] = 3
+		for key in ["head_switching","tracking_noise","vhs_edge_wave_enabled","composite_noise","luma_noise","chroma_noise"]: knobs[key] = false
+		for key in ["snow_intensity","vhs_chroma_loss","chroma_phase_noise_intensity"]: knobs[key] = 0.0
+	return knobs
+
+func receiver_settings() -> Dictionary:
+	var knobs := SETTINGS.sanitize_receiver(receiver_overrides)
+	if receiver_tape_coupling:
+		for key in ["head_switch","timebase_jitter","crinkle","head_clog","tracking","dropouts"]:
+			knobs[key] = float(knobs[key])*tape_damage*2.0
+	if reduced_flashing:
+		for key in ["head_switch","timebase_jitter","crinkle","head_clog","tracking","dropouts","horizontal_hold","vertical_hold","hum"]: knobs[key] = 0.0
+		knobs["signal_strength"] = 1.0
+	return knobs
+
+func active_crt_parameters() -> Dictionary:
+	return canonical_crt_parameters(active_crt())

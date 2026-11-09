@@ -21,3 +21,15 @@ Re-download:
     https://github.com/google/fonts/raw/main/apache/rocksalt/RockSalt-Regular.ttf
     https://github.com/google/fonts/raw/main/ofl/caveat/Caveat%5Bwght%5D.ttf
     https://github.com/google/fonts/raw/main/ofl/vt323/VT323-Regular.ttf
+
+## CJK fallback faces
+
+`cjk/NotoSansCJK{jp,kr,sc,tc}-Regular.otf` are the Japanese, Korean,
+Simplified Chinese and Traditional Chinese regional faces from Noto CJK
+Sans 2.004. They are bundled locally and selected by the game language;
+no installed system font or network access is required.
+
+Source: https://github.com/notofonts/noto-cjk/tree/Sans2.004/Sans/OTF
+
+License: SIL Open Font License 1.1, included in `cjk/LICENSE.txt`.
+Copyright 2014–2021 Adobe, with reserved font name Source.

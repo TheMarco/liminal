@@ -106,6 +106,9 @@ func run() -> void:
 		game._music.stream = load(game._music_track_for(game.active_level))
 		game._music.play()
 	expect(game._music.playing, "soundtrack could not start for the playback check")
+	# Headless startup omits the GPU video host. Exercise the Classic
+	# compositor explicitly; the default Full pipeline has no legacy overlay.
+	game._post_process.set_video_pipeline(0, game._settings.values)
 	game.descent_tape_watch(true)
 	expect(game._post_process._overlay.visible,
 		"TV watch must retain the whole-scene post-processing overlay")

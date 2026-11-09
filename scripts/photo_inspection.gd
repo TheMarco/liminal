@@ -99,4 +99,4 @@ func _gui_input(event: InputEvent) -> void:
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.10, 0.09, 0.075))
 	draw_rect(Rect2(Vector2.ONE, size - Vector2.ONE * 2), VhsOsd.AMBER if has_focus() else Color(0.48, 0.44, 0.35), false, 2)
-	draw_string(VhsOsd.FONT, Vector2(12, 24), caption, HORIZONTAL_ALIGNMENT_LEFT, maxf(1, size.x - 24), 22, VhsOsd.INK_DIM)
+	draw_string(VhsOsd.FONT, Vector2(12, 24), Localization.text(caption), HORIZONTAL_ALIGNMENT_LEFT, maxf(1, size.x - 24), 22, VhsOsd.INK_DIM)

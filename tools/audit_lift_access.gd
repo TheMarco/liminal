@@ -107,35 +107,47 @@ func _audit_arrival_reentry(stage: Node3D, player: Player,
 	# put unrelated furniture in this test's straight approach path.
 	chunk._descent_arrival_car(direction)
 	var rig: Dictionary = chunk._descent_arrival_rig
-	var car: Node3D = rig["root"]
-	var left: AnimatableBody3D = rig["left"]
+	var car: ElevatorCar = rig["root"]
 	var light: OmniLight3D = rig["light"]
 	player.global_position = car.to_global(Vector3(0.0, 0.15, 1.12))
 	await physics_frame
 	await physics_frame
+	# Probe the actual imported leaves/colliders across the opening, not just
+	# the presentation state: all four telescoping leaves must seal and clear.
+	for x in [-0.5, 0.0, 0.5]:
+		var from := player.global_transform
+		from.origin = car.to_global(Vector3(x, 0.15, 1.12))
+		expect(player.test_move(from, car.global_basis * Vector3(0, 0, 2.5)),
+			"closed supplied doors did not block x=%.1f facing=%d" % [x, direction])
 	chunk.open_descent_arrival()
-	expect(await await_until(func(): return left.position.x <= -1.01),
+	expect(await await_until(func(): return is_equal_approx(car.openness, 1.0)),
 		"arrival failed to open in facing %d" % direction)
+	await physics_frame
+	for x in [-0.5, 0.0, 0.5]:
+		var from := player.global_transform
+		from.origin = car.to_global(Vector3(x, 0.15, 1.12))
+		expect(not player.test_move(from, car.global_basis * Vector3(0, 0, 2.5)),
+			"open supplied doors blocked x=%.1f facing=%d" % [x, direction])
 
 	# Reverse course during the delay, then stay inside past both timers.
 	await _walk_car(player, car, 3.6, "first exit %d" % direction)
 	await _walk_car(player, car, 1.12, "return before closing %d" % direction)
 	await create_timer(2.8).timeout
-	expect(left.position.x <= -1.01 and light.visible and observer.spent_count == 0,
+	expect(is_equal_approx(car.openness, 1.0) and light.visible and observer.spent_count == 0,
 		"arrival retired after returning during delay, facing %d" % direction)
 
 	# Start back after the leaves are actually moving. Stop in the doorway:
 	# the player must not need to reach the cabin centre to stop the doors.
 	await _walk_car(player, car, 3.6, "second exit %d" % direction)
-	expect(await await_until(func(): return left.position.x > -1.0),
+	expect(await await_until(func(): return car.openness < 0.98),
 		"empty arrival never started closing, facing %d" % direction)
 	await _walk_car(player, car, 2.3, "return during closing %d" % direction)
 	await create_timer(1.2).timeout
-	expect(left.position.x <= -1.01 and light.visible and observer.spent_count == 0,
+	expect(is_equal_approx(car.openness, 1.0) and light.visible and observer.spent_count == 0,
 		"arrival sealed an occupied doorway, facing %d" % direction)
 	await _walk_car(player, car, 1.12, "back into cabin %d" % direction)
 	await create_timer(1.8).timeout
-	expect(left.position.x <= -1.01 and observer.spent_count == 0,
+	expect(is_equal_approx(car.openness, 1.0) and observer.spent_count == 0,
 		"stale close retired a reoccupied arrival, facing %d" % direction)
 
 	await _walk_car(player, car, 3.6, "final escape %d" % direction)
@@ -143,10 +155,10 @@ func _audit_arrival_reentry(stage: Node3D, player: Player,
 		"empty arrival did not retire, facing %d" % direction)
 	await physics_frame
 	await physics_frame
-	expect(is_equal_approx(left.position.x, -0.54) and observer.spent_count == 1 \
+	expect(is_zero_approx(car.openness) and observer.spent_count == 1 \
 			and chunk.descent_arrival_used,
-		"arrival retirement facing %d: leaf %.4f, spent %d, used %s" % [
-			direction, left.position.x, observer.spent_count, chunk.descent_arrival_used])
+		"arrival retirement facing %d: openness %.4f, spent %d, used %s" % [
+			direction, car.openness, observer.spent_count, chunk.descent_arrival_used])
 	chunk.free()
 	await physics_frame
 	var rebuilt := Chunk.new(21, Vector2i.ZERO, 0, {
@@ -157,7 +169,7 @@ func _audit_arrival_reentry(stage: Node3D, player: Player,
 	rebuilt.open_descent_arrival()
 	var retired: Dictionary = rebuilt._descent_arrival_rig
 	expect(not rebuilt.has_descent_arrival() and not retired["light"].visible \
-			and is_equal_approx(retired["left"].position.x, -0.54),
+			and is_zero_approx(retired["root"].openness),
 		"retired arrival reopened after rebuilding, facing %d" % direction)
 	rebuilt.free()
 	await physics_frame

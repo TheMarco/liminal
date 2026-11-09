@@ -1,5 +1,5 @@
 class_name TitleScreen
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 ## Front door for the game: a quiet title, then one deliberate page at a time.
 ##
 ## The generated world is already alive behind this opaque layer, but player
@@ -73,6 +73,7 @@ const CREDIT_SECTIONS := [
 		[
 			"ambientCG + Poly Haven + TextureCan  ·  CC0     Peter Hull / VT323  ·  SIL Open Font License",
 			"Alex Filip  —  Poolrooms tile textures  ·  CC BY 4.0",
+			"Adobe / Noto Sans CJK  ·  SIL Open Font License 1.1",
 		]],
 ]
 
@@ -108,9 +109,8 @@ var _primary_button: Button
 var _descent_start_button: Button
 
 func _ready() -> void:
-	# The supplied title art already owns its VHS treatment. Keep menu and rule
-	# typography above the layer-100 gameplay post pass so instructional text is
-	# not blurred, bloomed and scan-resampled a second time.
+	# The supplied artwork owns its styling. All live title text is presented
+	# at window resolution through the shared unfiltered screen UI canvas.
 	layer = 101
 	var back := ColorRect.new()
 	back.color = BACK
@@ -231,14 +231,10 @@ func _build_instructions() -> void:
 	_page_heading(page, "INSTRUCTIONS", "THE BUILDING WILL NOT EXPLAIN ITSELF TWICE")
 
 	var wander := _paragraph(
-		"WANDER  /  Explore eleven endless procedural worlds. Number keys and "
-		+ "physical elevators carry you between floors, and every floor remembers where "
-		+ "you left it.", 17, BODY, 820)
+		"WANDER  /  Explore eleven endless procedural worlds. Number keys and physical elevators carry you between floors, and every floor remembers where you left it.", 17, BODY, 820)
 	page.add_child(wander)
 	var descent := _paragraph(
-		"DESCENT  /  Cross all eleven floors in order. Follow the distance counter. "
-		+ "Sprinting drains a short reserve; there is no floor selection. The "
-		+ "rules are shown after you choose the mode.", 17, BODY, 820)
+		"DESCENT  /  Cross all eleven floors in order. Follow the distance counter. Sprinting drains a short reserve; there is no floor selection. The rules are shown after you choose the mode.", 17, BODY, 820)
 	page.add_child(descent)
 	page.add_child(_rule(820))
 
@@ -280,9 +276,7 @@ func _build_about() -> void:
 	page.add_child(title)
 	page.add_child(_rule(760))
 	var description := _paragraph(
-		"A first-person horror descent through eleven procedural spaces. Follow "
-		+ "Dr. Cross's recovered tapes, survive what hunts the halls, and find "
-		+ "the elevator before the architecture decides you belong to it.",
+		"A first-person horror descent through eleven procedural spaces. Follow Dr. Cross's recovered tapes, survive what hunts the halls, and find the elevator before the architecture decides you belong to it.",
 		20, BODY, 820)
 	page.add_child(description)
 	var modes := _label(
@@ -308,9 +302,7 @@ func _build_about() -> void:
 	gap2.custom_minimum_size.y = 20
 	page.add_child(gap2)
 	var acknowledgement := _paragraph(
-		"All third-party 3D model creators and supporting asset authors are "
-		+ "acknowledged on the CREDITS screen. Full model titles, source links, "
-		+ "licenses and modifications are recorded in THIRD_PARTY_ASSETS.md.",
+		"All third-party 3D model creators and supporting asset authors are acknowledged on the CREDITS screen. Full model titles, source links, licenses and modifications are recorded in THIRD_PARTY_ASSETS.md.",
 		16, BODY, 780)
 	page.add_child(acknowledgement)
 	var credit_link := _label("CREATOR ACKNOWLEDGEMENTS  /  CREDITS", 18, GOLD)
@@ -529,7 +521,7 @@ func _style(control: Control, size: int, color: Color,
 	control.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
 	control.add_theme_constant_override("shadow_offset_x", 2)
 	control.add_theme_constant_override("shadow_offset_y", 2)
-	# Same-ink outline: fattens the hairline so the tube pass keeps it.
+	# Same-ink outline gives the small title type a little more weight.
 	control.add_theme_color_override("font_outline_color", color)
 	control.add_theme_constant_override("outline_size", 1)
 	if width > 0.0 or height > 0.0:

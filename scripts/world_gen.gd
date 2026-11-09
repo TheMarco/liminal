@@ -782,6 +782,10 @@ static func annex_room_id(ws: int, cell: Vector2i) -> Vector2i:
 
 
 static func annex_room_size(ws: int, root: Vector2i) -> int:
+	# Corridors are single-cell architecture. In particular, ZERO is also the
+	# flooded-hall helper's "no hall" sentinel, not a nine-cell origin room.
+	if annex_corridor_axis(ws, root) != 0:
+		return 1
 	if _annex_flooded_hall_root(ws, root) == root:
 		return 9
 	var total := 0

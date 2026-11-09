@@ -9,6 +9,7 @@
 #       --apple-id "<apple-id-email>" --team-id 3ML6V62AF5 \
 #       --password "<app-specific-password>"
 # Skip notarization (fast local build) with:  NOTARIZE=0 ./build.sh
+# Skip standalone ZIP archives for Steam uploads with: BUILD_ARCHIVES=0 ./build.sh
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -21,8 +22,13 @@ fi
 
 NOTARY_PROFILE="${NOTARY_PROFILE:-AC_PASSWORD}"
 NOTARIZE="${NOTARIZE:-1}"
+BUILD_ARCHIVES="${BUILD_ARCHIVES:-1}"
 PRODUCT_NAME="It wants you to stay"
-RELEASE_VERSION="${RELEASE_VERSION:-0.5.4}"
+RELEASE_VERSION="${RELEASE_VERSION:-0.5.9}"
+if [[ "$BUILD_ARCHIVES" != "0" && "$BUILD_ARCHIVES" != "1" ]]; then
+	echo "BUILD_ARCHIVES must be 0 or 1." >&2
+	exit 1
+fi
 if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	echo "Release version must be major.minor.patch (found $RELEASE_VERSION)." >&2
 	exit 1
@@ -55,7 +61,12 @@ BUILD_LOG_DIR="${BUILD_LOG_DIR:-$(mktemp -d /tmp/liminal-release-checks.XXXXXX)}
 mkdir -p "$BUILD_LOG_DIR"
 echo "validation logs: $BUILD_LOG_DIR"
 
-godot --headless --path . --import
+# Generated screenshots, benchmarks and upload tools are not project assets.
+mkdir -p build
+touch build/.gdignore
+# Compute shaders require a real RenderingDevice during import. The headless
+# dummy renderer cannot compile GLSL; exports and audits remain headless.
+godot --path . --editor --import
 
 echo "==> audits"
 tools/run_audits.sh --no-import --log-dir "$BUILD_LOG_DIR"
@@ -76,16 +87,21 @@ echo "==> Windows"
 mkdir -p build/windows
 godot --headless --path . --export-release "Windows Desktop" "$STAGE_WINDOWS_EXE" >/dev/null
 verify_pack "windows" "$STAGE_WINDOWS_EXE"
-# Keep the exporter's runtime DLLs/architecture directories and console
-# wrapper. An embedded resource pack does not embed native dependencies.
-( cd "$STAGE_ROOT/windows" && zip -q -r "$STAGE_WINDOWS_ZIP" . )
+# Keep any runtime DLLs/architecture directories the exporter provides and
+# the console wrapper. Official templates can use Windows' system D3D12
+# runtime without shipping the optional Agility SDK/PIX DLLs.
+if [ "$BUILD_ARCHIVES" = "1" ]; then
+	( cd "$STAGE_ROOT/windows" && zip -q -r "$STAGE_WINDOWS_ZIP" . )
+fi
 
 echo "==> Linux"
 mkdir -p build/linux
 godot --headless --path . --export-release "Linux" "$STAGE_LINUX_EXE" >/dev/null
 chmod +x "$STAGE_LINUX_EXE"
 verify_pack "linux" "$STAGE_LINUX_EXE"
-zip -q -j "$STAGE_LINUX_ZIP" "$STAGE_LINUX_EXE"
+if [ "$BUILD_ARCHIVES" = "1" ]; then
+	zip -q -j "$STAGE_LINUX_ZIP" "$STAGE_LINUX_EXE"
+fi
 
 echo "==> macOS"
 mkdir -p build/macos
@@ -145,12 +161,18 @@ fi
 rm -rf "$APP"
 ditto "$STAGE_APP" "$APP"
 cp -R "$STAGE_ROOT/windows/." build/windows/
-cp -f "$STAGE_WINDOWS_ZIP" "$WINDOWS_ZIP"
 cp -f "$STAGE_LINUX_EXE" "$LINUX_EXE"
-cp -f "$STAGE_LINUX_ZIP" "$LINUX_ZIP"
-rm -f "$MACOS_ZIP"
-ditto -c -k --keepParent "$STAGE_APP" "$MACOS_ZIP"
+if [ "$BUILD_ARCHIVES" = "1" ]; then
+	cp -f "$STAGE_WINDOWS_ZIP" "$WINDOWS_ZIP"
+	cp -f "$STAGE_LINUX_ZIP" "$LINUX_ZIP"
+	rm -f "$MACOS_ZIP"
+	ditto -c -k --keepParent "$STAGE_APP" "$MACOS_ZIP"
+fi
 
 echo
 echo "built:"
-ls -lh "$MACOS_ZIP" "$WINDOWS_ZIP" "$LINUX_ZIP"
+if [ "$BUILD_ARCHIVES" = "1" ]; then
+	ls -lh "$MACOS_ZIP" "$WINDOWS_ZIP" "$LINUX_ZIP"
+else
+	ls -ldh "$APP" "$WINDOWS_EXE" "$LINUX_EXE"
+fi

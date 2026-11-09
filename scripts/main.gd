@@ -27,6 +27,8 @@ const MUTATION_REVEAL_EFFECT := preload(
 	"res://scripts/mutation_reveal_effect.gd")
 const CAUGHT_SEQUENCE := preload("res://scripts/caught_sequence.gd")
 const SelfReturnDoor := preload("res://scripts/self_return_door_director.gd")
+## The ending movie; built by tools/ending_outside_assemble.py.
+const OUTRO_PATH := "res://videos/outro/outside.ogv"
 ## What the ambient presence systems are allowed to do right now. Only three
 ## combinations of {figures, whispers, heartbeat} are ever wanted, and they were
 ## previously spelled out three lines at a time in eleven places -- including the
@@ -172,10 +174,14 @@ const SaveFailureNotice = preload("res://scripts/save_failure_notice.gd")
 var _save_notice: CanvasLayer
 var _applied_fullscreen: Variant = null
 var _applied_hdr_output: Variant = null
+var _title_covered := false
+var _diagnostic_settings: Dictionary = {}
 var _applied_graphics: Dictionary = {}
 var _quitting := false
 var _quit_prompt: ReturnPrompt
 var _pause_menu: PauseMenu
+var _fps_counter: CanvasLayer
+var _video_workshop: CanvasLayer
 var _pause_mouse_mode := Input.MOUSE_MODE_VISIBLE
 const MUSIC_BUS := "Music"
 
@@ -199,6 +205,10 @@ const TITLE_MUSIC := "res://music/title.mp3"
 
 
 func _ready() -> void:
+	RuntimeDiagnostics.mark("main_ready_begin")
+	RuntimeDiagnostics.set_context(_runtime_diagnostic_context)
+	if has_meta("ntscrt_video_host"):
+		get_meta("ntscrt_video_host").pipeline_failed.connect(_on_video_pipeline_failed)
 	_settings = GameSettings.new()
 	GameSettings.current = _settings
 	_settings.changed.connect(_apply_game_settings)
@@ -436,7 +446,8 @@ func _ready() -> void:
 	_figures.approach_starting.connect(
 		func(_figure: ShadowFigure):
 			player.trigger_handheld_scare(0.38, 0.06, 0.9))
-	_figures.spawned.connect(func(): _post_process.glitch_burst())
+	_figures.appearance_starting.connect(
+		func(seconds: float): _post_process.enemy_appearance_warning(seconds))
 	_figures.burned_away.connect(
 		func():
 			_heart.bump(Heartbeat.BUMP_BURNED)
@@ -471,6 +482,8 @@ func _ready() -> void:
 		_set_world_audio(false)
 	_switch_music(active_level)
 	_build_ui()
+	_fps_counter = preload("res://scripts/fps_counter.gd").new()
+	add_child(_fps_counter)
 	var game_window := get_window()
 	if game_window != null \
 			and game_window.has_signal("output_max_linear_value_changed"):
@@ -498,6 +511,48 @@ func _ready() -> void:
 	_dev_tools.schedule_screenshot(player, get_viewport(), opts.screenshot,
 		opts.shot_delay)
 	call_deferred("_settle_initial_arrival")
+	RuntimeDiagnostics.mark("main_ready_end", _runtime_diagnostic_context())
+
+
+func _runtime_diagnostic_context() -> Dictionary:
+	var video := {}
+	if has_meta("ntscrt_video_host"):
+		var host = get_meta("ntscrt_video_host")
+		video["title_suspended"] = host._suspended
+		video["source_update_mode"] = host.source.render_target_update_mode
+		if host.presenter != null:
+			video["completed_effect_frames"] = host.presenter.ready_frames
+			video["last_effect_cpu_ms"] = host.presenter.cpu_usec / 1000.0
+	return {
+		"level": active_level, "seed": world_seed, "descent": descent,
+		"title": is_instance_valid(_title), "transition": _switching,
+		"chunks": cm.chunks.size() if is_instance_valid(cm) else 0,
+		"queued_chunks": cm.queued.size() if is_instance_valid(cm) else 0,
+		"building_cell": str(cm._pending_cell) if is_instance_valid(cm) and cm._pending_chunk != null else "",
+		"player_position": str(player.position) if is_instance_valid(player) else "",
+		"player_physics_enabled": player.is_physics_processing() if is_instance_valid(player) else false,
+		"mouse_mode": Input.mouse_mode,
+		"video": video,
+		"cached_prop_scenes": FloorResourcePreloader.cached_count(),
+		"ambient_event_busy": _events._busy if is_instance_valid(_events) else false,
+		"blackout": run.blackout if is_instance_valid(run) else false,
+		"staged_mutation_chunks": cm._staged_cells.size() if is_instance_valid(cm) else 0,
+		"video_error": str(get_meta("ntscrt_video_host").presenter.last_error) if has_meta("ntscrt_video_host") and get_meta("ntscrt_video_host").presenter != null else "",
+	}
+
+
+func _set_title_covered(covered: bool) -> void:
+	if _title_covered == covered: return
+	_title_covered = covered
+	if is_instance_valid(cm): cm.set_process(not covered)
+	if has_meta("ntscrt_video_host"):
+		get_meta("ntscrt_video_host").set_title_covered(covered)
+	RuntimeDiagnostics.mark("title_coverage", {"covered": covered})
+
+
+func _on_video_pipeline_failed(_message: String) -> void:
+	# Preserve the user's saved preferences; use a plain picture for this run.
+	if _post_process != null: _post_process.set_enabled(false)
 
 
 ## The Wander contract lives here: hostile figures run only during a Descent,
@@ -558,6 +613,8 @@ func _create_descent_route(level: int, floor_idx: int) -> DescentRoute:
 
 
 func _build_level(level: int, around: Vector3) -> void:
+	var build_started := Time.get_ticks_usec()
+	RuntimeDiagnostics.mark("floor_prepare_begin", {"level": level})
 	# Floor changes are already opaque here. Bound inactive-floor retention and
 	# complete prop decoding before the player can outrun background prefetch.
 	Chunk.prepare_floor_resources(level)
@@ -658,6 +715,8 @@ func _build_level(level: int, around: Vector3) -> void:
 	# mid-transition (see ChunkManager.stream_focus).
 	cm.stream_focus = around
 	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
+	cm.set_process(not _title_covered)
+	RuntimeDiagnostics.mark("floor_prepare_end", {"level": level, "elapsed_ms": (Time.get_ticks_usec() - build_started) / 1000.0})
 	# Startup collision is ready before background decoding begins.
 	FloorResourcePreloader.configure(Chunk.theme_prop_paths(level))
 	_breathing = preload("res://scripts/environment_breath_director.gd").new()
@@ -794,6 +853,18 @@ func _finish_transition_build(level: int) -> void:
 func _apply_game_settings() -> void:
 	if _settings == null:
 		return
+	var diagnostic_settings := {}
+	for key in GameSettings.QUALITY_KEYS + ["quality_preset", "frame_limit", "vsync", "fullscreen", "hdr_enabled", "vhs_enabled", "crt_enabled", "crt_shader", "video_pipeline", "video_quality_override", "video_auto_resolution"]:
+		diagnostic_settings[key] = _settings.get_value(key)
+	if opts != null:
+		diagnostic_settings["launch_video_override"] = opts.video_pipeline_override
+		diagnostic_settings["launch_vhs_override"] = opts.vhs_override
+		diagnostic_settings["launch_crt_override"] = opts.crt_override
+	if diagnostic_settings != _diagnostic_settings:
+		_diagnostic_settings = diagnostic_settings
+		RuntimeDiagnostics.mark("settings_applied", diagnostic_settings)
+	if is_instance_valid(_fps_counter):
+		_fps_counter.set_enabled(bool(_settings.get_value("show_fps")))
 	_apply_graphics_settings()
 	var fullscreen := bool(_settings.get_value("fullscreen"))
 	if _applied_fullscreen != fullscreen:
@@ -809,6 +880,7 @@ func _apply_game_settings() -> void:
 		_apply_hdr_brightness(we.environment)
 	if is_instance_valid(player):
 		player.sensitivity_multiplier = float(_settings.values.sensitivity)
+		player._flash_dust.apply_quality(GraphicsQuality.atmosphere_tier(_settings.values))
 		player.base_fov = float(_settings.values.field_of_view)
 		player.head_bob_strength = float(_settings.values.head_bob)
 		player.handheld_camera_enabled = bool(_settings.values.handheld_camera)
@@ -827,7 +899,6 @@ func _apply_game_settings() -> void:
 	var vhs_enabled := bool(_settings.get_value("vhs_enabled")) \
 		if opts.vhs_override < 0 else opts.vhs_override == 1
 	var crt_enabled := _crt_requested()
-	var crt_changed := _crt_enabled != crt_enabled
 	var crt_curvature_enabled := bool(_settings.get_value("crt_curvature"))
 	var post_enabled := vhs_enabled or crt_enabled
 	if _post_process != null and (_vhs_enabled != vhs_enabled or _crt_enabled != crt_enabled):
@@ -838,9 +909,12 @@ func _apply_game_settings() -> void:
 	if _post_process != null and _crt_curvature_enabled != crt_curvature_enabled:
 		_crt_curvature_enabled = crt_curvature_enabled
 		_post_process.set_curvature_enabled(_crt_curvature_enabled)
-	if _post_enabled != post_enabled or crt_changed:
-		_post_enabled = post_enabled
-		_apply_scaling()
+	if _post_process != null:
+		_post_process.set_video_pipeline(_video_pipeline_requested(), _settings.values)
+	_post_enabled = post_enabled
+	# Video choices can change without a graphics-quality change (including
+	# receiver-only and launch overrides). The setter skips unchanged scales.
+	_apply_world_resolution()
 	for mat in [Mats.casino_slot_lights(), Mats.ticker()]:
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("reduced_flashing", GameSettings.flashing_reduced())
@@ -857,8 +931,10 @@ func _apply_graphics_settings() -> void:
 	if next == _applied_graphics:
 		return
 	_applied_graphics = next
-	GraphicsQuality.apply_viewport(get_viewport(), _settings, opts.notaa, _crt_requested())
+	GraphicsQuality.apply_viewport(get_viewport(), _settings, opts.notaa, _crt_requested(), _recording_requested())
 	GraphicsQuality.apply_global(_settings)
+	for light in find_children("*", "Light3D", true, false):
+		GraphicsQuality.apply_practical_light(light, _settings.values)
 	if is_instance_valid(we):
 		GraphicsQuality.apply_environment(we.environment, _settings)
 	if is_instance_valid(_realm_visit):
@@ -1020,10 +1096,20 @@ func _open_settings(only_options := false) -> void:
 	if is_instance_valid(player):
 		player.clear_sprint_toggle()
 	_pause_menu = PauseMenu.new()
+	if opts != null:
+		_pause_menu.video_lab = opts.video_lab
+		if opts.video_pipeline_override >= 0:
+			_pause_menu.video_overrides["video_pipeline"] = opts.video_pipeline_override
+		if opts.vhs_override >= 0:
+			_pause_menu.video_overrides["vhs_enabled"] = opts.vhs_override == 1
+		if opts.crt_override >= 0:
+			_pause_menu.video_overrides["crt_enabled"] = opts.crt_override == 1
 	_pause_menu.allow_return_to_title = not is_instance_valid(_descent_intro)
 	_pause_menu.allow_quit = not is_instance_valid(_descent_intro)
 	add_child(_pause_menu)
 	_pause_menu.setup(_settings, only_options)
+	_pause_menu.video_stage_selected.connect(_select_video_stage)
+	_pause_menu.preset_workshop_requested.connect(_open_video_workshop)
 	_pause_menu.resumed.connect(_close_settings)
 	_pause_menu.quit_requested.connect(_request_quit)
 	_pause_menu.return_to_title.connect(func():
@@ -1034,8 +1120,43 @@ func _open_settings(only_options := false) -> void:
 	_pause_menu.open()
 
 
+func _open_video_workshop() -> void:
+	if is_instance_valid(_video_workshop) or not has_meta("ntscrt_video_host"): return
+	_select_video_stage("look")
+	_pause_menu.visible = false
+	_video_workshop = preload("res://scripts/video_preset_workshop.gd").new()
+	add_child(_video_workshop)
+	_video_workshop.setup(_settings,get_meta("ntscrt_video_host"))
+	_video_workshop.closed.connect(func():
+		_video_workshop.queue_free()
+		_video_workshop = null
+		if is_instance_valid(_pause_menu): _pause_menu.open())
+
+
+func _select_video_stage(key: String) -> void:
+	if is_instance_valid(_pause_menu):
+		if key == "look":
+			_pause_menu.video_overrides.clear()
+		elif key == "tape":
+			_pause_menu.video_overrides.erase("video_pipeline")
+			_pause_menu.video_overrides.erase("vhs_enabled")
+		else:
+			_pause_menu.video_overrides.erase(key)
+	if opts == null:
+		return
+	if key in ["look", "tape", "video_pipeline"]:
+		opts.video_pipeline_override = -1
+	if key in ["look", "tape", "vhs_enabled"]:
+		opts.vhs_override = -1
+	if key in ["look", "crt_enabled"]:
+		opts.crt_override = -1
+
+
 func _close_settings() -> void:
 	IntroPlaybackState.retry_pending()
+	if is_instance_valid(_video_workshop):
+		_video_workshop.queue_free()
+		_video_workshop = null
 	if is_instance_valid(_pause_menu):
 		_pause_menu.queue_free()
 	_pause_menu = null
@@ -1248,6 +1369,7 @@ func descent_tape_watch(on: bool) -> void:
 	# together. The decoded video itself has no separate CRT/footage pass.
 	if _post_process != null:
 		_post_process.set_tape_playback(on)
+		_apply_world_resolution()
 	# The tape also owns the soundtrack: score and room tone hold their
 	# breath for it and pick up where they left off.
 	if _music != null:
@@ -2009,6 +2131,13 @@ func _on_descent_violation(kind: int) -> void:
 func _on_descent_blackout(on: bool) -> void:
 	if not descent or cm == null:
 		return
+	var started := Time.get_ticks_usec()
+	RuntimeDiagnostics.mark("blackout_begin", {"on": on, "chunks": cm.chunks.size()})
+	# Restore the original mesh/material pair before blackout snapshots it.
+	# Waiting for the architecture safety gate on the next tick captures the
+	# temporary UV material, then restores it onto the original ceiling mesh.
+	if on and is_instance_valid(_breathing):
+		_breathing.cancel("interrupted by blackout")
 	cm.set_blackout(on)
 	if is_instance_valid(ambience):
 		ambience.set_powered(not on)
@@ -2043,6 +2172,7 @@ func _on_descent_blackout(on: bool) -> void:
 			# defensive fallback for teardown/level-switch races.
 			_play_descent_cue(SoundBank.ding(), -10.0)
 			_show_event_message("POWER RESTORED")
+	RuntimeDiagnostics.mark("blackout_applied", {"on": on, "elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})
 
 
 func _spawn_mutation_reveal(at: Vector3,
@@ -2276,18 +2406,24 @@ func _on_descent_ended(won: bool) -> void:
 			return
 	_figures.despawn()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_show_descent_summary(won)
+	if won:
+		var escaped_run := run
+		await _play_descent_outro()
+		if run != escaped_run or _quitting:
+			return
+	# The ending finishes on silent black, so the summary rises from black too.
+	_show_descent_summary(won, won)
 	if is_instance_valid(_caught_sequence):
 		_caught_sequence.queue_free()
 		_caught_sequence = null
 
 
-func _show_descent_summary(won: bool) -> void:
+func _show_descent_summary(won: bool, from_black := false) -> void:
 	if is_instance_valid(_descent_summary):
 		return
 	_descent_summary = DescentSummary.new()
 	_descent_summary.won = won
-	_descent_summary.from_black = is_instance_valid(_caught_sequence)
+	_descent_summary.from_black = from_black or is_instance_valid(_caught_sequence)
 	_descent_summary.floor_idx = run.floor_idx
 	_descent_summary.floor_display = run.floor_name()
 	_descent_summary.elapsed = run.elapsed
@@ -2434,6 +2570,7 @@ func _settle_initial_arrival() -> void:
 
 
 func _process(dt: float) -> void:
+	_set_title_covered(is_instance_valid(_title) and not _title._gone)
 	_sync_osd_visible()
 	_flash_notice_left = maxf(0.0, _flash_notice_left - dt)
 	_check_torch_hint()
@@ -2500,34 +2637,45 @@ func _switch_music(level: int) -> void:
 		tw.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
 
 
-## The CRT always receives a 480-line world source. Without CRT, quality owns
-## world resolution; VHS supplies its own tape bandwidth and signal softness.
-## The saved resolution, menus and HUD retain their independent settings.
+func _video_pipeline_requested() -> int:
+	if opts != null and opts.video_pipeline_override >= 0:
+		return opts.video_pipeline_override
+	return int(_settings.get_value("video_pipeline")) if _settings != null else 0
+
+
+## Presets own these internal stages; CLI overrides never alter saved choices.
 func _crt_requested() -> bool:
 	if opts != null and opts.crt_override >= 0:
 		return opts.crt_override == 1
 	return _settings != null and bool(_settings.get_value("crt_enabled"))
 
 
-func _apply_scaling() -> void:
+func _recording_requested() -> bool:
+	if _settings == null: return false
+	var tape := bool(_settings.get_value("vhs_enabled")) if opts == null or opts.vhs_override < 0 else opts.vhs_override == 1
+	return tape or bool(_settings.get_value("receiver_enabled")) \
+		or (is_instance_valid(_post_process) and _post_process._tape_hold)
+
+
+func _apply_world_resolution() -> void:
 	if _settings != null:
-		GraphicsQuality.apply_resolution(get_viewport(), _settings, _crt_requested())
+		GraphicsQuality.apply_resolution(get_viewport(), _settings, _crt_requested(), _recording_requested())
+
+
+func _apply_scaling() -> void:
+	_apply_world_resolution()
 	_apply_hud_scaling()
 
 
-## Keep captions physically legible when the window is larger than 720p.
-## The 3D world can deliberately become low-resolution; the HUD must not.
+## Lay out the HUD at window size before it joins the recorded game image.
 func _apply_hud_scaling() -> void:
 	if _hint == null:
 		return
 	var viewport_size := Vector2(get_viewport().size)
 	var scale := maxf(1.0, minf(viewport_size.y / 720.0, viewport_size.x / 960.0))
 	var inset := VhsOsd.safe_inset(viewport_size)
-	# Every size here assumes the OSD is read through the selected video stages;
-	# the post pass
-	# emulates a 320-row signal, so no text may drop under ~5% of the
-	# viewport height (about 16 emulated rows) and everything sits inside the
-	# title-safe area used by the recovered-tape metadata.
+	# Preserve the large camcorder type and safe margins so the HUD stays
+	# recognizable after the recording's downsampling, noise and scanlines.
 	var playback_font_size := roundi(54.0 * scale)
 	if _vf_frame != null:
 		_vf_frame.inset = inset
@@ -2573,10 +2721,10 @@ func _apply_hud_scaling() -> void:
 	# A short line beneath the right-hand transport counter, clear of the
 	# central lift/evidence instrument. Narrow windows put it below that
 	# instrument instead, leaving its stacked evidence rows unobstructed.
-	_charger_distance.add_theme_font_size_override("font_size", roundi(30.0 * scale))
-	_charger_distance.size = Vector2(210.0, 40.0) * scale
+	_charger_distance.add_theme_font_size_override("font_size", roundi(40.0 * scale))
+	_charger_distance.size = Vector2(280.0, 52.0) * scale
 	_charger_distance.position = Vector2(viewport_size.x - inset.x - _charger_distance.size.x,
-		inset.y + (198.0 if viewport_size.x / scale < 1100.0 and descent else 65.0) * scale)
+		inset.y + (222.0 if viewport_size.x / scale < 1360.0 and descent else 65.0) * scale)
 
 	_stamina_meter.font_size = roundi(34.0 * scale)
 	_stamina_meter.size = Vector2(280.0, 74.0) * scale
@@ -2699,6 +2847,7 @@ func _build_ui() -> void:
 	_post_process = PostProcessController.new()
 	add_child(_post_process)
 	_post_process.setup(self, _vhs_enabled, _crt_enabled, _crt_curvature_enabled)
+	_post_process.set_video_pipeline(_video_pipeline_requested(), _settings.values)
 	_post_process.set_film_grain_intensity(float(_settings.get_value("film_grain")))
 	_post_process.ensure_scene_copy()
 	_reality_aftershock = preload("res://scripts/reality_aftershock.gd").new()
@@ -2713,6 +2862,21 @@ func _build_ui() -> void:
 	ShadowFigure.set_tape_look(_vhs_enabled)
 
 	var cl := CanvasLayer.new()
+	var readable_text := preload("res://scripts/readable_game_text.gd").new()
+	readable_text.name = "ReadableGameText"
+	readable_text.source_viewport = get_viewport()
+	readable_text.allowed = func() -> bool:
+		for modal in [_title, _pause_menu, _return_prompt, _quit_prompt, _descent_summary,
+				_descent_intro, _photo_album, _video_workshop]:
+			if is_instance_valid(modal): return false
+		return not _dying and not _quitting
+	add_child(readable_text)
+	var text_reader := preload("res://scripts/world_text_reader.gd").new()
+	text_reader.camera = player.cam
+	text_reader.exclude = [player.get_rid()]
+	text_reader.allowed = func() -> bool:
+		return _architecture_clock_allowed() and not _photo_camera._raised
+	add_child(text_reader)
 	cl.layer = 2
 	_osd_layer = cl
 	var lb := VhsOsd.make_label(16, Color(0.92, 0.96, 0.90, 0.80))
@@ -2759,7 +2923,7 @@ func _build_ui() -> void:
 	cl.add_child(_battery_meter)
 	_flash_icon = VhsOsd.FlashIcon.new()
 	cl.add_child(_flash_icon)
-	_charger_distance = VhsOsd.make_label(30, VhsOsd.INK_DIM)
+	_charger_distance = VhsOsd.make_label(40)
 	_charger_distance.text = "CHARGER --"
 	_charger_distance.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_charger_distance.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2931,6 +3095,8 @@ func _show_event_message(text: String, alert := false,
 		return
 	if _event_hint == null or _event_panel == null:
 		return
+	var started := Time.get_ticks_usec()
+	RuntimeDiagnostics.mark("event_caption_begin", {"text": text, "alert": alert})
 	VhsOsd.set_ink(_event_hint, VhsOsd.RED if alert else VhsOsd.INK)
 	_event_hint.text = text
 	if _event_tween != null and _event_tween.is_valid():
@@ -2942,6 +3108,7 @@ func _show_event_message(text: String, alert := false,
 	_event_tween.tween_property(_event_panel, "modulate:a", 0.96, 0.18)
 	_event_tween.tween_interval(hold_seconds)
 	_event_tween.tween_property(_event_panel, "modulate:a", 0.0, 0.7)
+	RuntimeDiagnostics.slow("event_caption_setup", started, {"text": text})
 
 
 ## Screenshot-only helper for checking both caption styles without waiting for
@@ -3001,6 +3168,7 @@ func _build_title(force := false) -> void:
 	_title.settings_requested.connect(func(): _open_settings(true))
 	_title.quit_requested.connect(_request_quit)
 	add_child(_title)
+	_set_title_covered(true)
 	if descent:
 		_title.present_descent(true)
 
@@ -3083,6 +3251,7 @@ func _fresh_descent_seed() -> int:
 
 func _on_start(selected_descent: bool) -> void:
 	_title = null
+	_set_title_covered(false)
 	_title_music = false
 	if selected_descent and _pending_new_descent_intro:
 		_pending_new_descent_intro = false
@@ -3126,6 +3295,33 @@ func _play_descent_intro() -> void:
 		var error := _intro_state.mark_viewed()
 		if error != OK:
 			push_warning("Could not save intro playback state (error %d)" % error)
+
+
+## The ending, "OUTSIDE" (docs/ENDING_CUTSCENE_SCRIPT.md): plays once the
+## Bloom exit completes the run, before the summary. It runs in the prologue's
+## player, so every gate keyed to _descent_intro (pause, input, presence)
+## holds for it too. Skip unlocks after one full viewing on this machine.
+func _play_descent_outro() -> void:
+	if is_instance_valid(_descent_intro):
+		await _descent_intro.completed
+		return
+	_set_presence(Presence.SILENT)
+	_set_world_audio(false)
+	_music.stream_paused = true
+	player.velocity = Vector3.ZERO
+	player.set_process_unhandled_input(false)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Loaded on demand: the 1080p ending is only needed by a finished run.
+	_descent_intro = DescentIntro.new(_intro_state.has_viewed_video(OUTRO_PATH),
+		load(OUTRO_PATH), "SKIP ENDING", false)
+	_descent_intro.pause_requested.connect(func(): _open_settings(false))
+	add_child(_descent_intro)
+	var watched_to_end: bool = await _descent_intro.completed
+	_descent_intro = null
+	if watched_to_end:
+		var error := _intro_state.mark_video_viewed(OUTRO_PATH)
+		if error != OK:
+			push_warning("Could not save ending playback state (error %d)" % error)
 
 
 func _commit_new_descent_checkpoint() -> void:

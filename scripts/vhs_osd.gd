@@ -30,6 +30,7 @@ const SHADOW := Color(0.0, 0.0, 0.0, 0.85)
 
 ## In-place restyle so existing Labels keep their layout containers.
 static func style_label(label: Label, size: int, color := INK) -> void:
+	label.add_to_group("readable_game_text")
 	label.add_theme_font_override("font", FONT)
 	label.add_theme_font_size_override("font_size", size)
 	label.add_theme_color_override("font_color", color)
@@ -51,6 +52,7 @@ static func set_ink(label: Label, color: Color) -> void:
 ## Drawn-widget twin of style_label: shadowed, stroked OSD text.
 static func draw_osd_string(ci: CanvasItem, f: Font, at: Vector2, text: String,
 		size: int, ink: Color) -> void:
+	text = Localization.text(text)
 	var off := Vector2(SHADOW_OFFSET, SHADOW_OFFSET)
 	ci.draw_string_outline(f, at + off, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		size, STROKE, SHADOW)
@@ -150,7 +152,7 @@ class Meter extends Control:
 		if not text.is_empty():
 			var f: Font = VhsOsd.FONT
 			text_h = f.get_height(font_size)
-			var text_w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT,
+			var text_w := f.get_string_size(Localization.text(text), HORIZONTAL_ALIGNMENT_LEFT,
 				-1, font_size).x
 			var tx := s.x - text_w if right_align else 0.0
 			var ty := f.get_ascent(font_size)
@@ -297,7 +299,7 @@ class Frame extends Control:
 			VhsOsd.INK)
 		# A transport glyph, drawn instead of sourced from the font so it stays
 		# a clean little playback triangle after the low-resolution tape pass.
-		var play_w := f.get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT,
+		var play_w := f.get_string_size(Localization.text("PLAY"), HORIZONTAL_ALIGNMENT_LEFT,
 			-1, font_size).x
 		var tri_h := float(font_size) * 0.36
 		var tri_x := play_at.x + play_w + float(font_size) * 0.22
@@ -332,7 +334,7 @@ class Frame extends Control:
 			font_size, VhsOsd.INK)
 
 	func _right_x(f: Font, text: String) -> float:
-		return size.x - inset.x - f.get_string_size(text,
+		return size.x - inset.x - f.get_string_size(Localization.text(text),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 
 	func _tape_counter() -> String:
@@ -374,6 +376,8 @@ class Frame extends Control:
 				break
 			remaining -= days_in_month
 			month += 1
+		if Localization.current_locale() != "en":
+			return "%04d-%02d-%02d" % [year, month + 1, remaining + 1]
 		return "%s %02d %04d" % [MONTH_NAMES[mini(month,
 			MONTH_NAMES.size() - 1)], remaining + 1, year]
 

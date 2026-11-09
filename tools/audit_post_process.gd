@@ -5,6 +5,13 @@ const CONTROLLER := preload("res://scripts/post_process_controller.gd")
 
 var failures: Array[String] = []
 
+class FaultPresenter extends TextureRect:
+	var signal_enabled := true
+	var signal_settings := {}
+	var receiver_settings := {}
+	var game_state := {}
+	var _clock := 0.0
+
 func expect(condition: bool, message: String) -> void:
 	if not condition:
 		failures.append(message)
@@ -42,6 +49,14 @@ func _run() -> void:
 	controller.set_film_grain_intensity(0.0)
 	expect(not controller._grain_copy.visible and not controller._grain_overlay.visible,
 		"zero film grain did not remove the pass")
+	controller.set_video_pipeline(2,{"video_color_saturation":0.0,"video_color_shadow_lift":0.03})
+	expect(controller._grain_overlay.visible and controller.is_enabled(),"Camera grading needs to work without tape, CRT or grain")
+	expect(controller._grain_overlay.material.get_shader_parameter("color_saturation")==0.0,"Camera saturation did not reach shared pass")
+	controller.set_enabled(false)
+	expect(not controller._grain_overlay.visible,"Disabled presentation left camera grading on menus")
+	controller.set_enabled(true)
+	controller.set_video_pipeline(0,{})
+	expect(not controller._grain_overlay.visible,"Neutral camera response did not bypass shared pass")
 	controller.set_effects(true, true)
 	expect(controller._tube_display.get_child_count() == 2, "tube display pass has wrong child count")
 	var tube_copy: BackBufferCopy = controller._tube_display.get_child(0)
@@ -157,6 +172,9 @@ func _run() -> void:
 		var param: String = glitch_parameters[kind]
 		var baseline := baseline_dropout if kind == CONTROLLER.GlitchKind.DROPOUT else 0.0
 		expect(float(full_material.get_shader_parameter(param)) > baseline, "glitch kind %s did not increase %s" % [kind, param])
+		var fault := controller._video_fault(Time.get_ticks_msec() * 0.001)
+		expect(fault.get("kind") == kind and float(fault.get("amount",0.0)) > 0.0,
+			"GPU path lost the distinct glitch kind %s" % kind)
 	controller._glitch_active = false
 	controller._apply_found_footage_state()
 	expect(approx(full_material.get_shader_parameter("tracking_error"), 0.0), "tracking did not reset")
@@ -190,6 +208,76 @@ func _run() -> void:
 	controller._start_glitch(false, now)
 	expect(controller._minor_at - now >= 5.0 and controller._minor_at - now <= 11.0, "minor reschedule out of bounds")
 	expect(controller._glitch_until - now >= 0.08 and controller._glitch_until - now <= 0.20, "minor glitch duration out of bounds")
+	controller._experiment_settings["ntsc_auto_faults"] = false
+	expect(controller._video_fault(now + 0.03).is_empty(), "disabled automatic faults still reached GPU")
+	controller.enemy_appearance_warning(ShadowFigures.APPEARANCE_WARNING_SECONDS)
+	var warning := controller._video_fault(controller._glitch_started + 0.08)
+	expect(float(warning.get("amount",0.0)) > 0.9, "encounter warning should be distinct from optional ambient faults")
+	expect(controller._glitch_until - controller._glitch_started > ShadowFigures.APPEARANCE_WARNING_SECONDS,
+		"warning must lead and briefly overlap manifestation")
+	expect(float(controller._video_fault(controller._glitch_until).get("amount",0.0)) == 0.0, "warning did not settle")
+	var gpu_host := preload("res://scripts/ntscrt_video_host.gd").new()
+	var output := FaultPresenter.new()
+	gpu_host.presenter = output
+	gpu_host.set_game_state(0.0,Vector2.ZERO,0.0,0.0,warning)
+	expect(float(output.game_state.fault_amount) > 0.9, "warning did not reach GPU preparation")
+	gpu_host._reduced = true
+	gpu_host.set_game_state(0.0,Vector2.ZERO,0.0,0.0,warning)
+	expect(output.game_state.fault_amount == 0.0, "reduced flashing retained a GPU glitch")
+	gpu_host._reduced = false
+	output.signal_enabled = false
+	gpu_host.set_game_state(0.0,Vector2.ZERO,0.0,0.0,warning)
+	expect(output.game_state.fault_amount == 0.0, "CRT-only output received a tape glitch")
+	# Full-signal presets play selected original animations without enabling
+	# the receiver or changing the persistent preset values.
+	controller._video_pipeline = 2
+	controller.enemy_appearance_warning(ShadowFigures.APPEARANCE_WARNING_SECONDS)
+	var pop := controller._video_fault(controller._glitch_started+0.096*controller._encounter_duration)
+	expect(pop.get("sequence") == "glitch_pop", "enemy warning did not select the original Glitch pop track")
+	output.signal_enabled = true
+	gpu_host._signal_knobs = GameSettings.FULL_SETTINGS.ntsc_defaults()
+	var base_knobs: Dictionary = gpu_host._signal_knobs.duplicate(true)
+	# Known upstream snapshots catch normalized timing, outgoing easing,
+	# discrete toggles and integer rounding independently of game adaptation.
+	var sequences = preload("res://scripts/ntscrt_glitch_sequences.gd")
+	var eased: Dictionary = sequences.sample("two_blips",(0.3042892041163142+0.4351338274169184)*0.5)
+	expect(is_equal_approx(float(eased.vertical_scale),1.543523704879374),"original outgoing Ease in was not retained")
+	var middle: Dictionary = sequences.sample("two_blips",lerpf(0.6680248064577039,0.7518646148036254,0.6))
+	expect(middle.vhs_edge_wave_detail==4,"original integer track did not round")
+	expect(not sequences.sample("glitch_pop",0.15).vhs_edge_wave_enabled
+		and sequences.sample("glitch_pop",0.16).vhs_edge_wave_enabled,"original toggle did not hold until its key")
+	for phase in [0.0,1.0]:
+		var settled := base_knobs.duplicate(true)
+		sequences.apply_to(settled,"two_blips",phase,1.0)
+		expect(settled==base_knobs,"sequence endpoint changed the preset")
+	var zero_wear := base_knobs.duplicate(true)
+	sequences.apply_to(zero_wear,"two_blips",0.75,0.0)
+	expect(zero_wear==base_knobs,"zero tape damage retained an authored animation")
+	var peak := base_knobs.duplicate(true)
+	sequences.apply_to(peak,"two_blips",0.7518646148036254,1.0)
+	expect(peak.vhs_edge_wave<=4.00001 and peak.vhs_edge_wave_detail<=3
+		and peak.vertical_scale>=0.69999,"ambient animation exceeded its readable/performance limits")
+	gpu_host.set_game_state(0.0,Vector2.ZERO,0.0,0.0,pop)
+	expect(output.signal_settings.vhs_chroma_loss>0.05 and output.signal_settings.vhs_chroma_loss<=0.10001,
+		"original colour-loss pop missing or exceeded its readable limit: %s" % output.signal_settings.vhs_chroma_loss)
+	expect(gpu_host._signal_knobs==base_knobs,"animation altered the preset")
+	gpu_host.set_game_state(0.0,Vector2.ZERO,0.0,0.0,{})
+	expect(output.signal_settings==base_knobs,"animation did not restore every base setting")
+	gpu_host._reduced = true
+	gpu_host.set_game_state(0.0,Vector2.ZERO,0.0,0.0,pop)
+	expect(output.signal_settings==base_knobs and output.game_state.fault_amount==0.0,
+		"Reduced flashing retained an authored animation")
+	gpu_host._reduced = false
+	controller._experiment_settings["ntsc_auto_faults"] = true
+	controller._start_glitch(true,now)
+	expect(controller._glitch_sequence=="two_blips" and is_equal_approx(controller._glitch_until-now,1.1),
+		"rare ambient fault did not select the adapted Two blips timeline")
+	controller._experiment_settings["ntsc_auto_faults"] = false
+	expect(controller._video_fault(now+0.5).is_empty(),"disabled ambient faults still played the authored sequence")
+	controller.set_effects(false, false)
+	expect(controller._video_fault(controller._glitch_started + 0.08).is_empty(), "Clean retained a gameplay glitch")
+	output.free()
+	gpu_host.free()
 
 	host.free()
 	if failures.is_empty():

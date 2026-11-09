@@ -425,6 +425,7 @@ func _annex_lighting() -> void:
 			Vector2(3.0, 9.0), Vector2(9.0, 9.0)]
 	var built_fixtures = 0
 	var built_fixture_centers: Array[Vector2] = []
+	var emitters: Array[MeshInstance3D] = []
 	for pt in fixtures:
 		var at = Vector3(
 			_annex_tile_center(pt.x, ctx.cell.x),
@@ -432,7 +433,7 @@ func _annex_lighting() -> void:
 			_annex_tile_center(pt.y, ctx.cell.y))
 		if not scene.annex_fixture_clear(at):
 			continue
-		_annex_troffer(at, pmat)
+		emitters.append(_annex_troffer(at, pmat))
 		built_fixtures += 1
 		built_fixture_centers.append(Vector2(at.x, at.z))
 	var effective_gap = light_gap or built_fixtures == 0
@@ -441,22 +442,17 @@ func _annex_lighting() -> void:
 	_annex_moisture_damage(built_fixture_centers)
 	if effective_gap:
 		return
-	var source := Vector3(built_fixture_centers[0].x, ctx.ceiling_height - 0.46, built_fixture_centers[0].y)
-	var light = scene.fixture_light(false, pmat, 0.24 if dim_zone else 1.42, source)
-	light.light_color = Color(1.0, 0.91, 0.64)
-	light.omni_range = 7.4 if dim_zone else 12.8
-	light.light_volumetric_fog_energy = 2.2
-	light.shadow_enabled = false
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 25.0
-	light.distance_fade_length = 9.0
-	scene.add_node(light)
+	for i in emitters.size():
+		scene.fixture_lower_face(emitters[i],Color(1.0,0.91,0.64),
+			0.24 if dim_zone else 0.65,7.4 if dim_zone else 9.0,
+			1 if i == 0 else (2 if i == emitters.size()-1 else 4),"annex_troffer")
 
 
 func _annex_flooded_lighting() -> void:
 	scene.set_chunk_meta("annex_dim_zone", false)
 	scene.set_chunk_meta("annex_light_gap", false)
 	var fixtures: Array[Vector2] = []
+	var emitters: Array[MeshInstance3D] = []
 	var pmat := Mats.annex_panel()
 	# Troffers hang in the clear bays between the tighter column rows.
 	for z in [4.0, 8.0]:
@@ -465,23 +461,14 @@ func _annex_flooded_lighting() -> void:
 				_annex_tile_center(z, ctx.cell.y))
 			if not scene.annex_fixture_clear(at):
 				continue
-			_annex_troffer(at, pmat)
+			emitters.append(_annex_troffer(at, pmat))
 			fixtures.append(Vector2(at.x, at.z))
 	scene.set_chunk_meta("annex_ceiling_fixture_count", fixtures.size())
 	scene.set_chunk_meta("annex_light_gap", fixtures.is_empty())
 	_annex_moisture_damage(fixtures)
-	for index in mini(fixtures.size(), 2):
-		var at := fixtures[index]
-		var light := scene.fixture_light(false, pmat, 1.35,
-			Vector3(at.x, ctx.ceiling_height - 0.5, at.y))
-		light.light_color = Color(1.0, 0.93, 0.72)
-		light.omni_range = 14.5
-		light.light_volumetric_fog_energy = 2.2
-		light.shadow_enabled = false
-		light.distance_fade_enabled = true
-		light.distance_fade_begin = 25.0
-		light.distance_fade_length = 9.0
-		scene.add_node(light)
+	for i in emitters.size():
+		scene.fixture_lower_face(emitters[i],Color(1.0,0.93,0.72),1.2,12.0,
+			1 if i == 0 else 4,"annex_flooded_troffer")
 
 
 ## Snap a local fixture coordinate to the centre of the world-space drop-
@@ -501,13 +488,17 @@ func _annex_tile_center(local_v: float, cell_axis: int) -> float:
 ## frame is the exact tile footprint; the glowing lens is inset within it.
 
 
-func _annex_troffer(at: Vector3, pmat: Material) -> void:
+func _annex_troffer(at: Vector3, pmat: Material) -> MeshInstance3D:
+	var fixture := Node3D.new()
+	fixture.name = "AnnexTroffer"
+	fixture.set_meta("practical_fixture","annex_troffer")
+	scene.add_node(fixture)
 	var frame = Mats.annex_trim()
 	var border = 0.035
 	var lens_size = Chunk.ANNEX_CEILING_TILE - border * 2.0
-	var lens = scene.box(
+	var lens = scene.model_box(fixture,
 		Vector3(at.x, ctx.ceiling_height - 0.055, at.z),
-		Vector3(lens_size, 0.05, lens_size), pmat, false)
+		Vector3(lens_size, 0.05, lens_size), pmat)
 	lens.set_meta("annex_ceiling_light_size", Chunk.ANNEX_CEILING_TILE)
 	lens.set_meta("annex_ceiling_light_on", true)
 	var world_x = float(ctx.cell.x) * WorldGen.CELL_SIZE + at.x
@@ -517,14 +508,15 @@ func _annex_troffer(at: Vector3, pmat: Material) -> void:
 		absf(world_z - roundf(world_z / Chunk.ANNEX_CEILING_TILE) * Chunk.ANNEX_CEILING_TILE))
 	lens.set_meta("annex_ceiling_light_grid_error", grid_error)
 	var edge = Chunk.ANNEX_CEILING_TILE * 0.5 - border * 0.5
-	scene.box(Vector3(at.x, ctx.ceiling_height - 0.02, at.z - edge),
-		Vector3(Chunk.ANNEX_CEILING_TILE, 0.035, border), frame, false)
-	scene.box(Vector3(at.x, ctx.ceiling_height - 0.02, at.z + edge),
-		Vector3(Chunk.ANNEX_CEILING_TILE, 0.035, border), frame, false)
-	scene.box(Vector3(at.x - edge, ctx.ceiling_height - 0.02, at.z),
-		Vector3(border, 0.035, lens_size), frame, false)
-	scene.box(Vector3(at.x + edge, ctx.ceiling_height - 0.02, at.z),
-		Vector3(border, 0.035, lens_size), frame, false)
+	scene.model_box(fixture,Vector3(at.x, ctx.ceiling_height - 0.02, at.z - edge),
+		Vector3(Chunk.ANNEX_CEILING_TILE, 0.035, border), frame)
+	scene.model_box(fixture,Vector3(at.x, ctx.ceiling_height - 0.02, at.z + edge),
+		Vector3(Chunk.ANNEX_CEILING_TILE, 0.035, border), frame)
+	scene.model_box(fixture,Vector3(at.x - edge, ctx.ceiling_height - 0.02, at.z),
+		Vector3(border, 0.035, lens_size), frame)
+	scene.model_box(fixture,Vector3(at.x + edge, ctx.ceiling_height - 0.02, at.z),
+		Vector3(border, 0.035, lens_size), frame)
+	return lens
 
 
 ## Reserve a small margin around each complete ceiling tile. The rectangles are

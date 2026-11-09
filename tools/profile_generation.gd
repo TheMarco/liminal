@@ -7,6 +7,7 @@ extends SceneTree
 const SEED := 240721
 const RADIUS := 2
 const LANDMARK_SEARCH := 80
+var runtime_preparation := false
 
 
 func _init() -> void:
@@ -21,6 +22,8 @@ func _run() -> void:
 			selected_theme = int(arg.trim_prefix("--theme="))
 		elif arg == "--stages":
 			stages = true
+		elif arg == "--runtime-preparation":
+			runtime_preparation = true
 	print("GENERATION PROFILE | seed %d | %dx%d background-preloaded cells per floor" %
 		[SEED, RADIUS * 2 + 1, RADIUS * 2 + 1])
 	# Match the game: workers start decoding glTF resources while the title is
@@ -53,6 +56,7 @@ func _theme_seed(theme: int) -> int:
 func _profile_theme(theme: int, pass_name: String, sample_landmark: bool) -> void:
 	var ws := _theme_seed(theme)
 	var times: Array[float] = []
+	var prepare_times: Array[float] = []
 	var totals := {"nodes": 0, "meshes": 0, "colliders": 0, "lights": 0,
 		"probes": 0, "fog_volumes": 0}
 	var worst_nodes := 0
@@ -67,6 +71,10 @@ func _profile_theme(theme: int, pass_name: String, sample_landmark: bool) -> voi
 			var chunk := Chunk.new(ws, cell, theme)
 			var elapsed := float(Time.get_ticks_usec() - t0) / 1000.0
 			times.append(elapsed)
+			if runtime_preparation:
+				var prepare_started := Time.get_ticks_usec()
+				chunk.prepare_runtime_rendering(ChunkManager.ROOM_LIGHT_FADE_BEGIN)
+				prepare_times.append(float(Time.get_ticks_usec()-prepare_started)/1000.0)
 			if elapsed > slowest_ms:
 				slowest_ms = elapsed
 				slowest_cell = cell
@@ -90,6 +98,12 @@ func _profile_theme(theme: int, pass_name: String, sample_landmark: bool) -> voi
 		float(totals["colliders"]) / n, float(totals["lights"]) / n,
 		float(totals["probes"]) / n, float(totals["fog_volumes"]) / n,
 		worst_nodes, worst_cell])
+	if not prepare_times.is_empty():
+		prepare_times.sort()
+		var prepare_total := 0.0
+		for value in prepare_times: prepare_total += value
+		print("  runtime preparation avg %.2fms p95 %.2fms max %.2fms"%[
+			prepare_total/prepare_times.size(),prepare_times[ceili(prepare_times.size()*0.95)-1],prepare_times[-1]])
 	if not sample_landmark:
 		return
 	var lm := _find_landmark(ws, theme)

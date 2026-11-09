@@ -1,7 +1,11 @@
 class_name DescentIntro
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 ## Full-screen Descent prologue. A first-ever viewing has no escape hatch;
-## later new runs offer a clickable and keyboard-accessible Skip.
+## later new runs offer a clickable and keyboard-accessible Skip. The ending
+## (videos/outro/outside.ogv) plays through the same player with its own
+## stream and Skip label. A recorded movie plays inside the game frame, so the
+## player's VHS and CRT presentation processes it like the world; its Skip,
+## Pause and subtitles stay crisp above, like every other screen UI.
 
 signal completed(watched_to_end: bool)
 signal pause_requested
@@ -11,35 +15,56 @@ const INTRO_STREAM: VideoStream = preload(
 const UI_FONT: Font = preload("res://fonts/VT323-Regular.ttf")
 
 var _skip_allowed := false
+var _stream: VideoStream
+var _skip_label := "SKIP INTRO"
+var _recorded := true
 var _video: VideoStreamPlayer
 var _skip_button: Button
 var _pause_button: Button
 var _done := false
 
 
-func _init(skip_allowed := false) -> void:
+func _init(skip_allowed := false, stream: VideoStream = null,
+		skip_label := "SKIP INTRO", recorded := true) -> void:
 	_skip_allowed = skip_allowed
+	_stream = stream if stream != null else INTRO_STREAM
+	_skip_label = skip_label
+	_recorded = recorded
 
 
 func _ready() -> void:
 	layer = 10
+	# screen_ui moves only this layer to the window. A plain child CanvasLayer
+	# stays in the game frame; at child index 0 it draws after the HUD (layer
+	# 2) and before PostProcessController's own layer, a later child of Main.
+	var screen: Node = self
+	if _recorded:
+		var recording := CanvasLayer.new()
+		recording.name = "RecordedMovie"
+		recording.layer = PostProcessController.RECORDING_LAYER
+		add_child(recording)
+		screen = recording
 	var back := ColorRect.new()
 	back.color = Color.BLACK
 	back.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# A full-screen STOP control prevents clicks outside Skip from reaching any
-	# results screen or world UI beneath the movie.
-	back.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(back)
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	screen.add_child(back)
 
 	_video = VideoStreamPlayer.new()
 	SoundBank.ensure_dialogue_bus()
 	_video.bus = SoundBank.DIALOGUE_BUS
-	_video.stream = INTRO_STREAM
+	_video.stream = _stream
 	_video.expand = true
 	_video.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_video.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_video.finished.connect(func(): _finish(true))
-	add_child(_video)
+	screen.add_child(_video)
+	# A full-screen STOP control prevents clicks outside Skip from reaching any
+	# results screen or world UI beneath the movie.
+	var blocker := Control.new()
+	blocker.set_anchors_preset(Control.PRESET_FULL_RECT)
+	blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(blocker)
 	var subtitles := StorySubtitles.new()
 	add_child(subtitles)
 	subtitles.attach(_video)
@@ -48,7 +73,7 @@ func _ready() -> void:
 		_skip_button = Button.new()
 		var skip := _skip_button
 		skip.name = "SkipIntro"
-		skip.text = "SKIP INTRO"
+		skip.text = _skip_label
 		skip.add_theme_font_override("font", UI_FONT)
 		skip.add_theme_font_size_override("font_size", 22)
 		skip.add_theme_color_override("font_color", Color(0.92, 0.88, 0.78))

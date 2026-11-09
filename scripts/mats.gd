@@ -60,6 +60,7 @@ static func detail_noise() -> NoiseTexture2D:
 static func carpet() -> Material:
 	var m := _shader("carpet", "res://shaders/carpet.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
+	m.set_shader_parameter("bump_strength", 0.035)
 	return m
 
 
@@ -155,6 +156,8 @@ static func hall_wallpaper_variant(idx: int) -> Material:
 static func ceiling() -> Material:
 	var m := _shader("ceiling", "res://shaders/casino_ceiling.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
+	m.set_shader_parameter("bump_strength", 1.0)
+	m.set_shader_parameter("plaster_tex", load("res://textures/mall/Plaster001/Plaster001_1K-JPG_Color.jpg"))
 	return m
 
 
@@ -556,6 +559,7 @@ static func office_carpet() -> Material:
 	m.set_shader_parameter("scenario_carpet_tex", load(
 		"res://models/scenario/office/carpet_tile_office_dark_carpet.png"))
 	m.set_shader_parameter("scenario_blend", 0.35)
+	m.set_shader_parameter("bump_strength", 0.07)
 	return m
 
 
@@ -574,7 +578,7 @@ static func office_lane_carpet() -> Material:
 	m.set_shader_parameter("col_base", Color(0.075, 0.18, 0.13))
 	m.set_shader_parameter("col_dark", Color(0.035, 0.105, 0.072))
 	m.set_shader_parameter("col_light", Color(0.12, 0.245, 0.17))
-	m.set_shader_parameter("bump_strength", 0.22)
+	m.set_shader_parameter("bump_strength", 0.07)
 	m.resource_name = "office_lane_carpet"
 	_c["office_lane_carpet"] = m
 	return m
@@ -1622,9 +1626,11 @@ static func sch_ceiling() -> Material:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/ceiling.gdshader")
 	m.set_shader_parameter("col", Color(0.90, 0.89, 0.86))
-	m.set_shader_parameter("stain_amount", 0.10)
-	m.set_shader_parameter("bump_strength", 0.02)
-	m.set_shader_parameter("missing_amount", 0.10)
+	m.set_shader_parameter("stain_amount", 0.28)
+	m.set_shader_parameter("bump_strength", 1.0)
+	m.set_shader_parameter("missing_amount", 0.6)
+	m.set_shader_parameter("tile_tex", load("res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_0.jpg"))
+	m.set_shader_parameter("detail_tex", detail_noise())
 	m.resource_name = "sch_ceiling"
 	_c["sch_ceiling"] = m
 	return m
@@ -2168,7 +2174,9 @@ static func bloom_flesh() -> StandardMaterial3D:
 
 static func bloom_wet() -> StandardMaterial3D:
 	return _std("bloom_wet", func(m: StandardMaterial3D):
-		m.albedo_color = Color(0.070, 0.083, 0.095)
+		# The mud texture is already dark. A second near-black tint crushed its
+		# diffuse detail, making standing water read as a hole between reflections.
+		m.albedo_color = Color(0.49, 0.58, 0.66)
 		m.albedo_texture = load(BLOOM_TEX_DIR + "mud_forest_diff_1k.jpg")
 		m.uv1_triplanar = true
 		m.uv1_world_triplanar = true
@@ -2341,6 +2349,17 @@ static func mall_fountain_water() -> ShaderMaterial:
 		"mall_fountain_water", "res://shaders/fountain_water.gdshader")
 	m.set_shader_parameter("normal_tex", pool_ripple_normal())
 	return m
+
+
+## Shaded opal glass retains HDR emission, so the fitting itself owns the glow.
+static func pool_lamp_diffuser() -> StandardMaterial3D:
+	return _std("pool_lamp_diffuser", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.15,0.15,0.15)
+		m.metallic = 0.0
+		m.roughness = 1.0
+		m.emission_enabled = true
+		m.emission = Color(1.0,0.985,0.93)
+		m.emission_energy_multiplier = 3.1)
 
 
 ## The daylight coming in is not a view of anywhere — it is a blown-out plane

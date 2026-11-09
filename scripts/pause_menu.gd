@@ -1,14 +1,24 @@
 class_name PauseMenu
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 
 signal resumed
 signal return_to_title
 signal quit_requested
+signal video_stage_selected(key: String)
+signal preset_workshop_requested
+
+const LOOKS = preload("res://scripts/video_preset_library.gd")
+const LOOK_BRIDGE = preload("res://scripts/video_preset_bridge.gd")
+const LOOK_IO = preload("res://scripts/video_preset_io.gd")
 
 var settings: GameSettings
 var options_only := false
 var allow_return_to_title := true
 var allow_quit := true
+## Opt-in developer tools; never shown in the normal player settings menu.
+var video_lab := false
+## Display launch-only choices accurately without writing them to saved settings.
+var video_overrides: Dictionary = {}
 
 var _overlay: ColorRect
 var _layout: Control
@@ -36,10 +46,28 @@ var _hdr_status: Label
 var _binding_buttons: Dictionary = {}
 var _binding_status: Label
 var _capturing := ""
+var _ntscrt_group: VBoxContainer
+var _ntscrt_note: Label
+var _crt_parameter_group: VBoxContainer
+var _crt_parameter_controls: Dictionary = {}
+var _crt_parameter_model := -1
+var _full_video_controls: VBoxContainer
+var _language_select: OptionButton
+var _look_select: OptionButton
+var _look_description: Label
+var _last_look_settings: Dictionary = {}
+var _video_advanced: VBoxContainer
 
 const SLIDER_KEYS := ["sensitivity", "field_of_view", "head_bob", "handheld_strength",
 	"music_volume", "effects_volume", "dialogue_volume", "vhs_distortion",
-	"film_grain", "hdr_brightness"]
+	"film_grain", "hdr_brightness", "ntsc_signal_strength", "ntsc_tracking",
+	"ntsc_head_switch", "ntsc_timebase_jitter", "ntsc_crinkle", "ntsc_head_clog",
+	"ntsc_dropouts", "ntsc_ghost", "ntsc_ghost_delay", "ntsc_hum",
+	"ntsc_horizontal_hold", "ntsc_vertical_hold", "ntsc_afc", "ntsc_search_speed",
+	"ntsc_chroma_noise", "ntsc_chroma_delay", "ntsc_chroma_bleed", "ntsc_sharpness",
+	"ntsc_bloom", "ntsc_mask_strength", "ntsc_scanline_strength", "ntsc_brightness",
+	"ntsc_saturation", "ntsc_glass_diffusion", "ntsc_convergence", "ntsc_vignette",
+	"ntsc_auto_exposure", "ntsc_rf_noise", "ntsc_black_level"]
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -75,12 +103,58 @@ const OPTION_LABELS := {
 	"reflections": ["Off", "Low", "High"],
 	"volumetric_fog": ["Off", "Low", "High"],
 	"frame_limit": ["Unlimited", "30 FPS", "60 FPS", "90 FPS", "120 FPS", "144 FPS"],
+	"video_pipeline": ["Classic", "NTSCRT approximation", "Full ntsc-rs"],
+	"crt_shader": ["Pipeline default", "Aperture", "EasyMode", "Glow Gaussian", "Glow Lanczos", "Hyllian", "Royale", "Crtsim", "Native NTSCRT", "Automatic (graphics quality)"],
+	"ntscrt_downscale_filter": ["Fast bilinear", "Nearest", "Nearest+", "Filtered bilinear", "Bicubic", "Lanczos", "Area"],
+	"ntscrt_signal_size": ["Standard signal", "Custom width", "Source size"],
+	"ntscrt_scale_mode": ["Window resolution", "Original supersampling", "Original integer fit"],
+	"ntsc_decoder": ["Composite notch", "Composite comb", "S-Video"],
+	"ntsc_tape_speed": ["SP", "LP", "EP"],
+	"ntsc_quality": ["Efficient", "Full"],
+	"ntsc_mask_type": ["Aperture grille", "Slot mask", "Shadow mask"],
+}
+const NTSCRT_PRESET_HELP := [
+	"Sharp, stable transfer: cleanest decoding, no tape damage, automatic faults off.",
+	"Everyday home recording: the default NTSCRT balance.",
+	"Aged rental tape: slower speed, heavy wobble, crinkle and dropouts.",
+	"Weak broadcast: faint signal, echo images, hum and drifting sync.",
+]
+const NTSCRT_SLIDER_HELP := {
+	"ntsc_signal_strength": "Antenna signal level. Lower values add snow, weaken colour and disturb sync.",
+	"ntsc_tracking": "Tracking error. Higher values add noise bands and picture breakup.",
+	"ntsc_head_switch": "Disturbance bar near the bottom of the frame from the head handover.",
+	"ntsc_timebase_jitter": "Horizontal wobble of the picture, like an unsteady tape transport.",
+	"ntsc_crinkle": "A crease briefly bends scanlines and damages the signal along a band of the tape.",
+	"ntsc_head_clog": "Clogged video head: the picture fades toward snow and muted colour.",
+	"ntsc_dropouts": "How often white streaks and flecks appear where the tape is damaged.",
+	"ntsc_ghost": "Strength of a faint offset echo image. Negative values darken the echo.",
+	"ntsc_ghost_delay": "Distance of the echo image, in microseconds of signal delay.",
+	"ntsc_hum": "Slow brightness bar rolling through the picture from mains hum.",
+	"ntsc_black_level": "Raises the receiver's black level, revealing blanking and sync pulses when the picture rolls.",
+	"ntsc_horizontal_hold": "Horizontal sync offset. Push too far and the picture tears sideways.",
+	"ntsc_vertical_hold": "Vertical sync offset. Push too far and the picture rolls.",
+	"ntsc_afc": "How firmly the set locks onto sync. Lower values drift and tear more easily.",
+	"ntsc_search_speed": "Cue and review playback speed while searching the tape.",
+	"ntsc_chroma_noise": "Crawling grain and confetti shimmer in coloured areas.",
+	"ntsc_chroma_delay": "Horizontal offset of colour relative to brightness, in signal pixels.",
+	"ntsc_chroma_bleed": "How far strong colours smear sideways into neighbouring detail.",
+	"ntsc_sharpness": "Edge crispness of the decoded picture.",
+	"ntsc_bloom": "Soft glow bleeding out of bright highlights.",
+	"ntsc_mask_strength": "Visibility of the tube's colour-dot pattern.",
+	"ntsc_scanline_strength": "Visibility of the dark gaps between scanlines.",
+	"ntsc_brightness": "Overall picture brightness.",
+	"ntsc_saturation": "Richness of colours, from grey to vivid.",
+	"ntsc_glass_diffusion": "Soft haze where the tube glass scatters bright areas.",
+	"ntsc_convergence": "Colour fringing where the red, green and blue beams misalign.",
+	"ntsc_vignette": "Darkening toward the corners of the screen.",
+	"ntsc_auto_exposure": "How strongly the set rides brightness up and down with the scene.",
+	"ntsc_rf_noise": "Fine background snow over the whole picture.",
 }
 const QUALITY_NOTES := [
-	"For slower GPUs. 360p, simple shadows, direct lighting and distance fog.",
-	"Balanced performance. 480p, soft shadows and light contact shading.",
-	"Richer lighting. 720p, bounce light, reflections and volumetric fog.",
-	"Maximum detail. Native resolution, full lighting and higher-quality shadows. Heavy GPU load.",
+	"For slower GPUs. Up to 480p, simple shadows and lighter tape/TV processing. Menus stay sharp.",
+	"Balanced performance. Up to 720p, soft shadows, bounce lighting, reflections and atmospheric haze.",
+	"Sharper detail. Up to 1080p, finer shadows and contact shading, plus finer tape/TV detail.",
+	"Richest lighting. Up to 1440p, finest shadows, full reflections and fog. Full-resolution TV output remains demanding.",
 	"Custom rendering options. Select a preset to replace these graphics choices.",
 ]
 
@@ -108,6 +182,17 @@ func _build_ui() -> void:
 	margin.add_child(column)
 	var header := HBoxContainer.new()
 	column.add_child(header)
+	_language_select = OptionButton.new()
+	_language_select.name = "Language"
+	_language_select.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	_language_select.custom_minimum_size = Vector2(230, 44)
+	_style_button(_language_select)
+	_language_select.get_popup().add_theme_font_override("font", VhsOsd.FONT)
+	_language_select.get_popup().add_theme_font_size_override("font_size", 24)
+	for language: String in Localization.NAMES: _language_select.add_item(language)
+	_language_select.select(Localization.LOCALES.find(str(settings.get_value("language"))))
+	_language_select.item_selected.connect(func(index: int): settings.set_value("language", Localization.LOCALES[index]))
+	column.add_child(_language_select)
 	_title = _label("SETTINGS", 38, CREAM)
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(_title)
@@ -135,6 +220,8 @@ func _build_ui() -> void:
 		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		scroll.follow_focus = true
+		scroll.get_h_scroll_bar().value_changed.connect(func(value: float):
+			if value != 0.0: scroll.scroll_horizontal = 0)
 		page_host.add_child(scroll)
 		var rows := VBoxContainer.new()
 		rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -235,6 +322,8 @@ func _build_graphics(rows: VBoxContainer) -> void:
 		_add_toggle(group, entry[0], entry[1])
 	_controls["vsync"].tooltip_text = "Synchronizes frames with the display to prevent tearing."
 	_add_option(rows, "frame_limit", "Frame limit", "A cap reduces GPU load, heat and power use. Independent of the quality preset.")
+	_add_toggle(rows, "show_fps", "SHOW FPS COUNTER")
+	_controls["show_fps"].tooltip_text = "Shows rendered frames per second and average frame time in milliseconds. Updates twice a second; stays readable over video effects."
 	var calibration := _button("HDR calibration  +", rows)
 	calibration.pressed.connect(func():
 		_hdr_group.visible = not _hdr_group.visible
@@ -249,17 +338,162 @@ func _build_graphics(rows: VBoxContainer) -> void:
 	_hdr_status = _note(_hdr_group, "")
 
 func _build_effects(rows: VBoxContainer) -> void:
-	_section(rows, "Recorded image", "These choices shape the footage and stay independent of the graphics preset.")
+	rows.add_theme_constant_override("separation", 8)
+	_section(rows, "Recording look")
+	_look_select = OptionButton.new()
+	_style_button(_look_select)
+	_look_select.get_popup().add_theme_font_override("font",VhsOsd.FONT)
+	_look_select.get_popup().add_theme_font_size_override("font_size",24)
+	_look_select.fit_to_longest_item = false
+	_look_select.custom_minimum_size.y = 48
+	_look_select.add_theme_font_size_override("font_size", 24)
+	_look_select.add_item("Current custom look")
+	_look_select.set_item_disabled(0,true)
+	for index in LOOKS.LOOKS.size():
+		_look_select.add_item("%02d  %s" % [index+1,LOOKS.LOOKS[index].name])
+	_look_select.item_selected.connect(_choose_complete_look)
+	rows.add_child(_look_select)
+	_look_description = _note(rows, "")
+	_note(rows,"Start with a preset, then adjust the controls below. Choosing another preset replaces those adjustments. Clean reference removes all video effects.")
+	_build_quick_effects(rows)
+	_section(rows, "Detailed tuning")
+	if not options_only:
+		var workshop := _button("Preview & fine-tune looks…",rows)
+		workshop.pressed.connect(func(): preset_workshop_requested.emit())
+		_note(rows,"Compare looks in this room, adjust a favorite or save your own preset.")
+	else:
+		_note(rows,"Live preview and detailed signal / CRT tuning are available from the pause menu during gameplay.")
+	if video_lab:
+		_video_advanced = _add_collapsed_section(rows, "Developer video lab")
+		_note(_video_advanced, "Individual signal and CRT controls. Choosing a complete look replaces these adjustments.")
+		_build_advanced_effects(_video_advanced)
+
+func _build_quick_effects(rows: VBoxContainer) -> void:
+	_section(rows, "Recording")
 	_add_toggle(rows, "vhs_enabled", "VHS EFFECT")
-	_controls["vhs_enabled"].tooltip_text = "Tape smearing, colour separation, signal noise and tracking damage."
+	_controls["vhs_enabled"].tooltip_text = "Switch tape processing on or off without replacing its settings. Grain and CRT playback stay independent."
 	_add_slider(rows, "vhs_distortion")
 	_add_slider(rows, "film_grain")
-	_controls["film_grain"][0].tooltip_text = "Fine, gently moving film texture. Works independently of VHS and CRT."
+	_section(rows, "Screen")
+	_add_toggle(rows, "crt_enabled", "CRT SCREEN")
+	_controls["crt_enabled"].tooltip_text = "Switch CRT playback on or off while keeping the chosen model and its tuning."
+	_add_option(rows, "crt_shader", "CRT model", "Choose a screen independently of the recording. Automatic follows graphics quality. Each model keeps its own tuning; detailed controls are available in the live preview.")
+	(_controls["crt_shader"] as OptionButton).fit_to_longest_item = false
+
+func _choose_complete_look(item: int) -> void:
+	if item<1 or item>LOOKS.LOOKS.size(): return
+	video_stage_selected.emit("look")
+	var previous := LOOK_BRIDGE.from_settings(settings)
+	var profile := LOOKS.make_profile(item-1)
+	profile.quality = previous.quality
+	profile.reduced_flashing = previous.reduced_flashing
+	profile.auto_world_resolution = previous.auto_world_resolution
+	var before := settings.values.duplicate(true)
+	LOOK_BRIDGE.apply(profile,settings)
+	# An explicit choice also releases launch-only overrides when already saved.
+	if before==settings.values: settings.changed.emit()
+
+## A deliberate menu selection supersedes the corresponding launch override,
+## including when the saved value already equals the user's selection.
+func _set_menu_value(key: String, value: Variant) -> void:
+	var stage_choice := key in ["video_pipeline", "vhs_enabled", "crt_enabled"]
+	if stage_choice:
+		video_stage_selected.emit(key)
+	var unchanged: bool = settings.get_value(key) == value
+	settings.set_value(key, value)
+	if stage_choice and unchanged:
+		settings.changed.emit()
+
+func _menu_value(key: String) -> Variant:
+	return video_overrides.get(key, settings.get_value(key))
+
+func _build_advanced_effects(rows: VBoxContainer) -> void:
+	_section(rows, "Video pipeline")
+	_add_option(rows, "video_pipeline", "Video signal", "Choose the recorded signal separately from the receiver and CRT. Full ntsc-rs provides every original signal control; the approximation is a lighter alternative.")
+	_ntscrt_note = _note(rows, "Experimental analogue video. Choose a preset below, then adjust the recording and the tube to taste.")
+	_section(rows, "Recorded image", "These choices shape the footage and stay independent of the graphics preset.")
+	_add_toggle(rows,"receiver_enabled","NTSCRT RECEIVER")
+	_controls["receiver_enabled"].tooltip_text = "Detailed broadcast receiver simulation. Tape faults here can sharply reduce frame rate. The looks above create tape wear without this extra stage. Also works with VHS off."
+	_add_toggle(rows,"ntscrs_field_history","WEAVE PREVIOUS FIELDS")
+	_controls["ntscrs_field_history"].tooltip_text = "Full ntsc-rs: select Alternating under the original Field mode control to weave the previous opposite field. Motion can show interlace combing. Off uses original bob reconstruction."
+	var sampling := _add_collapsed_section(rows,"Signal resolution and sampling")
+	_add_option(sampling,"ntsc_quality","Signal detail","Standard signal uses 360×240 in Efficient or 720×480 in Full. Also controls the native tube detail.")
+	_add_option(sampling,"ntscrt_signal_size","Receiver / CRT input","Standard preserves the game's tape dimensions. Custom follows the window aspect ratio. Source size bypasses shrinking. Applies to the full signal, receiver and original CRT models.")
+	var width := SpinBox.new()
+	width.min_value = 16; width.max_value = 4096; width.step = 2
+	width.prefix = "Signal width: "
+	width.value_changed.connect(func(value: float): settings.set_value("ntscrt_signal_width",value))
+	sampling.add_child(width)
+	_controls["ntscrt_signal_width"] = width
+	_add_option(sampling,"ntscrt_downscale_filter","Resize filter","The six original filters include proper anti-aliasing when shrinking. Fast bilinear uses the GPU's small fixed filter.")
+	_add_toggle(sampling,"ntscrs_source_resolution","PROCESS NTSC AT SOURCE RESOLUTION")
+	_controls["ntscrs_source_resolution"].tooltip_text = "Matches NTSCRT's order: degrade the full source, then shrink for the receiver and CRT. Can be much slower, especially at 4K."
+	_add_option(sampling,"ntscrt_scale_mode","CRT render size","Window resolution is economical. Original modes supersample the CRT; integer fit also centers and letterboxes it. These can cost substantially more.")
+	var full_group := _add_collapsed_section(rows,"Full signal and receiver controls")
+	_full_video_controls = preload("res://scripts/ntscrt_full_controls.gd").new()
+	full_group.add_child(_full_video_controls)
+	_full_video_controls.setup()
+	_full_video_controls.value_changed.connect(settings.set_video_parameter)
 	_section(rows, "Tube display")
-	_add_toggle(rows, "crt_enabled", "CRT EFFECT")
-	_controls["crt_enabled"].tooltip_text = "480p television source, scan beam, phosphor mask, halation and glass falloff."
+	_crt_parameter_group = _add_collapsed_section(rows,"Original CRT controls")
 	_add_toggle(rows, "crt_curvature", "SCREEN CURVATURE")
 	_controls["crt_curvature"].tooltip_text = "Bends the image like a curved tube. Off keeps a flat screen."
+	_ntscrt_group = VBoxContainer.new()
+	_ntscrt_group.add_theme_constant_override("separation", 8)
+	rows.add_child(_ntscrt_group)
+	_build_ntscrt(_ntscrt_group)
+
+func _build_ntscrt(rows: VBoxContainer) -> void:
+	_section(rows, "Approximation controls", "These presets change only the approximation controls below.")
+	var presets := GridContainer.new()
+	presets.columns = 2
+	presets.add_theme_constant_override("h_separation", 6)
+	presets.add_theme_constant_override("v_separation", 6)
+	rows.add_child(presets)
+	for i in GameSettings.NTSCRT_PRESET_NAMES.size():
+		var button := _button(GameSettings.NTSCRT_PRESET_NAMES[i], presets)
+		button.tooltip_text = NTSCRT_PRESET_HELP[i]
+		button.pressed.connect(func(): settings.apply_ntscrt_preset(i))
+	var signal_group := _add_collapsed_section(rows, "Broadcast signal")
+	_add_option(signal_group, "ntsc_decoder", "Decoder", "How colour is recovered: soft with rainbow shimmer, cleaner edges, or sharpest colour.")
+	for key in ["ntsc_signal_strength", "ntsc_rf_noise", "ntsc_ghost", "ntsc_ghost_delay",
+			"ntsc_hum", "ntsc_black_level", "ntsc_horizontal_hold", "ntsc_vertical_hold", "ntsc_afc"]:
+		_add_slider(signal_group, key)
+	_add_toggle(signal_group, "ntsc_caption_data", "LINE 21 DATA")
+	_controls["ntsc_caption_data"].tooltip_text = "Simulated caption-data dashes in the blanking bar, visible when the picture rolls. Does not change subtitles."
+	var tape_group := _add_collapsed_section(rows, "Tape transport")
+	_add_option(tape_group, "ntsc_tape_speed", "Tape speed", "Recording speed. Slower speeds add progressively more noise and softness.")
+	for key in ["ntsc_tracking", "ntsc_head_switch", "ntsc_timebase_jitter", "ntsc_crinkle",
+			"ntsc_head_clog", "ntsc_dropouts", "ntsc_search_speed"]:
+		_add_slider(tape_group, key)
+	_add_toggle(tape_group, "ntsc_dropout_compensation", "DROPOUT COMPENSATION")
+	_controls["ntsc_dropout_compensation"].tooltip_text = "Fills dropouts with neighbouring picture instead of leaving white streaks."
+	_add_toggle(tape_group, "ntsc_auto_faults", "AUTOMATIC TAPE FAULTS")
+	_controls["ntsc_auto_faults"].tooltip_text = "Lets the simulation trigger occasional tracking faults on its own."
+	var colour_group := _add_collapsed_section(rows, "Colour")
+	for key in ["ntsc_chroma_noise", "ntsc_chroma_delay", "ntsc_chroma_bleed", "ntsc_sharpness"]:
+		_add_slider(colour_group, key)
+	var screen_group := _add_collapsed_section(rows, "Tube screen")
+	_add_option(screen_group, "ntsc_mask_type", "Mask pattern", "Pattern of the tube's colour dots: vertical stripes, offset slots, or round triads.")
+	for key in ["ntsc_mask_strength", "ntsc_scanline_strength", "ntsc_bloom", "ntsc_brightness",
+			"ntsc_saturation", "ntsc_glass_diffusion", "ntsc_convergence", "ntsc_vignette",
+			"ntsc_auto_exposure"]:
+		_add_slider(screen_group, key)
+	_add_toggle(screen_group, "ntsc_interlaced", "INTERLACED FIELDS")
+	_controls["ntsc_interlaced"].tooltip_text = "Draws the picture as alternating fields, like a real broadcast tube."
+	for key: String in NTSCRT_SLIDER_HELP:
+		(_controls[key][0] as HSlider).tooltip_text = NTSCRT_SLIDER_HELP[key]
+
+func _add_collapsed_section(parent: VBoxContainer, title: String) -> VBoxContainer:
+	var toggle := _button(title + "  +", parent)
+	var group := VBoxContainer.new()
+	group.add_theme_constant_override("separation", 8)
+	parent.add_child(group)
+	group.visible = false
+	toggle.pressed.connect(func():
+		group.visible = not group.visible
+		toggle.text = title + "  −" if group.visible else title + "  +")
+	return group
 
 func _build_controls(rows: VBoxContainer) -> void:
 	_section(rows, "Mouse & movement")
@@ -301,7 +535,7 @@ func _add_option(parent: VBoxContainer, key: String, title: String, help: String
 	select.tooltip_text = help
 	for i in OPTION_LABELS[key].size():
 		select.add_item(OPTION_LABELS[key][i], GameSettings.ENUM_VALUES[key][i])
-	select.item_selected.connect(func(index: int): settings.set_value(key, select.get_item_id(index)))
+	select.item_selected.connect(func(index: int): _set_menu_value(key, select.get_item_id(index)))
 	row.add_child(select)
 	parent.add_child(row)
 	_controls[key] = select
@@ -320,7 +554,7 @@ func _select_tab(tab: String) -> void:
 
 func _fit_viewport() -> void:
 	var extent := get_viewport().get_visible_rect().size
-	var ui_scale := maxf(1.0, minf(extent.y / 720.0, extent.x / 1000.0))
+	var ui_scale := clampf(minf(extent.y / 720.0, extent.x / 1000.0), 0.5, 3.0)
 	var logical_size := extent / ui_scale
 	_layout.scale = Vector2.ONE * ui_scale
 	_layout.size = logical_size
@@ -330,17 +564,21 @@ func _fit_viewport() -> void:
 	_footer.columns = 2 if narrow else mini(4, _footer.get_child_count())
 	_display_grid.columns = 1 if narrow else 2
 	for page: ScrollContainer in _pages.values():
-		page.custom_minimum_size.y = maxf(80.0, minf(420.0, logical_size.y - (400.0 if narrow else 250.0)))
+		# Leave room for the language picker and the taller CJK fallback metrics.
+		page.custom_minimum_size.y = maxf(80.0, minf(340.0, logical_size.y - (456.0 if narrow else 306.0)))
 
 func _add_slider(parent: VBoxContainer, key: String) -> void:
 	var row := VBoxContainer.new()
 	var line := HBoxContainer.new()
 	var label := _label("", 24)
-	label.text = "MOUSE SENSITIVITY" if key == "sensitivity" \
-		else ("VHS EFFECT STRENGTH" if key == "vhs_distortion" \
-		else ("FILM GRAIN" if key == "film_grain" \
-		else ("HANDHELD STRENGTH" if key == "handheld_strength" \
-		else key.replace("_", " ").to_upper())))
+	if key.begins_with("ntsc_"):
+		label.text = key.substr(5).replace("_", " ").to_upper()
+	else:
+		label.text = "MOUSE SENSITIVITY" if key == "sensitivity" \
+			else ("TAPE DAMAGE" if key == "vhs_distortion" \
+			else ("GRAIN" if key == "film_grain" \
+			else ("HANDHELD STRENGTH" if key == "handheld_strength" \
+			else key.replace("_", " ").to_upper())))
 	line.add_child(label)
 	var value_label := _label("", 24, GOLD)
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -370,7 +608,7 @@ func _add_toggle(parent: VBoxContainer, key: String, text: String) -> void:
 	check.focus_mode = Control.FOCUS_ALL
 	if key == "toggle_sprint":
 		check.tooltip_text = _sprint_tooltip()
-	check.toggled.connect(func(value: bool): settings.set_value(key, value))
+	check.toggled.connect(func(value: bool): _set_menu_value(key, value))
 	parent.add_child(check)
 	_controls[key] = check
 
@@ -497,6 +735,7 @@ func _ask_reset() -> void:
 	_reset_prompt.process_mode = Node.PROCESS_MODE_ALWAYS
 	_reset_prompt.confirmed.connect(func() -> void:
 		if is_instance_valid(settings):
+			video_stage_selected.emit("look")
 			settings.reset_defaults()
 		if is_instance_valid(_binding_status):
 			_binding_status.text = "DEFAULTS RESTORED"
@@ -522,7 +761,14 @@ func _close_quit() -> void:
 func _refresh_controls() -> void:
 	if not settings:
 		return
+	if is_instance_valid(_language_select):
+		_language_select.select(Localization.LOCALES.find(str(settings.get_value("language"))))
+	if _controls.has("ntscrt_signal_width"):
+		(_controls["ntscrt_signal_width"] as SpinBox).set_value_no_signal(float(settings.get_value("ntscrt_signal_width")))
+		(_controls["ntscrt_signal_width"] as SpinBox).editable = int(settings.get_value("ntscrt_signal_size")) == 1
 	for key: String in SLIDER_KEYS:
+		if not _controls.has(key):
+			continue
 		var pair: Array = _controls[key]
 		var slider: HSlider = pair[0]
 		slider.set_value_no_signal(float(settings.get_value(key)))
@@ -530,28 +776,38 @@ func _refresh_controls() -> void:
 	for key: String in GameSettings.BOOLEAN_KEYS:
 		if not _controls.has(key):
 			continue
-		(_controls[key] as CheckButton).set_pressed_no_signal(bool(settings.get_value(key)))
+		(_controls[key] as CheckButton).set_pressed_no_signal(bool(_menu_value(key)))
 	if _controls.has("toggle_sprint"):
 		(_controls["toggle_sprint"] as CheckButton).tooltip_text = _sprint_tooltip()
 	for key: String in OPTION_LABELS:
+		if not _controls.has(key):
+			continue
 		var select := _controls[key] as OptionButton
-		select.select(select.get_item_index(int(settings.get_value(key))))
-	var crt_enabled := bool(settings.get_value("crt_enabled"))
+		select.select(select.get_item_index(int(_menu_value(key))))
+	var crt_enabled := bool(_menu_value("crt_enabled"))
+	var recording := bool(_menu_value("vhs_enabled")) or bool(settings.get_value("receiver_enabled"))
+	var resolution_limit := GraphicsQuality.resolution_limit(crt_enabled,recording) if bool(settings.get_value("video_auto_resolution")) else 5
+	var effective_resolution := GraphicsQuality.resolution_index(settings,crt_enabled,recording)
+	var resolution_label: String = OPTION_LABELS["render_resolution"][effective_resolution]
 	var resolution := _controls["render_resolution"] as OptionButton
-	resolution.disabled = crt_enabled
-	if crt_enabled:
-		resolution.select(resolution.get_item_index(1))
-		resolution.tooltip_text = "CRT fixes the world source at 480p. Turn CRT off to use your saved %s resolution." % OPTION_LABELS["render_resolution"][int(settings.get_value("render_resolution"))]
+	resolution.disabled = resolution_limit < 5
+	if resolution.disabled:
+		resolution.select(resolution.get_item_index(effective_resolution))
+		resolution.tooltip_text = "Tape and CRT effects limit world resolution to %s to save GPU work. Lower graphics presets stay lower. Turn both off to use your saved %s resolution; menus stay sharp." % [OPTION_LABELS["render_resolution"][resolution_limit], OPTION_LABELS["render_resolution"][int(settings.get_value("render_resolution"))]]
 	else:
 		resolution.tooltip_text = "Limits world resolution; menus stay sharp. Higher values cost more GPU time."
 	var preset := int(settings.get_value("quality_preset"))
 	for i in _preset_buttons.size():
 		_preset_buttons[i].set_pressed_no_signal(preset == i)
-	var quality_note: String = QUALITY_NOTES[preset]
-	if crt_enabled:
-		quality_note = quality_note.replace("480p", "480p CRT").replace("360p", "480p CRT").replace("720p", "480p CRT").replace("Native resolution", "480p CRT")
+	var quality_note: String = Localization.text(QUALITY_NOTES[preset])
+	if resolution.disabled:
+		var look_resolution := Localization.text("%s for this look") % resolution_label
+		for label in ["360p", "480p", "720p", "1080p", "1440p", "Native resolution"]:
+			if quality_note.contains(label):
+				quality_note = quality_note.replace(label,look_resolution)
+				break
 		if preset == 4:
-			quality_note += " CRT source: 480p."
+			quality_note += Localization.text(" This look uses %s.") % resolution_label
 	_quality_status.text = "%s · %s" % [GameSettings.QUALITY_NAMES[preset].to_upper(), quality_note]
 	_refresh_binding_buttons()
 	if is_instance_valid(_binding_status) and _capturing.is_empty():
@@ -559,19 +815,88 @@ func _refresh_controls() -> void:
 	_refresh_video_controls()
 	_refresh_motion_controls()
 	_refresh_hdr_controls()
+	_refresh_ntscrt_controls()
+	_refresh_crt_parameters()
+	if is_instance_valid(_full_video_controls):
+		_full_video_controls.refresh(settings.get_value("ntscrs_settings"),settings.get_value("receiver_settings"))
 
 
 func _refresh_video_controls() -> void:
-	if not settings or not _controls.has("vhs_distortion"):
-		return
+	if not settings: return
+	var profile := LOOK_BRIDGE.from_settings(settings)
+	var snapshot: Dictionary = LOOK_IO.encode(profile).settings
+	if snapshot!=_last_look_settings:
+		_last_look_settings = snapshot
+		var index := LOOKS.matching_index(profile)
+		_look_select.select(index+1)
+		_look_description.text = LOOKS.LOOKS[index].description if index>=0 else "Your custom settings are active. Adjust them below, or choose a preset to start over."
+	if not _controls.has("vhs_distortion"): return
 	var pair: Array = _controls["vhs_distortion"]
 	var slider := pair[0] as HSlider
 	var value_label := pair[1] as Label
-	slider.editable = bool(settings.get_value("vhs_enabled"))
+	slider.editable = bool(_menu_value("vhs_enabled")) or bool(settings.get_value("receiver_enabled"))
 	slider.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
 	value_label.modulate = Color.WHITE if slider.editable else Color(0.55, 0.55, 0.55)
-	var curvature_toggle := _controls["crt_curvature"] as CheckButton
-	curvature_toggle.disabled = not bool(settings.get_value("crt_enabled"))
+	if _controls.has("crt_curvature"):
+		var curvature_toggle := _controls["crt_curvature"] as CheckButton
+		var original := GraphicsQuality.crt_model(settings.values) in range(1,8)
+		curvature_toggle.disabled = not bool(_menu_value("crt_enabled")) or original
+		curvature_toggle.tooltip_text = "Original CRT models use their own geometry controls below." if original else "Bends the image like a curved tube. Off keeps a flat screen."
+	if _controls.has("ntscrs_field_history"):
+		(_controls["ntscrs_field_history"] as CheckButton).disabled = int(_menu_value("video_pipeline")) != 2
+
+
+func _refresh_crt_parameters() -> void:
+	if not is_instance_valid(_crt_parameter_group): return
+	var model := GraphicsQuality.crt_model(settings.values)
+	var preset: String = GameSettings.CRT_SHADER_IDS[model]
+	if model != _crt_parameter_model:
+		_crt_parameter_model = model
+		_crt_parameter_controls.clear()
+		for child in _crt_parameter_group.get_children():
+			_crt_parameter_group.remove_child(child)
+			child.queue_free()
+		if model in [0,8]:
+			_note(_crt_parameter_group,"Select an original CRT model to adjust its controls. Native NTSCRT uses the Tube screen controls below; Pipeline default uses the signal pipeline's tube.")
+		else:
+			var descriptors: Dictionary = GameSettings.crt_presets()[preset].parameters
+			for key in descriptors:
+				var descriptor: Dictionary = descriptors[key]
+				if float(descriptor.min) == float(descriptor.max):
+					_note(_crt_parameter_group,str(descriptor.label))
+					continue
+				var row := HBoxContainer.new()
+				row.add_theme_constant_override("separation",12)
+				var label := _label(str(descriptor.label),20)
+				label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				row.add_child(label)
+				var value_label := _label("",18,MUTED)
+				row.add_child(value_label)
+				_crt_parameter_group.add_child(row)
+				var slider := HSlider.new()
+				slider.min_value = float(descriptor.min)
+				slider.max_value = float(descriptor.max)
+				slider.step = float(descriptor.step)
+				slider.custom_minimum_size.y = 28
+				_crt_parameter_group.add_child(slider)
+				slider.value_changed.connect(func(value: float): settings.set_crt_parameter(preset,key,value))
+				_crt_parameter_controls[key] = [slider,value_label]
+	if model in [0,8]: return
+	var overrides: Dictionary = settings.get_value("crt_shader_parameters").get(preset,{})
+	for key in _crt_parameter_controls:
+		var value := float(overrides.get(key,GameSettings.crt_presets()[preset].parameters[key].default))
+		var controls: Array = _crt_parameter_controls[key]
+		(controls[0] as HSlider).set_value_no_signal(value)
+		(controls[1] as Label).text = "%.3f" % value
+
+
+func _refresh_ntscrt_controls() -> void:
+	if not settings or not is_instance_valid(_ntscrt_group):
+		return
+	var experimental := int(_menu_value("video_pipeline")) == 1
+	_ntscrt_group.visible = experimental or int(settings.get_value("crt_shader")) == 8
+	if is_instance_valid(_ntscrt_note):
+		_ntscrt_note.visible = experimental
 
 
 func _refresh_motion_controls() -> void:
@@ -606,6 +931,14 @@ func _refresh_hdr_controls() -> void:
 func _format_value(key: String, value: float) -> String:
 	if key == "field_of_view":
 		return "%d°" % roundi(value)
+	if key == "ntsc_ghost_delay":
+		return "%.1f µs" % value
+	if key == "ntsc_chroma_delay":
+		return "%+.1f px" % value
+	if key == "ntsc_search_speed":
+		return "%.1f×" % value
+	if key in ["ntsc_ghost", "ntsc_horizontal_hold", "ntsc_vertical_hold"]:
+		return "%+d%%" % roundi(value * 100.0)
 	return "%.2f" % value if key == "sensitivity" else "%d%%" % roundi(value * 100.0)
 
 func _close_resume() -> void:

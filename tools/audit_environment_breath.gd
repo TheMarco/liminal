@@ -379,6 +379,12 @@ func _audit_environments() -> void:
 		for at in [Vector2i.ZERO, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]:
 			chunk = Chunk.new(WorldGen.level_seed(980712989, theme), at, theme)
 			choices = Placement.candidates(chunk)
+			if theme == 7:
+				# Practical fixtures can require a shallower bow in the first
+				# cell. Keep the full-panel contract on a clear sampled wall.
+				choices = choices.filter(func(choice: Dictionary) -> bool:
+					return choice.size.x >= 5.5 and choice.size.y >= 3.2 \
+						and choice.depth >= 0.6)
 			if not choices.is_empty(): break
 			chunk.free()
 			chunk = null

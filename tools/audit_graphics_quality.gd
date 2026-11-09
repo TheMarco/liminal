@@ -28,16 +28,81 @@ func capture_crt_modes(settings: GameSettings) -> void:
 		settings.set_value("crt_enabled", mode[2])
 		await settle()
 		var source_height := root.get_visible_rect().size.y * root.scaling_3d_scale
-		expect(is_equal_approx(source_height, 480.0 if mode[2] else root.get_visible_rect().size.y), "wrong native capture resolution: " + mode[0])
+		var expected_height := 480.0 if mode[2] else (720.0 if mode[1] else root.get_visible_rect().size.y)
+		expect(is_equal_approx(source_height, expected_height), "wrong native capture resolution: " + mode[0])
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://build/crt-480p/%s.png" % mode[0])
 		print("CRT_CAPTURE %s source_height=%.1f saved_resolution=1440p" % [mode[0], source_height])
 	root.size = Vector2i(1280,720)
 	await settle()
 
+func check_recording_resolution(game: Node, settings: GameSettings) -> void:
+	var saved := settings.values.duplicate(true)
+	var extent := root.size
+	root.size = Vector2i(3840,2160)
+	await settle()
+	settings.apply_quality_preset(3)
+	for look in [3,2,1,0,3,0]:
+		settings.apply_video_look(look)
+		var height: float = root.get_visible_rect().size.y * root.scaling_3d_scale
+		expect(is_equal_approx(height,[1440.0,480.0,720.0,720.0][look]),"wrong Ultra world resolution for look %d: %s" % [look,height])
+		expect(settings.get_value("render_resolution")==4 and settings.get_value("quality_preset")==3,
+			"look discarded saved Ultra resolution")
+		expect(root.msaa_3d==Viewport.MSAA_DISABLED and root.use_taa and game.we.environment.sdfgi_enabled,
+			"look cap changed antialiasing or lighting quality")
+	# Receiver-only and launch overrides use the same policy as tape looks.
+	settings.set_value("receiver_enabled",true)
+	expect(is_equal_approx(root.scaling_3d_scale,1.0/3.0),"receiver-only missed 720p cap")
+	settings.set_value("receiver_enabled",false)
+	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"receiver off did not restore 1440p")
+	game.opts.vhs_override = 1
+	game._apply_game_settings()
+	expect(is_equal_approx(root.scaling_3d_scale,1.0/3.0),"launch tape override missed 720p cap")
+	game.opts.vhs_override = -1
+	settings.apply_video_look(3)
+	game.opts.vhs_override = 0
+	game._apply_game_settings()
+	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"launch clean override retained tape cap")
+	game.opts.vhs_override = -1
+	for pipeline in [0,1,2]:
+		settings.set_value("video_pipeline",pipeline)
+		game._apply_game_settings()
+		expect(is_equal_approx(root.scaling_3d_scale,1.0/3.0),"tape pipeline missed the world cap")
+	settings.apply_video_look(0)
+	game.descent_tape_watch(true)
+	expect(is_equal_approx(root.scaling_3d_scale,1.0/3.0),"forced tape playback missed 720p cap")
+	game.descent_tape_watch(false)
+	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"playback did not restore Clean resolution")
+	settings.apply_video_look(3)
+	root.size = Vector2i(3456,2234)
+	await settle()
+	expect(is_equal_approx(root.scaling_3d_scale*root.size.y,720.0),"tape cap lost on Retina resize")
+	settings.apply_quality_preset(0)
+	expect(is_equal_approx(root.scaling_3d_scale*root.size.y,480.0),"tape raised Low resolution")
+	settings.apply_video_look(1)
+	expect(is_equal_approx(root.scaling_3d_scale*root.size.y,480.0),"Home video raised Low resolution")
+	settings.apply_quality_preset(3)
+	settings.apply_video_look(3)
+	root.size = Vector2i(640,360)
+	await settle()
+	expect(is_equal_approx(root.scaling_3d_scale,1.0),"small tape window supersampled the world")
+	root.size = Vector2i(3840,2160)
+	settings.apply_video_look(0)
+	settings.set_value("render_resolution",5)
+	settings.set_value("anti_aliasing",5)
+	await settle()
+	expect(is_equal_approx(root.scaling_3d_scale,1.0) and root.use_taa
+		and root.msaa_3d==Viewport.MSAA_4X and settings.get_value("quality_preset")==4,
+		"manual Native and combined AA options were lost")
+	settings.values = saved
+	game._apply_game_settings()
+	root.size = extent
+	await settle()
+
 func run() -> void:
 	var path := "/tmp/liminal-quality-%d.cfg" % OS.get_process_id()
 	var settings := GameSettings.new(path)
+	expect(settings.matching_quality_preset()==1,"defaults no longer match Medium")
 	var notifications: Array[int] = []
 	settings.changed.connect(func(): notifications.append(1))
 	settings.set_value("vhs_enabled", false)
@@ -77,6 +142,22 @@ func run() -> void:
 		and migrated.get_value("quality_preset") == 1 and migrated.get_value("frame_limit") == 60,
 		"legacy/corrupt migration lost preferences or safe defaults")
 	DirAccess.remove_absolute(path)
+	# Old saved graphics remain exact, including explicit expensive choices.
+	# They become Custom instead of silently adopting a different image/budget.
+	var old_profile := ConfigFile.new()
+	var old_ultra := [5,5,3,2,2,2,2]
+	for i in GameSettings.QUALITY_KEYS.size():
+		old_profile.set_value("settings",GameSettings.QUALITY_KEYS[i],old_ultra[i])
+	old_profile.set_value("settings","quality_preset",3)
+	old_profile.set_value("settings","show_fps",true)
+	old_profile.save(path)
+	var preserved := GameSettings.new(path)
+	for i in GameSettings.QUALITY_KEYS.size():
+		expect(preserved.get_value(GameSettings.QUALITY_KEYS[i])==old_ultra[i],"old graphics choice changed")
+	expect(preserved.get_value("quality_preset")==4 and preserved.get_value("show_fps")
+		and GraphicsQuality.video_tier(preserved.values)==3,
+		"old profile lost Custom or FPS preference")
+	DirAccess.remove_absolute(path)
 	for theme in WorldGen.THEMES:
 		var environment := EnvBuilder.build(int(theme))
 		var authored := {}
@@ -110,35 +191,42 @@ func run() -> void:
 	for preset in [0, 1, 2, 3, 0]:
 		settings.apply_quality_preset(preset)
 		game._apply_game_settings()
-		expect(is_equal_approx(root.scaling_3d_scale, [0.5, 2.0 / 3.0, 1.0, 1.0][preset]), "preset selected wrong world resolution")
+		expect(game.player._flash_dust.quality_tier == preset, "live airborne-particle budget ignored quality")
+		for light in game.find_children("*", "Light3D", true, false):
+			if light.has_meta("practical_shadow_tier"):
+				expect(light.shadow_enabled and light.shadow_opacity==1.0, "quality permits fixture light through walls")
+				expect(light.distance_fade_shadow>=light.distance_fade_begin, "fixture occlusion fades before its source")
+		expect(is_equal_approx(root.scaling_3d_scale, [2.0 / 3.0, 1.0, 1.0, 1.0][preset]), "preset selected wrong world resolution")
 		expect(root.scaling_3d_scale <= 1.0 and root.scaling_3d_scale > 0.0, "invalid runtime resolution")
-		expect(root.msaa_3d == (Viewport.MSAA_4X if preset == 3 else Viewport.MSAA_DISABLED), "runtime MSAA mismatch")
-		expect(root.use_taa == (preset >= 2 and not game.opts.notaa), "runtime TAA mismatch")
-		expect(game.we.environment.sdfgi_enabled == (preset >= 2), "live GI toggle mismatch")
+		expect(root.msaa_3d == Viewport.MSAA_DISABLED, "runtime MSAA mismatch")
+		expect(root.use_taa == (preset >= 1 and not game.opts.notaa), "runtime TAA mismatch")
+		expect(game.we.environment.sdfgi_enabled == (preset >= 1), "live GI toggle mismatch")
 		var destination: Environment = game._build_env(8)
-		expect(destination.sdfgi_enabled == (preset >= 2), "new floor ignored quality")
+		expect(destination.sdfgi_enabled == (preset >= 1), "new floor ignored quality")
 		var scale := root.scaling_3d_scale
 		var saved_resolution: int = settings.get_value("render_resolution")
 		settings.set_value("vhs_enabled", not bool(settings.get_value("vhs_enabled")))
-		expect(root.scaling_3d_scale == scale, "VHS changed graphics resolution")
+		expect(root.scaling_3d_scale == scale, "tape cap raised an already economical resolution")
 		settings.set_value("crt_enabled", true)
-		expect(is_equal_approx(root.scaling_3d_scale, 2.0 / 3.0), "CRT did not force a 480p source")
+		var tv_scale := minf(scale,2.0/3.0)
+		expect(is_equal_approx(root.scaling_3d_scale, tv_scale), "TV cap did not respect a lower graphics resolution")
 		settings.set_value("vhs_enabled", not bool(settings.get_value("vhs_enabled")))
-		expect(is_equal_approx(root.scaling_3d_scale, 2.0 / 3.0), "VHS toggle broke the CRT cap")
+		expect(is_equal_approx(root.scaling_3d_scale, tv_scale), "VHS toggle broke the TV cap")
 		settings.set_value("crt_enabled", false)
 		expect(root.scaling_3d_scale == scale and settings.get_value("render_resolution") == saved_resolution,
 			"CRT toggle did not restore the saved resolution")
-		expect(game.we.environment.sdfgi_enabled == (preset >= 2), "CRT changed lighting quality")
+		expect(game.we.environment.sdfgi_enabled == (preset >= 1), "CRT changed lighting quality")
 	# CLI presentation overrides must use their effective state, leaving the
 	# player's saved CRT preference and resolution untouched.
 	game.opts.crt_override = 1
 	game._apply_game_settings()
-	expect(is_equal_approx(root.scaling_3d_scale, 2.0 / 3.0), "CRT QA override missed 480p")
+	expect(is_equal_approx(root.scaling_3d_scale, 2.0/3.0), "CRT QA override raised Low resolution")
 	game.opts.crt_override = 0
 	game._apply_game_settings()
-	expect(is_equal_approx(root.scaling_3d_scale, 0.5), "clean QA override retained CRT cap")
+	expect(is_equal_approx(root.scaling_3d_scale, 2.0/3.0), "clean QA override retained CRT cap")
 	game.opts.crt_override = -1
 	game._apply_game_settings()
+	await check_recording_resolution(game,settings)
 	await capture_crt_modes(settings)
 	settings.set_value("frame_limit", 30)
 	expect(Engine.max_fps == 30, "frame cap was not applied")
@@ -153,7 +241,7 @@ func run() -> void:
 	realm.refresh_graphics_quality(settings)
 	expect(realm._source.env.sdfgi_enabled and realm._preview_environment.environment.sdfgi_enabled,
 		"cached realm environments retained old quality")
-	expect(realm.preview.msaa_3d == Viewport.MSAA_4X and realm.preview.use_taa
+	expect(realm.preview.msaa_3d == Viewport.MSAA_DISABLED and realm.preview.use_taa
 		and realm.preview.scaling_3d_scale == 1.0, "preview missed quality or was downscaled twice")
 	realm.preview.free()
 	realm._preview_environment.free()
@@ -166,12 +254,13 @@ func run() -> void:
 	var resolution := menu._controls["render_resolution"] as OptionButton
 	expect(resolution.disabled and resolution.get_selected_id() == 1, "CRT resolution selector does not show its locked 480p override")
 	var expected_tabs := {"render_resolution": "Graphics", "fullscreen": "Graphics", "hdr_enabled": "Graphics",
-		"vhs_enabled": "Visual Effects", "film_grain": "Visual Effects", "sensitivity": "Controls",
+		"sensitivity": "Controls",
 		"invert_y": "Controls", "dialogue_volume": "Audio", "head_bob": "Accessibility",
 		"story_subtitles": "Accessibility", "reduced_flashing": "Accessibility"}
 	for key in expected_tabs:
 		var control: Control = menu._controls[key][0] if menu._controls[key] is Array else menu._controls[key]
 		expect(menu._pages[expected_tabs[key]].is_ancestor_of(control), "wrong tab for " + key)
+	expect(menu._pages["Visual Effects"].is_ancestor_of(menu._look_select), "complete look selector is outside Visual Effects")
 	for extent in [Vector2i(640,480), Vector2i(720,1280), Vector2i(1280,720), Vector2i(3456,2234), Vector2i(3840,2160)]:
 		root.size = extent
 		await settle()
@@ -216,9 +305,17 @@ func run() -> void:
 	tap(KEY_ENTER)
 	expect(settings.get_value("quality_preset") == 2, "keyboard did not activate preset")
 	expect(resolution.disabled and resolution.get_selected_id() == 1
-		and settings.get_value("render_resolution") == 2, "preset changed the CRT override or discarded saved resolution")
+		and settings.get_value("render_resolution") == 3, "preset changed the CRT override or discarded saved resolution")
 	settings.set_value("crt_enabled", false)
-	expect(not resolution.disabled and resolution.get_selected_id() == 2, "CRT off did not unlock and restore saved resolution in UI")
+	expect(not resolution.disabled and resolution.get_selected_id() == 3, "CRT off did not unlock and restore saved resolution in UI")
+	settings.apply_quality_preset(3)
+	for look in [3,2,1,0]:
+		settings.apply_video_look(look)
+		expect(resolution.disabled == (look!=0) and resolution.get_selected_id()==[4,1,2,2][look],
+			"resolution selector misrepresented look %d" % look)
+		expect(settings.get_value("render_resolution")==4,"menu discarded the saved 1440p resolution")
+		if look!=0:
+			expect(not menu._quality_status.text.contains("1440p"),"capped look still advertised the Clean resolution")
 	menu._controls["render_resolution"].item_selected.emit(3)
 	expect(settings.get_value("quality_preset") == 4 and menu._quality_status.text.begins_with("CUSTOM"), "UI override did not mark Custom")
 	menu._select_tab("Controls")
@@ -232,4 +329,4 @@ func run() -> void:
 	root.size = saved_extent
 	DirAccess.remove_absolute(path)
 	await teardown_game(game)
-	finish("graphics quality: presets, persistence, authored floors, CRT 480p / VHS-only resolution, live rendering, cached realms and five tab layouts")
+	finish("graphics quality: preset resolution caps, Clean restoration, overrides/playback, lower-quality preservation, authored floors, cached realms and five tab layouts")

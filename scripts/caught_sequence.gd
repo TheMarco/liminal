@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 ## Presentation only: the run is already over. The eye falls, not the player
 ## collision body. The actual catcher looms over the fallen viewpoint; no
 ## replacement apparition, white flash, or change to the chosen VHS mode.

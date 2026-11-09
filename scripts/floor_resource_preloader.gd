@@ -1,7 +1,7 @@
 class_name FloorResourcePreloader
 extends RefCounted
 
-## One pending threaded PackedScene prefetch with a bounded FIFO strong cache.
+## One pending threaded PackedScene prefetch with a bounded LRU strong cache.
 ## This service has no scene-tree or Chunk dependencies; callers own scheduling.
 
 const CACHE_LIMIT := 64
@@ -28,7 +28,9 @@ static func prepare_floor(paths: Array[String]) -> void:
 			_ready_order.erase(path)
 	for path in paths:
 		if not _ready.has(path):
+			var started := Time.get_ticks_usec()
 			var scene := load(path) as PackedScene
+			RuntimeDiagnostics.slow("floor_asset_load", started, {"asset": path})
 			if scene != null:
 				_store(path, scene)
 
@@ -75,7 +77,12 @@ static func request_next() -> void:
 
 static func cached_scene(path: String) -> PackedScene:
 	var resource = _ready.get(path)
+	if resource != null:
+		_touch(path)
 	return resource as PackedScene
+
+static func cached_count() -> int:
+	return _ready.size()
 
 ## Also retain synchronous first-use loads. ResourceLoader's cache is weak:
 ## instantiating a scene retains its meshes, but not the PackedScene itself.
@@ -100,9 +107,16 @@ static func finish() -> void:
 
 static func _store(path: String, resource: Resource) -> void:
 	if _ready.has(path):
+		_touch(path)
 		return
 	while _ready_order.size() >= CACHE_LIMIT:
 		var oldest: String = _ready_order.pop_front()
 		_ready.erase(oldest)
 	_ready[path] = resource
+	_ready_order.append(path)
+
+static func _touch(path: String) -> void:
+	# A frequently used prop must not be retired just because it was the first
+	# item decoded during floor preparation. The entry bound stays unchanged.
+	_ready_order.erase(path)
 	_ready_order.append(path)

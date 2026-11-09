@@ -9,6 +9,7 @@ func _init() -> void:
 
 func _audit_slices() -> void:
 	var failures: Array[String] = []
+	DirAccess.make_dir_recursive_absolute("res://build/streaming-slices")
 	if "--busways-only" in OS.get_cmdline_user_args():
 		_audit_busway_templates(failures)
 		for failure in failures: printerr(failure)
@@ -76,6 +77,23 @@ func _audit_slices() -> void:
 		for failure in failures: printerr(failure)
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures.is_empty() else 1)
+
+
+func _node_sig(node: Node) -> String:
+	var signature := super._node_sig(node)
+	if not node.has_meta("fixture_emitter"): return signature
+	var reference: NodePath = node.get_meta("fixture_emitter")
+	var emitter := node.get_node_or_null(reference)
+	if emitter == null: return signature + " INVALID_EMITTER"
+	# Godot's generated @MeshInstance3D@123 names differ between two builds
+	# in one process. Compare the actual referenced child's structural path,
+	# retaining the wiring check instead of discarding this metadata.
+	var indices: PackedStringArray = []
+	while emitter.get_parent() != null:
+		indices.insert(0,str(emitter.get_index()))
+		emitter = emitter.get_parent()
+	return signature.replace("@fixture_emitter=" + str(reference),
+		"@fixture_emitter=child/" + "/".join(indices))
 
 
 func _audit_busway_templates(failures: Array[String]) -> void:

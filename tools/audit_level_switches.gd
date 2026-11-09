@@ -18,8 +18,15 @@ func run() -> void:
 	var zero := InputEventKey.new()
 	zero.pressed = true
 	zero.physical_keycode = KEY_0
+	game.player._walk_p.stream = Sfx.walk("carpet")[0]
+	game.player._walk_p.play()
+	game.player.velocity = Vector3(3,0,0)
 	game._unhandled_input(zero)
+	expect(not game.player._walk_p.playing,"footstep loop continued during floor load")
+	expect(not game.player.is_physics_processing() and game.player.velocity == Vector3.ZERO,
+		"player could restart movement during floor load")
 	await await_until(func(): return not game._switching)
+	expect(game.player.is_physics_processing(),"floor load did not restore player physics")
 	expect(game.active_level == 10,
 		"0 key did not enter the Data Center")
 	expect(not casino_environment.sdfgi_enabled,
@@ -36,8 +43,11 @@ func run() -> void:
 	game._unhandled_input(video)
 
 	var data_center_environment: Environment = game.we.environment
+	game.player.set_physics_process(false)
 	game._jump_to(6, SAVED_POSITION, false)
 	await await_until(func(): return not game._switching)
+	expect(not game.player.is_physics_processing(),"floor load released an existing movement lock")
+	game.player.set_physics_process(true)
 	expect(not data_center_environment.sdfgi_enabled,
 		"outgoing Data Center indirect-light cache was not retired")
 	expect(game.we.environment != data_center_environment and game.we.environment.sdfgi_enabled,

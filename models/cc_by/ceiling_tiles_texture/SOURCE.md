@@ -10,3 +10,7 @@
   uses recessed one- and two-panel lights and matching vent housings. The
   12-triangle source demonstration slab is retained for provenance but is not
   instantiated at runtime; ceiling collision is unchanged.
+
+School uses the four panel interiors with varied orientation inside its existing
+0.6 m T-bar grid. The shader adds restrained water staining and shallow pore
+relief; no additional light or emission is added.

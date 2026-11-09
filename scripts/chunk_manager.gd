@@ -228,6 +228,8 @@ func _process(_dt: float) -> void:
 		# Neighbour/objective chunks keep their priority without finishing whole
 		# rooms in one frame. Warm-up/teleport preparation remains synchronous.
 		var urgent := _pending_cell == pc and not chunks.has(pc)
+		var build_started := Time.get_ticks_usec()
+		var building_cell := _pending_cell
 		while true:
 			if not urgent and Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
 				break
@@ -244,6 +246,7 @@ func _process(_dt: float) -> void:
 				break
 			if not urgent and Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
 				break
+		RuntimeDiagnostics.slow("chunk_build", build_started, {"cell": str(building_cell), "level": theme, "urgent": urgent})
 
 	for c in chunks.keys():
 		var ch := chunks[c] as Chunk
@@ -299,6 +302,7 @@ func _cancel_pending() -> void:
 
 
 func _install_chunk(c: Vector2i, chunk: Chunk) -> void:
+	var started := Time.get_ticks_usec()
 	chunk.restore_runtime_state(_runtime_state.subset_for_cells([c]))
 	chunk.set_blackout(blackout)
 	# Added only to complete live chunks: fingerprints of authored geometry
@@ -307,6 +311,7 @@ func _install_chunk(c: Vector2i, chunk: Chunk) -> void:
 	add_child(chunk)
 	chunks[c] = chunk
 	chunk_built.emit(chunk)
+	RuntimeDiagnostics.slow("chunk_install", started, {"cell": str(c), "level": theme})
 
 
 func _cheb(a: Vector2i, b: Vector2i) -> int:
@@ -407,8 +412,10 @@ func stage_rebuild_cells(cells: Array[Vector2i], state_override: int,
 func _process_staged_rebuild() -> bool:
 	if _staged_cells.is_empty():
 		return false
+	var started := Time.get_ticks_usec()
 	var at := _staged_cells[_staged_index]
 	var replacement := _build(at, false, _staged_state)
+	RuntimeDiagnostics.slow("mutation_chunk_build", started, {"cell": str(at), "level": theme, "total_chunks": _staged_cells.size()})
 	_staged_replacements[at] = replacement
 	if not replacement.mutation_rebuild_valid():
 		if _staged_failed.is_valid():
@@ -434,6 +441,7 @@ func _process_staged_rebuild() -> bool:
 
 
 func _commit_staged_rebuild() -> bool:
+	var started := Time.get_ticks_usec()
 	if fail_next_staged_commit:
 		fail_next_staged_commit = false
 		return false
@@ -462,6 +470,7 @@ func _commit_staged_rebuild() -> bool:
 		replacement.restore_runtime_state(
 			_runtime_state.subset_for_cells([at]))
 		chunk_built.emit(replacement)
+	RuntimeDiagnostics.mark("mutation_scene_commit", {"chunks": _staged_cells.size(), "elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})
 	_clear_staged_rebuild(false)
 	return true
 

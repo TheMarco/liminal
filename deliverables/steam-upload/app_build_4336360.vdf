@@ -1,7 +1,7 @@
 "AppBuild"
 {
     "AppID" "4336360"
-    "Desc" "It Wants You To Stay 0.5.3 - macOS Developer ID signing and notarization fix"
+    "Desc" "It Wants You To Stay 0.5.9 - November 9, 2026 - loading and video performance fixes, stall recovery - Windows, Linux and macOS"
     "ContentRoot" "../../build"
     "BuildOutput" "../../build/steam-upload-output"
     "Depots"
@@ -12,6 +12,12 @@
             {
                 "LocalPath" "windows/It wants you to stay.exe"
                 "DepotPath" "."
+            }
+            "FileMapping"
+            {
+                "LocalPath" "windows/*.dll"
+                "DepotPath" "."
+                "Recursive" "1"
             }
         }
         "4336365"

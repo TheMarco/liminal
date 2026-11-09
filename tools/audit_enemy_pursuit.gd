@@ -220,6 +220,49 @@ func _run() -> void:
 	f.free()
 	obstruction.free()
 
+	# Wall time, not a clamped physics delta, detects stalls. Catch-up ticks
+	# cannot spend the recovery window or reach contact before control returns.
+	var guard := root.get_node("StallGuard") as GameplayFrameGuard
+	guard.reset_clock(1000000)
+	for frame in 20:
+		var now := 1000000 + (frame + 1) * 50000
+		guard.observe_physics(now)
+		guard.observe_frame(now)
+	check(not GameplayFrameGuard.is_recovering(),"ordinary 20 FPS triggered recovery")
+	guard.observe_physics(3000000)
+	check(GameplayFrameGuard.is_recovering(),"wall-clock stall was missed before physics")
+	for frame in 8: guard.observe_physics(3000000 + frame * 100)
+	check(guard.remaining_usec == GameplayFrameGuard.RECOVERY_USEC,
+		"physics catch-up consumed reaction time")
+	guard.observe_frame(3001000)
+	f = actor(world,player,Vector3(9.2,0,6))
+	f._walker._manifestation = 1.0
+	var held_position := f.position
+	f._advance(DT,false)
+	check(f.catches == 0 and f.position == held_position,"stall recovery allowed pursuit or contact")
+	f.appearance_delay = 0.45
+	f.grace = 0.9
+	f._physics_process(0.5)
+	check(is_equal_approx(f.appearance_delay,0.45) and is_equal_approx(f.grace,0.9),
+		"stall recovery consumed the encounter warning")
+	f.appearance_delay = 0.0
+	f.grace = 0.0
+	for frame in 15: guard.observe_frame(3051000 + frame * 50000)
+	check(not GameplayFrameGuard.is_recovering(),"responsive frames did not release recovery")
+	f._advance(DT,false)
+	check(f.catches == 1,"contact stayed disabled after recovery ended")
+	guard.observe_frame(6000000)
+	guard.observe_frame(6300000)
+	check(guard.remaining_usec == GameplayFrameGuard.RECOVERY_USEC,"repeated stalls spent reaction time")
+	guard.reset_clock(7000000)
+	for frame in 30: guard.observe_physics(7016667 + frame * 16667)
+	check(GameplayFrameGuard.is_recovering(),"running physics concealed a stalled picture")
+	guard.reset_clock(8000000)
+	GameplayFrameGuard.hold_for_presentation()
+	check(GameplayFrameGuard.is_recovering(),"video resize did not hold threats while showing an old frame")
+	guard.reset_clock(Time.get_ticks_usec())
+	f.free()
+
 	world.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	print("enemy pursuit audit: %d failures" % failures.size())

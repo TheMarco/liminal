@@ -33,7 +33,9 @@ func off_material(material: Material) -> Material:
 		var base := material as BaseMaterial3D
 		if base.emission_enabled or base.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED:
 			var dark := base.duplicate() as BaseMaterial3D
-			dark.emission_enabled = false
+			# Extinguish emission through its uniform. Disabling the feature
+			# creates a new shader variant at the exact lights-out frame.
+			dark.emission_energy_multiplier = 0.0
 			dark.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 			off = dark
 	elif material is ShaderMaterial and _has_power(material.shader):

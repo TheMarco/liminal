@@ -1,4 +1,5 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 
 
 func _office_door_decor(dir: int, plane: float) -> void:
@@ -30,8 +31,14 @@ func _office_troffer(at: Vector3, panels: Vector2i,
 		pmat: Material) -> MeshInstance3D:
 	at = _office_ceiling_center(at, panels)
 	var turned := panels.y > panels.x
+	# Keep the imported, rotated model inside an unscaled fixture frame. The
+	# direct light uses the actual lens bounds in this frame, facing the room.
+	var frame := Node3D.new()
+	frame.name = "OfficeTroffer"
+	frame.set_meta("practical_fixture","office_troffer")
+	scene.add_node(frame)
 	var holder := scene.fitted_model("res://models/scenario/office/ceiling_light.glb",
-		null, Vector3(at.x, ctx.ceiling_height - 0.04, at.z),
+		frame, Vector3(at.x, ctx.ceiling_height - 0.04, at.z),
 		Vector3(1.5, 0.08, 0.75), PI / 2.0 if turned else 0.0, false)
 	var lens: MeshInstance3D = null
 	if holder != null:
@@ -42,13 +49,41 @@ func _office_troffer(at: Vector3, panels: Vector2i,
 	if lens == null:
 		if holder != null:
 			holder.free()
-		lens = scene.troffer(at, OfficeCeilingGrid.lens_size(panels), pmat,
-			Mats.metal_gray())
+		var size := OfficeCeilingGrid.lens_size(panels)
+		lens = scene.model_box(frame,Vector3(at.x,ctx.ceiling_height-0.055,at.z),
+			Vector3(size.x,0.05,size.y),pmat)
+		for sign_value in [-1.0,1.0]:
+			scene.model_box(frame,Vector3(at.x,ctx.ceiling_height-0.02,at.z+sign_value*(size.y/2.0+0.055)),
+				Vector3(size.x+0.18,0.035,0.07),Mats.metal_gray())
+			scene.model_box(frame,Vector3(at.x+sign_value*(size.x/2.0+0.055),ctx.ceiling_height-0.02,at.z),
+				Vector3(0.07,0.035,size.y+0.18),Mats.metal_gray())
 	else:
 		lens.material_override = pmat
 	lens.set_meta("office_ceiling_fixture", "light")
 	lens.set_meta("office_ceiling_panels", panels)
+	lens.set_meta("fixture_frame",lens.get_path_to(frame))
 	return lens
+
+
+func _office_panel_light(lens: MeshInstance3D, energy: float, shadow_tier: int,
+		flicker: bool, material: StandardMaterial3D) -> void:
+	var frame := lens.get_node(lens.get_meta("fixture_frame")) as Node3D
+	var light := FIXTURE_LIGHTING.lower_face(frame,lens,Color(0.93,1.0,0.95),
+		energy,OfficeCeilingGrid.LIGHT_REACH,shadow_tier,"office_troffer_grid")
+	# This diffuser faces away from the ceiling. Skip its direct-light shader
+	# work there; bounce light and the player's flashlight still reach the slab.
+	light.light_cull_mask &= ~OfficeCeilingGrid.CEILING_RENDER_LAYER
+	# The broad diffuser needs a matching shadow penumbra. The shared 8 cm
+	# source makes overlapping cubicle/desk shadows read as sharp diagonal bands.
+	# An equal-area disc approximates the panel for PCSS; reflections still use
+	# the exact rectangular lens dimensions and shadows remain fully opaque.
+	light.light_size = sqrt(light.area_size.x * light.area_size.y / PI)
+	if flicker:
+		light.set_meta("visible_source","office_flickering_troffer")
+		light.light_volumetric_fog_energy = 0.0
+		lens.set_meta("office_ceiling_flicker",true)
+		FIXTURE_LIGHTING.ballast(scene,[light],material,
+			WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),light.position)
 
 
 func _office_ceiling_vent(at: Vector3, yaw := 0.0) -> MeshInstance3D:
@@ -57,8 +92,10 @@ func _office_ceiling_vent(at: Vector3, yaw := 0.0) -> MeshInstance3D:
 		0.0, false)
 	var grille: MeshInstance3D = null
 	if holder != null:
-		# The preview faces a wall; rotate its flat front into the drop ceiling.
-		holder.rotation = Vector3(-PI / 2.0, yaw, 0.0)
+		# The grille is on the model's +Z face. Point it down into the room,
+		# keeping the recessed backing above the slats inside the ceiling.
+		holder.rotation = Vector3(PI / 2.0, yaw, 0.0)
+		holder.set_meta("ceiling_service",true)
 		grille = holder.find_child("Dark recessed backing", true, false) as MeshInstance3D
 	if grille == null:
 		if holder != null:
@@ -66,6 +103,7 @@ func _office_ceiling_vent(at: Vector3, yaw := 0.0) -> MeshInstance3D:
 		grille = scene.box(at,
 			Vector3(OfficeCeilingGrid.PITCH, 0.032, OfficeCeilingGrid.PITCH),
 			Mats.metal_gray(), false)
+		grille.set_meta("ceiling_service",true)
 	grille.set_meta("office_ceiling_fixture", "vent")
 	grille.set_meta("office_ceiling_panels", Vector2i.ONE)
 	return grille
@@ -83,8 +121,7 @@ func _office_lighting() -> void:
 		if flicker else null
 	var dead_index := clampi(int(ctx.random01(10) * 8.0), 0, 7)
 	var flicker_index := clampi(int(ctx.random01(11) * 8.0), 0, 7)
-	var flicker_source := Vector3.ZERO
-	# dense, even grid of fluorescent troffers — shadowless corporate daylight
+	# Dense, even fluorescent grid; each working lens owns its local output.
 	var fixture_index := 0
 	for gx in [3.0, 9.0]:
 		for gz in [2.1, 4.7, 7.3, 9.9]:
@@ -94,44 +131,14 @@ func _office_lighting() -> void:
 				else (flicker_panel if selected_flicker else steady_panel)
 			var lens := _office_troffer(Vector3(gx, 0, gz),
 				Vector2i(2, 1), fixture_material)
-			if selected_flicker:
-				lens.set_meta("office_ceiling_flicker", true)
-				flicker_source = _office_ceiling_center(Vector3(
-					gx, ctx.ceiling_height - 0.5, gz), Vector2i(2, 1))
+			if not (dead and fixture_index == dead_index):
+				_office_panel_light(lens,0.45,1 if fixture_index == 0 else (2 if fixture_index == 7 else 4),
+					selected_flicker,fixture_material)
 			fixture_index += 1
 	# AC diffuser grilles between the light rows
 	for vp in [Vector2(6.0, 3.4), Vector2(6.0, 8.6)]:
 		var at := _office_ceiling_center(Vector3(vp.x, ctx.ceiling_height - 0.015, vp.y), Vector2i.ONE)
 		_office_ceiling_vent(at)
-	# A failed or flickering tube removes only its own eighth of the grid. The
-	# former shared FlickerLight drove every lens and the room's only light,
-	# producing a hard 12m rectangle of darkness instead of one bad ballast.
-	var stable_share := 7.0 / 8.0 if dead or flicker else 1.0
-	var light = scene.fixture_light(false, steady_panel, stable_share,
-		_office_ceiling_center(Vector3(3.0,
-			ctx.ceiling_height - 0.5, 4.7), Vector2i(2, 1)),
-		"office_troffer_grid")
-	light.light_color = Color(0.93, 1.0, 0.95)
-	light.omni_range = 12.5
-	light.light_volumetric_fog_energy = 1.6
-	light.shadow_enabled = false
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 24.0
-	light.distance_fade_length = 8.0
-	scene.add_node(light)
-	if flicker:
-		var flutter := scene.fixture_light(true, flicker_panel, 1.0 / 8.0,
-			flicker_source, "office_flickering_troffer")
-		flutter.light_energy = 1.0 / 8.0
-		flutter.light_color = Color(0.93, 1.0, 0.95)
-		flutter.omni_range = 4.5
-		# Short pulses ghost in Godot's temporally reprojected volumetric fog.
-		flutter.light_volumetric_fog_energy = 0.0
-		flutter.shadow_enabled = false
-		flutter.distance_fade_enabled = true
-		flutter.distance_fade_begin = 18.0
-		flutter.distance_fade_length = 6.0
-		scene.add_node(flutter)
 
 
 ## Corridor fixtures follow the actual lane instead of filling the entire
@@ -151,7 +158,6 @@ func _office_corridor_lighting() -> void:
 		if flicker else null
 	var dead_index := clampi(int(ctx.random01(10) * 4.0), 0, 3)
 	var flicker_index := clampi(int(ctx.random01(11) * 4.0), 0, 3)
-	var flicker_source := Vector3.ZERO
 	var fixture_index := 0
 	for t in [-4.5, -1.5, 1.5, 4.5]:
 		var at = scene.world_point(o, Vector3(t, 0, 0), yw)
@@ -161,10 +167,9 @@ func _office_corridor_lighting() -> void:
 			if dead and fixture_index == dead_index \
 			else (flicker_panel if selected_flicker else steady_panel)
 		var lens := _office_troffer(at, panels, fixture_material)
-		if selected_flicker:
-			lens.set_meta("office_ceiling_flicker", true)
-			flicker_source = _office_ceiling_center(Vector3(
-				at.x, ctx.ceiling_height - 0.48, at.z), panels)
+		if not (dead and fixture_index == dead_index):
+			_office_panel_light(lens,0.5,1 if fixture_index == 1 else 4,
+				selected_flicker,fixture_material)
 		fixture_index += 1
 	# One supply and one return grille, both kept over the corridor rather than
 	# in the inaccessible office strips.
@@ -172,31 +177,6 @@ func _office_corridor_lighting() -> void:
 		var vp = scene.world_point(o, Vector3(t, ctx.ceiling_height - 0.018, 0.88 if t < 0.0 else -0.88), yw)
 		vp = _office_ceiling_center(vp, Vector2i.ONE)
 		_office_ceiling_vent(vp, yw)
-	var stable_share := 3.0 / 4.0 if dead or flicker else 1.0
-	var light = scene.fixture_light(false, steady_panel, 0.82 * stable_share,
-		scene.world_point(o, Vector3(-1.5,
-			ctx.ceiling_height - 0.48, 0), yw), "office_troffer_grid")
-	light.light_color = Color(0.91, 1.0, 0.94)
-	light.omni_range = 10.5
-	light.light_volumetric_fog_energy = 1.6
-	light.shadow_enabled = false
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 22.0
-	light.distance_fade_length = 8.0
-	scene.add_node(light)
-	if flicker:
-		var flicker_energy := 0.82 / 4.0
-		var flutter := scene.fixture_light(true, flicker_panel,
-			flicker_energy, flicker_source, "office_flickering_troffer")
-		flutter.light_energy = flicker_energy
-		flutter.light_color = Color(0.91, 1.0, 0.94)
-		flutter.omni_range = 4.0
-		flutter.light_volumetric_fog_energy = 0.0
-		flutter.shadow_enabled = false
-		flutter.distance_fade_enabled = true
-		flutter.distance_fade_begin = 18.0
-		flutter.distance_fade_length = 6.0
-		scene.add_node(flutter)
 
 
 ## Ceiling light fixture: recessed glowing lens inside a trim frame, instead

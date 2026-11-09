@@ -1,4 +1,4 @@
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 ## Non-modal: saving can fail inside transitions that must not be interrupted.
 ## Each category stays visible until that store successfully saves again.
 var _messages: Dictionary = {}
@@ -15,6 +15,8 @@ func _ready() -> void:
 	style.border_color = VhsOsd.AMBER
 	style.set_border_width_all(2)
 	style.set_content_margin_all(12)
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
 	_panel.add_theme_stylebox_override("panel", style)
 	add_child(_panel)
 	_label = VhsOsd.make_label(24, VhsOsd.AMBER)

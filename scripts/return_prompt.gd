@@ -1,5 +1,5 @@
 class_name ReturnPrompt
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 ## Safe, resizable confirmation shared by gameplay and destructive title actions.
 
 signal confirmed

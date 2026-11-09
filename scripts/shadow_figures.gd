@@ -48,9 +48,11 @@ const DEBUT_FLOOR := {
 
 signal burned_away
 signal seen_by_player
-## A hostile figure just entered the world (spawned or adopted) — the
-## recording's cue for a catastrophic frame or two.
+## A hostile figure just entered the world (spawned or adopted).
 signal spawned
+## The spawn is committed, but its visual and pursuit wait for this warning.
+signal appearance_starting(seconds: float)
+const APPEARANCE_WARNING_SECONDS := 0.45
 signal approach_starting(figure: ShadowFigure)
 ## One of them closed the distance. The owning game mode decides the outcome;
 ## Wander keeps this manager suspended, while Descent treats contact as fatal.
@@ -304,7 +306,7 @@ func despawn(reset_encounters := true) -> void:
 
 func _physics_process(dt: float) -> void:
 	_refresh_streaming()
-	if suspended or player == null or not player.is_inside_tree():
+	if suspended or GameplayFrameGuard.is_recovering() or player == null or not player.is_inside_tree():
 		# Forget where the player was facing. Coming back from a pause with a
 		# stale yaw turns however far they happened to turn while pinned into
 		# one enormous delta, which reads as a whip-around that never happened.
@@ -485,6 +487,7 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	f.variant = _force_variant if _force_variant >= 0 else _pick_variant()
 	_force_variant = -1
 	f.grace = grace
+	f.appearance_delay = APPEARANCE_WARNING_SECONDS
 	f.announce = announce or randf() < 0.3
 	f.position = ground
 	f.suppressed = passive or suspended
@@ -496,6 +499,7 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	_figs.append(f)
 	_refresh_streaming()
 	_sync_director_count()
+	appearance_starting.emit(APPEARANCE_WARNING_SECONDS)
 	spawned.emit()
 	if _dev:
 		print("spawned variant %d at %s (player %s)" % [f.variant, ground, player.global_position])

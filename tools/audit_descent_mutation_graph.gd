@@ -72,6 +72,7 @@ func _audit_theme(theme: int) -> void:
 		Time.get_ticks_msec() - plan_started)
 	most_plan_probes = maxi(most_plan_probes, topology.furniture_probe_count())
 	route.refresh_topology()
+	_audit_route_map(route, topology)
 	var states := topology.states()
 	_expect(states.size() >= 3,
 		"theme %d generated fewer than two alternate realities" % theme)
@@ -84,6 +85,7 @@ func _audit_theme(theme: int) -> void:
 		state_total += 1
 		topology.restore_state(state_id)
 		route.refresh_topology()
+		_audit_route_map(route, topology)
 		_expect(route.distance_from_target(route.origin) >= 0,
 			"theme %d state %d disconnected origin" % [theme, state_id])
 		for critical in [route.origin, route.target, route.objective_ritual_cell()]:
@@ -242,6 +244,69 @@ func _audit_theme(theme: int) -> void:
 		"theme %d base distance changed after reversal" % theme)
 	_expect(route.path_from_origin() == base_path,
 		"theme %d base route changed after reversal" % theme)
+	_audit_route_map(route, topology)
+	# Door changes must be observed even after every immutable neighbour list
+	# is warm. Compare to the old uncached edge-by-edge traversal each time.
+	var native_at := route.origin
+	topology.set_native_doorway_open(native_at, 0, true, 6.0, 2.0)
+	route.refresh_topology()
+	_audit_route_map(route, topology)
+	topology.set_native_doorway_open(native_at, 0, false, 6.0, 2.0)
+	route.refresh_topology()
+	_audit_route_map(route, topology)
+	_expect(route.path_from_origin() == base_path,
+		"native doorway close retained stale cached adjacency")
+	var photo_before := topology._photo_open.duplicate()
+	for door in topology.photo_doorways():
+		topology.open_photo_door(str(door["id"]))
+		route.refresh_topology()
+		_audit_route_map(route, topology)
+	topology._photo_open = photo_before
+	route.refresh_topology()
+	_audit_route_map(route, topology)
+	_expect(route.path_from_origin() == base_path,
+		"photo doorway reversal retained stale cached adjacency")
+
+
+func _audit_route_map(route: DescentRoute, topology: DescentTopology) -> void:
+	var distances := {route.target: 0}
+	var next := {route.target: route.target}
+	var queue: Array[Vector2i] = [route.target]
+	var head := 0
+	while head < queue.size():
+		var at := queue[head]
+		head += 1
+		for dir in 4:
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if not route.scanned_contains(other) or topology.is_wall(at, dir) \
+					or distances.has(other):
+				continue
+			distances[other] = int(distances[at]) + 1
+			next[other] = at
+			queue.append(other)
+	_expect(route._target_distance == distances and route._next == next,
+		"theme %d state %d cached route differs from uncached live traversal" % [
+			route.theme, topology.current_state_id()])
+	# Candidate searches use the same immutable neighbours but intentionally
+	# exclude transient native doors. Use the uncached state resolver as oracle.
+	var state := topology.current_state_id()
+	distances = {route.target: 0}
+	queue = [route.target]
+	head = 0
+	while head < queue.size():
+		var at := queue[head]
+		head += 1
+		for dir in 4:
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if not route.scanned_contains(other) or distances.has(other) \
+					or topology.is_wall_for_state(at, dir, state):
+				continue
+			distances[other] = int(distances[at]) + 1
+			queue.append(other)
+	var probes := [route.origin, route.target, queue[queue.size() / 2], queue[-1]]
+	for at in probes:
+		_expect(topology.distance_to_target_for_state(route, at, state) == int(distances.get(at, -1)),
+			"candidate route search differs from uncached state traversal at %s" % at)
 
 
 func _audit_edge_geometry(route: DescentRoute, topology: DescentTopology,

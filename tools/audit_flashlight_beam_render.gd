@@ -36,7 +36,7 @@ func gain(before: Image, after: Image, region := Rect2i(360, 180, 560, 360)) -> 
 			count += 1
 	return sum / count
 
-func render_stats(viewport: Viewport, beam: MeshInstance3D, enabled: bool) -> Dictionary:
+func render_stats(viewport: Viewport, beam: GeometryInstance3D, enabled: bool) -> Dictionary:
 	beam.visible = enabled
 	for i in 12:
 		await process_frame

@@ -28,7 +28,10 @@ func _key(code: Key, pressed := true, echo := false) -> InputEventKey:
 
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
-	var state := IntroPlaybackState.new(TEST_PATH)
+	# Load persistence at runtime, as the standalone playback scene is built.
+	# Statically resolving both global classes in this isolated script leaves
+	# IntroPlaybackState retained by Godot's script dependency graph at exit.
+	var state = load("res://scripts/intro_playback_state.gd").new(TEST_PATH)
 	state.clear_from_disk()
 	_expect(not state.has_viewed(), "cleared intro state was already viewed")
 
@@ -51,7 +54,7 @@ func _run() -> void:
 	first.free()
 
 	_expect(state.mark_viewed() == OK, "viewed state failed to save")
-	var loaded := IntroPlaybackState.new(TEST_PATH)
+	var loaded = load("res://scripts/intro_playback_state.gd").new(TEST_PATH)
 	_expect(loaded.has_viewed(), "viewed state did not survive relaunch")
 	var later := DescentIntro.new(loaded.has_viewed())
 	_expect(later.skip_available(), "later intro did not offer Skip")

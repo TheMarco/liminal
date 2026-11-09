@@ -320,7 +320,7 @@ func is_wall_for_state(cell: Vector2i, dir: int, state_id: int) -> bool:
 	return _is_wall_with(_states[state_id].edges, cell, dir)
 
 
-func is_wall(cell: Vector2i, dir: int) -> bool:
+func is_wall(cell: Vector2i, dir: int, route: DescentRoute = null) -> bool:
 	var key := edge_key(cell, dir)
 	if _native_doorway_open.has(key): return false
 	if _photo_doors.has(key):
@@ -329,8 +329,45 @@ func is_wall(cell: Vector2i, dir: int) -> bool:
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
 	if record.is_empty():
-		return WorldGen.is_wall(world_seed, cell, dir, theme)
+		# Only immutable generation is cached. Resolve all live overlays above
+		# on every query, including photo/native doors and rollback state.
+		return route.base_is_wall(cell, dir) if route != null else \
+			WorldGen.is_wall(world_seed, cell, dir, theme)
 	return str(record.get("kind", "open")) == "wall"
+
+
+## A fresh adjacency overlay for one live route rebuild. Unchanged rooms can
+## reuse the immutable scan's neighbours; resolve both sides of every mutable
+## edge now, without caching a door or reality state across transitions.
+func route_neighbour_overrides(route: DescentRoute) -> Dictionary:
+	return _route_neighbour_overrides(route, _current_edges(), true)
+
+
+func _route_neighbour_overrides(route: DescentRoute,
+		state_edges: Dictionary, include_native: bool) -> Dictionary:
+	var affected := {}
+	var layers := [state_edges, _shortcuts, _photo_doors]
+	if include_native:
+		layers.append(_native_doorway_open)
+	for edges in layers:
+		for key in edges:
+			var edge := _base_record_from_key(str(key))
+			var at: Vector2i = edge["cell"]
+			affected[at] = true
+			affected[at + WorldGen.DIRV[edge_dir(edge)]] = true
+	var neighbours := {}
+	for at: Vector2i in affected:
+		var connected: Array[Vector2i] = []
+		for dir in 4:
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if not route.scanned_contains(other):
+				continue
+			var wall := is_wall(at, dir, route) if include_native else \
+				_is_wall_for_route(route, state_edges, at, dir)
+			if not wall:
+				connected.append(other)
+		neighbours[at] = connected
+	return neighbours
 
 
 func shortcut_count() -> int:
@@ -497,6 +534,11 @@ func distance_to_target_for_state(route: DescentRoute, from: Vector2i,
 		state_id: int) -> int:
 	if route == null or not route.scanned_contains(from):
 		return -1
+	var state_edges: Dictionary = _states[state_id].edges \
+		if state_id >= 0 and state_id < _states.size() else {}
+	# Planning deliberately excludes transient native doors, exactly as the
+	# edge-by-edge search did. Photo doors and durable shortcuts remain live.
+	var neighbours := _route_neighbour_overrides(route, state_edges, false)
 	var distance := {route.target: 0}
 	var queue: Array[Vector2i] = [route.target]
 	var head := 0
@@ -505,13 +547,10 @@ func distance_to_target_for_state(route: DescentRoute, from: Vector2i,
 		head += 1
 		if at == from:
 			return int(distance[at])
-		for dir in 4:
-			var state_edges: Dictionary = _states[state_id].edges \
-				if state_id >= 0 and state_id < _states.size() else {}
-			if _is_wall_for_route(route, state_edges, at, dir):
-				continue
-			var other: Vector2i = at + WorldGen.DIRV[dir]
-			if distance.has(other) or not route.scanned_contains(other):
+		var connected: Array[Vector2i] = neighbours[at] \
+			if neighbours.has(at) else route.base_neighbours(at)
+		for other in connected:
+			if distance.has(other):
 				continue
 			distance[other] = int(distance[at]) + 1
 			queue.append(other)

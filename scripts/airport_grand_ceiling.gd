@@ -3,7 +3,7 @@ extends RefCounted
 ## Sculpted 3m terminal coffers, reserved for the tallest 6.2m halls.
 ## Intermediate 4.4m rooms retain the regular acoustic panels.
 ## Four batched, shared meshes per 12m cell;
-## no new shadow lights, colliders, imports or per-coffer scene nodes.
+## shared geometry plus one light on an actual luminous rim per coffer.
 const MIN_HEIGHT := 6.2
 const BAY := 3.0
 const COUNT := 4
@@ -24,6 +24,27 @@ static func depth(height: float, style: int) -> float:
 
 static func clear_runtime_cache() -> void:
 	_mesh_cache.clear()
+
+
+static func attach_lights(parent: Node3D, height: float) -> Array[Light3D]:
+	var result: Array[Light3D] = []
+	var lens := parent.get_node("CoveLights") as MeshInstance3D
+	var height_scale := maxf(1.0,(height-0.1)/6.1)
+	for x in COUNT:
+		for z in COUNT:
+			var face := Vector3((x+0.5)*BAY,-0.08,(z+0.5)*BAY)
+			# One of the four real rim segments supplies direct illumination;
+			# the complete emissive ring remains visible to SSR/GI. Alternating
+			# sides distributes the throw while bounding the per-cell light cost.
+			var along_x := (x+z)%2 == 0
+			face += Vector3(0,0,-0.99) if along_x else Vector3(0.99,0,0)
+			var light := preload("res://scripts/fixture_lighting.gd").rectangular(parent,lens,
+				Vector2(1.88,0.1) if along_x else Vector2(0.1,1.88),face,false,Color(1.0,0.95,0.84),
+				0.9*height_scale*height_scale,height+6.0,
+				1 if x == 1 and z == 1 else (2 if x == 2 and z == 2 else 4),"airport_grand_coffer")
+			light.area_attenuation = 0.7
+			result.append(light)
+	return result
 
 
 static func attach(parent: Node3D, height: float, style: int,

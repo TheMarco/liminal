@@ -1,0 +1,21 @@
+{
+  "triangles": 25328,
+  "vertices": 22479,
+  "primitives": 49,
+  "mesh_nodes": 14,
+  "bytes": 3857536,
+  "materials": 11,
+  "textures": 6,
+  "animations": [
+    "Open",
+    "Close",
+    "Open_Close_Preview",
+    "Call_Button_Press"
+  ],
+  "dimensions_m": [
+    2.879,
+    2.862,
+    2.6565
+  ],
+  "sha256": "569871352987d20426b58cf84b3300ff02a49290a12c51dfa142332418236c4a"
+}

@@ -13,15 +13,23 @@ var _found_footage_material: ShaderMaterial
 var _grain_copy: BackBufferCopy
 var _grain_overlay: ColorRect
 var _grain_intensity := 0.0
+var _color_adjusted := false
 var _vhs_enabled := true
 var _crt_enabled := true
 var _crt_curvature_enabled := false
+var _video_pipeline := 0
+var _experimental: Control
+var _experiment_settings: Dictionary = {}
+var _video_host: Control
+var _noise_multiplier := 1.0
+var _entity_position := Vector2(0.5, 0.5)
+var _entity_radius := 0.0
+var _entity_amount := 0.0
 ## Visual captures and transition tests sometimes need to suppress the complete
 ## presentation temporarily. This gate never changes either saved preference.
 var _presentation_enabled := true
-## While a ritual tape owns the camera, the main full-screen pass steps aside.
-## Playback has its own high-resolution, TV-glass-only instance of the shared
-## recovered-footage material.
+## Ritual playback requires a processed signal even when normal gameplay VHS
+## is disabled. The active pipeline still owns the final scene/HUD processing.
 var _tape_hold := false
 var _signal_corruption := 0.0
 var _minor_at := 0.0
@@ -34,6 +42,10 @@ var _glitch_started := 0.0
 var _glitch_kind := GlitchKind.TRACKING
 var _glitch_strength := 0.0
 var _glitch_origin := 0.6
+var _glitch_encounter := false
+var _glitch_sequence := ""
+var _encounter_left := 0.0
+var _encounter_duration := 0.0
 var _damage_intensity := 0.0
 ## Nearness of the closest hostile figure, seen or not, 0..1. Fast attack,
 ## slow release: the footage breaks before the cause is in frame and takes
@@ -69,6 +81,9 @@ const FILM_GRAIN_SHADER := preload("res://shaders/film_grain.gdshader")
 const FOUND_FOOTAGE_RESOLUTION := Vector2(720.0, 480.0)
 ## 240 visible rows at the ritual TV's physical tube aspect.
 const TV_TAPE_RESOLUTION := Vector2(344.0, 240.0)
+## The recording passes' CanvasLayer. Everything drawn below it in the game
+## frame is recorded; the Descent intro's movie draws at this layer, earlier.
+const RECORDING_LAYER := 3
 
 
 ## Base signal preset used by the in-world televisions. The live feed builds
@@ -216,10 +231,11 @@ func setup(host: Node, vhs_enabled := true, crt_enabled := true,
 	_vhs_enabled = vhs_enabled
 	_crt_enabled = crt_enabled
 	_crt_curvature_enabled = curvature_enabled
+	_video_host = host.get_meta("ntscrt_video_host") if host.has_meta("ntscrt_video_host") else null
 	var layer := CanvasLayer.new()
-	# Above every UI layer (HUD 2, title 3): the tube is the last thing the
-	# signal passes through, so the OSD and menus are part of the recording.
-	layer.layer = 100
+	# Record the world and gameplay HUD (layer 2), but keep modal screens
+	# (layers 4+) crisp even on the direct-render compatibility path.
+	layer.layer = RECORDING_LAYER
 	_overlay = ColorRect.new()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -251,7 +267,7 @@ func setup(host: Node, vhs_enabled := true, crt_enabled := true,
 	_apply_found_footage_state()
 
 
-## An earlier screen-reading effect needs a fresh copy here, after the HUD.
+## Refresh the world and HUD after perception effects, before recording passes.
 ## Installed by Main for perception beats, including normal non-debug gameplay.
 func ensure_scene_copy() -> void:
 	if _scene_copy != null:
@@ -281,6 +297,38 @@ func set_curvature_enabled(enabled: bool) -> void:
 	if _tube_display != null:
 		var face := _tube_display.get_node("Display") as ColorRect
 		(face.material as ShaderMaterial).set_shader_parameter("curvature_enabled", enabled)
+	_sync_experimental()
+
+
+## Select an independent implementation of the same signal/display choices.
+## Built lazily, so Classic never allocates the experimental atlas/controller.
+func set_video_pipeline(mode: int, settings: Dictionary) -> void:
+	_video_pipeline = clampi(mode, 0, 2)
+	_experiment_settings = settings.duplicate()
+	var saturation := float(settings.get("video_color_saturation",1.0))
+	var temperature := float(settings.get("video_color_temperature",0.0))
+	var shadow_lift := float(settings.get("video_color_shadow_lift",0.0))
+	_color_adjusted = not is_equal_approx(saturation,1.0) or not is_zero_approx(temperature) or shadow_lift>0.0
+	if _grain_overlay!=null:
+		var material := _grain_overlay.material as ShaderMaterial
+		material.set_shader_parameter("color_saturation",saturation)
+		material.set_shader_parameter("color_temperature",temperature)
+		material.set_shader_parameter("color_shadow_lift",shadow_lift)
+		material.set_shader_parameter("linear_source",_grain_overlay.get_viewport().use_hdr_2d)
+	if _video_pipeline == 1 and _experimental == null and _overlay != null:
+		_experimental = preload("res://scripts/ntscrt_pipeline.gd").new()
+		_experimental.visible = false
+		_overlay.get_parent().add_child(_experimental)
+	_sync_visible()
+
+
+func _sync_experimental() -> void:
+	if _experimental == null:
+		return
+	_experimental.configure(_experiment_settings, _vhs_enabled or _tape_hold,
+		_crt_enabled and not _tube_in_host(), _crt_curvature_enabled)
+	_experimental.visible = _video_pipeline == 1 and _presentation_enabled \
+		and (_vhs_enabled or _tape_hold or (_crt_enabled and not _tube_in_host()))
 
 
 func set_effects(vhs_enabled: bool, crt_enabled: bool) -> void:
@@ -306,7 +354,7 @@ func set_enabled(enabled: bool) -> void:
 
 func is_enabled() -> bool:
 	return _presentation_enabled and (_vhs_enabled or _crt_enabled or _tape_hold
-		or _grain_intensity > 0.0)
+		or _grain_intensity > 0.0 or _color_adjusted or bool(_experiment_settings.get("receiver_enabled",false)))
 
 
 func set_tape_playback(on: bool) -> void:
@@ -319,20 +367,33 @@ func set_tape_playback(on: bool) -> void:
 func _sync_visible() -> void:
 	var show_vhs := _presentation_enabled and (_vhs_enabled or _tape_hold)
 	var show_crt := _presentation_enabled and _crt_enabled
-	var show_grain := _presentation_enabled and _grain_intensity > 0.0
+	var show_grain := _presentation_enabled and (_grain_intensity > 0.0 or _color_adjusted)
 	if _scene_copy != null:
-		_scene_copy.visible = show_vhs or show_crt
+		_scene_copy.visible = (show_vhs or show_crt) and _video_pipeline == 0
 	if _overlay != null:
-		_overlay.visible = show_vhs
+		_overlay.visible = show_vhs and _video_pipeline == 0
 	if _tube_display != null:
-		_tube_display.visible = show_crt
+		_tube_display.visible = show_crt and _video_pipeline != 1 and not _tube_in_host()
 	if _grain_copy != null:
 		_grain_copy.visible = show_grain
 	if _grain_overlay != null:
 		_grain_overlay.visible = show_grain
+	_sync_experimental()
+	if _video_host != null:
+		_video_host.configure_video(_experiment_settings,_video_pipeline,show_vhs,show_crt,_presentation_enabled,_crt_curvature_enabled)
+
+func _using_slang() -> bool:
+	return is_instance_valid(_video_host) and _presentation_enabled and _crt_enabled and GraphicsQuality.crt_model(_experiment_settings) in range(1,8)
+
+func _gpu_signal_needed() -> bool:
+	return is_instance_valid(_video_host) and _presentation_enabled and ((_video_pipeline == 2 and (_vhs_enabled or _tape_hold)) or bool(_experiment_settings.get("receiver_enabled",false)))
+
+func _tube_in_host() -> bool:
+	return _using_slang() or _gpu_signal_needed() or (is_instance_valid(_video_host) and _crt_enabled and int(_experiment_settings.get("crt_shader",0)) == 8)
 
 
 func set_noise(value: float) -> void:
+	_noise_multiplier = value
 	if _found_footage_material != null:
 		_set_signal(_found_footage_material, "noise_amount", value)
 
@@ -352,6 +413,9 @@ func set_corruption(amount: float) -> void:
 ## Screen-space interference halo around the nearest visible figure. Fed
 ## every frame from main. VHS stage only: CRT-only output stays clean.
 func set_entity_halo(pos: Vector2, radius: float, amount: float) -> void:
+	_entity_position = pos
+	_entity_radius = radius
+	_entity_amount = clampf(amount, 0.0, 1.0)
 	if _found_footage_material == null:
 		return
 	_found_footage_material.set_shader_parameter("entity_pos", pos)
@@ -372,6 +436,30 @@ func glitch_burst() -> void:
 	_apply_found_footage_state()
 
 
+## A short tracking/sync failure leads the hostile's visible manifestation.
+func enemy_appearance_warning(seconds: float) -> void:
+	var now := Time.get_ticks_msec() * 0.001
+	_start_glitch(true, now)
+	_glitch_encounter = true
+	_glitch_sequence = "glitch_pop" if _video_pipeline == 2 else ""
+	_glitch_kind = GlitchKind.TRACKING if randf() < 0.5 else GlitchKind.SYNC_SLIP
+	_glitch_strength = 1.0
+	_encounter_duration = maxf(seconds, 0.1) + 0.08
+	_encounter_left = _encounter_duration
+	_glitch_until = now + _encounter_duration
+	_apply_found_footage_state()
+
+
+func _video_fault(now: float) -> Dictionary:
+	if not (_vhs_enabled or _tape_hold): return {}
+	if now < _burst_until:
+		return {"kind":GlitchKind.SYNC_SLIP,"amount":1.0,"phase":0.2,"origin":0.5}
+	if not _glitch_active or (not _glitch_encounter and not bool(_experiment_settings.get("ntsc_auto_faults",true))): return {}
+	var phase := clampf((now-_glitch_started)/maxf(0.001,_glitch_until-_glitch_started),0.0,1.0)
+	return {"kind":_glitch_kind,"amount":_glitch_strength*glitch_envelope(phase),"phase":phase,"origin":_glitch_origin,
+		"sequence":_glitch_sequence,"sequence_strength":_glitch_strength if phase<1.0 else 0.0}
+
+
 func damage_hit(intensity := 1.0) -> void:
 	_damage_intensity = clampf(intensity, 0.0, 1.0)
 	_damage_until = Time.get_ticks_msec() * 0.001 + 0.15
@@ -382,6 +470,19 @@ func update() -> void:
 	if _found_footage_material == null:
 		return
 	var now := Time.get_ticks_msec() * 0.001
+	if _glitch_active and (_glitch_encounter or not _glitch_sequence.is_empty()):
+		# Authored cues follow gameplay time: pause holds both the animation
+		# and the hostile's manifestation delay.
+		_glitch_started = now - (_encounter_duration - _encounter_left)
+		_glitch_until = now + _encounter_left
+		_encounter_left = maxf(0.0, _encounter_left - get_process_delta_time())
+	var fault := _video_fault(now)
+	if _experimental != null and _video_pipeline == 1:
+		_experimental.set_game_state(maxf(_signal_corruption,float(fault.get("amount",0.0))), _presence, _damage_intensity,
+			now < _burst_until, _noise_multiplier, _entity_position, _entity_radius, _entity_amount)
+	if _video_host != null and _gpu_signal_needed():
+		var stress := clampf(maxf(maxf(_signal_corruption*0.6,_presence*0.7),maxf(_damage_intensity,1.0 if now < _burst_until else 0.0)),0.0,1.0)
+		_video_host.set_game_state(stress,_entity_position,_entity_radius,_entity_amount,fault)
 	var changed := false
 	if _damage_intensity > 0.0 and now >= _damage_until:
 		_damage_intensity = 0.0
@@ -424,12 +525,18 @@ func _schedule_glitches(now: float) -> void:
 
 func _start_glitch(major: bool, now: float) -> void:
 	_glitch_active = true
+	_glitch_encounter = false
+	_glitch_sequence = "two_blips" if major and _video_pipeline == 2 else ""
 	_glitch_major = major
 	_glitch_started = now
 	_glitch_kind = randi_range(0, GlitchKind.SYNC_SLIP) as GlitchKind
 	_glitch_origin = randf_range(0.15, 0.82)
 	_glitch_strength = randf_range(0.65, 0.9) if major else randf_range(0.24, 0.48)
 	_glitch_until = now + (randf_range(0.18, 0.45) if major else randf_range(0.08, 0.20))
+	if not _glitch_sequence.is_empty():
+		_encounter_duration = 1.1
+		_encounter_left = _encounter_duration
+		_glitch_until = now + _encounter_duration
 	if major:
 		_major_at = now + randf_range(28.0, 55.0)
 	# A major event also buys a quiet interval instead of immediately releasing

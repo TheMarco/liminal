@@ -29,12 +29,14 @@ func _init() -> void:
 				wet_chunk_count += 1
 				var chunk := Chunk.new(ws, cell, THEME)
 				var emitters := {}
+				var emitting_nodes := {}
 				var chunk_direct_count := 0
 				for n in chunk.find_children("*", "Node", true, false):
 					if n.has_meta("pool_light_emitter"):
 						emit_count += 1
 						var id := str(n.get_meta("pool_light_pair_id", ""))
 						emitters[id] = str(n.get_meta("pool_light_type", ""))
+						emitting_nodes[id] = n
 						if n.get_meta("pool_light_type", "") == "ceiling_disc": disc_count += 1
 						if n.get_meta("pool_light_type", "") == "porcelain_orb":
 							orb_count += 1
@@ -51,6 +53,21 @@ func _init() -> void:
 					var typ := str(n.get_meta("pool_light_type", ""))
 					if not emitters.has(id) or str(emitters[id]) != typ:
 						failures.append("seed %d cell %s: direct light pair %s lacks matching visible %s emitter" % [si, cell, id, typ])
+					elif typ == "ceiling_disc":
+						var emitter: MeshInstance3D = emitting_nodes[id]
+						var material: StandardMaterial3D = emitter.material_override
+						var face_y: float = (emitter.transform*emitter.get_aabb()).position.y
+						if not n is SpotLight3D or (-n.basis.z).dot(Vector3.DOWN)<0.999:
+							failures.append("pool ceiling light must emit downward: "+id)
+						if absf(n.position.y-(face_y-0.03))>0.004 or Vector2(n.position.x,n.position.z).distance_to(Vector2(emitter.position.x,emitter.position.z))>0.001:
+							failures.append("pool light is not at its diffuser face: "+id)
+						if not material.emission_enabled or material.emission_energy_multiplier<3.0 or material.shading_mode != BaseMaterial3D.SHADING_MODE_PER_PIXEL:
+							failures.append("pool diffuser does not visibly emit HDR light: "+id)
+						GraphicsQuality.apply_practical_light(n,{"shadow_quality":0})
+						if not n.shadow_enabled or n.light_energy<=0.0: failures.append("Low lost direct light or wall occlusion")
+						if n.shadow_opacity != 1.0 or n.distance_fade_shadow < n.distance_fade_begin: failures.append("Low fades fixture occlusion before its light")
+						GraphicsQuality.apply_practical_light(n,{"shadow_quality":3})
+						if not n.shadow_enabled: failures.append("Ultra failed to restore fixture shadows")
 				if bool(chunk.get_meta("pool_intentionally_dim", false)):
 					dim_count += 1
 				if chunk_direct_count > 0:

@@ -1,7 +1,7 @@
 # It wants you to stay — Current Narrative Bible
 
 **Status:** Authoritative current story direction  
-**Last updated:** 2026-08-04
+**Last updated:** 2026-10-17 (outro: steel car, the chime, the waiting lift)
 
 This document exists to prevent the story, tapes, and ending from drifting as
 the game changes. It draws inspiration from the original *Narrative & Story
@@ -327,11 +327,14 @@ human voice telling the player how to interpret what they see. The sequence
 remains first-person. The player is never shown.
 
 After surviving Bloom/Upside Down, the player makes one final elevator ride.
-The outro begins inside the familiar warm-brown car with its doors closed. The
-car settles, sounds an ordinary arrival chime, and opens exactly as it does in
-play: the two leaves stop half-open. The player steps through the narrow opening
-into what appears to remain of the real world. The initial camera direction is
-away from the Desert Oasis; the hotel must not be visible during the exit.
+The outro begins inside the game's brushed-steel car with its doors closed. The
+car settles, sounds the ordinary arrival chime, and its doors open fully,
+exactly as they do in play. The car is set into the Desert Oasis entrance under
+the porte-cochère canopy from the intro, with its opening facing away from the
+hotel. The first thing outside is the underside of that canopy and one rusted
+car parked beneath it, where the intro's car stopped. Nothing identifies it as
+the player's, and nothing lingers on it. The player steps out into what appears
+to remain of the real world. The hotel must not be visible during the exit.
 
 For a brief moment, the transition should feel like success. Open sky and
 distance after prolonged confinement create the instinctive relief of finally
@@ -346,11 +349,23 @@ under shallow black water and wet ash. Sparse, long-abandoned car wrecks and
 old non-graphic human remains establish that other people were here and that
 none found a way out.
 
-Only after searching forward does the player turn around. The Desert Oasis
-casino from the intro is behind them, recognizable but ruined, flooded and
-lightless. The elevator is physically set into the hotel entrance, not standing
-separately in the waste. Its small warm interior is the only dry, finite,
-habitable-looking place left. Its doors close before the player can return.
+The player walks out along the access road and searches. Nothing answers.
+
+Then, behind the player, the arrival chime sounds once: the sound that meant
+the lift had come on every floor. The player turns. The Desert Oasis stands
+where the intro first showed it, framed as the intro framed it, but ruined,
+flooded and lightless, except for the elevator in its entrance. Its doors stand
+open and its light lies across the black water. It is the only dry, finite,
+habitable-looking place left. It does not close. It waits.
+
+After a long hold, the player turns away from it, toward the drowned road, and
+walks. Behind them, unseen, the door motor runs, the latch closes and the hum
+stops. The player never sees it close.
+
+The ending implies that the realms were keeping the player from this. Nothing
+in picture, sound or text may state it: no caption, voice, sign or symbol
+carries that message. Use the game's own arrival chime, door motor and car hum,
+which players have heard for the whole run, rather than new sounds.
 
 The final camera direction is away from the hotel, toward the drowned road,
 wrecks, remains and empty horizon. The emotional reference remains the ending
@@ -369,9 +384,11 @@ reason to believe it ever will.
    return to.
 3. **Search:** The player looks or moves for some sign of life, shelter, a road,
    a landmark, or a way back.
-4. **Finality:** Nothing answers. The elevator closes, the hotel offers no
-   shelter, and every visible road ends in the same drowned waste.
-5. **Dread:** The scale of the outside makes the earlier interiors seem almost
+4. **The offer:** The chime calls the player back. The lift is open, lit and
+   waiting in the ruin.
+5. **Finality:** The player turns away. The elevator closes behind them,
+   unseen, and every visible road ends in the same drowned waste.
+6. **Dread:** The scale of the outside makes the earlier interiors seem almost
    merciful.
 
 The ending should communicate, without text or dialogue:

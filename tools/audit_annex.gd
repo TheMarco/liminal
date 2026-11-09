@@ -542,12 +542,34 @@ func _baseboard_backing_violations(chunk: Chunk) -> int:
 	return bad
 
 
+func _origin_crossing_violations() -> Array[String]:
+	var failures: Array[String] = []
+	# This seed formerly mistook the no-flood sentinel for a nine-cell room
+	# and replaced the crossing's walls with a furniture pile at (18, 18).
+	var ws := WorldGen.level_seed(1419168697, 2)
+	if WorldGen.annex_room_size(ws, Vector2i.ZERO) != 1 \
+			or WorldGen.annex_furniture_pile(ws, Vector2i.ZERO):
+		failures.append("Annex origin must remain a single-cell corridor")
+	var chunk := Chunk.new(ws, Vector2i.ZERO, 2)
+	var corners := 0
+	for node in chunk.get_children():
+		if node.has_meta("annex_cross_corner"):
+			corners += 1
+		if node.has_meta("annex_furniture_pile"):
+			failures.append("Furniture replaced the origin crossing architecture")
+	if corners != 4:
+		failures.append("Origin crossing must close all four adjoining corridor walls")
+	chunk.free()
+	return failures
+
+
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	var seed_count := clampi(int(args[0]) if args.size() > 0 else 18, 1, 32)
 	var radius := clampi(int(args[1]) if args.size() > 1 else 12, 4, 18)
 	var failures: Array[String] = []
 	failures.append_array(_damage_asset_violations())
+	failures.append_array(_origin_crossing_violations())
 	var style_counts := {}
 	var finish_counts := {}
 	var wall_finish_counts := {}

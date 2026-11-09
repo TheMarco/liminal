@@ -45,7 +45,8 @@ func _check_bank(chunk: Chunk, first: int, ceiling: float) -> void:
 					"standby backlight level wrong or source mutated")
 				if not bool(node.get_meta("powered")):
 					expect(panel == Mats.casino_slot_standby(source), "standby materials not shared")
-				expect(not off.emission_enabled and off.albedo_texture == panel.albedo_texture,
+				expect((not off.emission_enabled or is_zero_approx(off.emission_energy_multiplier)) \
+					and off.albedo_texture == panel.albedo_texture,
 					"blackout loses artwork or leaves standby emission on")
 		elif node.get_meta("casino_landmark_sign", "") == "LAST CHANCE":
 			signs += 1

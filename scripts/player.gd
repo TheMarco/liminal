@@ -62,6 +62,7 @@ const FLASH_CHARGE_RATE := FLASH_MAX / FLASH_CHARGE_TIME
 const FLASH_MIN_START := 2.2
 const FLASH_WARN := 2.5       # it starts to fail this long before it goes out
 const FLASH_BEAM_SHADER := preload("res://shaders/flashlight_beam.gdshader")
+const FLASH_DUST := preload("res://scripts/flashlight_dust.gd")
 
 ## Chest-deep water halves your pace and takes the spring out of the step. The
 ## Poolrooms and the Annex can set `water_y`; only water deep enough to reach
@@ -83,6 +84,7 @@ signal emergency_flash_used()
 var cam: Camera3D
 var flashlight: SpotLight3D
 var _flash_beam: MeshInstance3D
+var _flash_dust: MultiMeshInstance3D
 var world_seed := 0   # set by main; used to pick footstep surface per cell
 var level_theme := 0  # set by main on level switch
 var _flash_charge := FLASH_MAX
@@ -147,6 +149,8 @@ var photo_aim := false
 var _focused: Interactable
 var _focus_text := ""
 var _interaction_scan_left := 0.0
+var _obstructed_seconds := 0.0
+var _obstruction_report_at := 2.0
 
 
 func _init() -> void:
@@ -183,6 +187,9 @@ func _init() -> void:
 	flashlight.set_meta("visible_source", "player_held_flashlight")
 	cam.add_child(flashlight)
 	_build_flashlight_beam()
+	_flash_dust = FLASH_DUST.new()
+	flashlight.add_child(_flash_dust)
+	_flash_dust.configure(self, flashlight, cam)
 
 
 func _build_flashlight_beam() -> void:
@@ -641,7 +648,9 @@ func _physics_process(dt: float) -> void:
 		if submerged and velocity.y < -2.2:
 			velocity.y = lerpf(velocity.y, -2.2, minf(1.0, dt * 6.0))
 	var vy_before := velocity.y
+	var before_move := global_position
 	move_and_slide()
+	_record_movement_obstruction(wish, global_position - before_move, dt, sliding)
 	if level_theme == 9 and not sliding and flat.length_squared() > 0.01:
 		_push_pool_floats(flat)
 	_record_traversal_sample()
@@ -685,6 +694,42 @@ func _physics_process(dt: float) -> void:
 		_step_acc += hs * dt
 	else:
 		_cam_y = lerpf(_cam_y, CAM_H - _land, minf(1.0, dt * 6.0))
+
+
+func _record_movement_obstruction(wish: Vector3, moved: Vector3, dt: float, sliding: bool) -> void:
+	# Ordinary walls also qualify: this is evidence of blocked motion, not an
+	# automatic stuck verdict. Never teleport or alter collisions here.
+	var trying := not sliding and Vector2(wish.x, wish.z).length_squared() > 0.01
+	var moving := Vector2(moved.x, moved.z).length() > 0.1 * dt
+	if not trying or moving:
+		if _obstruction_report_at > 2.0:
+			RuntimeDiagnostics.mark("movement_obstruction_ended", {
+				"seconds": _obstructed_seconds,
+				"reason": "movement_resumed" if moving else "input_released",
+				"position": str(global_position)})
+		_obstructed_seconds = 0.0
+		_obstruction_report_at = 2.0
+		return
+	_obstructed_seconds += dt
+	if _obstructed_seconds < _obstruction_report_at: return
+	_obstruction_report_at += 10.0
+	var contacts: Array[Dictionary] = []
+	for i in mini(get_slide_collision_count(), 4):
+		var hit := get_slide_collision(i)
+		var collider := hit.get_collider() as CollisionObject3D
+		if collider == null: continue
+		var owner := collider.shape_owner_get_owner(collider.shape_find_owner(hit.get_collider_shape_index())) as Node3D
+		var contact := {"body": str(collider.get_path()), "normal": str(hit.get_normal()),
+			"position": str(hit.get_position()), "shape_index": hit.get_collider_shape_index()}
+		if owner != null:
+			contact["shape_node"] = str(owner.get_path())
+			contact["shape_transform"] = str(owner.global_transform)
+			if owner is CollisionShape3D and owner.shape is BoxShape3D:
+				contact["box_size"] = str(owner.shape.size)
+		contacts.append(contact)
+	RuntimeDiagnostics.mark("movement_obstructed", {"seconds": _obstructed_seconds,
+		"level": level_theme, "position": str(global_position), "wish": str(wish),
+		"on_floor": is_on_floor(), "contacts": contacts}, true)
 
 
 func _push_pool_floats(intended: Vector3) -> void:

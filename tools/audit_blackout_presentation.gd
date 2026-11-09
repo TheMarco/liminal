@@ -38,7 +38,8 @@ func _environments() -> void:
 
 func _check_dark(material: Material) -> void:
 	if material is BaseMaterial3D:
-		expect(not material.emission_enabled, "standard/imported surface still emits during blackout")
+		expect(not material.emission_enabled or is_zero_approx(material.emission_energy_multiplier),
+			"standard/imported surface still emits during blackout")
 		expect(material.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED,
 			"unshaded powered surface still bypasses room lighting")
 	elif material is ShaderMaterial and SURFACE_POWER._has_power(material.shader):
@@ -72,7 +73,7 @@ func _chunk(theme: int, cell: Vector2i) -> void:
 			overrides.append(node.get_surface_override_material(i))
 			var mat: Material = node.get_active_material(i)
 			if mat is BaseMaterial3D:
-				materials[mat] = [mat.emission_enabled, mat.shading_mode]
+				materials[mat] = [mat.emission_enabled, mat.shading_mode, mat.emission_energy_multiplier]
 		meshes[node] = [node.visible, node.material_override, node.material_overlay, overrides]
 	for label in chunk.find_children("*", "Label3D", true, false):
 		labels[label] = label.shaded
@@ -86,7 +87,7 @@ func _chunk(theme: int, cell: Vector2i) -> void:
 			_check_dark(mesh.get_active_material(i))
 		meshes_checked += 1
 	for mat in materials:
-		expect([mat.emission_enabled, mat.shading_mode] == materials[mat], "blackout mutated a shared source material")
+		expect([mat.emission_enabled, mat.shading_mode, mat.emission_energy_multiplier] == materials[mat], "blackout mutated a shared source material")
 	for light in chunk.find_children("*", "Light3D", true, false):
 		expect(not light.visible, "blackout left a powered light visible")
 	for label in labels:
@@ -150,7 +151,7 @@ func _surface_cases() -> void:
 	holder.add_child(mesh)
 	var power := SURFACE_POWER.new()
 	power.apply(holder)
-	expect(mesh.visible and not mesh.get_active_material(0).emission_enabled and mat.emission_enabled,
+	expect(mesh.visible and is_zero_approx(mesh.get_active_material(0).emission_energy_multiplier) and mat.emission_enabled,
 		"imported mesh material was hidden/mutated instead of locally de-powered")
 	mesh.free()
 	power.restore() # streaming/mutation may remove objects while power is out

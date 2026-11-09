@@ -13,6 +13,7 @@ var _transitioning := false
 
 
 func _ready() -> void:
+	RuntimeDiagnostics.mark("startup_ready")
 	layer = 110 # Above the title and gameplay post-processing.
 	var options := CliOptions.parse()
 	if options.skips_title() or options.quick_exit():
@@ -54,11 +55,13 @@ func _ready() -> void:
 
 
 func _prepare_title() -> void:
+	RuntimeDiagnostics.mark("title_prepare_begin")
 	# Finish synchronous scene construction before the clip starts. Main's
 	# processing and score stay held until the title is fully revealed.
 	_main = _start_main(true)
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 	_video.play()
+	RuntimeDiagnostics.mark("intro_playing")
 
 
 func _input(_event: InputEvent) -> void:
@@ -70,6 +73,7 @@ func _on_video_finished() -> void:
 	if _transitioning:
 		return
 	_transitioning = true
+	RuntimeDiagnostics.mark("intro_finished")
 	_video.paused = true
 	# The title is already rendered below the video. Crossfade immediately;
 	# no loading work, black hold or frame waits belong after the clip ends.
@@ -78,20 +82,28 @@ func _on_video_finished() -> void:
 	await fade.finished
 	_video.stop()
 	_video.stream = null
-	_main.process_mode = Node.PROCESS_MODE_INHERIT
+	_main.process_mode = Node.PROCESS_MODE_PAUSABLE
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	queue_free()
 
 
 func _start_main(hold := false) -> Node:
 	var main := (load(MAIN_SCENE) as PackedScene).instantiate()
+	var scene_root: Node = main
 	if hold:
 		main.process_mode = Node.PROCESS_MODE_DISABLED
-	get_tree().root.add_child(main)
-	get_tree().current_scene = main
+	if DisplayServer.get_name() != "headless" and RenderingServer.get_current_rendering_method() != "gl_compatibility":
+		var host := preload("res://scripts/ntscrt_video_host.gd").new()
+		get_tree().root.add_child(host)
+		host.attach(main)
+		scene_root = host
+	else:
+		get_tree().root.add_child(main)
+	get_tree().current_scene = scene_root
 	return main
 
 
 func _boot_without_video() -> void:
+	RuntimeDiagnostics.mark("startup_bypass")
 	_start_main()
 	queue_free()

@@ -78,14 +78,14 @@ func _ready() -> void:
 	_evidence_row.add_theme_constant_override("h_separation", 34)
 	_evidence_row.add_theme_constant_override("v_separation", 8)
 	box.add_child(_evidence_row)
-	_photo = VhsOsd.make_label(31, VhsOsd.INK_DIM)
+	_photo = VhsOsd.make_label(42)
 	_photo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_photo.text = "PHOTOS 0 · MIN %d" % PhotoDirector.REQUIRED
 	_evidence_row.add_child(_photo)
 	# Evidence warning: blinks while an undocumented anomaly is near, faster
 	# the nearer. The one readout in the hunt that cannot be mistaken for
 	# tape noise.
-	_photo_warn = VhsOsd.make_label(31, VhsOsd.AMBER)
+	_photo_warn = VhsOsd.make_label(42, VhsOsd.AMBER)
 	_photo_warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_photo_warn.text = "SOMETHING HERE IS WRONG"
 	_photo_warn.visible = false
@@ -99,7 +99,7 @@ func set_photo_proximity(value: float) -> void:
 
 func set_photo_progress(count: int, required: int) -> void:
 	_photo.text = "PHOTOS %d · MIN %d" % [count, required]
-	VhsOsd.set_ink(_photo, VhsOsd.INK if count >= required else VhsOsd.INK_DIM)
+	VhsOsd.set_ink(_photo, VhsOsd.INK)
 
 
 func configure(p_player: Player, p_route: DescentRoute, p_run: DescentRun,

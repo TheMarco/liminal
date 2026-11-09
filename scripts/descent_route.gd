@@ -256,7 +256,7 @@ func edge_info(at: Vector2i, dir: int) -> Dictionary:
 
 
 func is_wall(at: Vector2i, dir: int) -> bool:
-	return topology.is_wall(at, dir) if topology != null else \
+	return topology.is_wall(at, dir, self) if topology != null else \
 		base_is_wall(at, dir)
 
 
@@ -886,21 +886,17 @@ func _build_reverse_map() -> void:
 	var queue: Array[Vector2i] = [target]
 	_target_distance[target] = 0
 	_next[target] = target
+	var live_neighbours := topology.route_neighbour_overrides(self) \
+		if topology != null else {}
 	var head := 0
 	while head < queue.size():
 		var c := queue[head]
 		head += 1
 		var dist := int(_target_distance[c])
-		# Target selection repeats this BFS up to sixteen times on the same
-		# immutable scan. Reuse adjacency; live overlays still resolve every edge.
-		var neighbours: Array[Vector2i] = []
-		if topology == null:
-			neighbours = base_neighbours(c)
-		else:
-			for dir in 4:
-				var nb: Vector2i = c + WorldGen.DIRV[dir]
-				if _origin_distance.has(nb) and not is_wall(c, dir):
-					neighbours.append(nb)
+		# Resolve mutable edges once per rebuild; all other adjacency belongs
+		# to the immutable scan. Neither cached list is modified by this BFS.
+		var neighbours: Array[Vector2i] = live_neighbours[c] \
+			if live_neighbours.has(c) else base_neighbours(c)
 		for nb in neighbours:
 			if _target_distance.has(nb):
 				continue

@@ -112,12 +112,19 @@ func fitted_model(path: String, parent: Node3D, pos: Vector3,
 		-bounds.get_center().x * fit.x,
 		-bounds.position.y * fit.y if floor_aligned else -bounds.get_center().y * fit.y,
 		-bounds.get_center().z * fit.z)
+	preload("res://scripts/office_shadow_batch.gd").install(inst,path)
 	return pivot
 
 
 func fixture_light(flicker: bool, material: StandardMaterial3D,
 		energy: float, source_position: Vector3, source_name := "authored_room_fixture") -> OmniLight3D:
 	return _host._make_main_light(flicker, material, energy, source_position, source_name)
+
+
+func fixture_lower_face(lens: MeshInstance3D, color: Color, energy: float,
+		reach: float, shadow_tier: int, source: String) -> AreaLight3D:
+	return preload("res://scripts/fixture_lighting.gd").lower_face(
+		lens.get_parent(),lens,color,energy,reach,shadow_tier,source)
 
 # Compatibility for specialized builders whose lights are already anchored by
 # their own fixture construction. Central room builders use fixture_light.

@@ -27,7 +27,7 @@ func run() -> void:
 		expect(DisplayServer.get_name() != "headless", "normal startup check needs the native renderer")
 		expect(await await_until(func(): return startup._video.is_playing(), 15000),
 			"startup video did not begin after preparing the title")
-		var prepared := root.get_node_or_null("Main")
+		var prepared := get_first_node_in_group("level_manager")
 		expect(prepared != null and is_instance_valid(prepared._title),
 			"title was not ready before playback")
 		expect(prepared.process_mode == Node.PROCESS_MODE_DISABLED and not prepared._music.playing,
@@ -49,13 +49,13 @@ func run() -> void:
 		await capture("video-tall")
 		expect(await await_until(func(): return startup._transitioning, 6000),
 			"video did not naturally finish")
-		expect(prepared == root.get_node_or_null("Main"), "title was rebuilt after the clip")
+		expect(prepared == get_first_node_in_group("level_manager"), "title was rebuilt after the clip")
 		await create_timer(0.15).timeout
 		expect(startup._presentation.modulate.a > 0.0 and startup._presentation.modulate.a < 1.0,
 			"crossfade did not start immediately after the clip")
 		await capture("crossfade")
 	else:
-		expect(await await_until(func(): return root.get_node_or_null("Main") != null, 10000),
+		expect(await await_until(func(): return get_first_node_in_group("level_manager") != null, 10000),
 			"direct launch did not load Main")
 	expect(await await_until(func(): return not is_instance_id_valid(startup_id), 5000),
 		"startup layer did not release title input")
@@ -63,18 +63,24 @@ func run() -> void:
 		var transition_ms := Time.get_ticks_msec() - finished_at[0]
 		expect(transition_ms <= 1100, "title transition added a loading hold: %dms" % transition_ms)
 		print("STARTUP immediate crossfade: %dms" % transition_ms)
-	var game := root.get_node_or_null("Main")
+	var game := get_first_node_in_group("level_manager")
 	if game == null:
 		finish("startup")
 		return
-	expect(current_scene == game, "Main did not become the active scene")
-	expect(game.process_mode == Node.PROCESS_MODE_INHERIT, "game processing remained disabled")
+	var host: Node = game.get_meta("ntscrt_video_host") if game.has_meta("ntscrt_video_host") else null
+	expect(current_scene == (host if host != null else game), "startup did not select the production scene root")
+	var expected_mode := Node.PROCESS_MODE_PAUSABLE if host != null or not bypass else Node.PROCESS_MODE_INHERIT
+	expect(game.process_mode == expected_mode, "game processing remained disabled")
 	if bypass:
 		expect(not is_instance_valid(game._title), "--nologo launch unexpectedly shows the title")
 	else:
 		expect(is_instance_valid(game._title) and not game._title._gone,
 			"startup did not reveal the normal title")
 		expect(not paused and game._pause_menu == null, "startup stranded a pause/settings panel")
+		expect(not game.cm.is_processing(), "opaque title kept streaming hidden rooms")
+		if host != null:
+			expect(await await_until(func(): return host._suspended, 5000), "title did not suspend warmed rendering")
+			expect(host.source.render_target_update_mode == SubViewport.UPDATE_DISABLED, "covered viewport still rendering")
 		await capture("title")
 	await teardown_game(game)
 	finish("startup direct-launch bypass" if bypass else

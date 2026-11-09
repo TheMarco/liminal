@@ -15,6 +15,7 @@ extends Node3D
 const NOSTALGIA_PROPS := preload("res://scripts/nostalgia_props.gd")
 const CHARGING_STATION_SCRIPT := preload("res://scripts/charging_station.gd")
 const VHS_RITUAL_SCRIPT := preload("res://scripts/vhs_ritual.gd")
+const ELEVATOR_CAR := preload("res://scripts/elevator_car.gd")
 
 const VEGAS_LEVEL_BUILDER = preload("res://scripts/levels/vegas_level_builder.gd")
 const OFFICE_LEVEL_BUILDER = preload("res://scripts/levels/office_level_builder.gd")
@@ -1077,7 +1078,7 @@ static func request_prop_preloads() -> void:
 
 
 static func _prop_preload_paths() -> Array[String]:
-	var paths: Array[String] = []
+	var paths: Array[String] = [ELEVATOR_CAR.MODEL_PATH]
 	paths.append_array([AIRPORT_WALKWAY_PATH, AIRPORT_WALKWAY_LONG_PATH, AIRPORT_ESCALATOR_PATH, SCH_TROPHY_CASE_PATH, SCH_BLEACHERS_PATH,
 		SCH_CAF_TABLE_PATH, SCH_CUPBOARD_PATH, SCH_SERVERY_PATH, PRISON_SHOWER_PATH, PRISON_MESS_TABLE_PATH])
 	for mname in ASY_PROP_NAMES:
@@ -1187,7 +1188,7 @@ static func _prop_preload_paths() -> Array[String]:
 ## Bounded live prefetch manifests. Required assets still have synchronous
 ## fallbacks; this only prepares known floor families ahead of their first use.
 static func theme_prop_paths(p_theme: int) -> Array[String]:
-	var paths: Array[String] = []
+	var paths: Array[String] = [ELEVATOR_CAR.MODEL_PATH]
 	match p_theme:
 		0:
 			paths.append(CHANGE_MACHINE_PATH)
@@ -1313,6 +1314,10 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH])
 	if p_theme != 7:
 		paths.append(ALARM_PATH)
+	# Shared wall decoration lives outside the per-floor builders. Without
+	# this entry, the first clock in a streamed room decodes during gameplay.
+	if p_theme in [1, 5, 6, 7]:
+		paths.append("res://models/cc0/wall_clock/wall_clock_1k.gltf")
 	paths.append_array(NOSTALGIA_PROPS.paths(p_theme))
 	return paths
 
@@ -1403,6 +1408,7 @@ static func clear_runtime_caches() -> void:
 
 
 static func _release_floor_caches() -> void:
+	preload("res://scripts/office_shadow_batch.gd").clear_cache()
 	preload("res://scripts/blackout_surfaces.gd").clear_cache()
 	preload("res://scripts/environment_breath_surface.gd").clear_runtime_cache()
 	ProceduralDetails.clear_runtime_cache()
@@ -1631,6 +1637,8 @@ func prepare_runtime_rendering(room_light_fade_begin := 0.0) -> void:
 	if _rendering_prepared:
 		return
 	_rendering_prepared = true
+	for mesh in find_children("*", "MeshInstance3D", true, false):
+		preload("res://scripts/fixture_lighting.gd").prepare_shadow_mesh(mesh)
 	# Builders keep their authored close-up illumination and short shadow budget.
 	# Extend only architectural lighting, not little indicators/prop glows. This
 	# is an installation policy shared by streaming and blackout replacements.
@@ -1977,6 +1985,9 @@ func _descent_clear_car_footprint(dir: int) -> void:
 		var node := child as Node3D
 		if node == null or node == body or node is Light3D \
 				or node is GPUParticles3D \
+				or node.has_meta("practical_fixture") \
+				or node.has_meta("airport_ceiling_fixture") \
+				or node.has_meta("ceiling_service") \
 				or node.has_meta("descent_ritual") \
 				or node.has_meta("charging_station"):
 			continue
@@ -2899,7 +2910,9 @@ func _build_floor_ceiling() -> void:
 		return
 	if theme == 1:
 		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.office_carpet())
-		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), Mats.office_ceiling())
+		var ceiling := _box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0),
+			Vector3(S, 0.3, S), Mats.office_ceiling())
+		ceiling.layers = OfficeCeilingGrid.CEILING_RENDER_LAYER
 		return
 	if theme == 4:
 		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.terrazzo_photo())
@@ -5038,6 +5051,7 @@ func _wall_art_mount(pos: Vector3, yaw: float, dir: int, path: String,
 	v.set_meta("wall_art_dir", dir)
 	v.set_meta("wall_art_aspect", size.x / size.y)
 	v.set_meta("wall_art_size", size)
+	LocalizedArt.mark(v, LocalizedArt.inscription(path), Vector3(0, 0, 0.025))
 	var tex := Mats.wall_art_texture(path)
 	v.set_meta("wall_art_source_aspect",
 		float(tex.get_width()) / float(tex.get_height()) if tex != null else 1.0)
@@ -5574,45 +5588,7 @@ func _build_lighting() -> void:
 	if style == WorldGen.STYLE_HALLWAY:
 		_level_builder._hall_lighting()
 		return
-	var is_spawn := cell == Vector2i.ZERO
-	var dead := (not is_spawn) and _r(8) < 0.07
-	var flicker := (not is_spawn) and (not dead) and _r(9) < 0.16
-	var pmat: StandardMaterial3D
-	if dead:
-		pmat = Mats.panel_dead()
-	elif flicker:
-		pmat = Mats.panel_on().duplicate()
-	else:
-		pmat = Mats.panel_on()
-	# The casino ceiling wants jewellery, not office hardware. Small opaline
-	# flush mounts keep the light warm and low without reading as fluorescent
-	# square panels against the coffered plaster.
-	# The shader's 2.4m world-space coffers put medallion centres at
-	# 1.2 + n*2.4. 3.6/8.4 give this four-light rhythm while keeping every
-	# mount inside a rosette instead of stranded on the moulding intersection.
-	for p in [Vector2(3.6, 3.6), Vector2(8.4, 3.6),
-			Vector2(3.6, 8.4), Vector2(8.4, 8.4)]:
-		_level_builder._casino_flush_mount(Vector3(p.x, 0, p.y), pmat)
-
-	var grand := style == WorldGen.STYLE_GRAND or style == WorldGen.STYLE_BALLROOM
-	if grand:
-		_level_builder._chandelier()
-	if dead:
-		return
-
-	var energy := 2.4 if grand else 1.35
-	var source_position := Vector3(S / 2.0, ceil_h - 1.4, S / 2.0) if grand \
-		else Vector3(3.6, ceil_h - 0.45, 3.6)
-	var light := _make_main_light(flicker, pmat, energy, source_position,
-		"casino_chandelier" if grand else "casino_flush_mount")
-	light.light_color = Color.from_hsv(0.07 + 0.05 * _r(11), 0.25 + 0.35 * _r(12), 1.0)
-	light.omni_range = 16.0 if grand else 11.0
-	light.shadow_enabled = true
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 24.0
-	light.distance_fade_length = 8.0
-	light.distance_fade_shadow = 18.0
-	add_child(light)
+	_level_builder._casino_lighting()
 
 
 func _troffer(at: Vector3, lens: Vector2, pmat: Material, frame: Material) -> MeshInstance3D:
@@ -6486,92 +6462,36 @@ func _build_interactions() -> void:
 	_interactive_elevator(wall)
 
 
-## A complete lift facade: split brushed-metal leaves, deep black reveal,
-## illuminated floor display, call panel and animated opening before travel.
+## Wander uses the same finished car as Descent; its existing E interaction
+## still opens the doors and switches directly to the next floor.
 func _interactive_elevator(dir: int) -> void:
-	var n := -1.0 if dir == 0 or dir == 2 else 1.0
-	var plane := (S - T / 2.0) if dir == 0 or dir == 2 else (T / 2.0)
-	var inner := plane + n * (T / 2.0)
-	var v := Node3D.new()
-	if dir < 2:
-		v.position = Vector3(inner + n * 0.035, _floor_h(), S / 2.0)
-		v.rotation.y = -PI / 2.0 if dir == 0 else PI / 2.0
-	else:
-		v.position = Vector3(S / 2.0, _floor_h(), inner + n * 0.035)
-		v.rotation.y = PI if dir == 2 else 0.0
-	v.set_meta("elevator_facade", true)
-	v.set_meta("elevator_facade_dir", dir)
-	add_child(v)
-	_mrbox(v, Vector3(0, 1.27, -0.035), Vector3(2.62, 2.54, 0.10),
-		Mats.charcoal(), 0.025)
-	_mbox(v, Vector3(0, 1.25, -0.075), Vector3(2.22, 2.42, 0.04), Mats.screen_dark())
-	var left := Node3D.new()
-	var right := Node3D.new()
-	v.add_child(left)
-	v.add_child(right)
-	left.position = Vector3(-0.545, 1.25, 0.015)
-	right.position = Vector3(0.545, 1.25, 0.015)
-	for leaf in [left, right]:
-		_mrbox(leaf, Vector3.ZERO, Vector3(1.07, 2.40, 0.075), Mats.steel(), 0.012)
-		for rib in [-0.36, 0.0, 0.36]:
-			_mbox(leaf, Vector3(rib, 0, 0.045), Vector3(0.018, 2.25, 0.018), Mats.chrome())
-	# Header display and its stubborn amber direction arrow. The Annex ceiling
-	# is only 2.78m high, so the former fixed 2.95m header top disappeared into
-	# the ceiling and cropped the number. Fit a compact housing between the
-	# door frame and the actual local ceiling instead.
-	const INDICATOR_BOTTOM := 2.58
-	const INDICATOR_TOP_NORMAL := 2.95
-	const INDICATOR_CEILING_GAP := 0.04
-	var local_ceiling := ceil_h - _floor_h()
-	var indicator_top := minf(
-		INDICATOR_TOP_NORMAL, local_ceiling - INDICATOR_CEILING_GAP)
-	var indicator_h := maxf(indicator_top - INDICATOR_BOTTOM, 0.12)
-	var indicator_y := indicator_top - indicator_h * 0.5
-	var indicator := _mrbox(
-		v, Vector3(0, indicator_y, 0.035),
-		Vector3(0.92, indicator_h, 0.08), Mats.sign_housing(), 0.018)
-	indicator.set_meta("elevator_indicator_header", true)
-	indicator.set_meta("elevator_indicator_top", indicator_top)
-	indicator.set_meta("elevator_indicator_ceiling", local_ceiling)
-	var floor_lb := Label3D.new()
-	floor_lb.text = "%d  ▼" % (WorldGen.THEMES.find(theme) + 1)
-	floor_lb.font_size = 52 if indicator_h < 0.24 else 72
-	floor_lb.pixel_size = 0.0021
-	floor_lb.modulate = Color(1.0, 0.56, 0.18)
-	floor_lb.position = Vector3(0, indicator_y, 0.082)
-	floor_lb.set_meta("elevator_indicator_label", true)
-	floor_lb.set_meta("elevator_indicator_top", indicator_top)
-	floor_lb.set_meta("elevator_indicator_ceiling", local_ceiling)
-	v.add_child(floor_lb)
-	# Brushed call plate, button, key switch and Braille-like locator studs.
-	_mrbox(v, Vector3(1.38, 1.16, 0.06), Vector3(0.34, 0.64, 0.08), Mats.steel(), 0.018)
-	var button := _mcyl(v, Vector3(1.38, 1.27, 0.125), 0.075, 0.035, Mats.lamp_amber())
-	button.rotation.x = PI / 2.0
-	var keyhole := _mcyl(v, Vector3(1.38, 0.99, 0.12), 0.026, 0.025, Mats.charcoal())
-	keyhole.rotation.x = PI / 2.0
-	for i in 3:
-		_msphere(v, Vector3(1.30 + 0.08 * float(i), 0.88, 0.125), 0.012, Mats.chrome())
+	_descent_clear_car_footprint(dir)
+	var rig := _descent_car_shell(dir, false)
+	var car: ElevatorCar = rig["root"]
+	car.name = "WanderElevator"
+	car.set_meta("elevator_facade", true)
+	car.set_meta("elevator_facade_dir", dir)
+	car.display.text = "%d  ▼" % (WorldGen.THEMES.find(theme) + 1)
 	var idx := WorldGen.THEMES.find(theme)
 	var dest: int = WorldGen.THEMES[(idx + 1) % WorldGen.THEMES.size()]
 	var hit := Interactable.new()
 	hit.prompt_text = "E — elevator to Floor %d" % (WorldGen.THEMES.find(dest) + 1)
-	hit.position = Vector3(1.38, 1.18, 0.22)
+	hit.position = Vector3(1.169, 1.168, ELEVATOR_CAR.THRESHOLD_Z + 0.20)
 	hit.add_box(Vector3(0.52, 0.88, 0.42))
-	v.add_child(hit)
-	hit.activated.connect(_use_elevator.bind(dest, hit, left, right))
+	car.add_child(hit)
+	hit.activated.connect(_use_elevator.bind(dest, hit, car))
 
 
 func _use_elevator(_actor: Node, dest: int, hit: Interactable,
-		left: Node3D, right: Node3D) -> void:
+		car: ElevatorCar) -> void:
 	if not hit.enabled:
 		return
 	hit.enabled = false
 	hit.prompt_text = "ELEVATOR ARRIVING"
 	get_tree().call_group("level_manager", "door_activity")
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(left, "position:x", -1.02, 0.48)
-	tw.parallel().tween_property(right, "position:x", 1.02, 0.48)
-	await tw.finished
+	car.press_call()
+	car.set_call_lit(true)
+	await car.move_doors(true, 0.48).finished
 	if is_inside_tree():
 		get_tree().call_group("level_manager", "use_elevator", dest)
 
@@ -6597,7 +6517,7 @@ func _descent_elevator(dir: int) -> void:
 	# The whole car front is the target. A 0.5m plate on the right jamb was
 	# findable only if you already knew it was there, which reads in play as
 	# "the elevator will not open".
-	hit.position = Vector3(0.0, 1.28, 2.42)
+	hit.position = Vector3(0.0, 1.28, ELEVATOR_CAR.THRESHOLD_Z + 0.18)
 	hit.add_box(Vector3(3.0, 2.3, 0.9))
 	rig["root"].add_child(hit)
 	rig["hit"] = hit
@@ -6610,7 +6530,7 @@ func _descent_elevator(dir: int) -> void:
 		hit.enabled = false
 		hit.prompt_text = ""
 		rig["root"].set_meta("opened", true)
-		_set_descent_leaves(rig, 1.02)
+		_set_descent_leaves(rig, 1.0)
 		_descent_lit_call(rig, true)
 	elif descent_lift_called:
 		hit.enabled = false
@@ -6644,8 +6564,7 @@ func open_descent_lift() -> void:
 		hit.enabled = false
 		hit.prompt_text = ""
 	_descent_sound(root, SoundBank.ding(), -7.0)
-	_open_descent_doors(_descent_lift_rig["left"], _descent_lift_rig["right"],
-		root, 0.72)
+	_open_descent_doors(_descent_lift_rig, root, 0.72)
 
 
 ## Final objective: the same impossible room-side shell opens onto a short,
@@ -6653,11 +6572,9 @@ func open_descent_lift() -> void:
 func _descent_exit(dir: int) -> void:
 	_descent_clear_car_footprint(dir)
 	var rig := _descent_car_shell(dir, true)
-	var left: AnimatableBody3D = rig["left"]
-	var right: AnimatableBody3D = rig["right"]
 	var root: Node3D = rig["root"]
 	# Bright endpoint and dense warm spill obscure the existing solid wall.
-	_mrbox(root, Vector3(0, 1.25, 0.16), Vector3(1.78, 2.28, 0.035),
+	_mrbox(root, Vector3(0, 1.25, 0.34), Vector3(1.78, 2.28, 0.035),
 		Mats.bulb(), 0.008)
 	for i in 5:
 		var haze := _mquad(root, Vector3(0, 1.25, 0.34 + float(i) * 0.28),
@@ -6682,7 +6599,7 @@ func _descent_exit(dir: int) -> void:
 	root.add_child(wind)
 	var approach := _local_area(root, Vector3(0, 1.1, 3.05),
 		Vector3(3.4, 2.2, 1.55))
-	approach.body_entered.connect(_descent_open.bind(left, right, approach))
+	approach.body_entered.connect(_descent_open.bind(rig, approach))
 	var finish := _local_area(root, Vector3(0, 1.05, 0.68),
 		Vector3(1.65, 2.0, 0.65))
 	finish.body_entered.connect(_descent_finish.bind(finish, approach))
@@ -6720,110 +6637,21 @@ static func car_interior_point(cell: Vector2i, dir: int, floor_y := 0.0) -> Dict
 
 
 func _descent_car_shell(dir: int, out: bool, arrival := false) -> Dictionary:
-	var root := Node3D.new()
-	root.name = "DescentArrival" if arrival else (
+	var car := ELEVATOR_CAR.new(_prop_scene(ELEVATOR_CAR.MODEL_PATH))
+	car.name = "DescentArrival" if arrival else (
 		"DescentExit" if out else "DescentElevator")
-	root.transform = descent_car_basis(dir, _floor_h())
-	add_child(root)
-
-	var shell := StaticBody3D.new()
-	root.add_child(shell)
-	# The generated room floor remains the collider beneath the car. Lift the
-	# visible steel skin a few millimetres above it: the old exactly-coplanar
-	# surfaces z-fought and let the room flooring shimmer through the panel.
-	_mrbox(shell, Vector3(0, 0.009, 1.12),
-		Vector3(2.44, 0.018, 2.24), Mats.steel(), 0.006)
-	_local_shell_box(shell, Vector3(0, 2.42, 1.12),
-		Vector3(2.44, 0.10, 2.24), Mats.charcoal())
-	_local_shell_box(shell, Vector3(0, 1.22, 0.06),
-		Vector3(2.44, 2.42, 0.12), Mats.charcoal())
-	_local_shell_box(shell, Vector3(-1.18, 1.22, 1.12),
-		Vector3(0.12, 2.42, 2.24), Mats.steel())
-	_local_shell_box(shell, Vector3(1.18, 1.22, 1.12),
-		Vector3(0.12, 2.42, 2.24), Mats.steel())
-	# The facade sits inward from the generated wall; the centre remains open.
-	_local_shell_box(shell, Vector3(0, 2.53, 2.23),
-		Vector3(2.82, 0.34, 0.14), Mats.charcoal())
-	_local_shell_box(shell, Vector3(-1.27, 1.22, 2.23),
-		Vector3(0.28, 2.48, 0.14), Mats.charcoal())
-	_local_shell_box(shell, Vector3(1.27, 1.22, 2.23),
-		Vector3(0.28, 2.48, 0.14), Mats.charcoal())
-	# Handrails make the alcove read as a car rather than a stage-flat door.
-	for sx in [-1.0, 1.0]:
-		var rail := _mcyl(root, Vector3(sx * 1.02, 0.92, 1.10),
-			0.025, 1.55, Mats.chrome())
-		rail.rotation.x = PI / 2.0
-	# Warm car light is intentionally non-shadowed and survives at range.
-	_mrbox(root, Vector3(0, 2.34, 1.10), Vector3(1.35, 0.035, 0.50),
-		Mats.bulb(), 0.015)
-	var car_light := OmniLight3D.new()
-	car_light.light_color = Color(1.0, 0.72, 0.42)
-	car_light.light_energy = 1.25
-	car_light.omni_range = 6.5
-	car_light.shadow_enabled = false
-	car_light.position = Vector3(0, 2.18, 1.1)
-	car_light.set_meta("visible_source", "elevator_ceiling_panel")
-	root.add_child(car_light)
-
-	var left := _descent_leaf(root, -0.54)
-	var right := _descent_leaf(root, 0.54)
-	_mrbox(root, Vector3(0, 2.68, 2.31), Vector3(1.24, 0.38, 0.10),
-		Mats.sign_housing(), 0.018)
-	_mrbox(root, Vector3(0, 2.68, 2.37), Vector3(1.04, 0.24, 0.025),
-		Mats.screen_dark(), 0.008)
-	var display := Label3D.new()
+	car.transform = descent_car_basis(dir, _floor_h())
+	add_child(car)
+	var indicator := car.find_child("Down_Indicator", true, false)
+	indicator.set_meta("elevator_indicator_ceiling", ceil_h - _floor_h())
+	car.display.set_meta("elevator_indicator_ceiling", ceil_h - _floor_h())
 	if out:
-		display.text = "OUT"
+		car.display.text = "OUT"
 	elif arrival:
-		# The car you arrived in reads the floor you are on, with no direction:
-		# it is not going anywhere and neither are you, back the way you came.
-		display.text = "%02d" % (descent_floor_idx + 1)
+		car.display.text = "%02d" % (descent_floor_idx + 1)
 	else:
-		display.text = "%02d  ▼" % (descent_floor_idx + 1)
-	display.font_size = 66
-	display.pixel_size = 0.0020
-	display.modulate = Color(1.0, 0.56, 0.18)
-	display.position = Vector3(0, 2.68, 2.392)
-	root.add_child(display)
-	# The call plate is real in Descent; _descent_elevator places the E-key
-	# target over this button. The final OUT passage keeps it as dressing.
-	_mrbox(root, Vector3(1.50, 1.20, 2.31), Vector3(0.32, 0.62, 0.08),
-		Mats.steel(), 0.018)
-	var call := _mcyl(root, Vector3(1.50, 1.28, 2.37), 0.07, 0.035,
-		Mats.lamp_amber())
-	call.rotation.x = PI / 2.0
-	return {
-		"root": root, "left": left, "right": right, "call": call,
-		"display": display, "light": car_light,
-	}
-
-
-func _descent_leaf(parent: Node3D, x: float) -> AnimatableBody3D:
-	var leaf := AnimatableBody3D.new()
-	leaf.position = Vector3(x, 1.22, 2.25)
-	parent.add_child(leaf)
-	_mrbox(leaf, Vector3.ZERO, Vector3(1.06, 2.38, 0.09),
-		Mats.steel(), 0.012)
-	for rib in [-0.35, 0.0, 0.35]:
-		_mbox(leaf, Vector3(rib, 0, 0.052),
-			Vector3(0.018, 2.22, 0.018), Mats.chrome())
-	var cs := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = Vector3(1.06, 2.38, 0.12)
-	cs.shape = shape
-	leaf.add_child(cs)
-	return leaf
-
-
-func _local_shell_box(parent: StaticBody3D, pos: Vector3, size: Vector3,
-		mat: Material) -> void:
-	_mrbox(parent, pos, size, mat, minf(0.025, minf(size.x, size.z) * 0.2))
-	var cs := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = size
-	cs.shape = shape
-	cs.position = pos
-	parent.add_child(cs)
+		car.display.text = "%02d  ▼" % (descent_floor_idx + 1)
+	return {"root": car, "display": car.display, "light": car.light}
 
 
 func _local_area(parent: Node3D, pos: Vector3, size: Vector3) -> Area3D:
@@ -6840,11 +6668,10 @@ func _local_area(parent: Node3D, pos: Vector3, size: Vector3) -> Area3D:
 	return area
 
 
-func _descent_open(actor: Node, left: AnimatableBody3D,
-		right: AnimatableBody3D, approach: Area3D) -> void:
+func _descent_open(actor: Node, rig: Dictionary, approach: Area3D) -> void:
 	if not actor is Player or approach.has_meta("opened"):
 		return
-	_open_descent_doors(left, right, approach)
+	_open_descent_doors(rig, approach)
 
 
 ## Area-only interaction rays can see through walls. The lift additionally
@@ -6873,10 +6700,8 @@ func _descent_call(actor: Node, rig: Dictionary, hit: Interactable) -> void:
 	hit.enabled = false
 	hit.prompt_text = "LIFT ARRIVING"
 	get_tree().call_group("level_manager", "door_activity")
-	var call: MeshInstance3D = rig["call"]
-	var press := create_tween().set_trans(Tween.TRANS_QUAD)
-	press.tween_property(call, "position:z", 2.345, 0.08)
-	press.tween_property(call, "position:z", 2.37, 0.14)
+	var car: ElevatorCar = rig["root"]
+	car.press_call()
 	_descent_lit_call(rig, true)
 	_descent_sound(rig["root"], SoundBank.key_click(), -6.0)
 	var seconds := DescentRun.lift_wait_for(descent_floor_idx)
@@ -6956,19 +6781,13 @@ func _descent_lift_indicator(display: Label3D, progress: float) -> void:
 
 
 func _descent_lit_call(rig: Dictionary, on: bool) -> void:
-	var call: MeshInstance3D = rig.get("call")
-	if not is_instance_valid(call):
-		return
-	call.material_override = Mats.bulb() if on else null
+	var car: ElevatorCar = rig["root"]
+	car.set_call_lit(on)
 
 
-func _set_descent_leaves(rig: Dictionary, x: float) -> void:
-	var left: AnimatableBody3D = rig["left"]
-	var right: AnimatableBody3D = rig["right"]
-	if is_instance_valid(left):
-		left.position.x = -x
-	if is_instance_valid(right):
-		right.position.x = x
+func _set_descent_leaves(rig: Dictionary, openness: float) -> void:
+	var car: ElevatorCar = rig["root"]
+	car.openness = openness
 
 
 func _descent_sound(parent: Node, stream: AudioStream, volume: float,
@@ -6985,8 +6804,7 @@ func _descent_sound(parent: Node, stream: AudioStream, volume: float,
 	return sound
 
 
-func _open_descent_doors(left: AnimatableBody3D,
-		right: AnimatableBody3D, owner: Node, seconds := 0.62) -> Tween:
+func _open_descent_doors(rig: Dictionary, owner: Node, seconds := 0.62) -> Tween:
 	if owner.has_meta("opened"):
 		return null
 	owner.set_meta("opened", true)
@@ -6997,10 +6815,8 @@ func _open_descent_doors(left: AnimatableBody3D,
 	sound.max_distance = 24.0
 	owner.add_child(sound)
 	sound.play()
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(left, "position:x", -1.02, seconds)
-	tw.parallel().tween_property(right, "position:x", 1.02, seconds)
-	return tw
+	var car: ElevatorCar = rig["root"]
+	return car.move_doors(true, seconds)
 
 
 ## The story tape is the objective. Charge affects survival on the way to the
@@ -7032,9 +6848,8 @@ func _descent_commit(actor: Node, rig: Dictionary, commit: Area3D,
 	hit.enabled = false
 	hit.prompt_text = ""
 	get_tree().call_group("descent_listener", "suspend_descent_rules")
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(rig["left"], "position:x", -0.54, 0.52)
-	tw.parallel().tween_property(rig["right"], "position:x", 0.54, 0.52)
+	var car: ElevatorCar = rig["root"]
+	var tw := car.move_doors(false, 0.52)
 	await tw.finished
 	if not is_inside_tree():
 		return
@@ -7058,16 +6873,16 @@ func _descent_ride(rig: Dictionary) -> void:
 	# floor outside is, as far as the fiction cares, somewhere between floors.
 	var shell := MeshInstance3D.new()
 	var shell_mesh := BoxMesh.new()
-	# Hugs the car skin (x ±1.24, z 0..2.36): the front face sits centimetres
-	# behind the door leaves so a crack can only ever show black.
-	shell_mesh.size = Vector3(2.9, 3.0, 2.64)
+	# Enclose the supplied shell without cutting through its wider side pockets
+	# or its threshold at Z=2.56.
+	shell_mesh.size = Vector3(3.0, 3.0, 2.94)
 	shell.mesh = shell_mesh
 	var shell_mat := StandardMaterial3D.new()
 	shell_mat.albedo_color = Color.BLACK
 	shell_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	shell_mat.cull_mode = BaseMaterial3D.CULL_FRONT
 	shell.material_override = shell_mat
-	shell.position = Vector3(0.0, 1.35, 1.02)
+	shell.position = Vector3(0.0, 1.35, 1.30)
 	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(shell)
 	_descent_sound(root, SoundBank.clang(), -14.0)
@@ -7163,7 +6978,7 @@ func open_descent_arrival(seconds := 1.15) -> void:
 		return
 	# Slower than a call: this is the reveal of a floor, not a door operating.
 	_descent_arrival_rig["opening"] = _open_descent_doors(
-		_descent_arrival_rig["left"], _descent_arrival_rig["right"], root, seconds)
+		_descent_arrival_rig, root, seconds)
 
 
 func _cancel_arrival_tween(rig: Dictionary, key: String) -> void:
@@ -7212,10 +7027,9 @@ func _finish_descent_arrival_left(rig: Dictionary, inside: Area3D) -> void:
 	_cancel_arrival_tween(rig, "opening")
 	var root: Node3D = rig["root"]
 	_descent_sound(root, SoundBank.elev(), -13.0)
-	var tw := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	var car: ElevatorCar = rig["root"]
+	var tw := car.move_doors(false, 0.9)
 	rig["closing"] = tw
-	tw.tween_property(rig["left"], "position:x", -0.54, 0.9)
-	tw.parallel().tween_property(rig["right"], "position:x", 0.54, 0.9)
 	tw.tween_callback(_complete_descent_arrival_left.bind(rig, inside))
 
 
@@ -7234,7 +7048,7 @@ func _complete_descent_arrival_left(rig: Dictionary, inside: Area3D) -> void:
 
 
 func _descent_kill_arrival(rig: Dictionary) -> void:
-	_set_descent_leaves(rig, 0.54)
+	_set_descent_leaves(rig, 0.0)
 	var light: OmniLight3D = rig.get("light")
 	if is_instance_valid(light):
 		light.light_energy = 0.0
@@ -8654,14 +8468,19 @@ static func _prop_scene(path: String) -> PackedScene:
 	var prepared := FloorResourcePreloader.cached_scene(path)
 	if prepared != null:
 		return prepared
+	var started := Time.get_ticks_usec()
+	var scene: PackedScene
 	if not _prop_preloads_requested:
-		return FloorResourcePreloader.retain_scene(path, load(path) as PackedScene)
-	var status := ResourceLoader.load_threaded_get_status(path)
-	if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS \
-			or status == ResourceLoader.THREAD_LOAD_LOADED:
-		return FloorResourcePreloader.retain_scene(path,
-			ResourceLoader.load_threaded_get(path) as PackedScene)
-	return FloorResourcePreloader.retain_scene(path, load(path) as PackedScene)
+		scene = load(path) as PackedScene
+	else:
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS \
+				or status == ResourceLoader.THREAD_LOAD_LOADED:
+			scene = ResourceLoader.load_threaded_get(path) as PackedScene
+		else:
+			scene = load(path) as PackedScene
+	RuntimeDiagnostics.slow("prop_cache_miss", started, {"asset": path})
+	return FloorResourcePreloader.retain_scene(path, scene)
 
 
 ## Instance a downloaded glTF prop. Scenes are load()-cached, so each model's

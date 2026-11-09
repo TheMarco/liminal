@@ -1,0 +1,387 @@
+{
+  "$schemaNote": "Ordered processing-stage inventory for pinned ntsc-rs add90f5bf1bf7e3c573e4e945a16f44a82941b51. Pipeline order from apply_effect_to_yiq_field (ntsc.rs:1150-1474). All former needsSourceRead items resolved with exact formulas except RNG-external items listed in remainingUnknowns.",
+  "constants": {
+    "NTSC_RATE": "(315000000/88)*4 Hz; lowpass rate arg = NTSC_RATE*hscale (ntsc.rs:23)",
+    "frameSeed": "seed=random_seed as u32 as u64 (ntsc.rs:1158)",
+    "noiseSeeds": "VIDEO_COMPOSITE=0 VIDEO_CHROMA_I=1 HEAD_SWITCHING=2 TRACKING_NOISE=3 VIDEO_CHROMA_PHASE=4 EDGE_WAVE=5 SNOW=6 CHROMA_LOSS=7 MID_LINE_JITTER=8 VIDEO_CHROMA_Q=9 VIDEO_LUMA=10 (ntsc.rs:591-604)",
+    "phaseTables": "I_MULT=[1,0,-1,0] Q_MULT=[0,1,0,-1] (ntsc.rs:291-292); I_MULT_INV=[-1,0,1,0] Q_MULT_INV=[0,-1,0,1] (ntsc.rs:326-327)",
+    "phasefn": "chroma_phase_shift(shift,offset,frame,line): 90/270 -> (frame+offset+(line>>1))&3; 180 -> (((frame+line)&2)+offset)&3; 0 -> 0 (ntsc.rs:276-289); called with line=row*2 (ntsc.rs:320,501,...); offset wraps mod 4 incl negatives"
+  },
+  "entryPoints": {
+    "apply_effect_to_buffer": "ntsc.rs:1527-1551",
+    "apply_effect_to_yiq": "ntsc.rs:1520",
+    "fieldDispatch": "apply_effect_to_all_fields (ntsc.rs:1476-1517): Upper/Lower/Both single pass; InterleavedUpper: split at Upper.num_actual rows, upper half frame*2, lower half frame*2+1; InterleavedLower: split at Lower.num_actual rows, lower frame*2, upper frame*2+1; subview.field forced to Upper/Lower",
+    "rgbBlit": "see fielding section; capi uses Bob (ntscrs-capi lib.rs:253-264)"
+  },
+  "fielding": {
+    "blitIn": "Upper src=r*2, Lower r*2+1, Both r (+rect.top; flip_y mirrors about other_buffer_height; rect height 1 forces row 0) (yiq_fielding.rs:604-632); Interleaved packs upper-field rows then lower-field rows (order per variant) (635-684)",
+    "blitOutBob": "Upper/Lower: skipped-parity interior rows = mean of stored neighbors in YIQ then convert; row 0/H-1 and stored rows copied via (dst>>1).min(num_rows-1) (767-842); Skip leaves rows untouched (843-872); Interleaved: idx=((dst>>1)+row_offset).min(H-1), row_offset=Upper/Lower.num_image_rows(H)*(parity selector) (873-915); Both direct (916-941)",
+    "buffer": "w*num_image_rows(H)*4 f32 = Y,I,Q,scratch contiguous (997-1023); scratch reused by demod copy, tracking shift_noise, edge_wave noise_dest, vert_blend delay",
+    "normalize": "u8: in v/255, out (v*255).clamp(0,255) truncated to int (242-271); f32 passthrough; alpha always written ONE/opaque on output",
+    "numRows": "Upper ceil(H/2), Lower max(floor(H/2),1), else H (73-82); num_actual_image_rows: Lower floor (can be 0) (87-96)",
+    "rgb2yiq": "Y=.299R+.587G+.114B; I=.5959R-.2746G-.3213B; Q=.2115R-.5227G+.3112B (11-31)",
+    "split": "split_at_row cuts Y,I,Q AND scratch at idx*w; empty half -> None (453-484)",
+    "yiq2rgb": "R=Y+.956I+.619Q; G=Y-.272I-.647Q; B=Y-1.106I+1.703Q (34-52)"
+  },
+  "filterSemantics": "UNCHANGED from v1 (verified ntsc.rs:20-89, filter.rs:57-179): constant-K alpha, triple cascade = 3rd order, Butterworth/notch biquads, with_scale shelf mix, Direct-Form-II-transposed, scipy lfilter_zi init, per-row causal, delay shifts output left.",
+  "rng": {
+    "consumption_composite": "video_noise_line (ntsc.rs:607-630): rng=Xoshiro(seed_from_u64(S.mix(row_u64).u64)); noise_seed=rng.next_u32() as i32; offset=rng.random::<f32>()*width; FBM{gain:1.0,lacun:2.0,freq:setting/hscale,oct:detail}; add_noise_1d(intensity*0.25,[offset],[w])",
+    "consumption_other": "phase_noise per-row offset=(S(row).f32-0.5)*2*intensity, S=Seeder(seed,4,frame) (ntsc.rs:702-715); snow/tracking rows: Xoshiro(seed_from_u64(S(row).u64)) into row_speckles (937-943,953-963); chroma_loss single Xoshiro(seed_from_u64(S(seed,7,frame).u64)) + Geometric gaps (1088-1115); headswitch per-row f32 (741-749), jitter avg of S(0),S(1) with seed 8 (763-770); tracking noise_seed=S.mix(0).i32, offset=S.mix(1).f32*num_rows, then seeder.mix(2) (887-892); edge_wave noise_seed=S.mix(0).i32, offset=S.mix(1).f32*H, S=Seeder(seed,5) NO frame mix (1058-1060)",
+    "fromSeeder": "u64 identity; i32 low 32 bits; f32 from_bits(((h&0xFFFFFFFF)>>9)|0x3F800000)-1.0; f64 from_bits((h|0x3FF0..)&0x3FFF..)-1.0 (random.rs:29-59)",
+    "geometric": "Geometric::new(p): lambda=ln(1-p), panics p<=0||p>1; sample=floor(ln(U)/lambda), U=random f64 (random.rs:5-27)",
+    "seeder": "SipHasher keys(0,0); chain Seeder::new(seed_u64).mix(pass_u64).mix(frame_usize).mix(row) (random.rs:61-83); finish = SipHash-2-4 with final block ((len&0xff)<<56)|tail (verified siphasher-1.0.3 src/sip.rs:321-332); byte stream = LE bytes per value (8B u64/usize on 64-bit, 4B i32)",
+    "standardFloat": "random::<f32>=(next_u32>>8)*2^-24; random::<f64>=(next_u64>>11)*2^-53; identical in rand 0.8.6 and 0.10.1 local sources; upstream rand 0.9 presumed same (verify if bit-exact)",
+    "uniformRange": "random_range(a..[=]b) f32 = v01*(b-a)+a, v01=from_bits((next_u32>>9)|0x3F800000)-1.0 (rand 0.10 sample_single path); rand 0.8 used scale=(b-a)/max_rand for inclusive -- upstream rand 0.9.0 source unavailable offline, see remainingUnknowns",
+    "xoshiro": "Xoshiro256PlusPlus::seed_from_u64 = SplitMix64 expansion; next_u32 = next_u64>>32; rng.jump() = stock xoshiro jump; replicate from rand_xoshiro/Vigna reference (external spec, not in-tree)"
+  },
+  "scaleResolution": "UNCHANGED from v1 (ntsc.rs:1160-1186).",
+  "simplexFbm": {
+    "add1d": "dst[i]+=sample*intensity, x=start[0]+i (noise.rs:85-113)",
+    "fbm": "p*=freq; r=s0; amp=gain; octaves-1 times: p*=lacunarity, r+=amp*s, amp*=gain (noise.rs:24-41); octaves=detail.clamp(1,5); NOTE video-noise FBM uses gain=1.0 (equal-amplitude octaves), edge_wave gain=1/sqrt2",
+    "sample1d": "x=start[0]+i unit steps (noise.rs:61-82)",
+    "sample2d": "row r: x=start[0]+i, y=start[1]+r (noise.rs:116-140)",
+    "simplex1d": "floor grid; ESGTSA hash of (i^seed): v=(v^2747636419)*2654435769, v=(v^(v>>16))*2654435769 x2 (hash.rs:7-17); gradient = +/-1..8 from top 4 bits, sign bit3 (simplex.rs:41-48); n=t0^4*g0*x0+t1^4*g1*x1, t=1-x^2 (12-37)",
+    "simplex2d": "skew F2=(sqrt3-1)/2, unskew G2=(1-1/sqrt3)/2 (grid.rs:36-84, note code negates a negative); PCG3D(i,j,seed) take [0] (hash.rs:20-39, simplex.rs:55-58); grad (|gx|,|gy|)=(1,2) if h<4 else (2,1), signs from h bits (86-106); t=max(0,.5-x^2-y^2); n=sum t^4*(g.d) (60-83)"
+  },
+  "sourceRoot": "build/ntscrt-upstream/ntsc-rs-add90f5bf1bf7e3c573e4e945a16f44a82941b51/crates/ntscrs/src",
+  "stages": [
+    {
+      "controls": [
+        "input_luma_filter"
+      ],
+      "fn": "luma_filter (ntsc.rs:208-246)",
+      "notes": "Box: queue init [16/255,16/255,y0,y1]; i in 0..w-2: out[i]=mean(q), push y[i+2]; tail 2 px push last-sample. Notch: notch(0.5,2.0) FirstSample delay0.",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "row-local causal",
+      "stage": 1,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "chroma_lowpass_in",
+        "filter_type",
+        "bandwidth_scale"
+      ],
+      "fn": "composite_chroma_lowpass[_lite] (ntsc.rs:251-273)",
+      "notes": "Full: I 1.3MHz d2, Q 0.6MHz d4, Zero. Lite: both 2.6MHz d1. rate=NTSC_RATE*hscale.",
+      "planes": [
+        "I",
+        "Q"
+      ],
+      "spatial": "row-local IIR",
+      "stage": 2,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "video_scanline_phase_shift",
+        "video_scanline_phase_shift_offset",
+        "use_field(frame)"
+      ],
+      "fn": "chroma_into_luma (ntsc.rs:309-324)",
+      "notes": "y+=i*I_MULT[(x+xi)&3]+q*Q_MULT[(x+xi)&3]; I/Q NOT zeroed (302-303).",
+      "planes": [
+        "Y+=f(I,Q)"
+      ],
+      "spatial": "pixel-local",
+      "stage": 3,
+      "temporal": "frame+row via phasefn"
+    },
+    {
+      "controls": [
+        "composite_preemphasis",
+        "bandwidth_scale"
+      ],
+      "fn": "inline (ntsc.rs:1207-1221)",
+      "gate": "sharpening != 0.0",
+      "notes": "Always SINGLE constant-k (not filter_type): cutoff=(315MHz/88/2)*hscale, with_scale(-s), Zero, d0.",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "row-local IIR",
+      "stage": 4,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "composite_noise.*",
+        "random_seed",
+        "scales"
+      ],
+      "fn": "composite_noise (ntsc.rs:633-650)",
+      "notes": "Per-row video_noise_line, seeder (seed,0,frame); freq=setting/hscale. See rng.consumption_composite.",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "row-local 1D FBM",
+      "stage": 5,
+      "temporal": "frame-seeded"
+    },
+    {
+      "controls": [
+        "snow_intensity",
+        "snow_anisotropy",
+        "random_seed",
+        "bandwidth_scale"
+      ],
+      "fn": "snow (ntsc.rs:948-964) -> row_speckles (799-869)",
+      "gate": "intensity>0 && hscale>0; caller premultiplies 0.01 (1228)",
+      "notes": "Y ONLY. Per row: f=exp((U-int)/(int*(1-int)*(1-aniso))); line=aniso/(1+f)+int*(1-aniso); line*=0.125 clamp 0..1; skip if <=0. Geometric(line) gaps from x=-64; per hit: len=U[8,64]*hscale, frq=U[len*3,len*5]; rng.jump()+clone; row[i]+=cos(x*pi/frq)*(1-x/len)^2*U[-1,2); min advance +1/iter. EDGE: aniso=1&U==int -> 0/0=NaN (measure-zero; replicate IEEE or guard).",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "speckle transients along row",
+      "stage": 6,
+      "temporal": "frame-seeded"
+    },
+    {
+      "controls": [
+        "head_switching.*"
+      ],
+      "fn": "head_switching (ntsc.rs:718-796)",
+      "notes": "Y ONLY. rows/offset*=vscale round; return if offset>rows. affected=rows-offset; band = bottom affected rows of Y. top-of-band row index=aff, bottom=1: shift=setting*((idx+offset)/rows)^1.5 (STRONGEST at band top); noisy=(shift+U-0.5)*hscale, U=S(idx). mid_line only on top-of-band row (idx==aff): shift_row_to Const(0) into scratch, copy_start=(w*(pos+jitter))as usize (wraps if negative -> >w guard returns), copy back + transient (1-x/len)^3*tint, len=16*hscale, tint=(S(0)+0.5)*0.5. Others: in-place shift_row Const(0).",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "bottom band; horizontal shift_row",
+      "stage": 7,
+      "temporal": "frame-seeded jitter"
+    },
+    {
+      "controls": [
+        "tracking_noise.*"
+      ],
+      "fn": "tracking_noise (ntsc.rs:874-945)",
+      "notes": "Y ONLY. rows*=vscale; band = bottom rows. shift_noise[0..min(rows,H)] = Simplex1d{seed=S.mix(0).i32,freq:0.5} from offset=S.mix(1).f32*num_rows. Per row: s=idx/rows (0 top -> ~1 bottom); shift_row(snoise*s*wave*0.25*hscale, Const0); video_noise_line(freq .25/hscale, int s^2*noise*4, oct 1); row_speckles(Xoshiro(S.mix(idx)), snow*s^2, aniso).",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "bottom band",
+      "stage": 8,
+      "temporal": "frame-seeded band noise"
+    },
+    {
+      "controls": [
+        "chroma_demodulation",
+        "video_scanline_phase_shift*"
+      ],
+      "fn": "luma_into_chroma (472-574)",
+      "notes": "scratch=copy of Y. Box: y[i]=mean(mod[i-1]or16/255, mod[i], mod[i+1]clamp, mod[i+2]clamp). Notch: Y=notch(0.5,2,Zero,d0) then demod. 1-comb: y=(top+cur)/2, top=line r-1 or line 1 if r==0. 2-comb: y=.5cur+.25prev+.25next, prev=line1 if r==0, next=line H-2 if last. Height1 -> combs fall back to Notch. demodulate_chroma_line scalar reference (400-442): c=y[x]-mod[x]; o=(x+xi)&3; i=c*I_INV[o], q=c*Q_INV[o]; +=0.5*neighbor terms where in-bounds (x=0 and tail always scalar; SIMD must match).",
+      "planes": [
+        "Y<=f(mod neighbors)",
+        "I,Q<=f(Y-mod)"
+      ],
+      "spatial": "3-tap H + combs use vertical neighbors",
+      "stage": 9,
+      "temporal": "frame+row via phasefn"
+    },
+    {
+      "controls": [
+        "luma_smear"
+      ],
+      "fn": "luma_smear (ntsc.rs:577-587)",
+      "gate": "> 0.0",
+      "notes": "Single constant-k lowpass cutoff=exp2(-4*amount)*0.25, rate=hscale (NOT NTSC_RATE -- quirk), Zero, d0, Y.",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "row-local IIR",
+      "stage": 10,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "ringing.*",
+        "bandwidth_scale"
+      ],
+      "fn": "inline (ntsc.rs:1279-1293)",
+      "gate": "enabled",
+      "notes": "notch(clamp(freq/hscale,0,1),power).with_scale(intensity), FirstSample, d1, Y.",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "row-local IIR",
+      "stage": 11,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "luma_noise.*"
+      ],
+      "fn": "plane_noise Y,seed VIDEO_LUMA (ntsc.rs:653-673,1295-1303)",
+      "notes": "1D-per-row FBM (same as stage 5 machinery), freq=setting/hscale. vertical_scale NOT used.",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "row-local 1D FBM",
+      "stage": 12,
+      "temporal": "frame-seeded"
+    },
+    {
+      "controls": [
+        "chroma_noise.*"
+      ],
+      "fn": "plane_noise I (seed 1) + Q (seed 9) (1305-1320)",
+      "notes": "Same as stage 12 per plane.",
+      "planes": [
+        "I",
+        "Q"
+      ],
+      "spatial": "row-local 1D FBM",
+      "stage": 13,
+      "temporal": "frame-seeded"
+    },
+    {
+      "controls": [
+        "chroma_phase_error"
+      ],
+      "fn": "chroma_phase_error (693-699)",
+      "gate": "> 0.0",
+      "notes": "Rotate (I,Q) by angle=intensity*2pi every pixel (676-690).",
+      "planes": [
+        "I",
+        "Q"
+      ],
+      "spatial": "pixel-local",
+      "stage": 14,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "chroma_phase_noise_intensity"
+      ],
+      "fn": "chroma_phase_noise (702-715)",
+      "gate": "> 0.0",
+      "notes": "Per row rotate by ((S(row)-0.5)*2*intensity)*2pi, S=Seeder(seed,4,frame).mix(row_usize).",
+      "planes": [
+        "I",
+        "Q"
+      ],
+      "spatial": "per-row constant",
+      "stage": 15,
+      "temporal": "frame-seeded"
+    },
+    {
+      "controls": [
+        "chroma_delay_horizontal",
+        "chroma_delay_vertical"
+      ],
+      "fn": "chroma_delay (969-1051)",
+      "gate": "h!=0||v!=0",
+      "notes": "h*=hscale; v=round(v*vscale). v<0: content moves UP |v| (dst r <- src r+|v|), bottom |v| zeroed. v>0: moves DOWN, top v zeroed. h==0 -> plain copy else shift_row_to Const(0). v==0 -> in-place shift_row per row.",
+      "planes": [
+        "I",
+        "Q"
+      ],
+      "spatial": "H subpixel lerp + integer V shift",
+      "stage": 16,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "vhs_edge_wave.*"
+      ],
+      "fn": "vhs_edge_wave (1054-1085)",
+      "gate": "enabled && intensity>0",
+      "notes": "Seeder(seed,5) NO frame mix. FBM{oct=detail.clamp(1,5),gain=1/sqrt2,lacun 2,freq=setting/vscale} 2D: noise[r]=FBM(offset+r, frame*speed). Per plane Y,I,Q per row: shift_row(noise/0.022*intensity*0.5*hscale, Extend).",
+      "planes": [
+        "Y",
+        "I",
+        "Q"
+      ],
+      "spatial": "per-row H shift, Extend boundary",
+      "stage": 17,
+      "temporal": "frame*speed as noise Y coord"
+    },
+    {
+      "controls": [
+        "vhs_tape_speed",
+        "filter_type",
+        "bandwidth_scale"
+      ],
+      "fn": "inline (1348-1407)",
+      "gate": "tape != NONE",
+      "notes": "Y lowpass_for_type(luma_cut) Zero d0; I/Q lowpass_for_type(chroma_cut) Zero d=round(chroma_delay*hscale); then extra single constant-k Y with_scale(-1.6) Zero d0.",
+      "planes": [
+        "Y",
+        "I",
+        "Q"
+      ],
+      "spatial": "row-local IIR",
+      "stage": 18,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "vhs_chroma_loss"
+      ],
+      "fn": "chroma_loss (1088-1115)",
+      "gate": "vhs enabled && loss>0",
+      "notes": "Single Xoshiro; Geometric(loss) row gaps from 0; hit rows: I,Q zeroed. loss=1.0 blanks ALL rows (no panic).",
+      "planes": [
+        "I",
+        "Q"
+      ],
+      "spatial": "whole-row drop",
+      "stage": 19,
+      "temporal": "frame-seeded"
+    },
+    {
+      "controls": [
+        "vhs_sharpen.*",
+        "vhs_tape_speed",
+        "filter_type"
+      ],
+      "fn": "inline (1413-1458)",
+      "gate": "sharpen enabled && tape != NONE",
+      "notes": "cutoff=luma_cut*(4.0 if ConstantK else 1.0)*freq; with_scale(-int*2*freq); Zero d0; Y ONLY (chroma sharpen commented out 1427-1457).",
+      "planes": [
+        "Y"
+      ],
+      "spatial": "row-local IIR",
+      "stage": 20,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "vhs_chroma_vert_blend"
+      ],
+      "fn": "chroma_vert_blend (1118-1147)",
+      "gate": "== true",
+      "notes": "out=(delay+cur)*0.5, delay=pre-blend cur; delay init 0 -> FIRST ROW HALVED toward black. I and Q joined.",
+      "planes": [
+        "I",
+        "Q"
+      ],
+      "spatial": "vertical 2-tap causal",
+      "stage": 21,
+      "temporal": "none"
+    },
+    {
+      "controls": [
+        "chroma_lowpass_out",
+        "filter_type",
+        "bandwidth_scale"
+      ],
+      "fn": "composite_chroma_lowpass[_lite] reused (1465-1473)",
+      "notes": "Identical to stage 2.",
+      "planes": [
+        "I",
+        "Q"
+      ],
+      "spatial": "row-local IIR",
+      "stage": 22,
+      "temporal": "none"
+    }
+  ],
+  "upstreamPin": "ntsc-rs-add90f5bf1bf7e3c573e4e945a16f44a82941b51",
+  "version": 2,
+  "remainingUnknowns": [
+    "rand 0.9.0 random_range float path: 0.8 (scale=(b-a)/max_rand, inclusive) vs 0.10 (scale=b-a) differ; affects transient_len/freq/amplitude only; 0.9 source unavailable offline",
+    "Xoshiro256++/SplitMix64/jump constants: replicate from rand_xoshiro/Vigna reference (external spec, not in-tree)",
+    "Seeder usize width: 64-bit assumed; 32-bit targets would hash 4B instead",
+    "fearless_simd dispatch: same math, batching only"
+  ]
+}

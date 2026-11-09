@@ -1,4 +1,5 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 
 
 func _asy_tiled_room() -> bool:
@@ -47,32 +48,24 @@ func _asy_lighting() -> void:
 		pmat = Mats.asy_panel().duplicate()
 	else:
 		pmat = Mats.asy_panel()
-	var pts = [Vector2(3.6, 6.0), Vector2(8.4, 6.0)]
+	var pts = [Vector2(3.6,2.5),Vector2(8.4,2.5),Vector2(3.6,6.0),
+		Vector2(8.4,6.0),Vector2(3.6,9.5),Vector2(8.4,9.5)]
 	if ctx.style == WorldGen.ASY_CORRIDOR:
 		var cdir = WorldGen.corridor(ctx.world_seed, ctx.cell)
 		if cdir == 1:
 			pts = [Vector2(2.4, 6.0), Vector2(6.0, 6.0), Vector2(9.6, 6.0)]
 		else:
 			pts = [Vector2(6.0, 2.4), Vector2(6.0, 6.0), Vector2(6.0, 9.6)]
-	for pt in pts:
-		_asy_fixture(Vector3(pt.x, 0, pt.y), pmat)
+	var lights: Array[Light3D] = []
+	for i in pts.size():
+		var pt: Vector2 = pts[i]
+		lights.append_array(_asy_fixture(Vector3(pt.x,0,pt.y),pmat,dead,
+			1 if i == 0 else (2 if i == pts.size()-1 else 4)))
 	if dead:
 		return
-	var tall = ctx.ceiling_height > 4.0
-	var light = scene.fixture_light(flicker, pmat, 1.8 if tall else 1.35,
-		Vector3(pts[0].x, ctx.ceiling_height - 0.55, pts[0].y))
-	light.light_color = Color(0.80, 0.91, 0.90)
-	light.omni_range = 13.5 if tall else 11.5
-	light.shadow_enabled = true
-	# Hanging fluorescent panels are broad emitters, not a single bare bulb.
-	# Keep the ward dark, but avoid point-light-black wall junctions.
-	light.shadow_opacity = 0.6
-	light.shadow_blur = 2.5
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 22.0
-	light.distance_fade_length = 8.0
-	light.distance_fade_shadow = 16.0
-	scene.add_node(light)
+	if flicker:
+		FIXTURE_LIGHTING.ballast(scene,lights,pmat,
+			WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),Vector3(pts[0].x,ctx.ceiling_height-0.5,pts[0].y))
 	if ctx.style in [WorldGen.ASY_CHAPEL, WorldGen.ASY_DAYROOM]:
 		_asy_pendant(Vector3(6, 0, 6), ctx.style == WorldGen.ASY_CHAPEL)
 
@@ -179,20 +172,34 @@ func _asy_moulded_wall(at: Vector3, yaw: float, width: float, y0: float, y1: flo
 		, true)
 
 
-## Real twin-tube fixture on rusted drop rods, lens panel underneath. Thin
-## fixture parts must not cast — the room omni would smear them into streaks.
+## Retain the real housing and give its opal diffuser an exposed upper face.
+## Both outputs stay attached to the assembly through streaming and blackout.
 
 
-func _asy_fixture(at: Vector3, pmat: Material) -> void:
-	var drop = 0.22
-	var y = ctx.ceiling_height - drop
-	var fixture = scene.load_model("mounted_fluorescent_lights", Vector3(at.x, y, at.z), 0.0)
+func _asy_fixture(at: Vector3, pmat: StandardMaterial3D, dead: bool,
+		shadow_tier: int) -> Array[Light3D]:
+	var frame := Node3D.new()
+	frame.name = "AsylumFluorescent"
+	frame.position = Vector3(at.x,ctx.ceiling_height-0.48,at.z)
+	frame.set_meta("practical_fixture","asylum_fluorescent")
+	scene.add_node(frame)
+	var fixture = scene.load_model("mounted_fluorescent_lights", Vector3.ZERO, 0.0)
+	fixture.reparent(frame,false)
 	scene.disable_shadows(fixture)
 	for dz in [-0.26, 0.26]:
-		var rod = scene.cylinder(Vector3(at.x, y + drop / 2.0, at.z + dz), 0.012, drop, Mats.asy_metal(), false)
+		var rod = scene.model_cylinder(frame,Vector3(0,0.265,dz),0.012,0.43,Mats.asy_metal())
 		rod.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var lens = scene.box(Vector3(at.x, y - 0.045, at.z), Vector3(0.8, 0.02, 0.55), pmat, false)
-	lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var lower := scene.model_box(frame,Vector3(0,-0.045,0),Vector3(0.8,0.02,0.55),pmat)
+	var upper := scene.model_box(frame,Vector3(0,0.025,0),Vector3(0.8,0.05,0.55),pmat)
+	var lights: Array[Light3D] = []
+	if dead: return lights
+	var height_scale := maxf(1.0,(ctx.ceiling_height-0.5)/4.0)
+	lights.append(FIXTURE_LIGHTING.rectangular(frame,lower,Vector2(0.8,0.55),
+		Vector3(0,-0.055,0),false,Color(0.80,0.91,0.90),1.45*height_scale*height_scale,
+		maxf(8.5,ctx.ceiling_height+3),shadow_tier,"asylum_fluorescent"))
+	lights.append(FIXTURE_LIGHTING.rectangular(frame,upper,Vector2(0.8,0.55),
+		Vector3(0,0.05,0),true,Color(0.80,0.91,0.90),0.9,9,4,"asylum_fluorescent"))
+	return lights
 
 
 # --- asylum: props ------------------------------------------------------------

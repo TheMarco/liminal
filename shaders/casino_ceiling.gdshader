@@ -10,10 +10,11 @@ uniform vec3 col_beam : source_color = vec3(0.30, 0.24, 0.19);
 uniform vec3 col_gilt : source_color = vec3(0.62, 0.45, 0.16);
 uniform vec3 col_smoke : source_color = vec3(0.20, 0.15, 0.10);
 uniform float coffer = 2.4;
-uniform float bump_strength = 0.30;
+uniform float bump_strength = 1.0;
 // 0 = a ceiling that has been cleaned this decade
 uniform float grime_amount = 1.0;
 uniform sampler2D detail_tex : filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D plaster_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 
 varying vec3 wpos;
 
@@ -35,14 +36,8 @@ float vnoise(vec2 p) {
 }
 
 float fbm(vec2 p) {
-	float v = 0.0;
-	float a = 0.5;
-	for (int i = 0; i < 4; i++) {
-		v += a * vnoise(p);
-		p *= 2.03;
-		a *= 0.5;
-	}
-	return v;
+	// Mipmapped plaster variation remains stable on the distant ceiling.
+	return texture(detail_tex, p * 0.085).r;
 }
 
 // Distance from the coffer centre in "square" metric — square coffers need a
@@ -52,7 +47,7 @@ float box_d(vec2 f) {
 	return max(d.x, d.y);
 }
 
-// The plaster medallion pressed into the middle of each panel: an eight-lobe
+// Millimetre-scale plaster relief in the middle of each panel: an eight-lobe
 // rosette inside a plain ring. Deliberately shallow — it should catch a
 // grazing highlight, not read as a sculpture.
 float medallion(vec2 f, float rot) {
@@ -60,8 +55,8 @@ float medallion(vec2 f, float rot) {
 	float r = length(d);
 	float a = atan(d.y, d.x) + rot;
 	float lobes = 0.5 + 0.5 * cos(a * 8.0);
-	float body = smoothstep(0.46, 0.30, r - lobes * 0.07);
-	float ring = smoothstep(0.60, 0.55, r) * smoothstep(0.49, 0.54, r);
+	float body = smoothstep(0.31, 0.24, r - lobes * 0.055);
+	float ring = smoothstep(0.43, 0.405, r) * smoothstep(0.375, 0.395, r);
 	return body * 0.6 + ring * 0.5;
 }
 
@@ -73,14 +68,14 @@ float surf_h(vec2 p2) {
 	// stepped profile from beam face (d=1) down into the panel field (d=0)
 	float step1 = smoothstep(0.90, 0.84, d);   // first drop off the beam
 	float step2 = smoothstep(0.80, 0.74, d);   // second, into the panel
-	float h = -(step1 * 0.5 + step2 * 0.5);
+	float h = -(step1 * 0.025 + step2 * 0.018);
 
 	// gilt bead sits proud on the lip of the second step
 	float bead = smoothstep(0.80, 0.775, d) * smoothstep(0.74, 0.765, d);
-	h += bead * 0.55;
+	h += bead * 0.004;
 
-	h -= medallion(f, hashf(id) * 6.28) * 0.42;
-	h += fbm(p2 * 5.0) * 0.10;
+	h += medallion(f, hashf(id) * 6.28) * 0.004;
+	h += texture(detail_tex, p2 / 0.55).r * 0.0007;
 	return h;
 }
 
@@ -95,12 +90,13 @@ void fragment() {
 
 	// base: beam outside, panel inside, with a slightly different plaster tone
 	// per coffer so a long hall does not read as a repeating stamp
-	vec3 c = mix(col_beam, col_panel * (0.92 + 0.16 * hashf(id + 5.5)), in_panel);
+	vec3 c = mix(col_beam, col_panel * (0.96 + 0.08 * hashf(id + 5.5)), in_panel);
 
 	// plaster tooth
 	float tooth = texture(detail_tex, wpos.xz / 0.9).r;
-	c *= 0.90 + 0.18 * tooth;
-	c *= 0.94 + 0.12 * fbm(wpos.xz * 3.0);
+	c *= 0.97 + 0.06 * tooth;
+	vec3 plaster = texture(plaster_tex, wpos.xz / 1.8).rgb;
+	c *= 0.88 + plaster * 0.24;
 
 	// the riser faces catch less light and hold more dirt
 	c *= 1.0 - riser * 0.22;
@@ -121,10 +117,10 @@ void fragment() {
 
 	// --- decades of smoke ---
 	// tar pools where air stalls: deep in the coffers and hard into the corners
-	float pocket = in_panel * (0.35 + 0.65 * smoothstep(0.7, 0.0, d));
+	float pocket = in_panel * (0.18 + 0.72 * smoothstep(0.25, 0.78, d));
 	float blotch = fbm(wpos.xz * 0.5 + 31.7);
 	float smoke = clamp(pocket * (0.45 + 0.75 * blotch), 0.0, 1.0);
-	c = mix(c, col_smoke, smoke * 0.55 * grime_amount);
+	c = mix(c, col_smoke, smoke * 0.35 * grime_amount);
 
 	// old water damage creeping out of one corner of some coffers
 	float leak = smoothstep(0.62, 0.92, fbm(wpos.xz * 0.33 + 4.2));
@@ -134,7 +130,7 @@ void fragment() {
 	vec3 axis = abs(gn.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
 	vec3 t1 = normalize(cross(axis, gn));
 	vec3 t2 = cross(gn, t1);
-	float e = 0.02;
+	float e = 0.008;
 	float h0 = surf_h(wpos.xz);
 	float d1 = (surf_h(wpos.xz + t1.xz * e) - h0) / e;
 	float d2 = (surf_h(wpos.xz + t2.xz * e) - h0) / e;

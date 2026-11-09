@@ -18,6 +18,12 @@ var _last_kind := ""
 
 func _ready() -> void:
 	_time_left = randf_range(32.0, 58.0)
+	# These procedural samples used to be synthesized at the first random
+	# event. Keep that bounded first-use work behind startup instead.
+	var started := Time.get_ticks_usec()
+	SoundBank.thud()
+	SoundBank.creak()
+	RuntimeDiagnostics.mark("ambient_audio_prepared", {"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})
 
 
 func set_level(root: Node3D, floor_theme := 0) -> void:
@@ -52,8 +58,15 @@ func _process(dt: float) -> void:
 	if pick < 0.48:
 		_power_sag(0.7, "THE POWER DIPS")
 	else:
-		_spatial_sound(SoundBank.thud(), 5.0, -8.0)
-		message.emit("THREE KNOCKS FROM BEHIND THE WALL")
+		_play_knocks()
+
+
+func _play_knocks() -> void:
+	var started := Time.get_ticks_usec()
+	RuntimeDiagnostics.mark("ambient_knocks_begin")
+	_spatial_sound(SoundBank.thud(), 5.0, -8.0)
+	message.emit("THREE KNOCKS FROM BEHIND THE WALL")
+	RuntimeDiagnostics.mark("ambient_knocks_queued", {"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})
 
 
 func terminal_response(page: int) -> void:
@@ -110,6 +123,8 @@ func _play_room_event() -> void:
 func _power_sag(hold: float, caption: String) -> void:
 	if _busy or not is_instance_valid(level_root):
 		return
+	var started := Time.get_ticks_usec()
+	RuntimeDiagnostics.mark("power_sag_begin", {"caption": caption, "level": theme, "hold_seconds": hold})
 	_busy = true
 	if not caption.is_empty():
 		message.emit(caption)
@@ -124,7 +139,10 @@ func _power_sag(hold: float, caption: String) -> void:
 		if l is FlickerLight:
 			l.set_process(false)
 		create_tween().tween_property(l, "light_energy", 0.015, 0.16)
+	RuntimeDiagnostics.mark("power_sag_lights", {"lights": lights.size(), "setup_ms": (Time.get_ticks_usec() - started) / 1000.0})
+	var sound_started := Time.get_ticks_usec()
 	_spatial_sound(SoundBank.thud(), 4.0, -14.0)
+	RuntimeDiagnostics.mark("power_sag_sound", {"elapsed_ms": (Time.get_ticks_usec() - sound_started) / 1000.0})
 	await get_tree().create_timer(hold).timeout
 	for l in lights:
 		if not is_instance_valid(l):
@@ -133,11 +151,13 @@ func _power_sag(hold: float, caption: String) -> void:
 		if l is FlickerLight:
 			l.set_process(true)
 	_busy = false
+	RuntimeDiagnostics.mark("power_sag_restore_queued", {"lights": lights.size()})
 
 
 func _spatial_sound(stream: AudioStream, distance: float, volume: float, scatter := false) -> void:
 	if player == null:
 		return
+	var started := Time.get_ticks_usec()
 	var a := AudioStreamPlayer3D.new()
 	a.stream = stream
 	a.volume_db = volume
@@ -155,3 +175,4 @@ func _spatial_sound(stream: AudioStream, distance: float, volume: float, scatter
 	a.global_position = player.global_position + fwd.normalized() * distance
 	a.finished.connect(a.queue_free)
 	a.play()
+	RuntimeDiagnostics.mark("ambient_sound_started", {"stream": stream.resource_path, "format": stream.get_class(), "elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})

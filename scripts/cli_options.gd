@@ -31,6 +31,9 @@ var attention := -1.0            # -1 when not overridden
 ## the saved value, 0 disables it, and 1 enables it. Legacy flags remain valid.
 var vhs_override := -1
 var crt_override := -1
+## QA override for the saved video_pipeline: -1 keeps it, 0 forces Classic,
+## 1 forces the approximation, 2 the full ntsc-rs signal. Never persisted.
+var video_pipeline_override := -1
 var notaa := false
 var nologo := false
 var screenshot := ""
@@ -44,6 +47,7 @@ var shot_delay := 2.5
 var audit := false
 var bench := false
 var perf_log := false           # benchmark counters without automatic movement
+var video_lab := false          # expose original signal/receiver/CRT development controls
 var chunktime := false
 var spin := false
 var flashlight := false
@@ -136,6 +140,14 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 		elif arg == "--nocrt" or arg == "--no-video-effects":
 			o.vhs_override = 0
 			o.crt_override = 0
+		elif arg == "--ntscrt":
+			o.video_pipeline_override = 1
+		elif arg == "--full-ntscrt":
+			o.video_pipeline_override = 2
+		elif arg == "--classic-video":
+			o.video_pipeline_override = 0
+		elif arg == "--video-lab":
+			o.video_lab = true
 		elif arg == "--notaa":
 			o.notaa = true
 		elif arg == "--nologo":

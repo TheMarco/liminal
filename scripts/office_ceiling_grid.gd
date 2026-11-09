@@ -5,6 +5,12 @@ extends RefCounted
 const PITCH := 0.75
 const SEAM_OFFSET := PITCH * 0.5
 const TROFFER_TRIM_ALLOWANCE := 0.18
+# The 6m by 2.6m fixture grid covers even the tallest 3.6m Office rooms with
+# this reach. Larger radii mostly add overlapping light/shadow work next door.
+const LIGHT_REACH := 6.5
+# Render layer 2: the slab stays visible to ordinary/photo cameras and remains
+# a shadow caster. Only downward Office troffers exclude it as a receiver.
+const CEILING_RENDER_LAYER := 1 << 1
 
 
 static func center(desired_world: Vector2, panels: Vector2i) -> Vector2:

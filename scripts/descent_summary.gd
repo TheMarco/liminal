@@ -1,5 +1,5 @@
 class_name DescentSummary
-extends CanvasLayer
+extends "res://scripts/screen_ui.gd"
 
 signal continue_run
 signal restart_run

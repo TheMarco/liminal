@@ -1469,7 +1469,7 @@ func _pool_round_ceiling_fixture(at: Vector2, index: int) -> void:
 	housing.set_meta("pool_light_type", "ceiling_disc")
 	var disc: MeshInstance3D = scene.cylinder(
 		Vector3(at.x, ctx.ceiling_height - 0.116, at.y),
-		0.43, 0.025, Mats.pool_daylight(), false)
+		0.43, 0.025, Mats.pool_lamp_diffuser(), false)
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	disc.set_meta("pool_ceiling_fixture_glow", true)
 	disc.set_meta("pool_light_emitter", true)
@@ -1483,16 +1483,23 @@ func _pool_round_ceiling_fixture(at: Vector2, index: int) -> void:
 		for angle in [0.0, TAU / 3.0, TAU * 2.0 / 3.0]:
 			var p := Vector3(cos(angle) * 0.475, -0.112, sin(angle) * 0.475)
 			d.tube(p, p - Vector3(0, 0.008, 0), 0.012, Mats.pool_rail()))
-	var lamp = OmniLight3D.new()
+	var lamp := SpotLight3D.new()
 	lamp.light_color = Color(1.0, 0.975, 0.90)
 	var height_scale := clampf(
 		(ctx.ceiling_height - 5.0) / 7.5, 0.0, 1.0)
-	lamp.light_energy = lerpf(1.58, 2.35, height_scale)
-	lamp.light_volumetric_fog_energy = 1.3
-	lamp.omni_range = maxf(
+	lamp.light_energy = lerpf(1.58, 2.35, height_scale)*1.2
+	lamp.light_volumetric_fog_energy = 0.35
+	lamp.spot_range = maxf(
 		8.2, ctx.ceiling_height - Chunk.POOL_DRY_Y + 1.8)
-	lamp.shadow_enabled = false
-	lamp.position = Vector3(at.x, ctx.ceiling_height - 0.42, at.y)
+	lamp.spot_angle = 80.0
+	lamp.spot_angle_attenuation = 0.65
+	lamp.light_size = 0.16
+	lamp.light_specular = 0.35
+	# The opal disc ends 12.85 cm below the ceiling. Emit out of that face,
+	# rather than throwing a specular streak upward beside an opaque housing.
+	lamp.position = Vector3(at.x, ctx.ceiling_height - 0.16, at.y)
+	lamp.rotation.x = -PI/2.0
+	GraphicsQuality.configure_practical_light(lamp, 1 if index == 0 else 2)
 	lamp.set_meta("pool_direct_light", true)
 	lamp.set_meta("pool_light_pair_id", pair_id)
 	lamp.set_meta("pool_light_type", "ceiling_disc")

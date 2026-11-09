@@ -1,5 +1,7 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
+
 
 func _sch_tiled_room() -> bool:
 	return ctx.style == WorldGen.SCH_BATHROOM
@@ -29,18 +31,18 @@ func _sch_corridor_axis() -> int:
 	return WorldGen.corridor(ctx.world_seed, ctx.cell)
 
 
-## Surface-mounted twin tube: a steel channel with a lens under it. Nothing
-## here casts — the room light would rake the housings into streaks.
-
-
-func _sch_strip(at: Vector3, along_x: bool, ln: float, pmat: Material) -> void:
-	var y = ctx.ceiling_height - 0.06
+## Suspended twin tube with a real upper diffuser: the ceiling receives light
+## from the fitting even when lower quality disables indirect illumination.
+func _sch_strip(at: Vector3, along_x: bool, ln: float,
+		pmat: StandardMaterial3D, dead: bool, shadow_tier: int) -> Array[Light3D]:
 	var body_size = Vector3(ln, 0.09, 0.24) if along_x else Vector3(0.24, 0.09, ln)
-	var housing = scene.box(Vector3(at.x, y, at.z), body_size, Mats.sch_trim(), false)
-	housing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var lens_size = Vector3(ln - 0.12, 0.03, 0.15) if along_x else Vector3(0.15, 0.03, ln - 0.12)
-	var lens = scene.box(Vector3(at.x, y - 0.06, at.z), lens_size, pmat, false)
-	lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var tall := ctx.ceiling_height > 4.5
+	# The upper face is close to the ceiling; bound its overlap independently
+	# of the downward throw that supplies floor illumination and reflections.
+	return FIXTURE_LIGHTING.suspended_strip(scene,at,ctx.ceiling_height,
+		body_size,lens_size,Mats.sch_trim(),pmat,dead,Color(0.94,0.97,1.0),
+		1.5 if tall else 1.15,1.8,11.0 if tall else 8.0,shadow_tier,"school_ceiling_strip",5.0)
 
 
 func _sch_lighting() -> void:
@@ -58,6 +60,7 @@ func _sch_lighting() -> void:
 	else:
 		pmat = Mats.sch_panel()
 	var cdir = _sch_corridor_axis()
+	var lights: Array[Light3D] = []
 	var source := Vector3(3.4, ctx.ceiling_height - 0.5, 3.0)
 	if cdir != 0:
 		# a single line of strips running the length of the passage, which is
@@ -66,34 +69,23 @@ func _sch_lighting() -> void:
 		source = Vector3(6.0, ctx.ceiling_height - 0.5, 6.0)
 		for t in [2.0, 6.0, 10.0]:
 			var at = Vector3(t, 0, WorldGen.CELL_SIZE / 2.0) if along_x else Vector3(WorldGen.CELL_SIZE / 2.0, 0, t)
-			_sch_strip(at, along_x, 2.6, pmat)
+			lights.append_array(_sch_strip(at,along_x,2.6,pmat,dead,1 if t == 6.0 else 4))
 	elif ctx.style == WorldGen.SCH_GYM:
 		source = Vector3(4.0, ctx.ceiling_height - 0.5, 4.0)
 		for gx in [4.0, 12.0, 20.0]:
 			for gz in [4.0, 12.0, 20.0]:
-				_sch_strip(Vector3(gx, 0, gz), true, 3.2, pmat)
+				lights.append_array(_sch_strip(Vector3(gx,0,gz),true,3.2,pmat,dead,
+					1 if gx == 12.0 and gz == 12.0 else 4))
 	else:
 		for gx in [3.4, 8.6]:
 			for gz in [3.0, 9.0]:
-				_sch_strip(Vector3(gx, 0, gz), ctx.random01(60) < 0.5, 2.4, pmat)
+				lights.append_array(_sch_strip(Vector3(gx,0,gz),ctx.random01(60)<0.5,2.4,pmat,dead,
+					1 if gx == 3.4 and gz == 3.0 else (2 if gx == 8.6 and gz == 9.0 else 4)))
 	if dead:
 		return
-	var tall = ctx.ceiling_height > 4.5
-	var light = scene.fixture_light(flicker, pmat, 2.1 if tall else 1.5,
-		source, "school_ceiling_strip")
-	light.light_color = Color(0.94, 0.97, 1.0)
-	light.omni_range = 17.0 if tall else 12.0
-	light.shadow_enabled = true
-	# Several broad fluorescent tubes share this one point light. Fully opaque,
-	# sharp point-light shadows make the wall/ceiling junction go nearly black;
-	# approximate the softer penumbra of the visible diffusers instead.
-	light.shadow_opacity = 0.4
-	light.shadow_blur = 3.0
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 24.0
-	light.distance_fade_length = 8.0
-	light.distance_fade_shadow = 18.0
-	scene.add_node(light)
+	if flicker:
+		FIXTURE_LIGHTING.ballast(scene,lights,pmat,
+			WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),source)
 
 
 ## The architectural contract for one side of a school hall. Coordinates are

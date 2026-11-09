@@ -108,6 +108,7 @@ AUDITS=(
 	"airport_colliders|tools/audit_airport_colliders.gd|"
 	"airport_ceiling_grid|tools/audit_airport_ceiling_grid.gd|"
 	"office_ceiling_grid|tools/audit_office_ceiling_grid.gd|"
+	"office_shadow_batch|tools/audit_office_shadow_batch.gd|"
 	"office_wall_joints|tools/audit_office_wall_joints.gd|"
 	"airport_passages|tools/audit_airport_passages.gd|"
 	"wall_art|tools/audit_wall_art.gd|"
@@ -129,6 +130,7 @@ AUDITS=(
 	"recording_replay|tools/audit_recording_replay.gd|--mode=descent --nologo"
 	"game_settings|tools/audit_game_settings.gd|"
 	"graphics_quality|tools/audit_graphics_quality.gd|--nologo"
+	"video_quality|tools/audit_video_quality.gd|--nologo"
 	"handheld_camera|tools/audit_handheld_camera.gd|"
 	"hdr_output|tools/audit_hdr_output.gd|"
 	"vhs_calendar|tools/audit_vhs_calendar.gd|"
@@ -137,17 +139,24 @@ AUDITS=(
 	"comfort_runtime|tools/audit_comfort_runtime.gd|--mode=descent --nologo"
 	"casino_landmarks|tools/audit_casino_landmarks.gd|"
 	"intro_playback|tools/audit_intro_playback.gd|"
+	"descent_outro|tools/audit_descent_outro.gd|--mode=descent --descent-floor=11 --nologo --test-mode"
 	"story_subtitles|tools/audit_story_subtitles.gd|"
+	"localization|tools/audit_localization.gd|"
 	"video_replay_skip|tools/audit_video_replay_skip.gd|"
 	"cross_video_review|tools/audit_cross_video_review.gd|"
 	"descent_ritual|tools/audit_descent_ritual.gd|"
 	"optional_vhs|tools/audit_optional_vhs.gd|"
 	"post_process|tools/audit_post_process.gd|"
+	"ntscrt_receiver|tools/audit_ntscrt_receiver.gd|"
+	"ntscrt_integration|tools/audit_ntscrt_integration.gd|--nologo"
+	"ntscrt_full_controls|tools/audit_ntscrt_full_controls.gd|"
+	"ntscrt_preview_scaler|tools/audit_ntscrt_preview_scaler.gd|"
 	"reality_aftershock|tools/audit_reality_aftershock.gd|"
 	"reality_approach|tools/audit_reality_approach.gd|"
 	"surface_wear|tools/audit_surface_wear.gd|"
 	"render_resource_cache|tools/audit_render_resource_cache.gd|"
 	"floor_resource_preloader|tools/audit_floor_resource_preloader.gd|"
+	"runtime_diagnostics|tools/audit_runtime_diagnostics.gd|"
 	"floor_resource_lifetime|tools/audit_floor_resource_lifetime.gd|"
 	"incremental_streaming|tools/audit_incremental_streaming.gd|"
 	"light_distance|tools/audit_light_distance.gd|"
@@ -317,10 +326,10 @@ run_one() {
 	# quit(), so it idles forever instead of failing. Cap every audit.
 	if [ -n "$extra" ]; then
 		# shellcheck disable=SC2086
-		$GODOT --headless --log-file "$LOGDIR/$name-godot.log" \
+		LIMINAL_DIAGNOSTICS_LOG="$LOGDIR/$name-performance.jsonl" $GODOT --headless --log-file "$LOGDIR/$name-godot.log" \
 			--path . --script "$script" -- $extra >"$log" 2>&1 &
 	else
-		$GODOT --headless --log-file "$LOGDIR/$name-godot.log" \
+		LIMINAL_DIAGNOSTICS_LOG="$LOGDIR/$name-performance.jsonl" $GODOT --headless --log-file "$LOGDIR/$name-godot.log" \
 			--path . --script "$script" >"$log" 2>&1 &
 	fi
 	local pid=$!

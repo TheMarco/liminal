@@ -1,0 +1,4417 @@
+{
+  "FLASH CAPTURED — SURVIVE TO KEEP IT": [
+    "scripts/realm_flash_bounty.gd:323"
+  ],
+  "A floating lightning bolt made of glowing blue-violet glyphs. Its photograph can hold one emergency flash.": [
+    "scripts/realm_flash_bounty.gd:327"
+  ],
+  "PROGRESS NOT SAVED — CHECK DISK/PERMISSIONS": [
+    "scripts/save_failure_notice.gd:41"
+  ],
+  "SETTINGS NOT SAVED — THIS SESSION ONLY": [
+    "scripts/save_failure_notice.gd:43"
+  ],
+  "PHOTO NOT SAVED — CHECK DISK/PERMISSIONS": [
+    "scripts/save_failure_notice.gd:45"
+  ],
+  "WATCH HISTORY NOT SAVED — WILL RETRY": [
+    "scripts/save_failure_notice.gd:47"
+  ],
+  "STAY": [
+    "scripts/photo_anomaly.gd:81"
+  ],
+  "DON'T LEAVE": [
+    "scripts/photo_anomaly.gd:82"
+  ],
+  "IT SEES YOU": [
+    "scripts/photo_anomaly.gd:83"
+  ],
+  "KEEP WALKING": [
+    "scripts/photo_anomaly.gd:84"
+  ],
+  "NOT ALONE": [
+    "scripts/photo_anomaly.gd:85"
+  ],
+  "YOU SHOULDN'T BE HERE": [
+    "scripts/photo_anomaly.gd:86"
+  ],
+  "IT'S CLOSER": [
+    "scripts/photo_anomaly.gd:87"
+  ],
+  "LET ME IN": [
+    "scripts/photo_anomaly.gd:88"
+  ],
+  "DON'T TURN AROUND": [
+    "scripts/photo_anomaly.gd:89"
+  ],
+  "WE CAN HEAR YOU": [
+    "scripts/photo_anomaly.gd:90"
+  ],
+  "THERE IS NO EXIT": [
+    "scripts/photo_anomaly.gd:91"
+  ],
+  "STOP TAKING PICTURES": [
+    "scripts/photo_anomaly.gd:92"
+  ],
+  "YOU'RE STILL HERE": [
+    "scripts/photo_anomaly.gd:93"
+  ],
+  "WE COUNTED YOU": [
+    "scripts/photo_anomaly.gd:94"
+  ],
+  "YOU WERE FASTER YESTERDAY": [
+    "scripts/photo_anomaly.gd:95"
+  ],
+  "THE LIGHTS ARE FOR YOU": [
+    "scripts/photo_anomaly.gd:96"
+  ],
+  "IT LEARNED YOUR NAME": [
+    "scripts/photo_anomaly.gd:97"
+  ],
+  "PUT THE CAMERA DOWN": [
+    "scripts/photo_anomaly.gd:98"
+  ],
+  "THIS ONE IS OF YOU": [
+    "scripts/photo_anomaly.gd:99"
+  ],
+  "SMILE": [
+    "scripts/photo_anomaly.gd:100"
+  ],
+  "WE DEVELOP AT NIGHT": [
+    "scripts/photo_anomaly.gd:101"
+  ],
+  "THE FILM REMEMBERS": [
+    "scripts/photo_anomaly.gd:102"
+  ],
+  "YOU BLINKED": [
+    "scripts/photo_anomaly.gd:103"
+  ],
+  "BEHIND THE WALLPAPER": [
+    "scripts/photo_anomaly.gd:104"
+  ],
+  "UNDER THE CARPET TOO": [
+    "scripts/photo_anomaly.gd:105"
+  ],
+  "THE FLOOR BELOW IS AWAKE": [
+    "scripts/photo_anomaly.gd:106"
+  ],
+  "IT RIDES THE LIFT WITH YOU": [
+    "scripts/photo_anomaly.gd:107"
+  ],
+  "THE LIFT GOES ONE WAY": [
+    "scripts/photo_anomaly.gd:108"
+  ],
+  "DEEPER": [
+    "scripts/photo_anomaly.gd:109"
+  ],
+  "ALMOST DOWN": [
+    "scripts/photo_anomaly.gd:110"
+  ],
+  "YOU LIVE HERE NOW": [
+    "scripts/photo_anomaly.gd:111"
+  ],
+  "THE DOORS MOVE WHEN IT'S DARK": [
+    "scripts/photo_anomaly.gd:112"
+  ],
+  "HOLD STILL LONGER": [
+    "scripts/photo_anomaly.gd:113"
+  ],
+  "IT PRACTISES STANDING STILL": [
+    "scripts/photo_anomaly.gd:114"
+  ],
+  "DON'T FEED THE METER": [
+    "scripts/photo_anomaly.gd:115"
+  ],
+  "THE TAPES LIE": [
+    "scripts/photo_anomaly.gd:116"
+  ],
+  "WATCH THE CORNERS": [
+    "scripts/photo_anomaly.gd:117"
+  ],
+  "IT WEARS THE ROOMS": [
+    "scripts/photo_anomaly.gd:118"
+  ],
+  "NOT THAT DOOR": [
+    "scripts/photo_anomaly.gd:119"
+  ],
+  "WRONG WAY": [
+    "scripts/photo_anomaly.gd:120"
+  ],
+  "TURN BACK": [
+    "scripts/photo_anomaly.gd:121"
+  ],
+  "TOO LATE FOR THAT": [
+    "scripts/photo_anomaly.gd:122"
+  ],
+  "WHO TOLD YOU TO LOOK": [
+    "scripts/photo_anomaly.gd:123"
+  ],
+  "YOU FOUND THE WRONG ONES": [
+    "scripts/photo_anomaly.gd:124"
+  ],
+  "THERE ARE MORE OF US": [
+    "scripts/photo_anomaly.gd:125"
+  ],
+  "ONE OF THESE ROOMS IS YOURS": [
+    "scripts/photo_anomaly.gd:126"
+  ],
+  "IT SAVED YOU A SEAT": [
+    "scripts/photo_anomaly.gd:127"
+  ],
+  "THE EXIT MOVED": [
+    "scripts/photo_anomaly.gd:128"
+  ],
+  "ASK THE STATIC": [
+    "scripts/photo_anomaly.gd:129"
+  ],
+  "IT HEARD THE SHUTTER": [
+    "scripts/photo_anomaly.gd:130"
+  ],
+  "THAT ROOM DOES NOT BELONG HERE": [
+    "scripts/photo_anomaly.gd:349"
+  ],
+  "THERE WAS NO DOOR HERE": [
+    "scripts/photo_anomaly.gd:354"
+  ],
+  "THE FILM SAYS 106": [
+    "scripts/photo_anomaly.gd:356"
+  ],
+  "THE CAMERA SAYS IT IS NOT THERE": [
+    "scripts/photo_anomaly.gd:358"
+  ],
+  "THAT IS NOT WHAT'S BEHIND THIS WALL": [
+    "scripts/photo_anomaly.gd:360"
+  ],
+  "\"%s\" — ONLY THE CAMERA SEES IT": [
+    "scripts/photo_anomaly.gd:362"
+  ],
+  "THE CEILING IS HOLDING IT": [
+    "scripts/photo_anomaly.gd:365"
+  ],
+  "TWO, WHEN YOU AREN'T LOOKING": [
+    "scripts/photo_anomaly.gd:369"
+  ],
+  "IT SHOULD NOT FIT IN HERE": [
+    "scripts/photo_anomaly.gd:371"
+  ],
+  "IT TURNED FOR THE PICTURE": [
+    "scripts/photo_anomaly.gd:373"
+  ],
+  "THEY MEET WHEN THE ROOM IS EMPTY": [
+    "scripts/photo_anomaly.gd:375"
+  ],
+  "IT BELONGS TO THE FLOOR BELOW": [
+    "scripts/photo_anomaly.gd:379"
+  ],
+  "A doorway into %s, inside another floor.": [
+    "scripts/photo_anomaly.gd:387"
+  ],
+  "Writing visible only through the camera: \"%s\".": [
+    "scripts/photo_anomaly.gd:392"
+  ],
+  "Door 106. It read 104 before the first photograph.": [
+    "scripts/photo_anomaly.gd:394"
+  ],
+  "The camera shows 106; the door reads 104.": [
+    "scripts/photo_anomaly.gd:395"
+  ],
+  "A passage opened by an earlier photograph.": [
+    "scripts/photo_anomaly.gd:397"
+  ],
+  "A doorway visible only through the camera.": [
+    "scripts/photo_anomaly.gd:398"
+  ],
+  "An object lodged in the ceiling, still visible through the camera.": [
+    "scripts/photo_anomaly.gd:400"
+  ],
+  "Two identical objects in a space that looks empty without the camera.": [
+    "scripts/photo_anomaly.gd:402"
+  ],
+  "An object that turns to face the camera.": [
+    "scripts/photo_anomaly.gd:404"
+  ],
+  "A piece of furniture far larger than it should be.": [
+    "scripts/photo_anomaly.gd:406"
+  ],
+  "A circle of objects visible only through the camera.": [
+    "scripts/photo_anomaly.gd:408"
+  ],
+  "An object visible to the eye is missing from this photograph.": [
+    "scripts/photo_anomaly.gd:410"
+  ],
+  "A view through the wall into another place.": [
+    "scripts/photo_anomaly.gd:412"
+  ],
+  "An object from the floor below, out of place here.": [
+    "scripts/photo_anomaly.gd:414"
+  ],
+  "An unusual detail in the building.": [
+    "scripts/photo_anomaly.gd:415"
+  ],
+  "E — CHARGE FLASHLIGHT": [
+    "scripts/charging_station.gd:63",
+    "scripts/charging_station.gd:199"
+  ],
+  "OUT OF ORDER": [
+    "scripts/charging_station.gd:180",
+    "scripts/charging_station.gd:191"
+  ],
+  "E — STOP CHARGING": [
+    "scripts/charging_station.gd:198"
+  ],
+  "FLASHLIGHT FULL": [
+    "scripts/charging_station.gd:199"
+  ],
+  "THE POWER DIPS": [
+    "scripts/environment_events.gd:53",
+    "scripts/main.gd:3039"
+  ],
+  "THREE KNOCKS FROM BEHIND THE WALL": [
+    "scripts/environment_events.gd:56"
+  ],
+  "THE TERMINAL REQUESTS MORE POWER": [
+    "scripts/environment_events.gd:61"
+  ],
+  "Visual Effects": [
+    "scripts/pause_menu.gd:92",
+    "scripts/pause_menu.gd:219"
+  ],
+  "Automatic (graphics quality)": [
+    "scripts/pause_menu.gd:106"
+  ],
+  "For slower GPUs. Up to 480p, simple shadows and lighter tape/TV processing. Menus stay sharp.": [
+    "scripts/pause_menu.gd:153"
+  ],
+  "Balanced performance. Up to 720p, soft shadows, bounce lighting, reflections and atmospheric haze.": [
+    "scripts/pause_menu.gd:154"
+  ],
+  "Sharper detail. Up to 1080p, finer shadows and contact shading, plus finer tape/TV detail.": [
+    "scripts/pause_menu.gd:155"
+  ],
+  "Richest lighting. Up to 1440p, finest shadows, full reflections and fog. Full-resolution TV output remains demanding.": [
+    "scripts/pause_menu.gd:156"
+  ],
+  "Custom rendering options. Select a preset to replace these graphics choices.": [
+    "scripts/pause_menu.gd:157"
+  ],
+  "SETTINGS": [
+    "scripts/pause_menu.gd:184",
+    "scripts/title.gd:216"
+  ],
+  "OPTIONS": [
+    "scripts/pause_menu.gd:187"
+  ],
+  "GAME PAUSED": [
+    "scripts/pause_menu.gd:187"
+  ],
+  "APPLIED LIVE · SAVED WHEN YOU CLOSE · ESC TO GO BACK": [
+    "scripts/pause_menu.gd:224"
+  ],
+  "Reset defaults": [
+    "scripts/pause_menu.gd:234"
+  ],
+  "Return to title": [
+    "scripts/pause_menu.gd:237"
+  ],
+  "Quality preset": [
+    "scripts/pause_menu.gd:275"
+  ],
+  "3D resolution": [
+    "scripts/pause_menu.gd:285"
+  ],
+  "Limits world resolution; menus stay sharp. Higher values cost more GPU time.": [
+    "scripts/pause_menu.gd:285",
+    "scripts/pause_menu.gd:781"
+  ],
+  "Advanced rendering  +": [
+    "scripts/pause_menu.gd:286",
+    "scripts/pause_menu.gd:289"
+  ],
+  "Advanced rendering  −": [
+    "scripts/pause_menu.gd:289"
+  ],
+  "Smooths edges. TAA can soften motion; MSAA costs additional GPU memory.": [
+    "scripts/pause_menu.gd:294"
+  ],
+  "Shadow quality": [
+    "scripts/pause_menu.gd:295"
+  ],
+  "Resolution and softness of real-time shadows.": [
+    "scripts/pause_menu.gd:295"
+  ],
+  "Bounce lighting": [
+    "scripts/pause_menu.gd:296"
+  ],
+  "Indirect light and colour bleed. Turning this off reduces work when entering new rooms.": [
+    "scripts/pause_menu.gd:296"
+  ],
+  "Contact shading": [
+    "scripts/pause_menu.gd:297"
+  ],
+  "Adds depth where surfaces meet.": [
+    "scripts/pause_menu.gd:297"
+  ],
+  "Screen reflections": [
+    "scripts/pause_menu.gd:298"
+  ],
+  "Reflections of visible surfaces; static water reflections remain available.": [
+    "scripts/pause_menu.gd:298"
+  ],
+  "Volumetric fog": [
+    "scripts/pause_menu.gd:299"
+  ],
+  "Light shafts and lit haze. Distance fog remains in every mode.": [
+    "scripts/pause_menu.gd:299"
+  ],
+  "FULLSCREEN": [
+    "scripts/pause_menu.gd:304"
+  ],
+  "VERTICAL SYNC": [
+    "scripts/pause_menu.gd:304"
+  ],
+  "Synchronizes frames with the display to prevent tearing.": [
+    "scripts/pause_menu.gd:309"
+  ],
+  "Frame limit": [
+    "scripts/pause_menu.gd:310"
+  ],
+  "A cap reduces GPU load, heat and power use. Independent of the quality preset.": [
+    "scripts/pause_menu.gd:310"
+  ],
+  "SHOW FPS COUNTER": [
+    "scripts/pause_menu.gd:311"
+  ],
+  "Shows rendered frames per second and average frame time in milliseconds. Updates twice a second; stays readable over video effects.": [
+    "scripts/pause_menu.gd:312"
+  ],
+  "HDR calibration  +": [
+    "scripts/pause_menu.gd:313",
+    "scripts/pause_menu.gd:316"
+  ],
+  "HDR calibration  −": [
+    "scripts/pause_menu.gd:316"
+  ],
+  "HDR OUTPUT": [
+    "scripts/pause_menu.gd:321"
+  ],
+  "Uses HDR on supported HDR/XDR displays; other displays use SDR.": [
+    "scripts/pause_menu.gd:322"
+  ],
+  "Recording look": [
+    "scripts/pause_menu.gd:328"
+  ],
+  "Current custom look": [
+    "scripts/pause_menu.gd:336"
+  ],
+  "Start with a preset, then adjust the controls below. Choosing another preset replaces those adjustments. Clean reference removes all video effects.": [
+    "scripts/pause_menu.gd:343"
+  ],
+  "Detailed tuning": [
+    "scripts/pause_menu.gd:345"
+  ],
+  "Preview & fine-tune looks…": [
+    "scripts/pause_menu.gd:347"
+  ],
+  "Compare looks in this room, adjust a favorite or save your own preset.": [
+    "scripts/pause_menu.gd:349"
+  ],
+  "Live preview and detailed signal / CRT tuning are available from the pause menu during gameplay.": [
+    "scripts/pause_menu.gd:351"
+  ],
+  "VHS EFFECT": [
+    "scripts/pause_menu.gd:359"
+  ],
+  "Switch tape processing on or off without replacing its settings. Grain and CRT playback stay independent.": [
+    "scripts/pause_menu.gd:360"
+  ],
+  "CRT SCREEN": [
+    "scripts/pause_menu.gd:364"
+  ],
+  "Switch CRT playback on or off while keeping the chosen model and its tuning.": [
+    "scripts/pause_menu.gd:365"
+  ],
+  "CRT model": [
+    "scripts/pause_menu.gd:366",
+    "scripts/video_preset_workshop_panel.gd:165"
+  ],
+  "Choose a screen independently of the recording. Automatic follows graphics quality. Each model keeps its own tuning; detailed controls are available in the live preview.": [
+    "scripts/pause_menu.gd:366"
+  ],
+  "Mouse & movement": [
+    "scripts/pause_menu.gd:485"
+  ],
+  "INVERT Y LOOK": [
+    "scripts/pause_menu.gd:487"
+  ],
+  "TOGGLE SPRINT": [
+    "scripts/pause_menu.gd:488"
+  ],
+  "Balance music, environmental sounds and spoken recordings separately.": [
+    "scripts/pause_menu.gd:492"
+  ],
+  "Camera comfort": [
+    "scripts/pause_menu.gd:497"
+  ],
+  "HANDHELD CAMERA": [
+    "scripts/pause_menu.gd:500"
+  ],
+  "Smooth found-footage drift and stronger motion during scares.": [
+    "scripts/pause_menu.gd:501"
+  ],
+  "Readability & assistance": [
+    "scripts/pause_menu.gd:503"
+  ],
+  "REDUCE FLASHING": [
+    "scripts/pause_menu.gd:504"
+  ],
+  "STORY SUBTITLES": [
+    "scripts/pause_menu.gd:505"
+  ],
+  "Spoken recording dialogue, synchronized to playback.": [
+    "scripts/pause_menu.gd:506"
+  ],
+  "EXPLAIN CAUSE OF DEATH": [
+    "scripts/pause_menu.gd:507"
+  ],
+  "MOUSE SENSITIVITY": [
+    "scripts/pause_menu.gd:562"
+  ],
+  "TAPE DAMAGE": [
+    "scripts/pause_menu.gd:563"
+  ],
+  "GRAIN": [
+    "scripts/pause_menu.gd:564"
+  ],
+  "HANDHELD STRENGTH": [
+    "scripts/pause_menu.gd:565"
+  ],
+  "Tap %s to sprint; tap again or stop moving to walk. Pausing and exhaustion reset the toggle.": [
+    "scripts/pause_menu.gd:601"
+  ],
+  "KEY BINDINGS": [
+    "scripts/pause_menu.gd:604",
+    "scripts/pause_menu.gd:605"
+  ],
+  "ARROWS ALSO WALK · RIGHT CLICK RAISES THE CAMERA · LEFT CLICK TAKES THE PHOTO · ESC IS FIXED": [
+    "scripts/pause_menu.gd:608"
+  ],
+  "PRESS KEY...": [
+    "scripts/pause_menu.gd:640"
+  ],
+  "PRESS A KEY FOR %s · ESC CANCELS": [
+    "scripts/pause_menu.gd:649"
+  ],
+  "REBIND CANCELLED": [
+    "scripts/pause_menu.gd:669"
+  ],
+  "RESET DEFAULTS?": [
+    "scripts/pause_menu.gd:717"
+  ],
+  "ALL SETTINGS WILL RETURN TO THEIR DEFAULT VALUES.": [
+    "scripts/pause_menu.gd:718"
+  ],
+  "DEFAULTS RESTORED": [
+    "scripts/pause_menu.gd:726"
+  ],
+  "Tape and CRT effects limit world resolution to %s to save GPU work. Lower graphics presets stay lower. Turn both off to use your saved %s resolution; menus stay sharp.": [
+    "scripts/pause_menu.gd:779"
+  ],
+  " for this look": [
+    "scripts/pause_menu.gd:787"
+  ],
+  "Native resolution": [
+    "scripts/pause_menu.gd:788"
+  ],
+  " This look uses %s.": [
+    "scripts/pause_menu.gd:793"
+  ],
+  "Your custom settings are active. Adjust them below, or choose a preset to start over.": [
+    "scripts/pause_menu.gd:815"
+  ],
+  "the casino": [
+    "scripts/descent_run.gd:49"
+  ],
+  "the office": [
+    "scripts/descent_run.gd:49"
+  ],
+  "the Annex": [
+    "scripts/descent_run.gd:49"
+  ],
+  "the airport": [
+    "scripts/descent_run.gd:49"
+  ],
+  "the asylum": [
+    "scripts/descent_run.gd:50"
+  ],
+  "the school": [
+    "scripts/descent_run.gd:50"
+  ],
+  "the mall": [
+    "scripts/descent_run.gd:50"
+  ],
+  "the prison": [
+    "scripts/descent_run.gd:50"
+  ],
+  "the Poolrooms": [
+    "scripts/descent_run.gd:51"
+  ],
+  "the Data Center": [
+    "scripts/descent_run.gd:51"
+  ],
+  "the Upside Down": [
+    "scripts/descent_run.gd:51"
+  ],
+  "IT HAS YOU NOW.\nKEEP DISTANCE AND USE THE TORCH.": [
+    "scripts/descent_run.gd:303"
+  ],
+  "MOVEMENT DURING THE BLACKOUT GAVE YOU AWAY.": [
+    "scripts/descent_run.gd:304"
+  ],
+  "Run  ·  Draws attention in Descent": [
+    "scripts/title.gd:35"
+  ],
+  "Use terminals, lifts, doors and charging stations": [
+    "scripts/title.gd:36"
+  ],
+  "Toggle the flashlight": [
+    "scripts/title.gd:37"
+  ],
+  "Raise camera  /  Take photograph  /  Photo album": [
+    "scripts/title.gd:39"
+  ],
+  "Move between the original floors  ·  Wander only": [
+    "scripts/title.gd:40"
+  ],
+  "Enter the Data Center  ·  Wander only": [
+    "scripts/title.gd:41"
+  ],
+  "Enter the Bloom  ·  Wander only": [
+    "scripts/title.gd:42"
+  ],
+  "Ask to leave the current mode": [
+    "scripts/title.gd:43"
+  ],
+  "Pause / settings": [
+    "scripts/title.gd:44"
+  ],
+  "3D MODEL CREATORS": [
+    "scripts/title.gd:49"
+  ],
+  "SURFACES & TYPE": [
+    "scripts/title.gd:72"
+  ],
+  "CHECKPOINT  /  FLOOR %02d  /  %s": [
+    "scripts/title.gd:192"
+  ],
+  "SELECT ENTRY": [
+    "scripts/title.gd:194"
+  ],
+  "BACKUP RECOVERED\nYour latest save could not be read.\nContinue uses the last valid checkpoint.": [
+    "scripts/title.gd:200"
+  ],
+  "WANDER": [
+    "scripts/title.gd:204"
+  ],
+  "CONTINUE F%02d": [
+    "scripts/title.gd:206"
+  ],
+  "RESTART DESCENT": [
+    "scripts/title.gd:209"
+  ],
+  "NEW DESCENT": [
+    "scripts/title.gd:211"
+  ],
+  "DESCENT": [
+    "scripts/title.gd:214",
+    "scripts/title.gd:353"
+  ],
+  "INSTRUCTIONS": [
+    "scripts/title.gd:218",
+    "scripts/title.gd:230"
+  ],
+  "ABOUT": [
+    "scripts/title.gd:220",
+    "scripts/title.gd:274"
+  ],
+  "CREDITS": [
+    "scripts/title.gd:222",
+    "scripts/title.gd:324"
+  ],
+  "QUIT": [
+    "scripts/title.gd:224"
+  ],
+  "THE BUILDING WILL NOT EXPLAIN ITSELF TWICE": [
+    "scripts/title.gd:230"
+  ],
+  "Move the mouse to look. The flashlight burns back what should not be there.": [
+    "scripts/title.gd:264"
+  ],
+  "A HORROR GAME ABOUT A BUILDING THAT REFUSES TO LET GO": [
+    "scripts/title.gd:275"
+  ],
+  "IT WANTS YOU TO STAY": [
+    "scripts/title.gd:277"
+  ],
+  "DESCENT  /  THE STORY        WANDER  /  THE ENDLESS BUILDING": [
+    "scripts/title.gd:288"
+  ],
+  "CREATED AND AUTHORED BY": [
+    "scripts/title.gd:296"
+  ],
+  "CREATOR ACKNOWLEDGEMENTS  /  CREDITS": [
+    "scripts/title.gd:315"
+  ],
+  "3D MODEL & ASSET CREATOR ACKNOWLEDGEMENTS": [
+    "scripts/title.gd:324"
+  ],
+  "FULL TITLES, LINKS, LICENSES & MODIFICATIONS  /  THIRD_PARTY_ASSETS.md": [
+    "scripts/title.gd:339"
+  ],
+  "THE BUILDING HAS ONE RULE": [
+    "scripts/title.gd:353"
+  ],
+  "WHEN THE LIGHTS FAIL, STAND STILL": [
+    "scripts/title.gd:356"
+  ],
+  "AND ONE THING THAT IS NOT A RULE": [
+    "scripts/title.gd:365"
+  ],
+  "WHAT REACHES YOU TAKES YOU  —  BURN IT WITH THE TORCH": [
+    "scripts/title.gd:369"
+  ],
+  "PREPARING THE FIRST FLOOR": [
+    "scripts/title.gd:374"
+  ],
+  "PREPARING FLOOR %02d  —  %s": [
+    "scripts/title.gd:376"
+  ],
+  "RESETTING EVERYTHING  —  PREPARING FLOOR 01": [
+    "scripts/title.gd:379"
+  ],
+  "CONTINUE": [
+    "scripts/title.gd:384"
+  ],
+  "DESCEND": [
+    "scripts/title.gd:384"
+  ],
+  "IT WANTS YOU TO STAY  /  RECOVERED ARCHIVE": [
+    "scripts/title.gd:396"
+  ],
+  "RETURN TO TITLE": [
+    "scripts/title.gd:414",
+    "scripts/game_input.gd:45"
+  ],
+  "REPLACE THIS DESCENT?": [
+    "scripts/title.gd:700"
+  ],
+  "YOUR FLOOR %02d CHECKPOINT AND RUN PROGRESS WILL BE REPLACED.\n%s": [
+    "scripts/title.gd:702"
+  ],
+  "START AGAIN IN A NEW BUILDING?": [
+    "scripts/title.gd:703"
+  ],
+  "START AGAIN FROM FLOOR 01?": [
+    "scripts/title.gd:704"
+  ],
+  "RETURN ALIVE TO KEEP THE FLASH": [
+    "scripts/realm_excursion.gd:273"
+  ],
+  "PHOTOGRAPH THE BOLT (%s + %s) — SURVIVE TO KEEP ITS FLASH": [
+    "scripts/realm_excursion.gd:673"
+  ],
+  "THIS PLACE IS NOT HOLDING": [
+    "scripts/realm_excursion.gd:675"
+  ],
+  "FLASH LOST — DID NOT RETURN ALIVE": [
+    "scripts/realm_excursion.gd:777"
+  ],
+  "THE DOOR CLOSES — THE FLASH IS LOST": [
+    "scripts/realm_excursion.gd:778"
+  ],
+  "THE DOOR CLOSES — ONE CHANCE": [
+    "scripts/realm_excursion.gd:779"
+  ],
+  "FLASH STORED — IT WILL KILL THE ATTACKER THAT CATCHES YOU": [
+    "scripts/realm_excursion.gd:782"
+  ],
+  "FLASH ALREADY STORED": [
+    "scripts/realm_excursion.gd:785"
+  ],
+  "FLASH LOST — LEFT TOO SOON": [
+    "scripts/realm_excursion.gd:785"
+  ],
+  "ONLY THIS ROOM REMAINS": [
+    "scripts/realm_excursion.gd:786"
+  ],
+  "Home video": [
+    "scripts/game_settings.gd:357",
+    "scripts/game_settings.gd:365",
+    "scripts/game_settings.gd:503"
+  ],
+  "Worn tape": [
+    "scripts/game_settings.gd:357",
+    "scripts/game_settings.gd:365",
+    "scripts/game_settings.gd:503"
+  ],
+  "No tape effects": [
+    "scripts/game_settings.gd:358",
+    "scripts/game_settings.gd:366"
+  ],
+  "Tape on an old TV": [
+    "scripts/game_settings.gd:358"
+  ],
+  "Subtle tape wear": [
+    "scripts/game_settings.gd:358",
+    "scripts/game_settings.gd:366"
+  ],
+  "Heavy tape damage": [
+    "scripts/game_settings.gd:358",
+    "scripts/game_settings.gd:366"
+  ],
+  "A clear picture with no tape damage or TV screen effects.": [
+    "scripts/game_settings.gd:360"
+  ],
+  "A soft, grainy home movie with the screen lines and glow of an old television.": [
+    "scripts/game_settings.gd:361"
+  ],
+  "Soft colour and subtle tape wear, like a recovered camcorder recording.": [
+    "scripts/game_settings.gd:362"
+  ],
+  "A damaged recording with more wobble, streaks and colour noise.": [
+    "scripts/game_settings.gd:363",
+    "scripts/game_settings.gd:371"
+  ],
+  "Soft and grainy": [
+    "scripts/game_settings.gd:366"
+  ],
+  "A clear recording with no tape softness, grain or damage.": [
+    "scripts/game_settings.gd:368"
+  ],
+  "A soft, grainy home movie with gentle tape wear.": [
+    "scripts/game_settings.gd:369"
+  ],
+  "Soft colour and subtle wear, like a recovered camcorder recording.": [
+    "scripts/game_settings.gd:370"
+  ],
+  "Clean transfer": [
+    "scripts/game_settings.gd:503"
+  ],
+  "Bad reception": [
+    "scripts/game_settings.gd:503"
+  ],
+  "RETURN TO TITLE?": [
+    "scripts/return_prompt.gd:36"
+  ],
+  "YOU CAN CONTINUE FROM YOUR DEEPEST FLOOR": [
+    "scripts/return_prompt.gd:42"
+  ],
+  "YOU WILL RETURN TO THE CASINO": [
+    "scripts/return_prompt.gd:43"
+  ],
+  "Y — YES": [
+    "scripts/return_prompt.gd:50"
+  ],
+  "N / ESC — NO": [
+    "scripts/return_prompt.gd:51"
+  ],
+  "PHOTOGRAPHS": [
+    "scripts/photo_album.gd:51"
+  ],
+  "PIN TO COMPARE": [
+    "scripts/photo_album.gd:59",
+    "scripts/photo_album.gd:182"
+  ],
+  "FIT": [
+    "scripts/photo_album.gd:61",
+    "scripts/photo_album.gd:188"
+  ],
+  "WHEEL / + − ZOOM  ·  DRAG / WASD PAN  ·  0 FIT  ·  TAB SELECTS PHOTO": [
+    "scripts/photo_album.gd:91"
+  ],
+  "← PREVIOUS": [
+    "scripts/photo_album.gd:107"
+  ],
+  "NEXT →": [
+    "scripts/photo_album.gd:108"
+  ],
+  "SAVE PHOTOGRAPH": [
+    "scripts/photo_album.gd:109"
+  ],
+  "CLOSE · %s / ESC": [
+    "scripts/photo_album.gd:110"
+  ],
+  "PINNED · PHOTO %02d": [
+    "scripts/photo_album.gd:176"
+  ],
+  "UNPIN %02d": [
+    "scripts/photo_album.gd:182"
+  ],
+  "NO PHOTOGRAPHS": [
+    "scripts/photo_album.gd:201"
+  ],
+  "PHOTO %02d": [
+    "scripts/photo_album.gd:207"
+  ],
+  "PHOTOGRAPH": [
+    "scripts/photo_album.gd:207"
+  ],
+  "Your album is empty.\n%s raises the camera. %s takes a photograph.": [
+    "scripts/photo_album.gd:211"
+  ],
+  "This photograph could not be loaded.": [
+    "scripts/photo_album.gd:213"
+  ],
+  "Every photograph you take is kept here.": [
+    "scripts/photo_album.gd:214"
+  ],
+  "FLOOR %s  ·  %s\n%s": [
+    "scripts/photo_album.gd:217"
+  ],
+  "Save photograph": [
+    "scripts/photo_album.gd:248"
+  ],
+  "SAVED — %s": [
+    "scripts/photo_album.gd:268"
+  ],
+  "COULD NOT SAVE PHOTOGRAPH — %s": [
+    "scripts/photo_album.gd:269"
+  ],
+  "PHOTOGRAPH WHAT IS WRONG": [
+    "scripts/main.gd:467"
+  ],
+  "QUIT WITHOUT SAVING?": [
+    "scripts/main.gd:963"
+  ],
+  "THE LATEST CHANGES COULD NOT BE SAVED.\nQUIT ANYWAY, OR RETURN AND TRY AGAIN?": [
+    "scripts/main.gd:964"
+  ],
+  "FLOOR %d": [
+    "scripts/main.gd:1242"
+  ],
+  "LIFT CALLED": [
+    "scripts/main.gd:1284"
+  ],
+  "THE TAPE COUNTS THE ROOMS AHEAD": [
+    "scripts/main.gd:1349"
+  ],
+  "PRESS %s TO USE YOUR CAMERA. PRESS %s TO TAKE A PHOTO.": [
+    "scripts/main.gd:1362"
+  ],
+  "THE TELEVISION IS WAITING": [
+    "scripts/main.gd:1383"
+  ],
+  "THE TAPE ENDS": [
+    "scripts/main.gd:1415"
+  ],
+  "THE STATION IS DEAD": [
+    "scripts/main.gd:1433"
+  ],
+  "THE TAPE WANTS PROOF — PHOTOGRAPH WHAT IS WRONG — %d/%d": [
+    "scripts/main.gd:1455"
+  ],
+  "%s — play the tape": [
+    "scripts/main.gd:1461"
+  ],
+  "PHOTOGRAPHS %d/%d — TAPE LOCKED": [
+    "scripts/main.gd:1462"
+  ],
+  "PHOTOGRAPH %d": [
+    "scripts/main.gd:1475"
+  ],
+  "PHOTOGRAPH %d — %s": [
+    "scripts/main.gd:1477"
+  ],
+  "RAISE THE CAMERA (%s) — SWEEP UNTIL IT FOCUSES": [
+    "scripts/main.gd:1542"
+  ],
+  "THE CALL DIED — THE ROOM WAS LEFT": [
+    "scripts/main.gd:1574"
+  ],
+  "THE LIFT IS HERE": [
+    "scripts/main.gd:1582"
+  ],
+  "FLOOR %d — %s": [
+    "scripts/main.gd:1627",
+    "scripts/main.gd:1652"
+  ],
+  "THE TAPE WANTS PROOF — PHOTOGRAPH AT LEAST %d THINGS THAT ARE WRONG": [
+    "scripts/main.gd:1687"
+  ],
+  "PHOTOGRAPH WHAT IS WRONG — %d TAKEN · MIN %d": [
+    "scripts/main.gd:1690"
+  ],
+  "RULE BROKEN": [
+    "scripts/main.gd:2049"
+  ],
+  "RULE BROKEN — STAND STILL": [
+    "scripts/main.gd:2052"
+  ],
+  "BLACKOUT — STAND STILL · THE TORCH STILL WORKS": [
+    "scripts/main.gd:2084"
+  ],
+  "POWER RESTORED — FOLLOW THE GLOW": [
+    "scripts/main.gd:2101"
+  ],
+  "POWER RESTORED — SOMETHING CHANGED": [
+    "scripts/main.gd:2103"
+  ],
+  "POWER RESTORED": [
+    "scripts/main.gd:2110"
+  ],
+  "IT IS COMING — %s TO BURN IT": [
+    "scripts/main.gd:2180"
+  ],
+  "CHARGER --": [
+    "scripts/main.gd:2846",
+    "scripts/main.gd:2957"
+  ],
+  "SPRINT": [
+    "scripts/main.gd:2853",
+    "scripts/game_input.gd:39"
+  ],
+  "CHARGING · E OR F TO DISCONNECT": [
+    "scripts/main.gd:2867"
+  ],
+  "CHARGING": [
+    "scripts/main.gd:2955"
+  ],
+  "CHARGER %dm": [
+    "scripts/main.gd:2956"
+  ],
+  "FLASH READY": [
+    "scripts/main.gd:2967"
+  ],
+  "FLASH SPENT — SAVED YOU FROM AN ATTACKER": [
+    "scripts/main.gd:2982"
+  ],
+  "SAVED BY THE FLASH": [
+    "scripts/main.gd:2998",
+    "scripts/main.gd:3013"
+  ],
+  "%s — QUERY TERMINAL": [
+    "scripts/main.gd:3040"
+  ],
+  "SKIP ENDING": [
+    "scripts/main.gd:3230"
+  ],
+  "%s toggle sprint": [
+    "scripts/main.gd:3251"
+  ],
+  "%s sprint": [
+    "scripts/main.gd:3251"
+  ],
+  "%s move  ·  %s  ·  %s use  ·  %s torch  ·  %s camera + %s photo  ·  %s album  ·  Esc settings  ·  %s title": [
+    "scripts/main.gd:3260"
+  ],
+  "%s move  ·  %s  ·  %s use  ·  %s torch  ·  1-9 / 0 / − floors  ·  Esc settings  ·  %s title": [
+    "scripts/main.gd:3266"
+  ],
+  "HDR OUTPUT REQUIRES A GODOT 4.7+ BUILD": [
+    "scripts/hdr_output.gd:53"
+  ],
+  "HDR OUTPUT OFF — SDR PRESENTATION": [
+    "scripts/hdr_output.gd:55"
+  ],
+  "HDR REQUESTED — DISPLAY CHECK UNAVAILABLE": [
+    "scripts/hdr_output.gd:57"
+  ],
+  "HDR REQUESTED — CURRENT DISPLAY SERVER USES SDR": [
+    "scripts/hdr_output.gd:59"
+  ],
+  "HDR REQUESTED — CURRENT DISPLAY IS SDR": [
+    "scripts/hdr_output.gd:61"
+  ],
+  "HDR ACTIVE — %.2fx DISPLAY HEADROOM": [
+    "scripts/hdr_output.gd:63"
+  ],
+  "SKIP INTRO": [
+    "scripts/descent_intro.gd:19",
+    "scripts/descent_intro.gd:28"
+  ],
+  "PAUSE": [
+    "scripts/descent_intro.gd:112"
+  ],
+  "open door": [
+    "scripts/shadow_figure.gd:904"
+  ],
+  "The final meeting": [
+    "scripts/route_setpieces.gd:5"
+  ],
+  "The waiting circle": [
+    "scripts/route_setpieces.gd:5"
+  ],
+  "Gate 00": [
+    "scripts/route_setpieces.gd:5"
+  ],
+  "The empty ward": [
+    "scripts/route_setpieces.gd:6"
+  ],
+  "The last class": [
+    "scripts/route_setpieces.gd:6"
+  ],
+  "The closed cinema": [
+    "scripts/route_setpieces.gd:6"
+  ],
+  "Visiting hours": [
+    "scripts/route_setpieces.gd:7"
+  ],
+  "The stopped pool clock": [
+    "scripts/route_setpieces.gd:7"
+  ],
+  "The signal choir": [
+    "scripts/route_setpieces.gd:7"
+  ],
+  "The listening circle": [
+    "scripts/route_setpieces.gd:8"
+  ],
+  "The stopped clock": [
+    "scripts/route_setpieces.gd:9"
+  ],
+  "MEETING IN PROGRESS": [
+    "scripts/route_setpieces.gd:116"
+  ],
+  "GATE 00\nALL DEPARTURES CANCELLED": [
+    "scripts/route_setpieces.gd:140"
+  ],
+  "NO PATIENTS": [
+    "scripts/route_setpieces.gd:146"
+  ],
+  "CLASS DISMISSED": [
+    "scripts/route_setpieces.gd:150"
+  ],
+  "TONIGHT\nNO SCREENING": [
+    "scripts/route_setpieces.gd:153"
+  ],
+  "VISITING HOURS\n00:00 - 00:00": [
+    "scripts/route_setpieces.gd:157"
+  ],
+  "SIGNAL LOST": [
+    "scripts/route_setpieces.gd:166"
+  ],
+  "THE TAPE WANTS PROOF": [
+    "scripts/vhs_ritual.gd:316"
+  ],
+  "%s — SKIP RECORDING  ·  ESC — PAUSE": [
+    "scripts/vhs_ritual.gd:507"
+  ],
+  "%s — STOP AND REWIND  ·  ESC — PAUSE": [
+    "scripts/vhs_ritual.gd:508"
+  ],
+  "%s — %s  ·  ESC — PAUSE": [
+    "scripts/vhs_ritual.gd:530"
+  ],
+  "SKIP RECORDING": [
+    "scripts/vhs_ritual.gd:531"
+  ],
+  "STOP AND REWIND": [
+    "scripts/vhs_ritual.gd:531"
+  ],
+  "E — replay recording": [
+    "scripts/vhs_ritual.gd:687"
+  ],
+  "E — play the tape": [
+    "scripts/vhs_ritual.gd:693"
+  ],
+  "E — interact": [
+    "scripts/interactable.gd:10"
+  ],
+  "FPS · measuring…": [
+    "scripts/fps_counter.gd:47"
+  ],
+  "C O C K T A I L S": [
+    "scripts/chunk.gd:846"
+  ],
+  "C A S H I E R": [
+    "scripts/chunk.gd:847"
+  ],
+  "B U F F E T": [
+    "scripts/chunk.gd:848"
+  ],
+  "K E N O": [
+    "scripts/chunk.gd:849"
+  ],
+  "R O O M S": [
+    "scripts/chunk.gd:850"
+  ],
+  "ACCOUNTS": [
+    "scripts/chunk.gd:852",
+    "scripts/chunk.gd:855"
+  ],
+  "ARCHIVES": [
+    "scripts/chunk.gd:852",
+    "scripts/chunk.gd:856"
+  ],
+  "CONFERENCE B": [
+    "scripts/chunk.gd:852"
+  ],
+  "FACILITIES": [
+    "scripts/chunk.gd:853"
+  ],
+  "HUMAN RESOURCES": [
+    "scripts/chunk.gd:853",
+    "scripts/chunk.gd:857"
+  ],
+  "PROCESSING": [
+    "scripts/chunk.gd:853",
+    "scripts/chunk.gd:855"
+  ],
+  "RECORDS": [
+    "scripts/chunk.gd:853",
+    "scripts/chunk.gd:856",
+    "scripts/chunk.gd:873",
+    "scripts/chunk.gd:8455"
+  ],
+  "SUPPLY": [
+    "scripts/chunk.gd:853"
+  ],
+  "DATA SERVICES": [
+    "scripts/chunk.gd:855"
+  ],
+  "DOCUMENT CONTROL": [
+    "scripts/chunk.gd:856"
+  ],
+  "WELLNESS": [
+    "scripts/chunk.gd:857"
+  ],
+  "BREAK ROOMS": [
+    "scripts/chunk.gd:857"
+  ],
+  "EMPLOYEE 0000\nSTATUS: PRESENT\nSHIFT END: --:--": [
+    "scripts/chunk.gd:860"
+  ],
+  "QUEUE 9 / 9\nPLEASE REMAIN\nAT YOUR STATION": [
+    "scripts/chunk.gd:861"
+  ],
+  "FLOOR PLAN\nROOM NOT FOUND\nRETRYING...": [
+    "scripts/chunk.gd:862"
+  ],
+  "MESSAGE (1)\nFROM: YOURSELF\nDO NOT REPLY": [
+    "scripts/chunk.gd:863"
+  ],
+  "ART": [
+    "scripts/chunk.gd:871",
+    "scripts/chunk.gd:872"
+  ],
+  "SCIENCE": [
+    "scripts/chunk.gd:871"
+  ],
+  "MUSIC": [
+    "scripts/chunk.gd:872"
+  ],
+  "GYM": [
+    "scripts/chunk.gd:872"
+  ],
+  "CAFETERIA": [
+    "scripts/chunk.gd:872"
+  ],
+  "LIBRARY": [
+    "scripts/chunk.gd:872"
+  ],
+  "FACULTY": [
+    "scripts/chunk.gd:873"
+  ],
+  "MAIN OFFICE": [
+    "scripts/chunk.gd:873"
+  ],
+  "COUNSELOR": [
+    "scripts/chunk.gd:873"
+  ],
+  "TODAY: FRIDAY\nTOMORROW: FRIDAY": [
+    "scripts/chunk.gd:876"
+  ],
+  "HOMEWORK\nfinish the corridor": [
+    "scripts/chunk.gd:877"
+  ],
+  "ATTENDANCE\n0 / 0 PRESENT": [
+    "scripts/chunk.gd:878"
+  ],
+  "DO NOT LOOK AT\nTHE BACK ROW": [
+    "scripts/chunk.gd:879"
+  ],
+  "SUBSTITUTE TEACHER\nAGAIN": [
+    "scripts/chunk.gd:880"
+  ],
+  "PERIOD 9\nPERIOD 9\nPERIOD 9": [
+    "scripts/chunk.gd:881"
+  ],
+  "WHO TURNED OFF\nTHE BELL?": [
+    "scripts/chunk.gd:882"
+  ],
+  "READ CHAPTER\nAGAIN": [
+    "scripts/chunk.gd:883"
+  ],
+  "TEST TOMORROW\n(there is no tomorrow)": [
+    "scripts/chunk.gd:884"
+  ],
+  "PLEASE REMAIN\nSEATED UNTIL": [
+    "scripts/chunk.gd:885"
+  ],
+  "IF YOU CAN READ THIS\nYOU ARE STILL HERE": [
+    "scripts/chunk.gd:886"
+  ],
+  "class of\n19__": [
+    "scripts/chunk.gd:887"
+  ],
+  "THE BELL RANG\nAFTER EVERYONE LEFT": [
+    "scripts/chunk.gd:888"
+  ],
+  "DO NOT ERASE\nTHE LAST LINE": [
+    "scripts/chunk.gd:889"
+  ],
+  "WE COUNTED\nONE TOO MANY": [
+    "scripts/chunk.gd:890"
+  ],
+  "TODAY'S LESSON:\nSTAY WHERE YOU ARE": [
+    "scripts/chunk.gd:891"
+  ],
+  "ORCHARD": [
+    "scripts/chunk.gd:893"
+  ],
+  "ARCADE": [
+    "scripts/chunk.gd:893"
+  ],
+  "HOUSE & HOME": [
+    "scripts/chunk.gd:893",
+    "scripts/levels/mall_level_builder.gd:892"
+  ],
+  "PARADE": [
+    "scripts/chunk.gd:893"
+  ],
+  "LEVEL TWO": [
+    "scripts/chunk.gd:894"
+  ],
+  "FOOD GALLERY": [
+    "scripts/chunk.gd:894"
+  ],
+  "CLOSED": [
+    "scripts/chunk.gd:894",
+    "scripts/levels/airport_level_builder.gd:1112"
+  ],
+  "COMING SOON": [
+    "scripts/chunk.gd:894"
+  ],
+  "RADIO HUT": [
+    "scripts/chunk.gd:895"
+  ],
+  "SHOE PALACE": [
+    "scripts/chunk.gd:895"
+  ],
+  "GOLDEN WOK": [
+    "scripts/chunk.gd:895",
+    "scripts/chunk.gd:899"
+  ],
+  "PHOTO 1 HR": [
+    "scripts/chunk.gd:895"
+  ],
+  "CARD & PARTY": [
+    "scripts/chunk.gd:896"
+  ],
+  "PRETZEL TIME": [
+    "scripts/chunk.gd:896",
+    "scripts/chunk.gd:899"
+  ],
+  "BOOKS & CO": [
+    "scripts/chunk.gd:896"
+  ],
+  "FASHION CITY": [
+    "scripts/chunk.gd:896"
+  ],
+  "TOY CHEST": [
+    "scripts/chunk.gd:897"
+  ],
+  "NAILS": [
+    "scripts/chunk.gd:897"
+  ],
+  "OPTICA": [
+    "scripts/chunk.gd:897"
+  ],
+  "GIFT GARDEN": [
+    "scripts/chunk.gd:897"
+  ],
+  "PET CORNER": [
+    "scripts/chunk.gd:898"
+  ],
+  "RECORD BAR": [
+    "scripts/chunk.gd:898"
+  ],
+  "LUGGAGE WORLD": [
+    "scripts/chunk.gd:898"
+  ],
+  "SUIT YOURSELF": [
+    "scripts/chunk.gd:898"
+  ],
+  "BURGER BARN": [
+    "scripts/chunk.gd:899"
+  ],
+  "TACO FIESTA": [
+    "scripts/chunk.gd:899"
+  ],
+  "ORANGE JULIET": [
+    "scripts/chunk.gd:900"
+  ],
+  "PIZZA MIA": [
+    "scripts/chunk.gd:900"
+  ],
+  "DONUT DEN": [
+    "scripts/chunk.gd:900"
+  ],
+  "CHICKEN SHACK": [
+    "scripts/chunk.gd:900"
+  ],
+  "TOTAL": [
+    "scripts/chunk.gd:1613",
+    "scripts/chunk.gd:1669"
+  ],
+  "E — open door": [
+    "scripts/chunk.gd:3540",
+    "scripts/chunk.gd:3579",
+    "scripts/chunk.gd:3827"
+  ],
+  "E — close door": [
+    "scripts/chunk.gd:3579",
+    "scripts/chunk.gd:3827"
+  ],
+  "EXIT": [
+    "scripts/chunk.gd:4876",
+    "scripts/chunk.gd:8903"
+  ],
+  "E — elevator to Floor %d": [
+    "scripts/chunk.gd:6473"
+  ],
+  "ELEVATOR ARRIVING": [
+    "scripts/chunk.gd:6485"
+  ],
+  "E — call lift": [
+    "scripts/chunk.gd:6508",
+    "scripts/chunk.gd:6510",
+    "scripts/chunk.gd:6760"
+  ],
+  "E — call lift · WATCH THE TAPE TO LEAVE": [
+    "scripts/chunk.gd:6511"
+  ],
+  "LIFT ARRIVING": [
+    "scripts/chunk.gd:6532",
+    "scripts/chunk.gd:6696"
+  ],
+  "OUT": [
+    "scripts/chunk.gd:6644",
+    "scripts/descent_summary.gd:44"
+  ],
+  "THE TAPE HAS NOT BEEN WATCHED": [
+    "scripts/chunk.gd:6836"
+  ],
+  "SAFETY IS EVERYONE'S JOB": [
+    "scripts/chunk.gd:7555"
+  ],
+  "HAVE YOU FILED YOUR 4-19?": [
+    "scripts/chunk.gd:7555"
+  ],
+  "THE BUILDING THANKS YOU": [
+    "scripts/chunk.gd:7556"
+  ],
+  "PLEASE CONSERVE LIGHT": [
+    "scripts/chunk.gd:7556"
+  ],
+  "TIDY DESK, TIDY MIND": [
+    "scripts/chunk.gd:7556"
+  ],
+  "YOUR DESK MISSES YOU": [
+    "scripts/chunk.gd:7557"
+  ],
+  "CONSISTENCY IS COMFORT": [
+    "scripts/chunk.gd:7557"
+  ],
+  "STAY UNTIL COMPLETE": [
+    "scripts/chunk.gd:7557"
+  ],
+  "EVERYONE IS COUNTING ON YOU": [
+    "scripts/chunk.gd:7558"
+  ],
+  "A QUIET FLOOR IS A PRODUCTIVE FLOOR": [
+    "scripts/chunk.gd:7558"
+  ],
+  "E — query terminal": [
+    "scripts/chunk.gd:7601",
+    "scripts/chunk.gd:7637"
+  ],
+  "E — next record": [
+    "scripts/chunk.gd:7628"
+  ],
+  "AMSTERDAM": [
+    "scripts/chunk.gd:8139"
+  ],
+  "SINGAPORE": [
+    "scripts/chunk.gd:8139"
+  ],
+  "DENVER": [
+    "scripts/chunk.gd:8139"
+  ],
+  "REYKJAVIK": [
+    "scripts/chunk.gd:8139"
+  ],
+  "OSAKA": [
+    "scripts/chunk.gd:8139"
+  ],
+  "LIMA": [
+    "scripts/chunk.gd:8140"
+  ],
+  "TBILISI": [
+    "scripts/chunk.gd:8140"
+  ],
+  "PERTH": [
+    "scripts/chunk.gd:8140"
+  ],
+  "MONTREAL": [
+    "scripts/chunk.gd:8140"
+  ],
+  "DOHA": [
+    "scripts/chunk.gd:8140"
+  ],
+  "HELSINKI": [
+    "scripts/chunk.gd:8140"
+  ],
+  "ANCHORAGE": [
+    "scripts/chunk.gd:8140"
+  ],
+  "MANAUS": [
+    "scripts/chunk.gd:8141"
+  ],
+  "TAIPEI": [
+    "scripts/chunk.gd:8141"
+  ],
+  "LAGOS": [
+    "scripts/chunk.gd:8141"
+  ],
+  "ZURICH": [
+    "scripts/chunk.gd:8141"
+  ],
+  "DELAYED": [
+    "scripts/chunk.gd:8142",
+    "scripts/chunk.gd:8142",
+    "scripts/chunk.gd:8142",
+    "scripts/chunk.gd:8143"
+  ],
+  "ON TIME": [
+    "scripts/chunk.gd:8142"
+  ],
+  "BOARDING": [
+    "scripts/chunk.gd:8142"
+  ],
+  "CANCELLED": [
+    "scripts/chunk.gd:8143"
+  ],
+  "GATE WAIT": [
+    "scripts/chunk.gd:8143"
+  ],
+  "Gates A1 - A22  >": [
+    "scripts/chunk.gd:8145"
+  ],
+  "<  Gates B1 - B14": [
+    "scripts/chunk.gd:8145"
+  ],
+  "Lounges  >": [
+    "scripts/chunk.gd:8145"
+  ],
+  "Departures  >": [
+    "scripts/chunk.gd:8146"
+  ],
+  "<  Check-in": [
+    "scripts/chunk.gd:8146"
+  ],
+  "Gates  >": [
+    "scripts/chunk.gd:8146"
+  ],
+  "Baggage Claim": [
+    "scripts/chunk.gd:8147",
+    "scripts/levels/airport_level_builder.gd:1205"
+  ],
+  "Exit  >": [
+    "scripts/chunk.gd:8147"
+  ],
+  "<  Passport Control": [
+    "scripts/chunk.gd:8147"
+  ],
+  "Trains to City": [
+    "scripts/chunk.gd:8147"
+  ],
+  "LET ME OUT": [
+    "scripts/chunk.gd:8446"
+  ],
+  "THEY LISTEN AT NIGHT": [
+    "scripts/chunk.gd:8446"
+  ],
+  "NO ONE LEFT": [
+    "scripts/chunk.gd:8446"
+  ],
+  "I AM NOT SICK": [
+    "scripts/chunk.gd:8447"
+  ],
+  "IT WATCHES THE DOOR": [
+    "scripts/chunk.gd:8447"
+  ],
+  "ROOM 9 ROOM 9 ROOM 9": [
+    "scripts/chunk.gd:8447"
+  ],
+  "DONT SLEEP HERE": [
+    "scripts/chunk.gd:8448"
+  ],
+  "WHERE DID EVERYONE GO": [
+    "scripts/chunk.gd:8448"
+  ],
+  "HE COUNTS US AT NIGHT": [
+    "scripts/chunk.gd:8448"
+  ],
+  "THE TREATMENT HELPS": [
+    "scripts/chunk.gd:8449"
+  ],
+  "ALL OF US ARE STILL HERE": [
+    "scripts/chunk.gd:8449"
+  ],
+  "THE WALLS BREATHE": [
+    "scripts/chunk.gd:8449"
+  ],
+  "SOMEONE IS USING MY NAME": [
+    "scripts/chunk.gd:8450"
+  ],
+  "THEY TURNED OFF THE SUN": [
+    "scripts/chunk.gd:8450"
+  ],
+  "KEEP THE DOOR SHUT": [
+    "scripts/chunk.gd:8450"
+  ],
+  "I HEARD YOU COME IN": [
+    "scripts/chunk.gd:8451"
+  ],
+  "WE NEVER WENT HOME": [
+    "scripts/chunk.gd:8451"
+  ],
+  "WARD 3": [
+    "scripts/chunk.gd:8453"
+  ],
+  "WARD 7": [
+    "scripts/chunk.gd:8453"
+  ],
+  "SOLITARY": [
+    "scripts/chunk.gd:8453"
+  ],
+  "DAY ROOM": [
+    "scripts/chunk.gd:8453"
+  ],
+  "HYDROTHERAPY": [
+    "scripts/chunk.gd:8454"
+  ],
+  "TREATMENT": [
+    "scripts/chunk.gd:8454"
+  ],
+  "NO ADMITTANCE": [
+    "scripts/chunk.gd:8454"
+  ],
+  "SURGERY": [
+    "scripts/chunk.gd:8454"
+  ],
+  "ADMISSIONS": [
+    "scripts/chunk.gd:8455"
+  ],
+  "ADMINISTRATION": [
+    "scripts/chunk.gd:8455"
+  ],
+  "VISITORS": [
+    "scripts/chunk.gd:8455"
+  ],
+  "A view of %s.": [
+    "scripts/photo_camera.gd:467"
+  ],
+  "A view of the building.": [
+    "scripts/photo_camera.gd:468"
+  ],
+  "FOCUS": [
+    "scripts/photo_camera.gd:618"
+  ],
+  "ALREADY DOCUMENTED": [
+    "scripts/photo_camera.gd:628",
+    "scripts/photo_camera.gd:666"
+  ],
+  "NO NEW EVIDENCE": [
+    "scripts/photo_camera.gd:670"
+  ],
+  "VIEW PARTLY BLOCKED": [
+    "scripts/photo_camera.gd:672"
+  ],
+  "FRAME THE WHOLE SUBJECT": [
+    "scripts/photo_camera.gd:674"
+  ],
+  "Slot-machine cabinets": [
+    "scripts/photo_obstruction.gd:173"
+  ],
+  "Metal shelving units": [
+    "scripts/photo_obstruction.gd:174"
+  ],
+  "Airport luggage trolleys": [
+    "scripts/photo_obstruction.gd:175"
+  ],
+  "Hospital beds": [
+    "scripts/photo_obstruction.gd:176"
+  ],
+  "School lockers": [
+    "scripts/photo_obstruction.gd:177"
+  ],
+  "Stockroom boxes": [
+    "scripts/photo_obstruction.gd:178"
+  ],
+  "Prison bunk beds": [
+    "scripts/photo_obstruction.gd:179"
+  ],
+  "Pool lounge chairs": [
+    "scripts/photo_obstruction.gd:180"
+  ],
+  "Server racks": [
+    "scripts/photo_obstruction.gd:181"
+  ],
+  "Incubator cabinets": [
+    "scripts/photo_obstruction.gd:182"
+  ],
+  "Storage furniture": [
+    "scripts/photo_obstruction.gd:183"
+  ],
+  "A passage cleared by an earlier photograph. %s once blocked the way.": [
+    "scripts/photo_obstruction.gd:188"
+  ],
+  "%s block this passage, but the camera shows it clear.": [
+    "scripts/photo_obstruction.gd:189"
+  ],
+  "THE BOXES WERE NOT IN THE PHOTOGRAPH": [
+    "scripts/photo_obstruction.gd:193"
+  ],
+  "THE OBSTRUCTION WAS NOT IN THE PHOTOGRAPH": [
+    "scripts/photo_obstruction.gd:193"
+  ],
+  "CAUGHT — FLOOR %d — %s": [
+    "scripts/descent_summary.gd:44"
+  ],
+  "seed %d": [
+    "scripts/descent_summary.gd:61"
+  ],
+  "SPACE — CONTINUE F%02d": [
+    "scripts/descent_summary.gd:73"
+  ],
+  "R — RESTART RUN": [
+    "scripts/descent_summary.gd:74"
+  ],
+  "N — NEW DESCENT": [
+    "scripts/descent_summary.gd:75"
+  ],
+  "ESC — TITLE": [
+    "scripts/descent_summary.gd:76"
+  ],
+  "RESTART RUN?": [
+    "scripts/descent_summary.gd:169"
+  ],
+  "NEW DESCENT?": [
+    "scripts/descent_summary.gd:169"
+  ],
+  "START AGAIN FROM FLOOR 01?\nYOUR CURRENT CHECKPOINT AND RUN PROGRESS WILL BE REPLACED.": [
+    "scripts/descent_summary.gd:170"
+  ],
+  "START AGAIN IN A NEW BUILDING?\nYOUR CURRENT CHECKPOINT AND RUN PROGRESS WILL BE REPLACED.": [
+    "scripts/descent_summary.gd:171"
+  ],
+  "PLAY": [
+    "scripts/vhs_osd.gd:296",
+    "scripts/vhs_osd.gd:300"
+  ],
+  "MOVE FORWARD": [
+    "scripts/game_input.gd:35"
+  ],
+  "MOVE BACK": [
+    "scripts/game_input.gd:36"
+  ],
+  "MOVE LEFT": [
+    "scripts/game_input.gd:37"
+  ],
+  "MOVE RIGHT": [
+    "scripts/game_input.gd:38"
+  ],
+  "INTERACT": [
+    "scripts/game_input.gd:40"
+  ],
+  "TORCH": [
+    "scripts/game_input.gd:41"
+  ],
+  "CAMERA": [
+    "scripts/game_input.gd:42"
+  ],
+  "TAKE PHOTO": [
+    "scripts/game_input.gd:43"
+  ],
+  "PHOTO ALBUM": [
+    "scripts/game_input.gd:44"
+  ],
+  "1-9, 0 and minus select floors in Wander.": [
+    "scripts/game_input.gd:143"
+  ],
+  "F6-F9 are debug keys.": [
+    "scripts/game_input.gd:145"
+  ],
+  "Unknown control.": [
+    "scripts/game_input.gd:154"
+  ],
+  "%s is already used by %s. Pick another key.": [
+    "scripts/game_input.gd:161"
+  ],
+  "Press a keyboard key.": [
+    "scripts/game_input.gd:168"
+  ],
+  "That key is not supported.": [
+    "scripts/game_input.gd:170",
+    "scripts/game_input.gd:173"
+  ],
+  "Escape is always menu / cancel.": [
+    "scripts/game_input.gd:175"
+  ],
+  "KEY %d": [
+    "scripts/game_input.gd:195"
+  ],
+  "  /  ARROWS": [
+    "scripts/game_input.gd:225"
+  ],
+  "open plan": [
+    "scripts/world_gen.gd:414"
+  ],
+  "service maze": [
+    "scripts/world_gen.gd:414"
+  ],
+  "dead offices": [
+    "scripts/world_gen.gd:414"
+  ],
+  "patient wing": [
+    "scripts/world_gen.gd:416"
+  ],
+  "retail galleries": [
+    "scripts/world_gen.gd:418"
+  ],
+  "food and cinema": [
+    "scripts/world_gen.gd:418"
+  ],
+  "service wing": [
+    "scripts/world_gen.gd:418"
+  ],
+  "cell blocks": [
+    "scripts/world_gen.gd:419"
+  ],
+  "bathing halls": [
+    "scripts/world_gen.gd:420"
+  ],
+  "civic halls": [
+    "scripts/world_gen.gd:421"
+  ],
+  "water courts": [
+    "scripts/world_gen.gd:421"
+  ],
+  "service megastructure": [
+    "scripts/world_gen.gd:421"
+  ],
+  "dormant campus": [
+    "scripts/world_gen.gd:422"
+  ],
+  "colonized recreation": [
+    "scripts/world_gen.gd:422"
+  ],
+  "arterial core": [
+    "scripts/world_gen.gd:422"
+  ],
+  "zone 0": [
+    "scripts/world_gen.gd:424"
+  ],
+  "zone 1": [
+    "scripts/world_gen.gd:424"
+  ],
+  "zone 2": [
+    "scripts/world_gen.gd:424"
+  ],
+  "LIFT": [
+    "scripts/descent_hud.gd:67",
+    "scripts/descent_hud.gd:165"
+  ],
+  "PHOTOS 0 · MIN %d": [
+    "scripts/descent_hud.gd:83"
+  ],
+  "SOMETHING HERE IS WRONG": [
+    "scripts/descent_hud.gd:90",
+    "scripts/descent_hud.gd:215"
+  ],
+  "PHOTOS %d · MIN %d": [
+    "scripts/descent_hud.gd:101"
+  ],
+  "FLASH": [
+    "scripts/descent_hud.gd:165"
+  ],
+  "ROOMS TO LIFT": [
+    "scripts/descent_hud.gd:165"
+  ],
+  "EVIDENCE %dm": [
+    "scripts/descent_hud.gd:211"
+  ],
+  "SOMETHING WRONG NEARBY": [
+    "scripts/descent_hud.gd:216"
+  ],
+  "KEEP GOING. THE HALLWAY REMEMBERS.": [
+    "scripts/levels/school_level_builder.gd:1602"
+  ],
+  "BE READY WHEN THE BELL RINGS.": [
+    "scripts/levels/school_level_builder.gd:1603"
+  ],
+  "YOU ARE ALMOST WHERE YOU NEED TO BE.": [
+    "scripts/levels/school_level_builder.gd:1604"
+  ],
+  "STAY CALM. STAY TOGETHER.": [
+    "scripts/levels/school_level_builder.gd:1605"
+  ],
+  "DO YOUR BEST. DO NOT LOOK BACK.": [
+    "scripts/levels/school_level_builder.gd:1606"
+  ],
+  "CHILLED WATER  /  %02d": [
+    "scripts/levels/brutalist_level_builder.gd:170"
+  ],
+  "C L O S E D": [
+    "scripts/levels/mall_level_builder.gd:175"
+  ],
+  "THANK YOU FOR VISITING": [
+    "scripts/levels/mall_level_builder.gd:176"
+  ],
+  "DIRECTORY": [
+    "scripts/levels/mall_level_builder.gd:261",
+    "scripts/levels/office_level_builder.gd:588"
+  ],
+  "1   MAIN CONCOURSE": [
+    "scripts/levels/mall_level_builder.gd:277"
+  ],
+  "2   DEPARTMENT STORES": [
+    "scripts/levels/mall_level_builder.gd:278"
+  ],
+  "3   FOOD COURT": [
+    "scripts/levels/mall_level_builder.gd:279"
+  ],
+  "4   CINEMAS": [
+    "scripts/levels/mall_level_builder.gd:280"
+  ],
+  "5   PARKING": [
+    "scripts/levels/mall_level_builder.gd:281"
+  ],
+  "ORCHARD GALLERIA": [
+    "scripts/levels/mall_level_builder.gd:697"
+  ],
+  "F A V O U R I T E S": [
+    "scripts/levels/mall_level_builder.gd:1011"
+  ],
+  "L U N C H   S P E C I A L": [
+    "scripts/levels/mall_level_builder.gd:1011"
+  ],
+  "C O L D   D R I N K S": [
+    "scripts/levels/mall_level_builder.gd:1011"
+  ],
+  "CLASSIC COMBO   4.95\nSIDE ORDER   1.50\nEXTRA SAUCE   .25": [
+    "scripts/levels/mall_level_builder.gd:1013"
+  ],
+  "SERVED UNTIL 3 PM\nMEAL + DRINK   5.95\nKIDS MEAL   2.95": [
+    "scripts/levels/mall_level_builder.gd:1013"
+  ],
+  "FOUNTAIN SODA   .95\nFRESH LEMONADE   1.25\nICED TEA   .95": [
+    "scripts/levels/mall_level_builder.gd:1013"
+  ],
+  "T I C K E T S": [
+    "scripts/levels/mall_level_builder.gd:1268"
+  ],
+  "O R C H A R D": [
+    "scripts/levels/mall_level_builder.gd:1299"
+  ],
+  "C I N E M A S   1 - 6": [
+    "scripts/levels/mall_level_builder.gd:1300"
+  ],
+  "THE LAST\nSUMMER": [
+    "scripts/levels/mall_level_builder.gd:1340"
+  ],
+  "AFTER\nHOURS": [
+    "scripts/levels/mall_level_builder.gd:1340"
+  ],
+  "O R C H A R D   P I C T U R E S": [
+    "scripts/levels/mall_level_builder.gd:1341"
+  ],
+  "A PLACE YOU REMEMBER": [
+    "scripts/levels/mall_level_builder.gd:1343"
+  ],
+  "DAILY  12:30  3:15  6:00\nALL SEATS  $4.50": [
+    "scripts/levels/mall_level_builder.gd:1344"
+  ],
+  "S L O T S": [
+    "scripts/levels/vegas_level_builder.gd:450"
+  ],
+  "CHANGE": [
+    "scripts/levels/vegas_level_builder.gd:544"
+  ],
+  "THE SILVER ROOM": [
+    "scripts/levels/vegas_level_builder.gd:764"
+  ],
+  "LAST CHANCE": [
+    "scripts/levels/vegas_level_builder.gd:1116",
+    "scripts/levels/vegas_level_builder.gd:1117"
+  ],
+  "THE AMBER LOUNGE": [
+    "scripts/levels/vegas_level_builder.gd:1140"
+  ],
+  "GUEST ROOMS": [
+    "scripts/levels/vegas_level_builder.gd:1160"
+  ],
+  "RECEPTION": [
+    "scripts/levels/vegas_level_builder.gd:1262"
+  ],
+  "ELECTRICAL": [
+    "scripts/levels/office_level_builder.gd:568"
+  ],
+  "PROCESSING  4E\nARCHIVES      4F\nWELLNESS      4G\nSTAIRS        <--": [
+    "scripts/levels/office_level_builder.gd:595"
+  ],
+  "a reminder from Facilities": [
+    "scripts/levels/office_level_builder.gd:754"
+  ],
+  "QUARTER  48\nATTENDANCE  0": [
+    "scripts/levels/office_level_builder.gd:945"
+  ],
+  "DEPARTURES": [
+    "scripts/levels/airport_level_builder.gd:199"
+  ],
+  "Gate %s": [
+    "scripts/levels/airport_level_builder.gd:682"
+  ],
+  "FLIGHT CLOSED": [
+    "scripts/levels/airport_level_builder.gd:690"
+  ],
+  "CONCOURSE ACCESS": [
+    "scripts/levels/airport_level_builder.gd:984"
+  ],
+  "CLOSED FOR MAINTENANCE": [
+    "scripts/levels/airport_level_builder.gd:1282"
+  ],
+  "SKYLINE GRILL": [
+    "scripts/levels/airport_level_builder.gd:1369"
+  ],
+  "COFFEE / TEA": [
+    "scripts/levels/airport_level_builder.gd:1369"
+  ],
+  "FRESH EXPRESS": [
+    "scripts/levels/airport_level_builder.gd:1369"
+  ],
+  "FOOD COURT": [
+    "scripts/levels/airport_level_builder.gd:1389"
+  ],
+  "Walk": [],
+  "Graphics": [],
+  "Controls": [],
+  "Audio": [],
+  "Accessibility": [],
+  "Native": [],
+  "Off": [],
+  "On": [],
+  "Low": [],
+  "Medium": [],
+  "High": [],
+  "Ultra": [],
+  "Balanced": [],
+  "Unlimited": [],
+  "Classic": [],
+  "Nearest": [],
+  "Nearest+": [],
+  "Bicubic": [],
+  "Area": [],
+  "Efficient": [],
+  "Full": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Back": [],
+  "Resume": [],
+  "Quit": [],
+  "Display": [],
+  "Recording": [],
+  "Screen": [],
+  "Decoder": [],
+  "Colour": [],
+  "Volume": [],
+  "Custom": [],
+  "Clean": [],
+  "Done": [],
+  "Look": [],
+  "Signal": [],
+  "Output": [],
+  "Tracking": [],
+  "Dropout": [],
+  "Bilinear": [],
+  "Automatic": [],
+  "FIELD OF VIEW": [],
+  "HEAD BOB": [],
+  "MUSIC VOLUME": [],
+  "EFFECTS VOLUME": [],
+  "DIALOGUE VOLUME": [],
+  "HDR BRIGHTNESS": [],
+  "SPACE": [],
+  "SHIFT": [],
+  "UP": [],
+  "DOWN": [],
+  "LEFT": [],
+  "RIGHT": [],
+  "ARROWS": [],
+  "%s  /  ARROWS": [],
+  "WANDER  /  Explore eleven endless procedural worlds. Number keys and physical elevators carry you between floors, and every floor remembers where you left it.": [],
+  "DESCENT  /  Cross all eleven floors in order. Follow the distance counter. Sprinting drains a short reserve; there is no floor selection. The rules are shown after you choose the mode.": [],
+  "A first-person horror descent through eleven procedural spaces. Follow Dr. Cross's recovered tapes, survive what hunts the halls, and find the elevator before the architecture decides you belong to it.": [],
+  "All third-party 3D model creators and supporting asset authors are acknowledged on the CREDITS screen. Full model titles, source links, licenses and modifications are recorded in THIRD_PARTY_ASSETS.md.": [],
+  "Clean reference": [
+    "scripts/video_preset_library.gd:34"
+  ],
+  "Unfiltered picture. Compare brightness and detail against any recording look.": [
+    "scripts/video_preset_library.gd:36"
+  ],
+  "No tape processing · no CRT": [
+    "scripts/video_preset_library.gd:37"
+  ],
+  "MiniDV · daylight": [
+    "scripts/video_preset_library.gd:41"
+  ],
+  "Camera capture": [
+    "scripts/video_preset_library.gd:42",
+    "scripts/video_preset_library.gd:51",
+    "scripts/video_preset_library.gd:61",
+    "scripts/video_preset_library.gd:70"
+  ],
+  "A well-kept digital camcorder captured through its AV cable: crisp edges, restrained color bleed and almost no noise.": [
+    "scripts/video_preset_library.gd:43"
+  ],
+  "AV capture · no VHS wear · no CRT": [
+    "scripts/video_preset_library.gd:44",
+    "scripts/video_preset_library.gd:53"
+  ],
+  "MiniDV · low light": [
+    "scripts/video_preset_library.gd:50"
+  ],
+  "A camcorder struggling after dark: visible gain noise, cooler white balance and muted colors. No VHS tracking damage.": [
+    "scripts/video_preset_library.gd:52"
+  ],
+  "Hi8 · family camcorder": [
+    "scripts/video_preset_library.gd:60"
+  ],
+  "Fairly sharp luma with softer color edges and a little sensor noise. A clean first-generation home recording.": [
+    "scripts/video_preset_library.gd:62"
+  ],
+  "Analog camera capture · no CRT": [
+    "scripts/video_preset_library.gd:63",
+    "scripts/video_preset_library.gd:72"
+  ],
+  "Video8 · worn handheld": [
+    "scripts/video_preset_library.gd:69"
+  ],
+  "A worn handheld recording: rougher color, restless edges and occasional small dropouts. Sharper than a heavily copied VHS tape.": [
+    "scripts/video_preset_library.gd:71"
+  ],
+  "VHS-C · family holiday": [
+    "scripts/video_preset_library.gd:81"
+  ],
+  "VHS capture": [
+    "scripts/video_preset_library.gd:82",
+    "scripts/video_preset_library.gd:92",
+    "scripts/video_preset_library.gd:102"
+  ],
+  "Warm, colorful home movies: soft bleeding reds, mild tape hiss and a visible narrow switching line at the bottom. A fresh-tape look.": [
+    "scripts/video_preset_library.gd:83"
+  ],
+  "VHS SP capture · no CRT": [
+    "scripts/video_preset_library.gd:84",
+    "scripts/video_preset_library.gd:94"
+  ],
+  "VHS · shoulder camera": [
+    "scripts/video_preset_library.gd:91"
+  ],
+  "An older full-size camera: warm, slightly faded color, electronic edge halos and a textured tape signal. More brittle than the holiday camcorder.": [
+    "scripts/video_preset_library.gd:93"
+  ],
+  "VHS · long-play recording": [
+    "scripts/video_preset_library.gd:101"
+  ],
+  "An extended recording on slow tape: visibly soft detail, noisy color, bottom-edge wear and occasional dropouts. A dirty everyday recording.": [
+    "scripts/video_preset_library.gd:103"
+  ],
+  "VHS extended-play capture · no CRT": [
+    "scripts/video_preset_library.gd:104"
+  ],
+  "Found footage · original tape": [
+    "scripts/video_preset_library.gd:113"
+  ],
+  "Found footage": [
+    "scripts/video_preset_library.gd:114",
+    "scripts/video_preset_library.gd:127",
+    "scripts/game_settings.gd:357",
+    "scripts/game_settings.gd:365"
+  ],
+  "A recovered recording with visible noise, bleeding color, wavering edges and occasional brief dropouts. The main found-footage candidate.": [
+    "scripts/video_preset_library.gd:115"
+  ],
+  "VHS capture · no CRT": [
+    "scripts/video_preset_library.gd:116"
+  ],
+  "Found footage · archive copy": [
+    "scripts/video_preset_library.gd:126"
+  ],
+  "A worn dub: coarse noise, smeared color, an unstable lower edge and brief tracking breaks. Visibly rougher than the original tape.": [
+    "scripts/video_preset_library.gd:128"
+  ],
+  "VHS copy · no CRT": [
+    "scripts/video_preset_library.gd:129"
+  ],
+  "Security camera · color": [
+    "scripts/video_preset_library.gd:140"
+  ],
+  "Cheap color surveillance: lower detail, a cool washed-out palette and constant electronic noise. No tape wobble or tracking breaks.": [
+    "scripts/video_preset_library.gd:142"
+  ],
+  "Live analog feed · no CRT": [
+    "scripts/video_preset_library.gd:143"
+  ],
+  "Security camera · monochrome": [
+    "scripts/video_preset_library.gd:150"
+  ],
+  "Grainy black-and-white surveillance with hard electronic edges and reduced detail. A stable live feed, without VHS tracking damage.": [
+    "scripts/video_preset_library.gd:152"
+  ],
+  "Monochrome analog feed · no CRT": [
+    "scripts/video_preset_library.gd:153"
+  ],
+  "Security camera · IR-style night": [
+    "scripts/video_preset_library.gd:159"
+  ],
+  "A noisy monochrome night camera with lifted shadows and heavy gain texture. Uses existing scene lighting; it does not add an infrared lamp.": [
+    "scripts/video_preset_library.gd:161"
+  ],
+  "Night-camera color treatment · no CRT": [
+    "scripts/video_preset_library.gd:162"
+  ],
+  "Broadcast preview monitor": [
+    "scripts/video_preset_library.gd:168"
+  ],
+  "CRT playback": [
+    "scripts/video_preset_library.gd:169",
+    "scripts/video_preset_library.gd:178",
+    "scripts/video_preset_library.gd:190",
+    "scripts/video_preset_library.gd:204",
+    "scripts/video_preset_library.gd:219",
+    "scripts/video_preset_library.gd:231",
+    "scripts/video_preset_library.gd:243"
+  ],
+  "A well-adjusted studio screen: tight phosphor structure, precise scanlines and very little glow. A clean signal makes the tube easy to judge.": [
+    "scripts/video_preset_library.gd:170"
+  ],
+  "Clean input → Aperture CRT": [
+    "scripts/video_preset_library.gd:171"
+  ],
+  "VHS on the living-room TV": [
+    "scripts/video_preset_library.gd:177"
+  ],
+  "Warm home video on a good television: gentle tape texture, a fine shadow mask and soft phosphor glow. The comfortable nostalgic option.": [
+    "scripts/video_preset_library.gd:179"
+  ],
+  "VHS SP → Royale CRT": [
+    "scripts/video_preset_library.gd:180"
+  ],
+  "Kitchen TV · weak reception": [
+    "scripts/video_preset_library.gd:189"
+  ],
+  "A portable TV with a poor aerial: continuous static, restless color and short bursts of interference over a soft dot-mask screen.": [
+    "scripts/video_preset_library.gd:191"
+  ],
+  "Noisy reception → EasyMode CRT": [
+    "scripts/video_preset_library.gd:192"
+  ],
+  "Motel VCR television": [
+    "scripts/video_preset_library.gd:203"
+  ],
+  "A worn rental tape on a tired TV: uneven edges, tracking breaks, unfocused highlights and a gently bowed picture.": [
+    "scripts/video_preset_library.gd:205"
+  ],
+  "VHS copy → Glow Gaussian CRT": [
+    "scripts/video_preset_library.gd:206"
+  ],
+  "School AV-cart television": [
+    "scripts/video_preset_library.gd:218"
+  ],
+  "A classroom tape copied more than once: pale color, broad color trails and electronic hiss on a brighter CRT. Softer than the living-room TV.": [
+    "scripts/video_preset_library.gd:220"
+  ],
+  "VHS SP → Glow Lanczos CRT": [
+    "scripts/video_preset_library.gd:221"
+  ],
+  "Camcorder CRT viewfinder": [
+    "scripts/video_preset_library.gd:230"
+  ],
+  "A small monochrome electronic viewfinder: sharp luminous edges and a fine raster. No colored phosphor grille or exaggerated curved border.": [
+    "scripts/video_preset_library.gd:232"
+  ],
+  "Monochrome camera → Hyllian CRT": [
+    "scripts/video_preset_library.gd:233"
+  ],
+  "Security-desk CRT monitor": [
+    "scripts/video_preset_library.gd:242"
+  ],
+  "A low-detail monochrome surveillance feed on a CRT: visible raster, moving electronic noise and a trace of phosphor persistence.": [
+    "scripts/video_preset_library.gd:244"
+  ],
+  "Monochrome camera → Crtsim CRT": [
+    "scripts/video_preset_library.gd:245"
+  ],
+  "Color unlock": [
+    "scripts/video_preset_profile.gd:50",
+    "scripts/video_preset_workshop_panel.gd:190"
+  ],
+  "RF static": [
+    "scripts/video_preset_profile.gd:50",
+    "scripts/video_preset_workshop_panel.gd:190"
+  ],
+  "Sync slip": [
+    "scripts/video_preset_profile.gd:50",
+    "scripts/video_preset_workshop_panel.gd:190"
+  ],
+  "Glow Gaussian": [
+    "scripts/video_preset_profile.gd:66",
+    "scripts/pause_menu.gd:106",
+    "scripts/video_preset_workshop_panel.gd:8"
+  ],
+  "Glow Lanczos": [
+    "scripts/video_preset_profile.gd:66",
+    "scripts/pause_menu.gd:106",
+    "scripts/video_preset_workshop_panel.gd:8"
+  ],
+  "Fast bilinear": [
+    "scripts/video_preset_profile.gd:86",
+    "scripts/pause_menu.gd:107",
+    "scripts/video_preset_workshop_panel.gd:230"
+  ],
+  "Custom width": [
+    "scripts/video_preset_profile.gd:90",
+    "scripts/pause_menu.gd:108",
+    "scripts/video_preset_workshop_panel.gd:228"
+  ],
+  "Source size": [
+    "scripts/video_preset_profile.gd:90",
+    "scripts/pause_menu.gd:108",
+    "scripts/video_preset_workshop_panel.gd:228"
+  ],
+  "Quality budget": [
+    "scripts/video_preset_profile.gd:98"
+  ],
+  "Original supersampling": [
+    "scripts/video_preset_profile.gd:98",
+    "scripts/pause_menu.gd:109",
+    "scripts/video_preset_workshop_panel.gd:231"
+  ],
+  "Original integer fit": [
+    "scripts/video_preset_profile.gd:98",
+    "scripts/pause_menu.gd:109",
+    "scripts/video_preset_workshop_panel.gd:231"
+  ],
+  "Automatic (follows budget)": [
+    "scripts/video_preset_workshop_panel.gd:8"
+  ],
+  "CHOOSE A LOOK": [
+    "scripts/video_preset_workshop_panel.gd:94"
+  ],
+  "Previous look": [
+    "scripts/video_preset_workshop_panel.gd:100"
+  ],
+  "Current look / loaded preset": [
+    "scripts/video_preset_workshop_panel.gd:104"
+  ],
+  "Next look": [
+    "scripts/video_preset_workshop_panel.gd:112"
+  ],
+  "Browse 20 camera, tape and TV looks with the arrows. Choose a favorite, then Capture preset to save it.": [
+    "scripts/video_preset_workshop_panel.gd:114",
+    "scripts/video_preset_workshop_panel.gd:440"
+  ],
+  "Browsing keeps your graphics budget and reduced-flashing preference.": [
+    "scripts/video_preset_workshop_panel.gd:115",
+    "scripts/video_preset_workshop_panel.gd:441"
+  ],
+  "Preview this look's tape damage": [
+    "scripts/video_preset_workshop_panel.gd:116"
+  ],
+  "Preset name": [
+    "scripts/video_preset_workshop_panel.gd:119"
+  ],
+  "My recording look": [
+    "scripts/video_preset_workshop_panel.gd:120"
+  ],
+  "Capture preset": [
+    "scripts/video_preset_workshop_panel.gd:123"
+  ],
+  "Load preset…": [
+    "scripts/video_preset_workshop_panel.gd:124"
+  ],
+  "Open captures": [
+    "scripts/video_preset_workshop_panel.gd:126"
+  ],
+  "Copy JSON": [
+    "scripts/video_preset_workshop_panel.gd:127"
+  ],
+  "Visible look copied as preset JSON.": [
+    "scripts/video_preset_workshop_panel.gd:129"
+  ],
+  "Keep as A": [
+    "scripts/video_preset_workshop_panel.gd:131"
+  ],
+  "Show A": [
+    "scripts/video_preset_workshop_panel.gd:132",
+    "scripts/video_preset_workshop_panel.gd:324"
+  ],
+  "Capture saves JSON + a Godot .tres + a preview PNG.": [
+    "scripts/video_preset_workshop_panel.gd:134"
+  ],
+  "Fine-tune this look": [
+    "scripts/video_preset_workshop_panel.gd:137"
+  ],
+  "CRT tuning": [
+    "scripts/video_preset_workshop_panel.gd:147"
+  ],
+  "Load NTSCRT preset": [
+    "scripts/video_preset_workshop_panel.gd:153"
+  ],
+  "NTSCRT preset": [
+    "scripts/video_preset_workshop_panel.gd:156"
+  ],
+  "Test image": [
+    "scripts/video_preset_workshop_panel.gd:162"
+  ],
+  "TV test card": [
+    "scripts/video_preset_workshop_panel.gd:162"
+  ],
+  "Animated chart": [
+    "scripts/video_preset_workshop_panel.gd:162"
+  ],
+  "CRT screen": [
+    "scripts/video_preset_workshop_panel.gd:164"
+  ],
+  "Arrows cycle the seven CRTs. Switch Recording effects off to judge just the CRT. Automatic uses Aperture on Low/Medium and Royale on High/Ultra. Fine-tune on the CRT tuning tab.": [
+    "scripts/video_preset_workshop_panel.gd:176"
+  ],
+  "Recording effects": [
+    "scripts/video_preset_workshop_panel.gd:178"
+  ],
+  "Bypass tape softness and damage without resetting this look. CRT, camera color and grain stay as configured.": [
+    "scripts/video_preset_workshop_panel.gd:182"
+  ],
+  "Tape damage": [
+    "scripts/video_preset_workshop_panel.gd:183"
+  ],
+  "Grain / sensor noise": [
+    "scripts/video_preset_workshop_panel.gd:184"
+  ],
+  "Camera color saturation": [
+    "scripts/video_preset_workshop_panel.gd:185"
+  ],
+  "White balance: cool / warm": [
+    "scripts/video_preset_workshop_panel.gd:186"
+  ],
+  "Shadow detail lift": [
+    "scripts/video_preset_workshop_panel.gd:187"
+  ],
+  "Brief defects per minute": [
+    "scripts/video_preset_workshop_panel.gd:188"
+  ],
+  "Defect strength": [
+    "scripts/video_preset_workshop_panel.gd:189"
+  ],
+  "Defect type": [
+    "scripts/video_preset_workshop_panel.gd:190"
+  ],
+  "Graphics budget": [
+    "scripts/video_preset_workshop_panel.gd:191",
+    "scripts/video_preset_workshop_panel.gd:231"
+  ],
+  "Reduced flashing": [
+    "scripts/video_preset_workshop_panel.gd:192"
+  ],
+  "Glitch pop": [
+    "scripts/video_preset_workshop_panel.gd:194"
+  ],
+  "Two blips": [
+    "scripts/video_preset_workshop_panel.gd:195"
+  ],
+  "Cues need tape and nonzero damage. Reduced flashing suppresses them. Captures save the look with any active cue cleared.": [
+    "scripts/video_preset_workshop_panel.gd:196"
+  ],
+  "Original shader controls. Hover a value for its parameter name and range. Values are kept separately for each CRT model.": [
+    "scripts/video_preset_workshop_panel.gd:200"
+  ],
+  "Reset this CRT's tuning": [
+    "scripts/video_preset_workshop_panel.gd:201"
+  ],
+  "Find a CRT setting…": [
+    "scripts/video_preset_workshop_panel.gd:206"
+  ],
+  "Receiver simulation": [
+    "scripts/video_preset_workshop_panel.gd:214"
+  ],
+  "Scale receiver wear with tape damage": [
+    "scripts/video_preset_workshop_panel.gd:215"
+  ],
+  "NTSC controls apply when tape is on; receiver controls need the switch above. Tape damage scales noise and wear after these values. Receiver timing can add CPU cost.": [
+    "scripts/video_preset_workshop_panel.gd:216"
+  ],
+  "These settings change processing cost and the detail that reaches the CRT. They are included in your preset.": [
+    "scripts/video_preset_workshop_panel.gd:227"
+  ],
+  "Signal resolution": [
+    "scripts/video_preset_workshop_panel.gd:228"
+  ],
+  "Automatic (graphics budget)": [
+    "scripts/video_preset_workshop_panel.gd:228"
+  ],
+  "Custom signal width": [
+    "scripts/video_preset_workshop_panel.gd:229"
+  ],
+  "Output sizing": [
+    "scripts/video_preset_workshop_panel.gd:231"
+  ],
+  "Process tape at full source resolution": [
+    "scripts/video_preset_workshop_panel.gd:232"
+  ],
+  "Full-source processing and supersampling can be expensive. Custom width is usually the better tuning starting point.": [
+    "scripts/video_preset_workshop_panel.gd:233"
+  ],
+  "Blend previous video field": [
+    "scripts/video_preset_workshop_panel.gd:234"
+  ],
+  "Automatically lower 3D resolution": [
+    "scripts/video_preset_workshop_panel.gd:235"
+  ],
+  "The 3D option affects game content, not this 2D test chart. Reduced flashing disables previous-field history.": [
+    "scripts/video_preset_workshop_panel.gd:236"
+  ],
+  "%s tuning%s": [
+    "scripts/video_preset_workshop_panel.gd:259"
+  ],
+  " · CRT off": [
+    "scripts/video_preset_workshop_panel.gd:259"
+  ],
+  "%s\nRange %s … %s · upstream default %s": [
+    "scripts/video_preset_workshop_panel.gd:278"
+  ],
+  "A stored: %s. Keep tuning B, then use Show A to compare.": [
+    "scripts/video_preset_workshop_panel.gd:306"
+  ],
+  "Back to B": [
+    "scripts/video_preset_workshop_panel.gd:324"
+  ],
+  "Reference A: ": [
+    "scripts/video_preset_workshop_panel.gd:327"
+  ],
+  "CRT: ": [
+    "scripts/video_preset_workshop_panel.gd:328"
+  ],
+  ". Back to B returns to the look you were browsing.": [
+    "scripts/video_preset_workshop_panel.gd:328"
+  ],
+  "Showing A: %s. Capture saves this reference look.": [
+    "scripts/video_preset_workshop_panel.gd:329"
+  ],
+  "Editing B. Your A reference is unchanged.": [
+    "scripts/video_preset_workshop_panel.gd:329"
+  ],
+  "Untitled preset": [
+    "scripts/video_preset_workshop_panel.gd:335",
+    "scripts/video_preset_io.gd:11",
+    "scripts/video_preset_io.gd:60"
+  ],
+  "A capture is already running.": [
+    "scripts/video_preset_workshop_panel.gd:347"
+  ],
+  "This host has no capture callback.": [
+    "scripts/video_preset_workshop_panel.gd:348"
+  ],
+  "Captured: %s. Use Open captures to find the three files.": [
+    "scripts/video_preset_workshop_panel.gd:377"
+  ],
+  "Capture failed: %s. Check %s for partial files.": [
+    "scripts/video_preset_workshop_panel.gd:377"
+  ],
+  "Loaded: ": [
+    "scripts/video_preset_workshop_panel.gd:396"
+  ],
+  "Look %d of %d. Capture saves all settings and a preview.": [
+    "scripts/video_preset_workshop_panel.gd:427"
+  ],
+  "Disabled by Reduced flashing": [
+    "scripts/video_preset_workshop_panel.gd:438"
+  ],
+  "Briefly previews the defect built into this look. It also happens occasionally during play.": [
+    "scripts/video_preset_workshop_panel.gd:438"
+  ],
+  " · modified": [
+    "scripts/video_preset_workshop_panel.gd:446"
+  ],
+  "\nReduced flashing is suppressing tape noise and glitches.": [
+    "scripts/video_preset_workshop_panel.gd:447"
+  ],
+  "\nBrief defects every ~%d seconds.": [
+    "scripts/video_preset_workshop_panel.gd:448"
+  ],
+  "Cannot open captures: ": [
+    "scripts/video_preset_workshop_panel.gd:458"
+  ],
+  "%s · Recording: %s · Screen: %s": [
+    "scripts/video_preset_workshop_panel.gd:463"
+  ],
+  "Reference A": [
+    "scripts/video_preset_workshop_panel.gd:463"
+  ],
+  "Current look": [
+    "scripts/video_preset_workshop_panel.gd:463"
+  ],
+  "This is not a Godot NTSCRT preset.": [
+    "scripts/video_preset_io.gd:27"
+  ],
+  "Unsupported preset version.": [
+    "scripts/video_preset_io.gd:30"
+  ],
+  "The preset has no settings object.": [
+    "scripts/video_preset_io.gd:32"
+  ],
+  "Expected true/false for ": [
+    "scripts/video_preset_io.gd:40"
+  ],
+  "Expected a finite number for ": [
+    "scripts/video_preset_io.gd:42"
+  ],
+  "Expected an integer for ": [
+    "scripts/video_preset_io.gd:44"
+  ],
+  "Expected a settings object for ": [
+    "scripts/video_preset_io.gd:49"
+  ],
+  "Cannot open preset: ": [
+    "scripts/video_preset_io.gd:65"
+  ],
+  "Preset file is too large.": [
+    "scripts/video_preset_io.gd:66"
+  ],
+  "Invalid JSON at line %d: %s": [
+    "scripts/video_preset_io.gd:69"
+  ],
+  "%s settings": [],
+  "Expand or collapse %s": [],
+  "%s (%s)": [],
+  "on": [],
+  "clean": [],
+  "NTSC signal": [
+    "scripts/ntscrt_full_controls.gd:25",
+    "scripts/video_preset_controls.gd:25"
+  ],
+  "Receiver / reception": [
+    "scripts/ntscrt_full_controls.gd:29",
+    "scripts/video_preset_controls.gd:29"
+  ],
+  "Receiver / tape": [
+    "scripts/ntscrt_full_controls.gd:29",
+    "scripts/video_preset_controls.gd:29"
+  ],
+  "NTSCRT approximation": [
+    "scripts/pause_menu.gd:105"
+  ],
+  "Full ntsc-rs": [
+    "scripts/pause_menu.gd:105"
+  ],
+  "Pipeline default": [
+    "scripts/pause_menu.gd:106"
+  ],
+  "Native NTSCRT": [
+    "scripts/pause_menu.gd:106"
+  ],
+  "Filtered bilinear": [
+    "scripts/pause_menu.gd:107"
+  ],
+  "Standard signal": [
+    "scripts/pause_menu.gd:108"
+  ],
+  "Window resolution": [
+    "scripts/pause_menu.gd:109"
+  ],
+  "Composite notch": [
+    "scripts/pause_menu.gd:110"
+  ],
+  "Composite comb": [
+    "scripts/pause_menu.gd:110"
+  ],
+  "Aperture grille": [
+    "scripts/pause_menu.gd:113"
+  ],
+  "Slot mask": [
+    "scripts/pause_menu.gd:113"
+  ],
+  "Shadow mask": [
+    "scripts/pause_menu.gd:113"
+  ],
+  "Sharp, stable transfer: cleanest decoding, no tape damage, automatic faults off.": [
+    "scripts/pause_menu.gd:116"
+  ],
+  "Everyday home recording: the default NTSCRT balance.": [
+    "scripts/pause_menu.gd:117"
+  ],
+  "Aged rental tape: slower speed, heavy wobble, crinkle and dropouts.": [
+    "scripts/pause_menu.gd:118"
+  ],
+  "Weak broadcast: faint signal, echo images, hum and drifting sync.": [
+    "scripts/pause_menu.gd:119"
+  ],
+  "Antenna signal level. Lower values add snow, weaken colour and disturb sync.": [
+    "scripts/pause_menu.gd:122"
+  ],
+  "Tracking error. Higher values add noise bands and picture breakup.": [
+    "scripts/pause_menu.gd:123"
+  ],
+  "Disturbance bar near the bottom of the frame from the head handover.": [
+    "scripts/pause_menu.gd:124"
+  ],
+  "Horizontal wobble of the picture, like an unsteady tape transport.": [
+    "scripts/pause_menu.gd:125"
+  ],
+  "A crease briefly bends scanlines and damages the signal along a band of the tape.": [
+    "scripts/pause_menu.gd:126"
+  ],
+  "Clogged video head: the picture fades toward snow and muted colour.": [
+    "scripts/pause_menu.gd:127"
+  ],
+  "How often white streaks and flecks appear where the tape is damaged.": [
+    "scripts/pause_menu.gd:128"
+  ],
+  "Strength of a faint offset echo image. Negative values darken the echo.": [
+    "scripts/pause_menu.gd:129"
+  ],
+  "Distance of the echo image, in microseconds of signal delay.": [
+    "scripts/pause_menu.gd:130"
+  ],
+  "Slow brightness bar rolling through the picture from mains hum.": [
+    "scripts/pause_menu.gd:131"
+  ],
+  "Raises the receiver's black level, revealing blanking and sync pulses when the picture rolls.": [
+    "scripts/pause_menu.gd:132"
+  ],
+  "Horizontal sync offset. Push too far and the picture tears sideways.": [
+    "scripts/pause_menu.gd:133"
+  ],
+  "Vertical sync offset. Push too far and the picture rolls.": [
+    "scripts/pause_menu.gd:134"
+  ],
+  "How firmly the set locks onto sync. Lower values drift and tear more easily.": [
+    "scripts/pause_menu.gd:135"
+  ],
+  "Cue and review playback speed while searching the tape.": [
+    "scripts/pause_menu.gd:136"
+  ],
+  "Crawling grain and confetti shimmer in coloured areas.": [
+    "scripts/pause_menu.gd:137"
+  ],
+  "Horizontal offset of colour relative to brightness, in signal pixels.": [
+    "scripts/pause_menu.gd:138"
+  ],
+  "How far strong colours smear sideways into neighbouring detail.": [
+    "scripts/pause_menu.gd:139"
+  ],
+  "Edge crispness of the decoded picture.": [
+    "scripts/pause_menu.gd:140"
+  ],
+  "Soft glow bleeding out of bright highlights.": [
+    "scripts/pause_menu.gd:141"
+  ],
+  "Visibility of the tube's colour-dot pattern.": [
+    "scripts/pause_menu.gd:142"
+  ],
+  "Visibility of the dark gaps between scanlines.": [
+    "scripts/pause_menu.gd:143"
+  ],
+  "Overall picture brightness.": [
+    "scripts/pause_menu.gd:144"
+  ],
+  "Richness of colours, from grey to vivid.": [
+    "scripts/pause_menu.gd:145"
+  ],
+  "Soft haze where the tube glass scatters bright areas.": [
+    "scripts/pause_menu.gd:146"
+  ],
+  "Colour fringing where the red, green and blue beams misalign.": [
+    "scripts/pause_menu.gd:147"
+  ],
+  "Darkening toward the corners of the screen.": [
+    "scripts/pause_menu.gd:148"
+  ],
+  "How strongly the set rides brightness up and down with the scene.": [
+    "scripts/pause_menu.gd:149"
+  ],
+  "Fine background snow over the whole picture.": [
+    "scripts/pause_menu.gd:150"
+  ],
+  "Developer video lab": [
+    "scripts/pause_menu.gd:353"
+  ],
+  "Individual signal and CRT controls. Choosing a complete look replaces these adjustments.": [
+    "scripts/pause_menu.gd:354"
+  ],
+  "Video pipeline": [
+    "scripts/pause_menu.gd:397"
+  ],
+  "Video signal": [
+    "scripts/pause_menu.gd:398"
+  ],
+  "Choose the recorded signal separately from the receiver and CRT. Full ntsc-rs provides every original signal control; the approximation is a lighter alternative.": [
+    "scripts/pause_menu.gd:398"
+  ],
+  "Experimental analogue video. Choose a preset below, then adjust the recording and the tube to taste.": [
+    "scripts/pause_menu.gd:399"
+  ],
+  "Recorded image": [
+    "scripts/pause_menu.gd:400"
+  ],
+  "These choices shape the footage and stay independent of the graphics preset.": [
+    "scripts/pause_menu.gd:400"
+  ],
+  "NTSCRT RECEIVER": [
+    "scripts/pause_menu.gd:401"
+  ],
+  "Detailed broadcast receiver simulation. Tape faults here can sharply reduce frame rate. The looks above create tape wear without this extra stage. Also works with VHS off.": [
+    "scripts/pause_menu.gd:402"
+  ],
+  "WEAVE PREVIOUS FIELDS": [
+    "scripts/pause_menu.gd:403"
+  ],
+  "Full ntsc-rs: select Alternating under the original Field mode control to weave the previous opposite field. Motion can show interlace combing. Off uses original bob reconstruction.": [
+    "scripts/pause_menu.gd:404"
+  ],
+  "Signal resolution and sampling": [
+    "scripts/pause_menu.gd:405"
+  ],
+  "Signal detail": [
+    "scripts/pause_menu.gd:406"
+  ],
+  "Standard signal uses 360×240 in Efficient or 720×480 in Full. Also controls the native tube detail.": [
+    "scripts/pause_menu.gd:406"
+  ],
+  "Receiver / CRT input": [
+    "scripts/pause_menu.gd:407"
+  ],
+  "Standard preserves the game's tape dimensions. Custom follows the window aspect ratio. Source size bypasses shrinking. Applies to the full signal, receiver and original CRT models.": [
+    "scripts/pause_menu.gd:407"
+  ],
+  "Signal width: %s": [],
+  "Resize filter": [
+    "scripts/pause_menu.gd:414",
+    "scripts/video_preset_workshop_panel.gd:230"
+  ],
+  "The six original filters include proper anti-aliasing when shrinking. Fast bilinear uses the GPU's small fixed filter.": [
+    "scripts/pause_menu.gd:414"
+  ],
+  "PROCESS NTSC AT SOURCE RESOLUTION": [
+    "scripts/pause_menu.gd:415"
+  ],
+  "Matches NTSCRT's order: degrade the full source, then shrink for the receiver and CRT. Can be much slower, especially at 4K.": [
+    "scripts/pause_menu.gd:416"
+  ],
+  "CRT render size": [
+    "scripts/pause_menu.gd:417"
+  ],
+  "Window resolution is economical. Original modes supersample the CRT; integer fit also centers and letterboxes it. These can cost substantially more.": [
+    "scripts/pause_menu.gd:417"
+  ],
+  "Full signal and receiver controls": [
+    "scripts/pause_menu.gd:418"
+  ],
+  "Tube display": [
+    "scripts/pause_menu.gd:423"
+  ],
+  "Original CRT controls": [
+    "scripts/pause_menu.gd:424"
+  ],
+  "SCREEN CURVATURE": [
+    "scripts/pause_menu.gd:425"
+  ],
+  "Bends the image like a curved tube. Off keeps a flat screen.": [
+    "scripts/pause_menu.gd:426",
+    "scripts/pause_menu.gd:827"
+  ],
+  "Approximation controls": [
+    "scripts/pause_menu.gd:433"
+  ],
+  "These presets change only the approximation controls below.": [
+    "scripts/pause_menu.gd:433"
+  ],
+  "Broadcast signal": [
+    "scripts/pause_menu.gd:443"
+  ],
+  "How colour is recovered: soft with rainbow shimmer, cleaner edges, or sharpest colour.": [
+    "scripts/pause_menu.gd:444"
+  ],
+  "LINE 21 DATA": [
+    "scripts/pause_menu.gd:448"
+  ],
+  "Simulated caption-data dashes in the blanking bar, visible when the picture rolls. Does not change subtitles.": [
+    "scripts/pause_menu.gd:449"
+  ],
+  "Tape transport": [
+    "scripts/pause_menu.gd:450"
+  ],
+  "Tape speed": [
+    "scripts/pause_menu.gd:451",
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Recording speed. Slower speeds add progressively more noise and softness.": [
+    "scripts/pause_menu.gd:451"
+  ],
+  "DROPOUT COMPENSATION": [
+    "scripts/pause_menu.gd:455"
+  ],
+  "Fills dropouts with neighbouring picture instead of leaving white streaks.": [
+    "scripts/pause_menu.gd:456"
+  ],
+  "AUTOMATIC TAPE FAULTS": [
+    "scripts/pause_menu.gd:457"
+  ],
+  "Lets the simulation trigger occasional tracking faults on its own.": [
+    "scripts/pause_menu.gd:458"
+  ],
+  "Tube screen": [
+    "scripts/pause_menu.gd:462"
+  ],
+  "Mask pattern": [
+    "scripts/pause_menu.gd:463"
+  ],
+  "Pattern of the tube's colour dots: vertical stripes, offset slots, or round triads.": [
+    "scripts/pause_menu.gd:463"
+  ],
+  "INTERLACED FIELDS": [
+    "scripts/pause_menu.gd:468"
+  ],
+  "Draws the picture as alternating fields, like a real broadcast tube.": [
+    "scripts/pause_menu.gd:469"
+  ],
+  "Original CRT models use their own geometry controls below.": [
+    "scripts/pause_menu.gd:827"
+  ],
+  "Select an original CRT model to adjust its controls. Native NTSCRT uses the Tube screen controls below; Pipeline default uses the signal pipeline's tube.": [
+    "scripts/pause_menu.gd:843"
+  ],
+  "Expand or collapse %s settings": [],
+  "Loaded: %s": [],
+  "Saved: %s": [],
+  "Deleted: %s": [],
+  "AM %s": [],
+  "PM %s": [],
+  "EMPLOYEE GUIDANCE": [
+    "localization/art_text.json"
+  ],
+  "YOUR DESK REMEMBERS YOUR SHAPE": [
+    "localization/art_text.json"
+  ],
+  "PRODUCTIVITY CONTINUES AFTER YOU LEAVE": [
+    "localization/art_text.json"
+  ],
+  "ATTENDANCE IS A FORM OF GRATITUDE": [
+    "localization/art_text.json"
+  ],
+  "THE MEETING HAS ALREADY STARTED": [
+    "localization/art_text.json"
+  ],
+  "PLEASE KEEP YOUR THOUGHTS WITHIN THE CUBICLE": [
+    "localization/art_text.json"
+  ],
+  "YOUR REPLACEMENT IS ONBOARDING NOW": [
+    "localization/art_text.json"
+  ],
+  "CLOCK OUT ONLY WHEN THE CLOCK AGREES": [
+    "localization/art_text.json"
+  ],
+  "HUMAN RESOURCES KNOWS WHERE YOU ARE": [
+    "localization/art_text.json"
+  ],
+  "A CLEAN DESK LEAVES NO EVIDENCE": [
+    "localization/art_text.json"
+  ],
+  "GUEST SERVICES": [
+    "localization/art_text.json"
+  ],
+  "WELCOME BACK. YOU NEVER CHECKED OUT.": [
+    "localization/art_text.json"
+  ],
+  "EVERY KEY OPENS THE SAME ROOM": [
+    "localization/art_text.json"
+  ],
+  "PLEASE ENJOY YOUR EXTENDED STAY": [
+    "localization/art_text.json"
+  ],
+  "HOUSEKEEPING WILL ENTER WHETHER YOU ARE READY": [
+    "localization/art_text.json"
+  ],
+  "YOUR RESERVATION HAS NO DEPARTURE DATE": [
+    "localization/art_text.json"
+  ],
+  "QUIET GUESTS RECEIVE COMPLIMENTARY NIGHTS": [
+    "localization/art_text.json"
+  ],
+  "THE LOBBY IS CLOSER THAN IT APPEARS": [
+    "localization/art_text.json"
+  ],
+  "PLEASE LEAVE YOUR NAME AT THE DESK": [
+    "localization/art_text.json"
+  ],
+  "SOMEONE ELSE IS USING YOUR ROOM": [
+    "localization/art_text.json"
+  ],
+  "PASSENGER NOTICE": [
+    "localization/art_text.json"
+  ],
+  "YOUR GATE HAS ALWAYS BEEN OPEN": [
+    "localization/art_text.json"
+  ],
+  "FINAL BOARDING BEGAN YESTERDAY": [
+    "localization/art_text.json"
+  ],
+  "THANK YOU FOR WAITING. WE NOTICED.": [
+    "localization/art_text.json"
+  ],
+  "YOUR FLIGHT IS ON TIME. YOU ARE LATE.": [
+    "localization/art_text.json"
+  ],
+  "UNATTENDED PASSENGERS WILL BE REMOVED": [
+    "localization/art_text.json"
+  ],
+  "ALL DESTINATIONS SHARE THIS TERMINAL": [
+    "localization/art_text.json"
+  ],
+  "YOUR BAGGAGE ARRIVED WITHOUT YOU": [
+    "localization/art_text.json"
+  ],
+  "PLEASE REMAIN SEATED DURING THE DELAY": [
+    "localization/art_text.json"
+  ],
+  "LAST CALL FOR A NAME YOU RECOGNIZE": [
+    "localization/art_text.json"
+  ],
+  "CUSTOMER CARE": [
+    "localization/art_text.json"
+  ],
+  "EVERYTHING MUST GO. PLEASE REMAIN.": [
+    "localization/art_text.json"
+  ],
+  "THE STORES ARE CLOSED. THE MALL IS OPEN.": [
+    "localization/art_text.json"
+  ],
+  "YOUR PURCHASE HAS BEEN REMEMBERED": [
+    "localization/art_text.json"
+  ],
+  "YOUR RECEIPT IS PROOF YOU WERE HERE": [
+    "localization/art_text.json"
+  ],
+  "THE FOOD COURT WILL SERVE YOU SHORTLY": [
+    "localization/art_text.json"
+  ],
+  "PLEASE RETURN TO THE STORE THAT CHOSE YOU": [
+    "localization/art_text.json"
+  ],
+  "TODAY'S SALE ENDS WHEN THE LIGHTS RETURN": [
+    "localization/art_text.json"
+  ],
+  "MANNEQUINS ARE FOR DISPLAY ONLY. SO ARE YOU.": [
+    "localization/art_text.json"
+  ],
+  "CUSTOMER SERVICE IS DIRECTLY BEHIND YOU": [
+    "localization/art_text.json"
+  ],
+  "STUDENT SUCCESS": [
+    "localization/art_text.json"
+  ],
+  "PERFECT ATTENDANCE IS FOREVER": [
+    "localization/art_text.json"
+  ],
+  "THE BELL RINGS WHEN YOU ARE READY": [
+    "localization/art_text.json"
+  ],
+  "TODAY'S LESSON HAS NO END": [
+    "localization/art_text.json"
+  ],
+  "YOUR SEAT HAS BEEN KEPT WARM": [
+    "localization/art_text.json"
+  ],
+  "HALL PASSES DO NOT WORK AFTER DARK": [
+    "localization/art_text.json"
+  ],
+  "THE SUBSTITUTE KNOWS YOUR NAME": [
+    "localization/art_text.json"
+  ],
+  "PLEASE FACE THE FRONT UNTIL DISMISSED": [
+    "localization/art_text.json"
+  ],
+  "THERE WILL BE A TEST ON WHAT YOU FORGOT": [
+    "localization/art_text.json"
+  ],
+  "GRADUATION HAS BEEN POSTPONED INDEFINITELY": [
+    "localization/art_text.json"
+  ],
+  "PATIENT PROGRESS": [
+    "localization/art_text.json"
+  ],
+  "YOUR IMPROVEMENT HAS BEEN OBSERVED": [
+    "localization/art_text.json"
+  ],
+  "COMPLIANCE IS A FORM OF WELLNESS": [
+    "localization/art_text.json"
+  ],
+  "YOU MAY LEAVE WHEN YOU ARRIVE": [
+    "localization/art_text.json"
+  ],
+  "YOUR FILE IS THICKER THAN YOU REMEMBER": [
+    "localization/art_text.json"
+  ],
+  "GROUP THERAPY BEGINS WHEN YOU ARE ALONE": [
+    "localization/art_text.json"
+  ],
+  "THE DOCTOR WILL SEE THROUGH YOU NOW": [
+    "localization/art_text.json"
+  ],
+  "RESTRAINT IS A FORM OF REASSURANCE": [
+    "localization/art_text.json"
+  ],
+  "PLEASE REPORT ANY UNFAMILIAR MEMORIES": [
+    "localization/art_text.json"
+  ],
+  "RECOVERY LOOKS DIFFERENT FROM INSIDE": [
+    "localization/art_text.json"
+  ],
+  "CONDUCT STANDARD": [
+    "localization/art_text.json"
+  ],
+  "GOOD BEHAVIOR IS ALWAYS WATCHED": [
+    "localization/art_text.json"
+  ],
+  "VISITING HOURS HAVE BEEN EXTENDED INDEFINITELY": [
+    "localization/art_text.json"
+  ],
+  "YOUR CELL KNOWS WHEN YOU ARE EMPTY": [
+    "localization/art_text.json"
+  ],
+  "COUNT YOURSELF BEFORE LIGHTS OUT": [
+    "localization/art_text.json"
+  ],
+  "FREEDOM IS A SCHEDULED ACTIVITY": [
+    "localization/art_text.json"
+  ],
+  "THE YARD IS OPEN. THE SKY IS NOT.": [
+    "localization/art_text.json"
+  ],
+  "YOUR SENTENCE KNOWS WHERE YOU SLEEP": [
+    "localization/art_text.json"
+  ],
+  "SILENCE WILL BE RECORDED AS CONSENT": [
+    "localization/art_text.json"
+  ],
+  "RELEASE PAPERWORK IS CURRENTLY MISSING": [
+    "localization/art_text.json"
+  ],
+  "KEY OF BEAUTY": [
+    "localization/art_text.json"
+  ],
+  "PURPLE SIDE": [
+    "localization/art_text.json"
+  ],
+  "NATURAL SHOP": [
+    "localization/art_text.json"
+  ],
+  "SINCE 1977": [
+    "localization/art_text.json"
+  ],
+  "BLUE MARINE": [
+    "localization/art_text.json"
+  ],
+  "ROYAL GRILL": [
+    "localization/art_text.json"
+  ],
+  "BOUTIQUE MARGUERITE": [
+    "localization/art_text.json"
+  ],
+  "CAFE PARADISE NOON": [
+    "localization/art_text.json"
+  ],
+  "SUNSHINE PRINCESS": [
+    "localization/art_text.json"
+  ],
+  "OFFICE   Red Fox / nokillnando · NotAnotherApocalypticCo. · AquaEquinox": [
+    "scripts/title.gd:53"
+  ],
+  "ANNEX   carlcapu9 · Avot · Drake · jimbogies · for_dev / varrocharlie": [
+    "scripts/title.gd:55"
+  ],
+  "AIRPORT   Bucks / Its_Bucks · Ellis Fossett · n.philipsen · assetfactory": [
+    "scripts/title.gd:57"
+  ],
+  "ASYLUM   Veterock · loxfear · Ellie · creative_beast · Mehdi Shahsavan · Matt LeMoine": [
+    "scripts/title.gd:58"
+  ],
+  "SCHOOL   Jawahar Yokesh · dercruz926 · barism09 · neverfollow81 · CAL21": [
+    "scripts/title.gd:59"
+  ],
+  "MALL   kapookkt · matejbiskup97": [
+    "scripts/title.gd:61"
+  ],
+  "PRISON   neverfollow81 · Mark Peters · Mehdi Shahsavan / adventurer · dudecon": [
+    "scripts/title.gd:63"
+  ],
+  "POOLROOMS   NXTLVLPLY · CadmiumCoffee (bsishir)": [
+    "scripts/title.gd:64"
+  ],
+  "SHARED PROPS   William Burke · Tom Seddon · Parth · 5CNG5": [
+    "scripts/title.gd:66"
+  ],
+  "DATA CENTER   Mark Peters · carlcapu9 · FlevasGR · JamieDTran": [
+    "scripts/title.gd:67"
+  ],
+  "BLOOM   Somersby · ChopperManiac · Mark Peters": [
+    "scripts/title.gd:69"
+  ],
+  "EARLIER MODEL   Dudzy (replaced roulette table; source retained)": [
+    "scripts/title.gd:52"
+  ],
+  "CC BY 4.0 except  assetfactory, MaX3Dd  ·  Sketchfab Standard": [
+    "scripts/title.gd:70"
+  ],
+  "Alex Filip  —  Poolrooms tile textures  ·  CC BY 4.0": [
+    "scripts/title.gd:75"
+  ],
+  "SIGNAL STRENGTH": [],
+  "TRACKING": [],
+  "HEAD SWITCH": [],
+  "TIMEBASE JITTER": [],
+  "CRINKLE": [],
+  "HEAD CLOG": [],
+  "DROPOUTS": [],
+  "GHOST": [],
+  "GHOST DELAY": [],
+  "HUM": [],
+  "HORIZONTAL HOLD": [],
+  "VERTICAL HOLD": [],
+  "AFC": [],
+  "SEARCH SPEED": [],
+  "CHROMA NOISE": [],
+  "CHROMA DELAY": [],
+  "CHROMA BLEED": [],
+  "SHARPNESS": [],
+  "MASK STRENGTH": [],
+  "SCANLINE STRENGTH": [],
+  "BRIGHTNESS": [
+    "scripts/video_preset_library.gd:175"
+  ],
+  "SATURATION": [],
+  "GLASS DIFFUSION": [],
+  "CONVERGENCE": [],
+  "VIGNETTE": [],
+  "AUTO EXPOSURE": [],
+  "RF NOISE": [],
+  "BLACK LEVEL": [],
+  "Reference A: %s": [],
+  "CRT: %s. Back to B returns to the look you were browsing.": [],
+  "%s · modified": [],
+  "%s  −": [],
+  "%s  +": [],
+  "Cannot open captures: %s": [],
+  "%s for this look": [],
+  "Sharpness Image": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Sharpness Edges": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Glow Width": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Glow Height": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Glow Halation": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Glow Diffusion": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Colors": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Strength": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Size": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Size Min.": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Size Max.": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Shape": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Offset": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Gamma Input": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Gamma Output": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Brightness": [
+    "third_party/ntscrt/receiver_schema.json",
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Sharpness Horizontal": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Sharpness Vertical": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Dot Width": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Dot Height": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Stagger": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Strength": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Beam Width Min.": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Beam Width Max.": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Brightness Min.": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Brightness Max.": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanline Cutoff": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Brightness Boost": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Dilation": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Input Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Color Boost": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Glow Whitepoint": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Glow Rolloff": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Glow Strength": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Monitor Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Curvature": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Curvature X-Axis": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Curvature Y-Axis": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Corner Size": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Corner Smoothness": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Noise Amount": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Effect": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "maskDark": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "maskLight": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "** CRT-HYLLIAN **": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "COLOR SETTINGS:": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    LUT [ OFF, DARK BLUE, DARK BLUE (cool) ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "LUT [ OFF, DARK BLUE, DARK BLUE (cool) ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Input Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Output Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Output Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Brightboost": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Brightboost": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "PRESET OPTIONS:": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "// Presets greater than 0 disable options with '*'.": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Mask Preset [CUSTOM, APERT1, APERT2, SLOT1, SLOT2, DOT]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Preset [CUSTOM, APERT1, APERT2, SLOT1, SLOT2, DOT]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "// Only affects presets greater than '0'.": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Target Resolution [ 1080P, 4K ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Target Resolution [ 1080P, 4K ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "SCANLINES SETTINGS:": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    * Min Beam Width": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "* Min Beam Width": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    * Max Beam Width": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "* Max Beam Width": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    * Scanlines Strength": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "* Scanlines Strength": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    * Scanlines Shape [ SHARP, SOFT ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "* Scanlines Shape [ SHARP, SOFT ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Orientation [ HORIZONTAL, VERTICAL ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Orientation [ HORIZONTAL, VERTICAL ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "MASK SETTINGS:": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    * Mask [1-6 APERT, 7-10 DOT, 11-14 SLOT, 15-17 LOTTES]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "* Mask [1-6 APERT, 7-10 DOT, 11-14 SLOT, 15-17 LOTTES]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Mask Strength": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Mask Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Monitor Subpixels Layout [ RGB, BGR ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Monitor Subpixels Layout [ RGB, BGR ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "SCALING SETTINGS:": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Scanlines Cutoff": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Scanlines Cutoff": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    High Resolution Scanlines": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "High Resolution Scanlines": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Internal Resolution Scale (downsampling)": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Internal Resolution Scale (downsampling)": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "FILTERING SETTINGS:": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Sharpness Hack": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Sharpness Hack": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Anti Ringing": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Anti Ringing": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "GLOW SETTINGS:": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Enable Glow": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Enable Glow": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "        Whitepoint": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Whitepoint": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "        Rolloff": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Rolloff": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "        Radius": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Radius": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "        Strength": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Strength": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "CURVATURE SETTINGS:": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "    Curvature Toggle": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Curvature Toggle": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "        Shape [ SPHERE, CYLINDER ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Shape [ SPHERE, CYLINDER ]": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "        Corner Size": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "        Corner Smoothness": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Simulated CRT Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Your Display Gamma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Contrast": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Halation Weight": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Diffusion Weight": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Bloom - Underestimate Levels": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Bloom - Excess": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Min Sigma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Max Sigma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Spot Power": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Min Shape": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Max Shape": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Shape Power": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Horiz Filter": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Horiz Sigma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Beam - Horiz Linear RGB Weight": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Convergence - Offset X Red": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Convergence - Offset X Green": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Convergence - Offset X Blue": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Convergence - Offset Y Red": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Convergence - Offset Y Green": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Convergence - Offset Y Blue": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask - Type": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask - Sample Mode": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask - Specify Number of Triads": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask - Triad Size Desired": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask - Number of Triads Desired": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "AA - Subpixel R Offset X": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "AA - Subpixel R Offset Y": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "AA - Cubic Sharpness": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "AA - Gaussian Sigma": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - Mode": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - Radius": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - View Distance": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - Tilt Angle X": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - Tilt Angle Y": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - Aspect Ratio X": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - Aspect Ratio Y": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - Overscan X": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Geometry - Overscan Y": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Border - Size": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Border - Darkness": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Border - Compression": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Interlacing - Toggle": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Interlacing - Bottom Field First": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Interlace - Detect 1080i": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Composite Sharp": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Red Persistence": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Green Persistence": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Blue Persistence": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Composite Bleed": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Composite Artifacts": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "NTSC Artifacts": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "NTSC Artifact Scale": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Animate NTSC Artifacts": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "CRT Mask Scale": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Saturation": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Brightness": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Opacity": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Downsample Bloom Scale": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Upsample Bloom Scale": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Bloom Power": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Bloom Scalar": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Overscan": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Barrel Distortion": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Mask Toggle": [
+    "third_party/ntscrt/slang/presets.json"
+  ],
+  "Anti-aliasing": [],
+  "BLOOM": [],
+  "Reference": [],
+  "Random seed": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Use field": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Choose which rows (\"fields\" in NTSC parlance) of the source image will be used.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Skip every other row, alternating between skipping even and odd rows.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Alternating": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Skip every lower row, keeping the upper ones.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Upper only": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Skip every upper row, keeping the lower ones.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Lower only": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Treat the video as interlaced, with the upper field as the earlier frame.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Interleaved (upper first)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Treat the video as interlaced, with the lower field as the earlier frame.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Interleaved (lower first)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Use all rows; don't skip any.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Both": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Lowpass filter type": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "The low-pass filter to use throughout the effect.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Constant K (blurry)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Simple constant-k filter. Produces longer, blurry results.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Butterworth (sharper)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Filter with a sharper falloff. Produces sharpened, less blurry results.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Input luma filter": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Filter the input luminance to decrease rainbow artifacts.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Notch": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Apply a notch filter to the input luminance signal. Sharp, but has ringing artifacts.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Box": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Apply a simple box filter to the input luminance signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "None": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Do not filter the luminance signal. Adds rainbow artifacts.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma low-pass in": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Apply a low-pass filter to the input chrominance (color) signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Full-intensity low-pass filter.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Light": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Less intense low-pass filter.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "No low-pass filter.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Composite signal sharpening": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Boost high frequencies in the NTSC signal, sharpening the image and intensifying colors.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Composite signal noise": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Noise applied to the composite NTSC signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Intensity": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Intensity of the noise.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Frequency": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Base wavelength, in pixels, of the noise.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Detail": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Octaves of noise.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Snow": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Frequency of random speckles in the image.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Snow anisotropy": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Determines whether the speckles are placed truly randomly or concentrated in certain rows.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Scanline phase shift": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Phase shift of the chrominance (color) signal each scanline. Usually 180 degrees.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "0 degrees": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "90 degrees": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "180 degrees": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "270 degrees": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Scanline phase shift offset": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma demodulation filter": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Filter used to modulate the chrominance (color) data out of the composite NTSC signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Simple horizontal box blur.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Notch filter. Sharper than a box blur, but with ringing artifacts.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "1-line comb": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Average the current row with the previous one, phase-cancelling the chrominance (color) signals. Only works if the scanline phase shift is 180 degrees.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "2-line comb": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Average the current row with the previous and next ones, phase-cancelling the chrominance (color) signals. Only works if the scanline phase shift is 180 degrees.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Luma smear": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Head switching": [
+    "third_party/ntscrt/ntsc_schema.json",
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Emulate VHS head-switching artifacts at the bottom of the image.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Height": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Total height of the head-switching artifact.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Offset": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "How much of the head-switching artifact is off-screen.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Horizontal shift": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "How much the head-switching artifact shifts rows horizontally.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Start mid-line": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Start the head-switching artifact mid-scanline, with some static where it begins.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Position": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Horizontal position at which the head-switching starts.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Jitter": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "How much the head-switching artifact \"jitters\" horizontally.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Tracking noise": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Emulate noise from VHS tracking error.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Total height of the tracking artifacts.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Wave intensity": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "How much the affected scanlines \"wave\" back and forth.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Snow intensity": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Frequency of speckle-type noise in the artifacts.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "How much the speckles are clustered by scanline.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Noise intensity": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Intensity of non-speckle noise.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Ringing": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Additional ringing artifacts, simulated with a notch filter.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Frequency/period of the ringing, in \"rings per pixel\".": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Power": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "The power of the notch filter / how far out the ringing extends.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Scale": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Intensity of the ringing.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Luma noise": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Noise applied to the luminance signal. Useful for higher-frequency noise than the \"Composite noise\" setting can provide.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma noise": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Noise applied to the chrominance (color) signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma phase error": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Phase error for the chrominance (color) signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma phase noise": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Noise applied per-scanline to the phase of the chrominance (color) signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma delay (horizontal)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Horizontal offset of the chrominance (color) signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma delay (vertical)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Vertical offset of the chrominance (color) signal. Usually increases with VHS generation loss.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "VHS emulation": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Emulate cutoff of high-frequency data at various VHS recording speeds.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "SP (Standard Play)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "LP (Long Play)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "EP (Extended Play)": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma loss": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chance that the chrominance (color) signal is completely lost in each scanline.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Sharpen": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Sharpening of the image, as done by some VHS decks.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Amount of sharpening to apply.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Frequency / radius of the sharpening, relative to the tape speed's cutoff frequency.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Edge wave": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Horizontal waving of the image.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Horizontal waving of the image, in pixels.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Speed": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Speed at which the horizontal waving occurs.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Base wavelength for the horizontal waving.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Octaves of noise for the waves.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Vertically blend chroma": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Vertically blend each scanline's chrominance with the scanline above it.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Chroma low-pass out": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Apply a low-pass filter to the output chroma signal.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Scale the effect by these factors.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Horizontal scale": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Horizontally scale the effect by this amount. For 480p video, leave this at 1.0 for the most physically-accurate result.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Vertical scale": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Vertically scale the effect by this amount. You should probably leave this at 1.0.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Scale with video size": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Multiply the scaling factors by the video's height. Prefer scaling the input video to 480p instead, which gives much more accurate-looking results.": [
+    "third_party/ntscrt/ntsc_schema.json"
+  ],
+  "Signal strength": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Antenna signal level. Lowering it brings snow first, then flickering and lost colour as the colour burst drowns, then broken sync as the sync pulses do — the order a real set fails in.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Vertical hold": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "The vertical oscillator's free-running speed. Near the centre the sync pulses pull it into lock; past the lock range the picture rolls, with the blanking bar crossing the screen.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Horizontal hold": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "The horizontal oscillator's free-running speed. Off centre the picture slides sideways as the AFC strains to hold it; further and lock breaks — the picture tears into diagonal bands and the colour goes wild.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "AFC response": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "How quickly the TV's horizontal AFC follows timing changes. Slow sets ride out noise but bend at the top of the picture on VCR playback (flagging); fast ones track tape timing but jitter in noise.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Raises the picture tube's black level, as turning up a TV's brightness did. The blanking intervals and sync pulses become visible when the picture rolls or tears.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Ghost": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "A reflected copy of the signal arriving late (multipath). Negative values invert it, as reflections often did. Its colour shifts with the delay, because the delayed colour carrier arrives at a different phase.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Ghost delay": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "How late the reflection arrives. 1 µs is about 2% of the picture width — a reflection path roughly 300 m longer than the direct one.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Hum": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Mains hum leaking into the video: light and dark bars that drift slowly up the picture (60 Hz hum against the 59.94 Hz colour field rate), bending the picture where the sync separator is pulled off.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Caption data": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Line 21 carries closed-caption data — the row of dashes visible in the blanking bar when the picture rolls.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Timing jump when the VCR changes heads, just before vertical sync. The bottom lines jump sideways and the TV's AFC chases the jump into the top of the next field — the bend called flagging.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Time-base jitter": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Tape stretch and transport flutter. The TV's AFC follows the slow wander; the fast jitter shows as ragged lines.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Tape crinkle": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Creased tape passing the heads: bands of signal loss and violent timing errors, enough to knock the TV out of lock for a moment.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Head clog": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Debris on the video heads, lifting them off the tape: whole fields drop out to noise and lose their sync, more often as the clog worsens.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Tracking error": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "The heads drifting off the recorded tracks. Well tracked, the noise band where they cross to the next track rests in the vertical interval, out of sight; as the error grows it climbs into the picture and widens.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Search": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Fast-forward picture search. The spinning heads cross from track to track, reading noise between them: one fewer noise bar than the speed, drifting as the tracking phase slides, with the picture jumping at each crossing.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Dropouts": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Oxide missing from the tape: brief losses of signal, often a few lines tall. How they look depends on Dropout compensation.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "Dropout compensation": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "The VCR's fix for dropouts: replay the lost stretch from the line before. On, dropouts shrink to brief white ticks and short smears where one line repeats down a tall flaw; off, they show as long white streaks.": [
+    "third_party/ntscrt/receiver_schema.json"
+  ],
+  "FXAA": [
+    "scripts/pause_menu.gd:98"
+  ],
+  "TAA": [
+    "scripts/pause_menu.gd:98"
+  ],
+  "2× MSAA": [
+    "scripts/pause_menu.gd:98"
+  ],
+  "4× MSAA": [
+    "scripts/pause_menu.gd:98"
+  ],
+  "TAA + 4× MSAA": [
+    "scripts/pause_menu.gd:98"
+  ],
+  "30 FPS": [
+    "scripts/pause_menu.gd:104"
+  ],
+  "60 FPS": [
+    "scripts/pause_menu.gd:104"
+  ],
+  "90 FPS": [
+    "scripts/pause_menu.gd:104"
+  ],
+  "120 FPS": [
+    "scripts/pause_menu.gd:104"
+  ],
+  "144 FPS": [
+    "scripts/pause_menu.gd:104"
+  ],
+  "%02d  %s": [
+    "scripts/pause_menu.gd:339",
+    "scripts/video_preset_workshop_panel.gd:106",
+    "scripts/chunk.gd:6772"
+  ],
+  "%s · %s": [
+    "scripts/pause_menu.gd:794"
+  ],
+  "%.1f µs": [
+    "scripts/pause_menu.gd:918"
+  ],
+  "%+.1f px": [
+    "scripts/pause_menu.gd:920"
+  ],
+  "%s  /  %s  /  %s": [
+    "scripts/title.gd:38"
+  ],
+  "ESC": [
+    "scripts/title.gd:44",
+    "scripts/game_input.gd:184"
+  ],
+  "Poly Haven  ·  CC0     nisu / 3DModelsCC0  ·  CC0     WillowBoxArt": [
+    "scripts/title.gd:51"
+  ],
+  "    Rylae Shylna · maxdragonn": [
+    "scripts/title.gd:54"
+  ],
+  "    Archer Sterling": [
+    "scripts/title.gd:56"
+  ],
+  "    Osian CG · HippoStance · Dun · FLUXIUM3D · ap-school": [
+    "scripts/title.gd:60"
+  ],
+  "    Some Random Mall Modeller · MaX3Dd": [
+    "scripts/title.gd:62"
+  ],
+  "    KhanSaab / SadiqKhan911 · ApprenticeRaccoon": [
+    "scripts/title.gd:65"
+  ],
+  "    EntropyNine · Khoa Nguyen · Lora · wpanayides · JmPrsh153 · Network manager": [
+    "scripts/title.gd:68"
+  ],
+  "ambientCG + Poly Haven + TextureCan  ·  CC0     Peter Hull / VT323  ·  SIL Open Font License": [
+    "scripts/title.gd:74"
+  ],
+  "MARCO VAN HYLCKAMA VLIEG": [
+    "scripts/title.gd:299"
+  ],
+  "AI & DESIGN GAME STUDIOS": [
+    "scripts/title.gd:302"
+  ],
+  "%02d     %s": [
+    "scripts/title.gd:359"
+  ],
+  "%02d / %02d": [
+    "scripts/photo_album.gd:201"
+  ],
+  "%d FPS · %.1f ms": [
+    "scripts/fps_counter.gd:61"
+  ],
+  "0 FPS · — ms": [
+    "scripts/fps_counter.gd:64"
+  ],
+  "%d  ▼": [
+    "scripts/chunk.gd:6469"
+  ],
+  "%02d  ▼": [
+    "scripts/chunk.gd:6556",
+    "scripts/chunk.gd:6648",
+    "scripts/chunk.gd:6916"
+  ],
+  "%s %02d:%02d": [
+    "scripts/vhs_osd.gd:353"
+  ],
+  "%s %02d %04d": [
+    "scripts/vhs_osd.gd:377"
+  ],
+  "%s / %s / %s / %s": [
+    "scripts/game_input.gd:221"
+  ],
+  "%s %02d": [
+    "scripts/levels/prison_level_builder.gd:441"
+  ],
+  "%02d:%02d\n": [
+    "scripts/levels/airport_level_builder.gd:214"
+  ],
+  "%s%d\n": [
+    "scripts/levels/airport_level_builder.gd:215"
+  ],
+  "MSAA": [],
+  "HDR": [],
+  "SDR": [],
+  "CRT": [],
+  "VHS": [],
+  "NTSC": [],
+  "NTSCRT": [],
+  "SP": [],
+  "LP": [],
+  "EP": [],
+  "S-Video": [],
+  "Aperture": [],
+  "EasyMode": [],
+  "Hyllian": [],
+  "Royale": [],
+  "Crtsim": [],
+  "Lanczos": [],
+  "TAB": [],
+  "ENTER": [],
+  "WASD": [],
+  "1 · Restaurant & Cafe": [
+    "localization/art_text.json"
+  ],
+  "2 · Beauty and Wellness": [
+    "localization/art_text.json"
+  ],
+  "3 · IT & Electronics": [
+    "localization/art_text.json"
+  ],
+  "4 · Gold and Jewelry": [
+    "localization/art_text.json"
+  ],
+  "5 · Fashion and Accessories": [
+    "localization/art_text.json"
+  ]
+}

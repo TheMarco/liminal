@@ -43,6 +43,18 @@ func run() -> void:
 	model.set_value("story_subtitles", true)
 	captions._update_caption()
 	expect(captions.visible and captions._label.text == "A readable caption", "enabled captions not visible")
+	# Switching language while a movie runs must select its translated track,
+	# preserve the movie clock and keep the user's ability to disable captions.
+	for code: String in ["ja", "ko", "zh_CN", "zh_TW"]:
+		var catalog := StorySubtitles.tracks(code)
+		var path := video.stream.resource_path
+		var original: Array = catalog[path]
+		var text: String = Localization.NAMES[Localization.LOCALES.find(code)]
+		catalog[path] = [{"start": 0.0, "end": 60.0, "text": text}]
+		model.set_value("language", code)
+		expect(captions.visible and captions._label.text == text, "live subtitle language switch failed: " + code)
+		expect(video.is_playing(), "language switch stopped the movie")
+		catalog[path] = original
 	model.set_value("story_subtitles", false)
 	expect(not captions.visible, "setting did not hide captions immediately")
 	model.set_value("story_subtitles", true)
@@ -52,4 +64,5 @@ func run() -> void:
 	captions.free()
 	video.free()
 	GameSettings.current = old_settings
+	Localization.apply("en")
 	finish("story subtitles")

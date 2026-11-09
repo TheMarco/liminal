@@ -1,0 +1,11 @@
+[package]
+name = "ntscrt-reference"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+ntsc-rs = { path = "../../../build/ntscrt-upstream/ntsc-rs-add90f5bf1bf7e3c573e4e945a16f44a82941b51/crates/ntscrs", default-features = false }
+serde_json = "1"
