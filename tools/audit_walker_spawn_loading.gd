@@ -57,6 +57,10 @@ func _run() -> void:
 
 	var player := Player.new()
 	player.level_theme = 1
+	# Spawn clearance and diagnostics use the player's world-space position.
+	root.add_child(player)
+	player.set_process(false)
+	player.set_physics_process(false)
 	var director := HorrorDirector.new()
 	director.enabled = true
 	var manager := LoadingManager.new()

@@ -7,7 +7,13 @@ var failures: Array[String] = []
 
 class TestWalker extends ShadowWalkerVisual:
 	func _ready() -> void:
-		pass
+		# Contact now requires a drawable body. Keep this fixture lightweight
+		# while exercising the real visibility guard, rather than bypassing it.
+		_model = Node3D.new()
+		add_child(_model)
+		var body := MeshInstance3D.new()
+		body.mesh = BoxMesh.new()
+		_model.add_child(body)
 
 class Pursuer extends ShadowFigure:
 	var catches := 0
