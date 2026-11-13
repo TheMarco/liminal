@@ -136,6 +136,8 @@ func run() -> void:
 			var cpu: Array[float] = []
 			var physics: Array[float] = []
 			var draws: Array[float] = []
+			var shadow_draws: Array[float] = []
+			var visible_draws: Array[float] = []
 			var primitives: Array[float] = []
 			var previous := Time.get_ticks_usec()
 			var start_frames := frame_events
@@ -157,10 +159,17 @@ func run() -> void:
 				cpu.append(Performance.get_monitor(Performance.TIME_PROCESS)*1000.0)
 				physics.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000.0)
 				draws.append(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+				var viewport_rid: RID = host.source.get_viewport_rid()
+				shadow_draws.append(RenderingServer.viewport_get_render_info(viewport_rid,
+					RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME))
+				visible_draws.append(RenderingServer.viewport_get_render_info(viewport_rid,
+					RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME))
 				primitives.append(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 			game.player.dev_walk = false
 			var record := {"look":look,"tier":tier,"variant":variant,"frame_ms":stats(frames),"cpu_process_ms":stats(cpu),
 				"physics_ms":stats(physics),"draw_calls":stats(draws),"primitives":stats(primitives),
+				"shadow_draw_calls":stats(shadow_draws),"visible_draw_calls":stats(visible_draws),
+				"zero_shadow_frames":shadow_draws.count(0.0),
 				"world_height":host.source.size.y*host.source.scaling_3d_scale,"source_size":str(host.source.size),
 				"rendered_frames":frame_events-start_frames,"resident_chunks":game.cm.chunks.size(),
 				"visited_cells":cells.size(),"travel_meters":travel,"end_level":game.active_level,

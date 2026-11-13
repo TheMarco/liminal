@@ -159,6 +159,7 @@ AUDITS=(
 	"runtime_diagnostics|tools/audit_runtime_diagnostics.gd|"
 	"player_floor_contact|tools/audit_player_floor_contact.gd|--mode=descent --nologo"
 	"floor_resource_lifetime|tools/audit_floor_resource_lifetime.gd|"
+	"performance_contracts|tools/audit_performance_contracts.gd|"
 	"incremental_streaming|tools/audit_incremental_streaming.gd|"
 	"light_distance|tools/audit_light_distance.gd|"
 	"blackout_presentation|tools/audit_blackout_presentation.gd|"
