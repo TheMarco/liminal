@@ -1,0 +1,25 @@
+[h1]0.5.11 — Performance improvements and smoother exploration[/h1]
+
+This update focuses on reducing unnecessary rendering work and the frame-time spikes that can interrupt exploration.
+
+Thank you to everyone who sent logs, screenshots and detailed reports. They helped narrow down several problems, including lights repeatedly redrawing shadows in rooms where nothing was moving.
+
+[h2]What's changed[/h2]
+[list]
+[*][b]More efficient shadows.[/b] Reworked shadow allocation to improve reuse of existing shadows, especially in rooms with many lights. The Bloom's pulsing growths and the airport's moving luggage also require fewer shadow updates.
+[*][b]Lower texture memory requirements.[/b] World, model and painting textures now use GPU compression, mipmaps and a 2K size limit. UI, ghost sprites, portal panoramas and CRT lookup textures keep their existing treatment.
+[*][b]Less work when leaving rooms.[/b] Unloaded rooms are now removed gradually across frames instead of deleting a whole group at once.
+[*][b]Lighter realm previews.[/b] Looking through a seal no longer runs a second full set of expensive lighting effects. The destination uses its full environment when you enter.
+[*][b]Less repeated work between floors.[/b] Shared shaders stay loaded across floor changes. Small decorative objects and some rounded meshes also have a lower rendering cost.
+[*][b]Better defaults and diagnostics.[/b] New Windows and Linux settings profiles on integrated graphics start on Low. Existing preferences are preserved. Additional logging will help investigate remaining performance problems.
+[/list]
+
+[h2]Visual trade-offs[/h2]
+Some lamp shadows may look softer up close, some previously 4K textures are now 2K, and the view through a realm seal may look flatter than the destination itself.
+
+[h2]Windows testing is continuing[/h2]
+These changes address specific sources of rendering and streaming cost. They are not a promise that every freeze or crash is fixed; startup stalls and Windows stability remain under investigation.
+
+If you still encounter problems, you can try [code]--rendering-driver vulkan[/code] in Steam's launch options. It has helped some testers, but results vary and the default driver has not changed.
+
+Please include your GPU, graphics settings, whether you used Vulkan, and your latest game and performance logs with further reports. Thank you for helping me make the game run better.
