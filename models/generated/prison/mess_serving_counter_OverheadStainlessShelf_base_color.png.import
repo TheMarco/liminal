@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ba77sufvcf3gn"
-path="res://.godot/imported/mess_serving_counter_OverheadStainlessShelf_base_color.png-7dd11cd2306550415958d8c20b8f716c.ctex"
+path.bptc="res://.godot/imported/mess_serving_counter_OverheadStainlessShelf_base_color.png-7dd11cd2306550415958d8c20b8f716c.bptc.ctex"
+path.astc="res://.godot/imported/mess_serving_counter_OverheadStainlessShelf_base_color.png-7dd11cd2306550415958d8c20b8f716c.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "f4d839f082ab2986bf9cdb61fd0782d6"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/generated/prison/mess_serving_counter_OverheadStainlessShelf_base_color.png"
-dest_files=["res://.godot/imported/mess_serving_counter_OverheadStainlessShelf_base_color.png-7dd11cd2306550415958d8c20b8f716c.ctex"]
+dest_files=["res://.godot/imported/mess_serving_counter_OverheadStainlessShelf_base_color.png-7dd11cd2306550415958d8c20b8f716c.bptc.ctex", "res://.godot/imported/mess_serving_counter_OverheadStainlessShelf_base_color.png-7dd11cd2306550415958d8c20b8f716c.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

@@ -3,27 +3,29 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://df28ip8ecrrfd"
-path="res://.godot/imported/wallpaper_damask_yellow.png-b0828b3ca973d4846fe7f6927d93a69e.ctex"
+path.bptc="res://.godot/imported/wallpaper_damask_yellow.png-b0828b3ca973d4846fe7f6927d93a69e.bptc.ctex"
+path.astc="res://.godot/imported/wallpaper_damask_yellow.png-b0828b3ca973d4846fe7f6927d93a69e.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://textures/annex/wallpaper_damask_yellow.png"
-dest_files=["res://.godot/imported/wallpaper_damask_yellow.png-b0828b3ca973d4846fe7f6927d93a69e.ctex"]
+dest_files=["res://.godot/imported/wallpaper_damask_yellow.png-b0828b3ca973d4846fe7f6927d93a69e.bptc.ctex", "res://.godot/imported/wallpaper_damask_yellow.png-b0828b3ca973d4846fe7f6927d93a69e.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
@@ -36,5 +38,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

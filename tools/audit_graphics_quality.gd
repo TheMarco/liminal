@@ -234,13 +234,18 @@ func run() -> void:
 	var realm := REALM.new()
 	realm._source["env"] = game._build_env(0)
 	realm._preview_environment = WorldEnvironment.new()
-	realm._preview_environment.environment = game._build_env(7)
+	realm._destination_environment = game._build_env(7)
+	realm._preview_environment.environment = realm._preview_only_environment(realm._destination_environment)
 	realm.preview = SubViewport.new()
 	realm.preview.size = Vector2i(960,600)
 	settings.apply_quality_preset(3)
 	realm.refresh_graphics_quality(settings)
-	expect(realm._source.env.sdfgi_enabled and realm._preview_environment.environment.sdfgi_enabled,
+	expect(realm._source.env.sdfgi_enabled and realm._destination_environment.sdfgi_enabled,
 		"cached realm environments retained old quality")
+	# The glimpse through the seal never carries a second GI field or fog grid.
+	expect(not realm._preview_environment.environment.sdfgi_enabled
+		and not realm._preview_environment.environment.volumetric_fog_enabled,
+		"realm preview allocated a second GI/fog environment")
 	expect(realm.preview.msaa_3d == Viewport.MSAA_DISABLED and realm.preview.use_taa
 		and realm.preview.scaling_3d_scale == 1.0, "preview missed quality or was downscaled twice")
 	realm.preview.free()

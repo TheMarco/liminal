@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://0i0g48yut6yf"
-path="res://.godot/imported/network_server_rack_0.png-b004cd1987e4b193ce950bd6b846cd29.ctex"
+path.bptc="res://.godot/imported/network_server_rack_0.png-b004cd1987e4b193ce950bd6b846cd29.bptc.ctex"
+path.astc="res://.godot/imported/network_server_rack_0.png-b004cd1987e4b193ce950bd6b846cd29.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "cfd01b0dc78a92ea4bf210065cb9f755"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/network_server_rack/network_server_rack_0.png"
-dest_files=["res://.godot/imported/network_server_rack_0.png-b004cd1987e4b193ce950bd6b846cd29.ctex"]
+dest_files=["res://.godot/imported/network_server_rack_0.png-b004cd1987e4b193ce950bd6b846cd29.bptc.ctex", "res://.godot/imported/network_server_rack_0.png-b004cd1987e4b193ce950bd6b846cd29.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

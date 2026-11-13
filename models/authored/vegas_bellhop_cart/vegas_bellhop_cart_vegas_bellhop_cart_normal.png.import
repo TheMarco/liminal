@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://l802nvv4vj3p"
-path="res://.godot/imported/vegas_bellhop_cart_vegas_bellhop_cart_normal.png-fef71b8a02a3db952fb159b560d8f4c5.ctex"
+path.bptc="res://.godot/imported/vegas_bellhop_cart_vegas_bellhop_cart_normal.png-fef71b8a02a3db952fb159b560d8f4c5.bptc.ctex"
+path.astc="res://.godot/imported/vegas_bellhop_cart_vegas_bellhop_cart_normal.png-fef71b8a02a3db952fb159b560d8f4c5.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "35844d096b32b97223f5e8b2a56c69ed"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/vegas_bellhop_cart/vegas_bellhop_cart_vegas_bellhop_cart_normal.png"
-dest_files=["res://.godot/imported/vegas_bellhop_cart_vegas_bellhop_cart_normal.png-fef71b8a02a3db952fb159b560d8f4c5.ctex"]
+dest_files=["res://.godot/imported/vegas_bellhop_cart_vegas_bellhop_cart_normal.png-fef71b8a02a3db952fb159b560d8f4c5.bptc.ctex", "res://.godot/imported/vegas_bellhop_cart_vegas_bellhop_cart_normal.png-fef71b8a02a3db952fb159b560d8f4c5.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

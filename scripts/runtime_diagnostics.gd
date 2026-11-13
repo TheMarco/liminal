@@ -10,6 +10,7 @@ const SLOW_USEC := 20000
 const REPORT_USEC := 2000000
 const SAMPLE_USEC := 30000000
 static var _instance: RuntimeDiagnostics
+static var world_viewport: Viewport
 
 var _file: FileAccess
 var _path := LOG_PATH
@@ -45,6 +46,7 @@ func _ready() -> void:
 		"game_version": ProjectSettings.get_setting("application/config/version", "unknown"),
 		"os_version": OS.get_version(), "cpu": OS.get_processor_name(),
 		"gpu": RenderingServer.get_video_adapter_name(),
+		"gpu_type": RenderingServer.get_video_adapter_type(),
 		"renderer": RenderingServer.get_current_rendering_method(),
 		"driver": RenderingServer.get_current_rendering_driver_name(),
 		"d3d12_resource_descriptors": ProjectSettings.get_setting("rendering/rendering_device/d3d12/max_resource_descriptors",65536),
@@ -127,6 +129,17 @@ func _snapshot() -> Dictionary:
 		"window_size": str(get_window().size), "fps": Engine.get_frames_per_second(),
 	}
 	if _context.is_valid(): result["game"] = _context.call()
+	# Unlike the Performance monitors above, per-viewport render info is live
+	# in release builds. Shadow draws that never fall to zero while nothing
+	# moves mean lights are fighting over shadow atlas slots.
+	if is_instance_valid(world_viewport):
+		var rid := world_viewport.get_viewport_rid()
+		result["world_draws"] = {
+			"visible": RenderingServer.viewport_get_render_info(rid,
+				RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
+			"shadow": RenderingServer.viewport_get_render_info(rid,
+				RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		}
 	return result
 
 

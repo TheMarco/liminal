@@ -101,8 +101,8 @@ const DOOR_CLEAR_DEPTH := 3.6
 const DOOR_CLEAR_PAD := 0.5
 
 static var BOX := BoxMesh.new()
-static var CYL := CylinderMesh.new()
-static var SPH := SphereMesh.new()
+static var CYL := _unit_cylinder()
+static var SPH := _unit_sphere()
 static var TOR := TorusMesh.new()
 static var QUAD := QuadMesh.new()
 static var CONE := CylinderMesh.new()
@@ -1383,7 +1383,7 @@ static func prewarm_theme_content(ws: int, p_theme: int) -> void:
 ## retains shared materials and models throughout play.
 static func prepare_floor_resources(p_theme: int) -> void:
 	_release_floor_caches()
-	Mats.clear_runtime_caches()
+	Mats.clear_runtime_caches(true)
 	FloorResourcePreloader.prepare_floor(theme_prop_paths(p_theme))
 	if p_theme in [5, 7, 8, 10, 11]:
 		SurfaceWear.prepare_floor()
@@ -1619,6 +1619,22 @@ func build_next_stage() -> bool:
 	return _build_stage == 8
 
 
+## The engine defaults are 64 segments: 768 and 4,224 triangles for shapes
+## used mostly as 3-13 cm bulbs, knobs and rails, repeated in every shadow pass.
+static func _unit_cylinder() -> CylinderMesh:
+	var mesh := CylinderMesh.new()
+	mesh.radial_segments = 24
+	mesh.rings = 1
+	return mesh
+
+
+static func _unit_sphere() -> SphereMesh:
+	var mesh := SphereMesh.new()
+	mesh.radial_segments = 24
+	mesh.rings = 11
+	return mesh
+
+
 ## The allowlist is intentionally conservative: other enclosed floors are
 ## measurable with the same diagnostic, but culling can cost more CPU there.
 static var occlusion_themes: Array[int] = [10]
@@ -1633,11 +1649,34 @@ func record_occluder_wall(mesh: MeshInstance3D) -> void:
 		_occluder_walls.append(mesh)
 
 
+## Knobs, bulbs, screws and trim smaller than this cover less than a texel of
+## a fixture shadow tile, yet each one is another draw in every shadow pass
+## that reaches it (hundreds per room on the Office and Casino floors).
+const SMALL_SHADOW_CASTER := 0.22
+
+func _drop_small_shadow_caster(instance: MeshInstance3D) -> bool:
+	if instance.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+			or instance.mesh == null:
+		return false
+	var basis := instance.basis
+	var ancestor := instance.get_parent()
+	while ancestor is Node3D and ancestor != self:
+		basis = ancestor.basis * basis
+		ancestor = ancestor.get_parent()
+	var size := instance.mesh.get_aabb().size * basis.get_scale().abs()
+	if maxf(size.x, maxf(size.y, size.z)) >= SMALL_SHADOW_CASTER:
+		return false
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return true
+
+
 func prepare_runtime_rendering(room_light_fade_begin := 0.0) -> void:
 	if _rendering_prepared:
 		return
 	_rendering_prepared = true
 	for mesh in find_children("*", "MeshInstance3D", true, false):
+		if _drop_small_shadow_caster(mesh):
+			continue
 		preload("res://scripts/fixture_lighting.gd").prepare_shadow_mesh(mesh)
 	# Builders keep their authored close-up illumination and short shadow budget.
 	# Extend only architectural lighting, not little indicators/prop glows. This

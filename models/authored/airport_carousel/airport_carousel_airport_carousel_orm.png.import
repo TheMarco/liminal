@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dh16ufdbewb7r"
-path="res://.godot/imported/airport_carousel_airport_carousel_orm.png-a4455561c80f26567fd3f2f1dfd15407.ctex"
+path.bptc="res://.godot/imported/airport_carousel_airport_carousel_orm.png-a4455561c80f26567fd3f2f1dfd15407.bptc.ctex"
+path.astc="res://.godot/imported/airport_carousel_airport_carousel_orm.png-a4455561c80f26567fd3f2f1dfd15407.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "4ccbf75477e21a688fad491d96ff5ce1"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/airport_carousel/airport_carousel_airport_carousel_orm.png"
-dest_files=["res://.godot/imported/airport_carousel_airport_carousel_orm.png-a4455561c80f26567fd3f2f1dfd15407.ctex"]
+dest_files=["res://.godot/imported/airport_carousel_airport_carousel_orm.png-a4455561c80f26567fd3f2f1dfd15407.bptc.ctex", "res://.godot/imported/airport_carousel_airport_carousel_orm.png-a4455561c80f26567fd3f2f1dfd15407.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

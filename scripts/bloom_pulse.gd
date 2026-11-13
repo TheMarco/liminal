@@ -14,6 +14,33 @@ var _time := 0.0
 
 func _ready() -> void:
 	_base_scale = scale
+	_freeze_shadows.call_deferred()
+
+
+## A shadow caster that changes scale every frame forces every fixture light in
+## range to re-render its shadow map every frame. The beat is a few percent:
+## cast the shadow from a still twin and let only the visible mesh breathe.
+func _freeze_shadows() -> void:
+	var host := get_parent() as Node3D
+	if host == null or not is_inside_tree():
+		return
+	for found in find_children("*", "MeshInstance3D", true, false):
+		var source := found as MeshInstance3D
+		if source.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+				or source.mesh == null or source.skin != null:
+			continue
+		var twin := MeshInstance3D.new()
+		twin.name = "StillShadow"
+		twin.mesh = source.mesh
+		twin.material_override = source.material_override
+		twin.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		twin.layers = source.layers
+		twin.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		host.add_child(twin)
+		twin.global_transform = source.global_transform
+		source.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# A removed or resolved set piece must not leave its shadow behind.
+		source.tree_exiting.connect(twin.queue_free)
 
 
 func _process(delta: float) -> void:

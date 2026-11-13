@@ -539,6 +539,8 @@ func _bloom_particle_layer(tag: String, amount: int, quad_size: float,
 		_particle_quad_meshes[quad_size] = quad
 	particles.draw_pass_1 = quad
 	particles.position = Vector3(6.0, ctx.ceiling_height * 0.48, 6.0)
+	# Live particle systems otherwise count as moving shadow casters.
+	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	particles.set_meta(tag, true)
 	scene.add_node(particles)
 

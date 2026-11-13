@@ -207,8 +207,23 @@ func _init(config_path: String = "user://settings.cfg") -> void:
 	_path = config_path
 	reset_defaults(false)
 	values["language"] = Localization.normalize(OS.get_locale())
-	if not load_from_disk() and values["language"] != "en": values["story_subtitles"] = true
+	if not load_from_disk():
+		if values["language"] != "en": values["story_subtitles"] = true
+		_apply_first_run_hardware_default()
 	Localization.apply(str(values["language"]))
+
+## A new player on integrated graphics should not start on the Medium budget
+## (SDFGI, volumetric fog, SSR, SSAO). Only a profile that has never been saved
+## is affected; Apple silicon reports "integrated" and keeps the authored default.
+func _apply_first_run_hardware_default() -> void:
+	if _path != "user://settings.cfg" or DisplayServer.get_name() == "headless" \
+			or OS.get_name() == "macOS":
+		return
+	var adapter := RenderingServer.get_video_adapter_type()
+	if adapter == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU \
+			or adapter == RenderingDevice.DEVICE_TYPE_CPU:
+		apply_quality_preset(0)
+
 
 func load_from_disk() -> bool:
 	var config := ConfigFile.new()

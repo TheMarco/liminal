@@ -111,7 +111,29 @@ static func apply_viewport_features(viewport: Viewport, settings: GameSettings, 
 	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if aa == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
 	viewport.msaa_3d = Viewport.MSAA_2X if aa == 3 else (Viewport.MSAA_4X if aa == 4 or aa == 5 else Viewport.MSAA_DISABLED)
 	# 4K retains fixture blockers without Ultra's fourfold atlas allocation.
-	viewport.positional_shadow_atlas_size = [1024, 2048, 4096, 4096][int(settings.get_value("shadow_quality"))]
+	var shadows := int(settings.get_value("shadow_quality"))
+	# Uniform 8x8 quadrants (see configure_shadow_atlas): every tile is 1/16 of
+	# the atlas edge, so 128/256/512/512 pixels per fixture.
+	viewport.positional_shadow_atlas_size = [2048, 4096, 8192, 8192][shadows]
+	configure_shadow_atlas(viewport)
+	# The world is at most 480/720 lines under the default looks: a two to
+	# three pixel LOD error and 4x anisotropy are invisible there, but they cut
+	# vertex work and texture bandwidth on entry-level GPUs.
+	viewport.mesh_lod_threshold = [3.0, 2.0, 1.0, 1.0][shadows]
+	viewport.anisotropic_filtering_level = [Viewport.ANISOTROPY_2X, Viewport.ANISOTROPY_4X,
+		Viewport.ANISOTROPY_8X, Viewport.ANISOTROPY_16X][shadows]
+
+## Godot's default atlas mixes tile sizes (4/4/16/64 per quadrant). A light
+## parked in a quadrant other than its ideal one is moved to another slot on
+## EVERY frame once the ideal quadrant is full, and each move re-renders its
+## shadow. Every fixture here is a blocker, so busy rooms overflow at once:
+## 10,000+ shadow draw calls per frame in the Casino and Prison with nothing
+## moving, on every preset. With one tile size no quadrant is "better", so a
+## cached shadow stays cached. 256 slots; omni lights take two.
+static func configure_shadow_atlas(viewport: Viewport) -> void:
+	for quadrant in 4:
+		if viewport.get_positional_shadow_atlas_quadrant_subdiv(quadrant) != Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_64:
+			viewport.set_positional_shadow_atlas_quadrant_subdiv(quadrant, Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_64)
 
 static func apply_global(settings: GameSettings) -> void:
 	var shadows := int(settings.get_value("shadow_quality"))

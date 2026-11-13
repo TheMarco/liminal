@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://er60b567osyh"
-path="res://.godot/imported/detention_sink_fixture_WallMountingFlange_R_normal.png-3c3b0656ef5351f463849accd0e3b79f.ctex"
+path.bptc="res://.godot/imported/detention_sink_fixture_WallMountingFlange_R_normal.png-3c3b0656ef5351f463849accd0e3b79f.bptc.ctex"
+path.astc="res://.godot/imported/detention_sink_fixture_WallMountingFlange_R_normal.png-3c3b0656ef5351f463849accd0e3b79f.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "b5e54788e6bfc8b8a10e352d0fd6b4f1"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/generated/prison/detention_sink_fixture_WallMountingFlange_R_normal.png"
-dest_files=["res://.godot/imported/detention_sink_fixture_WallMountingFlange_R_normal.png-3c3b0656ef5351f463849accd0e3b79f.ctex"]
+dest_files=["res://.godot/imported/detention_sink_fixture_WallMountingFlange_R_normal.png-3c3b0656ef5351f463849accd0e3b79f.bptc.ctex", "res://.godot/imported/detention_sink_fixture_WallMountingFlange_R_normal.png-3c3b0656ef5351f463849accd0e3b79f.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

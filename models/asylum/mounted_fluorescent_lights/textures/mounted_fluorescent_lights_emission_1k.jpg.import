@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bwmgxcesw3g"
-path="res://.godot/imported/mounted_fluorescent_lights_emission_1k.jpg-3617b0fb2d41db2c67ccc892b37dedee.ctex"
+path.bptc="res://.godot/imported/mounted_fluorescent_lights_emission_1k.jpg-3617b0fb2d41db2c67ccc892b37dedee.bptc.ctex"
+path.astc="res://.godot/imported/mounted_fluorescent_lights_emission_1k.jpg-3617b0fb2d41db2c67ccc892b37dedee.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://models/asylum/mounted_fluorescent_lights/textures/mounted_fluorescent_lights_emission_1k.jpg"
-dest_files=["res://.godot/imported/mounted_fluorescent_lights_emission_1k.jpg-3617b0fb2d41db2c67ccc892b37dedee.ctex"]
+dest_files=["res://.godot/imported/mounted_fluorescent_lights_emission_1k.jpg-3617b0fb2d41db2c67ccc892b37dedee.bptc.ctex", "res://.godot/imported/mounted_fluorescent_lights_emission_1k.jpg-3617b0fb2d41db2c67ccc892b37dedee.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -36,5 +38,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

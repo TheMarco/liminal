@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bbjeah8ffh3ao"
-path="res://.godot/imported/guard_key_cabinet_OliveDoorFrame_normal.png-aa3a7a15601f6ad3087179aa6e11f986.ctex"
+path.bptc="res://.godot/imported/guard_key_cabinet_OliveDoorFrame_normal.png-aa3a7a15601f6ad3087179aa6e11f986.bptc.ctex"
+path.astc="res://.godot/imported/guard_key_cabinet_OliveDoorFrame_normal.png-aa3a7a15601f6ad3087179aa6e11f986.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "737b717cfcee8812fe53e460c6c1c395"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/generated/prison/guard_key_cabinet_OliveDoorFrame_normal.png"
-dest_files=["res://.godot/imported/guard_key_cabinet_OliveDoorFrame_normal.png-aa3a7a15601f6ad3087179aa6e11f986.ctex"]
+dest_files=["res://.godot/imported/guard_key_cabinet_OliveDoorFrame_normal.png-aa3a7a15601f6ad3087179aa6e11f986.bptc.ctex", "res://.godot/imported/guard_key_cabinet_OliveDoorFrame_normal.png-aa3a7a15601f6ad3087179aa6e11f986.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

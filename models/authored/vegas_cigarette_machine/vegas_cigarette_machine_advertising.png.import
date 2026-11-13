@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dtw64drs6ebg6"
-path="res://.godot/imported/vegas_cigarette_machine_advertising.png-5cd924f831f1338ecd3ba33a1dd96888.ctex"
+path.bptc="res://.godot/imported/vegas_cigarette_machine_advertising.png-5cd924f831f1338ecd3ba33a1dd96888.bptc.ctex"
+path.astc="res://.godot/imported/vegas_cigarette_machine_advertising.png-5cd924f831f1338ecd3ba33a1dd96888.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "d4aad3e8e06600386a6b131e2adbc809"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/vegas_cigarette_machine/vegas_cigarette_machine_advertising.png"
-dest_files=["res://.godot/imported/vegas_cigarette_machine_advertising.png-5cd924f831f1338ecd3ba33a1dd96888.ctex"]
+dest_files=["res://.godot/imported/vegas_cigarette_machine_advertising.png-5cd924f831f1338ecd3ba33a1dd96888.bptc.ctex", "res://.godot/imported/vegas_cigarette_machine_advertising.png-5cd924f831f1338ecd3ba33a1dd96888.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

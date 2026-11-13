@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://coaj2e8vtnkc4"
-path="res://.godot/imported/mfp_office_printer_10.jpg-c71747b0bf7bcc99290ab3dbb7551419.ctex"
+path.bptc="res://.godot/imported/mfp_office_printer_10.jpg-c71747b0bf7bcc99290ab3dbb7551419.bptc.ctex"
+path.astc="res://.godot/imported/mfp_office_printer_10.jpg-c71747b0bf7bcc99290ab3dbb7551419.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "6d13b19873f4c93c2a91e230a021b664"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/mfp_office_printer/mfp_office_printer_10.jpg"
-dest_files=["res://.godot/imported/mfp_office_printer_10.jpg-c71747b0bf7bcc99290ab3dbb7551419.ctex"]
+dest_files=["res://.godot/imported/mfp_office_printer_10.jpg-c71747b0bf7bcc99290ab3dbb7551419.bptc.ctex", "res://.godot/imported/mfp_office_printer_10.jpg-c71747b0bf7bcc99290ab3dbb7551419.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

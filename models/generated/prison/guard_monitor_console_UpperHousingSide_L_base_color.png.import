@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c273vdrxer085"
-path="res://.godot/imported/guard_monitor_console_UpperHousingSide_L_base_color.png-d601e56be16a9d05f2aa23d66ca8b347.ctex"
+path.bptc="res://.godot/imported/guard_monitor_console_UpperHousingSide_L_base_color.png-d601e56be16a9d05f2aa23d66ca8b347.bptc.ctex"
+path.astc="res://.godot/imported/guard_monitor_console_UpperHousingSide_L_base_color.png-d601e56be16a9d05f2aa23d66ca8b347.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "a916120d0b941d49554f3fff9b303f66"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/generated/prison/guard_monitor_console_UpperHousingSide_L_base_color.png"
-dest_files=["res://.godot/imported/guard_monitor_console_UpperHousingSide_L_base_color.png-d601e56be16a9d05f2aa23d66ca8b347.ctex"]
+dest_files=["res://.godot/imported/guard_monitor_console_UpperHousingSide_L_base_color.png-d601e56be16a9d05f2aa23d66ca8b347.bptc.ctex", "res://.godot/imported/guard_monitor_console_UpperHousingSide_L_base_color.png-d601e56be16a9d05f2aa23d66ca8b347.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

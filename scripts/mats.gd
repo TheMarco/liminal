@@ -4,6 +4,7 @@ class_name Mats
 ## and reused across all chunks.
 
 static var _c := {}
+static var _floor_shaders := {}
 static var _wall_art_textures := {}
 static var _wall_art_preloads_requested := false
 
@@ -11,7 +12,16 @@ static var _wall_art_preloads_requested := false
 ## Called at the opaque floor transition and at audit teardown. Streamed
 ## chunks share these for the floor's lifetime; live nodes retain their own
 ## references when the cache relinquishes an inactive floor.
-static func clear_runtime_caches() -> void:
+static func clear_runtime_caches(keep_shaders := false) -> void:
+	# Freeing the last material of a shader discards its compiled pipelines;
+	# the next floor then recompiles the surfaces both floors share. Between
+	# floors only the (small) Shader objects are retained, never textures.
+	if keep_shaders:
+		for material in _c.values():
+			if material is ShaderMaterial and material.shader != null:
+				_floor_shaders[material.shader] = true
+	else:
+		_floor_shaders.clear()
 	_c.clear()
 	_wall_art_textures.clear()
 	_wall_art_preloads_requested = false

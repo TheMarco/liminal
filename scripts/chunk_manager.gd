@@ -75,6 +75,7 @@ var _hostile_cells := {}
 var _hostile_centers := {}
 var _last_center := NO_BROKEN_STATION
 var _last_ahead := NO_BROKEN_STATION
+var _retired: Array = []
 var _pending_chunk: Chunk
 var _pending_cell := NO_BROKEN_STATION
 var _chunks_since_prefetch := 0
@@ -144,6 +145,7 @@ func _process(_dt: float) -> void:
 	if player == null or not player.is_inside_tree():
 		return
 	var frame_started := Time.get_ticks_usec()
+	_free_one_retired()
 	# A blackout gives us several fully obscured seconds. Spend at most one room
 	# per frame preparing the next reality, and do not stack ordinary streaming
 	# work on the same frame.
@@ -259,8 +261,8 @@ func _process(_dt: float) -> void:
 			ch.visible = show
 		if not show:
 			_capture_chunk_runtime(ch)
-			ch.queue_free()
 			chunks.erase(c)
+			_retire(c, ch)
 
 	# Keep one decode in flight, between chunk builds. Never consume a request
 	# before it completes or stack first-use decoding with ordinary generation.
@@ -301,8 +303,36 @@ func _cancel_pending() -> void:
 	_pending_cell = NO_BROKEN_STATION
 
 
+## Crossing a cell boundary retires a whole row of rooms. Deleting them in one
+## frame (about 2,000 nodes with their bodies, lights and render instances) was
+## an unlogged 100 ms class hitch on slower CPUs. They are already hidden and
+## inert; delete one per frame instead.
+func _retire(c: Vector2i, chunk: Chunk) -> void:
+	chunk.process_mode = Node.PROCESS_MODE_DISABLED
+	_retired.append([c, chunk])
+
+
+func _free_one_retired() -> void:
+	while not _retired.is_empty():
+		var chunk: Chunk = _retired.pop_front()[1]
+		if is_instance_valid(chunk):
+			chunk.queue_free()
+			return
+
+
+## A room may never coexist with its own hidden predecessor's collision.
+func _free_retired_at(c: Vector2i) -> void:
+	for index in range(_retired.size() - 1, -1, -1):
+		if _retired[index][0] == c:
+			var chunk: Chunk = _retired[index][1]
+			_retired.remove_at(index)
+			if is_instance_valid(chunk):
+				chunk.free()
+
+
 func _install_chunk(c: Vector2i, chunk: Chunk) -> void:
 	var started := Time.get_ticks_usec()
+	_free_retired_at(c)
 	chunk.restore_runtime_state(_runtime_state.subset_for_cells([c]))
 	chunk.set_blackout(blackout)
 	# Added only to complete live chunks: fingerprints of authored geometry

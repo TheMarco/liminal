@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://5yfn46bymy6j"
-path="res://.godot/imported/shakedown_table_LowerBraceFrame_normal.png-d85243fc00e41fb8e41dd79fcc0f029d.ctex"
+path.bptc="res://.godot/imported/shakedown_table_LowerBraceFrame_normal.png-d85243fc00e41fb8e41dd79fcc0f029d.bptc.ctex"
+path.astc="res://.godot/imported/shakedown_table_LowerBraceFrame_normal.png-d85243fc00e41fb8e41dd79fcc0f029d.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "1d731bc88216ce851ed7adf7d50bbaff"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/generated/prison/shakedown_table_LowerBraceFrame_normal.png"
-dest_files=["res://.godot/imported/shakedown_table_LowerBraceFrame_normal.png-d85243fc00e41fb8e41dd79fcc0f029d.ctex"]
+dest_files=["res://.godot/imported/shakedown_table_LowerBraceFrame_normal.png-d85243fc00e41fb8e41dd79fcc0f029d.bptc.ctex", "res://.godot/imported/shakedown_table_LowerBraceFrame_normal.png-d85243fc00e41fb8e41dd79fcc0f029d.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

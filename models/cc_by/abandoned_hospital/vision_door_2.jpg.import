@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://353ypfl7qwms"
-path="res://.godot/imported/vision_door_2.jpg-f4ae1cbf208186a1506a5209a2f5108d.ctex"
+path.bptc="res://.godot/imported/vision_door_2.jpg-f4ae1cbf208186a1506a5209a2f5108d.bptc.ctex"
+path.astc="res://.godot/imported/vision_door_2.jpg-f4ae1cbf208186a1506a5209a2f5108d.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "03581214cfe6488c2a52e161d7ae55c7"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/abandoned_hospital/vision_door_2.jpg"
-dest_files=["res://.godot/imported/vision_door_2.jpg-f4ae1cbf208186a1506a5209a2f5108d.ctex"]
+dest_files=["res://.godot/imported/vision_door_2.jpg-f4ae1cbf208186a1506a5209a2f5108d.bptc.ctex", "res://.godot/imported/vision_door_2.jpg-f4ae1cbf208186a1506a5209a2f5108d.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

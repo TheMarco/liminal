@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://m2odxynebw7u"
-path="res://.godot/imported/medical_table_0.jpg-bfc9383d659c517bbe4d23732614630e.ctex"
+path.bptc="res://.godot/imported/medical_table_0.jpg-bfc9383d659c517bbe4d23732614630e.bptc.ctex"
+path.astc="res://.godot/imported/medical_table_0.jpg-bfc9383d659c517bbe4d23732614630e.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "dbfd1afdab0588578dd9d5e28366c8c7"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/medical_table/medical_table_0.jpg"
-dest_files=["res://.godot/imported/medical_table_0.jpg-bfc9383d659c517bbe4d23732614630e.ctex"]
+dest_files=["res://.godot/imported/medical_table_0.jpg-bfc9383d659c517bbe4d23732614630e.bptc.ctex", "res://.godot/imported/medical_table_0.jpg-bfc9383d659c517bbe4d23732614630e.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

@@ -54,6 +54,7 @@ var _collapse_effect: Node3D
 var collapse_style := "wireframe"
 var _rebuild_effect: RealmWireframeCollapse
 var _preview_environment: WorldEnvironment
+var _destination_environment: Environment
 var _prompt_hold := false
 var bounty: RealmFlashBounty
 var bounty_captured := false
@@ -102,8 +103,10 @@ func is_away() -> bool:
 func refresh_graphics_quality(settings: GameSettings) -> void:
 	# The source and destination environments can both survive a visit. A
 	# quality change while away must also take effect when the source returns.
-	if is_instance_valid(_preview_environment):
-		GraphicsQuality.apply_environment(_preview_environment.environment, settings)
+	if _destination_environment != null:
+		GraphicsQuality.apply_environment(_destination_environment, settings)
+	if is_instance_valid(_preview_environment) and _destination_environment != null:
+		_preview_environment.environment = _preview_only_environment(_destination_environment)
 	if _source.has("env"):
 		GraphicsQuality.apply_environment(_source["env"], settings)
 	if is_instance_valid(preview):
@@ -199,6 +202,22 @@ func _preload_preview_resources() -> void:
 	_preview_resources_ready = true
 
 
+## The glimpse through the seal is a second complete world in a 960x600
+## window. A second SDFGI field, fog froxel grid and SSR/SSAO chain for it
+## doubled the frame's most expensive buffers (and exhausted the Direct3D 12
+## descriptor heap in 0.5.8). The destination keeps its full authored
+## environment for the visit itself, which begins behind a fade.
+func _preview_only_environment(full: Environment) -> Environment:
+	if full == null:
+		return null
+	var lean: Environment = full.duplicate()
+	lean.sdfgi_enabled = false
+	lean.volumetric_fog_enabled = false
+	lean.ssr_enabled = false
+	lean.ssao_enabled = false
+	return lean
+
+
 func _build_preview() -> void:
 	if _building or _preview_cancelled:
 		return
@@ -218,7 +237,8 @@ func _build_preview() -> void:
 	preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(preview)
 	_preview_environment = WorldEnvironment.new()
-	_preview_environment.environment = game._build_env(destination_theme)
+	_destination_environment = game._build_env(destination_theme)
+	_preview_environment.environment = _preview_only_environment(_destination_environment)
 	preview.add_child(_preview_environment)
 	pocket = ChunkManager.new()
 	pocket.world_seed = WorldGen.level_seed(game.world_seed, destination_theme)
@@ -626,7 +646,7 @@ func enter() -> void:
 	pocket.player = game.player
 	pocket.stream_focus = destination_position
 	pocket.set_process(true)
-	game.we.environment = _preview_environment.environment
+	game.we.environment = _destination_environment
 	game.player.world_seed = pocket.world_seed
 	game.player.level_theme = destination_theme
 	game.player.water_y = game._water_level_for(destination_theme)

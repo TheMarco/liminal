@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cwt8vk5ei43sf"
-path="res://.godot/imported/blackjack_table_marble_base.jpg-4bad5f73a4b4ce56a00e926fc4ff9dac.ctex"
+path.bptc="res://.godot/imported/blackjack_table_marble_base.jpg-4bad5f73a4b4ce56a00e926fc4ff9dac.bptc.ctex"
+path.astc="res://.godot/imported/blackjack_table_marble_base.jpg-4bad5f73a4b4ce56a00e926fc4ff9dac.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "78fb647be1ea3e4c3fb776216b5f520d"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/blackjack_table/blackjack_table_marble_base.jpg"
-dest_files=["res://.godot/imported/blackjack_table_marble_base.jpg-4bad5f73a4b4ce56a00e926fc4ff9dac.ctex"]
+dest_files=["res://.godot/imported/blackjack_table_marble_base.jpg-4bad5f73a4b4ce56a00e926fc4ff9dac.bptc.ctex", "res://.godot/imported/blackjack_table_marble_base.jpg-4bad5f73a4b4ce56a00e926fc4ff9dac.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

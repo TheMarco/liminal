@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dxfr6cbvfxw3v"
-path="res://.godot/imported/poster_frame_orm.jpg-f537c754f3c144aeb41d4ee40fbf216b.ctex"
+path.bptc="res://.godot/imported/poster_frame_orm.jpg-f537c754f3c144aeb41d4ee40fbf216b.bptc.ctex"
+path.astc="res://.godot/imported/poster_frame_orm.jpg-f537c754f3c144aeb41d4ee40fbf216b.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "903ef87a68fed488d426efc3e6bd9ffb"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/scenario/office/poster_frame_orm.jpg"
-dest_files=["res://.godot/imported/poster_frame_orm.jpg-f537c754f3c144aeb41d4ee40fbf216b.ctex"]
+dest_files=["res://.godot/imported/poster_frame_orm.jpg-f537c754f3c144aeb41d4ee40fbf216b.bptc.ctex", "res://.godot/imported/poster_frame_orm.jpg-f537c754f3c144aeb41d4ee40fbf216b.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

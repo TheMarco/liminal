@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://6tnfyfb6qyrw"
-path="res://.godot/imported/food_court_set_7.jpg-3f5c7e800f0f0f373d4d8b23f310cabd.ctex"
+path.bptc="res://.godot/imported/food_court_set_7.jpg-3f5c7e800f0f0f373d4d8b23f310cabd.bptc.ctex"
+path.astc="res://.godot/imported/food_court_set_7.jpg-3f5c7e800f0f0f373d4d8b23f310cabd.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "6f8e4399b146d9cc53cf815d90e646c8"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/food_court_set/food_court_set_7.jpg"
-dest_files=["res://.godot/imported/food_court_set_7.jpg-3f5c7e800f0f0f373d4d8b23f310cabd.ctex"]
+dest_files=["res://.godot/imported/food_court_set_7.jpg-3f5c7e800f0f0f373d4d8b23f310cabd.bptc.ctex", "res://.godot/imported/food_court_set_7.jpg-3f5c7e800f0f0f373d4d8b23f310cabd.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

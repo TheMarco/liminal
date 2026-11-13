@@ -207,6 +207,7 @@ const TITLE_MUSIC := "res://music/title.mp3"
 func _ready() -> void:
 	RuntimeDiagnostics.mark("main_ready_begin")
 	RuntimeDiagnostics.set_context(_runtime_diagnostic_context)
+	RuntimeDiagnostics.world_viewport = get_viewport()
 	if has_meta("ntscrt_video_host"):
 		get_meta("ntscrt_video_host").pipeline_failed.connect(_on_video_pipeline_failed)
 	_settings = GameSettings.new()

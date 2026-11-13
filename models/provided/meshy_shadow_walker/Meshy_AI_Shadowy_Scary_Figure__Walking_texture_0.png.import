@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://coutae5cebutp"
-path="res://.godot/imported/Meshy_AI_Shadowy_Scary_Figure__Walking_texture_0.png-92946b06c0be8a4a4c4ba7177a7cf3a9.ctex"
+path.bptc="res://.godot/imported/Meshy_AI_Shadowy_Scary_Figure__Walking_texture_0.png-92946b06c0be8a4a4c4ba7177a7cf3a9.bptc.ctex"
+path.astc="res://.godot/imported/Meshy_AI_Shadowy_Scary_Figure__Walking_texture_0.png-92946b06c0be8a4a4c4ba7177a7cf3a9.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "915ab6f0608355eca009f3306bc7c87a"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/meshy_shadow_walker/Meshy_AI_Shadowy_Scary_Figure__Walking_texture_0.png"
-dest_files=["res://.godot/imported/Meshy_AI_Shadowy_Scary_Figure__Walking_texture_0.png-92946b06c0be8a4a4c4ba7177a7cf3a9.ctex"]
+dest_files=["res://.godot/imported/Meshy_AI_Shadowy_Scary_Figure__Walking_texture_0.png-92946b06c0be8a4a4c4ba7177a7cf3a9.bptc.ctex", "res://.godot/imported/Meshy_AI_Shadowy_Scary_Figure__Walking_texture_0.png-92946b06c0be8a4a4c4ba7177a7cf3a9.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

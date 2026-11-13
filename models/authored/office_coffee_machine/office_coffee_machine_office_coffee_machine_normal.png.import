@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://rq3h5pmheku8"
-path="res://.godot/imported/office_coffee_machine_office_coffee_machine_normal.png-4d2c5b9df5f8c929920377930fce2e12.ctex"
+path.bptc="res://.godot/imported/office_coffee_machine_office_coffee_machine_normal.png-4d2c5b9df5f8c929920377930fce2e12.bptc.ctex"
+path.astc="res://.godot/imported/office_coffee_machine_office_coffee_machine_normal.png-4d2c5b9df5f8c929920377930fce2e12.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "65b4fc840eafd49d1911b37ce338cd46"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/office_coffee_machine/office_coffee_machine_office_coffee_machine_normal.png"
-dest_files=["res://.godot/imported/office_coffee_machine_office_coffee_machine_normal.png-4d2c5b9df5f8c929920377930fce2e12.ctex"]
+dest_files=["res://.godot/imported/office_coffee_machine_office_coffee_machine_normal.png-4d2c5b9df5f8c929920377930fce2e12.bptc.ctex", "res://.godot/imported/office_coffee_machine_office_coffee_machine_normal.png-4d2c5b9df5f8c929920377930fce2e12.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

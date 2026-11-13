@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://gfbfkc5im5dp"
-path="res://.godot/imported/industry_workbench_LegRearRight_normal.png-4cb6c73e968c2599d25b3cfd2507fd0a.ctex"
+path.bptc="res://.godot/imported/industry_workbench_LegRearRight_normal.png-4cb6c73e968c2599d25b3cfd2507fd0a.bptc.ctex"
+path.astc="res://.godot/imported/industry_workbench_LegRearRight_normal.png-4cb6c73e968c2599d25b3cfd2507fd0a.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "a853a2e0aaee35be16d2f4e55a5fb3cb"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/generated/prison/industry_workbench_LegRearRight_normal.png"
-dest_files=["res://.godot/imported/industry_workbench_LegRearRight_normal.png-4cb6c73e968c2599d25b3cfd2507fd0a.ctex"]
+dest_files=["res://.godot/imported/industry_workbench_LegRearRight_normal.png-4cb6c73e968c2599d25b3cfd2507fd0a.bptc.ctex", "res://.godot/imported/industry_workbench_LegRearRight_normal.png-4cb6c73e968c2599d25b3cfd2507fd0a.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

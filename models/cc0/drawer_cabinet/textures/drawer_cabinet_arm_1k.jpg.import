@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cirpw07qau7xx"
-path="res://.godot/imported/drawer_cabinet_arm_1k.jpg-c378434ec685864d772e24993d568b9d.ctex"
+path.bptc="res://.godot/imported/drawer_cabinet_arm_1k.jpg-c378434ec685864d772e24993d568b9d.bptc.ctex"
+path.astc="res://.godot/imported/drawer_cabinet_arm_1k.jpg-c378434ec685864d772e24993d568b9d.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://models/cc0/drawer_cabinet/textures/drawer_cabinet_arm_1k.jpg"
-dest_files=["res://.godot/imported/drawer_cabinet_arm_1k.jpg-c378434ec685864d772e24993d568b9d.ctex"]
+dest_files=["res://.godot/imported/drawer_cabinet_arm_1k.jpg-c378434ec685864d772e24993d568b9d.bptc.ctex", "res://.godot/imported/drawer_cabinet_arm_1k.jpg-c378434ec685864d772e24993d568b9d.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -36,5 +38,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

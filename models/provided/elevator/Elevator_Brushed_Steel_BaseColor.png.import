@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bxhxkm15tcaw7"
-path="res://.godot/imported/Elevator_Brushed_Steel_BaseColor.png-b52d7195e91e1ccb72e78fa1efbab968.ctex"
+path.bptc="res://.godot/imported/Elevator_Brushed_Steel_BaseColor.png-b52d7195e91e1ccb72e78fa1efbab968.bptc.ctex"
+path.astc="res://.godot/imported/Elevator_Brushed_Steel_BaseColor.png-b52d7195e91e1ccb72e78fa1efbab968.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "3eb6d05839d5709ef2aebe573c4d761a"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/elevator/Elevator_Brushed_Steel_BaseColor.png"
-dest_files=["res://.godot/imported/Elevator_Brushed_Steel_BaseColor.png-b52d7195e91e1ccb72e78fa1efbab968.ctex"]
+dest_files=["res://.godot/imported/Elevator_Brushed_Steel_BaseColor.png-b52d7195e91e1ccb72e78fa1efbab968.bptc.ctex", "res://.godot/imported/Elevator_Brushed_Steel_BaseColor.png-b52d7195e91e1ccb72e78fa1efbab968.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

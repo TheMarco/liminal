@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://1asxdpw3w2hl"
-path="res://.godot/imported/ceiling_tile_office_ceiling_normal.png-71f7ff371f28990bbda356548b207619.ctex"
+path.bptc="res://.godot/imported/ceiling_tile_office_ceiling_normal.png-71f7ff371f28990bbda356548b207619.bptc.ctex"
+path.astc="res://.godot/imported/ceiling_tile_office_ceiling_normal.png-71f7ff371f28990bbda356548b207619.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "ba244df0ab6d1e3e0e025c1df67adf23"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/scenario/office/ceiling_tile_office_ceiling_normal.png"
-dest_files=["res://.godot/imported/ceiling_tile_office_ceiling_normal.png-71f7ff371f28990bbda356548b207619.ctex"]
+dest_files=["res://.godot/imported/ceiling_tile_office_ceiling_normal.png-71f7ff371f28990bbda356548b207619.bptc.ctex", "res://.godot/imported/ceiling_tile_office_ceiling_normal.png-71f7ff371f28990bbda356548b207619.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

@@ -3,20 +3,22 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://40fw2nbnn4nk"
-path="res://.godot/imported/waterline_mineral_atlas.png-d73c8db1594ad3ee710467172d895dff.ctex"
+path.bptc="res://.godot/imported/waterline_mineral_atlas.png-d73c8db1594ad3ee710467172d895dff.bptc.ctex"
+path.astc="res://.godot/imported/waterline_mineral_atlas.png-d73c8db1594ad3ee710467172d895dff.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://textures/pool/minerals/waterline_mineral_atlas.png"
-dest_files=["res://.godot/imported/waterline_mineral_atlas.png-d73c8db1594ad3ee710467172d895dff.ctex"]
+dest_files=["res://.godot/imported/waterline_mineral_atlas.png-d73c8db1594ad3ee710467172d895dff.bptc.ctex", "res://.godot/imported/waterline_mineral_atlas.png-d73c8db1594ad3ee710467172d895dff.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -36,5 +38,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

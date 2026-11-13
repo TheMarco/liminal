@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://in214o1s48h0"
-path="res://.godot/imported/shower_bench_AnchorBasePlate_03_normal.png-9f4d590a9d75c0f16590244be77818af.ctex"
+path.bptc="res://.godot/imported/shower_bench_AnchorBasePlate_03_normal.png-9f4d590a9d75c0f16590244be77818af.bptc.ctex"
+path.astc="res://.godot/imported/shower_bench_AnchorBasePlate_03_normal.png-9f4d590a9d75c0f16590244be77818af.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "9e8168ebb8753c07dae5a0a4e90f90f3"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/generated/prison/shower_bench_AnchorBasePlate_03_normal.png"
-dest_files=["res://.godot/imported/shower_bench_AnchorBasePlate_03_normal.png-9f4d590a9d75c0f16590244be77818af.ctex"]
+dest_files=["res://.godot/imported/shower_bench_AnchorBasePlate_03_normal.png-9f4d590a9d75c0f16590244be77818af.bptc.ctex", "res://.godot/imported/shower_bench_AnchorBasePlate_03_normal.png-9f4d590a9d75c0f16590244be77818af.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

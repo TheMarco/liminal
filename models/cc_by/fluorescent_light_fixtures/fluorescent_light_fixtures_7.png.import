@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://pcf27tx1qmcw"
-path="res://.godot/imported/fluorescent_light_fixtures_7.png-78932e0277c363fa5bc5ed92a6448b3e.ctex"
+path.bptc="res://.godot/imported/fluorescent_light_fixtures_7.png-78932e0277c363fa5bc5ed92a6448b3e.bptc.ctex"
+path.astc="res://.godot/imported/fluorescent_light_fixtures_7.png-78932e0277c363fa5bc5ed92a6448b3e.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "11f1c0f02683dea825c05166572cddcf"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/fluorescent_light_fixtures/fluorescent_light_fixtures_7.png"
-dest_files=["res://.godot/imported/fluorescent_light_fixtures_7.png-78932e0277c363fa5bc5ed92a6448b3e.ctex"]
+dest_files=["res://.godot/imported/fluorescent_light_fixtures_7.png-78932e0277c363fa5bc5ed92a6448b3e.bptc.ctex", "res://.godot/imported/fluorescent_light_fixtures_7.png-78932e0277c363fa5bc5ed92a6448b3e.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

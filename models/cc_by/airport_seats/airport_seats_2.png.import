@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://wfg72cynl6pq"
-path="res://.godot/imported/airport_seats_2.png-d5a855c1f6ffca8bfa1df0fbe139316d.ctex"
+path.bptc="res://.godot/imported/airport_seats_2.png-d5a855c1f6ffca8bfa1df0fbe139316d.bptc.ctex"
+path.astc="res://.godot/imported/airport_seats_2.png-d5a855c1f6ffca8bfa1df0fbe139316d.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "1b1517029b2a87f08d06b5f892d45a10"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/airport_seats/airport_seats_2.png"
-dest_files=["res://.godot/imported/airport_seats_2.png-d5a855c1f6ffca8bfa1df0fbe139316d.ctex"]
+dest_files=["res://.godot/imported/airport_seats_2.png-d5a855c1f6ffca8bfa1df0fbe139316d.bptc.ctex", "res://.godot/imported/airport_seats_2.png-d5a855c1f6ffca8bfa1df0fbe139316d.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

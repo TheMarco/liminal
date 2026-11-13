@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bly4vxc66sgmu"
-path="res://.godot/imported/casino_bar_rightsign.png-01e5d93a1fe0a2854465a9ef16661f4a.ctex"
+path.bptc="res://.godot/imported/casino_bar_rightsign.png-01e5d93a1fe0a2854465a9ef16661f4a.bptc.ctex"
+path.astc="res://.godot/imported/casino_bar_rightsign.png-01e5d93a1fe0a2854465a9ef16661f4a.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "f0acd705a20bc0c6af5c08d30d9b6ada"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/provided/casino_bar/casino_bar_rightsign.png"
-dest_files=["res://.godot/imported/casino_bar_rightsign.png-01e5d93a1fe0a2854465a9ef16661f4a.ctex"]
+dest_files=["res://.godot/imported/casino_bar_rightsign.png-01e5d93a1fe0a2854465a9ef16661f4a.bptc.ctex", "res://.godot/imported/casino_bar_rightsign.png-01e5d93a1fe0a2854465a9ef16661f4a.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

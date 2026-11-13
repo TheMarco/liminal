@@ -3,27 +3,29 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://j0buui0rpeum"
-path="res://.godot/imported/desert_fortune.png-771fb0a51b2f8a84c364497c1be79faf.ctex"
+path.bptc="res://.godot/imported/desert_fortune.png-771fb0a51b2f8a84c364497c1be79faf.bptc.ctex"
+path.astc="res://.godot/imported/desert_fortune.png-771fb0a51b2f8a84c364497c1be79faf.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://textures/slots/desert_fortune.png"
-dest_files=["res://.godot/imported/desert_fortune.png-771fb0a51b2f8a84c364497c1be79faf.ctex"]
+dest_files=["res://.godot/imported/desert_fortune.png-771fb0a51b2f8a84c364497c1be79faf.bptc.ctex", "res://.godot/imported/desert_fortune.png-771fb0a51b2f8a84c364497c1be79faf.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
@@ -36,5 +38,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://4f4rs38m1u60"
-path="res://.godot/imported/indoor_air_conditioner_unit_2.png-35d76eec4733a7e85a9c9b3aabe20f7b.ctex"
+path.bptc="res://.godot/imported/indoor_air_conditioner_unit_2.png-35d76eec4733a7e85a9c9b3aabe20f7b.bptc.ctex"
+path.astc="res://.godot/imported/indoor_air_conditioner_unit_2.png-35d76eec4733a7e85a9c9b3aabe20f7b.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "f6b90ae153df7d1f59dafe72d9c00d4e"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/indoor_air_conditioner/indoor_air_conditioner_unit_2.png"
-dest_files=["res://.godot/imported/indoor_air_conditioner_unit_2.png-35d76eec4733a7e85a9c9b3aabe20f7b.ctex"]
+dest_files=["res://.godot/imported/indoor_air_conditioner_unit_2.png-35d76eec4733a7e85a9c9b3aabe20f7b.bptc.ctex", "res://.godot/imported/indoor_air_conditioner_unit_2.png-35d76eec4733a7e85a9c9b3aabe20f7b.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

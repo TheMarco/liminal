@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bd1ncxevobqs"
-path="res://.godot/imported/garbage_bin_1.jpg-ddec871b1dad8a9ce39fed6f33c80fef.ctex"
+path.bptc="res://.godot/imported/garbage_bin_1.jpg-ddec871b1dad8a9ce39fed6f33c80fef.bptc.ctex"
+path.astc="res://.godot/imported/garbage_bin_1.jpg-ddec871b1dad8a9ce39fed6f33c80fef.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "dbd2472a22f26e8fbd0334775a80243b"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/cc_by/garbage_bin/garbage_bin_1.jpg"
-dest_files=["res://.godot/imported/garbage_bin_1.jpg-ddec871b1dad8a9ce39fed6f33c80fef.ctex"]
+dest_files=["res://.godot/imported/garbage_bin_1.jpg-ddec871b1dad8a9ce39fed6f33c80fef.bptc.ctex", "res://.godot/imported/garbage_bin_1.jpg-ddec871b1dad8a9ce39fed6f33c80fef.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1

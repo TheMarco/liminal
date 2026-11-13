@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bidwhl5r0bc7e"
-path="res://.godot/imported/mall_rocket_ride_mall_rocket_ride_normal.png-1572f2dd7a03b8ff9b4942e16dbd4eaf.ctex"
+path.bptc="res://.godot/imported/mall_rocket_ride_mall_rocket_ride_normal.png-1572f2dd7a03b8ff9b4942e16dbd4eaf.bptc.ctex"
+path.astc="res://.godot/imported/mall_rocket_ride_mall_rocket_ride_normal.png-1572f2dd7a03b8ff9b4942e16dbd4eaf.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "306231ff9e64caa3194dd60255b1e4b5"
@@ -14,12 +16,12 @@ generator_parameters={
 [deps]
 
 source_file="res://models/authored/mall_rocket_ride/mall_rocket_ride_mall_rocket_ride_normal.png"
-dest_files=["res://.godot/imported/mall_rocket_ride_mall_rocket_ride_normal.png-1572f2dd7a03b8ff9b4942e16dbd4eaf.ctex"]
+dest_files=["res://.godot/imported/mall_rocket_ride_mall_rocket_ride_normal.png-1572f2dd7a03b8ff9b4942e16dbd4eaf.bptc.ctex", "res://.godot/imported/mall_rocket_ride_mall_rocket_ride_normal.png-1572f2dd7a03b8ff9b4942e16dbd4eaf.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
+process/size_limit=2048
 detect_3d/compress_to=1
