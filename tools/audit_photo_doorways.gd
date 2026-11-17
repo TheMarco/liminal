@@ -84,6 +84,13 @@ func run() -> void:
 		"unphotographed door lost collision")
 	expect(_layers_ok(left.fill, PhotoAnomaly.EYE_ONLY_LAYER)
 		and _layers_ok(right.fill, PhotoAnomaly.EYE_ONLY_LAYER), "wall is not eye-only")
+	var structural_walls := cm.chunk_at(at).find_children("*", "OccluderInstance3D", true, false)
+	structural_walls.append_array(cm.chunk_at(other).find_children("*", "OccluderInstance3D", true, false))
+	expect(game.get_viewport().use_occlusion_culling and not structural_walls.is_empty(),
+		"Casino doorway fixture has no active structural wall occlusion")
+	for side: PhotoDoorSeal in [left, right]:
+		expect(side.fill.find_children("*", "OccluderInstance3D", true, false).is_empty(),
+			"photographic wall hides the room beyond it from the viewfinder")
 	var centre := left.to_global(left.centre) + Vector3.UP * 1.3
 	var forward := Vector3(WorldGen.DIRV[dir].x, 0.0, WorldGen.DIRV[dir].y)
 	expect(not _ray(player, centre, forward).is_empty(), "closed wall is physically passable")

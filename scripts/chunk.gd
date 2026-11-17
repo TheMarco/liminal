@@ -101,6 +101,7 @@ const DOOR_CLEAR_DEPTH := 3.6
 const DOOR_CLEAR_PAD := 0.5
 
 static var BOX := BoxMesh.new()
+static var _wall_occluder := BoxOccluder3D.new()
 static var CYL := _unit_cylinder()
 static var SPH := _unit_sphere()
 static var TOR := TorusMesh.new()
@@ -1208,7 +1209,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 		1:
 			paths.append_array([OFFICE_AIR_CONDITIONER_PATH, OFFICE_PHONE_PATH, OFFICE_PRINTER_PATH])
 			paths.append_array([OFFICE_WATER_COOLER_PATH, OFFICE_CHAIR_PATH, OFFICE_MODERN_CHAIR_PATH, OFFICE_TERMINAL_PATH])
-			paths.append_array([OFFICE_BOXES_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
+			paths.append_array([OFFICE_BOXES_PATH, OFFICE_SCHOOL_BIN_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/clipboard/clipboard_1k.gltf")
 			paths.append("res://models/cc0/office_notepads/office_notepads_1k.gltf")
@@ -1228,6 +1229,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array([AIRPORT_SEATS_PATH, AIRPORT_DEPARTURE_BOARD_PATH, AIRPORT_LUGGAGE_PATH,
 				AIRPORT_TROLLEY_PATH, AIRPORT_JETWAY_PATH, AIRPORT_PLANE_PATH, AIRPORT_CAROUSEL_PATH, AIRPORT_GATE_DESK_PATH])
 			paths.append_array([CHECKIN_DESK_PATH, AIRPORT_ESCALATOR_PATH, AIRPORT_WALKWAY_PATH, AIRPORT_WALKWAY_LONG_PATH])
+			paths.append(GARBAGE_BIN_PATH)
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/wooden_picnic_table/wooden_picnic_table_1k.gltf")
 			paths.append("res://models/cc0/CoffeeCart_01/CoffeeCart_01_1k.gltf")
@@ -1250,7 +1252,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/asylum/BarberShopChair_01/BarberShopChair_01_1k.gltf")
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
 		6:
-			paths.append_array([LOCKERS_PATH, GYM_LOCKER_PATH, SCH_CLEANING_CART_PATH])
+			paths.append_array([LOCKERS_PATH, GYM_LOCKER_PATH, SCH_CLEANING_CART_PATH, OFFICE_SCHOOL_BIN_PATH])
 			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH, CHEMISTRY_GLASSWARE_PATH])
 			paths.append_array([SCH_TOILET_PATH, SCH_SINK_PATH, SCH_URINAL_PATH, SCH_SHELF_PATH])
 			paths.append_array([SCH_FOUNTAIN_PATH, SCH_TROPHY_CASE_PATH, SCH_BLEACHERS_PATH,
@@ -1262,7 +1264,9 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array([MALL_PAYPHONE_PATH, MALL_DIRECTORY_PATH, MALL_SHOPPING_CART_PATH,
 				MALL_GARMENT_RACK_PATH, MALL_MERCHANDISE_PATH, MALL_DISPLAY_PATH])
 			paths.append_array([CITY_BENCH_PATH, FOOD_COURT_SET_PATH, MALL_HOTDOG_PATH])
-			paths.append_array([ROPE_BARRIER_PATH])
+			paths.append_array([ROPE_BARRIER_PATH, GARBAGE_BIN_PATH])
+			for model in ["CashRegister_01", "hand_truck", "metal_trash_can"]:
+				paths.append("res://models/cc0/%s/%s_1k.gltf" % [model, model])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/potted_plant_02/potted_plant_02_1k.gltf")
 			paths.append("res://models/cc0/wooden_crate_01/wooden_crate_01_1k.gltf")
@@ -1635,9 +1639,9 @@ static func _unit_sphere() -> SphereMesh:
 	return mesh
 
 
-## The allowlist is intentionally conservative: other enclosed floors are
-## measurable with the same diagnostic, but culling can cost more CPU there.
-static var occlusion_themes: Array[int] = [10]
+## Solid walls hide most of the Casino and Data Center at typical sightlines.
+## Other floors need their own measurement because occlusion also costs CPU.
+static var occlusion_themes: Array[int] = [0, 10]
 
 
 ## Only explicitly authored opaque walls can occlude. Store references until
@@ -1698,9 +1702,8 @@ func prepare_runtime_rendering(room_light_fade_begin := 0.0) -> void:
 			continue # the viewfinder must see the actual adjoining room
 		var occluder := OccluderInstance3D.new()
 		occluder.name = "StructuralOccluder"
-		var box := BoxOccluder3D.new()
-		box.size = mesh.mesh.get_aabb().size * 0.998
-		occluder.occluder = box
+		occluder.occluder = _wall_occluder
+		occluder.scale = mesh.mesh.get_aabb().size * 0.998
 		mesh.add_child(occluder)
 	_occluder_walls.clear()
 

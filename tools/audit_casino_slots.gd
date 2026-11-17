@@ -152,7 +152,18 @@ func streamed_sign_checks() -> void:
 	for sliced in [false, true]:
 		var chunk := Chunk.new(756105833, Vector2i(4, -4), 0, null, sliced)
 		if sliced:
-			while not chunk.build_next_slice(): pass
+			var built := 0
+			var finished := false
+			while not finished:
+				var first := chunk.get_child_count()
+				finished = chunk.build_next_slice()
+				var cabinets := 0
+				for i in range(first, chunk.get_child_count()):
+					if chunk.get_child(i).has_meta("slot_machine"):
+						cabinets += 1
+				check(cabinets <= 1, "Streaming built multiple slot cabinets in one slice")
+				built += cabinets
+			check(built == 24, "Streamed slot bank built %d cabinets" % built)
 		check(sign_support_checks(chunk) == 1, "reproducing room lost its SLOTS sign")
 		sign_art_checks(chunk)
 		var layout: Array[String] = []

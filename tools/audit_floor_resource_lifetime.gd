@@ -16,8 +16,21 @@ func run() -> void:
 	expect(is_instance_valid(material) and Mats.paint_white() != material,
 		"retirement invalidated a live material or reused the retired cache")
 	var second := Chunk.new(WorldGen.level_seed(240721, 4), Vector2i.ZERO, 4)
+	expect(FloorResourcePreloader.cached_scene(Chunk.GARBAGE_BIN_PATH) != null,
+		"airport bin was not ready for streaming")
 	first.free()
 	second.free()
+	for theme in [1, 6]:
+		Chunk.prepare_floor_resources(theme)
+		expect(FloorResourcePreloader.cached_scene(Chunk.OFFICE_SCHOOL_BIN_PATH) != null,
+			"floor %d did not prepare its indoor wastebasket" % theme)
+	Chunk.prepare_floor_resources(7)
+	expect(FloorResourcePreloader.cached_scene(Chunk.GARBAGE_BIN_PATH) != null,
+		"mall bin was not ready for streaming")
+	for model in ["CashRegister_01", "hand_truck", "metal_trash_can"]:
+		var path := "res://models/cc0/%s/%s_1k.gltf" % [model, model]
+		expect(FloorResourcePreloader.cached_scene(path) != null,
+			"mall room construction would synchronously load " + model)
 	var keep := ShadowWalkerVisual._model_scene(0)
 	var retired := ShadowWalkerVisual._model_scene(9)
 	var live_actor := retired.instantiate()

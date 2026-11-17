@@ -158,7 +158,7 @@ func _pillars(h: float, mat: Material) -> void:
 
 
 func _slots() -> void:
-	var idx = 0
+	var idx := 0
 	# Four banks form two close back-to-back islands, as on a real casino floor.
 	# Seats face the outside of each island, preserving a central circulation
 	# lane and perimeter routes instead of creating four isolated rows.
@@ -166,8 +166,12 @@ func _slots() -> void:
 		var z: float = row[0]
 		var fx: float = row[1]
 		for i in 6:
-			_slot_machine(2.7 + 1.32 * i, z, fx, idx)
+			scene.build_job(_slot_machine.bind(2.7 + 1.32 * i, z, fx, idx))
 			idx += 1
+	scene.build_job(_slot_room_cove_and_audio)
+
+
+func _slot_room_cove_and_audio() -> void:
 	# The cabinets already carry authored emissive displays and light guides.
 	# A separate bank-wide header always sat in the player aisle and read as
 	# loose geometry, even with brackets, so the entire assembly is gone.
