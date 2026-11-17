@@ -16,6 +16,13 @@ var _grid_heights: Array[PackedFloat32Array] = []
 var _triangles := PackedInt32Array()
 var _installed := false
 var _spacing := 0.12
+## Preparation slicing: at most PREPARE_BATCH_MAX vertices per prepare_step,
+## with a ~2ms wall-clock cap checked every PREPARE_BATCH_CHECK vertices, so a
+## large wall/ceiling grid cannot stall first activation in a single tick.
+## Only pacing moved here; every per-vertex formula below is unchanged.
+const PREPARE_BATCH_MAX := 1024
+const PREPARE_BATCH_CHECK := 32
+const PREPARE_BUDGET_USEC := 2000
 
 var prepared := false
 var failed := false
@@ -42,7 +49,11 @@ func prepare_step() -> void:
 	if _building.is_empty():
 		var item: Dictionary = _pending[0]
 		failed = not _begin_piece(item.mesh, item.transform)
-	elif _building.shapes.size() < targets.size():
+	elif _building.stage == "anchor":
+		failed = not _step_anchor()
+	elif _building.stage == "custom":
+		failed = not _step_custom()
+	elif _building.stage == "morph" and (_building.has("target") or _building.shapes.size() < targets.size()):
 		_append_target()
 	else:
 		failed = not _finish_piece()
@@ -66,24 +77,8 @@ func _begin_piece(node: MeshInstance3D, transform_to_room: Transform3D) -> bool:
 	primitive.set("subdivide_height", clampi(ceili(absf(physical.y) / _spacing), 1, 96))
 	if primitive is BoxMesh: primitive.subdivide_depth = clampi(ceili(absf(physical.z) / _spacing), 1, 160)
 	var arrays: Array = primitive.get_mesh_arrays()
-	var render_material := material
-	if material is StandardMaterial3D and material.uv1_triplanar:
-		render_material = _anchor_triplanar(material, node, arrays)
-		if render_material == null: return false
-	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-	var tangents: PackedFloat32Array = arrays[Mesh.ARRAY_TANGENT]
-	var flags := 0
-	if material is ShaderMaterial:
-		var rest_position := PackedFloat32Array()
-		var rest_normal := PackedFloat32Array()
-		for i in vertices.size():
-			rest_position.append_array([vertices[i].x, vertices[i].y, vertices[i].z])
-			rest_normal.append_array([normals[i].x, normals[i].y, normals[i].z])
-		arrays[Mesh.ARRAY_CUSTOM0] = rest_position
-		arrays[Mesh.ARRAY_CUSTOM1] = rest_normal
-		flags = (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
-		render_material = _wrap_native_shader(material)
+	# The node itself stays untouched until pose() installs the finished mesh,
+	# so every staged slice below can be discarded safely by restore().
 	var from_mesh := frame.affine_inverse() * transform_to_room
 	var to_mesh := from_mesh.affine_inverse()
 	var normal_in := from_mesh.basis.inverse().transposed()
@@ -92,17 +87,152 @@ func _begin_piece(node: MeshInstance3D, transform_to_room: Transform3D) -> bool:
 	mesh.blend_shape_mode = Mesh.BLEND_SHAPE_MODE_NORMALIZED
 	var shapes: Array[Array] = []
 	_building = {"node": node, "original": original, "material": material,
-		"render_material": render_material, "arrays": arrays, "flags": flags,
-		"vertices": vertices, "normals": normals, "tangents": tangents,
+		"render_material": material, "arrays": arrays, "flags": 0,
+		"vertices": arrays[Mesh.ARRAY_VERTEX], "normals": arrays[Mesh.ARRAY_NORMAL],
+		"tangents": arrays[Mesh.ARRAY_TANGENT],
 		"from_mesh": from_mesh, "to_mesh": to_mesh, "normal_in": normal_in,
-		"normal_out": normal_out, "mesh": mesh, "shapes": shapes}
+		"normal_out": normal_out, "mesh": mesh, "shapes": shapes,
+		"stage": "anchor", "cursor": 0}
+	return true
+
+# Triplanar anchor pass, sliced to the preparation budget. Vertex-for-vertex
+# the same math as _anchor_triplanar, which stays the shared reference (and
+# the hallway-wave caller); only the pacing moved here.
+func _step_anchor() -> bool:
+	var node: MeshInstance3D = _building.node
+	if not is_instance_valid(node): return false
+	var material: Material = _building.material
+	if not (material is StandardMaterial3D and (material as StandardMaterial3D).uv1_triplanar):
+		_building.stage = "custom"
+		_building.cursor = 0
+		return true
+	if not _building.has("anchor"):
+		var count: int = (_building.vertices as PackedVector3Array).size()
+		var uvs := PackedVector2Array()
+		uvs.resize(count)
+		var baked := PackedFloat32Array()
+		baked.resize(count * 4)
+		var mapping := node.global_transform if (material as StandardMaterial3D).uv1_world_triplanar else Transform3D.IDENTITY
+		_building["anchor"] = {"uvs": uvs, "tangents": baked,
+			"mapping": mapping, "basis": mapping.basis.inverse().transposed()}
+	var state: Dictionary = _building.anchor
+	var source: StandardMaterial3D = material
+	var arrays: Array = _building.arrays
+	var vertices: PackedVector3Array = _building.vertices
+	var normals: PackedVector3Array = _building.normals
+	var uvs: PackedVector2Array = state.uvs
+	var baked: PackedFloat32Array = state.tangents
+	var mapping: Transform3D = state.mapping
+	var normal_basis: Basis = state.basis
+	var cursor: int = _building.cursor
+	var total := vertices.size()
+	var start := Time.get_ticks_usec()
+	var end := mini(cursor + PREPARE_BATCH_MAX, total)
+	while cursor < end:
+		var check := mini(cursor + PREPARE_BATCH_CHECK, end)
+		while cursor < check:
+			var n := (normal_basis * normals[cursor]).normalized()
+			var axis := n.abs().max_axis_index()
+			if absf(n[axis]) < 0.9999:
+				push_error("Breathing surfaces require axis-aligned triplanar faces: " + source.resource_name)
+				return false
+			var p := (mapping * vertices[cursor]) * source.uv1_scale + source.uv1_offset
+			var t := Vector3.RIGHT
+			var b := Vector3.UP
+			match axis:
+				Vector3.AXIS_X:
+					uvs[cursor] = Vector2(-p.z, -p.y)
+					t = Vector3.FORWARD
+				Vector3.AXIS_Y:
+					uvs[cursor] = Vector2(p.x, p.z)
+					b = Vector3.FORWARD
+				Vector3.AXIS_Z:
+					uvs[cursor] = Vector2(p.x, -p.y)
+			t = (normal_basis.inverse() * t).normalized()
+			b = (normal_basis.inverse() * b).normalized()
+			baked[cursor * 4] = t.x
+			baked[cursor * 4 + 1] = t.y
+			baked[cursor * 4 + 2] = t.z
+			baked[cursor * 4 + 3] = signf(normals[cursor].cross(t).dot(b))
+			cursor += 1
+		if Time.get_ticks_usec() - start >= PREPARE_BUDGET_USEC:
+			break
+	_building.cursor = cursor
+	if cursor < total:
+		return true
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_TANGENT] = baked
+	_building.tangents = baked
+	var result := source.duplicate() as StandardMaterial3D
+	result.uv1_triplanar = false
+	result.uv1_world_triplanar = false
+	result.uv1_scale = Vector3.ONE
+	result.uv1_offset = Vector3.ZERO
+	# Godot ignores height mapping while triplanar is enabled; keep that behavior.
+	result.heightmap_enabled = false
+	_building.render_material = result
+	_building.erase("anchor")
+	_building.stage = "custom"
+	_building.cursor = 0
+	return true
+
+# Rest-attribute pass for native shaders, sliced. Same floats, same order as
+# the old inline append loop; pre-sized instead of appended.
+func _step_custom() -> bool:
+	var node: MeshInstance3D = _building.node
+	if not is_instance_valid(node): return false
+	var material: Material = _building.material
+	if not (material is ShaderMaterial):
+		_building.stage = "morph"
+		_building.cursor = 0
+		return true
+	if not _building.has("custom"):
+		var count: int = (_building.vertices as PackedVector3Array).size()
+		var rest_position := PackedFloat32Array()
+		rest_position.resize(count * 3)
+		var rest_normal := PackedFloat32Array()
+		rest_normal.resize(count * 3)
+		_building["custom"] = {"position": rest_position, "normal": rest_normal}
+	var state: Dictionary = _building.custom
+	var vertices: PackedVector3Array = _building.vertices
+	var normals: PackedVector3Array = _building.normals
+	var rest_position: PackedFloat32Array = state.position
+	var rest_normal: PackedFloat32Array = state.normal
+	var cursor: int = _building.cursor
+	var total := vertices.size()
+	var start := Time.get_ticks_usec()
+	var end := mini(cursor + PREPARE_BATCH_MAX, total)
+	while cursor < end:
+		var check := mini(cursor + PREPARE_BATCH_CHECK, end)
+		while cursor < check:
+			rest_position[cursor * 3] = vertices[cursor].x
+			rest_position[cursor * 3 + 1] = vertices[cursor].y
+			rest_position[cursor * 3 + 2] = vertices[cursor].z
+			rest_normal[cursor * 3] = normals[cursor].x
+			rest_normal[cursor * 3 + 1] = normals[cursor].y
+			rest_normal[cursor * 3 + 2] = normals[cursor].z
+			cursor += 1
+		if Time.get_ticks_usec() - start >= PREPARE_BUDGET_USEC:
+			break
+	_building.cursor = cursor
+	if cursor < total:
+		return true
+	var arrays: Array = _building.arrays
+	arrays[Mesh.ARRAY_CUSTOM0] = rest_position
+	arrays[Mesh.ARRAY_CUSTOM1] = rest_normal
+	_building.flags = (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
+	_building.render_material = _wrap_native_shader(material)
+	_building.erase("custom")
+	_building.stage = "morph"
+	_building.cursor = 0
 	return true
 
 # Godot packs morph normals as unit vectors: supply complete target poses,
 # not normal deltas. Profile weights form a partition so normals stay outward.
+# Each target is built in bounded vertex slices across prepare_step calls, in
+# target order; the per-vertex formulas are unchanged.
 func _append_target() -> void:
 	var mesh: ArrayMesh = _building.mesh
-	var target_index: int = _building.shapes.size()
 	var vertices: PackedVector3Array = _building.vertices
 	var normals: PackedVector3Array = _building.normals
 	var tangents: PackedFloat32Array = _building.tangents
@@ -110,33 +240,53 @@ func _append_target() -> void:
 	var to_mesh: Transform3D = _building.to_mesh
 	var normal_in: Basis = _building.normal_in
 	var normal_out: Basis = _building.normal_out
-	mesh.add_blend_shape("pressure_%d" % target_index)
+	if not _building.has("target"):
+		mesh.add_blend_shape("pressure_%d" % _building.shapes.size())
+		var positions := PackedVector3Array()
+		positions.resize(vertices.size())
+		var directions := PackedVector3Array()
+		directions.resize(vertices.size())
+		var tangent_delta := PackedFloat32Array()
+		tangent_delta.resize(tangents.size())
+		_building["target"] = {"index": _building.shapes.size(), "positions": positions,
+			"directions": directions, "delta": tangent_delta, "cursor": 0}
+	var state: Dictionary = _building.target
+	var target_index: int = state.index
 	var target := targets[target_index]
-	var positions := PackedVector3Array()
-	var directions := PackedVector3Array()
-	var tangent_delta := PackedFloat32Array()
-	positions.resize(vertices.size())
-	directions.resize(vertices.size())
-	tangent_delta.resize(tangents.size())
-	for i in vertices.size():
-		var p := from_mesh * vertices[i]
-		var sample := Profile.sample(target, Vector2(p.x, p.y))
-		positions[i] = vertices[i] + to_mesh.basis * Vector3(0, 0, sample.x)
-		var n := normal_in * normals[i]
-		directions[i] = (normals[i] + normal_out * Vector3(-sample.y * n.z, -sample.z * n.z, 0)).normalized()
-		if tangents.size() >= (i + 1) * 4:
-			var t := from_mesh.basis * Vector3(tangents[i*4], tangents[i*4+1], tangents[i*4+2])
-			var delta := (Vector3(tangents[i*4], tangents[i*4+1], tangents[i*4+2]) + to_mesh.basis * Vector3(0, 0, sample.y * t.x + sample.z * t.y)).normalized()
-			tangent_delta[i*4] = delta.x
-			tangent_delta[i*4+1] = delta.y
-			tangent_delta[i*4+2] = delta.z
-			tangent_delta[i*4+3] = tangents[i*4+3]
+	var positions: PackedVector3Array = state.positions
+	var directions: PackedVector3Array = state.directions
+	var tangent_delta: PackedFloat32Array = state.delta
+	var cursor: int = state.cursor
+	var start := Time.get_ticks_usec()
+	var end := mini(cursor + PREPARE_BATCH_MAX, vertices.size())
+	while cursor < end:
+		var check := mini(cursor + PREPARE_BATCH_CHECK, end)
+		while cursor < check:
+			var p := from_mesh * vertices[cursor]
+			var sample := Profile.sample(target, Vector2(p.x, p.y))
+			positions[cursor] = vertices[cursor] + to_mesh.basis * Vector3(0, 0, sample.x)
+			var n := normal_in * normals[cursor]
+			directions[cursor] = (normals[cursor] + normal_out * Vector3(-sample.y * n.z, -sample.z * n.z, 0)).normalized()
+			if tangents.size() >= (cursor + 1) * 4:
+				var t := from_mesh.basis * Vector3(tangents[cursor*4], tangents[cursor*4+1], tangents[cursor*4+2])
+				var delta := (Vector3(tangents[cursor*4], tangents[cursor*4+1], tangents[cursor*4+2]) + to_mesh.basis * Vector3(0, 0, sample.y * t.x + sample.z * t.y)).normalized()
+				tangent_delta[cursor*4] = delta.x
+				tangent_delta[cursor*4+1] = delta.y
+				tangent_delta[cursor*4+2] = delta.z
+				tangent_delta[cursor*4+3] = tangents[cursor*4+3]
+			cursor += 1
+		if Time.get_ticks_usec() - start >= PREPARE_BUDGET_USEC:
+			break
+	if cursor < vertices.size():
+		state.cursor = cursor
+		return
 	var blend: Array = []
 	blend.resize(Mesh.ARRAY_MAX)
 	blend[Mesh.ARRAY_VERTEX] = positions
 	blend[Mesh.ARRAY_NORMAL] = directions
 	if not tangents.is_empty(): blend[Mesh.ARRAY_TANGENT] = tangent_delta
 	_building.shapes.append(blend)
+	_building.erase("target")
 
 func _finish_piece() -> bool:
 	var mesh: ArrayMesh = _building.mesh
@@ -251,6 +401,15 @@ func sync_collision() -> void:
 func restore() -> void:
 	# Cancellation restores synchronously; deferred _exit_tree must not write
 	# again after blackout (or another material owner) has taken over.
+	# Preparation never touches the node until pose() installs the finished
+	# mesh, so dropping staging mid-build leaves originals exactly as they
+	# were; the halted effect must then stay inert instead of preparing an
+	# empty collision shell on the next tick.
+	var staging := not _pending.is_empty() or not _building.is_empty()
+	_pending.clear()
+	_building = {}
+	if staging and not prepared:
+		failed = true
 	if not _installed: return
 	for piece in pieces:
 		var node: MeshInstance3D = piece.node

@@ -66,6 +66,9 @@ static var _model_scenes: Dictionary = {}
 static var _run_model_scenes: Dictionary = {}
 static var _walking_clips: Dictionary = {}
 static var _running_clips: Dictionary = {}
+## Initial walk-pose bounds are invariant for a model. Sampling every skinned
+## vertex on each spawn cost more than the rest of actor construction combined.
+static var _initial_bounds: Dictionary = {}
 
 var _presentation: Node3D
 var _model: Node3D
@@ -243,8 +246,18 @@ func _prepare_animation(root: Node) -> void:
 func _normalize_model_origin() -> void:
 	if _model == null or _presentation == null:
 		return
+	var cached: Dictionary = _initial_bounds.get(model_index, {})
+	if not cached.is_empty():
+		for mesh in _meshes(_model):
+			var entry: Dictionary = cached.meshes.get(_model.get_path_to(mesh), {})
+			if not entry.is_empty():
+				_set_mesh_foot_base(mesh, entry.foot_base)
+				mesh.custom_aabb = entry.aabb
+		_model.position += cached.offset
+		return
 	var box := AABB()
 	var first := true
+	var mesh_bounds := {}
 	for mesh in _meshes(_model):
 		if mesh.mesh == null:
 			continue
@@ -259,6 +272,8 @@ func _normalize_model_origin() -> void:
 			local_box = local_box.expand(point)
 		_set_mesh_foot_base(mesh, local_box.position.y - 0.005)
 		mesh.custom_aabb = mesh.mesh.get_aabb().merge(local_box).grow(0.2)
+		mesh_bounds[_model.get_path_to(mesh)] = {
+			"foot_base": local_box.position.y - 0.005, "aabb": mesh.custom_aabb}
 		var staged: AABB = global_transform.affine_inverse() \
 			* (mesh.global_transform * local_box)
 		box = staged if first else box.merge(staged)
@@ -270,8 +285,9 @@ func _normalize_model_origin() -> void:
 	shift.x = 0.0 if absf(shift.x) < 0.15 else shift.x
 	shift.y = 0.0 if absf(shift.y) < 0.15 else shift.y
 	shift.z = 0.0 if absf(shift.z) < 0.15 else shift.z
-	if shift.length() > 0.0001:
-		_model.position += shift / _presentation.scale.x
+	var offset := shift / _presentation.scale.x if shift.length() > 0.0001 else Vector3.ZERO
+	_model.position += offset
+	_initial_bounds[model_index] = {"meshes": mesh_bounds, "offset": offset}
 
 
 func _set_mesh_foot_base(mesh: MeshInstance3D, foot_base: float) -> void:
@@ -397,6 +413,22 @@ func _posed_surface_vertices(mesh_instance: MeshInstance3D,
 	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS] \
 		if arrays[Mesh.ARRAY_WEIGHTS] is PackedFloat32Array else PackedFloat32Array()
 	var influences := weights.size() / vertices.size() if not weights.is_empty() else 0
+	# A bind's posed transform is identical for every vertex in this sample.
+	# Resolve it once per call, never across calls: burn fragments still use
+	# the exact current animation pose, including named skin binds.
+	var bind_transforms: Array[Transform3D] = []
+	var valid_binds := PackedByteArray()
+	if skeleton != null and skin != null and influences > 0:
+		bind_transforms.resize(skin.get_bind_count())
+		valid_binds.resize(skin.get_bind_count())
+		for bind_index in skin.get_bind_count():
+			var bone_index := skin.get_bind_bone(bind_index)
+			if bone_index < 0:
+				bone_index = skeleton.find_bone(skin.get_bind_name(bind_index))
+			if bone_index < 0 or bone_index >= skeleton.get_bone_count(): continue
+			bind_transforms[bind_index] = skeleton.get_bone_global_pose(bone_index) \
+				* skin.get_bind_pose(bind_index)
+			valid_binds[bind_index] = 1
 	for vertex_index in vertices.size():
 		var point := vertices[vertex_index]
 		var posed := false
@@ -409,15 +441,9 @@ func _posed_surface_vertices(mesh_instance: MeshInstance3D,
 				var weight := weights[array_index]
 				var bind_index := bones[array_index]
 				if weight <= 0.0001 or bind_index < 0 \
-						or bind_index >= skin.get_bind_count():
+						or bind_index >= valid_binds.size() or valid_binds[bind_index] == 0:
 					continue
-				var bone_index := skin.get_bind_bone(bind_index)
-				if bone_index < 0:
-					bone_index = skeleton.find_bone(skin.get_bind_name(bind_index))
-				if bone_index < 0 or bone_index >= skeleton.get_bone_count():
-					continue
-				var skinning_transform := skeleton.get_bone_global_pose(bone_index) \
-					* skin.get_bind_pose(bind_index)
+				var skinning_transform := bind_transforms[bind_index]
 				skinned += (skinning_transform * point) * weight
 				weight_total += weight
 			if weight_total > 0.0001:
@@ -612,6 +638,7 @@ static func retain_models(indices: Array[int]) -> void:
 			continue
 		_finish_threaded_request(MODEL_PATHS[index])
 		_model_scenes.erase(index)
+		_initial_bounds.erase(index)
 		if RUN_MODEL_PATHS.has(index):
 			_finish_threaded_request(str(RUN_MODEL_PATHS[index]))
 		_run_model_scenes.erase(index)
@@ -630,6 +657,7 @@ static func clear_runtime_caches() -> void:
 		_finish_threaded_request(str(path))
 	_model_scenes.clear()
 	_run_model_scenes.clear()
+	_initial_bounds.clear()
 	_walking_clips.clear()
 	_running_clips.clear()
 

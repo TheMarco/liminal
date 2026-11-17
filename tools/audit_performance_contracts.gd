@@ -5,11 +5,49 @@ const CAROUSEL = preload("res://scripts/airport_carousel_motion.gd")
 
 
 func run() -> void:
+	_gallery_shadow_geometry()
 	await _bloom_shadow_lifecycle()
 	await _carousel_shadow_cadence()
 	await _retirement_lifecycle()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	finish("performance lifecycle contracts")
+
+
+func _gallery_shadow_geometry() -> void:
+	# Refining the long bevelled balcony slab must preserve its shape and
+	# winding; use an unrefined copy as an independent geometric reference.
+	var size := Vector3(9.6, 0.28, 0.85)
+	var coarse := RoundedBox.mesh(size, 0.025)
+	var refined := RoundedBox.mesh(size, 0.025, 0.5)
+	expect(coarse != refined and coarse.get_aabb().is_equal_approx(refined.get_aabb()),
+		"refined balcony changed bounds or reused the coarse cache")
+	var before := _surface_measure(coarse.get_faces())
+	var after := _surface_measure(refined.get_faces())
+	expect(absf(before.x - after.x) < 0.0001 and absf(before.y - after.y) < 0.0001,
+		"refined balcony changed area or winding: %s vs %s" % [before, after])
+	expect(RoundedBox.mesh(size, 0.025, 0.5) == refined, "refined balcony was not cached")
+	var host := Node3D.new()
+	preload("res://scripts/levels/mall_level_builder.gd")._attach_upper_gallery(host, 4)
+	for instance: MeshInstance3D in host.get_children():
+		var mesh := instance.mesh as ArrayMesh
+		var faces := mesh.get_faces()
+		for offset in range(0, faces.size(), 3):
+			for edge in 3:
+				expect(faces[offset + edge].distance_squared_to(faces[offset + (edge + 1) % 3]) <= 0.50001,
+					"gallery retained a long shadow triangle")
+	host.free()
+
+
+func _surface_measure(faces: PackedVector3Array) -> Vector2:
+	var area := 0.0
+	var volume := 0.0
+	for offset in range(0, faces.size(), 3):
+		var a := faces[offset]
+		var b := faces[offset + 1]
+		var c := faces[offset + 2]
+		area += (b - a).cross(c - a).length() * 0.5
+		volume += a.dot(b.cross(c)) / 6.0
+	return Vector2(area, volume)
 
 
 func _mesh() -> MeshInstance3D:

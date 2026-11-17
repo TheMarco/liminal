@@ -15,12 +15,29 @@ func _expect(ok: bool, detail: String) -> void:
 func _verify() -> void:
 	_expect(not FileAccess.file_exists("res://export_presets.cfg"), "source tree leaked into pack check")
 	for path in ["res://scripts/main.gd", "res://scripts/caught_sequence.gd",
+			"res://scripts/encounter_render_warmup.gd", "res://scripts/environment_breath_surface.gd",
+			"res://scripts/environment_breath_profile.gd", "res://scripts/reality_aftershock.gd",
+			"res://shaders/reality_aftershock.gdshader", "res://shaders/shadow_walker_halo.gdshader",
+			"res://shaders/ghost_walker.gdshader", "res://shaders/ghost_walker_halo.gdshader",
+			"res://scenes/startup.tscn", "res://videos/intro/startup.ogv", "res://videos/outro/outside.ogv",
 			"res://scripts/gameplay_frame_guard.gd",
 			"res://scripts/runtime_diagnostics.gd", "res://scripts/ntscrt_video_host.gd",
 			"res://scripts/ntscrt_gpu_presenter.gd",
 			"res://scripts/levels/school_level_builder.gd", "res://scripts/levels/brutalist_level_builder.gd",
 			"res://textures/annex/half_wall_cap_wood.png", "res://scenes/main.tscn"]:
 		_expect(ResourceLoader.exists(path), "missing packed runtime resource: " + path)
+	for path in ["res://scripts/encounter_render_warmup.gd", "res://scripts/environment_breath_surface.gd",
+			"res://scripts/reality_aftershock.gd"]:
+		var script := load(path) as GDScript
+		_expect(script != null and script.can_instantiate(), "packed encounter script cannot compile: " + path)
+	var warmup = load("res://scripts/encounter_render_warmup.gd").new()
+	_expect(warmup.get_class() == "Node" and warmup.has_method("_warm_blackout_surfaces")
+		and warmup.has_method("_warm_mutation_reveal") and warmup.has_method("_release_view"),
+		"floor-environment/blackout warmup and GPU-world retirement missing or stale")
+	warmup.free()
+	var breath = load("res://scripts/environment_breath_surface.gd")
+	_expect(breath.PREPARE_BATCH_MAX == 1024 and breath.PREPARE_BUDGET_USEC == 2000,
+		"bounded breathing preparation missing or stale")
 	_expect(ProjectSettings.get_setting("autoload/StallGuard", "") == "*res://scripts/gameplay_frame_guard.gd",
 		"stall recovery is not enabled in exported startup")
 	_expect(ProjectSettings.get_setting("rendering/rendering_device/d3d12/max_resource_descriptors", 0) == 131072,

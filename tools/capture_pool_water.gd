@@ -9,6 +9,8 @@ var output := "res://build/water-review"
 var filter := ""
 var baseline := false
 var motion := false
+var quality := -1
+var fixtures_only := false
 var view: SubViewport
 var stage: Node3D
 var env_node: WorldEnvironment
@@ -19,6 +21,8 @@ func _init() -> void:
 		elif arg.begins_with("--filter="): filter = arg.trim_prefix("--filter=")
 		elif arg == "--baseline": baseline = true
 		elif arg == "--motion": motion = true
+		elif arg.begins_with("--quality="): quality = clampi(int(arg.trim_prefix("--quality=")),0,3)
+		elif arg == "--fixtures-only": fixtures_only = true
 	call_deferred("run")
 
 func draw(count := 1) -> void:
@@ -107,11 +111,18 @@ func run() -> void:
 	view.msaa_3d = Viewport.MSAA_4X
 	view.use_taa = true
 	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var settings: GameSettings
+	if quality >= 0:
+		settings = GameSettings.new("/tmp/liminal-pool-capture-%d.cfg" % OS.get_process_id())
+		settings.apply_quality_preset(quality)
+		GameSettings.current = settings
+		GraphicsQuality.apply_viewport(view,settings)
 	root.add_child(view)
 	stage = Node3D.new()
 	view.add_child(stage)
 	env_node = WorldEnvironment.new()
 	env_node.environment = EnvBuilder.build(THEME)
+	if settings != null: GraphicsQuality.apply_environment(env_node.environment,settings)
 	view.add_child(env_node)
 	var camera := Camera3D.new()
 	camera.fov = 70.0
@@ -147,11 +158,14 @@ func run() -> void:
 		var prefix := "style-%03d" % style
 		camera.position = water_center + Vector3(size.x * .35, Chunk.POOL_DECK_Y + 1.55 - water_y, size.y * .5 + .7)
 		look(camera, water_center + Vector3(0, 0, -size.y * .2))
-		await capture(camera, prefix + "-poolside", chunks, env_node.environment)
+		if not fixtures_only: await capture(camera, prefix + "-poolside", chunks, env_node.environment)
 		camera.position = Vector3(camera.position.x, water_y + .6, water_center.z + size.y * .5 - .35)
 		look(camera, water_center + Vector3(0, .1, -size.y * .4))
-		await capture(camera, prefix + "-low", chunks, env_node.environment)
+		if not fixtures_only: await capture(camera, prefix + "-low", chunks, env_node.environment)
 		if motion: await capture_motion(camera, style)
+		camera.position = water_center + Vector3(size.x * .35, Chunk.POOL_DECK_Y + 1.55 - water_y, size.y * .5 + .7)
+		look(camera, water_center + Vector3(0, centre.ceil_h * .55, -size.y * .2))
+		await capture(camera, prefix + "-fixtures", chunks, env_node.environment)
 		for chunk in chunks: chunk.free()
 	view.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)

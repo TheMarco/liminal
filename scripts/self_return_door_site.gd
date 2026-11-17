@@ -45,6 +45,7 @@ func build(actor: Player, landing: Vector3, wall_material: Material,
 	_preview_camera.far = 70.0
 	_preview.add_child(_preview_camera)
 	_preview_camera.current = true
+	refresh_graphics_quality(GameSettings.current, not actor.get_viewport().use_taa)
 	_window = MeshInstance3D.new()
 	_window.name = "same room through doorway"
 	_window.visible = false
@@ -103,6 +104,28 @@ func build(actor: Player, landing: Vector3, wall_material: Material,
 	pose(0.0, 0.0)
 
 
+func refresh_graphics_quality(settings: GameSettings, disable_taa := false) -> void:
+	if _preview == null: return
+	if settings != null:
+		GraphicsQuality.apply_viewport_features(_preview, settings, disable_taa)
+	else:
+		GraphicsQuality.configure_shadow_atlas(_preview)
+	_sync_preview_resolution()
+
+
+func _sync_preview_resolution() -> void:
+	# This is another view of the streamed room, not an independent high-res
+	# scene. Follow the actual world resolution, including tape/CRT caps, and
+	# retain the original maximum for Native. Do not downscale it twice.
+	var source := _actor.get_viewport()
+	var height := clampi(roundi(source.get_visible_rect().size.y
+		* source.scaling_3d_scale), 1, 1188)
+	var target_size := Vector2i(maxi(1, roundi(height * WIDTH / HEIGHT)), height)
+	if _preview.size != target_size:
+		_has_frame = false
+		_preview.size = target_size
+
+
 func pose(progress: float, _time: float) -> void:
 	openness = clampf(progress, 0.0, 1.0)
 	if _frame != null:
@@ -117,6 +140,8 @@ func _process(dt: float) -> void:
 	if _preview == null or not is_instance_valid(_actor): return
 	var near := _actor.cam.global_position.distance_to(global_position) < 16.0
 	var should_render := openness > 0.02 and near and _update_preview_camera()
+	if should_render:
+		_sync_preview_resolution()
 	_preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS \
 		if should_render else SubViewport.UPDATE_DISABLED
 	_window.visible = should_render and _has_frame and openness >= 0.96

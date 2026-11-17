@@ -1,0 +1,588 @@
+{
+  "date": "2026-10-09",
+  "status": "Historical scanline-tuning measurements. Royale changes were subsequently withdrawn after the player reported visible moire in gameplay. Pattern contrast and still-image checks did not establish acceptable motion quality. Royale now restores automatic interlace detection, former beam widths and former window signal sizing; the samples below do not validate that rollback.",
+  "request": "Make the seven CRT models retain visible scanlines/raster at sensible resolutions, preserve dark-scene readability and avoid a large rendering cost.",
+  "device": "Apple M3 Max (Apple9), Metal, Godot 4.7.2",
+  "changes": [
+    "Automatic CRT signals fit at least three final display rows per signal line, within existing quality budgets: up to 240 lines in a 720-row window, 360 at 1080, 480 at larger sizes. 3D world resolution is independent.",
+    "Tape-only processing and explicit custom/source sizing or original supersampling/integer fit retain their sizing. Smaller automatic signals keep tape defect scaling proportional.",
+    "EasyMode/Hyllian scanline cutoffs raised from 400 to 1000; calibrated beam strength for their authored looks.",
+    "Royale automatic interlace detection disabled for progressive game frames; beam maximum sigma reduced to 0.28. Explicit custom parameter sets remain authoritative.",
+    "Crtsim security-monitor raster restored using its native staggered phosphor mask, scale 4, opacity 0.65 and brightness 0.6. Original persistence retained.",
+    "Aperture and the Glow models retain their existing beam calibration; their raster benefits from the smaller-window sizing fix.",
+    "EasyMode cosine beam receives a tiny positive floor before fractional pow in the generated shader, fixing Metal NaN black rows at exact beam minima. Importer reproduces it; all vendored source files and other generated shader data unchanged.",
+    "Game and workshop share calibration. Only exact recognized former defaults/authored model parameter sets migrate on load; deliberately customized models and unrelated graphics settings remain unchanged."
+  ],
+  "pattern_check": {
+    "method": "Real GPU presenter, final scaling, 24 warmup + 8 captured frames. Measure raster contrast in four uniform gray columns after temporal averaging. Crtsim uses per-column vertical contrast because its slots are staggered.",
+    "retina_display": [
+      3456,
+      2234
+    ],
+    "retina_result": "PASS: all seven models across four quality tiers (28 cases).",
+    "window_display": [
+      1280,
+      720
+    ],
+    "window_result": "PASS: all seven models at High; automatic CRT input becomes 240 lines.",
+    "acceptance": "25% and 50% patches retain contrast >0.035 and <0.55; 8% remains above 0.015; mean levels remain distinct; 75% patch remains below 0.9.",
+    "samples": [
+      {
+        "model": "aperture",
+        "tier": 0,
+        "signal": "(360, 240)",
+        "output": "(1114, 720)",
+        "midgray_raster_contrast": 0.109708079892514,
+        "gray_patch_means": [
+          0.105121543856625,
+          0.286360030683751,
+          0.520161865952424,
+          0.730439846540895
+        ]
+      },
+      {
+        "model": "aperture",
+        "tier": 1,
+        "signal": "(540, 360)",
+        "output": "(1671, 1080)",
+        "midgray_raster_contrast": 0.109017731419221,
+        "gray_patch_means": [
+          0.105329858782049,
+          0.287115962128489,
+          0.521013679765973,
+          0.731184932280799
+        ]
+      },
+      {
+        "model": "aperture",
+        "tier": 2,
+        "signal": "(720, 480)",
+        "output": "(2228, 1440)",
+        "midgray_raster_contrast": 0.111653881091865,
+        "gray_patch_means": [
+          0.105429450335454,
+          0.287612520415134,
+          0.521070148693398,
+          0.732460148708056
+        ]
+      },
+      {
+        "model": "aperture",
+        "tier": 3,
+        "signal": "(720, 480)",
+        "output": "(3456, 2234)",
+        "midgray_raster_contrast": 0.259713708296268,
+        "gray_patch_means": [
+          0.102757355401991,
+          0.280290041429301,
+          0.510079673957079,
+          0.720680163319534
+        ]
+      },
+      {
+        "model": "royale",
+        "tier": 0,
+        "signal": "(360, 240)",
+        "output": "(1114, 720)",
+        "midgray_raster_contrast": 0.0830319332600939,
+        "gray_patch_means": [
+          0.104669369071741,
+          0.310044089906814,
+          0.561987865595187,
+          0.787908136748075
+        ]
+      },
+      {
+        "model": "royale",
+        "tier": 1,
+        "signal": "(540, 360)",
+        "output": "(1671, 1080)",
+        "midgray_raster_contrast": 0.0810747815917214,
+        "gray_patch_means": [
+          0.105063093502415,
+          0.310175835324779,
+          0.562217532053741,
+          0.788397492698278
+        ]
+      },
+      {
+        "model": "royale",
+        "tier": 2,
+        "signal": "(720, 480)",
+        "output": "(2228, 1440)",
+        "midgray_raster_contrast": 0.081247072668985,
+        "gray_patch_means": [
+          0.105336763130483,
+          0.310581151506747,
+          0.562862410140899,
+          0.790178150527191
+        ]
+      },
+      {
+        "model": "royale",
+        "tier": 3,
+        "signal": "(720, 480)",
+        "output": "(3456, 2234)",
+        "midgray_raster_contrast": 0.236682148587176,
+        "gray_patch_means": [
+          0.105664011826714,
+          0.302579749731792,
+          0.553786473942875,
+          0.779069845940114
+        ]
+      },
+      {
+        "model": "easymode",
+        "tier": 0,
+        "signal": "(360, 240)",
+        "output": "(1114, 720)",
+        "midgray_raster_contrast": 0.0770707747987308,
+        "gray_patch_means": [
+          0.120048325469524,
+          0.29156400573462,
+          0.517373477888416,
+          0.769826641578878
+        ]
+      },
+      {
+        "model": "easymode",
+        "tier": 1,
+        "signal": "(540, 360)",
+        "output": "(1671, 1080)",
+        "midgray_raster_contrast": 0.0774468352417219,
+        "gray_patch_means": [
+          0.120331673937043,
+          0.292166369107622,
+          0.517194727134,
+          0.768435226475949
+        ]
+      },
+      {
+        "model": "easymode",
+        "tier": 2,
+        "signal": "(720, 480)",
+        "output": "(2228, 1440)",
+        "midgray_raster_contrast": 0.0791608627265643,
+        "gray_patch_means": [
+          0.1205169313005,
+          0.292193803235889,
+          0.51755022489976,
+          0.769288251343405
+        ]
+      },
+      {
+        "model": "easymode",
+        "tier": 3,
+        "signal": "(720, 480)",
+        "output": "(3456, 2234)",
+        "midgray_raster_contrast": 0.143969973512122,
+        "gray_patch_means": [
+          0.12045376222992,
+          0.291857873756346,
+          0.517909976664807,
+          0.768951084033027
+        ]
+      },
+      {
+        "model": "glow_gauss",
+        "tier": 0,
+        "signal": "(360, 240)",
+        "output": "(1114, 720)",
+        "midgray_raster_contrast": 0.185405187518306,
+        "gray_patch_means": [
+          0.103358611677929,
+          0.30575215582697,
+          0.567236028252713,
+          0.815598203393167
+        ]
+      },
+      {
+        "model": "glow_gauss",
+        "tier": 1,
+        "signal": "(540, 360)",
+        "output": "(1671, 1080)",
+        "midgray_raster_contrast": 0.18287855642225,
+        "gray_patch_means": [
+          0.104241985575451,
+          0.305685775102271,
+          0.566350100600781,
+          0.822135427268224
+        ]
+      },
+      {
+        "model": "glow_gauss",
+        "tier": 2,
+        "signal": "(720, 480)",
+        "output": "(2228, 1440)",
+        "midgray_raster_contrast": 0.186490776478162,
+        "gray_patch_means": [
+          0.104839411699989,
+          0.304654959206043,
+          0.565000146375193,
+          0.826061463594671
+        ]
+      },
+      {
+        "model": "glow_gauss",
+        "tier": 3,
+        "signal": "(720, 480)",
+        "output": "(3456, 2234)",
+        "midgray_raster_contrast": 0.316515305782013,
+        "gray_patch_means": [
+          0.106581907250075,
+          0.301291240180338,
+          0.558836310054175,
+          0.825191493262539
+        ]
+      },
+      {
+        "model": "glow_lanczos",
+        "tier": 0,
+        "signal": "(360, 240)",
+        "output": "(1114, 720)",
+        "midgray_raster_contrast": 0.192531470763586,
+        "gray_patch_means": [
+          0.101499122260842,
+          0.294764711711269,
+          0.548068299682018,
+          0.771385745856864
+        ]
+      },
+      {
+        "model": "glow_lanczos",
+        "tier": 1,
+        "signal": "(540, 360)",
+        "output": "(1671, 1080)",
+        "midgray_raster_contrast": 0.181462632057569,
+        "gray_patch_means": [
+          0.102657509622118,
+          0.296317789962769,
+          0.549080194821925,
+          0.775197865600029
+        ]
+      },
+      {
+        "model": "glow_lanczos",
+        "tier": 2,
+        "signal": "(720, 480)",
+        "output": "(2228, 1440)",
+        "midgray_raster_contrast": 0.178434417445294,
+        "gray_patch_means": [
+          0.103461552997539,
+          0.296614089354779,
+          0.548482534180117,
+          0.780839008544019
+        ]
+      },
+      {
+        "model": "glow_lanczos",
+        "tier": 3,
+        "signal": "(720, 480)",
+        "output": "(3456, 2234)",
+        "midgray_raster_contrast": 0.319702264615529,
+        "gray_patch_means": [
+          0.104221554524005,
+          0.29194525960445,
+          0.539615485203339,
+          0.778715157528846
+        ]
+      },
+      {
+        "model": "hyllian",
+        "tier": 0,
+        "signal": "(360, 240)",
+        "output": "(1114, 720)",
+        "midgray_raster_contrast": 0.0536912696908487,
+        "gray_patch_means": [
+          0.143545757979155,
+          0.352736936882139,
+          0.576797410845756,
+          0.770731222815813
+        ]
+      },
+      {
+        "model": "hyllian",
+        "tier": 1,
+        "signal": "(540, 360)",
+        "output": "(1671, 1080)",
+        "midgray_raster_contrast": 0.0536912696908487,
+        "gray_patch_means": [
+          0.14787582308054,
+          0.351899518631399,
+          0.57728760689497,
+          0.770669948309662
+        ]
+      },
+      {
+        "model": "hyllian",
+        "tier": 2,
+        "signal": "(720, 480)",
+        "output": "(2228, 1440)",
+        "midgray_raster_contrast": 0.0540540485028548,
+        "gray_patch_means": [
+          0.148018796928227,
+          0.353227132931352,
+          0.577675678767264,
+          0.771527791395785
+        ]
+      },
+      {
+        "model": "hyllian",
+        "tier": 3,
+        "signal": "(720, 480)",
+        "output": "(3456, 2234)",
+        "midgray_raster_contrast": 0.0748299242356879,
+        "gray_patch_means": [
+          0.144873372279108,
+          0.352736936882139,
+          0.577532704919576,
+          0.772324359975757
+        ]
+      },
+      {
+        "model": "sim",
+        "tier": 0,
+        "signal": "(360, 240)",
+        "output": "(1114, 720)",
+        "midgray_raster_contrast": 0.0612668285149802,
+        "gray_patch_means": [
+          0.0803066305234097,
+          0.255736834097964,
+          0.511929396995886,
+          0.763107653008775
+        ]
+      },
+      {
+        "model": "sim",
+        "tier": 1,
+        "signal": "(540, 360)",
+        "output": "(1671, 1080)",
+        "midgray_raster_contrast": 0.0686072413149,
+        "gray_patch_means": [
+          0.0802491856738926,
+          0.260534118836707,
+          0.517262833707112,
+          0.765459700458452
+        ]
+      },
+      {
+        "model": "sim",
+        "tier": 2,
+        "signal": "(720, 480)",
+        "output": "(2228, 1440)",
+        "midgray_raster_contrast": 0.0658045727536436,
+        "gray_patch_means": [
+          0.0807508706930094,
+          0.25685381765652,
+          0.512985104927794,
+          0.765134817920627
+        ]
+      },
+      {
+        "model": "sim",
+        "tier": 3,
+        "signal": "(720, 480)",
+        "output": "(3456, 2234)",
+        "midgray_raster_contrast": 0.0726605456167723,
+        "gray_patch_means": [
+          0.0809117162716576,
+          0.257502305365051,
+          0.514881423005136,
+          0.768335772590946
+        ]
+      }
+    ],
+    "raw_reports": [
+      "build/crt-scanline-review/baseline-all/report.json",
+      "build/crt-scanline-review/final-retina/report.json",
+      "build/crt-scanline-review/final-sim-balanced/report.json",
+      "build/crt-scanline-review/window-candidate/report.json",
+      "build/crt-scanline-review/final-sim-window/report.json"
+    ],
+    "supersession": "final-retina Sim samples are superseded by final-sim-balanced; window-candidate Sim by final-sim-window. Other models use exactly the final parameters."
+  },
+  "scene_check": {
+    "result": "Seven authored CRT looks reviewed in School classroom 61, with adjacent rooms, ceiling detail and glossy floor retained.",
+    "captures": "build/crt-scanline-review/school-final",
+    "raw_report": "build/crt-scanline-review/school-final/report.json"
+  },
+  "performance": {
+    "method": "Same frozen School room/camera at High with CRT world height 480 and output limit 1440 on a 3456x2234 display. Before/after/after/before, 96 warmup + 32 measured frames per case; CPU submission, GPU fence and image readback included.",
+    "comparisons": [
+      {
+        "model": "royale",
+        "before_ms": 24.75125,
+        "after_ms": 24.468,
+        "difference_percent": -1.1443866471390285,
+        "draw_calls": 399,
+        "raw_samples": [
+          {
+            "case": "royale-before",
+            "draw_calls": {
+              "mean": 399.0,
+              "median": 399.0,
+              "p95": 399.0
+            },
+            "frame_cost": {
+              "mean": 24.17365625,
+              "median": 24.1395,
+              "p95": 24.789
+            },
+            "output_limit": 1440,
+            "signal": "(720, 480)",
+            "warmup": 96,
+            "world_height": 479.999985724688
+          },
+          {
+            "case": "royale-after",
+            "draw_calls": {
+              "mean": 399.0,
+              "median": 399.0,
+              "p95": 399.0
+            },
+            "frame_cost": {
+              "mean": 24.658625,
+              "median": 24.5345,
+              "p95": 26.178
+            },
+            "output_limit": 1440,
+            "signal": "(720, 480)",
+            "warmup": 96,
+            "world_height": 479.999985724688
+          },
+          {
+            "case": "royale-after",
+            "draw_calls": {
+              "mean": 399.0,
+              "median": 399.0,
+              "p95": 399.0
+            },
+            "frame_cost": {
+              "mean": 24.24921875,
+              "median": 24.4015,
+              "p95": 25.1
+            },
+            "output_limit": 1440,
+            "signal": "(720, 480)",
+            "warmup": 96,
+            "world_height": 479.999985724688
+          },
+          {
+            "case": "royale-before",
+            "draw_calls": {
+              "mean": 399.0,
+              "median": 399.0,
+              "p95": 399.0
+            },
+            "frame_cost": {
+              "mean": 27.71215625,
+              "median": 25.363,
+              "p95": 34.229
+            },
+            "output_limit": 1440,
+            "signal": "(720, 480)",
+            "warmup": 96,
+            "world_height": 479.999985724688
+          }
+        ]
+      },
+      {
+        "model": "easymode",
+        "before_ms": 23.52,
+        "after_ms": 23.3445,
+        "difference_percent": -0.7461734693877564,
+        "draw_calls": 399,
+        "raw_samples": [
+          {
+            "case": "easymode-before",
+            "draw_calls": {
+              "mean": 399.0,
+              "median": 399.0,
+              "p95": 399.0
+            },
+            "frame_cost": {
+              "mean": 23.22403125,
+              "median": 23.128,
+              "p95": 24.711
+            },
+            "output_limit": 1440,
+            "signal": "(720, 480)",
+            "warmup": 96,
+            "world_height": 479.999985724688
+          },
+          {
+            "case": "easymode-after",
+            "draw_calls": {
+              "mean": 399.0,
+              "median": 399.0,
+              "p95": 399.0
+            },
+            "frame_cost": {
+              "mean": 23.66196875,
+              "median": 23.687,
+              "p95": 24.885
+            },
+            "output_limit": 1440,
+            "signal": "(720, 480)",
+            "warmup": 96,
+            "world_height": 479.999985724688
+          },
+          {
+            "case": "easymode-after",
+            "draw_calls": {
+              "mean": 399.0,
+              "median": 399.0,
+              "p95": 399.0
+            },
+            "frame_cost": {
+              "mean": 23.26103125,
+              "median": 23.002,
+              "p95": 24.761
+            },
+            "output_limit": 1440,
+            "signal": "(720, 480)",
+            "warmup": 96,
+            "world_height": 479.999985724688
+          },
+          {
+            "case": "easymode-before",
+            "draw_calls": {
+              "mean": 399.0,
+              "median": 399.0,
+              "p95": 399.0
+            },
+            "frame_cost": {
+              "mean": 23.83115625,
+              "median": 23.912,
+              "p95": 25.29
+            },
+            "output_limit": 1440,
+            "signal": "(720, 480)",
+            "warmup": 96,
+            "world_height": 479.999985724688
+          }
+        ]
+      }
+    ],
+    "conclusion": "Both focused comparisons differ by about 1%, within short-run noise; no observed meaningful added cost. No claim of a gameplay FPS improvement.",
+    "raw_report": "build/crt-scanline-review/school-paired/report.json"
+  },
+  "checks": [
+    "audit_video_quality.gd: PASS, including responsive signal sizing, explicit overrides, exact legacy migration and custom preservation.",
+    "audit_video_preset.gd: PASS, including profile/bridge round trips.",
+    "audit_game_settings.gd: PASS.",
+    "audit_video_preset_library.gd: PASS, 20 authored looks and seven complete model profiles.",
+    "audit_security_desk_crt.gd: PASS, identical patch means at frames 1/30/120; bright trails fade to ~0.0205 by frame 30 after switching to darkness. Sampling now averages one resolved raster tile rather than one potentially dark mask pixel.",
+    "Generated-manifest comparison: only the reproducible EasyMode numerical correction differs; transformation is idempotent.",
+    "git diff --check: PASS."
+  ],
+  "limits": [
+    "Native measurements are not gameplay FPS or pure GPU timings. Only this M3 Max was measured.",
+    "The first game capture set in school/ was covered by the auto-pause menu and is excluded. school-final contains the corrected classroom captures.",
+    "The long school-final timing sequence drifted, including unchanged-control models. Its timings are excluded from performance conclusions; school-paired is the controlled follow-up.",
+    "Existing native CRT PNG-import/export warnings remain; an exported build was not validated in this task.",
+    "Crtsim uses its own staggered phosphor raster rather than straight horizontal bars. Real-time tape noise and viewing scale can still affect perceived scanline strength."
+  ],
+  "reproduce_pattern": "godot --path . --audio-driver Dummy --script tools/audit_crt_scanlines.gd -- --models=all --tiers=0,1,2,3 --verify",
+  "reproduce_scene": "godot --path . --audio-driver Dummy --script tools/capture_crt_scanlines_game.gd -- --nologo --level=6"
+}

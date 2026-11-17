@@ -9,6 +9,9 @@ static var _cache: Dictionary = {}
 static var _floor_templates: Dictionary = {}
 const MAX_CACHED_DESIGNS := 192
 var _parts: Array[Dictionary] = []
+## Opt-in for long architectural members under paraboloid area-light shadows.
+## Include the subdivision choice in the caller's design cache key.
+var max_edge_length := 0.0
 
 
 static func attach(parent: Node3D, key: String, builder: Callable,
@@ -57,10 +60,14 @@ func box(pos: Vector3, size: Vector3, material: Material,
 		bevel := 0.0, rotation := Vector3.ZERO) -> void:
 	var mesh: Mesh
 	if bevel > 0.0:
-		mesh = RoundedBox.mesh(size, bevel)
+		mesh = RoundedBox.mesh(size, bevel, max_edge_length)
 	else:
 		var primitive := BoxMesh.new()
 		primitive.size = size
+		if max_edge_length > 0.0:
+			primitive.subdivide_width = maxi(0, ceili(size.x / max_edge_length) - 1)
+			primitive.subdivide_height = maxi(0, ceili(size.y / max_edge_length) - 1)
+			primitive.subdivide_depth = maxi(0, ceili(size.z / max_edge_length) - 1)
 		mesh = primitive
 	_add(mesh, Transform3D(Basis.from_euler(rotation), pos), material)
 
@@ -75,6 +82,8 @@ func tube(a: Vector3, b: Vector3, radius: float, material: Material) -> void:
 	mesh.height = direction.length()
 	mesh.radial_segments = 12
 	mesh.rings = 1
+	if max_edge_length > 0.0:
+		mesh.rings = maxi(1, ceili(mesh.height / max_edge_length) - 1)
 	_add(mesh, Transform3D(Basis(Quaternion(Vector3.UP,
 		direction.normalized())), (a + b) * 0.5), material)
 

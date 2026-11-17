@@ -14,6 +14,7 @@ func run() -> void:
 	game._settings = settings
 	GameSettings.current = settings
 	settings.changed.connect(game._apply_game_settings)
+	await _check_enemy_warning_pause(game)
 	game.player.toggle_sprint = true
 	game.player._sprint_toggle_active = true
 	game.notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
@@ -136,3 +137,41 @@ func run() -> void:
 	DirAccess.remove_absolute(prefix + "-progress.cfg")
 	DirAccess.remove_absolute(prefix + "-progress.cfg.bak")
 	finish("focus-loss pause, explicit resume, intro protection, failed/recovered saves and warning layout")
+
+
+func _check_enemy_warning_pause(game: Node) -> void:
+	var figure := ShadowFigure.new()
+	figure.player = game.player
+	figure.walker_model_index = 5
+	figure.position = game.player.position + Vector3(8, 0, 0)
+	figure.appearance_delay = 0.35
+	figure.grace = 0.9
+	game.add_child(figure)
+	# Exercise both the initial invisible recording warning and the later
+	# approach reaction hold using the actual SceneTree pause notification.
+	for during_appearance in [true, false]:
+		if not during_appearance:
+			figure.appearance_delay = 0.0
+			figure.hold_approach(0.7)
+		var position := figure.position
+		var delay := figure.appearance_delay
+		var grace := figure.grace
+		var hold := figure._approach_hold
+		var manifestation := figure._walker._manifestation
+		game.notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
+		await create_timer(0.15).timeout
+		expect(not figure.can_process() and figure.position == position,
+			"unfocused warning allowed enemy movement")
+		expect(figure.appearance_delay == delay and figure.grace == grace \
+			and figure._approach_hold == hold and figure._walker._manifestation == manifestation,
+			"pause spent enemy warning/grace or advanced manifestation")
+		game.notification(Node.NOTIFICATION_WM_WINDOW_FOCUS_IN)
+		await create_timer(0.05).timeout
+		expect(paused and figure.position == position and figure.appearance_delay == delay,
+			"focus gain resumed the enemy before explicit resume")
+		game._close_settings()
+		await physics_frame
+		await physics_frame
+		expect(figure.appearance_delay < delay if during_appearance else figure._approach_hold < hold,
+			"enemy warning did not resume after explicit resume")
+	figure.free()

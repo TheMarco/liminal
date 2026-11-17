@@ -120,7 +120,7 @@ func jump_to(level: int, requested_position: Vector3,
 	exact = bool(prepared.get("exact", exact))
 	yaw = float(prepared.get("yaw", yaw))
 	_port.build_level.call(level, position)
-	_port.post_build.call(level)
+	await _port.post_build.call(level)
 	await get_tree().physics_frame
 
 	var cell := Vector2i(floori(position.x / WorldGen.CELL_SIZE),

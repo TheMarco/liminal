@@ -7,10 +7,16 @@ var water: Array[AABB] = []
 var supports: Array[AABB] = []
 
 static func collision_bounds(shape: Shape3D) -> AABB:
-	# Box dimensions already are exact CPU geometry. Creating a debug mesh
+	# Primitive dimensions already are exact CPU geometry. Creating a debug mesh
 	# here needlessly allocates renderer RIDs during threaded asset loading.
 	if shape is BoxShape3D:
 		return AABB(-shape.size * 0.5, shape.size)
+	if shape is CylinderShape3D or shape is CapsuleShape3D:
+		var size := Vector3(shape.radius * 2.0, shape.height, shape.radius * 2.0)
+		return AABB(-size * 0.5, size)
+	if shape is SphereShape3D:
+		var extent: Vector3 = Vector3.ONE * shape.radius
+		return AABB(-extent, extent * 2.0)
 	return shape.get_debug_mesh().get_aabb()
 
 func _init(chunk: Node3D) -> void:

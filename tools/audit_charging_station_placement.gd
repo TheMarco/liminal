@@ -48,6 +48,23 @@ func plane(parent: Node, at: Vector3, size: Vector2, meta: String) -> void:
 	parent.add_child(node)
 
 func synthetic() -> void:
+	# Direct CPU bounds must retain the engine's geometry without constructing
+	# debug meshes in the streaming placement path.
+	for radius in [0.15, 0.5, 1.3]:
+		var cylinder := CylinderShape3D.new()
+		cylinder.radius = radius
+		cylinder.height = 2.7
+		var capsule := CapsuleShape3D.new()
+		capsule.height = 3.0
+		capsule.radius = radius
+		var sphere := SphereShape3D.new()
+		sphere.radius = radius
+		for shape in [cylinder, capsule, sphere]:
+			var expected: AABB = shape.get_debug_mesh().get_aabb()
+			var actual := ChargingStationPlacement.collision_bounds(shape)
+			check(actual.position.is_equal_approx(expected.position) \
+				and actual.size.is_equal_approx(expected.size),
+				"CPU bounds differ from debug geometry: %s radius %f" % [shape.get_class(), radius])
 	var chunk := Node3D.new()
 	slab(chunk, Vector3(6, -0.1, 6), Vector3(12, 0.2, 12))
 	box(chunk, Vector3(2.0, 0.9, 2.0), Vector3(1.0, 1.8, 1.0))

@@ -1,0 +1,1136 @@
+{
+  "date": "2026-10-09",
+  "scope": "Performance review only; no production lighting or quality settings changed.",
+  "device": "Apple M3 Max / Metal / Godot 4.7.2",
+  "method": "High / Clean, 1152x720 world in 1440x900 output. Seed 240721. Unique room-complete neighbourhoods. Six batches of 30 forced frames per diagnostic, fenced by image readback. Current lighting measured before and after each sequence; reduction ranges use both baselines. All GPU jobs ran sequentially.",
+  "limitations": [
+    "Static renderer throughput, not gameplay FPS; scripts, streaming and moving-camera frame pacing are not covered. Renderer-time shader and particle effects may still advance.",
+    "GPU timestamp queries returned zero and are unavailable. Ordinary frames were sometimes suppressed when the native window was not rendering; ignore interval/CPU timestamp fields where ordinary_timing_valid is false or absent. Forced draws explicitly validated in Bloom and subsequent runs.",
+    "Airport baseline drift was about 12% in the room-only trial, so results are reported as a range rather than exact projected savings. Compare paired runs rather than treating previous-day absolute timings as identical conditions.",
+    "One representative view per affected level on one GPU. No claim for all variants, lower-tier hardware, or VHS/CRT processing.",
+    "Existing native harness shutdown warnings about 7 texture RIDs and 1 ObjectDB instance occurred in several runs; no parse, shader or measurement-assertion errors."
+  ],
+  "findings": [
+    {
+      "priority": 1,
+      "area": "Upward light ranges",
+      "finding": "5 m instead of 9 m reduces shadow/lighting overlap while leaving downward floor-light reach intact. Measured about 9\u201316% lower render time across School, Mall and Bloom.",
+      "next_step": "Tune per fixture height and ceiling layout; verify brightness, walls, doorways, floor reflections and moving-camera transitions before adopting."
+    },
+    {
+      "priority": 2,
+      "area": "Airport light visibility",
+      "finding": "Loaded neighbourhood contains 304 coffer lights and 48 panel lights. Room-only diagnostic reduces measured cost from 34.9\u201339.0 ms to 22.6 ms.",
+      "next_step": "Implement conservative room/portal-aware light and receiver culling. Retain neighbouring sources that can contribute through doors or to visible reflections. The diagnostic itself is not shippable."
+    },
+    {
+      "priority": 3,
+      "area": "Bloom shadow geometry",
+      "finding": "Observed shadow-inclusive baseline workload is about 5,800 draws and 15 million primitives. Removing small-object shadows alone saved roughly 9%; full shadow removal saved roughly 34% but violates occlusion requirements.",
+      "next_step": "Investigate simpler shadow-only geometry and batching for organic props, retaining wall blocking and full visible meshes. Proxy savings are not yet measured."
+    },
+    {
+      "priority": 4,
+      "area": "Preserve reflections",
+      "finding": "Disabling SSR/probes yielded approximately 0\u20134% improvement in these samples. Airport specular-off test also showed only a small change. Neither is a good first quality tradeoff.",
+      "next_step": "Keep floor gloss and reflection features; optimize the number of unnecessary lighting/shadow evaluations."
+    }
+  ],
+  "rejected_candidate": "Reducing every downward range to 70% and uplights to 3 m saved 27\u201340%, but dimmed ceilings and removed valid Mall floor reflections. Do not apply this blanket change.",
+  "focused_results": [
+    {
+      "room": "airport",
+      "diagnostic": "current-room-only",
+      "baseline_medians_ms": [
+        34.9265333333333,
+        39.0477833333333
+      ],
+      "candidate_median_ms": 22.6088166666667,
+      "reduction_percent_range": [
+        35.26750436153587,
+        42.09961555649539
+      ],
+      "production_applied": false
+    },
+    {
+      "room": "school",
+      "diagnostic": "uplights-5m",
+      "baseline_medians_ms": [
+        13.2461833333333,
+        14.0348
+      ],
+      "candidate_median_ms": 12.0073,
+      "reduction_percent_range": [
+        9.35275695766431,
+        14.446233647789775
+      ],
+      "production_applied": false
+    },
+    {
+      "room": "mall",
+      "diagnostic": "uplights-5m",
+      "baseline_medians_ms": [
+        13.8440333333333,
+        14.1527166666667
+      ],
+      "candidate_median_ms": 11.9656333333333,
+      "reduction_percent_range": [
+        13.56830018226869,
+        15.453452399598632
+      ],
+      "production_applied": false
+    },
+    {
+      "room": "bloom",
+      "diagnostic": "uplights-5m",
+      "baseline_medians_ms": [
+        19.5284,
+        19.5344
+      ],
+      "candidate_median_ms": 16.8013666666667,
+      "reduction_percent_range": [
+        13.96444835897105,
+        13.990874218472559
+      ],
+      "production_applied": false
+    }
+  ],
+  "source_references": [
+    {
+      "path": "scripts/fixture_lighting.gd",
+      "detail": "suspended_strip gives upward lights a 9 m reach; rectangular creates AreaLight3D at the visible face."
+    },
+    {
+      "path": "scripts/airport_grand_ceiling.gd",
+      "detail": "4 x 4 coffers per 12 m cell, one area light per coffer."
+    },
+    {
+      "path": "scripts/graphics_quality.gd",
+      "detail": "All practical lights retain shadow blocking to prevent phantom reflections."
+    },
+    {
+      "path": "scripts/levels/bloom_level_builder.gd",
+      "detail": "Eight paired fixtures in full rooms; imported organic meshes also cast shadows."
+    },
+    {
+      "url": "https://docs.godotengine.org/en/stable/classes/class_renderingserver.html#class-renderingserver-method-viewport-get-measured-render-time-gpu",
+      "detail": "Official timing API semantics. Zero GPU results from this run are treated as unavailable."
+    }
+  ],
+  "runs": {
+    "airport-ranges": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "airport_ceiling_fixture": 48,
+        "airport_grand_coffer": 304
+      },
+      "geometry_instances": 1603,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            43.0907666666667,
+            40.2593666666667,
+            43.1463333333333,
+            40.5934666666667,
+            42.4815666666667,
+            41.4200333333333
+          ],
+          "draw_calls": 4946.0,
+          "draw_calls_max": 4946,
+          "frame_interval_median_ms": 6.9,
+          "mode": "baseline",
+          "primitives": 5911126.0,
+          "render_cpu_median_ms": 3.45499992370605,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 41.9508
+        },
+        {
+          "batches_ms": [
+            2.64736666666667,
+            2.64243333333333,
+            2.9238,
+            2.7421,
+            2.79336666666667,
+            2.70383333333333
+          ],
+          "draw_calls": 224.0,
+          "draw_calls_max": 224,
+          "frame_interval_median_ms": 6.896,
+          "mode": "no-fixture-lights",
+          "primitives": 160260.0,
+          "render_cpu_median_ms": 0.493000000715256,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 2.72296666666667
+        },
+        {
+          "batches_ms": [
+            47.9467333333333,
+            41.5417333333333,
+            40.7426333333333,
+            40.3985333333333,
+            40.0116666666667,
+            39.6652333333333
+          ],
+          "draw_calls": 4946.0,
+          "draw_calls_max": 4946,
+          "frame_interval_median_ms": 6.9,
+          "mode": "no-fixture-specular",
+          "primitives": 5911126.0,
+          "render_cpu_median_ms": 3.30699992179871,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 40.5705833333333
+        },
+        {
+          "batches_ms": [
+            27.7622,
+            26.6631666666667,
+            25.0306333333333,
+            25.3442,
+            28.1794666666667,
+            27.2974666666667
+          ],
+          "draw_calls": 2771.0,
+          "draw_calls_max": 2771,
+          "frame_interval_median_ms": 6.891,
+          "mode": "short-ranges",
+          "primitives": 2962939.0,
+          "render_cpu_median_ms": 2.25600004196167,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 26.9803166666667
+        },
+        {
+          "batches_ms": [
+            39.6238,
+            37.6997,
+            40.9033666666667,
+            42.6586,
+            41.6429,
+            40.2124333333333
+          ],
+          "draw_calls": 5075.0,
+          "draw_calls_max": 5075,
+          "frame_interval_median_ms": 6.898,
+          "mode": "baseline-repeat",
+          "primitives": 6096530.0,
+          "render_cpu_median_ms": 3.78200006484985,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 40.5579
+        }
+      ],
+      "style": 141,
+      "theme": 4,
+      "unique_chunks": 28,
+      "world_scale": 0.800000011920929
+    },
+    "focused-mall": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "mall_pendant": 44,
+        "mall_troffer": 108
+      },
+      "geometry_instances": 2240,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            13.7215666666667,
+            13.8049333333333,
+            14.1877,
+            14.2578666666667,
+            13.8831333333333,
+            13.6240666666667
+          ],
+          "draw_calls": 4841.0,
+          "draw_calls_max": 4841,
+          "frame_interval_median_ms": 14.624,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 3614577.0,
+          "render_cpu_median_ms": 3.61049997806549,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 13.8440333333333
+        },
+        {
+          "batches_ms": [
+            12.0022333333333,
+            11.7668,
+            11.7148666666667,
+            11.9290333333333,
+            12.5126333333333,
+            12.0479666666667
+          ],
+          "draw_calls": 3747.0,
+          "draw_calls_max": 3747,
+          "frame_interval_median_ms": 6.893,
+          "mode": "uplights-5m",
+          "ordinary_rendered_frames": 1,
+          "ordinary_timing_valid": false,
+          "primitives": 3095689.0,
+          "render_cpu_median_ms": 2.68499994277954,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 11.9656333333333
+        },
+        {
+          "batches_ms": [
+            14.2825,
+            14.7848333333333,
+            14.0229333333333,
+            13.8620666666667,
+            13.8421,
+            14.3913666666667
+          ],
+          "draw_calls": 5108.0,
+          "draw_calls_max": 5108,
+          "frame_interval_median_ms": 6.896,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 3842461.0,
+          "render_cpu_median_ms": 3.90300011634827,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 14.1527166666667
+        }
+      ],
+      "style": 73,
+      "theme": 7,
+      "unique_chunks": 19,
+      "world_scale": 0.800000011920929
+    },
+    "focused-airport": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "airport_ceiling_fixture": 48,
+        "airport_grand_coffer": 304
+      },
+      "geometry_instances": 1603,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            34.7509666666667,
+            32.8435666666667,
+            35.3010333333333,
+            34.1398666666667,
+            35.1021,
+            35.4053333333333
+          ],
+          "draw_calls": 4946.0,
+          "draw_calls_max": 4946,
+          "frame_interval_median_ms": 32.598,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 5911126.0,
+          "render_cpu_median_ms": 3.17150008678436,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 34.9265333333333
+        },
+        {
+          "batches_ms": [
+            23.1957666666667,
+            22.6172666666667,
+            22.6343,
+            22.6003666666667,
+            21.1638,
+            22.2721
+          ],
+          "draw_calls": 701.0,
+          "draw_calls_max": 701,
+          "frame_interval_median_ms": 20.654,
+          "mode": "current-room-only",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 632490.0,
+          "render_cpu_median_ms": 0.916000008583069,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 22.6088166666667
+        },
+        {
+          "batches_ms": [
+            39.1843,
+            38.9253333333333,
+            41.4681,
+            39.0164,
+            39.0791666666667,
+            37.8523333333333
+          ],
+          "draw_calls": 4804.0,
+          "draw_calls_max": 4804,
+          "frame_interval_median_ms": 38.888,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 5968120.0,
+          "render_cpu_median_ms": 3.20299994945526,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 39.0477833333333
+        }
+      ],
+      "style": 141,
+      "theme": 4,
+      "unique_chunks": 28,
+      "world_scale": 0.800000011920929
+    },
+    "bloom": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "fluorescent_fixture": 168
+      },
+      "geometry_instances": 1922,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            19.2888666666667,
+            19.2326,
+            19.0612666666667,
+            19.0512,
+            19.0384333333333,
+            18.8352666666667
+          ],
+          "draw_calls": 5808.0,
+          "draw_calls_max": 5808,
+          "frame_interval_median_ms": 6.888,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 14980206.0,
+          "render_cpu_median_ms": 3.22699999809265,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 19.0562333333333
+        },
+        {
+          "batches_ms": [
+            13.5722333333333,
+            12.6189,
+            12.2134666666667,
+            12.2642666666667,
+            13.2261,
+            12.1466333333333
+          ],
+          "draw_calls": 298.0,
+          "draw_calls_max": 298,
+          "frame_interval_median_ms": 6.897,
+          "mode": "no-fixture-shadows",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 739408.0,
+          "render_cpu_median_ms": 0.513000011444092,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 12.4415833333333
+        },
+        {
+          "batches_ms": [
+            17.2898333333333,
+            16.4873,
+            16.3724,
+            16.3275333333333,
+            16.5287666666667,
+            15.865
+          ],
+          "draw_calls": 4411.0,
+          "draw_calls_max": 4411,
+          "frame_interval_median_ms": 6.901,
+          "mode": "short-uplights",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 11094158.0,
+          "render_cpu_median_ms": 2.51999998092651,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 16.42985
+        },
+        {
+          "batches_ms": [
+            12.5376333333333,
+            12.6059,
+            12.5316666666667,
+            12.6213,
+            12.5219666666667,
+            12.0995333333333
+          ],
+          "draw_calls": 3536.0,
+          "draw_calls_max": 3536,
+          "frame_interval_median_ms": 6.889,
+          "mode": "short-ranges",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 8499508.0,
+          "render_cpu_median_ms": 2.27699995040894,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 12.53465
+        },
+        {
+          "batches_ms": [
+            17.3350666666667,
+            17.376,
+            16.9727,
+            17.0187,
+            16.9437666666667,
+            17.5683333333333
+          ],
+          "draw_calls": 3066.0,
+          "draw_calls_max": 3066,
+          "frame_interval_median_ms": 6.896,
+          "mode": "no-small-caster-shadows",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 12231970.0,
+          "render_cpu_median_ms": 2.49000000953674,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 17.1768833333333
+        },
+        {
+          "batches_ms": [
+            18.0094,
+            17.8824666666667,
+            18.1181666666667,
+            17.2862,
+            17.5204,
+            18.4288666666667
+          ],
+          "draw_calls": 5892.0,
+          "draw_calls_max": 5892,
+          "frame_interval_median_ms": 6.892,
+          "mode": "no-gi",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 15144028.0,
+          "render_cpu_median_ms": 3.60999989509583,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 17.9459333333333
+        },
+        {
+          "batches_ms": [
+            18.7558666666667,
+            18.2693666666667,
+            18.3083,
+            18.6791666666667,
+            18.1202666666667,
+            18.4039333333333
+          ],
+          "draw_calls": 5892.0,
+          "draw_calls_max": 5892,
+          "frame_interval_median_ms": 6.874,
+          "mode": "no-reflections",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 15144028.0,
+          "render_cpu_median_ms": 3.02099990844727,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 18.3561166666667
+        },
+        {
+          "batches_ms": [
+            18.8158666666667,
+            18.4419333333333,
+            18.7843666666667,
+            18.4754,
+            18.9722666666667,
+            19.7016
+          ],
+          "draw_calls": 5892.0,
+          "draw_calls_max": 5892,
+          "frame_interval_median_ms": 6.891,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 15144028.0,
+          "render_cpu_median_ms": 3.1340000629425,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 18.8001166666667
+        }
+      ],
+      "style": 111,
+      "theme": 11,
+      "unique_chunks": 16,
+      "world_scale": 0.800000011920929
+    },
+    "focused-school": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "school_ceiling_strip": 146
+      },
+      "geometry_instances": 2380,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            13.5751666666667,
+            13.2206666666667,
+            13.2893666666667,
+            12.9700666666667,
+            12.8760333333333,
+            13.2717
+          ],
+          "draw_calls": 4613.0,
+          "draw_calls_max": 4613,
+          "frame_interval_median_ms": 13.585,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 4428751.0,
+          "render_cpu_median_ms": 3.30200004577637,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 13.2461833333333
+        },
+        {
+          "batches_ms": [
+            12.2948333333333,
+            12.0395333333333,
+            12.2255,
+            11.9641333333333,
+            11.8444,
+            11.9750666666667
+          ],
+          "draw_calls": 4051.0,
+          "draw_calls_max": 4051,
+          "frame_interval_median_ms": 12.466,
+          "mode": "uplights-5m",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 4165183.0,
+          "render_cpu_median_ms": 2.85399997234344,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 12.0073
+        },
+        {
+          "batches_ms": [
+            14.0190666666667,
+            13.5106,
+            13.7696666666667,
+            14.0505333333333,
+            14.2597,
+            14.4266333333333
+          ],
+          "draw_calls": 4949.0,
+          "draw_calls_max": 4949,
+          "frame_interval_median_ms": 6.892,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 1,
+          "ordinary_timing_valid": false,
+          "primitives": 4967761.0,
+          "render_cpu_median_ms": 3.54699993133545,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 14.0348
+        }
+      ],
+      "style": 61,
+      "theme": 6,
+      "unique_chunks": 20,
+      "world_scale": 0.800000011920929
+    },
+    "airport": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "airport_ceiling_fixture": 48,
+        "airport_grand_coffer": 304
+      },
+      "geometry_instances": 1603,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            35.3346,
+            35.2060666666667,
+            35.0864333333333,
+            34.2452,
+            33.0184666666667,
+            34.4076666666667
+          ],
+          "draw_calls": 4946,
+          "mode": "baseline",
+          "primitives": 5911126,
+          "render_cpu_median_ms": 3.42599999904633,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 34.74705
+        },
+        {
+          "batches_ms": [
+            37.3997666666667,
+            34.2107333333333,
+            35.3660333333333,
+            35.519,
+            34.2887666666667,
+            34.2278
+          ],
+          "draw_calls": 4946,
+          "mode": "soft-low",
+          "primitives": 5911126,
+          "render_cpu_median_ms": 3.37800002098083,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 34.8274
+        },
+        {
+          "batches_ms": [
+            32.5938666666667,
+            31.2797,
+            31.1641333333333,
+            30.7224,
+            30.7776,
+            32.3287666666667
+          ],
+          "draw_calls": 4946,
+          "mode": "hard-shadows",
+          "primitives": 5911126,
+          "render_cpu_median_ms": 3.30699992179871,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 31.2219166666667
+        },
+        {
+          "batches_ms": [
+            31.9174,
+            32.9315,
+            32.5568666666667,
+            31.7932,
+            31.7991,
+            32.3282333333333
+          ],
+          "draw_calls": 224,
+          "mode": "atlas-2048",
+          "primitives": 160260,
+          "render_cpu_median_ms": 0.800000011920929,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 32.1228166666667
+        },
+        {
+          "batches_ms": [
+            26.8787,
+            27.2881,
+            27.2334333333333,
+            26.5695,
+            26.7068666666667,
+            28.7576333333333
+          ],
+          "draw_calls": 224,
+          "mode": "no-fixture-shadows",
+          "primitives": 160260,
+          "render_cpu_median_ms": 0.681999981403351,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 27.0560666666667
+        },
+        {
+          "batches_ms": [
+            30.9645,
+            31.4274666666667,
+            31.1988333333333,
+            32.1395,
+            31.4573,
+            30.8013666666667
+          ],
+          "draw_calls": 224,
+          "mode": "no-gi",
+          "primitives": 160260,
+          "render_cpu_median_ms": 0.811999976634979,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 31.31315
+        },
+        {
+          "batches_ms": [
+            37.9717666666667,
+            34.8639666666667,
+            35.5271666666667,
+            34.0361333333333,
+            34.2224666666667,
+            35.7744
+          ],
+          "draw_calls": 4946,
+          "mode": "no-volumetric-fog",
+          "primitives": 5911126,
+          "render_cpu_median_ms": 3.50099992752075,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 35.1955666666667
+        },
+        {
+          "batches_ms": [
+            34.2421333333333,
+            35.1192333333333,
+            37.4330666666667,
+            35.2612666666667,
+            35.1478,
+            35.4352333333333
+          ],
+          "draw_calls": 4946,
+          "mode": "no-reflections",
+          "primitives": 5911126,
+          "render_cpu_median_ms": 3.48099994659424,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 35.2045333333333
+        },
+        {
+          "batches_ms": [
+            37.5029,
+            34.9457333333333,
+            35.3576,
+            36.8656666666667,
+            35.9449666666667,
+            36.3934666666667
+          ],
+          "draw_calls": 4946,
+          "mode": "baseline-repeat",
+          "primitives": 5911126,
+          "render_cpu_median_ms": 3.30599999427795,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 36.1692166666667
+        }
+      ],
+      "style": 141,
+      "theme": 4,
+      "unique_chunks": 28,
+      "world_scale": 0.800000011920929
+    },
+    "focused-bloom": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "fluorescent_fixture": 168
+      },
+      "geometry_instances": 1922,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            20.4534,
+            19.8677666666667,
+            19.4814666666667,
+            19.5753333333333,
+            18.9309,
+            19.1325333333333
+          ],
+          "draw_calls": 5808.0,
+          "draw_calls_max": 5808,
+          "frame_interval_median_ms": 6.894,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 14980206.0,
+          "render_cpu_median_ms": 3.73000001907349,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 19.5284
+        },
+        {
+          "batches_ms": [
+            17.5498666666667,
+            16.8929,
+            16.3914333333333,
+            16.9634333333333,
+            16.7098333333333,
+            16.6446
+          ],
+          "draw_calls": 4452.0,
+          "draw_calls_max": 4452,
+          "frame_interval_median_ms": 6.895,
+          "mode": "uplights-5m",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 11501425.0,
+          "render_cpu_median_ms": 2.91300010681152,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 16.8013666666667
+        },
+        {
+          "batches_ms": [
+            20.0290333333333,
+            19.532,
+            19.8505333333333,
+            18.9939,
+            19.5368,
+            19.3450333333333
+          ],
+          "draw_calls": 5837.0,
+          "draw_calls_max": 5837,
+          "frame_interval_median_ms": 6.879,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 15082776.0,
+          "render_cpu_median_ms": 3.60800004005432,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 19.5344
+        }
+      ],
+      "style": 111,
+      "theme": 11,
+      "unique_chunks": 16,
+      "world_scale": 0.800000011920929
+    },
+    "mall": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "mall_pendant": 44,
+        "mall_troffer": 108
+      },
+      "geometry_instances": 2240,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            14.1216333333333,
+            14.2149,
+            13.7214,
+            13.6538666666667,
+            14.098,
+            13.9856333333333
+          ],
+          "draw_calls": 4841.0,
+          "draw_calls_max": 4841,
+          "frame_interval_median_ms": 13.87,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 3614577.0,
+          "render_cpu_median_ms": 3.5514999628067,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 14.0418166666667
+        },
+        {
+          "batches_ms": [
+            8.65066666666667,
+            8.72023333333333,
+            8.35156666666667,
+            8.4408,
+            8.42713333333333,
+            8.48356666666667
+          ],
+          "draw_calls": 486.0,
+          "draw_calls_max": 486,
+          "frame_interval_median_ms": 10.946,
+          "mode": "no-fixture-shadows",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 481783.0,
+          "render_cpu_median_ms": 0.812000006437302,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 8.46218333333333
+        },
+        {
+          "batches_ms": [
+            11.1556333333333,
+            11.0802666666667,
+            11.2108333333333,
+            11.1449333333333,
+            11.0783333333333,
+            11.4165333333333
+          ],
+          "draw_calls": 3256.0,
+          "draw_calls_max": 3256,
+          "frame_interval_median_ms": 12.302,
+          "mode": "short-uplights",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 2836982.0,
+          "render_cpu_median_ms": 2.52500009536743,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 11.1502833333333
+        },
+        {
+          "batches_ms": [
+            8.62656666666667,
+            8.29156666666667,
+            8.43283333333333,
+            8.1866,
+            8.40926666666667,
+            8.33893333333333
+          ],
+          "draw_calls": 2180.0,
+          "draw_calls_max": 2180,
+          "frame_interval_median_ms": 14.611,
+          "mode": "short-ranges",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 1792083.0,
+          "render_cpu_median_ms": 1.96700000762939,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 8.3741
+        },
+        {
+          "batches_ms": [
+            13.8592666666667,
+            14.0273666666667,
+            13.4561333333333,
+            13.3655333333333,
+            12.9506666666667,
+            12.9633666666667
+          ],
+          "draw_calls": 4890.0,
+          "draw_calls_max": 4890,
+          "frame_interval_median_ms": 14.671,
+          "mode": "no-reflections",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 3732117.0,
+          "render_cpu_median_ms": 3.66499996185303,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 13.4108333333333
+        },
+        {
+          "batches_ms": [
+            14.1957,
+            14.0321333333333,
+            13.8037,
+            13.5245,
+            13.8713,
+            13.2523
+          ],
+          "draw_calls": 4921.0,
+          "draw_calls_max": 4921,
+          "frame_interval_median_ms": 15.819,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 3741217.0,
+          "render_cpu_median_ms": 3.55450010299683,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 13.8375
+        }
+      ],
+      "style": 73,
+      "theme": 7,
+      "unique_chunks": 19,
+      "world_scale": 0.800000011920929
+    },
+    "school": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "school_ceiling_strip": 146
+      },
+      "geometry_instances": 2380,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            13.6972,
+            13.2268,
+            13.2822,
+            13.4038,
+            13.7337333333333,
+            14.0922333333333
+          ],
+          "draw_calls": 4613.0,
+          "draw_calls_max": 4613,
+          "frame_interval_median_ms": 6.899,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 4428751.0,
+          "render_cpu_median_ms": 3.51099991798401,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 13.5505
+        },
+        {
+          "batches_ms": [
+            7.9541,
+            7.90593333333333,
+            7.73506666666667,
+            7.92976666666667,
+            8.4806,
+            8.2564
+          ],
+          "draw_calls": 412.0,
+          "draw_calls_max": 412,
+          "frame_interval_median_ms": 6.896,
+          "mode": "no-fixture-shadows",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 391787.0,
+          "render_cpu_median_ms": 0.777999997138977,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 7.94193333333333
+        },
+        {
+          "batches_ms": [
+            11.5001,
+            11.3346666666667,
+            11.2569666666667,
+            11.3583,
+            11.2571,
+            11.1609666666667
+          ],
+          "draw_calls": 3671.0,
+          "draw_calls_max": 3671,
+          "frame_interval_median_ms": 6.898,
+          "mode": "short-uplights",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 3939829.0,
+          "render_cpu_median_ms": 2.67700004577637,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 11.2958833333333
+        },
+        {
+          "batches_ms": [
+            10.7093666666667,
+            9.90273333333333,
+            9.6934,
+            9.9414,
+            9.73506666666667,
+            9.71896666666667
+          ],
+          "draw_calls": 2660.0,
+          "draw_calls_max": 2660,
+          "frame_interval_median_ms": 6.889,
+          "mode": "short-ranges",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 2338007.0,
+          "render_cpu_median_ms": 1.63499999046326,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 9.8189
+        },
+        {
+          "batches_ms": [
+            13.2029666666667,
+            13.0543666666667,
+            13.1621333333333,
+            13.1806,
+            13.3705,
+            13.9308
+          ],
+          "draw_calls": 4858.0,
+          "draw_calls_max": 4858,
+          "frame_interval_median_ms": 6.892,
+          "mode": "no-reflections",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 5029125.0,
+          "render_cpu_median_ms": 3.33599996566772,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 13.1917833333333
+        },
+        {
+          "batches_ms": [
+            14.1068,
+            13.5788333333333,
+            13.2173333333333,
+            13.4839666666667,
+            13.4588333333333,
+            12.9784
+          ],
+          "draw_calls": 4858.0,
+          "draw_calls_max": 4858,
+          "frame_interval_median_ms": 6.896,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 5029125.0,
+          "render_cpu_median_ms": 3.1010000705719,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 13.4714
+        }
+      ],
+      "style": 61,
+      "theme": 6,
+      "unique_chunks": 20,
+      "world_scale": 0.800000011920929
+    }
+  }
+}

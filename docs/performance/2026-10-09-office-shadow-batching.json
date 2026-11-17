@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-09",
+  "request": "Further Office optimization after the player reports about 40 FPS at 1440p Ultra without VHS/CRT",
+  "device": "Apple M3 Max (Apple9)",
+  "change": "Merge the exact shadow geometry of each Office desk and cubicle divider into one opaque two-sided shadow-only draw; cache two source meshes. Keep visible materials, collisions, all fixture lighting and quality settings.",
+  "scope": "Office desk and cubicle-divider GLBs only",
+  "measurement": {
+    "method": "One forced render per engine tick, automatic rendering disabled, moving camera. Per-frame CPU/GPU fence and full-resolution readback included; 24 warmup frames, then 90 measured. Frozen gameplay simulation, not gameplay FPS.",
+    "original_parts": 108,
+    "output_size": "(3456, 2234)",
+    "quality": 3,
+    "shadow_batches": 12,
+    "world_scale": 0.644583702087402
+  },
+  "paired_results": [
+    {
+      "before_ms": 41.5295,
+      "after_ms": 40.9285,
+      "cost_reduction_percent": 1.4471640640990158,
+      "before_draw_calls": 2590.5,
+      "after_draw_calls": 2270.0,
+      "draw_reduction_percent": 12.372128932638482
+    },
+    {
+      "before_ms": 42.0715,
+      "after_ms": 41.6415,
+      "cost_reduction_percent": 1.0220695720380757,
+      "before_draw_calls": 2574.0,
+      "after_draw_calls": 2270.0,
+      "draw_reduction_percent": 11.810411810411814
+    }
+  ],
+  "raw_report": "build/office-performance-round2/stepped/profile.json",
+  "reproduce": "godot --path . --audio-driver Dummy --script tools/profile_office_shadows.gd -- --nologo --level=1 --styles=12 --quality=3 --out=res://build/office-shadow-profile",
+  "checks": [
+    "Exact world-space triangles at two transforms, shared cache, unchanged visible materials and special-material fallback: PASS",
+    "Ultra screenshots at four camera poses compared; RGB mean absolute differences 0.059\u20130.163 on a 0\u2013255 scale",
+    "Low-quality close Office before/after screenshots reviewed: PASS; retained furniture silhouettes and lighting",
+    "git diff --check and audit runner shell syntax: PASS"
+  ],
+  "limits": [
+    "Not gameplay FPS: moving-camera test with frozen gameplay simulation; timings include a GPU fence and full-resolution image readback.",
+    "Observed render-time improvement is only 1.0\u20131.5%, small enough to be affected by run-to-run noise; reduced draw submissions are the firmer result.",
+    "The preliminary 11\u201312% speed estimate did not reproduce. Earlier forced-draw loops could skip normal engine updates and are not the basis for this result.",
+    "No new real-play FPS measurement yet.",
+    "The rendered capture harness reports one ObjectDB instance remaining on shutdown; the geometry audit exits cleanly. This harness cleanup warning was not addressed in this optimization."
+  ],
+  "excluded_measurements": [
+    "build/office-performance-round2/applied: helper runtime error, invalid",
+    "build/office-performance-round2/probe, moving, applied-verified, cache-diagnostic: superseded by one-render-per-engine-tick comparison"
+  ],
+  "settings": "No changes to saved player settings, resolution, quality presets, lights, reflections, or shadow filtering.",
+  "low_quality_review": "build/office-performance-round2/low-close"
+}

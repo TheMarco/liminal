@@ -39,6 +39,7 @@ func run() -> void:
 		_audit_shader_reuse()
 		for kind in KINDS:
 			await _audit_renderer_kind(kind)
+		await _audit_bounded_preparation()
 	await _audit_environments()
 	await _audit_ceilings()
 	_audit_director()
@@ -279,6 +280,67 @@ func _verify_collider_rays(kind: String, room: Node3D, center: Vector3, face: Su
 		var expected_global: Vector3 = room.global_transform * (plane_point + face.normal * _posed_height(targets, weights, at))
 		expect((hit.position - expected_global).length() < RAY_TOLERANCE,
 			"%s collider off by %.3fm at %s" % [kind, (hit.position - expected_global).length(), at])
+
+# Bounded preparation: a large surface must split morph targets across many
+# steps (not one target per tick), match the synchronous morph formulas, and
+# survive cancellation mid-build with originals untouched. -------------------
+func _audit_bounded_preparation() -> void:
+	if Surface == null:
+		return
+	var rig := _make_room()
+	var room: Node3D = rig.room
+	var wall: MeshInstance3D = rig.wall
+	var band: MeshInstance3D = rig.band
+	var face: SurfaceWear.Face = rig.face
+	var size := Vector2(3.0, 2.0)
+	var depth := 0.35
+	var center := Vector3(0, 1.5, 0.1)
+	var selection := {"face": face, "center": center, "size": size,
+		"depth": depth, "companions": [{"mesh": band, "transform": band.transform}]}
+	var kind := "travel"
+	var targets := Profile.targets(kind, size, depth)
+	# Cancellation during partial work must leave originals untouched.
+	var cancelled: Node3D = Surface.new()
+	room.add_child(cancelled)
+	cancelled.begin_setup(selection, kind)
+	for step in 200:
+		cancelled.prepare_step()
+		if cancelled._building.has("target"): break
+	expect(cancelled._building.has("target"), "fixture never reached a partial morph target")
+	expect(not cancelled.prepared, "large surface finished before cancellation could interrupt it")
+	cancelled.restore()
+	expect(wall.mesh == rig.wall_mesh and band.mesh == rig.band_mesh,
+		"cancelled preparation touched original meshes")
+	expect(wall.material_override == rig.finish and band.material_override == rig.finish,
+		"cancelled preparation touched original materials")
+	expect(cancelled.originals_restored(), "cancelled preparation left staging behind")
+	cancelled.free()
+	# Batching: the old code spent one step per morph target, so this surface
+	# must now take strictly more steps than pieces * (targets + 2) + 1.
+	var effect: Node3D = Surface.new()
+	room.add_child(effect)
+	effect.begin_setup(selection, kind)
+	var steps := 0
+	while not effect.prepared and not effect.failed:
+		effect.prepare_step()
+		steps += 1
+		if steps >= 20000:
+			failures.append("bounded preparation did not converge")
+			break
+	expect(effect.prepared and not effect.failed, "bounded preparation failed")
+	var pieces := 1 + (selection.companions as Array).size()
+	expect(steps > pieces * (targets.size() + 2) + 1,
+		"large surface prepared in %d steps; morph targets were not batched" % steps)
+	var weights := Profile.weights(kind, 0.5)
+	effect.pose(weights)
+	_verify_morphs(kind, wall, targets, center, face, true)
+	_verify_morphs(kind, band, targets, center, face, false)
+	effect.restore()
+	expect(effect.originals_restored(), "bounded preparation restore incomplete")
+	effect.free()
+	room.queue_free()
+	await process_frame
+	expect(not is_instance_valid(room), "bounded preparation room did not free")
 
 # Director: actor clearance and start gating. --------------------------------
 

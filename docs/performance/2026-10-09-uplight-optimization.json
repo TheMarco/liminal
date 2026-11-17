@@ -1,0 +1,412 @@
+{
+  "date": "2026-10-09",
+  "status": "Applied to production source",
+  "change": "Upward-facing area-light range reduced from 9 m to 5 m in School, Mall and Bloom. Suspended-strip helper accepts an independent upper range; Prison retains its prior default.",
+  "preserved": [
+    "Downward light ranges and energy",
+    "Fixture source positions and emitting shapes",
+    "Shadow blocking on all quality tiers",
+    "Floor materials, glossy reflection settings and neighbouring-room lights",
+    "Airport lighting"
+  ],
+  "method": "M3 Max / Metal / Godot 4.7.2. High / Clean, 720p world, seed 240721, same static scene. Six batches of 30 forced rendered frames per measurement, fenced by readback. Old 9 m reach restored temporarily between production measurements. This is rendering throughput, not gameplay FPS.",
+  "results": [
+    {
+      "room": "school",
+      "old_median_ms": 16.1688166666667,
+      "new_medians_ms": [
+        14.4647333333333,
+        15.4280833333333
+      ],
+      "reduction_percent_range": [
+        4.581246411560103,
+        10.539320028573918
+      ],
+      "timing_conclusion": "lower render time in both production samples"
+    },
+    {
+      "room": "mall",
+      "old_median_ms": 14.8427166666667,
+      "new_medians_ms": [
+        14.8456166666667,
+        15.615
+      ],
+      "reduction_percent_range": [
+        -5.2031130868897435,
+        -0.01953820223836722
+      ],
+      "timing_conclusion": "inconclusive; lower draw workload, no reliable wall-time gain"
+    },
+    {
+      "room": "bloom",
+      "old_median_ms": 22.7620166666667,
+      "new_medians_ms": [
+        20.7969333333333,
+        19.8985166666667
+      ],
+      "reduction_percent_range": [
+        8.63316885366805,
+        12.58016827741535
+      ],
+      "timing_conclusion": "lower render time in both production samples"
+    }
+  ],
+  "mall_note": "Initial production run and alternating confirmation did not reliably reproduce the earlier diagnostic wall-time gain. Across the confirmation, old reach observed 5013\u20135097 draw calls and new reach 4242 (~15\u201317% fewer). Report reduced work only; do not claim a proven FPS improvement.",
+  "checks": {
+    "fixture_contract": "PASS: 879 fixtures, 16 flickering rooms, 12 dead rooms; added a ceiling-reach geometric assertion.",
+    "fixture_occlusion": "PASS native Low and High: corrected contribution 0.000000; shadowless positive controls 0.035056 and 0.035050.",
+    "visual": "Reviewed School classroom, Mall foodcourt, Bloom commons, plus Low tall School gym (6.6 m), Mall atrium (7.2 m), Bloom gym (8.74 m). Ceilings readable and visible floor reflections retained.",
+    "diff_check": "PASS",
+    "warnings": "Headless fixture teardown logged dummy-renderer null-material errors at chunk.free while all assertions passed. Native captures retained existing shutdown texture/ObjectDB warnings; no parse or shader failures."
+  },
+  "limitations": [
+    "One GPU and representative fixed views; no full moving gameplay, streaming, or VHS/CRT FPS claim.",
+    "GPU timestamps unavailable. Ordinary-frame timing is invalid where ordinary_timing_valid is false. Use synchronized forced-batch values only.",
+    "Mall timing remains inconclusive; all runs retained below.",
+    "Airport visibility-aware optimization and Bloom shadow proxies are still future work. No adjacent-room lights were disabled in production."
+  ],
+  "runs": {
+    "bloom": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "fluorescent_fixture": 168
+      },
+      "geometry_instances": 1922,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            20.9331333333333,
+            20.6607333333333,
+            21.3297333333333,
+            21.7185,
+            20.0043,
+            20.4305333333333
+          ],
+          "draw_calls": 4452.0,
+          "draw_calls_max": 4452,
+          "frame_interval_median_ms": 6.879,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 11501425.0,
+          "render_cpu_median_ms": 2.79800009727478,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 20.7969333333333
+        },
+        {
+          "batches_ms": [
+            26.3575333333333,
+            25.0336666666667,
+            22.7327666666667,
+            22.5987666666667,
+            21.9567,
+            22.7912666666667
+          ],
+          "draw_calls": 5837.0,
+          "draw_calls_max": 5837,
+          "frame_interval_median_ms": 6.886,
+          "mode": "uplights-9m",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 15082776.0,
+          "render_cpu_median_ms": 3.41599988937378,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 22.7620166666667
+        },
+        {
+          "batches_ms": [
+            20.0824666666667,
+            19.6863,
+            19.7285333333333,
+            20.0685,
+            19.7184666666667,
+            21.3078
+          ],
+          "draw_calls": 4452.0,
+          "draw_calls_max": 4452,
+          "frame_interval_median_ms": 6.89,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 11501425.0,
+          "render_cpu_median_ms": 2.89100003242493,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 19.8985166666667
+        }
+      ],
+      "style": 111,
+      "theme": 11,
+      "unique_chunks": 16,
+      "world_scale": 0.800000011920929
+    },
+    "mall-confirmation": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "mall_pendant": 44,
+        "mall_troffer": 108
+      },
+      "geometry_instances": 2240,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            19.2463,
+            17.8679666666667,
+            15.9962,
+            15.2914,
+            14.9701,
+            14.8047666666667
+          ],
+          "draw_calls": 5013.0,
+          "draw_calls_max": 5013,
+          "frame_interval_median_ms": 16.79,
+          "mode": "uplights-9m",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 3805113.0,
+          "render_cpu_median_ms": 3.61149990558624,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 15.6438
+        },
+        {
+          "batches_ms": [
+            15.2627666666667,
+            15.2901666666667,
+            14.1116666666667,
+            16.126,
+            15.4285,
+            14.6844
+          ],
+          "draw_calls": 4242.0,
+          "draw_calls_max": 4242,
+          "frame_interval_median_ms": 15.104,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 3442189.0,
+          "render_cpu_median_ms": 2.96799993515015,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 15.2764666666667
+        },
+        {
+          "batches_ms": [
+            17.7983,
+            15.9302666666667,
+            15.6474333333333,
+            17.0939,
+            17.2076666666667,
+            18.0784666666667
+          ],
+          "draw_calls": 5097.0,
+          "draw_calls_max": 5097,
+          "frame_interval_median_ms": 17.983,
+          "mode": "uplights-9m",
+          "ordinary_rendered_frames": 60,
+          "ordinary_timing_valid": true,
+          "primitives": 3833549.0,
+          "render_cpu_median_ms": 3.7114999294281,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 17.1507833333333
+        },
+        {
+          "batches_ms": [
+            17.1769,
+            18.3941333333333,
+            18.5329,
+            19.4195333333333,
+            17.2989666666667,
+            15.7797666666667
+          ],
+          "draw_calls": 4242.0,
+          "draw_calls_max": 4242,
+          "frame_interval_median_ms": 6.9,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 3442189.0,
+          "render_cpu_median_ms": 3.39800000190735,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 17.84655
+        },
+        {
+          "batches_ms": [
+            14.6730666666667,
+            14.3719333333333,
+            15.3766333333333,
+            14.6959,
+            14.6506333333333,
+            15.5181
+          ],
+          "draw_calls": 4242.0,
+          "draw_calls_max": 4242,
+          "frame_interval_median_ms": 6.897,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 3442189.0,
+          "render_cpu_median_ms": 2.8199999332428,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 14.6844833333333
+        }
+      ],
+      "style": 73,
+      "theme": 7,
+      "unique_chunks": 19,
+      "world_scale": 0.800000011920929
+    },
+    "mall": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "mall_pendant": 44,
+        "mall_troffer": 108
+      },
+      "geometry_instances": 2240,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            14.6142666666667,
+            14.2742666666667,
+            15.0471666666667,
+            15.0108333333333,
+            14.7147,
+            14.9765333333333
+          ],
+          "draw_calls": 4242.0,
+          "draw_calls_max": 4242,
+          "frame_interval_median_ms": 6.895,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 3442189.0,
+          "render_cpu_median_ms": 3.23099994659424,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 14.8456166666667
+        },
+        {
+          "batches_ms": [
+            15.5613333333333,
+            14.4526,
+            13.678,
+            14.8464666666667,
+            15.6757333333333,
+            14.8389666666667
+          ],
+          "draw_calls": 5013.0,
+          "draw_calls_max": 5013,
+          "frame_interval_median_ms": 6.903,
+          "mode": "uplights-9m",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 3805113.0,
+          "render_cpu_median_ms": 3.87899994850159,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 14.8427166666667
+        },
+        {
+          "batches_ms": [
+            17.9882333333333,
+            15.1956333333333,
+            15.797,
+            15.433,
+            15.9613666666667,
+            15.1695333333333
+          ],
+          "draw_calls": 4242.0,
+          "draw_calls_max": 4242,
+          "frame_interval_median_ms": 6.903,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 3442189.0,
+          "render_cpu_median_ms": 2.93099999427795,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 15.615
+        }
+      ],
+      "style": 73,
+      "theme": 7,
+      "unique_chunks": 19,
+      "world_scale": 0.800000011920929
+    },
+    "school": {
+      "device": "Apple M3 Max (Apple9)",
+      "fixture_sources": {
+        "school_ceiling_strip": 146
+      },
+      "geometry_instances": 2380,
+      "method": "Frozen scene, Clean, High world resolution. Six batches of 30 forced frames with GPU fence; then 60 ordinary frames for CPU/GPU timestamps. Diagnostic effects restored between modes. Not gameplay FPS.",
+      "quality": 2,
+      "samples": [
+        {
+          "batches_ms": [
+            15.3008,
+            15.281,
+            14.4206333333333,
+            14.2091666666667,
+            14.5088333333333,
+            14.2622
+          ],
+          "draw_calls": 4525.0,
+          "draw_calls_max": 4525,
+          "frame_interval_median_ms": 6.887,
+          "mode": "baseline",
+          "ordinary_rendered_frames": 1,
+          "ordinary_timing_valid": false,
+          "primitives": 4757673.0,
+          "render_cpu_median_ms": 3.01399993896484,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 14.4647333333333
+        },
+        {
+          "batches_ms": [
+            16.0653666666667,
+            16.4218,
+            16.4405333333333,
+            16.2722666666667,
+            15.1390666666667,
+            15.7329333333333
+          ],
+          "draw_calls": 4949.0,
+          "draw_calls_max": 4949,
+          "frame_interval_median_ms": 6.892,
+          "mode": "uplights-9m",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 4967761.0,
+          "render_cpu_median_ms": 3.75799989700317,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 16.1688166666667
+        },
+        {
+          "batches_ms": [
+            15.3028666666667,
+            14.4568333333333,
+            15.5533,
+            14.9045,
+            15.8776666666667,
+            15.6482666666667
+          ],
+          "draw_calls": 4525.0,
+          "draw_calls_max": 4525,
+          "frame_interval_median_ms": 6.899,
+          "mode": "baseline-repeat",
+          "ordinary_rendered_frames": 0,
+          "ordinary_timing_valid": false,
+          "primitives": 4757673.0,
+          "render_cpu_median_ms": 3.30200004577637,
+          "render_gpu_median_ms": 0.0,
+          "wall_median_ms": 15.4280833333333
+        }
+      ],
+      "style": 61,
+      "theme": 6,
+      "unique_chunks": 20,
+      "world_scale": 0.800000011920929
+    }
+  }
+}

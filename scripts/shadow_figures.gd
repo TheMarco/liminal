@@ -494,6 +494,7 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	var walker_model := _next_spawn_model()
 	if walker_model < 0:
 		return false
+	var setup_started := Time.get_ticks_usec()
 	var f := ShadowFigure.new()
 	f.player = player
 	f.topology = topology
@@ -522,7 +523,8 @@ func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 		"position": str(f.global_position), "player_position": str(player.global_position),
 		"player_distance": f.global_position.distance_to(player.global_position),
 		"variant": f.variant, "model": walker_model, "grace": grace,
-		"announced": f.announce})
+		"announced": f.announce,
+		"setup_ms": (Time.get_ticks_usec() - setup_started) / 1000.0})
 	if _dev:
 		print("spawned variant %d at %s (player %s)" % [f.variant, ground, player.global_position])
 	return true

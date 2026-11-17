@@ -1,0 +1,684 @@
+{
+  "date": "2026-10-09",
+  "request": "Re-evaluate Low, Medium, High and Ultra for a sensible balance of image quality and performance, including VHS/CRT.",
+  "device": "Apple M3 Max (Apple9), Metal, Godot 4.7.2",
+  "display": [
+    3456,
+    2234
+  ],
+  "quality_keys": [
+    "render_resolution",
+    "anti_aliasing",
+    "shadow_quality",
+    "global_illumination",
+    "ambient_occlusion",
+    "reflections",
+    "volumetric_fog"
+  ],
+  "old_presets": [
+    [
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      1,
+      1,
+      1,
+      0,
+      1,
+      0,
+      0
+    ],
+    [
+      2,
+      2,
+      2,
+      1,
+      2,
+      1,
+      1
+    ],
+    [
+      5,
+      5,
+      3,
+      2,
+      2,
+      2,
+      2
+    ]
+  ],
+  "new_presets": [
+    [
+      1,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      2,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    [
+      3,
+      2,
+      2,
+      1,
+      2,
+      1,
+      1
+    ],
+    [
+      4,
+      2,
+      3,
+      2,
+      2,
+      2,
+      2
+    ]
+  ],
+  "decisions": [
+    "Low: up to 480p, FXAA, simple shadows, direct lighting and distance fog.",
+    "Medium: up to 720p, TAA, balanced bounce lighting, contact shading, screen reflections and volumetric haze. GI-off candidate rejected after Office visual review.",
+    "High: up to 1080p, TAA, finer shadows and contact shading; balanced GI, reflections and fog.",
+    "Ultra: up to 1440p, TAA, full effects. Native and combined TAA + 4x MSAA remain manual choices.",
+    "Lower modes spend more on Clean image quality than their old 360p/480p/720p counterparts; they are not claimed faster than the old lower presets.",
+    "All fixture visibility and practical shadow occlusion retained. No adjacent-room light disabling.",
+    "World resolution caps remain 480p with CRT and 720p with tape/receiver; a lower user resolution remains lower.",
+    "Video signal/output quality remains tiered separately: signal 240/360/480/480 lines; output 720/1080/1440/native. Ultra video output can remain expensive on Retina.",
+    "Saved choices are preserved, and older preset combinations become Custom. Custom world tweaks retain the previous named video budget; selecting a named preset resets video quality to Automatic."
+  ],
+  "clean_measurement": {
+    "method": "Frozen gameplay, moving camera, one forced draw per engine tick, 30 warmup + 48 measured frames. Per-frame GPU fence and full-resolution readback included. Not gameplay FPS.",
+    "results": [
+      {
+        "room": "office-final",
+        "style": 12,
+        "raw_report": "build/graphics-preset-review/office-final/room-12-profile.json",
+        "samples": [
+          {
+            "draw_calls": 413.0,
+            "median_ms": 13.315,
+            "mode": "current-0",
+            "msaa": 0,
+            "shadow_atlas": 1024,
+            "taa": false,
+            "values": [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "world_height": 479.999985724688
+          },
+          {
+            "draw_calls": 413.0,
+            "median_ms": 17.6425,
+            "mode": "medium-no-gi",
+            "msaa": 0,
+            "shadow_atlas": 2048,
+            "taa": true,
+            "values": [
+              2,
+              2,
+              1,
+              0,
+              1,
+              1,
+              1
+            ],
+            "world_height": 719.999995231628
+          },
+          {
+            "draw_calls": 5073.0,
+            "median_ms": 26.36,
+            "mode": "current-1",
+            "msaa": 0,
+            "shadow_atlas": 2048,
+            "taa": true,
+            "values": [
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "world_height": 719.999995231628
+          },
+          {
+            "draw_calls": 413.0,
+            "median_ms": 25.818,
+            "mode": "current-2",
+            "msaa": 0,
+            "shadow_atlas": 4096,
+            "taa": true,
+            "values": [
+              3,
+              2,
+              2,
+              1,
+              2,
+              1,
+              1
+            ],
+            "world_height": 1079.99999284744
+          },
+          {
+            "draw_calls": 413.0,
+            "median_ms": 39.4855,
+            "mode": "current-3",
+            "msaa": 0,
+            "shadow_atlas": 8192,
+            "taa": true,
+            "values": [
+              4,
+              2,
+              3,
+              2,
+              2,
+              2,
+              2
+            ],
+            "world_height": 1439.99999046326
+          }
+        ]
+      },
+      {
+        "room": "school",
+        "style": 61,
+        "raw_report": "build/graphics-preset-review/school/room-61-profile.json",
+        "samples": [
+          {
+            "draw_calls": 397.0,
+            "median_ms": 12.266,
+            "mode": "current-0",
+            "msaa": 0,
+            "shadow_atlas": 1024,
+            "taa": false,
+            "values": [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "world_height": 479.999985724688
+          },
+          {
+            "draw_calls": 397.0,
+            "median_ms": 16.81,
+            "mode": "current-1",
+            "msaa": 0,
+            "shadow_atlas": 2048,
+            "taa": true,
+            "values": [
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "world_height": 719.999995231628
+          },
+          {
+            "draw_calls": 397.0,
+            "median_ms": 21.922,
+            "mode": "current-2",
+            "msaa": 0,
+            "shadow_atlas": 4096,
+            "taa": true,
+            "values": [
+              3,
+              2,
+              2,
+              1,
+              2,
+              1,
+              1
+            ],
+            "world_height": 1079.99999284744
+          },
+          {
+            "draw_calls": 397.0,
+            "median_ms": 34.965,
+            "mode": "current-3",
+            "msaa": 0,
+            "shadow_atlas": 8192,
+            "taa": true,
+            "values": [
+              4,
+              2,
+              3,
+              2,
+              2,
+              2,
+              2
+            ],
+            "world_height": 1439.99999046326
+          }
+        ]
+      },
+      {
+        "room": "mall",
+        "style": 73,
+        "raw_report": "build/graphics-preset-review/mall/room-73-profile.json",
+        "samples": [
+          {
+            "draw_calls": 480.0,
+            "median_ms": 13.969,
+            "mode": "candidate-0",
+            "msaa": 0,
+            "shadow_atlas": 1024,
+            "taa": false,
+            "values": [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "world_height": 479.999985724688
+          },
+          {
+            "draw_calls": 480.0,
+            "median_ms": 16.776,
+            "mode": "candidate-1",
+            "msaa": 0,
+            "shadow_atlas": 2048,
+            "taa": true,
+            "values": [
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "world_height": 719.999995231628
+          },
+          {
+            "draw_calls": 480.0,
+            "median_ms": 23.993,
+            "mode": "candidate-2",
+            "msaa": 0,
+            "shadow_atlas": 4096,
+            "taa": true,
+            "values": [
+              3,
+              2,
+              2,
+              1,
+              2,
+              1,
+              1
+            ],
+            "world_height": 1079.99999284744
+          },
+          {
+            "draw_calls": 480.0,
+            "median_ms": 37.9735,
+            "mode": "candidate-3",
+            "msaa": 0,
+            "shadow_atlas": 8192,
+            "taa": true,
+            "values": [
+              4,
+              2,
+              3,
+              2,
+              2,
+              2,
+              2
+            ],
+            "world_height": 1439.99999046326
+          }
+        ]
+      },
+      {
+        "room": "pool",
+        "style": 90,
+        "raw_report": "build/graphics-preset-review/pool/room-90-profile.json",
+        "samples": [
+          {
+            "draw_calls": 298.0,
+            "median_ms": 9.088,
+            "mode": "current-0",
+            "msaa": 0,
+            "shadow_atlas": 1024,
+            "taa": false,
+            "values": [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "world_height": 479.999985724688
+          },
+          {
+            "draw_calls": 298.0,
+            "median_ms": 11.2135,
+            "mode": "current-1",
+            "msaa": 0,
+            "shadow_atlas": 2048,
+            "taa": true,
+            "values": [
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "world_height": 719.999995231628
+          },
+          {
+            "draw_calls": 298.0,
+            "median_ms": 13.409,
+            "mode": "current-2",
+            "msaa": 0,
+            "shadow_atlas": 4096,
+            "taa": true,
+            "values": [
+              3,
+              2,
+              2,
+              1,
+              2,
+              1,
+              1
+            ],
+            "world_height": 1079.99999284744
+          },
+          {
+            "draw_calls": 298.0,
+            "median_ms": 17.9685,
+            "mode": "current-3",
+            "msaa": 0,
+            "shadow_atlas": 8192,
+            "taa": true,
+            "values": [
+              4,
+              2,
+              3,
+              2,
+              2,
+              2,
+              2
+            ],
+            "world_height": 1439.99999046326
+          }
+        ]
+      },
+      {
+        "room": "bloom",
+        "style": 111,
+        "raw_report": "build/graphics-preset-review/bloom/room-111-profile.json",
+        "samples": [
+          {
+            "draw_calls": 5402.0,
+            "median_ms": 24.4205,
+            "mode": "current-0",
+            "msaa": 0,
+            "shadow_atlas": 1024,
+            "taa": false,
+            "values": [
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "world_height": 479.999985724688
+          },
+          {
+            "draw_calls": 5402.0,
+            "median_ms": 33.407,
+            "mode": "current-1",
+            "msaa": 0,
+            "shadow_atlas": 2048,
+            "taa": true,
+            "values": [
+              2,
+              2,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "world_height": 719.999995231628
+          },
+          {
+            "draw_calls": 5402.0,
+            "median_ms": 41.7635,
+            "mode": "current-2",
+            "msaa": 0,
+            "shadow_atlas": 4096,
+            "taa": true,
+            "values": [
+              3,
+              2,
+              2,
+              1,
+              2,
+              1,
+              1
+            ],
+            "world_height": 1079.99999284744
+          },
+          {
+            "draw_calls": 5402.0,
+            "median_ms": 61.546,
+            "mode": "current-3",
+            "msaa": 0,
+            "shadow_atlas": 8192,
+            "taa": true,
+            "values": [
+              4,
+              2,
+              3,
+              2,
+              2,
+              2,
+              2
+            ],
+            "world_height": 1439.99999046326
+          }
+        ]
+      }
+    ]
+  },
+  "office_same_resolution_aa_comparison": {
+    "resolution": "1440p",
+    "before": "TAA + 4x MSAA",
+    "after": "TAA",
+    "pairs": [
+      {
+        "before_ms": 52.0905,
+        "after_ms": 48.6595,
+        "reduction_percent": 6.59,
+        "before_draw_calls": 5056.0,
+        "after_draw_calls": 5073.0
+      },
+      {
+        "before_ms": 48.8245,
+        "after_ms": 44.196,
+        "reduction_percent": 9.48,
+        "before_draw_calls": 5073.0,
+        "after_draw_calls": 5073.0
+      }
+    ],
+    "raw_report": "build/graphics-preset-review/office/room-12-profile.json",
+    "interpretation": "About 6.6-9.5% less sampled render/fence/readback time in these pairs, with similar reviewed still images. No measured gameplay-FPS claim."
+  },
+  "video_check": {
+    "method": "Real video host, one forced draw per engine tick, GPU fence/readback each frame, 24 warmup and 32 measured. Fixed camera/gameplay; not gameplay FPS.",
+    "samples": [
+      {
+        "case": "home-low",
+        "crt_model": "aperture",
+        "frame_cost": {
+          "mean": 27.23975,
+          "median": 27.301,
+          "p95": 28.466
+        },
+        "output_limit": 720,
+        "ready_frames": 112,
+        "signal": "(360, 240)",
+        "world_height": 479.999985724688
+      },
+      {
+        "case": "home-medium",
+        "crt_model": "aperture",
+        "frame_cost": {
+          "mean": 34.64878125,
+          "median": 34.6035,
+          "p95": 35.777
+        },
+        "output_limit": 1080,
+        "ready_frames": 112,
+        "signal": "(540, 360)",
+        "world_height": 479.999985724688
+      },
+      {
+        "case": "home-high",
+        "crt_model": "royale",
+        "frame_cost": {
+          "mean": 42.23665625,
+          "median": 42.0935,
+          "p95": 43.867
+        },
+        "output_limit": 1440,
+        "ready_frames": 112,
+        "signal": "(720, 480)",
+        "world_height": 479.999985724688
+      },
+      {
+        "case": "home-ultra",
+        "crt_model": "royale",
+        "frame_cost": {
+          "mean": 58.1276875,
+          "median": 47.4005,
+          "p95": 58.755
+        },
+        "output_limit": 0,
+        "ready_frames": 112,
+        "signal": "(720, 480)",
+        "world_height": 479.999985724688
+      },
+      {
+        "case": "worn-low",
+        "crt_model": "none",
+        "frame_cost": {
+          "mean": 34.1055,
+          "median": 32.666,
+          "p95": 40.881
+        },
+        "output_limit": 720,
+        "ready_frames": 112,
+        "signal": "(360, 240)",
+        "world_height": 479.999985724688
+      },
+      {
+        "case": "worn-medium",
+        "crt_model": "none",
+        "frame_cost": {
+          "mean": 43.3676875,
+          "median": 43.357,
+          "p95": 45.198
+        },
+        "output_limit": 1080,
+        "ready_frames": 112,
+        "signal": "(540, 360)",
+        "world_height": 719.999995231628
+      },
+      {
+        "case": "worn-high",
+        "crt_model": "none",
+        "frame_cost": {
+          "mean": 46.6143125,
+          "median": 46.6355,
+          "p95": 52.568
+        },
+        "output_limit": 1440,
+        "ready_frames": 112,
+        "signal": "(720, 480)",
+        "world_height": 719.999995231628
+      },
+      {
+        "case": "worn-ultra",
+        "crt_model": "none",
+        "frame_cost": {
+          "mean": 49.24228125,
+          "median": 49.3665,
+          "p95": 50.98
+        },
+        "output_limit": 0,
+        "ready_frames": 112,
+        "signal": "(720, 480)",
+        "world_height": 719.999995231628
+      }
+    ],
+    "raw_report": "build/graphics-preset-review/video/profile.json",
+    "result": "All eight Home video/Worn tape tier combinations rendered without presenter errors and with the expected world/signal/output caps."
+  },
+  "visual_review": [
+    "Office: retained ceiling detail and bounce lighting; TAA-only Ultra close to combined-AA reference.",
+    "School: Low/Medium/High ceiling and fixture readability inspected; glossy surfaces retained.",
+    "Mall Medium: floor reflections, visible fixtures and ceiling retained.",
+    "Pool Medium: atmospheric haze, water, tiles and glowing round fixtures retained.",
+    "Bloom Medium: ceiling fixture/uplight detail and floor reflections visible; remains the heaviest sampled room.",
+    "Home video Medium and Ultra: inspected actual Aperture and Royale output."
+  ],
+  "checks": [
+    "audit_game_settings.gd: PASS",
+    "audit_graphics_quality.gd: PASS, including preset application, look caps, manual Native/combined AA, saved-profile preservation and menu layouts",
+    "audit_start_options.gd: PASS",
+    "audit_video_quality.gd: PASS, including Custom budget preservation; corrected stale exact-dictionary calibration assertion to verify the authored subset",
+    "Native Clean captures: Office, School, Mall, Pool, Bloom completed",
+    "Native Home video/Worn tape: all four tiers completed",
+    "Saved player profile untouched"
+  ],
+  "limits": [
+    "These are controlled rendering samples, not gameplay FPS, pure GPU timestamps, thermal steady-state measurements or guarantees for all rooms/hardware.",
+    "Office shadow draw counts vary with preset transitions (413 versus 5073). Consequently its full preset timing ladder is not a reliable apples-to-apples speed ranking: Medium measured 26.36 ms and High 25.818 ms. The AA-only pairs had comparable draw counts, but remain short samples.",
+    "The earlier Office candidate-1 capture used GI off; it is superseded by office-final/current-1. Mall candidate-1 and all later current-1 captures use the final balanced GI.",
+    "Video host produced 112 ready-frame increments over 56 ticks; some ambient scene activity continued. Use these as renderer/cap checks and indicative cost samples, not timings directly comparable with the Clean harness.",
+    "Existing native harness shutdown ObjectDB/texture warnings and direct PNG CRT LUT export warnings remain; this task did not validate an exported build.",
+    "Real-play testing at the revised presets remains necessary. High is a reasonable starting point on this Mac; Medium reduces work in demanding rooms such as Bloom."
+  ],
+  "reproduce_clean": "godot --path . --audio-driver Dummy --script tools/profile_graphics_presets.gd -- --nologo --level=1 --styles=12 --quality=3 --modes=current-0,current-1,current-2,current-3 --out=res://build/graphics-preset-review/repeat-office",
+  "reproduce_video": "godot --path . --audio-driver Dummy --script tools/profile_graphics_video.gd -- --nologo --level=1"
+}

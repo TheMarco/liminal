@@ -503,6 +503,7 @@ func _build_presence() -> void:
 func _spawn_burn_particles() -> void:
 	if _walker == null:
 		return
+	var started := Time.get_ticks_usec()
 	var reduced := GameSettings.current != null \
 		and bool(GameSettings.current.values.get("reduced_flashing", false))
 	# Area-weighted samples cover the complete currently posed GLB rather than
@@ -510,6 +511,7 @@ func _spawn_burn_particles() -> void:
 	# Thousands of sub-centimetre fragments, rather than a sparse shell of large
 	# pieces, reproduce the final intact silhouette on the handoff frame.
 	var samples := _walker.burn_surface_samples(1800 if reduced else 5200)
+	var sampled := Time.get_ticks_usec()
 	var points: PackedVector3Array = samples.get("points", PackedVector3Array())
 	if points.is_empty():
 		return
@@ -526,6 +528,11 @@ func _spawn_burn_particles() -> void:
 	fragments.global_transform = _walker.global_transform
 	fragments.configure(samples, minf(1.45, peak) if reduced else peak)
 	_burn_particles = fragments
+	if not get_meta("render_warmup", false):
+		RuntimeDiagnostics.mark("figure_burn_prepared", {
+			"model": walker_model_index, "fragments": fragments.fragment_count,
+			"sample_ms": (sampled - started) / 1000.0,
+			"fragment_ms": (Time.get_ticks_usec() - sampled) / 1000.0})
 
 
 ## Drives the sprite sheet's frame instead of letting the shader run it on a

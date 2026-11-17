@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-09",
+  "issue": "Office reported near 12 FPS in fullscreen Ultra with VHS and CRT disabled",
+  "device": "Apple M3 Max (Apple9)",
+  "resolution": "(3456, 2234)",
+  "quality": "Ultra",
+  "video_effects": "disabled",
+  "changes": [
+    "Office troffer reach 8.5m to 6.5m; fixture count, intensity, shadow softness and specular shape retained",
+    "Office ceiling on render layer 2, excluded only from downward Office fixture receivers; shadow casting, cameras, bounce lighting and flashlight retained"
+  ],
+  "paired_fullscreen_static_render": {
+    "before_ms": [
+      191.444666666667,
+      184.351116666667
+    ],
+    "after_ms": 135.469283333333,
+    "render_cost_reduction_percent": [
+      29.238413536374598,
+      26.515615536910087
+    ],
+    "before_draw_calls": [
+      9353.0,
+      9472.0
+    ],
+    "after_draw_calls": 5169.0,
+    "raw_report": "build/office-performance/fullscreen-candidate/room-12-profile.json"
+  },
+  "checks": [
+    "147-cell Office fixture/grid audit PASS (1096 fixtures, 294 vents, 20 corridors)",
+    "Native Office fixture wall/reflection occlusion PASS at Low and High; blocked contribution 0.0",
+    "Office ceiling flashlight response PASS (positive luminance difference 0.00998)",
+    "Applied Ultra corridor and close cubicle images reviewed",
+    "git diff --check PASS"
+  ],
+  "limits": [
+    "Static forced-draw render comparison, not post-fix gameplay FPS. Ordinary timing invalid while app backgrounded.",
+    "Absolute fullscreen timings varied substantially between runs; use the paired before/after comparison only.",
+    "Native-resolution Ultra remains expensive. No resolution, quality preset or saved player settings were changed."
+  ],
+  "visual_review": "build/office-performance/applied-review",
+  "softness_diagnostic": {
+    "before_softening_ms": 29.8851333333333,
+    "current_softening_ms": 29.8449,
+    "report": "build/office-performance/ultra-probe/room-12-profile.json",
+    "finding": "No measured slowdown from the last Office shadow-softness adjustment."
+  }
+}

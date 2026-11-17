@@ -46,10 +46,11 @@ func _run() -> void:
 	var player := Player.new()
 	var breath := Breath.new()
 	var door := Door.new()
-	scheduler.configure(cm, player, breath, door, null,
+	var returns := SelfReturnDoorDirector.new()
+	scheduler.configure(cm, player, breath, door, returns, null,
 		func() -> bool: return true)
-	_check(breath.managed and door.managed,
-		"one manager did not take ownership of both effect families")
+	_check(breath.managed and door.managed and returns.managed,
+		"one manager did not take ownership of every effect family")
 	_check(scheduler.cooldown >= Scheduler.FIRST_DELAY.x \
 		and scheduler.cooldown <= Scheduler.FIRST_DELAY.y,
 		"first sighting is outside the intended arrival window")
@@ -66,12 +67,18 @@ func _run() -> void:
 		scheduler._clock += 1000.0
 		scheduler._door_ready_at = 0.0
 		scheduler._floor_doors = 0
+		if i % 15 == 0:
+			# A new floor re-opens the one-per-floor return quota.
+			scheduler._floor_returns = 0
+			scheduler._return_ready_at = 0.0
 		var kind: String = scheduler.ordered_kinds()[0]
 		consecutive = consecutive + 1 if kind == previous else 1
 		_check(consecutive < 3, "the policy scheduled three %s sights in a row" % kind)
 		previous = kind
 		scheduler._commit(kind)
-		_check(scheduler.cooldown >= 24.0 and scheduler.cooldown <= 42.0,
+		var cadence_min := 34.0 if kind == "return" else 24.0
+		var cadence_max := 46.0 if kind == "return" else 42.0
+		_check(scheduler.cooldown >= cadence_min and scheduler.cooldown <= cadence_max,
 			"architecture cadence is outside the intended exploration window")
 	for kind in Scheduler.KINDS:
 		_check(int(scheduler.counts.get(kind, 0)) >= 4,
@@ -81,24 +88,31 @@ func _run() -> void:
 	scheduler._floor_doors = Scheduler.MAX_FLOOR_DOORS
 	_check(not scheduler.ordered_kinds().has("doorway"),
 		"doorway exceeded its per-floor limit")
+	scheduler._return_ready_at = 0.0
+	scheduler._floor_returns = 1
+	_check(not scheduler.ordered_kinds().has("return"),
+		"return exceeded its per-floor limit")
 	var old_count := scheduler.events_started
 	var old_history := scheduler.history.duplicate()
-	scheduler.configure(cm, player, breath, door, null,
+	scheduler.configure(cm, player, breath, door, returns, null,
 		func() -> bool: return true)
 	_check(scheduler.events_started == old_count \
-		and scheduler.history == old_history and scheduler._floor_doors == 0,
-		"floor change erased run variety or retained the floor door quota")
+		and scheduler.history == old_history and scheduler._floor_doors == 0 \
+		and scheduler._floor_returns == 0,
+		"floor change erased run variety or retained a floor quota")
 	# Short-lived corridor and wall opportunities can start after the quiet gap
 	# even while the ordinary wall-search timer has not expired.
 	var rare := Scheduler.new()
 	var rare_breath := OpportunityBreath.new()
 	var rare_door := OpportunityDoor.new()
+	var rare_returns := SelfReturnDoorDirector.new()
 	root.add_child(player)
 	cm.chunks[Vector2i.ZERO] = true
-	rare.configure(cm, player, rare_breath, rare_door, null,
+	rare.configure(cm, player, rare_breath, rare_door, rare_returns, null,
 		func() -> bool: return true)
 	rare._clock = Scheduler.OPPORTUNITY_FIRST
 	rare._door_ready_at = INF
+	rare._return_ready_at = INF
 	rare.cooldown = 100.0
 	rare._physics_process(0.1)
 	_check(rare_breath.wave_requests == 0,
@@ -153,7 +167,9 @@ func _run() -> void:
 	rare.free()
 	rare_door.free()
 	rare_breath.free()
+	rare_returns.free()
 	scheduler.free()
+	returns.free()
 	door.free()
 	breath.free()
 	player.free()

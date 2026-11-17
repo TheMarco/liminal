@@ -183,6 +183,7 @@ var _pause_menu: PauseMenu
 var _fps_counter: CanvasLayer
 var _video_workshop: CanvasLayer
 var _pause_mouse_mode := Input.MOUSE_MODE_VISIBLE
+var _encounter_warmup: Node
 const MUSIC_BUS := "Music"
 
 # One mood track per floor.
@@ -493,6 +494,7 @@ func _ready() -> void:
 	player.emergency_flash_changed.connect(_on_emergency_flash_changed)
 	player.emergency_flash_used.connect(_on_emergency_flash_used)
 	_apply_game_settings()
+	_prepare_encounter_rendering(active_level)
 	_configure_level_transitions()
 	player.interaction_prompt_changed.connect(_on_interaction_prompt)
 	_events.message.connect(_show_event_message)
@@ -867,6 +869,17 @@ func _finish_transition_build(level: int) -> void:
 	add_child(ambience)
 	if _title_music:
 		ambience.stop()
+	_prepare_encounter_rendering(level)
+	if is_instance_valid(_encounter_warmup) and not _encounter_warmup.finished:
+		await _encounter_warmup.completed
+
+
+func _prepare_encounter_rendering(level: int) -> void:
+	if is_instance_valid(_encounter_warmup):
+		_encounter_warmup.free()
+	_encounter_warmup = preload("res://scripts/encounter_render_warmup.gd").new()
+	add_child(_encounter_warmup)
+	_encounter_warmup.prepare(get_viewport(), level, level_root)
 
 
 func _apply_game_settings() -> void:
@@ -958,6 +971,8 @@ func _apply_graphics_settings() -> void:
 		GraphicsQuality.apply_environment(we.environment, _settings)
 	if is_instance_valid(_realm_visit):
 		_realm_visit.refresh_graphics_quality(_settings)
+	if is_instance_valid(_self_return_door) and is_instance_valid(_self_return_door.site):
+		_self_return_door.site.refresh_graphics_quality(_settings, opts.notaa)
 
 
 func _on_progress_save_failed(error: Error) -> void:

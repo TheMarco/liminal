@@ -1135,7 +1135,11 @@ func _mall_upper_gallery(dir: int, plane: float, along: float, width: float) -> 
 static func _attach_upper_gallery(parent: Node3D, bays: int) -> void:
 	var pitch := 2.4
 	var span := pitch * float(bays)
-	ProceduralDetails.attach(parent, "mall_upper_gallery_module_%d" % bays, func(d: ProceduralDetails):
+	ProceduralDetails.attach(parent, "mall_upper_gallery_subdivided_%d" % bays, func(d: ProceduralDetails):
+		# Long baked ledges bypass the BoxMesh shadow preparation. Subdivide
+		# before baking so area lights cannot project curved light leaks below
+		# this straight balcony. Shape, bevels, materials and draws stay the same.
+		d.max_edge_length = 0.5
 		d.box(Vector3(0, 4.20, 0.38), Vector3(span, 0.28, 0.85), Mats.mall_wall(), 0.025)
 		d.box(Vector3(0, 4.06, 0.80), Vector3(span, 0.045, 0.08), Mats.mall_brass())
 		for b in bays:

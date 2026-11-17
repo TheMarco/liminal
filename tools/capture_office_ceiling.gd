@@ -12,6 +12,8 @@ func _init() -> void:
 
 func draw(count: int) -> void:
 	for i in count:
+		if is_instance_valid(game) and is_instance_valid(game._pause_menu):
+			game._close_settings()
 		await process_frame
 		RenderingServer.force_draw(false, 1.0 / 60.0)
 

@@ -99,6 +99,56 @@ func check_recording_resolution(game: Node, settings: GameSettings) -> void:
 	root.size = extent
 	await settle()
 
+func check_return_preview(game: Node, settings: GameSettings) -> void:
+	var saved := settings.values.duplicate(true)
+	var extent := root.size
+	var director: Node = game._self_return_door
+	var previous_site: Node3D = director.site
+	var processing := director.is_physics_processing()
+	director.set_physics_process(false)
+	settings.apply_quality_preset(1)
+	settings.apply_video_look(0)
+	var site := SelfReturnDoorSite.new()
+	game.level_root.add_child(site)
+	site.build(game.player, Vector3.ZERO, StandardMaterial3D.new(), 731)
+	director.site = site
+	# New doors and already-open doors must both receive the stable atlas,
+	# AA and LOD policy. Previously this viewport kept Godot's mixed tiles.
+	for preset in [1, 0, 3, 1]:
+		settings.apply_quality_preset(preset)
+		expect(site._preview.positional_shadow_atlas_size == root.positional_shadow_atlas_size
+			and site._preview.use_taa == root.use_taa
+			and site._preview.mesh_lod_threshold == root.mesh_lod_threshold,
+			"return doorway missed initial/live graphics quality")
+		for quadrant in 4:
+			expect(site._preview.get_positional_shadow_atlas_quadrant_subdiv(quadrant)
+				== Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_64,
+				"return doorway reintroduced mixed shadow atlas tiles")
+	root.size = Vector2i(3840, 2160)
+	await settle()
+	for look in [0, 1, 3]:
+		settings.apply_video_look(look)
+		site._has_frame = true
+		site._sync_preview_resolution()
+		expect(site._preview.size.y == (480 if look == 1 else 720)
+			and site._preview.scaling_3d_scale == 1.0,
+			"return doorway ignored effective world resolution or scaled twice")
+		if look != 0:
+			expect(not site._has_frame, "resized return view reused an unrendered texture")
+	settings.apply_video_look(0)
+	settings.set_value("render_resolution", 5)
+	site._sync_preview_resolution()
+	expect(site._preview.size == Vector2i(680, 1188), "Native return preview exceeded its original cap")
+	director.site = previous_site
+	stop_audio(site)
+	site.queue_free()
+	director.set_physics_process(processing)
+	settings.values = saved
+	game._apply_game_settings()
+	root.size = extent
+	await settle()
+
+
 func run() -> void:
 	var path := "/tmp/liminal-quality-%d.cfg" % OS.get_process_id()
 	var settings := GameSettings.new(path)
@@ -251,6 +301,7 @@ func run() -> void:
 	realm.preview.free()
 	realm._preview_environment.free()
 	realm.free()
+	await check_return_preview(game, settings)
 	settings.apply_quality_preset(1)
 	settings.set_value("crt_enabled", true)
 	game._open_settings(false)

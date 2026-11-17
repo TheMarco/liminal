@@ -104,6 +104,10 @@ func floor_view(theme: int, grand := false) -> void:
 	await draw(2)
 
 func run() -> void:
+	var themes := [4, 0, 1, 2, 5, 6, 7, 8, 9, 10, 11]
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--theme="):
+			themes = [int(arg.trim_prefix("--theme="))]
 	DirAccess.make_dir_recursive_absolute(OUT)
 	view = SubViewport.new()
 	view.size = Vector2i(1280, 800)
@@ -112,7 +116,7 @@ func run() -> void:
 	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(view)
 	# Start with the reported floor, including its distinct tall ceiling.
-	for theme in [4, 0, 1, 2, 5, 6, 7, 8, 9, 10, 11]:
+	for theme in themes:
 		await floor_view(theme)
 		if theme == 4:
 			await floor_view(theme, true)

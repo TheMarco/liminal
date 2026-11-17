@@ -65,6 +65,19 @@ func _run() -> void:
 		var roster_surface := roster_visual.burn_surface_points(320)
 		expect(roster_surface.size() == 320,
 			"roster model %d cannot provide its skinned burn surface" % index)
+		var cached := ShadowWalkerVisual.new()
+		cached.model_index = index
+		cached.position = Vector3(600, 0, 700)
+		cached.rotation.y = 1.1
+		root.add_child(cached)
+		expect(cached._model.position.is_equal_approx(roster_visual._model.position),
+			"cached initial pose changed model origin for %d" % index)
+		for original_mesh in roster_visual._meshes(roster_visual._model):
+			var cached_mesh: MeshInstance3D = cached._model.get_node(
+				roster_visual._model.get_path_to(original_mesh))
+			expect(cached_mesh.custom_aabb == original_mesh.custom_aabb,
+				"cached initial pose changed culling bounds for %d" % index)
+		cached.free()
 		roster_visual.free()
 	expect(visual.animation_player().callback_mode_process ==
 		AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL,

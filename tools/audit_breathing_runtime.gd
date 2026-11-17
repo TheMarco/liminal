@@ -172,11 +172,15 @@ func run() -> void:
 	finish("breathing runtime: pacing, visibility, gates, actor withdrawal and teardown")
 
 func finish_preparing(director: Node) -> void:
-	for step in 100:
+	# Preparation now yields within targets. Allow the director's existing
+	# 45-second preparation window rather than assuming <=100 whole targets.
+	var steps := 0
+	for step in 2800:
 		if not is_instance_valid(director.active) or director.active.prepared: break
 		director._physics_process(0.016)
+		steps += 1
 	expect(is_instance_valid(director.active) and director.active.prepared, "incremental preparation failed")
-	print("Preparation max step ms: ", director.max_prepare_step_ms)
+	print("Preparation max step ms: ", director.max_prepare_step_ms, "; ticks: ", steps)
 
 func check_ceiling(game: Node, director: Node) -> void:
 	var choice: Dictionary = {}

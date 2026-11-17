@@ -1,0 +1,351 @@
+{
+  "device": "Apple M3 Max / Metal / Godot 4.7.2",
+  "baseline": "e0950c5 level builders, airport ceiling, materials, environment and ceiling shaders, isolated with current renderer/settings/gameplay",
+  "conditions": "High preset, Clean, 1152x720 3D render in 1440x900 viewport. Seed 240721, identical fixed cameras and complete neighbourhoods. Exactly one Chunk per cell, with matching cell lists asserted. Six batches of 30 frames, static game. CPU submission + GPU completion + amortized image readback; NOT gameplay FPS.",
+  "current": "Includes reflection occlusion fix and final School/Casino ceiling shaders.",
+  "limitations": [
+    "Four representative static views, not a moving gameplay benchmark or all level variants.",
+    "Earlier exploratory captures were invalidated because the harness could duplicate already-loaded chunks; those timings are excluded.",
+    "No claim about other GPUs."
+  ],
+  "results": [
+    {
+      "room": "school",
+      "style": 61,
+      "original_median_ms": 3.295,
+      "current_median_ms": 9.867,
+      "captures": {
+        "original": {
+          "cells": "[(-2, 1), (-2, 2), (-2, 3), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (-1, 3), (0, -1), (0, 0), (0, 1), (0, 2), (1, -1), (1, 0), (1, 1), (1, 2), (2, -1), (2, 0), (2, 1), (2, 2)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 338,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            3.3007,
+            3.28863333333333,
+            3.2655,
+            3.31333333333333,
+            3.31473333333333,
+            3.28833333333333
+          ],
+          "style": 61,
+          "theme": 6,
+          "unique_chunks": 20,
+          "world_scale": 0.800000011920929
+        },
+        "current": {
+          "cells": "[(-2, 1), (-2, 2), (-2, 3), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (-1, 3), (0, -1), (0, 0), (0, 1), (0, 2), (1, -1), (1, 0), (1, 1), (1, 2), (2, -1), (2, 0), (2, 1), (2, 2)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 410,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            9.96886666666667,
+            9.85206666666667,
+            10.1661,
+            9.8813,
+            9.84906666666667,
+            9.63846666666667
+          ],
+          "style": 61,
+          "theme": 6,
+          "unique_chunks": 20,
+          "world_scale": 0.800000011920929
+        }
+      }
+    },
+    {
+      "room": "mall",
+      "style": 73,
+      "original_median_ms": 3.028,
+      "current_median_ms": 10.607,
+      "captures": {
+        "original": {
+          "cells": "[(-2, -2), (-2, -1), (-2, 0), (-2, 1), (-1, -2), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (0, -2), (0, -1), (0, 0), (0, 1), (0, 2), (1, -2), (1, -1), (1, 0), (1, 1), (2, -1)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 410,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            3.0277,
+            3.02736666666667,
+            3.07623333333333,
+            3.0354,
+            2.99073333333333,
+            3.00423333333333
+          ],
+          "style": 73,
+          "theme": 7,
+          "unique_chunks": 19,
+          "world_scale": 0.800000011920929
+        },
+        "current": {
+          "cells": "[(-2, -2), (-2, -1), (-2, 0), (-2, 1), (-1, -2), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (0, -2), (0, -1), (0, 0), (0, 1), (0, 2), (1, -2), (1, -1), (1, 0), (1, 1), (2, -1)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 487,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            10.8687,
+            10.7048666666667,
+            10.5212333333333,
+            10.3384,
+            10.5795,
+            10.6346
+          ],
+          "style": 73,
+          "theme": 7,
+          "unique_chunks": 19,
+          "world_scale": 0.800000011920929
+        }
+      }
+    },
+    {
+      "room": "airport",
+      "style": 141,
+      "original_median_ms": 3.078,
+      "current_median_ms": 32.538,
+      "captures": {
+        "original": {
+          "cells": "[(0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (2, 7), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6), (3, 7), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (5, 2), (5, 3), (5, 4)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 195,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            3.09363333333333,
+            3.1121,
+            3.04286666666667,
+            3.10376666666667,
+            3.05216666666667,
+            3.06263333333333
+          ],
+          "style": 141,
+          "theme": 4,
+          "unique_chunks": 28,
+          "world_scale": 0.800000011920929
+        },
+        "current": {
+          "cells": "[(0, 2), (0, 3), (0, 4), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (2, 2), (2, 3), (2, 4), (2, 5), (2, 6), (2, 7), (3, 2), (3, 3), (3, 4), (3, 5), (3, 6), (3, 7), (4, 2), (4, 3), (4, 4), (4, 5), (4, 6), (5, 2), (5, 3), (5, 4)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 227,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            33.6214666666667,
+            32.1392333333333,
+            32.6017333333333,
+            33.1764666666667,
+            32.3194666666667,
+            32.475
+          ],
+          "style": 141,
+          "theme": 4,
+          "unique_chunks": 28,
+          "world_scale": 0.800000011920929
+        }
+      }
+    },
+    {
+      "room": "bloom",
+      "style": 111,
+      "original_median_ms": 6.773,
+      "current_median_ms": 19.875,
+      "captures": {
+        "original": {
+          "cells": "[(-1, -1), (-1, 0), (-1, 1), (-1, 2), (0, -1), (0, 0), (0, 1), (0, 2), (1, -1), (1, 0), (1, 1), (1, 2), (2, -1), (2, 0), (2, 1), (2, 2)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 2821,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            6.87733333333333,
+            6.92946666666667,
+            6.67643333333333,
+            6.8012,
+            6.7444,
+            6.64983333333333
+          ],
+          "style": 111,
+          "theme": 11,
+          "unique_chunks": 16,
+          "world_scale": 0.800000011920929
+        },
+        "current": {
+          "cells": "[(-1, -1), (-1, 0), (-1, 1), (-1, 2), (0, -1), (0, 0), (0, 1), (0, 2), (1, -1), (1, 0), (1, 1), (1, 2), (2, -1), (2, 0), (2, 1), (2, 2)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 6801,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            20.2580333333333,
+            19.8555,
+            19.7067,
+            19.8948,
+            20.2567666666667,
+            19.8357333333333
+          ],
+          "style": 111,
+          "theme": 11,
+          "unique_chunks": 16,
+          "world_scale": 0.800000011920929
+        }
+      }
+    }
+  ],
+  "ceiling_comparison": [
+    {
+      "room": "school",
+      "style": 61,
+      "before_median_ms": 10.8659833333333,
+      "after_median_ms": 9.988933333333314,
+      "captures": {
+        "before": {
+          "cells": "[(-2, 1), (-2, 2), (-2, 3), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (-1, 3), (0, -1), (0, 0), (0, 1), (0, 2), (1, -1), (1, 0), (1, 1), (1, 2), (2, -1), (2, 0), (2, 1), (2, 2)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 411,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            11.4885333333333,
+            10.8715333333333,
+            10.9205666666667,
+            10.8604333333333,
+            10.7347,
+            10.7228
+          ],
+          "style": 61,
+          "theme": 6,
+          "unique_chunks": 20,
+          "world_scale": 0.800000011920929
+        },
+        "after": {
+          "cells": "[(-2, 1), (-2, 2), (-2, 3), (-1, -1), (-1, 0), (-1, 1), (-1, 2), (-1, 3), (0, -1), (0, 0), (0, 1), (0, 2), (1, -1), (1, 0), (1, 1), (1, 2), (2, -1), (2, 0), (2, 1), (2, 2)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 411,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            10.3936666666667,
+            10.0075333333333,
+            9.97033333333333,
+            9.92916666666667,
+            10.2389666666667,
+            9.83513333333333
+          ],
+          "style": 61,
+          "theme": 6,
+          "unique_chunks": 20,
+          "world_scale": 0.800000011920929
+        }
+      }
+    },
+    {
+      "room": "casino",
+      "style": 2,
+      "before_median_ms": 4.7434833333333355,
+      "after_median_ms": 4.45665,
+      "captures": {
+        "before": {
+          "cells": "[(-2, -2), (-2, -1), (-2, 0), (-2, 1), (-1, -2), (-1, -1), (-1, 0), (-1, 1), (0, -2), (0, -1), (0, 0), (0, 1), (1, -2), (1, -1), (1, 0), (1, 1)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 415,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            4.7957,
+            4.6928,
+            4.70396666666667,
+            4.7626,
+            4.72436666666667,
+            4.769
+          ],
+          "style": 2,
+          "theme": 0,
+          "unique_chunks": 16,
+          "world_scale": 0.800000011920929
+        },
+        "after": {
+          "cells": "[(-2, -2), (-2, -1), (-2, 0), (-2, 1), (-1, -2), (-1, -1), (-1, 0), (-1, 1), (0, -2), (0, -1), (0, 0), (0, 1), (1, -2), (1, -1), (1, 0), (1, 1)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 415,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            4.58726666666667,
+            4.3627,
+            4.40093333333333,
+            4.46613333333333,
+            4.49373333333333,
+            4.44716666666667
+          ],
+          "style": 2,
+          "theme": 0,
+          "unique_chunks": 16,
+          "world_scale": 0.800000011920929
+        }
+      }
+    },
+    {
+      "room": "casino",
+      "style": 4,
+      "before_median_ms": 6.473783333333335,
+      "after_median_ms": 6.17445,
+      "captures": {
+        "before": {
+          "cells": "[(-12, 0), (-12, 1), (-11, -1), (-11, 0), (-11, 1), (-11, 2), (-10, -1), (-10, 0), (-10, 1), (-10, 2), (-9, -1), (-9, 0), (-9, 1), (-9, 2), (-8, -1), (-8, 0), (-8, 1), (-8, 2), (-7, 1)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 626,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            6.6167,
+            6.41336666666667,
+            6.4855,
+            6.35573333333333,
+            6.46206666666667,
+            6.56863333333333
+          ],
+          "style": 4,
+          "theme": 0,
+          "unique_chunks": 19,
+          "world_scale": 0.800000011920929
+        },
+        "after": {
+          "cells": "[(-12, 0), (-12, 1), (-11, -1), (-11, 0), (-11, 1), (-11, 2), (-10, -1), (-10, 0), (-10, 1), (-10, 2), (-9, -1), (-9, 0), (-9, 1), (-9, 2), (-8, -1), (-8, 0), (-8, 1), (-8, 2), (-7, 1)]",
+          "device": "Apple M3 Max (Apple9)",
+          "draw_calls": 626,
+          "method": "Six batches of 30 static frames at preset world resolution. Includes CPU submission, GPU completion and amortized readback; not gameplay FPS.",
+          "output_size": "(1440, 900)",
+          "quality": 2,
+          "samples_ms": [
+            6.21566666666667,
+            6.2419,
+            6.21213333333333,
+            6.13676666666667,
+            6.09863333333333,
+            6.07096666666667
+          ],
+          "style": 4,
+          "theme": 0,
+          "unique_chunks": 19,
+          "world_scale": 0.800000011920929
+        }
+      }
+    }
+  ]
+}

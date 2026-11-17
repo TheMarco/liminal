@@ -86,6 +86,7 @@ func _physics_process(dt: float) -> void:
 			var begin := Time.get_ticks_usec()
 			active.prepare_step()
 			var cost := (Time.get_ticks_usec() - begin) / 1000.0
+			RuntimeDiagnostics.slow("architecture_prepare_step", begin, {"kind": kind})
 			last_setup_ms += cost
 			max_prepare_step_ms = maxf(max_prepare_step_ms, cost)
 			if active.failed:
@@ -117,6 +118,9 @@ func _physics_process(dt: float) -> void:
 				debug_notice.emit("HALLWAY WAVE — PLAYING NOW; walk through it")
 				print("Hallway wave PLAYING: ", active_chunk.cell)
 		if not _audio_started:
+			RuntimeDiagnostics.mark("architecture_presented", {"kind": kind,
+				"cell": str(active_chunk.cell), "setup_ms": last_setup_ms,
+				"max_prepare_step_ms": max_prepare_step_ms})
 			_audio.begin_event()
 			_audio_started = true
 		elapsed += dt

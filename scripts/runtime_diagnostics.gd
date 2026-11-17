@@ -41,7 +41,7 @@ func _ready() -> void:
 	_last_frame = Time.get_ticks_usec()
 	_last_sample = _last_frame
 	_write("session_start", {
-		"schema": 1, "diagnostics_revision": "photo-contact-4", "utc": Time.get_datetime_string_from_system(true),
+		"schema": 1, "diagnostics_revision": "encounter-warmup-7", "utc": Time.get_datetime_string_from_system(true),
 		"engine": Engine.get_version_info().string, "os": OS.get_name(),
 		"game_version": ProjectSettings.get_setting("application/config/version", "unknown"),
 		"os_version": OS.get_version(), "cpu": OS.get_processor_name(),
