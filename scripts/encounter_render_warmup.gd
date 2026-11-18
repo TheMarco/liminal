@@ -161,6 +161,7 @@ func _prepare_torch(source_camera: Camera3D, camera: Camera3D) -> void:
 				break
 	if _torch == null:
 		_torch = SpotLight3D.new()
+		_torch.set_meta("visible_source", "player_held_flashlight")
 		_torch.shadow_enabled = true
 		_torch.spot_range = 24.0
 		_torch.spot_angle = 65.0
