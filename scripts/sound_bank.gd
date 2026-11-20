@@ -116,16 +116,29 @@ static func muzak() -> AudioStreamWAV:
 	var s := PackedFloat32Array()
 	s.resize(seg * 4)
 	for ci in 4:
-		for f in chords[ci]:
-			for detune in [-0.15, 0.15]:
-				var ff: float = f * (1.0 + detune / 100.0)
-				for i in seg:
-					var t := float(i) / RATE
-					var tg := float(ci) * chord_len + t
-					var env := minf(1.0, t / 0.5) * minf(1.0, (chord_len - t) / 0.7)
-					var trem := 1.0 - 0.18 * (0.5 + 0.5 * sin(TAU * 3.1 * tg + float(ci)))
-					var v := sin(TAU * ff * tg + 0.6 * sin(TAU * 5.3 * tg))
-					s[ci * seg + i] += 0.042 * env * trem * v
+		var chord: Array = chords[ci]
+		var w0: float = TAU * float(chord[0]) * 0.9985
+		var w1: float = TAU * float(chord[0]) * 1.0015
+		var w2: float = TAU * float(chord[1]) * 0.9985
+		var w3: float = TAU * float(chord[1]) * 1.0015
+		var w4: float = TAU * float(chord[2]) * 0.9985
+		var w5: float = TAU * float(chord[2]) * 1.0015
+		var w6: float = TAU * float(chord[3]) * 0.9985
+		var w7: float = TAU * float(chord[3]) * 1.0015
+		var base := ci * seg
+		var tg_base := float(ci) * chord_len
+		var ci_f := float(ci)
+		for i in seg:
+			var t := float(i) / RATE
+			var tg := tg_base + t
+			var env := minf(1.0, t / 0.5) * minf(1.0, (chord_len - t) / 0.7)
+			var trem := 1.0 - 0.18 * (0.5 + 0.5 * sin(TAU * 3.1 * tg + ci_f))
+			var vib := 0.6 * sin(TAU * 5.3 * tg)
+			s[base + i] = 0.042 * env * trem * (
+				sin(w0 * tg + vib) + sin(w1 * tg + vib) +
+				sin(w2 * tg + vib) + sin(w3 * tg + vib) +
+				sin(w4 * tg + vib) + sin(w5 * tg + vib) +
+				sin(w6 * tg + vib) + sin(w7 * tg + vib))
 	_c["muzak"] = _wav(_loop_blend(s, 2200), true)
 	return _c["muzak"]
 
@@ -475,3 +488,27 @@ static func elev() -> AudioStreamWAV:
 		s[i] = v
 	_c["elev"] = _wav(s)
 	return _c["elev"]
+
+
+## Synthesize floor-relevant procedural audio behind the opaque transition fade
+## so lifts, portals, airports, and casino lounges never stall gameplay frames.
+static func prepare_floor(theme: int) -> void:
+	ding()
+	elev()
+	thud()
+	creak()
+	key_click()
+	static_hiss()
+	portal_hum()
+	lift_shaft()
+	lift_motor()
+	clang()
+	warp()
+	match theme:
+		0:
+			muzak()
+		4:
+			pa_chime()
+			jet_far()
+		9:
+			water_rush()

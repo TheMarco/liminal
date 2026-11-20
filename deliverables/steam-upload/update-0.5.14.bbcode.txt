@@ -1,0 +1,20 @@
+[h1]Update 0.5.14 — Smoother blackouts, scares, and exploration[/h1]
+
+A pause just before the Casino goes dark or a figure appears in the hallway can give away the scare. This update cuts the work the game does at those moments and tackles several other sources of stutter during exploration.
+
+[h2]Blackouts and encounters[/h2]
+[list]
+[*]The Casino switches off its lights faster. When rooms rearrange during a blackout, the game spreads more of the work across frames and reuses doorway measurements when placing furniture.
+[*]Stationary hallway apparitions prepare their smoke effect ahead of time, reducing the pause when a figure appears or dissolves.
+[*]Burning a monster takes less CPU time. In one test on an M3 Max, preparing the burn effect for one monster fell from 62 ms to 10 ms.
+[/list]
+
+[h2]Exploration and photos[/h2]
+[list]
+[*]Floor transitions now prepare more sounds, doorway effects, portal scenery, and VHS props before you encounter them. This reduces first-use pauses during play.
+[*]The Poolrooms load in smaller steps as you move. Doorways that show another room stop rendering that view when they are off screen.
+[*]The camera now caps the long edge of a photo at 1,600 pixels when you take it, avoiding an expensive resize on high-resolution displays. The evidence circle still lines up with the shot.
+[*]The HUD, viewfinder, and VHS display skip repeated updates when their readings stay the same.
+[/list]
+
+If you still feel a pause, the floor you're on and what happened immediately beforehand are the most helpful details to include in a report. Thank you for playing.

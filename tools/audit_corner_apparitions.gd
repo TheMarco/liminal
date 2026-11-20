@@ -161,6 +161,17 @@ func _run() -> void:
 			var smoke := smoke_nodes[0] as CPUParticles3D
 			if smoke.amount < 200 or not smoke.one_shot or smoke.mesh == null:
 				failures.append("smoke puff is missing its dense one-shot particle mesh")
+			var silhouette := manager._live.get_node("Silhouette") as GhostVisual
+			var key: String = manager._live.get_meta("texture_key")
+			var cutout := load("res://textures/ghosts/%s.png" % key) as Texture2D
+			var image := cutout.get_image()
+			for point in smoke.emission_points:
+				var u := point.x / silhouette.scale.x + 0.5
+				var v := 0.5 - point.y / silhouette.scale.y
+				if u < 0.0 or u >= 1.0 or v < 0.0 or v >= 1.0 or image.get_pixel(
+						int(u * image.get_width()), int(v * image.get_height())).a < 0.32:
+					failures.append("smoke emission points fell outside the visible silhouette")
+					break
 	await create_timer(CornerApparitions.FADE_SECONDS + 0.12).timeout
 	await process_frame
 	if is_instance_valid(manager._live):

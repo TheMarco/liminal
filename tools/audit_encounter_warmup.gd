@@ -55,6 +55,32 @@ func check_event(event: String, trigger: Callable) -> void:
 		if delta[key] != 0: failures.append("%s compiled %d new %s pipelines" % [event, delta[key], key])
 	if worst_ms >= 100.0: failures.append("%s stalled %.1f ms" % [event, worst_ms])
 
+func check_corner_apparition(rooms: Node3D) -> void:
+	for key: String in CornerApparitions.LOOKS:
+		var points: PackedVector3Array = CornerApparitions._smoke_shapes.get(key, PackedVector3Array())
+		if points.size() != CornerApparitions.SMOKE_PARTICLE_COUNT or not ShadowFigure._layered_mats.has(key):
+			failures.append("corner look %s was not prepared during floor loading" % key)
+	var corner := CornerApparitions.new()
+	rooms.add_child(corner)
+	corner.set_physics_process(false)
+	corner.configure(992421325, theme)
+	var existing_tweens := get_processed_tweens()
+	var scare_tweens: Array[Tween] = []
+	await check_event("corner_reveal", func():
+		corner._show(Vector3(4, 0, 4))
+		# Advance the actual two-second hold separately so each phase gets
+		# its own first draw, timing window and pipeline counters.
+		for tween in get_processed_tweens():
+			if not existing_tweens.has(tween):
+				tween.pause()
+				scare_tweens.append(tween))
+	await check_event("corner_dissolve", func():
+		for tween in scare_tweens:
+			tween.custom_step(CornerApparitions.HOLD_SECONDS + 0.05))
+	if not is_instance_valid(corner._live) or not corner._live.has_node("SilhouetteSmokePuff"):
+		failures.append("corner dissolve did not exercise the live smoke emitter")
+	corner.free()
+
 func run() -> void:
 	if DisplayServer.get_name() == "headless":
 		push_error("Encounter warm-up audit requires a native renderer")
@@ -124,6 +150,7 @@ func run() -> void:
 		failures.append("warmup changed the live room or environment")
 	if is_instance_valid(warmer._view): failures.append("warmup retained its GPU viewport")
 	await check_event("idle_control", func(): pass)
+	await check_corner_apparition(rooms)
 	var effect := Effect.new()
 	root.add_child(effect)
 	effect.set_process(false)

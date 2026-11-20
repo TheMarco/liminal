@@ -452,6 +452,9 @@ func _process_staged_rebuild() -> bool:
 			_staged_failed.call("replacement failed furniture/doorway validation")
 		_discard_staged_rebuild()
 		return true
+	# Prepare rendering and blackout materials on this obscured build frame
+	# instead of stacking every replacement's preparation onto the commit frame.
+	replacement.prepare_runtime_rendering(ROOM_LIGHT_FADE_BEGIN)
 	_staged_index += 1
 	if _staged_index < _staged_cells.size():
 		return true
@@ -487,7 +490,8 @@ func _commit_staged_rebuild() -> bool:
 			chunks.erase(at)
 			if is_instance_valid(old):
 				remove_child(old)
-				old.queue_free()
+				old.visible = false
+				_retire(at, old)
 	for at in _staged_cells:
 		var replacement := _staged_replacements[at] as Chunk
 		replacement.descent_topology_state_override = -1
@@ -528,6 +532,11 @@ func _exit_tree() -> void:
 	_cancel_pending()
 	if not _staged_cells.is_empty():
 		_discard_staged_rebuild()
+	for entry in _retired:
+		var chunk: Chunk = entry[1]
+		if is_instance_valid(chunk) and chunk.get_parent() == null:
+			chunk.free()
+	_retired.clear()
 
 
 func _is_optional_vhs_cell(c: Vector2i) -> bool:
@@ -600,9 +609,12 @@ func set_blackout(on: bool) -> void:
 	if blackout != on:
 		_cancel_pending()
 	blackout = on
+	# All resident rooms switch together. Share each current material's dark
+	# variant for this transition only, including across room boundaries.
+	var variants := {}
 	for ch in chunks.values():
 		if is_instance_valid(ch):
-			(ch as Chunk).set_blackout(on)
+			(ch as Chunk).set_blackout(on, variants)
 
 
 func chunk_at(c: Vector2i) -> Chunk:

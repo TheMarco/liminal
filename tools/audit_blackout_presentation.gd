@@ -61,6 +61,7 @@ func _annex_ceiling(chunk: Chunk) -> MeshInstance3D:
 func _chunk(theme: int, cell: Vector2i) -> void:
 	var ws := WorldGen.level_seed(240721, theme)
 	var chunk := Chunk.new(ws, cell, theme)
+	chunk.prepare_runtime_rendering()
 	var meshes := {}
 	var materials := {}
 	var labels := {}
@@ -150,11 +151,40 @@ func _surface_cases() -> void:
 	mesh.mesh.material = mat
 	holder.add_child(mesh)
 	var power := SURFACE_POWER.new()
+	var sign := ShaderMaterial.new()
+	sign.shader = preload("res://shaders/office_ceiling.gdshader")
+	mesh.material_overlay = sign
+	power.prepare_mesh(mesh, {})
+	# An in-place change, a newly attached surface and an override replaced
+	# after room installation must all use their current appearance.
+	mat.albedo_color = Color.CORAL
+	sign.set_shader_parameter("pitch", 1.25)
+	var late := MeshInstance3D.new()
+	late.mesh = BoxMesh.new()
+	late.material_override = mat
+	holder.add_child(late)
+	var label := Label3D.new()
+	holder.add_child(label)
 	power.apply(holder)
 	expect(mesh.visible and is_zero_approx(mesh.get_active_material(0).emission_energy_multiplier) and mat.emission_enabled,
 		"imported mesh material was hidden/mutated instead of locally de-powered")
+	var first_dark := mesh.get_active_material(0) as StandardMaterial3D
+	expect(first_dark.albedo_color == mat.albedo_color and late.material_override == first_dark,
+		"late fixture or changed colour did not use the current dark material")
+	expect(mesh.material_overlay != sign and mesh.material_overlay.get_shader_parameter("pitch") == 1.25
+		and is_zero_approx(mesh.material_overlay.get_shader_parameter("mains_power")) and label.shaded,
+		"prepared overlay or late label had the wrong blackout state")
 	mesh.free()
 	power.restore() # streaming/mutation may remove objects while power is out
+	expect(late.material_override == mat and not label.shaded, "late fixture or label failed to restore")
+	var replacement := mat.duplicate() as StandardMaterial3D
+	replacement.albedo_color = Color.GREEN
+	late.material_override = replacement
+	power.apply(holder)
+	expect(late.material_override != replacement and late.material_override.albedo_color == Color.GREEN
+		and first_dark.albedo_color == Color.CORAL, "second blackout used or modified an earlier snapshot")
+	power.restore()
+	expect(late.material_override == replacement, "second blackout restored a stale override")
 	holder.free()
 	for name in ["adbox", "casino_slot_lights", "slot_artwork", "slot_reels", "slot_ticker", "slot_paytable", "slot_wheel"]:
 		var original := ShaderMaterial.new()

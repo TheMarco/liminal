@@ -130,15 +130,33 @@ func _power_sag(hold: float, caption: String) -> void:
 		message.emit(caption)
 	var lights: Array[OmniLight3D] = []
 	var energy := {}
-	for n in level_root.find_children("*", "OmniLight3D", true, false):
-		var l := n as OmniLight3D
-		if l.global_position.distance_to(player.global_position) > 24.0:
-			continue
-		lights.append(l)
-		energy[l] = l.light_energy
-		if l is FlickerLight:
-			l.set_process(false)
-		create_tween().tween_property(l, "light_energy", 0.015, 0.16)
+	var search_roots: Array[Node] = []
+	var cm: ChunkManager = null
+	for child in level_root.get_children():
+		if child is ChunkManager:
+			cm = child as ChunkManager
+			break
+	if cm != null:
+		var pc := Vector2i(
+			floori(player.global_position.x / ChunkManager.CELL),
+			floori(player.global_position.z / ChunkManager.CELL))
+		for dz in range(-2, 3):
+			for dx in range(-2, 3):
+				var ch := cm.chunk_at(pc + Vector2i(dx, dz))
+				if ch != null:
+					search_roots.append(ch)
+	else:
+		search_roots.append(level_root)
+	for root_node in search_roots:
+		for n in root_node.find_children("*", "OmniLight3D", true, false):
+			var l := n as OmniLight3D
+			if l.global_position.distance_squared_to(player.global_position) > 576.0:
+				continue
+			lights.append(l)
+			energy[l] = l.light_energy
+			if l is FlickerLight:
+				l.set_process(false)
+			create_tween().tween_property(l, "light_energy", 0.015, 0.16)
 	RuntimeDiagnostics.mark("power_sag_lights", {"lights": lights.size(), "setup_ms": (Time.get_ticks_usec() - started) / 1000.0})
 	var sound_started := Time.get_ticks_usec()
 	_spatial_sound(SoundBank.thud(), 4.0, -14.0)

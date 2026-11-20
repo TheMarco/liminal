@@ -116,7 +116,12 @@ func _ready() -> void:
 func _model(path: String, scl: float, pos: Vector3, yaw := 0.0) -> Node3D:
 	var ps: PackedScene = _scenes.get(path)
 	if ps == null:
-		ps = load(path)
+		ps = FloorResourcePreloader.cached_scene(path)
+	if ps == null:
+		ps = load(path) as PackedScene
+		if ps != null:
+			FloorResourcePreloader.retain_scene(path, ps)
+	if ps != null:
 		_scenes[path] = ps
 	var inst := ps.instantiate() as Node3D
 	inst.position = pos
@@ -180,7 +185,7 @@ func _build_screen() -> void:
 	_screen = MeshInstance3D.new()
 	_screen.mesh = quad
 	_screen_mat = ShaderMaterial.new()
-	_screen_mat.shader = load("res://shaders/vhs_tape.gdshader")
+	_screen_mat.shader = preload("res://shaders/vhs_tape.gdshader")
 	_screen_mat.set_shader_parameter("variant",
 		float(posmod(WorldGen.h(world_seed, floor_idx, 7, 9301), 8)))
 	_screen.material_override = _screen_mat

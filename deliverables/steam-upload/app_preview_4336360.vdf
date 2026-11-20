@@ -2,7 +2,7 @@
 {
     "AppID" "4336360"
     "Preview" "1"
-    "Desc" "It Wants You To Stay 0.5.13 - November 17, 2026 - Casino rendering, room streaming, prop preloads and encounter warmup - Windows, Linux and macOS"
+    "Desc" "It Wants You To Stay 0.5.14 - Blackouts, hallway apparitions, monster burns, audio, streaming and photo performance - Windows, Linux and macOS"
     "ContentRoot" "../../build"
     "BuildOutput" "../../build/steam-upload-output"
     "Depots"

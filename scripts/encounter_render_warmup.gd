@@ -3,6 +3,7 @@ extends Node
 ## startup/the opaque transition. Loading a GLB alone never visits its runtime
 ## materials, posed bounds, morph variants or screen-reading canvas shader.
 const Surface := preload("res://scripts/environment_breath_surface.gd")
+const DoorwaySurface := preload("res://scripts/native_doorway_surface.gd")
 const Aftershock := preload("res://scripts/reality_aftershock.gd")
 const PowerSurfaces := preload("res://scripts/blackout_surfaces.gd")
 const PowerEnvironment := preload("res://scripts/blackout_environment.gd")
@@ -84,8 +85,14 @@ func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
 		var visual := actor._walker
 		visual.disappear(0.0) # Stop the appearance tween before setting a fixed pose.
 		visual.set_manifestation(1.0)
+		visual.prepare_burn_cache()
+	var corner_samples := Node3D.new()
+	corner_samples.position = Vector3(0, 1, 5)
+	_view.add_child(corner_samples)
+	CornerApparitions.prepare_render_samples(corner_samples)
 	_warm_surfaces(rooms)
 	_warm_blackout_surfaces(rooms)
+	_warm_gameplay_effects(rooms, theme)
 	var effect := Aftershock.new()
 	_view.add_child(effect)
 	effect.set_process(false)
@@ -97,13 +104,14 @@ func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
 		"cpu_ms": (Time.get_ticks_usec() - started) / 1000.0})
 	await _draw_state()
 	# Exercise the production overlays on isolated samples, never live rooms.
-	_power_surfaces.apply(_samples)
+	var blackout_variants := {}
+	_power_surfaces.apply(_samples, blackout_variants)
 	_power_environment.apply(_environment)
 	_lights.visible = false
 	await _draw_state()
 	_torch.visible = true
 	await _draw_state()
-	_blackout_materials = _power_surfaces._variants.values()
+	_blackout_materials = blackout_variants.values()
 	_power_surfaces.restore()
 	_power_environment.restore()
 	_lights.visible = true
@@ -120,6 +128,9 @@ func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
 		await _draw_state()
 	_warm_mutation_reveal()
 	await _draw_state()
+	# The live effect shares the cached materials and meshes. Its temporary
+	# bodies and particle emitter can go away with the loading scene.
+	corner_samples.free()
 	finished = true
 	_release_view()
 	process_mode = Node.PROCESS_MODE_DISABLED
@@ -301,3 +312,88 @@ func _warm_surfaces(rooms: Node3D) -> void:
 		material_count += 1
 		# Bound loading work to the floor's common architectural materials.
 		if material_count >= 24: break
+
+
+func _warm_gameplay_effects(rooms: Node3D, theme: int) -> void:
+	var host := Node3D.new()
+	host.name = "GameplayEffectWarmup"
+	_view.add_child(host)
+	var wall_shaders: Array[ShaderMaterial] = []
+	var seen_shaders := {}
+	for node in rooms.find_children("*", "MeshInstance3D", true, false):
+		if not (node.mesh is BoxMesh or node.mesh is QuadMesh):
+			continue
+		var mat := node.material_override as ShaderMaterial
+		if mat == null or mat.shader == null or seen_shaders.has(mat.shader):
+			continue
+		seen_shaders[mat.shader] = true
+		wall_shaders.append(mat)
+		if wall_shaders.size() >= 12:
+			break
+	DoorwaySurface.prepare_render_samples(host, wall_shaders, theme)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.5, 0.5)
+	# Warm camera viewfinder mask (CanvasItem shader compiled on first raise).
+	var mask := ColorRect.new()
+	mask.size = Vector2(64, 64)
+	var mask_mat := ShaderMaterial.new()
+	mask_mat.shader = preload("res://shaders/viewfinder_mask.gdshader")
+	mask.material = mask_mat
+	_view.add_child(mask)
+	# Warm portal anomaly crack + outer glow shaders.
+	var portal_mat := ShaderMaterial.new()
+	portal_mat.shader = PhotoAnomaly.PORTAL_SHADER
+	if not PhotoAnomaly.PORTAL_PANOS.is_empty():
+		portal_mat.set_shader_parameter("pano", PhotoAnomaly._portal_pano(PhotoAnomaly.PORTAL_PANOS[0]))
+	_add_effect_quad(host, quad, portal_mat, Vector3(-0.8, 2.4, 2.5))
+	var glow_mat := ShaderMaterial.new()
+	glow_mat.shader = PhotoAnomaly.PORTAL_GLOW_SHADER
+	_add_effect_quad(host, quad, glow_mat, Vector3(0.0, 2.4, 2.5))
+	# Warm realm doorway leak + window + VHS screen shaders.
+	var leak_mat := ShaderMaterial.new()
+	leak_mat.shader = RealmDoorLeak.SHADER
+	leak_mat.set_shader_parameter("strength", 0.5)
+	_add_effect_quad(host, quad, leak_mat, Vector3(0.8, 2.4, 2.5))
+	var window_mat := ShaderMaterial.new()
+	window_mat.shader = SelfReturnDoorSite.WINDOW_SHADER
+	_add_effect_quad(host, quad, window_mat, Vector3(1.6, 2.4, 2.5))
+	var vhs_mat := ShaderMaterial.new()
+	vhs_mat.shader = preload("res://shaders/vhs_tape.gdshader")
+	_add_effect_quad(host, quad, vhs_mat, Vector3(2.4, 2.4, 2.5))
+	if theme in [2, 9]:
+		var drop_mesh := SphereMesh.new()
+		drop_mesh.radius = 0.05
+		drop_mesh.height = 0.1
+		drop_mesh.radial_segments = 6
+		drop_mesh.rings = 3
+		var drop_mm := MultiMesh.new()
+		drop_mm.transform_format = MultiMesh.TRANSFORM_3D
+		drop_mm.use_custom_data = true
+		drop_mm.instance_count = 1
+		drop_mm.mesh = drop_mesh
+		drop_mm.set_instance_transform(0, Transform3D.IDENTITY)
+		drop_mm.set_instance_custom_data(0, Color(0.5, 0.5, 0.5, 0.0))
+		var drop_inst := MultiMeshInstance3D.new()
+		drop_inst.multimesh = drop_mm
+		drop_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		drop_inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		var drop_mat := ShaderMaterial.new()
+		drop_mat.shader = preload("res://shaders/pool_splash_drop.gdshader")
+		drop_mat.render_priority = 1
+		drop_inst.material_override = drop_mat
+		drop_inst.position = Vector3(3.2, 2.4, 2.5)
+		host.add_child(drop_inst)
+		var sheet_mat := ShaderMaterial.new()
+		sheet_mat.shader = preload("res://shaders/pool_splash_sheet.gdshader")
+		sheet_mat.render_priority = 1
+		_add_effect_quad(host, quad, sheet_mat, Vector3(4.0, 2.4, 2.5))
+
+
+func _add_effect_quad(parent: Node3D, quad: QuadMesh, material: Material, pos: Vector3) -> void:
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = quad
+	mesh.material_override = material
+	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mesh.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	mesh.position = pos
+	parent.add_child(mesh)

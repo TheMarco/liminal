@@ -56,6 +56,28 @@ const PORTAL_PANOS := [
 	"res://textures/portals/construction_yard_2k.hdr",
 	"res://textures/portals/outdoor_umbrellas_2k.hdr",
 ]
+static var _portal_panos: Dictionary = {}
+
+
+static func prepare_floor() -> void:
+	for path in PORTAL_PANOS:
+		if not _portal_panos.has(path):
+			var tex := load(path) as Texture2D
+			if tex != null:
+				_portal_panos[path] = tex
+
+
+static func clear_runtime_cache() -> void:
+	_portal_panos.clear()
+
+
+static func _portal_pano(path: String) -> Texture2D:
+	var cached: Texture2D = _portal_panos.get(path)
+	if cached == null:
+		cached = load(path) as Texture2D
+		if cached != null:
+			_portal_panos[path] = cached
+	return cached
 
 ## Themes whose BLEED_PROPS row is a portable, self-contained prop and can
 ## therefore carry PLACEMENT/DUPLICATE. Airport luggage is a scatter set with
@@ -764,7 +786,7 @@ func _build_portal(floor_h: float, wall_dir: int, wall_along: float) -> void:
 	mat.shader = PORTAL_SHADER
 	var pano_path: String = PORTAL_PANOS[WorldGen.h(world_seed, cell.x,
 		cell.y, 9337) % PORTAL_PANOS.size()]
-	mat.set_shader_parameter("pano", load(pano_path))
+	mat.set_shader_parameter("pano", _portal_pano(pano_path))
 	mat.set_shader_parameter("yaw_offset",
 		WorldGen.r01(world_seed, cell.x, cell.y, 9341))
 	mat.set_shader_parameter("seed_phase",
@@ -815,7 +837,7 @@ func _build_turned(floor_h: float) -> void:
 	if row.is_empty():
 		_build_universal_photo(floor_h)
 		return
-	var scene := load(row[0]) as PackedScene
+	var scene := Chunk._prop_scene(row[0])
 	if scene == null:
 		return
 	var scl := float(row[1])
@@ -885,7 +907,7 @@ func _build_missing(floor_h: float) -> void:
 	var row: Array = Chunk.BLEED_PROPS.get(theme, [])
 	if row.is_empty():
 		return
-	var scene := load(row[0]) as PackedScene
+	var scene := Chunk._prop_scene(row[0])
 	if scene == null:
 		return
 	var scl := float(row[1])
@@ -980,7 +1002,7 @@ func _build_props(floor_h: float, count: int) -> void:
 	if row.is_empty():
 		_build_universal_photo(floor_h)
 		return
-	var scene := load(row[0]) as PackedScene
+	var scene := Chunk._prop_scene(row[0])
 	if scene == null:
 		return
 	var scl := float(row[1])
@@ -1123,7 +1145,7 @@ func _build_giant(floor_h: float) -> void:
 	var row: Array = Chunk.BLEED_PROPS.get(theme, [])
 	if row.is_empty():
 		return
-	var scene := load(row[0]) as PackedScene
+	var scene := Chunk._prop_scene(row[0])
 	if scene == null:
 		return
 	var scl := float(row[1])
@@ -1206,7 +1228,7 @@ func _build_ring(floor_h: float) -> void:
 	var row: Array = Chunk.BLEED_PROPS.get(theme, [])
 	if row.is_empty():
 		return
-	var scene := load(row[0]) as PackedScene
+	var scene := Chunk._prop_scene(row[0])
 	if scene == null:
 		return
 	var scl := float(row[1])

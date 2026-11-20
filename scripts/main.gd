@@ -96,6 +96,8 @@ var _charging_panel: VBoxContainer
 var _charging_label: Label
 var _charging_meter: VhsOsd.Meter
 var _charger_distance: Label
+var _last_charger_text := ""
+var _last_charger_tier := -1
 var _events: EnvironmentEvents
 var _photo_director: PhotoDirector
 var _photo_camera: PhotoCamera
@@ -3084,11 +3086,17 @@ func _update_flashlight_hud() -> void:
 		and not is_instance_valid(_descent_intro) and not is_instance_valid(_descent_summary)
 	if _charger_distance.visible:
 		var station := ChargingStation.nearest_to(player)
-		_charger_distance.text = "CHARGING" if player.is_charging() else (
+		var next_text := "CHARGING" if player.is_charging() else (
 			"CHARGER %dm" % maxi(1, ceili(player.global_position.distance_to(station.global_position))) \
 			if station != null else "CHARGER --")
-		VhsOsd.set_ink(_charger_distance, VhsOsd.RED if level <= 0.1 \
-			else (VhsOsd.AMBER if level <= 0.25 else VhsOsd.INK_DIM))
+		if next_text != _last_charger_text:
+			_last_charger_text = next_text
+			_charger_distance.text = next_text
+		var next_tier := 0 if level <= 0.1 else (1 if level <= 0.25 else 2)
+		if next_tier != _last_charger_tier:
+			_last_charger_tier = next_tier
+			VhsOsd.set_ink(_charger_distance, VhsOsd.RED if next_tier == 0 \
+				else (VhsOsd.AMBER if next_tier == 1 else VhsOsd.INK_DIM))
 
 
 func award_emergency_flash(photo_id: String) -> bool:

@@ -33,22 +33,30 @@ func configure(samples: Dictionary, hdr_peak: float) -> void:
 	instances.mesh = _mesh()
 	instances.instance_count = fragment_count
 	instances.visible_instance_count = fragment_count
+	# Bulk-pack the 3x4 transform + 4-float custom_data (16 floats/instance)
+	# into a single MultiMesh buffer upload instead of 10,400 API calls.
+	var buf := PackedFloat32Array()
+	buf.resize(fragment_count * 16)
 	for index in fragment_count:
-		var seed := fmod(sin(float(index + 1) * 91.713 + points[index].dot(
-			Vector3(17.17, 43.31, 29.53))) * 43758.5453, 1.0)
+		var pt := points[index]
+		var seed := fmod(sin(float(index + 1) * 91.713 + pt.x * 17.17 + pt.y * 43.31 + pt.z * 29.53) * 43758.5453, 1.0)
 		seed = seed + 1.0 if seed < 0.0 else seed
 		# 0.5-1.2cm, with irregular faceted proportions. Density, not oversized
 		# sprites, reconstructs the original body.
 		var size := lerpf(0.005, 0.012, seed)
-		var scale := Vector3(size * lerpf(0.60, 1.15, fmod(seed * 7.1, 1.0)),
-			size * lerpf(0.75, 1.45, fmod(seed * 11.7, 1.0)),
-			size * lerpf(0.55, 1.05, fmod(seed * 17.3, 1.0)))
-		instances.set_instance_transform(index,
-			Transform3D(Basis.IDENTITY.scaled(scale), points[index]))
+		var base := index * 16
+		buf[base] = size * lerpf(0.60, 1.15, fmod(seed * 7.1, 1.0))
+		buf[base + 3] = pt.x
+		buf[base + 5] = size * lerpf(0.75, 1.45, fmod(seed * 11.7, 1.0))
+		buf[base + 7] = pt.y
+		buf[base + 10] = size * lerpf(0.55, 1.05, fmod(seed * 17.3, 1.0))
+		buf[base + 11] = pt.z
 		var normal := normals[index].normalized()
-		instances.set_instance_custom_data(index, Color(
-			normal.x * 0.5 + 0.5, normal.y * 0.5 + 0.5,
-			normal.z * 0.5 + 0.5, seed))
+		buf[base + 12] = normal.x * 0.5 + 0.5
+		buf[base + 13] = normal.y * 0.5 + 0.5
+		buf[base + 14] = normal.z * 0.5 + 0.5
+		buf[base + 15] = seed
+	instances.buffer = buf
 	multimesh = instances
 	set_process(true)
 

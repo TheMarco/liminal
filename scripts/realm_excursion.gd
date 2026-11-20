@@ -111,6 +111,7 @@ func refresh_graphics_quality(settings: GameSettings) -> void:
 		GraphicsQuality.apply_environment(_source["env"], settings)
 	if is_instance_valid(preview):
 		GraphicsQuality.apply_viewport_features(preview, settings, game.opts.notaa if is_instance_valid(game) else false)
+		preview.positional_shadow_atlas_size = mini(preview.positional_shadow_atlas_size, 2048)
 
 
 func allows_perception_effect() -> bool:
@@ -234,6 +235,7 @@ func _build_preview() -> void:
 	preview.use_hdr_2d = true
 	preview.size = Vector2i(960, 600)
 	GraphicsQuality.apply_viewport_features(preview, game._settings, game.opts.notaa)
+	preview.positional_shadow_atlas_size = mini(preview.positional_shadow_atlas_size, 2048)
 	preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(preview)
 	_preview_environment = WorldEnvironment.new()
@@ -516,9 +518,13 @@ func _process(dt: float) -> void:
 		# it there was paying for a second scene throughout every approach.
 		# The aperture is visible beyond the audio/entry cue's 18m range.
 		# Keeping its viewport disabled there exposed a blank white texture.
-		var in_view := player.cam.is_position_in_frustum(
-			source_centre + Vector3.UP * seal.height * 0.5)
-		var show_preview: bool = (nearby or in_view) and (seal.opened or game._photo_camera._raised)
+		var centre_mid := source_centre + Vector3.UP * seal.height * 0.5
+		var half_right := source_forward.cross(Vector3.UP).normalized() * (seal.width * 0.5)
+		var in_view := player.cam.is_position_in_frustum(centre_mid) \
+			or player.cam.is_position_in_frustum(centre_mid - half_right) \
+			or player.cam.is_position_in_frustum(centre_mid + half_right)
+		var show_preview: bool = (in_view or offset.length_squared() < 9.0) \
+			and (seal.opened or game._photo_camera._raised)
 		preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS if show_preview else SubViewport.UPDATE_DISABLED
 		if show_preview:
 			var vp := game.get_viewport()

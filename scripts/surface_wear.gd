@@ -82,7 +82,37 @@ static func apply(chunk: Node3D, context: ChunkBuildContext) -> void:
 	pass_._build()
 
 
+static func queue_apply(chunk: Chunk, context: ChunkBuildContext) -> void:
+	if not enabled:
+		return
+	var pass_ := SurfaceWear.new()
+	pass_.host = chunk
+	pass_.ctx = context
+	# Bind pass_ as an argument (Callables hold RefCounted targets weakly, but
+	# bound Variant arguments retain strong references until the job runs).
+	chunk.queue_build_job(SurfaceWear._run_step.bind(pass_, 0))
+	chunk.queue_build_job(SurfaceWear._run_step.bind(pass_, 1))
+	chunk.queue_build_job(SurfaceWear._run_step.bind(pass_, 2))
+
+
+static func _run_step(pass_: SurfaceWear, step: int) -> void:
+	match step:
+		0:
+			pass_._build_scan()
+		1:
+			pass_._build_architecture()
+		2:
+			pass_._build_fixtures()
+			pass_.host = null
+
+
 func _build() -> void:
+	_build_scan()
+	_build_architecture()
+	_build_fixtures()
+
+
+func _build_scan() -> void:
 	var district_cell := Vector2i(floori(float(ctx.room_root.x + 3) / 6.0),
 		floori(float(ctx.room_root.y + 3) / 6.0))
 	district = posmod(WorldGen.h(ctx.world_seed, district_cell.x,
@@ -115,11 +145,17 @@ func _build() -> void:
 	# Stable physical ordering, independent of scene instance IDs/names.
 	walls.sort_custom(func(a: Face, b: Face): return a.salt < b.salt)
 	floors.sort_custom(func(a: Face, b: Face): return a.center.y > b.center.y)
+
+
+func _build_architecture() -> void:
 	_architectural_wear()
 	_threshold_wear()
 	_root_damage()
 	_vent_dust()
 	_fixing_runoff()
+
+
+func _build_fixtures() -> void:
 	_fixture_wear()
 	host.set_meta("surface_wear_summary", {"patches": patches,
 		"prop_meshes": prop_meshes, "district": district,
@@ -798,10 +834,12 @@ func _prop_overlay(prop: Dictionary, profile: int, limit: int) -> void:
 		return
 	var seed_ := float(_hash(prop.foot, 28501) % 8192)
 	var selected := 0
-	# Preserve the original two sorts and their tie ordering. Only the costly
-	# comparator arithmetic is cached, not the resulting order.
-	prop.meshes.sort_custom(func(a: Dictionary, b: Dictionary):
-		return a.wear_size_squared > b.wear_size_squared)
+	# Sort each prop's meshes once; the second overlay pass reuses the exact
+	# same ordering without re-sorting hundreds of imported sub-meshes.
+	if not prop.get("wear_sorted", false):
+		prop.meshes.sort_custom(func(a: Dictionary, b: Dictionary):
+			return a.wear_size_squared > b.wear_size_squared)
+		prop["wear_sorted"] = true
 	for entry: Dictionary in prop.meshes:
 		if prop_meshes >= MAX_PROP_MESHES or selected >= limit:
 			break

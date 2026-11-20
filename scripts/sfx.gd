@@ -252,3 +252,28 @@ static func water_exit() -> Array:
 
 static func water_wade() -> AudioStream:
 	return _stream("sound-water-wade", true)
+
+
+## Preload recorded gameplay cues behind the opaque floor transition so scares,
+## whispers, deaths, footsteps and water entries never block on disk I/O mid-frame.
+static func prepare_floor(theme: int) -> void:
+	if has_bed(theme):
+		bed(theme)
+	for surface in WALKS:
+		walk(surface)
+	heartbeat()
+	breathing()
+	for i in SCARE_MEANS.size():
+		scare(i)
+	for i in WHISPER_MEANS.size():
+		whisper(i)
+	for i in DEATH_MEANS.size():
+		death(i)
+	for i in PLAYER_DEATH_MEANS.size():
+		player_death(i)
+	if theme == 0:
+		slots()
+	elif theme in [2, 9]:
+		water_enter()
+		water_exit()
+		water_wade()

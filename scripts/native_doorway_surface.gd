@@ -10,6 +10,10 @@ const SPARK_COUNT := 288
 const WISP_COUNT := 56
 const TRANSITION_SECONDS := 0.9
 const HOT_BURST_INTERVAL := 0.12
+## Cache dynamically spliced doorway shaders per source shader so opening a
+## native doorway never forces a fresh GPU shader compilation mid-play.
+static var _magic_shaders: Dictionary = {}
+static var _casing_shaders: Dictionary = {}
 var phase := 0.0
 var _collision_phase := -1.0
 var chunks: Array[Chunk] = []
@@ -115,13 +119,7 @@ func setup(left: Chunk, right: Chunk, left_dir := 2, initial_phase := 0.0,
 	rim = MeshInstance3D.new()
 	rim_material = material
 	if left.theme == 1 and material is ShaderMaterial:
-		rim_material = material.duplicate()
-		var shader := Shader.new()
-		shader.code = material.shader.code.replace("uniform float ceil_h", "uniform float casing_amount = 0.0;\nuniform vec4 casing_color : source_color;\nuniform float ceil_h") \
-			.replace("ALBEDO = c;", "ALBEDO = mix(c, casing_color.rgb, casing_amount);") \
-			.replace("ROUGHNESS = 0.42;", "ROUGHNESS = mix(0.42, 0.5, casing_amount);") \
-			.replace("SPECULAR = 0.35;", "SPECULAR = mix(0.35, 0.5, casing_amount);")
-		rim_material.shader = shader
+		rim_material = _casing_material(material)
 		rim_material = _magic_material(rim_material)
 		(rim_material as ShaderMaterial).set_shader_parameter("casing_color", Mats.paint_white().albedo_color)
 	rim.material_override = rim_material
@@ -219,14 +217,120 @@ func setup(left: Chunk, right: Chunk, left_dir := 2, initial_phase := 0.0,
 	add_child(hot_fragments)
 	pose(initial_phase)
 
-func _magic_material(source: ShaderMaterial) -> ShaderMaterial:
+static func clear_runtime_cache() -> void:
+	_magic_shaders.clear()
+	_casing_shaders.clear()
+
+
+static func _casing_material(source: ShaderMaterial) -> ShaderMaterial:
 	var material: ShaderMaterial = source.duplicate()
-	var shader := Shader.new()
-	shader.code = source.shader.code.replace("shader_type spatial;", "shader_type spatial;\n#include \"res://shaders/doorway_magic.gdshaderinc\"") \
-		.replace("void vertex() {", "void vertex() {\n magic_local = VERTEX;") \
-		.replace("SPECULAR =", "vec4 magic = doorway_magic(magic_local);\n ALBEDO *= 1.0+magic.a;\n EMISSION = magic.rgb;\n SPECULAR =")
+	var base := source.shader
+	var shader: Shader = _casing_shaders.get(base)
+	if shader == null:
+		shader = Shader.new()
+		shader.code = base.code.replace("uniform float ceil_h", "uniform float casing_amount = 0.0;\nuniform vec4 casing_color : source_color;\nuniform float ceil_h") \
+			.replace("ALBEDO = c;", "ALBEDO = mix(c, casing_color.rgb, casing_amount);") \
+			.replace("ROUGHNESS = 0.42;", "ROUGHNESS = mix(0.42, 0.5, casing_amount);") \
+			.replace("SPECULAR = 0.35;", "SPECULAR = mix(0.35, 0.5, casing_amount);")
+		_casing_shaders[base] = shader
 	material.shader = shader
 	return material
+
+
+static func _magic_material(source: ShaderMaterial) -> ShaderMaterial:
+	var material: ShaderMaterial = source.duplicate()
+	var base := source.shader
+	var shader: Shader = _magic_shaders.get(base)
+	if shader == null:
+		shader = Shader.new()
+		shader.code = base.code.replace("shader_type spatial;", "shader_type spatial;\n#include \"res://shaders/doorway_magic.gdshaderinc\"") \
+			.replace("void vertex() {", "void vertex() {\n magic_local = VERTEX;") \
+			.replace("SPECULAR =", "vec4 magic = doorway_magic(magic_local);\n ALBEDO *= 1.0+magic.a;\n EMISSION = magic.rgb;\n SPECULAR =")
+		_magic_shaders[base] = shader
+	material.shader = shader
+	return material
+
+
+static func prepare_render_samples(parent: Node3D, wall_materials: Array[ShaderMaterial], theme: int) -> void:
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.5, 0.5)
+	var x := -5.0
+	var seen := {}
+	for source in wall_materials:
+		if source == null or source.shader == null or seen.has(source.shader):
+			continue
+		var code := source.shader.code
+		if not code.contains("void vertex() {") or not code.contains("SPECULAR ="):
+			continue
+		seen[source.shader] = true
+		var magic := _magic_material(source)
+		magic.set_shader_parameter("magic_amount", 0.5)
+		var sample := MeshInstance3D.new()
+		sample.mesh = quad
+		sample.material_override = magic
+		sample.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		sample.position = Vector3(x, 3.2, 2.5)
+		parent.add_child(sample)
+		x += 0.65
+		if theme == 1 and code.contains("uniform float ceil_h") and code.contains("ALBEDO = c;"):
+			var casing := _magic_material(_casing_material(source))
+			casing.set_shader_parameter("magic_amount", 0.5)
+			var csample := MeshInstance3D.new()
+			csample.mesh = quad
+			csample.material_override = casing
+			csample.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+			csample.position = Vector3(x, 3.2, 2.5)
+			parent.add_child(csample)
+			x += 0.65
+	var spark_mm := MultiMesh.new()
+	spark_mm.transform_format = MultiMesh.TRANSFORM_3D
+	spark_mm.use_colors = true
+	spark_mm.use_custom_data = true
+	spark_mm.instance_count = 1
+	spark_mm.mesh = quad
+	spark_mm.set_instance_transform(0, Transform3D.IDENTITY)
+	spark_mm.set_instance_color(0, Color.WHITE)
+	spark_mm.set_instance_custom_data(0, Color(0.5, 0.5, 0.5, 1.0))
+	var spark_inst := MultiMeshInstance3D.new()
+	spark_inst.multimesh = spark_mm
+	spark_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	spark_inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	var spark_mat := ShaderMaterial.new()
+	spark_mat.shader = preload("res://shaders/doorway_sparks.gdshader")
+	spark_inst.material_override = spark_mat
+	spark_inst.position = Vector3(-4.0, 2.4, 2.5)
+	parent.add_child(spark_inst)
+	var mist_shader := preload("res://shaders/doorway_mist.gdshader")
+	var veil_inst := MeshInstance3D.new()
+	veil_inst.mesh = quad
+	veil_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	veil_inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	var veil_mat := ShaderMaterial.new()
+	veil_mat.shader = mist_shader
+	veil_mat.set_shader_parameter("membrane", true)
+	veil_inst.material_override = veil_mat
+	veil_inst.position = Vector3(-3.2, 2.4, 2.5)
+	parent.add_child(veil_inst)
+	var mist_inst := MultiMeshInstance3D.new()
+	mist_inst.multimesh = spark_mm
+	mist_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mist_inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	var mist_mat := ShaderMaterial.new()
+	mist_mat.shader = mist_shader
+	mist_inst.material_override = mist_mat
+	mist_inst.position = Vector3(-2.4, 2.4, 2.5)
+	parent.add_child(mist_inst)
+	var edge_inst := MeshInstance3D.new()
+	edge_inst.mesh = quad
+	edge_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	edge_inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	var edge_mat := ShaderMaterial.new()
+	edge_mat.shader = preload("res://shaders/doorway_soft_edge.gdshader")
+	edge_mat.render_priority = -10
+	edge_mat.set_shader_parameter("magic_amount", 0.5)
+	edge_inst.material_override = edge_mat
+	edge_inst.position = Vector3(-1.6, 2.4, 2.5)
+	parent.add_child(edge_inst)
 
 func advance_magic(dt: float) -> void:
 	magic_clock += dt

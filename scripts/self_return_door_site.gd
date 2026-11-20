@@ -110,6 +110,9 @@ func refresh_graphics_quality(settings: GameSettings, disable_taa := false) -> v
 		GraphicsQuality.apply_viewport_features(_preview, settings, disable_taa)
 	else:
 		GraphicsQuality.configure_shadow_atlas(_preview)
+	# A doorway peek does not need a second 8K shadow atlas alongside the main
+	# world; uniform 64-tile quadrants stay cached at 2048 without VRAM bloat.
+	_preview.positional_shadow_atlas_size = mini(_preview.positional_shadow_atlas_size, 2048)
 	_sync_preview_resolution()
 
 
@@ -138,8 +141,10 @@ func pose(progress: float, _time: float) -> void:
 
 func _process(dt: float) -> void:
 	if _preview == null or not is_instance_valid(_actor): return
-	var near := _actor.cam.global_position.distance_to(global_position) < 16.0
-	var should_render := openness > 0.02 and near and _update_preview_camera()
+	var dist_sq := _actor.cam.global_position.distance_squared_to(global_position)
+	var near := dist_sq < 256.0
+	var in_view := near and (dist_sq < 9.0 or _window_in_view())
+	var should_render := openness > 0.02 and in_view and _update_preview_camera()
 	if should_render:
 		_sync_preview_resolution()
 	_preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS \
@@ -148,6 +153,19 @@ func _process(dt: float) -> void:
 	_frame.visible = openness >= 0.96
 	_fallback.visible = openness >= 0.96 and not _window.visible
 	_leak.update_cue(dt, near, false)
+
+
+func _window_in_view() -> bool:
+	var cam := _actor.cam
+	var half_w := WIDTH * 0.5
+	var center := _window.global_position
+	var right := global_basis.x * half_w
+	var up := Vector3.UP * (HEIGHT * 0.45)
+	return cam.is_position_in_frustum(center) \
+		or cam.is_position_in_frustum(center - right) \
+		or cam.is_position_in_frustum(center + right) \
+		or cam.is_position_in_frustum(center + up) \
+		or cam.is_position_in_frustum(center - up)
 
 
 func _update_preview_camera() -> bool:

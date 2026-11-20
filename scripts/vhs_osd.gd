@@ -137,13 +137,24 @@ class Meter extends Control:
 	## bright rooms without adding a modern UI panel around the meter.
 	var channel_alpha := 0.0
 	var _blink_t := 0.0
+	var _last_drawn_state: Array = []
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _process(dt: float) -> void:
 		_blink_t += dt
-		if visible:
+		if not visible:
+			return
+		var low := value <= low_threshold
+		var blink_hidden := low and blink_when_low and fmod(_blink_t, 0.9) > 0.55
+		var lit := int(ceil(clampf(value, 0.0, 1.0) * float(segments) - 0.0001))
+		var tier := 0 if low else (1 if value <= warn_threshold else 2)
+		var state := [lit, tier, blink_hidden, text, font_size, size,
+			segments, battery_glyph, right_align, channel_alpha,
+			Localization.current_locale()]
+		if state != _last_drawn_state:
+			_last_drawn_state = state
 			queue_redraw()
 
 	func _draw() -> void:
@@ -272,6 +283,7 @@ class Frame extends Control:
 	## Set by PhotoCamera; purely presentational here.
 	var interference := 0.0
 	var _t := 0.0
+	var _last_drawn_state: Array = []
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -279,7 +291,16 @@ class Frame extends Control:
 
 	func _process(dt: float) -> void:
 		_t += dt
-		if visible:
+		if not visible:
+			return
+		if interference > 0.01:
+			_last_drawn_state.clear()
+			queue_redraw()
+			return
+		var state := [maxi(0, floori(_t)), recording_day_offset, font_size,
+			inset, size, Localization.current_locale()]
+		if state != _last_drawn_state:
+			_last_drawn_state = state
 			queue_redraw()
 
 	func _draw() -> void:

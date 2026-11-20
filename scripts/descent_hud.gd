@@ -40,6 +40,7 @@ var _photo_proximity := 0.0
 var _warn_t := 0.0
 var _last_label_text := ""
 var _last_distance_text := ""
+var _last_photo_warn_text := ""
 var _last_viewport_size := Vector2.ZERO
 var _last_wide := false
 
@@ -208,12 +209,18 @@ func _process(dt: float) -> void:
 	# anomaly instead of relying on a transient proximity blink.
 	if evidence_target != Vector3.INF:
 		var delta := evidence_target - player.global_position
-		_photo_warn.text = "EVIDENCE %dm" % maxi(1,
+		var warn_text := "EVIDENCE %dm" % maxi(1,
 			roundi(Vector2(delta.x, delta.z).length()))
+		if warn_text != _last_photo_warn_text:
+			_last_photo_warn_text = warn_text
+			_photo_warn.text = warn_text
 		_photo_warn.visible = true
 	elif _photo_proximity > 0.12:
-		_photo_warn.text = "SOMETHING HERE IS WRONG" \
+		var warn_text := "SOMETHING HERE IS WRONG" \
 			if _photo_proximity >= 0.42 else "SOMETHING WRONG NEARBY"
+		if warn_text != _last_photo_warn_text:
+			_last_photo_warn_text = warn_text
+			_photo_warn.text = warn_text
 		_warn_t += dt
 		var period := lerpf(0.9, 0.3, _photo_proximity)
 		_photo_warn.visible = fmod(_warn_t, period) < period * 0.6

@@ -391,9 +391,22 @@ func _pool_floor_ceiling() -> void:
 		return
 	scene.box(Vector3(WorldGen.CELL_SIZE / 2.0, -0.15, WorldGen.CELL_SIZE / 2.0), Vector3(WorldGen.CELL_SIZE, 0.3, WorldGen.CELL_SIZE), Mats.pool_tile())
 	var layout := _pool_water_layout()
+	scene.build_job(_pool_basin_deck_and_coping.bind(layout))
+	scene.build_job(_pool_water_surface.bind(layout))
+	# Every generated basin gets exactly one usable exit. Room decoration no
+	# longer decides whether the player is allowed to climb out.
+	scene.build_job(_pool_compact_ladder.bind(2240))
+	if ctx.style == WorldGen.POOL_STAIRS:
+		scene.build_job(_pool_walk_in_stairs.bind(layout))
+	scene.build_job(_pool_place_equipment.bind(layout))
+	scene.build_job(_pool_edge_steps)
+	if WorldGen.pool_grand_cistern(ctx.world_seed, ctx.cell):
+		scene.build_job(_pool_grand_cistern_fittings)
+
+
+func _pool_water_surface(layout: Dictionary) -> void:
 	var center: Vector2 = layout["center"]
 	var size: Vector2 = layout["size"]
-	_pool_basin_deck_and_coping(layout)
 	# The surface itself carries no collider: you wade through it, and the
 	# basin floor underneath is what holds you up.
 	# A subdivided plane, never a box. A box showed its side faces at every
@@ -436,27 +449,22 @@ func _pool_floor_ceiling() -> void:
 	for i in outline.size(): outline[i] -= surface_center
 	water.set_meta("pool_water_outline", outline)
 	scene.add_node(water)
-	# Every generated basin gets exactly one usable exit. Room decoration no
-	# longer decides whether the player is allowed to climb out.
-	_pool_compact_ladder(2240)
-	if ctx.style == WorldGen.POOL_STAIRS:
-		_pool_walk_in_stairs(layout)
-	_pool_place_equipment(layout)
-	_pool_edge_steps()
-	if WorldGen.pool_grand_cistern(ctx.world_seed, ctx.cell):
-		_pool_grand_cistern_piers()
-		var offset := ctx.cell - WorldGen.room_id(ctx.world_seed, ctx.cell)
-		if offset == Vector2i.ONE:
-			_pool_mattress_float(2380, true)
-		elif offset == Vector2i.RIGHT:
-			_pool_striped_float(2381, true)
-		elif offset == Vector2i.DOWN:
-			_pool_float(2382, true)
-		if ctx.random01(2384) < 0.45:
-			if ctx.random01(2385) < 0.5:
-				_pool_striped_float(2386, true)
-			else:
-				_pool_float(2387, true)
+
+
+func _pool_grand_cistern_fittings() -> void:
+	_pool_grand_cistern_piers()
+	var offset := ctx.cell - WorldGen.room_id(ctx.world_seed, ctx.cell)
+	if offset == Vector2i.ONE:
+		_pool_mattress_float(2380, true)
+	elif offset == Vector2i.RIGHT:
+		_pool_striped_float(2381, true)
+	elif offset == Vector2i.DOWN:
+		_pool_float(2382, true)
+	if ctx.random01(2384) < 0.45:
+		if ctx.random01(2385) < 0.5:
+			_pool_striped_float(2386, true)
+		else:
+			_pool_float(2387, true)
 
 
 func _pool_place_equipment(layout: Dictionary) -> void:
@@ -549,32 +557,32 @@ func _pool_basin_deck_and_coping(layout: Dictionary) -> void:
 	north_x1 -= right_connection.x
 	south_x1 -= right_connection.y
 	if has_left:
-		_pool_vertical_coping(
-			x0, left_z0, left_z1, Vector2(1.0, 0.0))
+		scene.build_job(_pool_vertical_coping.bind(
+			x0, left_z0, left_z1, Vector2(1.0, 0.0)))
 	if has_right:
-		_pool_vertical_coping(
-			x1, right_z0, right_z1, Vector2(-1.0, 0.0))
+		scene.build_job(_pool_vertical_coping.bind(
+			x1, right_z0, right_z1, Vector2(-1.0, 0.0)))
 	if has_north:
-		_pool_horizontal_coping(
-			z0, north_x0, north_x1, Vector2(0.0, 1.0))
+		scene.build_job(_pool_horizontal_coping.bind(
+			z0, north_x0, north_x1, Vector2(0.0, 1.0)))
 	if has_south:
-		_pool_horizontal_coping(
-			z1, south_x0, south_x1, Vector2(0.0, -1.0))
+		scene.build_job(_pool_horizontal_coping.bind(
+			z1, south_x0, south_x1, Vector2(0.0, -1.0)))
 	if rounded_corner != 0 and has_left and has_north:
-		_pool_square_coping_corner_arc(Vector2(x0, z0), 0)
+		scene.build_job(_pool_square_coping_corner_arc.bind(Vector2(x0, z0), 0))
 	if rounded_corner != 1 and has_right and has_north:
-		_pool_square_coping_corner_arc(Vector2(x1, z0), 1)
+		scene.build_job(_pool_square_coping_corner_arc.bind(Vector2(x1, z0), 1))
 	if rounded_corner != 2 and has_right and has_south:
-		_pool_square_coping_corner_arc(Vector2(x1, z1), 2)
+		scene.build_job(_pool_square_coping_corner_arc.bind(Vector2(x1, z1), 2))
 	if rounded_corner != 3 and has_left and has_south:
-		_pool_square_coping_corner_arc(Vector2(x0, z1), 3)
+		scene.build_job(_pool_square_coping_corner_arc.bind(Vector2(x0, z1), 3))
 	if rounded_corner >= 0:
-		_pool_compact_rounded_basin_corner(layout)
+		scene.build_job(_pool_compact_rounded_basin_corner.bind(layout))
 	if ctx.style != WorldGen.POOL_CHANNEL:
 		for dir_value in layout.get("edge_links", []):
 			var dir := int(dir_value)
 			if dir < 2:
-				_pool_connected_coping_transition(layout, dir)
+				scene.build_job(_pool_connected_coping_transition.bind(layout, dir))
 
 
 func _pool_connected_coping_transition(
@@ -2354,12 +2362,12 @@ func _pool_compact_ladder(salt: int) -> void:
 func _pool_basin_room() -> void:
 	var piers := _pool_piers(
 		2300, 1 + int(ctx.random01(2301) * 1.99))
-	_pool_pier_island(piers)
+	scene.build_job(_pool_pier_island.bind(piers))
 	if ctx.random01(2302) < 0.42:
-		_pool_window(
+		scene.build_job(_pool_window.bind(
 			0 if ctx.random01(2303) < 0.5 else 1,
-			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2304)))
-	_pool_float_mix(2305)
+			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2304))))
+	scene.build_job(_pool_float_mix.bind(2305))
 
 
 func _pool_channel_room() -> void:
@@ -2644,15 +2652,15 @@ func _pool_gallery_room() -> void:
 
 func _pool_cistern_room() -> void:
 	if WorldGen.pool_grand_cistern(ctx.world_seed, ctx.cell):
-		_pool_flamingo_float(2376, true)
+		scene.build_job(_pool_flamingo_float.bind(2376, true))
 		return
 	var piers := _pool_piers(2370, 2 + int(ctx.random01(2372) * 1.99))
-	_pool_pier_island(piers)
+	scene.build_job(_pool_pier_island.bind(piers))
 	if ctx.random01(2373) < 0.55:
-		_pool_window(
+		scene.build_job(_pool_window.bind(
 			int(ctx.random01(2374) * 4.0) % 4,
-			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2375)))
-	_pool_float_mix(2371)
+			lerpf(3.0, WorldGen.CELL_SIZE - 3.0, ctx.random01(2375))))
+	scene.build_job(_pool_float_mix.bind(2371))
 
 
 func _pool_grand_cistern_piers() -> void:

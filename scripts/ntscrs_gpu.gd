@@ -146,6 +146,8 @@ var _history := RID()
 var _last_frame := -1
 var _last_field := -1
 var _history_parity := -1
+var _last_settings: Dictionary = {}
+var _settings_uploaded := false
 
 func setup(rd: RenderingDevice, extent: Vector2i) -> bool:
 	dispose()
@@ -229,11 +231,14 @@ func render(input: RID, frame_number: int, settings: Dictionary) -> RID:
 	var weave := history_enabled and _history_parity == (2 - field)
 	_last_frame = frame_number
 	_last_field = field
-	var values := PackedFloat32Array()
-	values.resize(62)
-	for i in 62:
-		values[i] = float(settings.get(KEYS[i], DEFAULTS[KEYS[i]]))
-	_rd.buffer_update(_settings, 0, 62 * 4, values.to_byte_array())
+	if not _settings_uploaded or settings != _last_settings:
+		var values := PackedFloat32Array()
+		values.resize(62)
+		for i in 62:
+			values[i] = float(settings.get(KEYS[i], DEFAULTS[KEYS[i]]))
+		_rd.buffer_update(_settings, 0, 62 * 4, values.to_byte_array())
+		_last_settings = settings.duplicate()
+		_settings_uploaded = true
 	var push := PackedByteArray()
 	push.resize(32)
 	push.encode_s32(0, _extent.x)
@@ -274,4 +279,6 @@ func dispose() -> void:
 	_last_frame = -1
 	_last_field = -1
 	_history_parity = -1
+	_last_settings.clear()
+	_settings_uploaded = false
 	_rd = null

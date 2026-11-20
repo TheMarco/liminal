@@ -491,10 +491,11 @@ func _take_photo() -> void:
 		_photo.visible = true
 		_mask.visible = false
 		_reticle.visible = false
-		var source_size := Vector2(image.get_size())
-		var scale := maxf(review_rect.size.x / source_size.x,
-			review_rect.size.y / source_size.y)
-		var crop := (source_size * scale - review_rect.size) * 0.5
+		# Evidence marks were projected in the live viewport's pixel space.
+		var mark_source_size := Vector2(get_viewport().size)
+		var scale := maxf(review_rect.size.x / maxf(1.0, mark_source_size.x),
+			review_rect.size.y / maxf(1.0, mark_source_size.y))
+		var crop := (mark_source_size * scale - review_rect.size) * 0.5
 		for i in marks.size():
 			var m := marks[i]
 			marks[i] = Rect2(m.position * scale + review_rect.position - crop,
@@ -735,7 +736,22 @@ func _render_snapshot() -> Image:
 		add_child(_snap_viewport)
 		_snap_cam = Camera3D.new()
 		_snap_viewport.add_child(_snap_cam)
-	_snap_viewport.size = viewport.size
+	# Match pipeline-affecting viewport features so the first shutter never
+	# compiles new variants, and cap the snapshot at the album's maximum edge
+	# to avoid 4K GPU readbacks and main-thread Lanczos downsampling.
+	for feature in ["msaa_3d", "msaa_2d", "use_taa", "use_hdr_2d", "screen_space_aa",
+			"positional_shadow_atlas_16_bits"]:
+		_snap_viewport.set(feature, viewport.get(feature))
+	_snap_viewport.positional_shadow_atlas_size = mini(viewport.positional_shadow_atlas_size, 2048)
+	GraphicsQuality.configure_shadow_atlas(_snap_viewport)
+	var target_size := Vector2i(viewport.size)
+	var longest := maxi(target_size.x, target_size.y)
+	if longest > PhotoAlbumStore.MAX_IMAGE_EDGE:
+		var snap_scale := float(PhotoAlbumStore.MAX_IMAGE_EDGE) / float(longest)
+		target_size = Vector2i(
+			maxi(1, roundi(target_size.x * snap_scale)),
+			maxi(1, roundi(target_size.y * snap_scale)))
+	_snap_viewport.size = target_size
 	_snap_viewport.world_3d = player.get_world_3d()
 	var cam := player.cam
 	_snap_cam.global_transform = cam.global_transform
@@ -874,21 +890,28 @@ class EvidenceMarks extends Control:
 ## centre third, in the HUD's phosphor ink.
 class PhotoReticle extends Control:
 	var _feedback_label: Label
+	var _last_feedback := ""
+	var _last_focused := false
+	var _last_warmth := -1.0
+	var _last_size := Vector2.ZERO
 	var feedback := "":
 		set(value):
 			if feedback != value:
 				feedback = value
 				queue_redraw()
+				_sync_feedback_label()
 	var focused := false:
 		set(value):
 			if focused != value:
 				focused = value
 				queue_redraw()
+				_sync_feedback_label()
 	var warmth := 0.0:
 		set(value):
 			if absf(warmth - value) > 0.01:
 				warmth = value
 				queue_redraw()
+				_sync_feedback_label()
 
 	func _init() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -897,10 +920,22 @@ class PhotoReticle extends Control:
 	func _ready() -> void:
 		_feedback_label = VhsOsd.make_label(30)
 		add_child(_feedback_label)
+		_sync_feedback_label()
 
-	func _process(_delta: float) -> void:
-		_feedback_label.visible = not feedback.is_empty() and is_visible_in_tree()
-		if not _feedback_label.visible: return
+	func _sync_feedback_label() -> void:
+		if _feedback_label == null:
+			return
+		var show_label := not feedback.is_empty() and is_visible_in_tree()
+		_feedback_label.visible = show_label
+		if not show_label:
+			return
+		if feedback == _last_feedback and focused == _last_focused \
+				and absf(warmth - _last_warmth) <= 0.01 and size == _last_size:
+			return
+		_last_feedback = feedback
+		_last_focused = focused
+		_last_warmth = warmth
+		_last_size = size
 		_feedback_label.text = feedback
 		var fs := roundi(30.0 * maxf(1.0, minf(size.x / 960.0, size.y / 720.0)))
 		var width := VhsOsd.FONT.get_string_size(Localization.text(feedback), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
@@ -941,5 +976,6 @@ class PhotoReticle extends Control:
 			Vector2(cx, cy + patch * 0.55), c, 1.5 * scale)
 
 	func _notification(what: int) -> void:
-		if what == NOTIFICATION_RESIZED:
+		if what == NOTIFICATION_RESIZED or what == NOTIFICATION_VISIBILITY_CHANGED:
 			queue_redraw()
+			_sync_feedback_label()

@@ -1322,6 +1322,12 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 	# this entry, the first clock in a streamed room decodes during gameplay.
 	if p_theme in [1, 5, 6, 7]:
 		paths.append("res://models/cc0/wall_clock/wall_clock_1k.gltf")
+	paths.append_array([VhsRitual.TABLE_PATH, VhsRitual.TV_PATH, VhsRitual.VCR_PATH])
+	var order_idx := DescentRun.FIXED_ORDER.find(p_theme)
+	if order_idx >= 0 and order_idx + 1 < DescentRun.FIXED_ORDER.size():
+		var next_bleed: Array = BLEED_PROPS.get(DescentRun.FIXED_ORDER[order_idx + 1], [])
+		if not next_bleed.is_empty():
+			paths.append(str(next_bleed[0]))
 	paths.append_array(NOSTALGIA_PROPS.paths(p_theme))
 	return paths
 
@@ -1389,6 +1395,9 @@ static func prepare_floor_resources(p_theme: int) -> void:
 	_release_floor_caches()
 	Mats.clear_runtime_caches(true)
 	FloorResourcePreloader.prepare_floor(theme_prop_paths(p_theme))
+	SoundBank.prepare_floor(p_theme)
+	Sfx.prepare_floor(p_theme)
+	PhotoAnomaly.prepare_floor()
 	if p_theme in [5, 7, 8, 10, 11]:
 		SurfaceWear.prepare_floor()
 	if p_theme == 5:
@@ -1415,6 +1424,8 @@ static func _release_floor_caches() -> void:
 	preload("res://scripts/office_shadow_batch.gd").clear_cache()
 	preload("res://scripts/blackout_surfaces.gd").clear_cache()
 	preload("res://scripts/environment_breath_surface.gd").clear_runtime_cache()
+	preload("res://scripts/native_doorway_surface.gd").clear_runtime_cache()
+	PhotoAnomaly.clear_runtime_cache()
 	ProceduralDetails.clear_runtime_cache()
 	AirportGrandCeiling.clear_runtime_cache()
 	_attributed_scenes.clear()
@@ -1610,7 +1621,7 @@ func build_next_stage() -> bool:
 			for entry in _deferred_wall_art:
 				queue_build_job(_wall_art.bind(entry[0], entry[1], 1060 + entry[0] * 7))
 		6:
-			SurfaceWear.apply(self, _build_context)
+			SurfaceWear.queue_apply(self, _build_context)
 			_profile_stage("surface_wear", started)
 		7:
 			if anomaly_kind >= 0:
@@ -1678,7 +1689,10 @@ func prepare_runtime_rendering(room_light_fade_begin := 0.0) -> void:
 	if _rendering_prepared:
 		return
 	_rendering_prepared = true
+	var blackout_variants := {}
 	for mesh in find_children("*", "MeshInstance3D", true, false):
+		if not _blackout:
+			_blackout_surfaces.prepare_mesh(mesh, blackout_variants)
 		if _drop_small_shadow_caster(mesh):
 			continue
 		preload("res://scripts/fixture_lighting.gd").prepare_shadow_mesh(mesh)
@@ -7115,27 +7129,25 @@ func _descent_finish(actor: Node, finish: Area3D, approach: Area3D) -> void:
 
 ## Blackout is a reversible overlay. Snapshot each light's exact visible and
 ## energy state; restoring never resurrects a fixture that was already dead.
-func set_blackout(on: bool) -> void:
+func set_blackout(on: bool, variants: Dictionary = {}) -> void:
 	if is_instance_valid(_pool_reflection):
 		_pool_reflection.set_blackout(on)
 	if on:
 		if _blackout:
 			return
-		for node in find_children("*", "Light3D", true, false):
-			var light := node as Light3D
-			_blackout_lights[light] = [light.visible, light.light_energy]
-			light.visible = false
-		for node in find_children("*", "ReflectionProbe", true, false):
-			var probe := node as ReflectionProbe
-			if probe == _pool_reflection:
-				continue # its capture scheduling has its own blackout contract
-			_blackout_probes[probe] = [probe.intensity, probe.visible]
-			probe.intensity = 0.0
-			# Intensity only removes specular reflection: a cached probe can still
-			# supply diffuse room lighting. Disable the entire probe, and prevent
-			# freshly streamed UPDATE_ONCE probes capturing the unpowered room.
-			probe.visible = false
-		_blackout_surfaces.apply(self)
+		# Use the current tree, including props installed after the room was
+		# prepared. Lights, probes, meshes and labels share a single traversal.
+		var visuals := find_children("*", "VisualInstance3D", true, false)
+		for node in visuals:
+			if node is Light3D:
+				_blackout_lights[node] = [node.visible, node.light_energy]
+				node.visible = false
+			elif node is ReflectionProbe and node != _pool_reflection:
+				_blackout_probes[node] = [node.intensity, node.visible]
+				node.intensity = 0.0
+				# Hiding the probe also disables its diffuse contribution.
+				node.visible = false
+		_blackout_surfaces.apply_visuals(visuals, variants)
 		_blackout = true
 		return
 	if not _blackout:
@@ -7193,6 +7205,9 @@ func _apply_furniture_variant(variant: int) -> void:
 		var original_gid := int(original.get_meta("furnishing_group"))
 		occupied[original_gid] = _furnishing_group_rect(
 			original, group_colliders.get(original_gid, []))
+	# Moving furniture changes occupied footprints, never the room or its doors.
+	var room_bounds := _mutation_room_bounds().grow(-0.45)
+	var doorways := _doorway_clearance_rects()
 	var remove_pivots: Array[Node3D] = []
 	var remove_colliders: Array[Node] = []
 	var fallback_pivot: Node3D
@@ -7265,7 +7280,7 @@ func _apply_furniture_variant(variant: int) -> void:
 				c.rotation.y = base.basis.get_euler().y + turn
 			var candidate := _furnishing_group_rect(
 				pivot, group_colliders.get(gid, []))
-			if _furnishing_variant_rect_valid(candidate, gid, occupied):
+			if _furnishing_variant_rect_valid(candidate, gid, occupied, room_bounds, doorways):
 				occupied[gid] = candidate
 				pivot.set_meta("mutation_furniture_moved", true)
 				mutation_furniture_changed_groups += 1
@@ -7377,20 +7392,18 @@ func _furnishing_group_rect(pivot: Node3D, colliders: Array) -> Rect2:
 
 
 func _furnishing_variant_rect_valid(candidate: Rect2, gid: int,
-		occupied: Dictionary) -> bool:
-	if candidate.size == Vector2.ZERO:
+		occupied: Dictionary, room_bounds: Rect2, doorways: Array[Rect2]) -> bool:
+	if candidate.size == Vector2.ZERO or not room_bounds.encloses(candidate):
 		return false
-	var bounds := _mutation_room_bounds().grow(-0.45)
-	if not bounds.encloses(candidate):
-		return false
-	for zone in _doorway_clearance_rects():
-		if candidate.grow(0.12).intersects(zone):
+	var padded := candidate.grow(0.12)
+	for zone in doorways:
+		if padded.intersects(zone):
 			return false
 	for other_gid in occupied:
 		if int(other_gid) == gid:
 			continue
 		var other: Rect2 = occupied[other_gid]
-		if candidate.grow(0.12).intersects(other.grow(0.12)):
+		if padded.intersects(other.grow(0.12)):
 			return false
 	return true
 
@@ -7433,10 +7446,14 @@ func mutation_furniture_clearance_violations() -> int:
 		if bool(pivot.get_meta("mutation_furniture_moved", false)):
 			moved.append(pivot)
 	var bad := 0
+	if moved.is_empty():
+		return bad
+	var room_bounds := _mutation_room_bounds().grow(-0.45)
+	var doorways := _doorway_clearance_rects()
 	for pivot in moved:
 		var gid := int(pivot.get_meta("furnishing_group"))
 		if not _furnishing_variant_rect_valid(
-				occupied[gid], gid, occupied):
+				occupied[gid], gid, occupied, room_bounds, doorways):
 			bad += 1
 	return bad
 

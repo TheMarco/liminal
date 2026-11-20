@@ -69,6 +69,9 @@ static var _running_clips: Dictionary = {}
 ## Initial walk-pose bounds are invariant for a model. Sampling every skinned
 ## vertex on each spawn cost more than the rest of actor construction combined.
 static var _initial_bounds: Dictionary = {}
+## Rest-pose mesh arrays and triangle area CDFs per model, so burning a walker
+## skins only the sampled triangles instead of scanning the entire high-poly GLB.
+static var _burn_surface_cache: Dictionary = {}
 
 var _presentation: Node3D
 var _model: Node3D
@@ -334,12 +337,15 @@ func burn_surface_points(max_points := 520) -> PackedVector3Array:
 ## Area-weighted samples avoid inheriting each GLB's arbitrary vertex density.
 ## Every point and normal comes from a triangle of the currently posed mesh, so
 ## the detached fragment cloud is a complete copy of the visible body surface.
-func burn_surface_samples(max_samples := 1200) -> Dictionary:
-	var triangle_vertices := PackedVector3Array()
-	var triangle_normals := PackedVector3Array()
-	var cumulative_area := PackedFloat32Array()
+func prepare_burn_cache() -> Dictionary:
+	if _burn_surface_cache.has(model_index):
+		return _burn_surface_cache[model_index]
+	var surfaces: Array[Dictionary] = []
+	var surface_cdf := PackedFloat32Array()
 	var total_area := 0.0
-	for mesh_instance in _meshes(_model):
+	var meshes := _meshes(_model)
+	for mesh_idx in meshes.size():
+		var mesh_instance := meshes[mesh_idx]
 		if mesh_instance.mesh == null:
 			continue
 		for surface in mesh_instance.mesh.get_surface_count():
@@ -347,49 +353,201 @@ func burn_surface_samples(max_samples := 1200) -> Dictionary:
 					!= Mesh.PRIMITIVE_TRIANGLES:
 				continue
 			var arrays := mesh_instance.mesh.surface_get_arrays(surface)
-			var posed := _posed_surface_vertices(mesh_instance, surface)
-			if arrays.is_empty() or posed.size() < 3:
+			if arrays.is_empty() or not arrays[Mesh.ARRAY_VERTEX] is PackedVector3Array:
+				continue
+			var vertices := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+			if vertices.size() < 3:
 				continue
 			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] \
 				if arrays[Mesh.ARRAY_INDEX] is PackedInt32Array else PackedInt32Array()
-			var corner_count := indices.size() if not indices.is_empty() else posed.size()
+			var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES] \
+				if arrays[Mesh.ARRAY_BONES] is PackedInt32Array else PackedInt32Array()
+			var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS] \
+				if arrays[Mesh.ARRAY_WEIGHTS] is PackedFloat32Array else PackedFloat32Array()
+			var influences := weights.size() / vertices.size() if not weights.is_empty() else 0
+			var corner_count := indices.size() if not indices.is_empty() else vertices.size()
+			var tri_cap := corner_count / 3
+			var tri_a := PackedInt32Array()
+			var tri_b := PackedInt32Array()
+			var tri_c := PackedInt32Array()
+			var cumulative_area := PackedFloat32Array()
+			tri_a.resize(tri_cap)
+			tri_b.resize(tri_cap)
+			tri_c.resize(tri_cap)
+			cumulative_area.resize(tri_cap)
+			var tri_count := 0
+			var surf_area := 0.0
+			var has_indices := not indices.is_empty()
+			var vcount := vertices.size()
 			for corner in range(0, corner_count - 2, 3):
-				var ia := indices[corner] if not indices.is_empty() else corner
-				var ib := indices[corner + 1] if not indices.is_empty() else corner + 1
-				var ic := indices[corner + 2] if not indices.is_empty() else corner + 2
-				if ia < 0 or ib < 0 or ic < 0 or ia >= posed.size() \
-						or ib >= posed.size() or ic >= posed.size():
+				var ia := indices[corner] if has_indices else corner
+				var ib := indices[corner + 1] if has_indices else corner + 1
+				var ic := indices[corner + 2] if has_indices else corner + 2
+				if ia < 0 or ib < 0 or ic < 0 or ia >= vcount or ib >= vcount or ic >= vcount:
 					continue
-				var a := posed[ia]
-				var b := posed[ib]
-				var c := posed[ic]
-				var cross := (b - a).cross(c - a)
-				var area := cross.length() * 0.5
+				var a := vertices[ia]
+				var area := (vertices[ib] - a).cross(vertices[ic] - a).length() * 0.5
 				if area <= 0.0000001:
 					continue
-				total_area += area
-				triangle_vertices.append_array(PackedVector3Array([a, b, c]))
-				triangle_normals.append(cross.normalized())
-				cumulative_area.append(total_area)
+				surf_area += area
+				tri_a[tri_count] = ia
+				tri_b[tri_count] = ib
+				tri_c[tri_count] = ic
+				cumulative_area[tri_count] = surf_area
+				tri_count += 1
+			if tri_count <= 0:
+				continue
+			if tri_count < tri_cap:
+				tri_a.resize(tri_count)
+				tri_b.resize(tri_count)
+				tri_c.resize(tri_count)
+				cumulative_area.resize(tri_count)
+			var area_start := total_area
+			total_area += surf_area
+			surfaces.append({
+				"mesh_idx": mesh_idx,
+				"vertices": vertices,
+				"bones": bones,
+				"weights": weights,
+				"influences": influences,
+				"tri_a": tri_a,
+				"tri_b": tri_b,
+				"tri_c": tri_c,
+				"cumulative_area": cumulative_area,
+				"area_start": area_start,
+			})
+			surface_cdf.append(total_area)
+	var cached := {
+		"surfaces": surfaces,
+		"surface_cdf": surface_cdf,
+		"total_area": total_area,
+	}
+	_burn_surface_cache[model_index] = cached
+	return cached
+
+
+func burn_surface_samples(max_samples := 1200) -> Dictionary:
+	var cache := prepare_burn_cache()
+	var surfaces: Array[Dictionary] = cache["surfaces"]
+	var surface_cdf: PackedFloat32Array = cache["surface_cdf"]
+	var total_area: float = cache["total_area"]
 	var points := PackedVector3Array()
 	var normals := PackedVector3Array()
-	if total_area <= 0.0 or cumulative_area.is_empty():
+	if total_area <= 0.0 or surfaces.is_empty() or max_samples <= 0:
 		return {"points": points, "normals": normals}
+	var meshes := _meshes(_model)
+	var frame := global_transform.affine_inverse()
+	var updated_skeletons := {}
+	var runtime_surfaces: Array[Dictionary] = []
+	runtime_surfaces.resize(surfaces.size())
+	for si in surfaces.size():
+		var surf := surfaces[si]
+		var mesh_instance := meshes[int(surf["mesh_idx"])]
+		var vertices: PackedVector3Array = surf["vertices"]
+		var influences: int = surf["influences"]
+		var skeleton := mesh_instance.get_node_or_null(mesh_instance.skeleton) as Skeleton3D
+		var skin := mesh_instance.skin
+		var bind_transforms: Array[Transform3D] = []
+		var valid_binds := PackedByteArray()
+		var skinned := false
+		if skeleton != null and skin != null and influences > 0:
+			if not updated_skeletons.has(skeleton):
+				skeleton.force_update_all_bone_transforms()
+				updated_skeletons[skeleton] = true
+			var skel_to_local := frame * skeleton.global_transform
+			var bind_count := skin.get_bind_count()
+			bind_transforms.resize(bind_count)
+			valid_binds.resize(bind_count)
+			for bind_index in bind_count:
+				var bone_index := skin.get_bind_bone(bind_index)
+				if bone_index < 0:
+					bone_index = skeleton.find_bone(skin.get_bind_name(bind_index))
+				if bone_index < 0 or bone_index >= skeleton.get_bone_count():
+					continue
+				bind_transforms[bind_index] = skel_to_local \
+					* skeleton.get_bone_global_pose(bone_index) * skin.get_bind_pose(bind_index)
+				valid_binds[bind_index] = 1
+			skinned = true
+		var cache_pts := PackedVector3Array()
+		cache_pts.resize(vertices.size())
+		var cache_ok := PackedByteArray()
+		cache_ok.resize(vertices.size())
+		runtime_surfaces[si] = {
+			"surf": surf,
+			"skinned": skinned,
+			"bind_transforms": bind_transforms,
+			"valid_binds": valid_binds,
+			"static_xf": frame * mesh_instance.global_transform,
+			"cache_pts": cache_pts,
+			"cache_ok": cache_ok,
+		}
+	points.resize(max_samples)
+	normals.resize(max_samples)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9187 + model_index * 104729 + int(_phase * 100000.0)
+	var surf_last := surface_cdf.size() - 1
+	var inv_samples := total_area / float(max_samples)
 	for index in max_samples:
-		var area_target := (float(index) + rng.randf()) / max_samples * total_area
-		var triangle := mini(cumulative_area.size() - 1,
-			cumulative_area.bsearch(area_target))
-		var a := triangle_vertices[triangle * 3]
-		var b := triangle_vertices[triangle * 3 + 1]
-		var c := triangle_vertices[triangle * 3 + 2]
+		var area_target := (float(index) + rng.randf()) * inv_samples
+		var si := mini(surf_last, surface_cdf.bsearch(area_target))
+		var rt := runtime_surfaces[si]
+		var surf: Dictionary = rt["surf"]
+		var cdf: PackedFloat32Array = surf["cumulative_area"]
+		var tri := mini(cdf.size() - 1, cdf.bsearch(area_target - float(surf["area_start"])))
+		var ia: int = (surf["tri_a"] as PackedInt32Array)[tri]
+		var ib: int = (surf["tri_b"] as PackedInt32Array)[tri]
+		var ic: int = (surf["tri_c"] as PackedInt32Array)[tri]
+		var a := _posed_burn_vertex(rt, ia)
+		var b := _posed_burn_vertex(rt, ib)
+		var c := _posed_burn_vertex(rt, ic)
 		var root := sqrt(rng.randf())
 		var across := rng.randf()
-		points.append(a * (1.0 - root) + b * (root * (1.0 - across))
-			+ c * (root * across))
-		normals.append(triangle_normals[triangle])
+		points[index] = a * (1.0 - root) + b * (root * (1.0 - across)) + c * (root * across)
+		var cross := (b - a).cross(c - a)
+		normals[index] = cross.normalized() if cross.length_squared() > 1e-12 else Vector3.UP
 	return {"points": points, "normals": normals}
+
+
+static func _posed_burn_vertex(rt: Dictionary, vi: int) -> Vector3:
+	var cache_ok: PackedByteArray = rt["cache_ok"]
+	var cache_pts: PackedVector3Array = rt["cache_pts"]
+	if cache_ok[vi] != 0:
+		return cache_pts[vi]
+	var surf: Dictionary = rt["surf"]
+	var vertices: PackedVector3Array = surf["vertices"]
+	var point := vertices[vi]
+	var posed := false
+	if rt["skinned"]:
+		var influences: int = surf["influences"]
+		var bones: PackedInt32Array = surf["bones"]
+		var weights: PackedFloat32Array = surf["weights"]
+		var base := vi * influences
+		if bones.size() >= base + influences:
+			var bind_transforms: Array[Transform3D] = rt["bind_transforms"]
+			var valid_binds: PackedByteArray = rt["valid_binds"]
+			var valid_size := valid_binds.size()
+			var skinned_pt := Vector3.ZERO
+			var weight_total := 0.0
+			for influence in influences:
+				var ai := base + influence
+				var weight := weights[ai]
+				if weight <= 0.0001:
+					continue
+				var bind_index := bones[ai]
+				if bind_index < 0 or bind_index >= valid_size or valid_binds[bind_index] == 0:
+					continue
+				skinned_pt += (bind_transforms[bind_index] * point) * weight
+				weight_total += weight
+			if weight_total > 0.0001:
+				if absf(weight_total - 1.0) > 0.001:
+					skinned_pt /= weight_total
+				point = skinned_pt
+				posed = true
+	if not posed:
+		point = (rt["static_xf"] as Transform3D) * point
+	cache_pts[vi] = point
+	cache_ok[vi] = 1
+	return point
 
 
 func _posed_surface_vertices(mesh_instance: MeshInstance3D,
@@ -639,6 +797,7 @@ static func retain_models(indices: Array[int]) -> void:
 		_finish_threaded_request(MODEL_PATHS[index])
 		_model_scenes.erase(index)
 		_initial_bounds.erase(index)
+		_burn_surface_cache.erase(index)
 		if RUN_MODEL_PATHS.has(index):
 			_finish_threaded_request(str(RUN_MODEL_PATHS[index]))
 		_run_model_scenes.erase(index)
@@ -658,6 +817,7 @@ static func clear_runtime_caches() -> void:
 	_model_scenes.clear()
 	_run_model_scenes.clear()
 	_initial_bounds.clear()
+	_burn_surface_cache.clear()
 	_walking_clips.clear()
 	_running_clips.clear()
 
