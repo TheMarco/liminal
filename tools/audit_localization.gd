@@ -193,16 +193,13 @@ func _check_readable_hud() -> void:
 	window_ui.add_child(album_caption)
 	var reticle := PhotoCamera.PhotoReticle.new()
 	viewport.add_child(reticle)
-	reticle.size = Vector2(1280, 720)
 	reticle.feedback = "FOCUS"
-	reticle._process(0)
 	mirror._process(0)
 	expect(not mirror._copies.has(album_caption) and album_caption.self_modulate.a == 1,
 		"window-resolution album text was intercepted")
 	expect(mirror._copies.has(reticle._feedback_label), "camera feedback bypassed readable HUD")
 	expect(Localization.text(reticle._feedback_label.text) != "FOCUS", "camera feedback untranslated")
 	reticle.feedback = ""
-	reticle._process(0)
 	mirror._process(0)
 	if mirror._copies.has(reticle._feedback_label):
 		expect(not mirror._copies[reticle._feedback_label].visible, "empty camera feedback remained visible")

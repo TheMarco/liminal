@@ -112,14 +112,15 @@ func check_return_preview(game: Node, settings: GameSettings) -> void:
 	game.level_root.add_child(site)
 	site.build(game.player, Vector3.ZERO, StandardMaterial3D.new(), 731)
 	director.site = site
-	# New doors and already-open doors must both receive the stable atlas,
-	# AA and LOD policy. Previously this viewport kept Godot's mixed tiles.
+	# New and already-open doors follow the main AA and LOD settings.
+	# Their smaller shadow atlas keeps the same uniform tile layout.
 	for preset in [1, 0, 3, 1]:
 		settings.apply_quality_preset(preset)
-		expect(site._preview.positional_shadow_atlas_size == root.positional_shadow_atlas_size
-			and site._preview.use_taa == root.use_taa
+		expect(site._preview.positional_shadow_atlas_size == mini(root.positional_shadow_atlas_size, 2048),
+			"return doorway missed its 2048-pixel shadow atlas cap")
+		expect(site._preview.use_taa == root.use_taa
 			and site._preview.mesh_lod_threshold == root.mesh_lod_threshold,
-			"return doorway missed initial/live graphics quality")
+			"return doorway missed initial/live AA or LOD settings")
 		for quadrant in 4:
 			expect(site._preview.get_positional_shadow_atlas_quadrant_subdiv(quadrant)
 				== Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_64,
