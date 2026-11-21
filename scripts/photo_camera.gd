@@ -21,6 +21,7 @@ extends CanvasLayer
 const AIM_FOV := 58.0
 const REVIEW_SECONDS := 2.6
 const FLASH_SECONDS := 0.09
+const CASINO_PRINT_CASCADES := 1
 ## Post-photo danger table; rolled only when the shot documented something.
 const RISK_NOTHING := 0.70
 const RISK_ENVIRONMENT := 0.22   # remainder is the encounter
@@ -94,6 +95,8 @@ signal review_finished()
 ## A newly documented unnatural subject's print review has closed.
 signal unnatural_photographed()
 signal photograph_taken(image: Image, metadata: Dictionary)
+var archive_photograph: Callable
+signal _snapshot_downloaded(image: Image)
 signal first_raise()
 ## True while the camera is up — main hides the whole HUD so only the
 ## viewfinder exists (owner, 2026-08-20).
@@ -435,7 +438,7 @@ func emergency_flash_feedback() -> void:
 
 
 func _take_photo() -> void:
-	if not _raised:
+	if not _raised or _capturing:
 		return
 	_capturing = true
 	_begin_review_safety()
@@ -474,11 +477,17 @@ func _take_photo() -> void:
 		"theme": str(DescentRun.THEME_NAMES[director.theme]) if director != null else "",
 		"caption": " · ".join(descriptions), "anomaly_ids": ids,
 	}
+	var capture_started := Time.get_ticks_usec()
 	var image := await _render_snapshot()
+	var captured_at := Time.get_ticks_usec()
+	if image != null and archive_photograph.is_valid():
+		await archive_photograph.call(image, metadata)
 	_capturing = false
 	if image != null:
 		photograph_taken.emit(image, metadata)
 		_photo.texture = ImageTexture.create_from_image(image)
+		RuntimeDiagnostics.mark("photo_capture", {"render_and_readback_ms": (captured_at - capture_started) / 1000.0,
+			"album_and_upload_ms": (Time.get_ticks_usec() - captured_at) / 1000.0})
 		# Black card, centred print at exactly the live viewfinder's size; the
 		# viewfinder chrome leaves with it. The same covered-image transform maps
 		# the evidence marks, so annotations cannot drift away from the image.
@@ -725,9 +734,14 @@ static func evidence_ellipse(bounds: Rect2, extent: Vector2) -> Rect2:
 	return Rect2(bounds.get_center(), radii)
 
 
-## One off-screen render with the photo layer enabled. The print sees the
-## same writing as the raised viewfinder.
-func _render_snapshot() -> Image:
+## Allocate the photo viewport's render buffers under the floor's opaque load.
+## Each shutter draws again at the live pose, with the current print-only layers.
+func prepare_snapshot_buffers() -> void:
+	_request_snapshot_draw()
+	await RenderingServer.frame_post_draw
+
+
+func _request_snapshot_draw() -> void:
 	var viewport := get_viewport()
 	if _snap_viewport == null:
 		_snap_viewport = SubViewport.new()
@@ -740,7 +754,7 @@ func _render_snapshot() -> Image:
 	# compiles new variants, and cap the snapshot at the album's maximum edge
 	# to avoid 4K GPU readbacks and main-thread Lanczos downsampling.
 	for feature in ["msaa_3d", "msaa_2d", "use_taa", "use_hdr_2d", "screen_space_aa",
-			"positional_shadow_atlas_16_bits"]:
+			"positional_shadow_atlas_16_bits", "use_occlusion_culling"]:
 		_snap_viewport.set(feature, viewport.get(feature))
 	_snap_viewport.positional_shadow_atlas_size = mini(viewport.positional_shadow_atlas_size, 2048)
 	GraphicsQuality.configure_shadow_atlas(_snap_viewport)
@@ -758,14 +772,69 @@ func _render_snapshot() -> Image:
 	_snap_cam.fov = cam.fov
 	_snap_cam.near = cam.near
 	_snap_cam.far = cam.far
+	_snap_cam.environment = _snapshot_environment(cam)
 	_snap_cam.cull_mask = (cam.cull_mask | PhotoAnomaly.PHOTO_LAYER
 		| PhotoAnomaly.PRINT_LAYER) & ~PhotoAnomaly.EYE_ONLY_LAYER
 	_snap_cam.current = true
 	_snap_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+func _snapshot_environment(cam: Camera3D) -> Environment:
+	if player.level_theme != 0:
+		return cam.environment
+	var source := cam.environment
+	if source == null:
+		source = cam.get_world_3d().environment
+	if source == null or not source.sdfgi_enabled or source.sdfgi_cascades < 4:
+		return cam.environment
+	# The full-quality Casino print only needs the nearest of its four grids.
+	# Keep its fine cell spacing, fog and lamp shadows. Lower quality already
+	# uses a different, coarser grid and follows its own preset.
+	var print_env := source.duplicate() as Environment
+	print_env.sdfgi_cascades = CASINO_PRINT_CASCADES
+	return print_env
+
+
+func _render_snapshot() -> Image:
+	_request_snapshot_draw()
 	await RenderingServer.frame_post_draw
-	if _snap_viewport == null:
+	if not is_instance_valid(_snap_viewport):
 		return null
-	return _snap_viewport.get_texture().get_image()
+	var texture := _snap_viewport.get_texture()
+	if RenderingServer.get_rendering_device() != null:
+		RenderingServer.call_on_render_thread(_read_snapshot.bind(texture.get_rid(), _snap_viewport.size))
+		var image: Image = await _snapshot_downloaded
+		if image != null:
+			return image
+	return texture.get_image()
+
+
+func _read_snapshot(texture: RID, size: Vector2i) -> void:
+	var device := RenderingServer.get_rendering_device()
+	var rid := RenderingServer.texture_get_rd_texture(texture)
+	if rid.is_valid() and device.texture_is_valid(rid):
+		var format := device.texture_get_format(rid)
+		var rgba := Image.FORMAT_RGBA8
+		var supported := format.format in [RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM,
+			RenderingDevice.DATA_FORMAT_R8G8B8A8_SRGB, RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT]
+		if format.format == RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT:
+			rgba = Image.FORMAT_RGBAH
+		if supported and format.mipmaps == 1 and (format.usage_bits & RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT):
+			var complete := _finish_snapshot_read.bind(size, rgba, RenderingServer.texture_get_format(texture))
+			if device.texture_get_data_async(rid, 0, complete) == OK:
+				return
+	_snapshot_downloaded.emit.call_deferred(null)
+
+
+func _finish_snapshot_read(bytes: PackedByteArray, size: Vector2i, rgba: Image.Format,
+		output: Image.Format) -> void:
+	var image: Image
+	var pixel_bytes := 8 if rgba == Image.FORMAT_RGBAH else 4
+	if bytes.size() == size.x * size.y * pixel_bytes:
+		image = Image.create_from_data(size.x, size.y, false, rgba, bytes)
+		# Opaque viewports expose RGB even when the GPU stores four channels.
+		image.convert(output)
+	_snapshot_downloaded.emit.call_deferred(image)
 
 
 func _roll_risk() -> void:

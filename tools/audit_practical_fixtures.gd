@@ -123,7 +123,8 @@ func run() -> void:
 				expect(not light.visible,"blackout leaves a diffuser illuminating the room")
 				var mesh := light.get_node(light.get_meta("fixture_emitter")) as MeshInstance3D
 				var mat := mesh.get_active_material(0) as StandardMaterial3D
-				expect(mat != null and not mat.emission_enabled,"blackout leaves a lens glowing")
+				expect(mat != null and (not mat.emission_enabled or is_zero_approx(mat.emission_energy_multiplier)),
+					"blackout leaves a lens glowing")
 			chunk.set_blackout(false)
 			for light in lamps:
 				expect(light.visible==state[light][0] and light.light_energy==state[light][1],"power restoration changes the fixture state")

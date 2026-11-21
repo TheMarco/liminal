@@ -21,6 +21,15 @@ func _run() -> void:
 		names[entry.id] = true
 		check(LIBRARY.matching_index(profile)==index,"Cannot recognize saved library look")
 		var document := IO.encode(profile,entry.name)
+		if index == 1:
+			var customized: Dictionary = document.settings.duplicate(true)
+			customized.quality = PROFILE.Quality.LOW
+			customized.reduced_flashing = not customized.reduced_flashing
+			customized.auto_world_resolution = not customized.auto_world_resolution
+			check(LIBRARY.matching_settings(customized) == index, "Local preferences lost the preset name")
+			customized.receiver_overrides.clear()
+			check(LIBRARY.matching_settings(customized) == -1, "A custom receiver matched a stock preset")
+			check(LIBRARY.matching_settings(document.settings) == index, "Custom settings altered the cached preset")
 		var restored := IO.decode(JSON.parse_string(JSON.stringify(document)))
 		check(restored.error.is_empty(),"Cannot decode "+entry.name)
 		check(IO.encode(restored.profile,entry.name)==document,"Roundtrip lost values: "+entry.name)

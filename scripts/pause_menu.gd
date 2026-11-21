@@ -827,7 +827,7 @@ func _refresh_video_controls() -> void:
 	var snapshot: Dictionary = LOOK_IO.encode(profile).settings
 	if snapshot!=_last_look_settings:
 		_last_look_settings = snapshot
-		var index := LOOKS.matching_index(profile)
+		var index := LOOKS.matching_settings(snapshot)
 		_look_select.select(index+1)
 		_look_description.text = LOOKS.LOOKS[index].description if index>=0 else "Your custom settings are active. Adjust them below, or choose a preset to start over."
 	if not _controls.has("vhs_distortion"): return

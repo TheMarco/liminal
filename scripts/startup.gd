@@ -60,10 +60,6 @@ func _prepare_title() -> void:
 	# processing and score stay held until the title is fully revealed.
 	_main = _start_main(true)
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
-	# Finish first-use GPU work under the opaque startup card, before the
-	# video's clock/audio start. Otherwise the first compilation can skip it.
-	if is_instance_valid(_main._encounter_warmup) and not _main._encounter_warmup.finished:
-		await _main._encounter_warmup.completed
 	_video.play()
 	RuntimeDiagnostics.mark("intro_playing")
 

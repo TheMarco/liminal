@@ -2,14 +2,15 @@ class_name TitleScreen
 extends "res://scripts/screen_ui.gd"
 ## Front door for the game: a quiet title, then one deliberate page at a time.
 ##
-## The generated world is already alive behind this opaque layer, but player
-## input, figures and haunt timers remain suspended until a mode starts.
+## The first world is prepared behind this opaque layer when a mode is chosen.
 
 signal mode_selected(descent: bool)
 signal started(descent: bool)
 signal settings_requested
 signal descent_requested(entry: int)
 signal quit_requested
+
+var prepare_wander: Callable
 
 enum DescentEntry {
 	CONTINUE,
@@ -776,6 +777,13 @@ func _start(selected_descent: bool) -> void:
 		return
 	_gone = true
 	set_process_input(false)
+	if not selected_descent and prepare_wander.is_valid():
+		_prompt.text = tr("PREPARING THE FIRST FLOOR")
+		for control in _main_dock.get_children():
+			if control is Button: control.disabled = true
+		if DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
+		await prepare_wander.call()
 	started.emit(selected_descent)
 	var tween := create_tween()
 	tween.tween_property(self, "offset:y", -40.0, 0.5)

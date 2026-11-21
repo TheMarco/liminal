@@ -97,6 +97,8 @@ func _run() -> void:
 
 func _validate(ws: int, theme: int, route: DescentRoute,
 		path: Array[Vector2i], check_repeat: bool, floor_idx: int) -> String:
+	if route._candidate_path() != path:
+		return "candidate search chose a different shortest path from the live navigation map"
 	if check_repeat:
 		var again := DescentRoute.build(ws, theme, floor_idx)
 		if again.target != route.target or again.target_wall != route.target_wall \

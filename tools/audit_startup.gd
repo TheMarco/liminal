@@ -15,6 +15,9 @@ func capture(label: String) -> void:
 
 func run() -> void:
 	root.size = Vector2i(1280, 720)
+	if DisplayServer.get_name() != "headless":
+		root.always_on_top = true
+		root.grab_focus()
 	DirAccess.make_dir_recursive_absolute(OUT)
 	var scene_path: String = ProjectSettings.get_setting("application/run/main_scene")
 	expect(scene_path == "res://scenes/startup.tscn", "project bypasses the startup video")
@@ -78,10 +81,29 @@ func run() -> void:
 			"startup did not reveal the normal title")
 		expect(not paused and game._pause_menu == null, "startup stranded a pause/settings panel")
 		expect(not game.cm.is_processing(), "opaque title kept streaming hidden rooms")
+		expect(game.cm.chunks.is_empty() and game._encounter_warmup == null,
+			"startup built a floor or rendered encounters before a mode was chosen")
+		expect(not game.player.is_physics_processing(), "player could fall through the unbuilt title floor")
+		var messages: Array[String] = []
+		game._events.message.connect(func(line: String): messages.append(line))
+		var remaining: float = game._events._time_left
+		game._events._time_left = 0.0
+		await process_frame
+		await process_frame
+		expect(not game._events.is_processing() and game._events._time_left == 0.0
+			and messages.is_empty(), "title ran a due room sound or power sag")
+		game._events._time_left = remaining
 		if host != null:
 			expect(await await_until(func(): return host._suspended, 5000), "title did not suspend warmed rendering")
 			expect(host.source.render_target_update_mode == SubViewport.UPDATE_DISABLED, "covered viewport still rendering")
 		await capture("title")
+		game._title._select_wander()
+		var ready_to_play := await await_until(func(): return not is_instance_valid(game._title), 30000)
+		expect(ready_to_play, "Wander did not finish preparing the selected floor within 30 seconds")
+		if ready_to_play:
+			expect(game.cm.arrival_stream_ready() and game.player.is_physics_processing(),
+				"Wander gave control back before the arrival rooms and player were ready")
+			expect(game._events.is_processing(), "Wander did not resume room ambience")
 	await teardown_game(game)
 	finish("startup direct-launch bypass" if bypass else
 		"startup video: immediate crossfade, held audio/input, aspect ratio and normal title")

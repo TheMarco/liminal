@@ -12,14 +12,11 @@ var _signal_knobs: Dictionary = {}
 var _receiver_knobs: Dictionary = {}
 var _reduced := false
 var _wear := 1.0
-var _title_covered := false
 var _suspended := false
 var _gpu_failed := false
 var _gpu_wanted := false
 var _classic_wanted := false
 var _native_wanted := false
-var _warmup_frames := 0
-var _warmup_ready_after := 0
 
 func _ready() -> void:
 	SEQUENCES.prepare()
@@ -50,28 +47,10 @@ func attach(game: Node) -> void:
 	game.tree_exited.connect(queue_free)
 
 func set_title_covered(covered: bool) -> void:
-	if _title_covered == covered: return
-	_title_covered = covered
-	# Prepare a couple of frames before sleeping. Otherwise the expensive first
-	# shader use would simply move from startup to the player's first click.
-	_request_warmup()
-
-func _request_warmup() -> void:
-	_suspended = false
-	_warmup_frames = 0
-	_warmup_ready_after = presenter.ready_frames + 2 if presenter != null else 0
+	if _suspended == covered: return
+	_suspended = covered
 	_apply_visibility()
-
-func _process(_delta: float) -> void:
-	if not _title_covered or _suspended: return
-	_warmup_frames += 1
-	if _gpu_wanted and not _gpu_failed and presenter != null:
-		if presenter.ready_frames < _warmup_ready_after: return
-	elif _warmup_frames < 3:
-		return
-	_suspended = true
-	_apply_visibility()
-	RuntimeDiagnostics.mark("title_render_suspended")
+	if covered: RuntimeDiagnostics.mark("title_render_suspended")
 
 func _apply_visibility() -> void:
 	if source == null: return
@@ -164,8 +143,7 @@ func configure_video(settings: Dictionary, pipeline: int, signal_on: bool, crt_o
 	# final native/classic tube when changing combinations during gameplay.
 	if _classic_tube != null: move_child(_classic_tube,get_child_count()-1)
 	if _native_tube != null: move_child(_native_tube,get_child_count()-1)
-	if _title_covered: _request_warmup()
-	else: _apply_visibility()
+	_apply_visibility()
 
 func set_game_state(stress: float, position: Vector2, radius: float, amount: float, fault: Dictionary = {}) -> void:
 	if presenter == null: return

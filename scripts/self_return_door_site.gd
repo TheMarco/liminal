@@ -144,9 +144,15 @@ func _process(dt: float) -> void:
 	var dist_sq := _actor.cam.global_position.distance_squared_to(global_position)
 	var near := dist_sq < 256.0
 	var in_view := near and (dist_sq < 9.0 or _window_in_view())
-	var should_render := openness > 0.02 and in_view and _update_preview_camera()
+	# The wall hides the opening until 96%. Prime one frame early, then resume
+	# just before the window appears with the current camera pose.
+	var needs_frame := openness >= 0.90 or (openness > 0.02 and not _has_frame)
+	var should_render := needs_frame and in_view and _update_preview_camera()
 	if should_render:
 		_sync_preview_resolution()
+		var render_scale := GraphicsQuality.doorway_render_scale(_actor.cam, _window, _preview)
+		if _preview.scaling_3d_scale != render_scale:
+			_preview.scaling_3d_scale = render_scale
 	_preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS \
 		if should_render else SubViewport.UPDATE_DISABLED
 	_window.visible = should_render and _has_frame and openness >= 0.96

@@ -134,12 +134,20 @@ var _base_room_members_cache := {}
 static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 	var cache_key := "%d:%d:%d" % [ws, floor_theme, p_floor_idx]
 	var district := int(_realm_district_cache.get(cache_key, 0))
+	# Districts overlap within one seed and theme. Only their base geometry
+	# is shared. Reachability, candidate doors and guidance depend on origin.
+	var walls := {}
+	var rooms := {}
+	var room_members := {}
 	var route: DescentRoute
 	while district < REALM_DISTRICTS:
 		route = DescentRoute.new()
 		route.world_seed = ws
 		route.theme = floor_theme
 		route.floor_idx = p_floor_idx
+		route._base_wall_cache = walls
+		route._base_room_cache = rooms
+		route._base_room_members_cache = room_members
 		route._obstruction_district = district
 		route._build()
 		# Search each district once in order. Keep the original obstruction
@@ -149,6 +157,7 @@ static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 				district += 1
 				continue
 			push_warning("No safe photographic obstruction for seed %d theme %d" % [ws, floor_theme])
+		route._build_reverse_map()
 		var realm_plan := DescentTopology.new(ws, floor_theme)
 		route.realm_door_hint = realm_plan.plan_realm_door(route)
 		if not route.realm_door_hint.is_empty() or p_floor_idx == 0 or p_floor_idx >= DescentRun.FLOOR_COUNT - 1:
@@ -505,6 +514,23 @@ func path_from_origin() -> Array[Vector2i]:
 	return path
 
 
+## During target selection only the path to the arrival room is needed.
+## A BFS starting at the candidate discovers the first shortest path in
+## neighbour order. Walking downhill in the arrival distance map with that
+## same order selects exactly that path, including ties.
+func _candidate_path() -> Array[Vector2i]:
+	var at := target
+	var path: Array[Vector2i] = [at]
+	for remaining in range(int(_origin_distance[target]) - 1, -1, -1):
+		for neighbour in base_neighbours(at):
+			if _origin_distance[neighbour] == remaining:
+				at = neighbour
+				path.append(at)
+				break
+	path.reverse()
+	return path
+
+
 ## Hypothetical base route after photographing the introductory doorway.
 ## Used for evidence coverage without opening the live wall or changing guidance.
 func path_after_intro_door() -> Array[Vector2i]:
@@ -679,7 +705,6 @@ func _build() -> void:
 		push_error("DescentRoute: no target seed=%d theme=%d" % [world_seed, theme])
 		target = origin
 		target_wall = WorldGen.anchor_wall(world_seed, target, TARGET_WALL_SALT, theme)
-		_build_reverse_map()
 		return
 
 	target = _ranked_pick(candidates, TARGET_SALT)
@@ -696,16 +721,16 @@ func _build() -> void:
 				return WorldGen.h(world_seed, a.x, a.y, TARGET_SALT) < WorldGen.h(world_seed, b.x, b.y, TARGET_SALT))
 			for candidate in candidates.slice(0, INTRO_TARGET_ATTEMPTS):
 				target = candidate
-				_build_reverse_map()
+				var candidate_path := _candidate_path()
 				var discovery := DescentTopology.new(world_seed, theme)
-				discovery._plan_photo_doors(self, true)
+				discovery._plan_photo_doors(self, true, false, candidate_path)
 				intro_door_hint = discovery.intro_photo_door()
 				if intro_door_hint.is_empty():
 					continue
 				if fallback.is_empty():
 					fallback = {"target": target, "door": intro_door_hint.duplicate(true)}
 				var obstruction_plan := DescentTopology.new(world_seed, theme)
-				obstruction_plan._plan_photo_doors(self, false, true)
+				obstruction_plan._plan_photo_doors(self, false, true, candidate_path)
 				for record in obstruction_plan.photo_doorways():
 					if bool(record.get("intro", false)):
 						intro_door_hint = record.duplicate(true)
@@ -732,9 +757,8 @@ func _build() -> void:
 				return WorldGen.h(world_seed, a.x, a.y, TARGET_SALT) < WorldGen.h(world_seed, b.x, b.y, TARGET_SALT))
 			for candidate in candidates.slice(0, OBSTRUCTION_TARGET_ATTEMPTS):
 				target = candidate
-				_build_reverse_map()
 				var discovery := DescentTopology.new(world_seed, theme)
-				discovery._plan_photo_doors(self, false, true)
+				discovery._plan_photo_doors(self, false, true, _candidate_path())
 				var options := discovery.photo_doorways()
 				if not options.is_empty():
 					obstruction_hint = options[0].duplicate(true)
@@ -744,7 +768,6 @@ func _build() -> void:
 			_obstruction_target_cache[cache_key] = {"target": target, "obstruction": obstruction_hint.duplicate(true)}
 	target_wall = WorldGen.anchor_wall(world_seed, target, TARGET_WALL_SALT, theme)
 	graph_distance = int(_origin_distance[target])
-	_build_reverse_map()
 
 
 func _collect(low: int, high: int, styled: bool) -> Array[Vector2i]:

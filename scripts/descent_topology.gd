@@ -58,7 +58,6 @@ var _furniture_probe_count := 0
 var _floor_furniture_candidates: Array[Vector2i] = []
 var _floor_furniture_scanned := false
 var _cell_allowed_cache := {}
-var _room_members_cache := {}
 var _mutation_cell_safe_cache := {}
 static var _plan_cache := {}
 
@@ -107,7 +106,6 @@ func _reset_states() -> void:
 	_floor_furniture_candidates.clear()
 	_floor_furniture_scanned = false
 	_cell_allowed_cache.clear()
-	_room_members_cache.clear()
 	_mutation_cell_safe_cache.clear()
 	_planned = false
 
@@ -659,11 +657,6 @@ func photo_geometry_edge(at: Vector2i, dir: int) -> Dictionary:
 		"photo_obstruction": bool(record.get("obstruction", false))}
 
 
-func _photo_room(at: Vector2i) -> Vector2i:
-	return WorldGen.annex_room_id(world_seed, at) if theme == 2 \
-		else WorldGen.room_id(world_seed, at)
-
-
 ## Room transitions, not grid steps: crossing a merged hall is free here.
 ## A distance difference of five proves that the new single transition saves
 ## at least four room transitions on the route to the objective.
@@ -672,14 +665,11 @@ func _photo_room_graph(route: DescentRoute) -> Dictionary:
 		return route._photo_graph_cache
 	var neighbours := {}
 	for at in route.scanned_cells():
-		var room := _photo_room(at)
+		var room := route.base_room(at)
 		if not neighbours.has(room):
 			neighbours[room] = {}
-		for dir in 4:
-			var other: Vector2i = at + WorldGen.DIRV[dir]
-			if not route.scanned_contains(other) or route.base_is_wall(at, dir):
-				continue
-			var next_room := _photo_room(other)
+		for other in route.base_neighbours(at):
+			var next_room := route.base_room(other)
 			if room != next_room:
 				neighbours[room][next_room] = true
 	route._photo_graph_cache = neighbours
@@ -692,13 +682,13 @@ func _photo_room_distances(route: DescentRoute, graph: Dictionary,
 	for record: Dictionary in openings:
 		var at: Vector2i = record["cell"]
 		var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
-		var a := _photo_room(at)
-		var b := _photo_room(other)
+		var a := route.base_room(at)
+		var b := route.base_room(other)
 		neighbours[a] = (neighbours[a] as Dictionary).duplicate()
 		neighbours[b] = (neighbours[b] as Dictionary).duplicate()
 		neighbours[a][b] = true
 		neighbours[b][a] = true
-	var start := _photo_room(route.target)
+	var start := route.base_room(route.target)
 	var distances := {start: 0}
 	var queue: Array[Vector2i] = [start]
 	var head := 0
@@ -712,7 +702,8 @@ func _photo_room_distances(route: DescentRoute, graph: Dictionary,
 	return distances
 
 
-func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_only := false) -> void:
+func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_only := false,
+		candidate_path: Array[Vector2i] = []) -> void:
 	if not obstruction_only and not intro_only and not route.obstruction_hint.is_empty():
 		for hint in [route.intro_door_hint, route.obstruction_hint, route.realm_door_hint]:
 			if not hint.is_empty():
@@ -727,39 +718,47 @@ func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_onl
 		_photo_doors[str(first["key"])] = first.duplicate(true)
 		var first_at: Vector2i = first["cell"]
 		for endpoint in [first_at, first_at + WorldGen.DIRV[edge_dir(first)]]:
-			for member in _owning_room_members(endpoint):
+			for member in route.base_room_members(endpoint):
 				protected[member] = true
 	var graph := _photo_room_graph(route)
 	var distances := _photo_room_distances(route, graph)
 	var near_path := {}
-	var path := route.path_from_origin()
+	var path := route.path_from_origin() if candidate_path.is_empty() else candidate_path
 	var path_rooms := {}
 	for at in path:
-		path_rooms[_photo_room(at)] = true
+		path_rooms[route.base_room(at)] = true
 		for dz in range(-1, 2):
 			for dx in range(-1, 2):
 				near_path[at + Vector2i(dx, dz)] = true
 	var seen := {}
 	var candidates: Array[Dictionary] = []
+	var allow_corridor := obstruction_only and theme == 7
 	for at: Vector2i in near_path:
-		if not _photo_cell_safe(route, at, protected, optional, obstruction_only and theme == 7):
+		var room := route.base_room(at)
+		var distance := int(distances.get(room, -1))
+		if distance < 0:
 			continue
 		for dir in 4:
 			var other: Vector2i = at + WorldGen.DIRV[dir]
+			var far_room := route.base_room(other)
+			var far_distance := int(distances.get(far_room, -1))
+			var saving := absi(distance - far_distance) - 1
+			# Only a wall that shortens the trip can become a photo door.
+			# Obstructions must also be approachable from the authored path.
+			if far_distance < 0 or saving < PHOTO_DOOR_MIN_SAVING:
+				continue
+			if obstruction_only and not path_rooms.has(room if distance > far_distance else far_room):
+				continue
+			if not route.base_is_wall(at, dir):
+				continue
 			var key := edge_key(at, dir)
-			if seen.has(key) or not route.base_is_wall(at, dir):
+			if seen.has(key):
 				continue
 			seen[key] = true
-			if not _photo_cell_safe(route, other, protected, optional, obstruction_only and theme == 7) \
+			if not _photo_cell_safe(route, at, protected, optional, allow_corridor) \
+					or not _photo_cell_safe(route, other, protected, optional, allow_corridor) \
 					or not is_equal_approx(Chunk.cell_floor_h(world_seed, at, theme),
 						Chunk.cell_floor_h(world_seed, other, theme)):
-				continue
-			var room := _photo_room(at)
-			var far_room := _photo_room(other)
-			if room == far_room or not distances.has(room) or not distances.has(far_room):
-				continue
-			var saving := absi(int(distances[room]) - int(distances[far_room])) - 1
-			if saving < PHOTO_DOOR_MIN_SAVING:
 				continue
 			var record := _opening_record(canonical_edge(at, dir), false)
 			record["id"] = ("photo_obstruction:%s" if obstruction_only else "photo_door:%s") % key
@@ -769,7 +768,7 @@ func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_onl
 			if not obstruction_only and route.floor_idx == 0 and theme == 0:
 				record.merge(_photo_intro_approach(route, record, distances, path, intro_only))
 			if obstruction_only:
-				var approach := _photo_obstruction_approach(record, distances, path)
+				var approach := _photo_obstruction_approach(route, record, distances, path)
 				if approach.is_empty():
 					continue
 				record.merge(approach)
@@ -793,8 +792,8 @@ func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_onl
 	for record in candidates:
 		var at: Vector2i = record["cell"]
 		var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
-		var room := _photo_room(at)
-		var far_room := _photo_room(other)
+		var room := route.base_room(at)
+		var far_room := route.base_room(other)
 		if used_rooms.has(room) or used_rooms.has(far_room):
 			continue
 		var minimum := absi(int(remaining_distances[room]) \
@@ -808,8 +807,8 @@ func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_onl
 			var first: Dictionary = _photo_doors.values()[0]
 			var first_at: Vector2i = first["cell"]
 			var first_other: Vector2i = first_at + WorldGen.DIRV[edge_dir(first)]
-			var first_min := absi(int(after_candidate[_photo_room(first_at)]) \
-				- int(after_candidate[_photo_room(first_other)])) - 1
+			var first_min := absi(int(after_candidate[route.base_room(first_at)]) \
+				- int(after_candidate[route.base_room(first_other)])) - 1
 			# The early teaching door already saves four or more on its own.
 			# On the short casino floor it must still help if the later obstruction
 			# was found first, without demanding two independent four-room detours.
@@ -833,34 +832,34 @@ func _photo_intro_approach(route: DescentRoute, record: Dictionary,
 		distances: Dictionary, path: Array[Vector2i], ignore_tapes := false) -> Dictionary:
 	var at: Vector2i = record["cell"]
 	var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
-	var approach := at if int(distances[_photo_room(at)]) > int(distances[_photo_room(other)]) else other
+	var approach := at if int(distances[route.base_room(at)]) > int(distances[route.base_room(other)]) else other
 	var tape_rooms := {}
 	if not ignore_tapes:
 		for tape in route.optional_vhs_cells():
-			tape_rooms[_photo_room(tape)] = true
+			tape_rooms[route.base_room(tape)] = true
 	var room_steps := 0
-	var previous := _photo_room(route.origin)
+	var previous := route.base_room(route.origin)
 	for idx in mini(path.size(), INTRO_DOOR_MAX_PATH_STEPS + 1):
-		var room := _photo_room(path[idx])
+		var room := route.base_room(path[idx])
 		if room != previous:
 			room_steps += 1
 			previous = room
 		if room_steps > INTRO_DOOR_MAX_ROOM_STEPS or tape_rooms.has(room):
 			break
-		if room == _photo_room(approach) and room_steps > 0 \
+		if room == route.base_room(approach) and room_steps > 0 \
 				and maxi(absi(path[idx].x - approach.x), absi(path[idx].y - approach.y)) <= 1:
 			return {"intro": true, "approach_cell": approach,
 				"approach_path_index": idx, "approach_room_steps": room_steps}
 	return {}
 
 
-func _photo_obstruction_approach(record: Dictionary, distances: Dictionary,
+func _photo_obstruction_approach(route: DescentRoute, record: Dictionary, distances: Dictionary,
 		path: Array[Vector2i]) -> Dictionary:
 	var at: Vector2i = record["cell"]
 	var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
-	var approach := at if int(distances[_photo_room(at)]) > int(distances[_photo_room(other)]) else other
+	var approach := at if int(distances[route.base_room(at)]) > int(distances[route.base_room(other)]) else other
 	for idx in path.size():
-		if _photo_room(path[idx]) == _photo_room(approach) \
+		if route.base_room(path[idx]) == route.base_room(approach) \
 				and maxi(absi(path[idx].x - approach.x), absi(path[idx].y - approach.y)) <= 1:
 			return {"approach_cell": approach, "approach_path_index": idx}
 	return {}
@@ -881,7 +880,7 @@ func plan_realm_door(route: DescentRoute, allow_station_cells := false) -> Dicti
 			continue
 		var near: Vector2i = hint["cell"]
 		for endpoint in [near, near + WorldGen.DIRV[edge_dir(hint)]]:
-			for member in _owning_room_members(endpoint):
+			for member in route.base_room_members(endpoint):
 				protected[member] = true
 	var path := route.path_from_origin()
 	var candidates: Array[Dictionary] = []
@@ -889,7 +888,7 @@ func plan_realm_door(route: DescentRoute, allow_station_cells := false) -> Dicti
 	for idx in range(1, (path.size() - 1) / 2 + 1):
 		# Include adjacent cells of the same room: a merged room's usable wall
 		# need not sit on the exact sequence of lattice cells in the route.
-		for at in _owning_room_members(path[idx]):
+		for at in route.base_room_members(path[idx]):
 			if maxi(absi(at.x - path[idx].x), absi(at.y - path[idx].y)) > 1:
 				continue
 			if not _realm_cell_safe(route, at, protected, allow_station_cells):
@@ -900,7 +899,7 @@ func plan_realm_door(route: DescentRoute, allow_station_cells := false) -> Dicti
 				if seen.has(key) or not route.base_is_wall(at, dir):
 					continue
 				if not _realm_cell_safe(route, other, protected, allow_station_cells) \
-						or _photo_room(at) == _photo_room(other) \
+						or route.base_room(at) == route.base_room(other) \
 						or not is_equal_approx(Chunk.cell_floor_h(world_seed, at, theme),
 							Chunk.cell_floor_h(world_seed, other, theme)):
 					continue
@@ -908,7 +907,7 @@ func plan_realm_door(route: DescentRoute, allow_station_cells := false) -> Dicti
 				var record := _opening_record(canonical_edge(at, dir), false)
 				record.merge({"id": "realm_door:" + key, "realm": true,
 					"approach_cell": at, "approach_path_index": idx})
-				record.merge(_realm_discovery_approach(path, idx, at, dir))
+				record.merge(_realm_discovery_approach(route, path, idx, at, dir))
 				candidates.append(record)
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary):
 		# A forward-facing wall on entry gets priority over the exact 30% mark.
@@ -933,11 +932,11 @@ func plan_realm_door(route: DescentRoute, allow_station_cells := false) -> Dicti
 	return candidates[0] if not candidates.is_empty() else {}
 
 
-func _realm_discovery_approach(path: Array[Vector2i], idx: int, at: Vector2i, dir: int) -> Dictionary:
+func _realm_discovery_approach(route: DescentRoute, path: Array[Vector2i], idx: int, at: Vector2i, dir: int) -> Dictionary:
 	# Reconstruct the ordinary entrance into this merged room, including the
 	# actual offset of its existing doorway rather than assuming cell centres.
-	var room := _photo_room(at)
-	while idx > 1 and _photo_room(path[idx - 1]) == room:
+	var room := route.base_room(at)
+	while idx > 1 and route.base_room(path[idx - 1]) == room:
 		idx -= 1
 	var previous := path[idx - 1]
 	var incoming := WorldGen.DIRV.find(path[idx] - previous)
@@ -964,7 +963,7 @@ func _realm_cell_safe(route: DescentRoute, at: Vector2i, protected: Dictionary,
 	# to share a room with a pod, provided all other architecture rules hold.
 	if not route.scanned_contains(at):
 		return false
-	for member in _owning_room_members(at):
+	for member in route.base_room_members(at):
 		if protected.has(member) or WorldGen.portal(world_seed, member, theme) >= 0 \
 				or WorldGen.elevator_cell(world_seed, member, theme):
 			return false
@@ -1000,10 +999,9 @@ func _photo_cell_safe(route: DescentRoute, at: Vector2i,
 	if not allow_corridor and (WorldGen.annex_corridor_axis(world_seed, at) if theme == 2 \
 			else WorldGen.corridor(world_seed, at)) != 0:
 		return false
-	var style := WorldGen.cell_style(world_seed, at, theme)
-	if theme == 2 and style == WorldGen.ANNEX_PASSAGE:
-		return false
-	return theme != 9 or Chunk.pool_style_dry(style)
+	if theme == 2:
+		return WorldGen.cell_style(world_seed, at, theme) != WorldGen.ANNEX_PASSAGE
+	return theme != 9 or Chunk.pool_style_dry(WorldGen.cell_style(world_seed, at, theme))
 
 
 func _closure_record(edge: Dictionary) -> Dictionary:
@@ -1055,7 +1053,7 @@ func _cell_allowed(route: DescentRoute, at: Vector2i,
 	# Rebuilding one member rebuilds the furnishing owner for the complete room.
 	# Protect the whole owning room whenever any member contains mandatory or
 	# stateful content, not merely the edge endpoint selected by the planner.
-	for member in _owning_room_members(at):
+	for member in route.base_room_members(at):
 		if protected.has(member) \
 				or WorldGen.portal(world_seed, member, theme) >= 0 \
 				or WorldGen.elevator_cell(world_seed, member, theme) \
@@ -1064,14 +1062,6 @@ func _cell_allowed(route: DescentRoute, at: Vector2i,
 			return false
 	_cell_allowed_cache[at] = true
 	return true
-
-
-func _owning_room_members(at: Vector2i) -> Array[Vector2i]:
-	if _room_members_cache.has(at):
-		return (_room_members_cache[at] as Array).duplicate()
-	var out := WorldGen.owning_room_members(world_seed, at, theme)
-	_room_members_cache[at] = out.duplicate()
-	return out
 
 
 func _mutation_cell_safe(route: DescentRoute, at: Vector2i,

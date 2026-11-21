@@ -9,8 +9,8 @@ func _init() -> void:
 func _run() -> void:
 	var failures: Array[String] = []
 	if ChunkManager.LOAD_R != 3 or ChunkManager.UNLOAD_R != ChunkManager.LOAD_R + 1 \
-			or ChunkManager.BUDGET != 1 or ChunkManager.WARM_R != 1:
-		failures.append("expanded range changed the one-chunk budget or safe 3x3 warmup")
+			or ChunkManager.WARM_R != 1:
+		failures.append("streaming range or safe 3x3 warmup changed")
 	_audit_visible_rings(failures)
 	var deferred := Chunk.new(99173, Vector2i(0, 0), 2, null, true)
 	var stages := 0
@@ -75,10 +75,6 @@ func _run() -> void:
 		manager._process(1.0 / 60.0)
 	if manager._last_center != Vector2i(-1, 0):
 		failures.append("reverse traversal did not update streaming center")
-	manager.set_blackout(true)
-	if manager._pending_chunk != null:
-		failures.append("blackout left a pending ordinary build")
-	manager.set_blackout(false)
 	if signals.count == 0:
 		failures.append("no complete chunk was installed/signalled")
 	for cell in manager._wanted:
@@ -86,20 +82,48 @@ func _run() -> void:
 			var anchor := WorldGen.room_id(manager.world_seed, member)
 			if WorldGen.corridor(manager.world_seed, member) == 0 and not manager._wanted.has(anchor):
 				failures.append("visible room member lacks required owning anchor")
-	# Cancellation is tested with a guaranteed incomplete off-tree chunk,
-	# independently of how fast this computer happens to build a normal frame.
+	# Power must not throw away unfinished geometry. A topology change that
+	# actually edits the unfinished room must still cancel and requeue it.
 	manager._cancel_pending()
-	var staged_cell: Vector2i = manager._wanted.keys()[0]
+	var staged_cell := Vector2i(15, 0)
+	manager._wanted[staged_cell] = true
 	manager._pending_cell = staged_cell
 	manager._pending_chunk = Chunk.new(manager.world_seed, staged_cell, manager.theme, null, true)
 	var staged_id := manager._pending_chunk.get_instance_id()
 	manager._pending_chunk.build_next_slice()
 	manager._pending_chunk.build_next_slice()
 	if manager._pending_chunk._build_jobs.is_empty():
-		failures.append("cancellation fixture did not retain unfinished wall jobs")
+		failures.append("power fixture did not retain unfinished wall jobs")
 	manager.set_blackout(true)
+	if not is_instance_id_valid(staged_id) or manager.chunk_at(staged_cell) != null:
+		failures.append("power cut discarded or exposed an unfinished room")
+	var keep := func(): return false
+	if not manager.stage_rebuild_cells([Vector2i.ZERO], 1, keep):
+		failures.append("unrelated resident room could not be staged")
+	var resident := manager.chunk_at(Vector2i.ZERO)
+	manager._process(1.0 / 60.0)
+	if manager._staged_build != null or manager._staged_cells.is_empty() \
+			or manager.chunk_at(Vector2i.ZERO) != resident or not resident.body.is_inside_tree():
+		failures.append("power-cut frame started a replacement or lost its live collider")
+	manager._process(1.0 / 60.0)
+	if manager._staged_build == null and not manager._staged_cells.is_empty():
+		failures.append("replacement did not resume on the next frame")
+	manager._discard_staged_rebuild()
+	manager._stream_one_chunk(staged_cell, Vector3.ZERO, [], false, Time.get_ticks_usec())
+	var installed := manager.chunk_at(staged_cell)
+	if installed == null or installed.get_instance_id() != staged_id or not installed._blackout:
+		failures.append("unfinished room did not install under the current power state")
+	manager.set_blackout(false)
+	if installed == null or installed._blackout:
+		failures.append("streamed room did not recover power")
+	staged_cell += Vector2i.RIGHT
+	manager._wanted[staged_cell] = true
+	manager._pending_cell = staged_cell
+	manager._pending_chunk = Chunk.new(manager.world_seed, staged_cell, manager.theme, null, true)
+	staged_id = manager._pending_chunk.get_instance_id()
+	manager.stage_rebuild_cells([staged_cell], 1, keep)
 	if is_instance_id_valid(staged_id) or not manager.queued.has(staged_cell):
-		failures.append("blackout did not discard and requeue incomplete content")
+		failures.append("changed topology kept a stale partially built room")
 	manager.free()
 
 	var warm_manager := ChunkManager.new()

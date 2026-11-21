@@ -47,6 +47,18 @@ func _run() -> void:
 	loaded.configure(103, true, test_root)
 	_expect(loaded.entries.is_empty(), "different seed leaked photographs")
 	_expect(loaded.image_at(-1) == null and loaded.image_at(0) == null, "invalid index returned image")
+	var snapshot := Image.create(96, 64, false, Image.FORMAT_RGBH)
+	snapshot.fill(Color(0.75, 0.5, 0.125))
+	_expect(loaded.add_photo(snapshot, {"caption": "reference"}) == OK
+		and await loaded.add_live_photo(snapshot, {"caption": "shutter"}, self) == OK,
+		"could not save matching HDR prints")
+	if loaded.entries.size() == 2:
+		var directory := test_root.path_join("103")
+		var reference := FileAccess.get_file_as_bytes(directory.path_join(loaded.entries[0]["file"]))
+		var shutter := FileAccess.get_file_as_bytes(directory.path_join(loaded.entries[1]["file"]))
+		_expect(not reference.is_empty() and shutter == reference and snapshot.get_format() == Image.FORMAT_RGBH,
+			"worker changed the JPEG or the original HDR print")
+	await _check_overlapping_writes(snapshot)
 	var memory_root := test_root.path_join("must_not_exist")
 	var memory := Store.new()
 	memory.configure(102, false, memory_root)
@@ -93,6 +105,42 @@ func _run() -> void:
 	if failures.is_empty():
 		print("photo album store audit: PASS — persistence, order, resize, seed isolation, memory mode, malformed data and write failure")
 	quit(0 if failures.is_empty() else 1)
+
+
+func _check_overlapping_writes(photo: Image) -> void:
+	var store := Store.new()
+	store.configure(106, true, test_root)
+	_expect(store.add_photo(photo, {"anomaly_ids": ["door"]}) == OK, "overlap setup failed")
+	var results := {}
+	_save_live(store, photo, "first", results)
+	_save_live(store, photo, "second", results)
+	store.set_flash_status("door", "ready")
+	while results.size() < 2:
+		await process_frame
+	var again := Store.new()
+	again.configure(106, true, test_root)
+	_expect(results["first"] == OK and results["second"] == OK and again.entries.size() == 3,
+		"concurrent writes lost an album row")
+	if again.entries.size() == 3:
+		_expect(again.entries[0].flash_status == "ready" and again.entries[1].caption == "first"
+			and again.entries[2].caption == "second" and again.image_at(2) != null,
+			"shutter order, image or intervening flash update was lost")
+	var switched := {}
+	_save_live(store, photo, "old run", switched)
+	store.configure(107, true, test_root)
+	while switched.is_empty():
+		await process_frame
+	_expect(switched["old run"] == ERR_SKIP and store.entries.is_empty()
+		and DirAccess.get_files_at(test_root.path_join("106")).size() == 4,
+		"changing runs published a stale print or left staging files")
+	DirAccess.make_dir_recursive_absolute(test_root.path_join("107/manifest.json"))
+	_expect(await store.add_live_photo(photo, {}, self) != OK and store.entries.is_empty()
+		and DirAccess.get_files_at(test_root.path_join("107")).is_empty(),
+		"failed live manifest publication left a photograph or staging file")
+
+
+func _save_live(store: PhotoAlbumStore, photo: Image, caption: String, results: Dictionary) -> void:
+	results[caption] = await store.add_live_photo(photo, {"caption": caption}, self)
 
 
 func _cleanup(path: String) -> void:

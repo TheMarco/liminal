@@ -8,6 +8,9 @@ var _prepared := {}
 static var _shader_power := {}
 var _meshes := {}
 var _labels := {}
+var _by_override: Dictionary[Material, Array] = {}
+var _other_visuals: Array[Node] = []
+var _switched_overrides: Dictionary[Material, Array] = {}
 
 static func clear_cache() -> void:
 	_shader_power.clear()
@@ -85,6 +88,44 @@ func off_material(material: Material, variants: Dictionary = {}) -> Material:
 func apply(root: Node, variants: Dictionary = {}) -> void:
 	apply_visuals(root.find_children("*", "VisualInstance3D", true, false), variants)
 
+
+func index_visuals(visuals: Array[Node]) -> void:
+	_by_override.clear()
+	_other_visuals.clear()
+	for node in visuals:
+		var mesh := node as MeshInstance3D
+		if mesh != null and mesh.material_override != null and mesh.material_overlay == null:
+			var group: Array = _by_override.get_or_add(mesh.material_override, [])
+			group.append(mesh)
+		else:
+			_other_visuals.append(node)
+
+
+func apply_indexed(variants: Dictionary) -> void:
+	# Group by original binding only. Read its current shader, emission and
+	# next pass at the switch, and check for changes to individual instances.
+	var rebound: Array[Node] = []
+	for source: Material in _by_override:
+		var dark := off_material(source, variants)
+		var group: Array = _by_override[source]
+		if dark == source:
+			for mesh: MeshInstance3D in group:
+				if mesh.material_override != source or mesh.material_overlay != null:
+					rebound.append(mesh)
+		else:
+			var switched: Array[MeshInstance3D] = []
+			for mesh: MeshInstance3D in group:
+				if mesh.material_override != source or mesh.material_overlay != null:
+					rebound.append(mesh)
+				elif mesh.mesh != null:
+					mesh.material_override = dark
+					switched.append(mesh)
+			_switched_overrides[source] = switched
+	apply_visuals(_other_visuals, variants)
+	if not rebound.is_empty():
+		apply_visuals(rebound, variants)
+
+
 func apply_visuals(visuals: Array[Node], variants: Dictionary) -> void:
 	for node in visuals:
 		if node is Label3D:
@@ -93,19 +134,25 @@ func apply_visuals(visuals: Array[Node], variants: Dictionary) -> void:
 				node.shaded = true
 			continue
 		var mesh := node as MeshInstance3D
-		if mesh == null or mesh.mesh == null or _meshes.has(mesh):
+		if mesh == null or mesh.mesh == null:
 			continue
 		var original := mesh.material_override
 		var overlay := mesh.material_overlay
-		var dark: Material = variants.get(original)
-		if original != null and dark == null:
-			dark = off_material(original, variants)
+		var dark := original
+		if original != null:
+			dark = variants.get(original)
+			if dark == null:
+				dark = off_material(original, variants)
+			if dark == original and overlay == null:
+				continue
+		if _meshes.has(mesh):
+			continue
 		var dark_overlay := overlay
 		if overlay != null:
 			dark_overlay = off_material(overlay, variants)
 		if original != null and original == dark and overlay == dark_overlay:
 			continue
-		var surfaces := {}
+		var surfaces: Dictionary
 		if original == null:
 			for i in mesh.mesh.get_surface_count():
 				var current := mesh.get_active_material(i)
@@ -117,16 +164,25 @@ func apply_visuals(visuals: Array[Node], variants: Dictionary) -> void:
 					mesh.set_surface_override_material(i, variant)
 		if dark != original or dark_overlay != overlay or not surfaces.is_empty():
 			_meshes[mesh] = [original, overlay, surfaces]
-			mesh.material_override = dark
-			mesh.material_overlay = dark_overlay
+			if dark != original:
+				mesh.material_override = dark
+			if dark_overlay != overlay:
+				mesh.material_overlay = dark_overlay
 
 func restore() -> void:
+	for source: Material in _switched_overrides:
+		for mesh in _switched_overrides[source]:
+			if is_instance_valid(mesh):
+				mesh.material_override = source
+	_switched_overrides.clear()
 	for mesh in _meshes:
 		if not is_instance_valid(mesh):
 			continue
 		var state: Array = _meshes[mesh]
-		mesh.material_override = state[0]
-		mesh.material_overlay = state[1]
+		if mesh.material_override != state[0]:
+			mesh.material_override = state[0]
+		if mesh.material_overlay != state[1]:
+			mesh.material_overlay = state[1]
 		for i in state[2]:
 			mesh.set_surface_override_material(i, state[2][i])
 	for label in _labels:

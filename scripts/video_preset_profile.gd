@@ -134,10 +134,12 @@ func selected_crt_model() -> String:
 	return ("royale" if quality>=Quality.HIGH else "aperture") if crt_model==0 else CRT_NAMES[crt_model]
 
 static func crt_descriptors(model: String) -> Dictionary:
+	return _descriptors_for(model).duplicate(true)
+
+static func _descriptors_for(model: String) -> Dictionary:
 	if _crt_presets.is_empty():
-		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://third_party/ntscrt/slang/presets.json"))
-		if data is Dictionary: _crt_presets = data.get("presets",{})
-	return _crt_presets.get(model,{}).get("parameters",{}).duplicate(true)
+		_crt_presets = preload("res://scripts/ntscrt_slang_chain.gd").load_presets()
+	return _crt_presets.get(model, {}).get("parameters", {})
 
 ## Complete model values, including upstream defaults and this port's calibration.
 ## Sending the complete set also restores shader defaults after removing overrides.
@@ -146,8 +148,9 @@ func canonical_crt_parameters(model: String) -> Dictionary:
 	var overrides: Dictionary = CRT_CALIBRATION.get(model,{}).duplicate(true)
 	if crt_parameters.get(model,{}) is Dictionary:
 		overrides.merge(crt_parameters.get(model,{}),true)
-	for key: String in crt_descriptors(model):
-		var descriptor: Dictionary = _crt_presets[model].parameters[key]
+	var descriptors := _descriptors_for(model)
+	for key: String in descriptors:
+		var descriptor: Dictionary = descriptors[key]
 		var value: Variant = overrides.get(key,descriptor.default)
 		if not (value is int or value is float) or not is_finite(float(value)):
 			value = descriptor.default

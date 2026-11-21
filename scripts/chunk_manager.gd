@@ -16,8 +16,8 @@ const ROOM_LIGHT_FADE_BEGIN := ceilf(CELL * (LOAD_R + 1) * sqrt(2.0))
 ## A complete authored chunk can already consume the frame's build allowance.
 ## Building only one per frame prevents three individually legal rooms from
 ## stacking into a visible hitch; the 3x3 warm-up keeps collision ahead safe.
-const BUDGET := 1  # chunks built per frame; selection below assumes one
 const BUILD_BUDGET_USEC := 3000
+const COVERED_BUILD_BUDGET_USEC := 8000
 const LOOKAHEAD_SECONDS := 1.5
 const WARM_R := 1  # 3x3 is enough collision coverage for a safe arrival
 ## 12m cells at a 6% hit rate produce one optional set per ~200m of newly
@@ -44,6 +44,8 @@ var descent_route: DescentRoute
 var descent_topology: DescentTopology
 var native_doorway_plan: NativeDoorwayPlan
 var blackout := false
+var _power_cut_since_stream_tick := false
+var _arrival_power_materials: Array[Material] = []
 var anomalies := {}
 ## Mirrored from DescentRun so a target or arrival room that streams out and
 ## back rebuilds in the state the run is actually in.
@@ -82,6 +84,7 @@ var _chunks_since_prefetch := 0
 var _pending_run_state: Array = []
 var _staged_cells: Array[Vector2i] = []
 var _staged_index := 0
+var _staged_build: Chunk
 var _staged_state := -1
 var _staged_replacements := {}
 var _staged_snapshots := {}
@@ -110,6 +113,7 @@ static var _dev_timing := false
 ## the player; the first frame the player reaches the safe WARM_R ring it clears
 ## itself and normal player-centred streaming resumes.
 var stream_focus := Vector3.INF
+var preparing_arrival := false
 
 
 func warm_up(center: Vector2i) -> void:
@@ -121,6 +125,31 @@ func warm_up(center: Vector2i) -> void:
 			var c := center + Vector2i(dx, dz)
 			if not chunks.has(c):
 				_build(c)
+
+
+func arrival_stream_ready() -> bool:
+	return _last_center != NO_BROKEN_STATION and queued.is_empty() and _pending_chunk == null
+
+
+## The first steps out of the Casino car and the turn onto its route each
+## predict a neighbouring cell before the player leaves the arrival room.
+## Build those same strips with the covered budget and ordinary room ordering.
+func prepare_lift_exit_lookahead() -> void:
+	if not preparing_arrival or descent_route == null or descent_route.origin_wall < 0 \
+			or _last_center != descent_route.origin:
+		return
+	var normal_ahead := _ahead
+	var exit_cell: Vector2i = _last_center - WorldGen.DIRV[descent_route.origin_wall]
+	var exit_ahead := _room_complete_cells(exit_cell)
+	exit_ahead.merge(normal_ahead)
+	var route := descent_route.path_from_origin()
+	if route.size() > 1 and route[1] != exit_cell:
+		exit_ahead.merge(_room_complete_cells(route[1]))
+	_ahead = exit_ahead
+	_refill_queue()
+	while can_process() and is_same(_ahead, exit_ahead) and not arrival_stream_ready():
+		await get_tree().process_frame
+	if is_same(_ahead, exit_ahead): _ahead = normal_ahead
 
 
 ## Keep collision available under live hostile actors without moving the normal
@@ -144,12 +173,17 @@ func set_hostile_cells(centers: Array[Vector2i]) -> void:
 func _process(_dt: float) -> void:
 	if player == null or not player.is_inside_tree():
 		return
+	if _power_cut_since_stream_tick:
+		_power_cut_since_stream_tick = false
+		# The power switch has already consumed this frame's build budget.
+		# Resident rooms and colliders stay live until the staged swap.
+		if not _staged_cells.is_empty():
+			return
 	var frame_started := Time.get_ticks_usec()
 	_free_one_retired()
-	# A blackout gives us several fully obscured seconds. Spend at most one room
-	# per frame preparing the next reality, and do not stack ordinary streaming
-	# work on the same frame.
-	if _process_staged_rebuild():
+	# A staged room shares the streaming budget. Keep the previous colliders
+	# live until the entire replacement set has been validated.
+	if _process_staged_rebuild(frame_started):
 		return
 	var pc := Vector2i(
 		floori(player.global_position.x / CELL),
@@ -191,6 +225,36 @@ func _process(_dt: float) -> void:
 	if _pending_chunk != null and _pending_run_state != run_state:
 		_cancel_pending()
 	var loading_asset := FloorResourcePreloader.poll()
+	var deadline := frame_started + (COVERED_BUILD_BUDGET_USEC if preparing_arrival else BUILD_BUDGET_USEC)
+	while _stream_one_chunk(pc, prediction, run_state, loading_asset, deadline):
+		if not preparing_arrival or queued.is_empty() or Time.get_ticks_usec() >= deadline:
+			break
+
+	for c in chunks.keys():
+		var ch := chunks[c] as Chunk
+		# Prefetch is useful scenery as soon as it is complete. Likewise, don't
+		# hide a resident room just because we crossed a cell boundary or turned
+		# around. Retain its owning anchor too, keeping merged-room props intact.
+		var show: bool = _wanted.has(c) or _ahead.has(c) or _retained.has(c) \
+			or _hostile_cells.has(c)
+		if ch.visible != show:
+			ch.visible = show
+		if not show:
+			_capture_chunk_runtime(ch)
+			chunks.erase(c)
+			_retire(c, ch)
+
+	# Keep one decode in flight, between chunk builds. Never consume a request
+	# before it completes or stack first-use decoding with ordinary generation.
+	if _pending_chunk == null and (_chunks_since_prefetch >= 2 or queued.is_empty()):
+		FloorResourcePreloader.request_next()
+		_chunks_since_prefetch = 0
+
+
+## A visible frame installs at most one room. Under an opaque loading screen
+## several small rooms may share the same wall-clock allowance.
+func _stream_one_chunk(pc: Vector2i, prediction: Vector3, run_state: Array,
+		loading_asset: bool, deadline: int) -> bool:
 	if _pending_chunk == null and not queued.is_empty():
 		var closest := NO_BROKEN_STATION
 		var best := INF
@@ -222,8 +286,11 @@ func _process(_dt: float) -> void:
 			queued.erase(closest)
 			_pending_run_state = run_state
 			_pending_cell = closest
-			_pending_chunk = Chunk.new(world_seed, closest, theme,
-				_build_spec(closest), true)
+			var spec := _build_spec(closest)
+			# The ordinary streamer applies the current power after restoring
+			# saved fixtures in _install_chunk. Power can change between slices.
+			spec.blackout = false
+			_pending_chunk = Chunk.new(world_seed, closest, theme, spec, true)
 			_pending_chunk.position = Vector3(closest.x * CELL, 0.0, closest.y * CELL)
 	if _pending_chunk != null:
 		# Only a missing floor under the player may bypass the allowance.
@@ -233,11 +300,11 @@ func _process(_dt: float) -> void:
 		var build_started := Time.get_ticks_usec()
 		var building_cell := _pending_cell
 		while true:
-			if not urgent and Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
+			if not urgent and Time.get_ticks_usec() >= deadline:
 				break
 			if _pending_chunk.build_next_slice():
 				# Installation gets the next allowance if generation used this one.
-				if not urgent and Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
+				if not urgent and Time.get_ticks_usec() >= deadline:
 					break
 				var complete := _pending_chunk
 				var at := _pending_cell
@@ -246,29 +313,11 @@ func _process(_dt: float) -> void:
 				_install_chunk(at, complete)
 				_chunks_since_prefetch += 1
 				break
-			if not urgent and Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
+			if not urgent and Time.get_ticks_usec() >= deadline:
 				break
 		RuntimeDiagnostics.slow("chunk_build", build_started, {"cell": str(building_cell), "level": theme, "urgent": urgent})
-
-	for c in chunks.keys():
-		var ch := chunks[c] as Chunk
-		# Prefetch is useful scenery as soon as it is complete. Likewise, don't
-		# hide a resident room just because we crossed a cell boundary or turned
-		# around. Retain its owning anchor too, keeping merged-room props intact.
-		var show: bool = _wanted.has(c) or _ahead.has(c) or _retained.has(c) \
-			or _hostile_cells.has(c)
-		if ch.visible != show:
-			ch.visible = show
-		if not show:
-			_capture_chunk_runtime(ch)
-			chunks.erase(c)
-			_retire(c, ch)
-
-	# Keep one decode in flight, between chunk builds. Never consume a request
-	# before it completes or stack first-use decoding with ordinary generation.
-	if _pending_chunk == null and (_chunks_since_prefetch >= 2 or queued.is_empty()):
-		FloorResourcePreloader.request_next()
-		_chunks_since_prefetch = 0
+		return _pending_chunk == null
+	return false
 
 
 func _room_complete_cells(center: Vector2i, radius: int = LOAD_R) -> Dictionary:
@@ -415,7 +464,8 @@ func stage_rebuild_cells(cells: Array[Vector2i], state_override: int,
 	if not _staged_cells.is_empty() or state_override < 0 \
 			or not when_staged.is_valid():
 		return false
-	_cancel_pending()
+	if cells.has(_pending_cell):
+		_cancel_pending()
 	var unique := {}
 	for at in cells:
 		if chunks.has(at) and is_instance_valid(chunks[at]):
@@ -439,13 +489,21 @@ func stage_rebuild_cells(cells: Array[Vector2i], state_override: int,
 	return true
 
 
-func _process_staged_rebuild() -> bool:
+func _process_staged_rebuild(frame_started: int) -> bool:
 	if _staged_cells.is_empty():
 		return false
-	var started := Time.get_ticks_usec()
 	var at := _staged_cells[_staged_index]
-	var replacement := _build(at, false, _staged_state)
-	RuntimeDiagnostics.slow("mutation_chunk_build", started, {"cell": str(at), "level": theme, "total_chunks": _staged_cells.size()})
+	if _staged_build == null:
+		_staged_build = Chunk.new(world_seed, at, theme, _build_spec(at, _staged_state), true)
+		_staged_build.position = Vector3(at.x * CELL, 0.0, at.y * CELL)
+	while Time.get_ticks_usec() - frame_started < BUILD_BUDGET_USEC:
+		if _staged_build.build_next_slice():
+			break
+	if Time.get_ticks_usec() - frame_started >= BUILD_BUDGET_USEC:
+		return true
+	var replacement := _staged_build
+	_staged_build = null
+	replacement.restore_runtime_state(_runtime_state.subset_for_cells([at]))
 	_staged_replacements[at] = replacement
 	if not replacement.mutation_rebuild_valid():
 		if _staged_failed.is_valid():
@@ -495,6 +553,7 @@ func _commit_staged_rebuild() -> bool:
 	for at in _staged_cells:
 		var replacement := _staged_replacements[at] as Chunk
 		replacement.descent_topology_state_override = -1
+		replacement.set_blackout(blackout)
 		replacement.prepare_runtime_rendering(ROOM_LIGHT_FADE_BEGIN)
 		add_child(replacement)
 		chunks[at] = replacement
@@ -514,6 +573,9 @@ func _discard_staged_rebuild() -> void:
 
 
 func _clear_staged_rebuild(free_replacements: bool) -> void:
+	if is_instance_valid(_staged_build):
+		_staged_build.free()
+		_staged_build = null
 	if free_replacements:
 		for replacement in _staged_replacements.values():
 			if is_instance_valid(replacement):
@@ -605,9 +667,9 @@ func _broken_station_cell() -> Vector2i:
 	return _broken_cell
 
 
-func set_blackout(on: bool) -> void:
-	if blackout != on:
-		_cancel_pending()
+func set_blackout(on: bool, retain_arrival_materials := false) -> void:
+	if on != blackout:
+		_power_cut_since_stream_tick = on
 	blackout = on
 	# All resident rooms switch together. Share each current material's dark
 	# variant for this transition only, including across room boundaries.
@@ -615,6 +677,11 @@ func set_blackout(on: bool) -> void:
 	for ch in chunks.values():
 		if is_instance_valid(ch):
 			(ch as Chunk).set_blackout(on, variants)
+	if retain_arrival_materials:
+		_arrival_power_materials.clear()
+		for original: Material in variants:
+			if variants[original] != original:
+				_arrival_power_materials.append(variants[original])
 
 
 func chunk_at(c: Vector2i) -> Chunk:

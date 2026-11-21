@@ -27,14 +27,25 @@ static func owning_room_members(seed: int, at: Vector2i,
 		return [at]
 	var root := annex_room_id(seed, at) if theme == 2 else room_id(seed, at)
 	var out: Array[Vector2i] = []
-	# Ordinary merges extend one cell; the Annex's flooded hall extends two.
-	var reach := 3 if theme == 2 and annex_room_size(seed, root) == 9 else 2
-	for x in range(root.x - 1, root.x + reach):
-		for y in range(root.y - 1, root.y + reach):
-			var member := Vector2i(x, y)
-			var member_root := annex_room_id(seed, member) if theme == 2 \
-				else room_id(seed, member)
-			if member_root == root:
+	if theme != 2:
+		# A hall fills its aligned square. Every other room can only receive
+		# its west or north neighbour. Preserve the original x-then-y order.
+		if hall_root(seed, root) == root:
+			return [root, root + Vector2i.DOWN, root + Vector2i.RIGHT, root + Vector2i.ONE]
+		if merge_dir(seed, root + Vector2i.LEFT) == 0:
+			out.append(root + Vector2i.LEFT)
+		if merge_dir(seed, root + Vector2i.UP) == 2:
+			out.append(root + Vector2i.UP)
+		out.append(root)
+		return out
+	# Annex room ids anchor the lowest x and y. Flooded halls fill their
+	# entire 3×3 block. Pairs and ordinary halls fit the positive 2×2 block.
+	var flooded := _annex_flooded_hall_root(seed, root) == root
+	var reach := 3 if flooded else 2
+	for x in reach:
+		for y in reach:
+			var member := root + Vector2i(x, y)
+			if flooded or annex_room_id(seed, member) == root:
 				out.append(member)
 	return out
 
@@ -260,14 +271,12 @@ static func hall_root(ws: int, cell: Vector2i) -> Vector2i:
 	return Vector2i(bx, bz)
 
 
-## Raw merge preference, ignoring whether the target can accept it.
-static func _merge_raw(ws: int, cell: Vector2i) -> int:
+## Seeded direction before checking whether either endpoint is a hall or corridor.
+static func _merge_preference(ws: int, cell: Vector2i) -> int:
 	# The origin is the guaranteed arrival room. Keep it as a root so theme
 	# spawn contracts (classroom, ward, gate) cannot silently move their props
 	# into a neighbouring anchor cell while the player still arrives at (0, 0).
 	if cell == Vector2i.ZERO:
-		return -1
-	if corridor(ws, cell) != 0 or hall_root(ws, cell) != NO_HALL:
 		return -1
 	var r := r01(ws, cell.x, cell.y, 611)
 	if r < 0.24:
@@ -277,18 +286,18 @@ static func _merge_raw(ws: int, cell: Vector2i) -> int:
 	return -1
 
 
+static func _accepts_merge(ws: int, cell: Vector2i) -> bool:
+	return _merge_preference(ws, cell) == -1 and corridor(ws, cell) == 0 \
+		and hall_root(ws, cell) == NO_HALL
+
+
 ## A cell may only merge into a cell that is itself a room root, so chains
 ## stay one link long and every room stays small enough to reason about.
 static func merge_dir(ws: int, cell: Vector2i) -> int:
-	var d := _merge_raw(ws, cell)
-	if d == -1:
+	var d := _merge_preference(ws, cell)
+	if d == -1 or corridor(ws, cell) != 0 or hall_root(ws, cell) != NO_HALL:
 		return -1
-	var nb: Vector2i = cell + DIRV[d]
-	if corridor(ws, nb) != 0 or hall_root(ws, nb) != NO_HALL:
-		return -1
-	if _merge_raw(ws, nb) != -1:
-		return -1
-	return d
+	return d if _accepts_merge(ws, cell + DIRV[d]) else -1
 
 
 ## Identity of the room this cell belongs to. Pure function of the cell, so
@@ -297,8 +306,11 @@ static func room_id(ws: int, cell: Vector2i) -> Vector2i:
 	var h := hall_root(ws, cell)
 	if h != NO_HALL:
 		return h
-	var d := merge_dir(ws, cell)
-	return cell if d == -1 else cell + DIRV[d]
+	var d := _merge_preference(ws, cell)
+	if d == -1 or corridor(ws, cell) != 0:
+		return cell
+	var neighbour: Vector2i = cell + DIRV[d]
+	return neighbour if _accepts_merge(ws, neighbour) else cell
 
 
 ## How many cells the room occupies (1, 2, 3 or 4).
@@ -591,35 +603,9 @@ static func partition_offset(ws: int, cell: Vector2i, theme: int, along_x: bool,
 ## [along_x, offset_metres] or [] for none. This is where small rooms come
 ## from — a 12x12 cell split into, say, 4x12 and 8x12.
 static func room_split(ws: int, root: Vector2i, theme: int) -> Array:
-	# Never drop a partition across a level's arrival room. In the school this
-	# could put the fixed spawn capsule inside a wall before the first frame.
-	if root == Vector2i.ZERO or theme == 2 or room_size(ws, root) != 1 \
-			or corridor(ws, root) != 0:
+	# Poolrooms, Data Center and Quiet Campus never generate partitions.
+	if root == Vector2i.ZERO or theme == 2 or theme == 9 or theme == 10 or theme == 11:
 		return []
-	# A split is a room-type decision, not a generic overlay. Letting it replace
-	# landmark/set-piece styles created context nonsense: bunks in showers,
-	# store fascias behind a food-court counter, and classroom filler in gyms.
-	# Only styles that plausibly contain a little stockroom/office annex may be
-	# subdivided; every other style keeps its authored furnishing contract.
-	var st := cell_style(ws, root, theme)
-	# A regular 12x12 casino room fits the authored slot banks. Its interior
-	# must stay open; generic partitions replace the room's furnishing recipe.
-	if theme == 0 and st == STYLE_SLOTS:
-		return []
-	if theme == 6 and st != SCH_ADMIN:
-		return []
-	if theme == 7 and st != MALL_STORE and st != MALL_SERVICE:
-		return []
-	if theme == 8 and st != PRISON_INDUSTRY:
-		return []
-	# A partition dropped into standing water reads as a mistake, and would cut
-	# the one continuous body of water the floor depends on.
-	if theme == 9:
-		return []
-	if theme == 10 or theme == 11:
-		return []
-	var r := r01(ws, root.x, root.y, 613)
-	# the asylum is mostly small rooms: split single cells aggressively
 	var split_p := 0.3
 	if theme == 1:
 		split_p = 0.42
@@ -635,7 +621,25 @@ static func room_split(ws: int, root: Vector2i, theme: int) -> Array:
 		# A workshop can contain a caged tool or stock room. Actual cells are
 		# built by the barred cell-strip system, never by generic partitions.
 		split_p = 0.62
-	if r > split_p:
+	if r01(ws, root.x, root.y, 613) > split_p:
+		return []
+	# A split is a room-type decision, not a generic overlay. Letting it replace
+	# landmark/set-piece styles created context nonsense: bunks in showers,
+	# store fascias behind a food-court counter, and classroom filler in gyms.
+	# Only styles that plausibly contain a little stockroom/office annex may be
+	# subdivided; every other style keeps its authored furnishing contract.
+	if room_size(ws, root) != 1 or corridor(ws, root) != 0:
+		return []
+	var st := cell_style(ws, root, theme)
+	# A regular 12x12 casino room fits the authored slot banks. Its interior
+	# must stay open; generic partitions replace the room's furnishing recipe.
+	if theme == 0 and st == STYLE_SLOTS:
+		return []
+	if theme == 6 and st != SCH_ADMIN:
+		return []
+	if theme == 7 and st != MALL_STORE and st != MALL_SERVICE:
+		return []
+	if theme == 8 and st != PRISON_INDUSTRY:
 		return []
 	var along_x := r01(ws, root.x, root.y, 614) < 0.5
 	var off: float = [4.0, 5.5, 7.0, 8.0][int(r01(ws, root.x, root.y, 615) * 3.99)]
@@ -905,44 +909,40 @@ static func _annex_edge_info(ws: int, cell: Vector2i, dir: int) -> Dictionary:
 static func is_wall(ws: int, cell: Vector2i, dir: int, theme := 0) -> bool:
 	if theme == 2:
 		return bool(_annex_edge_info(ws, cell, dir)["wall"])
-	if room_id(ws, cell) == room_id(ws, cell + DIRV[dir]):
+	var neighbour: Vector2i = cell + DIRV[dir]
+	var root := room_id(ws, cell)
+	var other_root := room_id(ws, neighbour)
+	if root == other_root:
 		return false
 	if corridor_link(ws, cell, dir):
 		return false
-	return not _doorway(ws, cell, dir)
+	return not _doorway(ws, cell, dir, root, other_root)
 
 
 ## The cell of a room that sits closest to the origin — the room hangs its
 ## guaranteed way out off this one, so a room needs one such door, not one
 ## per cell.
 static func room_link_cell(ws: int, root: Vector2i) -> Vector2i:
-	var best := root
-	var bd := absi(root.x) + absi(root.y)
-	var cells: Array[Vector2i] = []
 	if hall_root(ws, root) == root:
-		cells = [Vector2i(root.x + 1, root.y), Vector2i(root.x, root.y + 1),
-			Vector2i(root.x + 1, root.y + 1)]
-	else:
-		if merge_dir(ws, Vector2i(root.x - 1, root.y)) == 0:
-			cells.append(Vector2i(root.x - 1, root.y))
-		if merge_dir(ws, Vector2i(root.x, root.y - 1)) == 2:
-			cells.append(Vector2i(root.x, root.y - 1))
-	for c in cells:
-		var d := absi(c.x) + absi(c.y)
-		if d < bd or (d == bd and (c.x < best.x or (c.x == best.x and c.y < best.y))):
-			best = c
-			bd = d
-	return best
+		return root + Vector2i(int(root.x < 0), int(root.y < 0))
+	# Either neighbour can reduce Manhattan distance by exactly one. The
+	# west cell wins their original coordinate tie-break when both qualify.
+	if root.x > 0 and merge_dir(ws, root + Vector2i.LEFT) == 0:
+		return root + Vector2i.LEFT
+	if root.y > 0 and merge_dir(ws, root + Vector2i.UP) == 2:
+		return root + Vector2i.UP
+	return root
 
 
 ## Is the boundary between these two rooms pierced by a doorway here? Each
 ## room forces exactly one — from its origin-most cell, stepping inward — so
 ## the whole floor stays connected without perforating every wall.
-static func _doorway(ws: int, cell: Vector2i, dir: int) -> bool:
-	if room_link_cell(ws, room_id(ws, cell)) == cell and _parent_dir(ws, cell) == dir:
+static func _doorway(ws: int, cell: Vector2i, dir: int,
+		root: Vector2i, other_root: Vector2i) -> bool:
+	if _parent_dir(ws, cell) == dir and room_link_cell(ws, root) == cell:
 		return true
 	var nb: Vector2i = cell + DIRV[dir]
-	if room_link_cell(ws, room_id(ws, nb)) == nb and _parent_dir(ws, nb) == OPP[dir]:
+	if _parent_dir(ws, nb) == OPP[dir] and room_link_cell(ws, other_root) == nb:
 		return true
 	# rooms open onto corridors, not into each other: a room-to-room door is
 	# rare, a door onto a corridor is the normal way in. That makes corridors
@@ -1189,6 +1189,10 @@ static func portal(_ws: int, _cell: Vector2i, _theme := 0) -> int:
 ## predicate here makes the set piece deterministic and lets dev tools locate
 ## one without constructing the whole world.
 static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
+	# Most cells miss the seeded lift roll. Rule them out before deriving
+	# room membership, partitions, furnishing style and a wall anchor.
+	if r01(ws, cell.x, cell.y, 1700) >= 0.28:
+		return false
 	var local_root := annex_room_id(ws, cell) if theme == 2 else room_id(ws, cell)
 	var local_size := annex_room_size(ws, local_root) if theme == 2 \
 		else room_size(ws, local_root)
@@ -1207,8 +1211,7 @@ static func elevator_cell(ws: int, cell: Vector2i, theme: int) -> bool:
 		# The facade stands on the dry deck at 1.42, which lifts its header
 		# display to 4.37 — only decks with headroom to spare may carry one.
 		eligible = room_height(ws, cell, theme) >= 4.45
-	return eligible and r01(ws, cell.x, cell.y, 1700) < 0.28 \
-		and anchor_wall(ws, cell, 1701, theme) >= 0
+	return eligible and anchor_wall(ws, cell, 1701, theme) >= 0
 
 
 ## What kind of room this is. Seeded by the room ROOT so every cell of a

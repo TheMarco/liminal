@@ -1033,6 +1033,9 @@ var _blackout := false
 var _blackout_lights := {}
 var _blackout_probes := {}
 var _blackout_surfaces := preload("res://scripts/blackout_surfaces.gd").new()
+var _power_lights: Array[Light3D] = []
+var _power_probes: Array[ReflectionProbe] = []
+var _power_index_valid := false
 var _pool_reflection: ReflectionProbe
 var _furnishing_group_serial := 0
 ## Stable semantic identities for objects whose generated node instances may
@@ -7029,6 +7032,53 @@ func has_descent_arrival() -> bool:
 	return not _descent_arrival_rig.is_empty() and not descent_arrival_used
 
 
+## Draw the first view beyond the lift while the floor is still covered.
+## Keep door positions and colliders in their actual closed state.
+func draw_arrival_corridor() -> void:
+	if not has_descent_arrival():
+		return
+	var car: ElevatorCar = _descent_arrival_rig["root"]
+	var leaves: Array[Node3D] = []
+	for entry in car.doors:
+		var leaf: Node3D = entry["body"]
+		if leaf.visible:
+			leaves.append(leaf)
+			leaf.hide()
+	await RenderingServer.frame_post_draw
+	if theme == 0:
+		await _draw_casino_exit_views(car)
+	for leaf in leaves:
+		leaf.show()
+
+
+## The closed car hides the two hallways beside its doors. A player turning
+## out of the lift can otherwise submit their lights and reflections for the
+## first time while walking. Use the actual floor viewport under the cover.
+func _draw_casino_exit_views(car: ElevatorCar) -> void:
+	var live := get_viewport().get_camera_3d()
+	if live == null: return
+	var started := Time.get_ticks_usec()
+	var view := Camera3D.new()
+	view.keep_aspect = live.keep_aspect
+	view.set_perspective(live.fov, live.near, live.far)
+	view.cull_mask = live.cull_mask
+	view.environment = live.environment
+	view.attributes = live.attributes
+	view.compositor = live.compositor
+	add_child(view)
+	var outside := car.to_global(Vector3(0, 0, ElevatorCar.THRESHOLD_Z + 3.5))
+	outside.y = live.global_position.y
+	view.global_position = outside
+	view.make_current()
+	for turn: float in [-PI * 0.5, PI * 0.5, PI]:
+		view.look_at(outside + car.global_basis.z.rotated(Vector3.UP, turn))
+		await RenderingServer.frame_post_draw
+		await RenderingServer.frame_post_draw
+	live.make_current()
+	view.free()
+	RuntimeDiagnostics.mark("casino_exit_views_prepared", {"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})
+
+
 func open_descent_arrival(seconds := 1.15) -> void:
 	if _descent_arrival_rig.is_empty() or descent_arrival_used:
 		return
@@ -7127,6 +7177,47 @@ func _descent_finish(actor: Node, finish: Area3D, approach: Area3D) -> void:
 	get_tree().call_group("descent_listener", "_on_descent_exit")
 
 
+func _ready() -> void:
+	var tree := get_tree()
+	# A single listener for the tree handles late props and reparenting at any
+	# depth. Rooms entering the tree build their index after all children enter.
+	if not tree.node_added.is_connected(Chunk._power_tree_changed):
+		tree.node_added.connect(Chunk._power_tree_changed)
+		tree.node_removed.connect(Chunk._power_tree_changed)
+	_index_power_visuals()
+
+
+func _exit_tree() -> void:
+	_power_index_valid = false
+	request_ready()
+
+
+static func _power_tree_changed(node: Node) -> void:
+	if not (node is MeshInstance3D or node is Light3D or node is ReflectionProbe or node is Label3D):
+		return
+	var parent := node.get_parent()
+	while parent != null and not parent is Chunk:
+		parent = parent.get_parent()
+	if parent is Chunk:
+		parent._power_index_valid = false
+
+
+func _index_power_visuals() -> void:
+	_power_lights.clear()
+	_power_probes.clear()
+	var geometry: Array[Node] = []
+	for node in find_children("*", "VisualInstance3D", true, false):
+		if node is Light3D:
+			_power_lights.append(node)
+		elif node is ReflectionProbe:
+			if node != _pool_reflection: _power_probes.append(node)
+		elif node is MeshInstance3D or node is Label3D:
+			geometry.append(node)
+	_blackout_surfaces.index_visuals(geometry)
+	# Detached rooms can still be edited without SceneTree signals.
+	_power_index_valid = is_inside_tree()
+
+
 ## Blackout is a reversible overlay. Snapshot each light's exact visible and
 ## energy state; restoring never resurrects a fixture that was already dead.
 func set_blackout(on: bool, variants: Dictionary = {}) -> void:
@@ -7135,19 +7226,16 @@ func set_blackout(on: bool, variants: Dictionary = {}) -> void:
 	if on:
 		if _blackout:
 			return
-		# Use the current tree, including props installed after the room was
-		# prepared. Lights, probes, meshes and labels share a single traversal.
-		var visuals := find_children("*", "VisualInstance3D", true, false)
-		for node in visuals:
-			if node is Light3D:
-				_blackout_lights[node] = [node.visible, node.light_energy]
-				node.visible = false
-			elif node is ReflectionProbe and node != _pool_reflection:
-				_blackout_probes[node] = [node.intensity, node.visible]
-				node.intensity = 0.0
-				# Hiding the probe also disables its diffuse contribution.
-				node.visible = false
-		_blackout_surfaces.apply_visuals(visuals, variants)
+		if not _power_index_valid:
+			_index_power_visuals()
+		for light in _power_lights:
+			_blackout_lights[light] = [light.visible, light.light_energy]
+			light.visible = false
+		for probe in _power_probes:
+			_blackout_probes[probe] = [probe.intensity, probe.visible]
+			probe.intensity = 0.0
+			probe.visible = false
+		_blackout_surfaces.apply_indexed(variants)
 		_blackout = true
 		return
 	if not _blackout:

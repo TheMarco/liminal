@@ -15,10 +15,120 @@ var _directory := ""
 var _configured := false
 
 
+# Running captures use private files until one atomic manifest replacement
+# publishes them. Only the game thread owns entries and their revision.
+var _configuration_id := 0
+var _revision := 0
+var _live_writes: Array[PhotoWrite] = []
+
+
+class PhotoWrite:
+	var directory: String
+	var image_path: String
+	var manifest_path: String
+	var error := OK
+	var jpeg_usec := 0
+	var write_usec := 0
+
+	func prepare(source: Image, rows: Array) -> void:
+		var started := Time.get_ticks_usec()
+		var rgb := source.duplicate() as Image
+		error = PhotoAlbumStore._prepare_print(rgb)
+		if error != OK:
+			return
+		var bytes := rgb.save_jpg_to_buffer(0.92)
+		jpeg_usec = Time.get_ticks_usec() - started
+		if bytes.is_empty():
+			error = ERR_FILE_CANT_WRITE
+			return
+		started = Time.get_ticks_usec()
+		error = DirAccess.make_dir_recursive_absolute(directory)
+		if error == OK:
+			var file := FileAccess.open(image_path, FileAccess.WRITE)
+			if file == null:
+				error = FileAccess.get_open_error()
+			else:
+				file.store_buffer(bytes)
+				file.flush()
+				error = file.get_error()
+				file.close()
+		write_usec = Time.get_ticks_usec() - started
+		if error == OK:
+			stage_manifest(rows)
+
+	func stage_manifest(rows: Array) -> void:
+		var started := Time.get_ticks_usec()
+		error = PhotoAlbumStore._write_manifest_file(manifest_path, rows)
+		write_usec += Time.get_ticks_usec() - started
+
+	func discard() -> void:
+		if not manifest_path.is_empty() and FileAccess.file_exists(manifest_path):
+			DirAccess.remove_absolute(manifest_path)
+		if not image_path.is_empty() and FileAccess.file_exists(image_path):
+			DirAccess.remove_absolute(image_path)
+		manifest_path = ""
+		image_path = ""
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_PREDELETE and not image_path.is_empty():
+			discard()
+
+
+func _wait_for_job(task: int, tree: SceneTree) -> void:
+	while not WorkerThreadPool.is_task_completed(task):
+		await tree.process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+
+
+func add_live_photo(image: Image, metadata: Dictionary, tree: SceneTree) -> Error:
+	if not _persistent or image == null or image.is_empty():
+		return add_photo(image, metadata)
+	var configuration := _configuration_id
+	var revision := _revision
+	var entry := _photo_entry(metadata)
+	var writer := PhotoWrite.new()
+	_live_writes.append(writer)
+	writer.directory = ProjectSettings.globalize_path(_directory)
+	entry["file"] = "photo_%06d_%d_%d.jpg" % [entries.size(), Time.get_ticks_usec(), writer.get_instance_id()]
+	writer.image_path = writer.directory.path_join(entry.file)
+	writer.manifest_path = writer.image_path + ".manifest.tmp"
+	var task := WorkerThreadPool.add_task(writer.prepare.bind(image, _entries_with(entry)), false, "Develop photograph")
+	await _wait_for_job(task, tree)
+	# Encoding may complete out of order. Publish in shutter order.
+	while _live_writes.front() != writer:
+		await tree.process_frame
+	# An overlapping photo or flash update may have been published while
+	# storage was busy. Re-stage just the small manifest with those edits.
+	while writer.error == OK and configuration == _configuration_id and revision != _revision:
+		revision = _revision
+		task = WorkerThreadPool.add_task(writer.stage_manifest.bind(_entries_with(entry)), false, "Update photograph manifest")
+		await _wait_for_job(task, tree)
+	var error: Error = writer.error
+	var started := Time.get_ticks_usec()
+	if configuration != _configuration_id:
+		error = ERR_SKIP
+	elif error == OK:
+		error = DirAccess.rename_absolute(writer.manifest_path, writer.directory.path_join("manifest.json"))
+	if error != OK:
+		task = WorkerThreadPool.add_task(writer.discard, false, "Discard unpublished photograph")
+		await _wait_for_job(task, tree)
+		_live_writes.pop_front()
+		return error
+	entries.append(entry)
+	writer.manifest_path = ""
+	writer.image_path = ""
+	_revision += 1
+	_live_writes.pop_front()
+	RuntimeDiagnostics.mark("photo_album_saved", {"jpeg_worker_ms": writer.jpeg_usec / 1000.0,
+		"worker_write_ms": writer.write_usec / 1000.0, "main_write_ms": (Time.get_ticks_usec() - started) / 1000.0})
+	return OK
+
+
 func configure(run_seed: int, persistent: bool, custom_root: String = "") -> void:
 	var album_root := custom_root if not custom_root.is_empty() else "user://photo_albums"
 	if _configured and _run_seed == run_seed and _persistent == persistent and _root == album_root:
 		return
+	_configuration_id += 1
 	_configured = true
 	_run_seed = run_seed
 	_persistent = persistent
@@ -34,6 +144,13 @@ func add_photo(image: Image, metadata: Dictionary) -> Error:
 	if not _configured or image == null or image.is_empty():
 		return ERR_INVALID_PARAMETER
 	var photo := image.duplicate() as Image
+	var error := _prepare_print(photo)
+	if error != OK:
+		return error
+	return _append_photo(photo, metadata)
+
+
+static func _prepare_print(photo: Image) -> Error:
 	if photo.is_compressed():
 		var decompress_error := photo.decompress()
 		if decompress_error != OK:
@@ -44,11 +161,26 @@ func add_photo(image: Image, metadata: Dictionary) -> Error:
 		photo.resize(maxi(1, roundi(photo.get_width() * scale_factor)),
 			maxi(1, roundi(photo.get_height() * scale_factor)), Image.INTERPOLATE_LANCZOS)
 	photo.convert(Image.FORMAT_RGB8)
+	return OK
+
+
+func _photo_entry(metadata: Dictionary) -> Dictionary:
 	var entry := metadata.duplicate(true)
 	entry["floor"] = maxi(1, int(metadata.get("floor", 1)))
 	entry["theme"] = str(metadata.get("theme", ""))
 	entry["caption"] = str(metadata.get("caption", ""))
 	entry.erase("file")
+	return entry
+
+
+func _entries_with(entry: Dictionary) -> Array[Dictionary]:
+	var rows := entries.duplicate(true)
+	rows.append(entry)
+	return rows
+
+
+func _append_photo(photo: Image, metadata: Dictionary) -> Error:
+	var entry := _photo_entry(metadata)
 	if not _persistent:
 		entries.append(entry)
 		_images.append(photo)
@@ -60,15 +192,15 @@ func add_photo(image: Image, metadata: Dictionary) -> Error:
 	var image_path := _directory.path_join(filename)
 	var image_error := photo.save_jpg(image_path, 0.92)
 	if image_error != OK:
+		DirAccess.remove_absolute(image_path)
 		return image_error
 	entry["file"] = filename
-	var next_entries := entries.duplicate(true)
-	next_entries.append(entry)
-	var manifest_error := _save_manifest(next_entries)
+	var manifest_error := _save_manifest(_entries_with(entry))
 	if manifest_error != OK:
 		DirAccess.remove_absolute(image_path)
 		return manifest_error
 	entries.append(entry)
+	_revision += 1
 	return OK
 
 
@@ -81,6 +213,7 @@ func set_flash_status(anomaly_id: String, status: String) -> void:
 			entry["flash_status"] = status
 			changed = true
 	if changed and _persistent:
+		_revision += 1
 		_save_manifest(entries)
 
 
@@ -117,13 +250,7 @@ func export_photo(index: int, path: String, overwrite_confirmed := false) -> Err
 func _save_manifest(next_entries: Array) -> Error:
 	var destination := _directory.path_join("manifest.json")
 	var temporary := _directory.path_join("manifest.json.tmp")
-	var file := FileAccess.open(temporary, FileAccess.WRITE)
-	if file == null:
-		return FileAccess.get_open_error()
-	file.store_string(JSON.stringify({"version": MANIFEST_VERSION, "entries": next_entries}))
-	file.flush()
-	var write_error := file.get_error()
-	file.close()
+	var write_error := _write_manifest_file(temporary, next_entries)
 	if write_error != OK:
 		DirAccess.remove_absolute(temporary)
 		return write_error
@@ -131,6 +258,17 @@ func _save_manifest(next_entries: Array) -> Error:
 	if rename_error != OK:
 		DirAccess.remove_absolute(temporary)
 	return rename_error
+
+
+static func _write_manifest_file(temporary: String, next_entries: Array) -> Error:
+	var file := FileAccess.open(temporary, FileAccess.WRITE)
+	if file == null:
+		return FileAccess.get_open_error()
+	file.store_string(JSON.stringify({"version": MANIFEST_VERSION, "entries": next_entries}))
+	file.flush()
+	var write_error := file.get_error()
+	file.close()
+	return write_error
 
 
 func _load_manifest() -> void:

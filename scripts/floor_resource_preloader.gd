@@ -5,6 +5,7 @@ extends RefCounted
 ## This service has no scene-tree or Chunk dependencies; callers own scheduling.
 
 const CACHE_LIMIT := 64
+const FLOOR_LOAD_BATCH := 3
 
 static var _queue: Array[String] = []
 static var _pending: String = ""
@@ -16,23 +17,38 @@ static var _ready_order: Array[String] = []
 ## on a decode. Inactive floors have no strong-cache allowance. Live scenes
 ## keep their own resources (including actors and realm previews) alive.
 static func prepare_floor(paths: Array[String]) -> void:
+	var started := Time.get_ticks_usec()
 	if not _pending.is_empty():
 		var status := ResourceLoader.load_threaded_get_status(_pending)
 		if status in [ResourceLoader.THREAD_LOAD_IN_PROGRESS, ResourceLoader.THREAD_LOAD_LOADED]:
-			ResourceLoader.load_threaded_get(_pending)
+			var scene := ResourceLoader.load_threaded_get(_pending) as PackedScene
+			if scene != null and paths.has(_pending): _store(_pending, scene)
 		_pending = ""
 	_queue.clear()
 	for path in _ready.keys():
 		if not paths.has(path):
 			_ready.erase(path)
 			_ready_order.erase(path)
+	# Overlap independent scene decodes only while the floor is covered. Keep the
+	# same manifest order and bound decoder scratch space on lower-memory PCs.
+	var requests: Array[String] = []
 	for path in paths:
-		if not _ready.has(path):
-			var started := Time.get_ticks_usec()
-			var scene := load(path) as PackedScene
-			RuntimeDiagnostics.slow("floor_asset_load", started, {"asset": path})
-			if scene != null:
-				_store(path, scene)
+		if _ready.has(path) or requests.has(path): continue
+		if OS.has_feature("web") or ResourceLoader.load_threaded_request(path, "PackedScene", false) != OK:
+			_collect_floor_scene(path, false)
+			continue
+		requests.append(path)
+		if requests.size() == FLOOR_LOAD_BATCH:
+			_collect_floor_scene(requests.pop_front(), true)
+	for path in requests:
+		_collect_floor_scene(path, true)
+	RuntimeDiagnostics.slow("floor_resource_prepare", started, {"scenes": paths.size()})
+
+static func _collect_floor_scene(path: String, threaded: bool) -> void:
+	var started := Time.get_ticks_usec()
+	var scene := (ResourceLoader.load_threaded_get(path) if threaded else load(path)) as PackedScene
+	RuntimeDiagnostics.slow("floor_asset_load", started, {"asset": path, "threaded": threaded})
+	if scene != null: _store(path, scene)
 
 static func configure(paths: Array[String]) -> void:
 	var next: Array[String] = []

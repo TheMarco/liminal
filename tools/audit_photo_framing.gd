@@ -20,6 +20,34 @@ func check_mark(subject: PhotoAnomaly, camera: Camera3D, extent: Vector2) -> voi
 		var relative := (pixel - mark.position) / (mark.size * 0.95)
 		check(relative.length_squared() <= 1.0, "evidence mark cuts off subject corner")
 
+func check_print_lighting(capture: PhotoCamera, player: Player) -> void:
+	var world := player.get_world_3d()
+	var previous := world.environment
+	var env := Environment.new()
+	env.sdfgi_cascades = 4
+	env.sdfgi_enabled = true
+	world.environment = env
+	player.level_theme = 0
+	capture._request_snapshot_draw()
+	var print_env := capture._snap_cam.environment
+	check(print_env != null and print_env != env and print_env.sdfgi_enabled
+		and print_env.sdfgi_cascades == PhotoCamera.CASINO_PRINT_CASCADES, "Casino print lighting missing")
+	check(env.sdfgi_cascades == 4 and player.cam.environment == null, "shutter changed player lighting")
+	player.level_theme = 7
+	capture._request_snapshot_draw()
+	check(capture._snap_cam.environment == null, "Casino lighting carried into another floor")
+	player.level_theme = 0
+	env.sdfgi_cascades = 2
+	capture._request_snapshot_draw()
+	check(capture._snap_cam.environment == null, "shutter replaced the low-cost GI preset")
+	var camera_env := Environment.new()
+	camera_env.sdfgi_enabled = false
+	player.cam.environment = camera_env
+	capture._request_snapshot_draw()
+	check(capture._snap_cam.environment == camera_env, "camera's own lighting override was lost")
+	player.cam.environment = null
+	world.environment = previous
+
 func run() -> void:
 	root.size = Vector2i(1280, 720)
 	var player := Player.new()
@@ -124,6 +152,7 @@ func run() -> void:
 		check_mark(writing, player.cam, Vector2(extent))
 	large.free()
 	if DisplayServer.get_name() != "headless":
+		check_print_lighting(capture, player)
 		root.size = Vector2i(1280, 720)
 		player.cam.global_position = Vector3(0, 0, 12)
 		player.cam.look_at(Vector3.ZERO)
@@ -152,6 +181,19 @@ func run() -> void:
 		await create_timer(0.4).timeout
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("/tmp/liminal-round3-photo-proof.png")
+		# The GPU buffer can have an extra alpha channel. Check the exact print
+		# bytes, orientation and colour depth against Godot's reference read.
+		var saved_hdr := root.use_hdr_2d
+		for hdr in [false, true]:
+			root.use_hdr_2d = hdr
+			var print_image := await capture._render_snapshot()
+			var reference := capture._snap_viewport.get_texture().get_image()
+			check(print_image != null and print_image.get_format() == reference.get_format()
+				and print_image.get_size() == reference.get_size() and print_image.get_data() == reference.get_data(),
+				"shutter readback changed the print (HDR %s)" % hdr)
+		root.use_hdr_2d = saved_hdr
+		# The last capture resumes its caller from the camera's completion signal.
+		await process_frame
 		wall.free()
 	writing.free()
 	capture.free()

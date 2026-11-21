@@ -490,12 +490,22 @@ func _configure_interactions(node: Node) -> void:
 		_configure_interactions(child)
 
 
+func prepare_nearby_preview() -> void:
+	if phase != Phase.PREPARING or game.player.global_position.distance_to(source_centre) >= 42.0:
+		return
+	if not _building:
+		await _build_preview()
+	else:
+		while phase == Phase.PREPARING and not _preview_cancelled:
+			await _preview_frame
+
+
 func _process(dt: float) -> void:
 	if game == null:
 		return
 	if phase == Phase.PREPARING:
-		if not _building and game.player.global_position.distance_to(source_centre) < 42.0:
-			_build_preview()
+		if not _building:
+			prepare_nearby_preview()
 		return
 	if phase == Phase.WAITING:
 		_bind_left -= dt
@@ -539,7 +549,11 @@ func _process(dt: float) -> void:
 			if preview.size != target_size:
 				_preview_has_frame = false
 				preview.size = target_size
-			if not _update_preview_camera():
+			if _update_preview_camera():
+				var render_scale := GraphicsQuality.doorway_render_scale(player.cam, window, preview)
+				if preview.scaling_3d_scale != render_scale:
+					preview.scaling_3d_scale = render_scale
+			else:
 				show_preview = false
 				preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		window.visible = show_preview and _preview_has_frame

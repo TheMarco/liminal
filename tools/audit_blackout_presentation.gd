@@ -193,9 +193,54 @@ func _surface_cases() -> void:
 		expect(off != original and is_zero_approx(float(off.get_shader_parameter("mains_power"))),
 			"shader %s has no reversible mains-power contract" % name)
 
+func _indexed_room() -> void:
+	var room := Chunk.new(WorldGen.level_seed(240721, 0), Vector2i.ZERO, 0)
+	var holder := Node3D.new()
+	room.add_child(holder)
+	var original := StandardMaterial3D.new()
+	var replaced := MeshInstance3D.new()
+	replaced.mesh = BoxMesh.new()
+	replaced.material_override = original
+	holder.add_child(replaced)
+	var changed := MeshInstance3D.new()
+	changed.mesh = replaced.mesh
+	changed.material_override = original
+	holder.add_child(changed)
+	root.add_child(room)
+	var current := original.duplicate() as StandardMaterial3D
+	current.emission_enabled = true
+	current.albedo_color = Color.CORAL
+	replaced.material_override = current
+	original.emission_enabled = true
+	room.set_blackout(true)
+	expect(replaced.material_override != current and replaced.material_override.albedo_color == Color.CORAL
+		and changed.material_override != original, "indexed bindings missed a replacement or newly powered material")
+	room.set_blackout(false)
+	expect(replaced.material_override == current and changed.material_override == original, "indexed bindings restored stale materials")
+	var late := OmniLight3D.new()
+	holder.add_child(late)
+	var removed := changed
+	holder.remove_child(removed)
+	removed.free()
+	room.set_blackout(true)
+	expect(not late.visible, "late nested light stayed powered")
+	replaced.free()
+	room.set_blackout(false)
+	expect(late.visible, "late light failed to recover after removing an indexed mesh")
+	root.remove_child(room)
+	var label := Label3D.new()
+	holder.add_child(label)
+	root.add_child(room)
+	room.set_blackout(true)
+	expect(label.shaded, "room reentry retained its old index")
+	room.set_blackout(false)
+	room.free()
+
+
 func run() -> void:
 	_environments()
 	_surface_cases()
+	_indexed_room()
 	for theme in WorldGen.THEMES:
 		for cell in [Vector2i.ZERO, Vector2i(3, 3), Vector2i(-4, 2)]:
 			_chunk(theme, cell)

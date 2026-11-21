@@ -23,18 +23,22 @@ var _blackout_materials: Array = []
 var _view: SubViewport
 var _retained: Node
 var _figures: Array[ShadowFigure] = []
+var _draw_times := {}
 
 func _exit_tree() -> void:
 	if is_instance_valid(_retained):
 		_retained.free()
 		_retained = null
 
-func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
+func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := false, wander_only := false) -> void:
 	var started := Time.get_ticks_usec()
 	if DisplayServer.get_name() == "headless":
 		finished = true
 		completed.emit()
 		return
+	if live_power_pass:
+		# Submit the destination before adding a second scene full of encounters.
+		await _draw_state("arrival")
 	_view = SubViewport.new()
 	_view.size = Vector2i(256, 128)
 	_view.own_world_3d = true
@@ -54,6 +58,10 @@ func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
 		source_environment = source_camera.environment
 	if source_environment != null:
 		_environment = source_environment.duplicate() as Environment
+		# The real arrival camera draws the lit floor during preparation. A second
+		# set of SDFGI cascades for this tray of unrelated meshes is discarded
+		# after a dozen frames and makes every sample change revoxelize the tray.
+		_environment.sdfgi_enabled = false
 		var world := WorldEnvironment.new()
 		world.environment = _environment
 		_view.add_child(world)
@@ -67,6 +75,15 @@ func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
 	camera.position = Vector3(0, 2.5, 12)
 	camera.current = true
 	_prepare_torch(source_camera, camera)
+	if wander_only:
+		# Wander suspends hostile figures, hallway apparitions and Descent rules.
+		# Its torch, living walls and native doorways still need their first draw.
+		_warm_surfaces(rooms)
+		_warm_gameplay_effects(rooms, theme, true)
+		_torch.visible = true
+		await _draw_state("wander")
+		_finish(theme, started)
+		return
 	model_indices.assign(ShadowFigures.DARK_ROSTER)
 	var signature: int = ShadowFigures.THEME_WALKER.get(theme, -1)
 	if signature >= 0 and not model_indices.has(signature): model_indices.append(signature)
@@ -91,7 +108,7 @@ func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
 	_view.add_child(corner_samples)
 	CornerApparitions.prepare_render_samples(corner_samples)
 	_warm_surfaces(rooms)
-	_warm_blackout_surfaces(rooms)
+	_warm_blackout_surfaces(rooms, live_power_pass)
 	_warm_gameplay_effects(rooms, theme)
 	var effect := Aftershock.new()
 	_view.add_child(effect)
@@ -101,21 +118,21 @@ func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
 	RuntimeDiagnostics.mark("encounter_warmup_prepared", {
 		"level": theme, "models": model_indices, "materials": material_count,
 		"blackout_meshes": blackout_mesh_count, "blackout_labels": blackout_label_count,
-		"cpu_ms": (Time.get_ticks_usec() - started) / 1000.0})
-	await _draw_state()
+		"setup_ms": (Time.get_ticks_usec() - started) / 1000.0 - float(_draw_times.get("arrival", 0.0))})
+	await _draw_state("lit")
 	# Exercise the production overlays on isolated samples, never live rooms.
 	var blackout_variants := {}
 	_power_surfaces.apply(_samples, blackout_variants)
 	_power_environment.apply(_environment)
 	_lights.visible = false
-	await _draw_state()
+	await _draw_state("blackout")
 	_torch.visible = true
-	await _draw_state()
+	await _draw_state("torch")
 	_blackout_materials = blackout_variants.values()
 	_power_surfaces.restore()
 	_power_environment.restore()
 	_lights.visible = true
-	await _draw_state()
+	await _draw_state("restored")
 	# Burn fragments use a separate MultiMesh vertex layout and shader. Keep
 	# its owner alive just like the body materials after the temporary draw.
 	# One actor covers the shared fragment format for every roster model.
@@ -125,17 +142,21 @@ func prepare(source: Viewport, theme: int, rooms: Node3D) -> void:
 		if is_instance_valid(actor._burn_particles):
 			actor._burn_particles.set_process(false)
 		actor._flash.light_energy = 1.0
-		await _draw_state()
+		await _draw_state("burn")
 	_warm_mutation_reveal()
-	await _draw_state()
+	await _draw_state("reveal")
 	# The live effect shares the cached materials and meshes. Its temporary
 	# bodies and particle emitter can go away with the loading scene.
 	corner_samples.free()
+	_finish(theme, started)
+
+
+func _finish(theme: int, started: int) -> void:
 	finished = true
 	_release_view()
 	process_mode = Node.PROCESS_MODE_DISABLED
 	RuntimeDiagnostics.mark("encounter_warmup_finished", {"level": theme,
-		"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})
+		"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0, "draw_ms": _draw_times})
 	completed.emit()
 
 func _release_view() -> void:
@@ -159,10 +180,12 @@ func _release_view() -> void:
 	_view = null
 	_environment = null
 
-func _draw_state() -> void:
+func _draw_state(phase: String) -> void:
 	# Two draws include deferred surface uploads and the screen-copy mip chain.
+	var started := Time.get_ticks_usec()
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
+	_draw_times[phase] = (Time.get_ticks_usec() - started) / 1000.0
 
 func _prepare_torch(source_camera: Camera3D, camera: Camera3D) -> void:
 	if source_camera != null:
@@ -210,9 +233,12 @@ func _prepare_lighting(rooms: Node3D) -> void:
 	if not rooms.find_children("*", "ReflectionProbe", true, false).is_empty():
 		var probe := ReflectionProbe.new()
 		probe.size = Vector3(24, 16, 24)
+		# Exercise receiving reflections without rendering the sample tray from
+		# all six directions as well as from the warmup camera.
+		probe.cull_mask = 0
 		_lights.add_child(probe)
 
-func _warm_blackout_surfaces(rooms: Node3D) -> void:
+func _warm_blackout_surfaces(rooms: Node3D, live_power_pass: bool) -> void:
 	var seen := {}
 	for node in rooms.find_children("*", "MeshInstance3D", true, false):
 		var original := node as MeshInstance3D
@@ -221,15 +247,18 @@ func _warm_blackout_surfaces(rooms: Node3D) -> void:
 		# Replacing imported meshes with boxes misses their pipeline variants.
 		var key: Array = [original.gi_mode, original.cast_shadow]
 		for i in original.mesh.get_surface_count():
-			var material := original.get_active_material(i)
 			if original.mesh is ArrayMesh:
 				key.append(original.mesh.surface_get_format(i))
 			elif original.mesh is PrimitiveMesh:
 				key.append([original.mesh.get_class(), original.mesh.add_uv2])
 			else:
 				key.append(original.mesh.get_rid())
-			key.append(_material_key(material))
-		key.append(_material_key(original.material_overlay))
+			# The live camera covers actual powered materials under the loading
+			# screen. The mutation outline/ghost still needs each vertex layout.
+			if not live_power_pass:
+				key.append(_material_key(original.get_active_material(i)))
+		if not live_power_pass:
+			key.append(_material_key(original.material_overlay))
 		if seen.has(key): continue
 		seen[key] = true
 		var mesh := MeshInstance3D.new()
@@ -284,6 +313,8 @@ func _warm_mutation_reveal() -> void:
 	reveal.set_process(false)
 
 func _warm_surfaces(rooms: Node3D) -> void:
+	# Hallway waves wrap the same shaders as breathing walls, including
+	# floors and props along the moving section of a corridor.
 	var materials := {}
 	for node in rooms.find_children("*", "MeshInstance3D", true, false):
 		if not (node.mesh is BoxMesh or node.mesh is QuadMesh): continue
@@ -314,46 +345,30 @@ func _warm_surfaces(rooms: Node3D) -> void:
 		if material_count >= 24: break
 
 
-func _warm_gameplay_effects(rooms: Node3D, theme: int) -> void:
+func _warm_gameplay_effects(rooms: Node3D, theme: int, wander_only := false) -> void:
 	var host := Node3D.new()
 	host.name = "GameplayEffectWarmup"
 	_view.add_child(host)
 	var wall_shaders: Array[ShaderMaterial] = []
 	var seen_shaders := {}
-	for node in rooms.find_children("*", "MeshInstance3D", true, false):
-		if not (node.mesh is BoxMesh or node.mesh is QuadMesh):
+	# DoorwaySurface builds its shader from the registered opening or the
+	# room's wall finish. Floors, signage and furniture never supply it.
+	for manager in rooms.get_children():
+		if not manager is ChunkManager:
 			continue
-		var mat := node.material_override as ShaderMaterial
-		if mat == null or mat.shader == null or seen_shaders.has(mat.shader):
-			continue
-		seen_shaders[mat.shader] = true
-		wall_shaders.append(mat)
-		if wall_shaders.size() >= 12:
-			break
+		for room: Chunk in manager.chunks.values():
+			var sources: Array[Material] = [room._wall_material()]
+			for site: Dictionary in room.native_doorway_sites.values():
+				sources.append(site.material)
+			for mat in sources:
+				if mat is ShaderMaterial and mat.shader != null and not seen_shaders.has(mat.shader):
+					seen_shaders[mat.shader] = true
+					wall_shaders.append(mat)
 	DoorwaySurface.prepare_render_samples(host, wall_shaders, theme)
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.5, 0.5)
-	# Warm camera viewfinder mask (CanvasItem shader compiled on first raise).
-	var mask := ColorRect.new()
-	mask.size = Vector2(64, 64)
-	var mask_mat := ShaderMaterial.new()
-	mask_mat.shader = preload("res://shaders/viewfinder_mask.gdshader")
-	mask.material = mask_mat
-	_view.add_child(mask)
-	# Warm portal anomaly crack + outer glow shaders.
-	var portal_mat := ShaderMaterial.new()
-	portal_mat.shader = PhotoAnomaly.PORTAL_SHADER
-	if not PhotoAnomaly.PORTAL_PANOS.is_empty():
-		portal_mat.set_shader_parameter("pano", PhotoAnomaly._portal_pano(PhotoAnomaly.PORTAL_PANOS[0]))
-	_add_effect_quad(host, quad, portal_mat, Vector3(-0.8, 2.4, 2.5))
-	var glow_mat := ShaderMaterial.new()
-	glow_mat.shader = PhotoAnomaly.PORTAL_GLOW_SHADER
-	_add_effect_quad(host, quad, glow_mat, Vector3(0.0, 2.4, 2.5))
-	# Warm realm doorway leak + window + VHS screen shaders.
-	var leak_mat := ShaderMaterial.new()
-	leak_mat.shader = RealmDoorLeak.SHADER
-	leak_mat.set_shader_parameter("strength", 0.5)
-	_add_effect_quad(host, quad, leak_mat, Vector3(0.8, 2.4, 2.5))
+	if not wander_only:
+		_warm_photo_and_realm_effects(host, quad)
 	var window_mat := ShaderMaterial.new()
 	window_mat.shader = SelfReturnDoorSite.WINDOW_SHADER
 	_add_effect_quad(host, quad, window_mat, Vector3(1.6, 2.4, 2.5))
@@ -387,6 +402,30 @@ func _warm_gameplay_effects(rooms: Node3D, theme: int) -> void:
 		sheet_mat.shader = preload("res://shaders/pool_splash_sheet.gdshader")
 		sheet_mat.render_priority = 1
 		_add_effect_quad(host, quad, sheet_mat, Vector3(4.0, 2.4, 2.5))
+
+
+func _warm_photo_and_realm_effects(host: Node3D, quad: QuadMesh) -> void:
+	# The viewfinder, photographic evidence and realm visits belong to Descent.
+	var mask := ColorRect.new()
+	mask.size = Vector2(64, 64)
+	var mask_mat := ShaderMaterial.new()
+	mask_mat.shader = preload("res://shaders/viewfinder_mask.gdshader")
+	mask.material = mask_mat
+	_view.add_child(mask)
+	# Warm portal anomaly crack + outer glow shaders.
+	var portal_mat := ShaderMaterial.new()
+	portal_mat.shader = PhotoAnomaly.PORTAL_SHADER
+	if not PhotoAnomaly.PORTAL_PANOS.is_empty():
+		portal_mat.set_shader_parameter("pano", PhotoAnomaly._portal_pano(PhotoAnomaly.PORTAL_PANOS[0]))
+	_add_effect_quad(host, quad, portal_mat, Vector3(-0.8, 2.4, 2.5))
+	var glow_mat := ShaderMaterial.new()
+	glow_mat.shader = PhotoAnomaly.PORTAL_GLOW_SHADER
+	_add_effect_quad(host, quad, glow_mat, Vector3(0.0, 2.4, 2.5))
+	# A photographic realm leads through this luminous seam.
+	var leak_mat := ShaderMaterial.new()
+	leak_mat.shader = RealmDoorLeak.SHADER
+	leak_mat.set_shader_parameter("strength", 0.5)
+	_add_effect_quad(host, quad, leak_mat, Vector3(0.8, 2.4, 2.5))
 
 
 func _add_effect_quad(parent: Node3D, quad: QuadMesh, material: Material, pos: Vector3) -> void:

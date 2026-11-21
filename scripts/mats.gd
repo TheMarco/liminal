@@ -68,6 +68,8 @@ static func detail_noise() -> NoiseTexture2D:
 
 
 static func carpet() -> Material:
+	if _c.has("carpet"):
+		return _c["carpet"]
 	var m := _shader("carpet", "res://shaders/carpet.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
 	m.set_shader_parameter("bump_strength", 0.035)
@@ -75,6 +77,8 @@ static func carpet() -> Material:
 
 
 static func wallpaper() -> Material:
+	if _c.has("wallpaper"):
+		return _c["wallpaper"]
 	var m := _shader("wallpaper", "res://shaders/wallpaper.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
 	m.set_shader_parameter("wood_tex", load("res://textures/annex/half_wall_cap_wood.png"))
@@ -164,6 +168,8 @@ static func hall_wallpaper_variant(idx: int) -> Material:
 
 ## The casino gets coffered plaster, not the office's drop tiles.
 static func ceiling() -> Material:
+	if _c.has("ceiling"):
+		return _c["ceiling"]
 	var m := _shader("ceiling", "res://shaders/casino_ceiling.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
 	m.set_shader_parameter("bump_strength", 1.0)
@@ -564,6 +570,8 @@ static func band_paint() -> StandardMaterial3D:
 # --- office theme -----------------------------------------------------------
 
 static func office_carpet() -> Material:
+	if _c.has("office_carpet"):
+		return _c["office_carpet"]
 	var m := _shader("office_carpet", "res://shaders/office_carpet.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
 	m.set_shader_parameter("scenario_carpet_tex", load(
@@ -595,6 +603,8 @@ static func office_lane_carpet() -> Material:
 
 
 static func office_wall() -> Material:
+	if _c.has("office_wall"):
+		return _c["office_wall"]
 	var m := _shader("office_wall", "res://shaders/office_wall.gdshader")
 	m.set_shader_parameter("scenario_drywall_tex", load(
 		"res://models/scenario/office/drywall_panel_office_patina_drywall.png"))
@@ -610,6 +620,8 @@ static func office_wall_variant(_idx: int) -> Material:
 
 
 static func office_ceiling() -> Material:
+	if _c.has("office_ceiling"):
+		return _c["office_ceiling"]
 	var m := _shader("office_ceiling", "res://shaders/office_ceiling.gdshader")
 	m.set_shader_parameter("scenario_ceiling_tex", load(
 		"res://models/scenario/office/ceiling_tile_office_patina_ceiling.png"))
@@ -967,6 +979,8 @@ static func jug_blue() -> StandardMaterial3D:
 # --- sewer -------------------------------------------------------------------
 
 static func concrete() -> Material:
+	if _c.has("concrete"):
+		return _c["concrete"]
 	var m := _shader("concrete", "res://shaders/concrete.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
 	return m
@@ -1018,6 +1032,8 @@ static func puddle() -> StandardMaterial3D:
 
 ## Wet tarmac. The theme park is gone; the airport apron still uses this.
 static func asphalt() -> Material:
+	if _c.has("asphalt"):
+		return _c["asphalt"]
 	var m := _shader("asphalt", "res://shaders/asphalt.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
 	return m
@@ -2048,6 +2064,8 @@ static func data_center_floor_mark() -> StandardMaterial3D:
 
 
 static func data_center_access_floor() -> ShaderMaterial:
+	if _c.has("data_center_access_floor"):
+		return _c["data_center_access_floor"]
 	var m := _shader("data_center_access_floor", "res://shaders/data_center_floor.gdshader")
 	m.set_shader_parameter("detail_tex", detail_noise())
 	return m
@@ -2347,6 +2365,8 @@ static func pool_wall_tile() -> ShaderMaterial:
 
 
 static func pool_water() -> ShaderMaterial:
+	if _c.has("pool_water"):
+		return _c["pool_water"]
 	var m := _shader("pool_water", "res://shaders/pool_water.gdshader")
 	m.set_shader_parameter("normal_tex", pool_ripple_normal())
 	return m
@@ -2355,6 +2375,8 @@ static func pool_water() -> ShaderMaterial:
 ## The Mall keeps its existing fountain treatment. Poolrooms absorption and
 ## reflection tuning must not change this much shallower decorative basin.
 static func mall_fountain_water() -> ShaderMaterial:
+	if _c.has("mall_fountain_water"):
+		return _c["mall_fountain_water"]
 	var m := _shader(
 		"mall_fountain_water", "res://shaders/fountain_water.gdshader")
 	m.set_shader_parameter("normal_tex", pool_ripple_normal())

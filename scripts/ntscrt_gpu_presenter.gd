@@ -26,6 +26,7 @@ var pipeline_builds := 0
 var last_error := ""
 var cpu_usec := 0
 var timestamp_samples: Array[Dictionary] = []
+var profile_gpu_passes := OS.get_cmdline_args().has("--gpu-profile")
 var _presets: Dictionary
 var _input_chain: RefCounted
 var _crt_chain: RefCounted
@@ -34,7 +35,9 @@ var _receiver_stage: RefCounted
 var _downscale_stage: RefCounted
 var _texture: Texture2DRD
 var _signature := ""
+var _presented_output := RID()
 var _accepted_layout := ""
+var _display_fraction := Vector2.ZERO
 var _pending_layout := ""
 var _pending_layout_since := 0
 var _retired: Array[Dictionary] = []
@@ -62,12 +65,9 @@ render_mode unshaded;
 // Canvas TEXTURE automatically decodes UNORM colour in HDR viewports. Sample
 // through an unhinted uniform so only the explicit conversion below runs.
 uniform sampler2D video_texture : filter_linear, repeat_disable;
-uniform bool encoded_output = true;
 uniform bool linear_destination = true;
+uniform bool scale_signal = false;
 uniform vec2 display_fraction = vec2(1.0);
-vec3 encode_srgb(vec3 value) {
-    return mix(value*12.92,1.055*pow(max(value,vec3(0.0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),value));
-}
 vec3 decode_srgb(vec3 value) {
     return mix(value/12.92,pow((max(value,vec3(0.0))+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),value));
 }
@@ -75,8 +75,13 @@ void fragment() {
     vec2 sample_uv=(UV-0.5)/display_fraction+0.5;
     vec4 sample_colour=texture(video_texture,clamp(sample_uv,vec2(0.0),vec2(1.0)));
     vec3 value=sample_colour.rgb;
-    if (linear_destination && encoded_output) value=decode_srgb(value);
-    if (!linear_destination && !encoded_output) value=encode_srgb(value);
+    if (scale_signal) {
+        // Match the previous linear black-border upscale into RGBA8 before HDR decoding.
+        vec2 extent=vec2(textureSize(video_texture,0));
+        vec2 border=clamp(min(sample_uv,1.0-sample_uv)*extent+0.5,vec2(0.0),vec2(1.0));
+        value=roundEven(clamp(value*border.x*border.y,vec3(0.0),vec3(1.0))*255.0)/255.0;
+    }
+    if (linear_destination) value=decode_srgb(value);
     float inside=step(0.0,sample_uv.x)*step(sample_uv.x,1.0)*step(0.0,sample_uv.y)*step(sample_uv.y,1.0);
     COLOR=vec4(value*inside,1.0);
 }"""
@@ -164,7 +169,10 @@ func _queue_frame() -> void:
 		var plan := SCALER.plan(signal_size,display,presentation_scale == 2)
 		target = plan.render_size
 		shown = plan.display_size
-	(material as ShaderMaterial).set_shader_parameter("display_fraction",Vector2(shown)/Vector2(display))
+	var fraction := Vector2(shown) / Vector2(display)
+	if fraction != _display_fraction:
+		_display_fraction = fraction
+		(material as ShaderMaterial).set_shader_parameter("display_fraction",fraction)
 	# Window drags can deliver many one-pixel sizes. Keep the last finished
 	# picture stretched by TextureRect until the requested dimensions settle.
 	# Do not feed a newly sized source into the old, differently sized buffers.
@@ -174,9 +182,12 @@ func _queue_frame() -> void:
 	var signal_knobs := signal_settings.duplicate()
 	if signal_size_mode == 0 and not source_resolution and signal_size.y < signal_extent.y:
 		signal_knobs["scale_with_video_size"] = true
+	# At native output size the canvas can perform the neutral final upscale itself.
+	# Explicit size caps, letterboxing and any final-pass overrides keep their own target.
+	var direct_signal := preset_name == "none" and target == display and shown == display and parameters.is_empty()
 	RenderingServer.call_on_render_thread(_render_frame.bind(source.get_texture().get_rid(),source.size,source.use_hdr_2d,
 		target,signal_size,preset_name,parameters.duplicate(),signal_enabled,receiver_enabled,
-		signal_knobs,receiver_settings.duplicate(),int(_clock*60000.0/1001.0),effective_game_state(),source_resolution,downscale_method))
+		signal_knobs,receiver_settings.duplicate(),int(_clock*60000.0/1001.0),effective_game_state(),source_resolution,downscale_method,direct_signal,profile_gpu_passes))
 
 func _layout_ready(layout: String, now_usec: int) -> bool:
 	if _accepted_layout.is_empty() or layout == _accepted_layout:
@@ -193,7 +204,8 @@ func _layout_ready(layout: String, now_usec: int) -> bool:
 	return true
 
 func _render_frame(source_texture: RID, extent: Vector2i, linear: bool, display: Vector2i, signal_size: Vector2i, selected: String, knobs: Dictionary,
-		use_signal: bool, use_receiver: bool, signal_knobs: Dictionary, receiver_knobs: Dictionary, field: int, state: Dictionary, source_first: bool, filter_method: int) -> void:
+		use_signal: bool, use_receiver: bool, signal_knobs: Dictionary, receiver_knobs: Dictionary, field: int, state: Dictionary, source_first: bool, filter_method: int,
+		direct_signal: bool, profile_passes: bool) -> void:
 	if not _running or _pipeline_failed: return
 	var started := Time.get_ticks_usec()
 	var rd := RenderingServer.get_rendering_device()
@@ -205,21 +217,22 @@ func _render_frame(source_texture: RID, extent: Vector2i, linear: bool, display:
 	source_first = source_first and use_signal
 	var prepared_size := extent if source_first or filter_method >= 0 else signal_size
 	var signal_work_size := extent if source_first else signal_size
-	var signature := str([extent,linear,display,signal_size,selected,use_signal,use_receiver,source_first,prepared_size])
+	var signature := str([extent,linear,display,signal_size,selected,use_signal,use_receiver,source_first,prepared_size,direct_signal])
 	if signature != _signature:
 		var setup_started := Time.get_ticks_usec()
 		var prepared := CHAIN.new()
-		var crt := CHAIN.new()
+		var crt := CHAIN.new() if not direct_signal else null
 		var signal_stage: RefCounted = load("res://scripts/ntscrs_gpu.gd").new() if use_signal else null
 		var receiver_stage: RefCounted = load("res://scripts/ntscrt_receiver_gpu.gd").new() if use_receiver else null
 		var downscale_stage: RefCounted = load("res://scripts/ntscrt_downscale_gpu.gd").new() if prepared_size != signal_size else null
 		var bundle := {"input":prepared,"signal":signal_stage,"receiver":receiver_stage,"crt":crt,"downscale":downscale_stage,"age":0}
-		var valid := prepared.setup(rd,_preparation(linear),extent,prepared_size) and crt.setup(rd,_presets[selected],signal_size,display)
+		var valid := prepared.setup(rd,_preparation(linear),extent,prepared_size)
+		if valid and crt != null: valid = crt.setup(rd,_presets[selected],signal_size,display)
 		if valid and signal_stage != null: valid = signal_stage.setup(rd,signal_work_size)
 		if valid and receiver_stage != null: valid = receiver_stage.setup(rd,signal_size)
 		if valid and downscale_stage != null: valid = downscale_stage.setup(rd,prepared_size,signal_size)
 		if not valid:
-			var message: String = prepared.error + crt.error + (signal_stage.error if signal_stage != null else "") + (receiver_stage.error if receiver_stage != null else "") + (downscale_stage.error if downscale_stage != null else "")
+			var message: String = prepared.error + (crt.error if crt != null else "") + (signal_stage.error if signal_stage != null else "") + (receiver_stage.error if receiver_stage != null else "") + (downscale_stage.error if downscale_stage != null else "")
 			_dispose_bundle(bundle)
 			_fail_pipeline(message if not message.is_empty() else "Video pipeline resource allocation failed")
 			return
@@ -233,10 +246,7 @@ func _render_frame(source_texture: RID, extent: Vector2i, linear: bool, display:
 		pipeline_builds += 1
 		last_error = ""
 		_report_setup.call_deferred(signature, (Time.get_ticks_usec() - setup_started) / 1000.0)
-		# The unhinted canvas sampler uses the raw view, including for sRGB
-		# render targets. Every final preset stores display-encoded RGB.
-		_publish.call_deferred(_crt_chain.output,true)
-	var prepared: RID = _input_chain.render(input,state if use_signal else {})
+	var prepared: RID = _input_chain.render(input,state if use_signal else {},profile_passes)
 	if not prepared.is_valid():
 		_fail_pipeline("Input stage: " + _input_chain.error)
 		return
@@ -252,9 +262,14 @@ func _render_frame(source_texture: RID, extent: Vector2i, linear: bool, display:
 	if not prepared.is_valid():
 		_fail_pipeline("Receiver stage did not produce a texture: " + _receiver_stage.error)
 		return
-	if not _crt_chain.render(prepared,knobs).is_valid():
-		_fail_pipeline("CRT stage: " + _crt_chain.error)
-		return
+	if _crt_chain != null:
+		prepared = _crt_chain.render(prepared,knobs,profile_passes)
+		if not prepared.is_valid():
+			_fail_pipeline("CRT stage: " + _crt_chain.error)
+			return
+	if prepared != _presented_output:
+		_presented_output = prepared
+		_publish.call_deferred(prepared,direct_signal)
 	ready_frames += 1
 	cpu_usec = Time.get_ticks_usec()-started
 	# The render server consumes deferred Texture2DRD changes before these old
@@ -263,6 +278,7 @@ func _render_frame(source_texture: RID, extent: Vector2i, linear: bool, display:
 	while not _retired.is_empty() and int(_retired[0].age) >= 3:
 		var entry: Dictionary = _retired.pop_front()
 		_dispose_bundle(entry)
+	if not profile_passes: return
 	var sample := {}
 	for index in rd.get_captured_timestamps_count():
 		var label := rd.get_captured_timestamp_name(index)
@@ -294,13 +310,13 @@ func _handle_failure(message: String) -> void:
 	push_warning("Video effects disabled for this session: " + message)
 	pipeline_failed.emit(message)
 
-func _publish(texture_rid: RID, encoded: bool) -> void:
+func _publish(texture_rid: RID, direct_signal: bool) -> void:
 	if not _running or _pipeline_failed: return
 	_texture = Texture2DRD.new()
 	_texture.texture_rd_rid = texture_rid
 	texture = _texture
 	(material as ShaderMaterial).set_shader_parameter("video_texture",_texture)
-	(material as ShaderMaterial).set_shader_parameter("encoded_output",encoded)
+	(material as ShaderMaterial).set_shader_parameter("scale_signal",direct_signal)
 
 static func _preparation(linear: bool) -> Dictionary:
 	return {"parameters":{"entity_x":{"default":0.5},"entity_y":{"default":0.5},"entity_radius":{"default":0.0},"entity_amount":{"default":0.0},"field_index":{"default":0.0},"fault_kind":{"default":0.0},"fault_amount":{"default":0.0},"fault_phase":{"default":0.0},"fault_origin":{"default":0.5}},"textures":{},"passes":[{
@@ -387,6 +403,7 @@ func _dispose() -> void:
 	_dispose_bundle({"input":_input_chain,"signal":_signal_stage,"receiver":_receiver_stage,"crt":_crt_chain,"downscale":_downscale_stage})
 	_input_chain = null
 	_crt_chain = null
+	_presented_output = RID()
 	_signal_stage = null
 	_receiver_stage = null
 	_downscale_stage = null

@@ -160,6 +160,7 @@ var _title_music := false
 ## fade, so the live stream lags the intent — guarding on the stream instead
 ## lets a second call stack another fade tween on the same property.
 var _music_target := ""
+var _floor_music: AudioStreamMP3
 var _descent_summary: DescentSummary
 var _descent_hud: DescentHUD
 var _return_prompt: ReturnPrompt
@@ -177,6 +178,7 @@ var _save_notice: CanvasLayer
 var _applied_fullscreen: Variant = null
 var _applied_hdr_output: Variant = null
 var _title_covered := false
+var _title_floor_pending := false
 var _diagnostic_settings: Dictionary = {}
 var _applied_graphics: Dictionary = {}
 var _quitting := false
@@ -341,11 +343,14 @@ func _ready() -> void:
 	player.allow_sprint = true
 	if descent and run != null:
 		run.player = player
+	_title_floor_pending = _will_show_title() and not opts.quick_exit()
 	_build_level(active_level, spawn)
 
 	player.position = spawn
 	player.rotation.y = yaw
 	add_child(player)
+	if _title_floor_pending:
+		player.set_physics_process(false)
 	if opts.lineup:
 		var forward := Vector3(-sin(yaw), 0, -cos(yaw))
 		var ring: Node3D = MonsterLineupScene.new()
@@ -440,9 +445,6 @@ func _ready() -> void:
 			_post_process.damage_hit(0.32)
 			if _passers != null:
 				_passers.defer_for(CornerApparitions.SHARED_QUIET_SECONDS))
-	# Nothing mutters, haunts or races behind a title or a rule card. The
-	# screenshot and --nologo starts release this below.
-	_set_presence(Presence.SILENT)
 	_figures.seen_by_player.connect(
 		func():
 			_heart.bump(Heartbeat.BUMP_SEEN)
@@ -462,6 +464,7 @@ func _ready() -> void:
 	_events.descent_mode = descent
 	_events.set_level(level_root, active_level)
 	add_child(_events)
+	_set_presence(Presence.SILENT)
 	_photo_camera = PhotoCamera.new()
 	_photo_camera.player = player
 	_photo_camera.run = run
@@ -472,7 +475,7 @@ func _ready() -> void:
 	add_child(_photo_camera)
 	_photo_camera.photo_documented.connect(_on_photo_documented)
 	_photo_camera.review_finished.connect(_on_photo_review_finished)
-	_photo_camera.photograph_taken.connect(_on_album_photograph)
+	_photo_camera.archive_photograph = _on_album_photograph
 	_photo_camera.first_raise.connect(
 		func(): _show_event_message("PHOTOGRAPH WHAT IS WRONG"))
 	_music = AudioStreamPlayer.new()
@@ -496,7 +499,8 @@ func _ready() -> void:
 	player.emergency_flash_changed.connect(_on_emergency_flash_changed)
 	player.emergency_flash_used.connect(_on_emergency_flash_used)
 	_apply_game_settings()
-	_prepare_encounter_rendering(active_level)
+	if not _title_floor_pending:
+		_prepare_encounter_rendering(active_level)
 	_configure_level_transitions()
 	player.interaction_prompt_changed.connect(_on_interaction_prompt)
 	_events.message.connect(_show_event_message)
@@ -515,7 +519,8 @@ func _ready() -> void:
 			_set_presence(Presence.WANDER)
 	_dev_tools.schedule_screenshot(player, get_viewport(), opts.screenshot,
 		opts.shot_delay)
-	call_deferred("_settle_initial_arrival")
+	if not _title_floor_pending:
+		call_deferred("_settle_initial_arrival")
 	RuntimeDiagnostics.mark("main_ready_end", _runtime_diagnostic_context())
 
 
@@ -597,6 +602,7 @@ func _set_presence(state: Presence) -> void:
 		_corner_apparitions.suspended = state != Presence.DESCENT
 	_whispers.suspended = state == Presence.SILENT
 	_heart.suspended = state == Presence.SILENT
+	_events.set_suspended(state == Presence.SILENT)
 
 
 func _level_seed(level: int) -> int:
@@ -638,11 +644,6 @@ func _create_descent_route(level: int, floor_idx: int) -> DescentRoute:
 func _build_level(level: int, around: Vector3) -> void:
 	var build_started := Time.get_ticks_usec()
 	RuntimeDiagnostics.mark("floor_prepare_begin", {"level": level})
-	# Floor changes are already opaque here. Bound inactive-floor retention and
-	# complete prop decoding before the player can outrun background prefetch.
-	Chunk.prepare_floor_resources(level)
-	ShadowWalkerVisual.retain_models([0, 1, 2, 3,
-		int(ShadowFigures.THEME_WALKER.get(level, -1))])
 	get_viewport().use_occlusion_culling = level in Chunk.occlusion_themes
 	level_root = Node3D.new()
 	add_child(level_root)
@@ -729,19 +730,16 @@ func _build_level(level: int, around: Vector3) -> void:
 					_photo_director.plan[at]["id"],
 					int(_photo_director.plan[at]["type"]),
 					str(_photo_director.plan[at]["required"]), str(at)])
-	Chunk.prewarm_theme_content(_level_seed(level), level)
 	level_root.add_child(cm)
 	if descent:
 		_configure_mutation_coordinator()
 	# Streaming must orbit the ARRIVAL until the player is teleported there,
 	# or the stale pre-teleport player position frees these warmed chunks
 	# mid-transition (see ChunkManager.stream_focus).
-	cm.stream_focus = around
-	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
-	cm.set_process(not _title_covered)
+	if not _title_floor_pending:
+		_populate_floor(level, around)
+	cm.set_process(not _title_covered and not _title_floor_pending)
 	RuntimeDiagnostics.mark("floor_prepare_end", {"level": level, "elapsed_ms": (Time.get_ticks_usec() - build_started) / 1000.0})
-	# Startup collision is ready before background decoding begins.
-	FloorResourcePreloader.configure(Chunk.theme_prop_paths(level))
 	_breathing = preload("res://scripts/environment_breath_director.gd").new()
 	level_root.add_child(_breathing)
 	_breathing.configure(cm, player, _director, _breathing_allowed, opts.breathing, opts.hallway_wave)
@@ -871,17 +869,83 @@ func _finish_transition_build(level: int) -> void:
 	add_child(ambience)
 	if _title_music:
 		ambience.stop()
-	_prepare_encounter_rendering(level)
+	await _prepare_covered_encounters(level)
+
+
+func _prepare_covered_encounters(level: int) -> void:
+	# Draw the destination camera under the opaque menu along with the encounter
+	# samples. Its first frame must be ready before handing control to the player.
+	var host = get_meta("ntscrt_video_host") if has_meta("ntscrt_video_host") else null
+	if _title_covered and host != null:
+		host.set_title_covered(false)
+	cm.set_process(true)
+	var live_power_pass := descent and not cm.blackout and DisplayServer.get_name() != "headless"
+	if live_power_pass:
+		_prepare_realm_visit()
+	_prepare_encounter_rendering(level, live_power_pass, not descent)
 	if is_instance_valid(_encounter_warmup) and not _encounter_warmup.finished:
 		await _encounter_warmup.completed
+	if DisplayServer.get_name() != "headless":
+		# The 3x3 collision core is ready synchronously. Give the renderer the
+		# rest of the arrival neighbourhood while the loading screen is opaque.
+		# Keep the first encounter draws on their own streaming allowance.
+		cm.preparing_arrival = true
+		while cm.can_process() and not cm.arrival_stream_ready():
+			await get_tree().process_frame
+		if live_power_pass and level == 0:
+			await cm.prepare_lift_exit_lookahead()
+		cm.preparing_arrival = false
+		if live_power_pass:
+			var arrival := cm.chunk_at(descent_route.origin) if descent_route != null else null
+			if arrival != null:
+				await arrival.draw_arrival_corridor()
+			await _draw_arrival_blackout()
+			await _photo_camera.prepare_snapshot_buffers()
+			if is_instance_valid(_realm_visit):
+				await _realm_visit.prepare_nearby_preview()
+		await RenderingServer.frame_post_draw
+	# A Descent still has its arrival safety check and fade to finish. Keep
+	# drawing the real floor through that fade, then let the ready card idle.
+	if _title_covered and host != null and not _descent_preparing:
+		host.set_title_covered(true)
+	cm.set_process(not _title_covered)
 
 
-func _prepare_encounter_rendering(level: int) -> void:
+func _draw_arrival_blackout() -> void:
+	# The title or transition fade still covers the floor. Draw the actual
+	# room materials through lights-out and restoration without starting a
+	# gameplay blackout, touching the player's torch charge or firing a scare.
+	var started := Time.get_ticks_usec()
+	var power := preload("res://scripts/blackout_environment.gd").new()
+	cm.set_blackout(true, true)
+	power.apply(we.environment)
+	await RenderingServer.frame_post_draw
+	cm.set_blackout(false)
+	power.restore()
+	await RenderingServer.frame_post_draw
+	RuntimeDiagnostics.mark("arrival_power_prepared", {"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0})
+
+
+func _prepare_encounter_rendering(level: int, live_power_pass := false, wander_only := false) -> void:
 	if is_instance_valid(_encounter_warmup):
 		_encounter_warmup.free()
 	_encounter_warmup = preload("res://scripts/encounter_render_warmup.gd").new()
 	add_child(_encounter_warmup)
-	_encounter_warmup.prepare(get_viewport(), level, level_root)
+	_encounter_warmup.prepare(get_viewport(), level, level_root, live_power_pass, wander_only)
+
+
+func _populate_floor(level: int, around: Vector3) -> void:
+	# The score fades in after control returns. Read its MP3 while this floor
+	# is covered so the delayed audio callback only starts playback.
+	var track := _music_track_for(level)
+	_floor_music = load(track) as AudioStreamMP3 if not track.is_empty() else null
+	Chunk.prepare_floor_resources(level)
+	ShadowWalkerVisual.retain_models([0, 1, 2, 3,
+		int(ShadowFigures.THEME_WALKER.get(level, -1))])
+	Chunk.prewarm_theme_content(_level_seed(level), level)
+	cm.stream_focus = around
+	cm.warm_up(Vector2i(floori(around.x / ChunkManager.CELL), floori(around.z / ChunkManager.CELL)))
+	FloorResourcePreloader.configure(Chunk.theme_prop_paths(level))
 
 
 func _apply_game_settings() -> void:
@@ -1099,7 +1163,7 @@ func _input(event: InputEvent) -> void:
 
 func _on_album_photograph(image: Image, metadata: Dictionary) -> void:
 	_photo_album_store.configure(world_seed, _progress_enabled)
-	var error := _photo_album_store.add_photo(image, metadata)
+	var error := await _photo_album_store.add_live_photo(image, metadata, get_tree())
 	if error != OK:
 		_report_save_failure("Photograph", error)
 	elif is_instance_valid(_save_notice):
@@ -1924,6 +1988,8 @@ func _allow_realm_visit_retry(floor_idx: int) -> void:
 
 
 func _prepare_realm_visit() -> void:
+	if is_instance_valid(_realm_visit) and _realm_visit._source_cm == cm:
+		return
 	_dispose_realm_visit()
 	if not descent or run == null or run.is_last_floor() or _realm_visit_used(run.floor_idx):
 		return
@@ -2003,12 +2069,16 @@ func _update_bleed() -> void:
 		return
 	if _bleed_captured and we.environment != null:
 		var mixv := run.bleed * 0.65
-		we.environment.fog_light_color = _bleed_base_fog.lerp(
-			_bleed_next_fog, mixv)
-		we.environment.fog_density = lerpf(_bleed_base_density,
-			_bleed_next_density, run.bleed * 0.5)
+		var color := _bleed_base_fog.lerp(_bleed_next_fog, mixv)
+		var density := lerpf(_bleed_base_density, _bleed_next_density, run.bleed * 0.5)
+		if we.environment.fog_light_color != color:
+			we.environment.fog_light_color = color
+		if not is_equal_approx(we.environment.fog_density, density):
+			we.environment.fog_density = density
 	if is_instance_valid(_bleed_bed):
-		_bleed_bed.volume_db = lerpf(-58.0, -30.0, run.bleed)
+		var volume := lerpf(-58.0, -30.0, run.bleed)
+		if not is_equal_approx(_bleed_bed.volume_db, volume):
+			_bleed_bed.volume_db = volume
 
 
 func _ensure_descent_hud() -> void:
@@ -2623,7 +2693,7 @@ func _settle_initial_arrival() -> void:
 
 
 func _process(dt: float) -> void:
-	_set_title_covered(is_instance_valid(_title) and not _title._gone)
+	_set_title_covered(is_instance_valid(_title))
 	_sync_osd_visible()
 	_flash_notice_left = maxf(0.0, _flash_notice_left - dt)
 	_check_torch_hint()
@@ -2674,15 +2744,17 @@ func _switch_music(level: int) -> void:
 	if target == _music_target:
 		return
 	_music_target = target
+	var track := _floor_music if _floor_music != null and _floor_music.resource_path == target else null
+	if track == null and not target.is_empty():
+		track = load(target) as AudioStreamMP3
 	var tw := create_tween()
 	tw.tween_property(_music, "volume_db", -50.0, 0.6)
 	tw.tween_callback(func():
-		if target == "":
+		if track == null:
 			_music.stop()
 			return
-		var st: AudioStreamMP3 = load(target)
-		st.loop = true
-		_music.stream = st
+		track.loop = true
+		_music.stream = track
 		# The title track starts at the top. A floor track is joined partway in,
 		# because you are walking into a building that was already playing.
 		_music.play(0.0 if _title_music else randf() * 20.0))
@@ -3216,6 +3288,8 @@ func _build_title(force := false) -> void:
 	_set_world_audio(false)
 	_switch_music(active_level)
 	_title = TitleScreen.new()
+	if _title_floor_pending:
+		_title.prepare_wander = _prepare_first_wander
 	if _progress_enabled and _descent_progress != null \
 			and _descent_progress.has_checkpoint():
 		var checkpoint_theme: int = DescentRun.order_for(
@@ -3256,6 +3330,9 @@ func _prepare_descent(entry: int) -> void:
 		_descent_preparing = false
 		descent = false
 		return
+	if _title_floor_pending:
+		_title_floor_pending = false
+		player.set_physics_process(true)
 	player.allow_sprint = true
 	player.set_process_unhandled_input(false)
 	player.reset_descent_resources()
@@ -3273,6 +3350,8 @@ func _prepare_descent(entry: int) -> void:
 	await _jump_to(run.theme(), Vector3.INF, true)
 	_descent_preparing = false
 	if is_instance_valid(_title):
+		if _title_covered and has_meta("ntscrt_video_host"):
+			get_meta("ntscrt_video_host").set_title_covered(true)
 		_title.set_descent_ready()
 
 
@@ -3319,6 +3398,16 @@ func _on_start(selected_descent: bool) -> void:
 		await _play_descent_intro()
 		_commit_new_descent_checkpoint()
 	_finish_mode_start(selected_descent)
+
+
+func _prepare_first_wander() -> void:
+	if not _title_floor_pending:
+		return
+	_title_floor_pending = false
+	_populate_floor(active_level, player.position)
+	await _settle_initial_arrival()
+	await _prepare_covered_encounters(active_level)
+	player.set_physics_process(true)
 
 
 func _finish_mode_start(selected_descent: bool) -> void:

@@ -5,6 +5,8 @@ extends RefCounted
 
 const MANIFEST := "res://third_party/ntscrt/slang/presets.json"
 const TEXTURE_ROOT := "res://third_party/ntscrt/slang/upstream/"
+static var _preset_definitions: Dictionary = {}
+static var _preset_mutex := Mutex.new()
 # CPU bytecode only: GPU resources remain owned by each chain and retire with
 # its frames. All access stays on the rendering thread, including cache hits.
 const COMPILED_CACHE_LIMIT := 64
@@ -32,8 +34,16 @@ var _mip_targets: Dictionary = {}
 var _mip_pipelines: Dictionary = {}
 
 static func load_presets() -> Dictionary:
-	var data = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST))
-	return data.get("presets", {}) if data is Dictionary else {}
+	# The renderer and settings UI use the same packaged 1.6 MB manifest.
+	# Keep independent caller dictionaries while sharing its parsed strings.
+	_preset_mutex.lock()
+	if _preset_definitions.is_empty():
+		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST))
+		if data is Dictionary and data.get("presets") is Dictionary:
+			_preset_definitions = data.presets
+	var definitions := _preset_definitions
+	_preset_mutex.unlock()
+	return definitions.duplicate(true)
 
 static func _compile(rd: RenderingDevice, source: RDShaderSource) -> RDShaderSPIRV:
 	var key := str(rd.get_instance_id()) + ":" + (source.source_vertex + "\n--fragment--\n" + source.source_fragment).sha256_text()
@@ -157,7 +167,7 @@ void main() { colour=textureLod(source,uv,0.0); }
 	output = _passes[-1].outputs[0]
 	return true
 
-func render(input: RID, overrides: Dictionary = {}) -> RID:
+func render(input: RID, overrides: Dictionary = {}, profile_passes := false) -> RID:
 	if not error.is_empty() or _passes.is_empty(): return RID()
 	parameters.merge(overrides,true)
 	var resources := _textures.duplicate()
@@ -200,7 +210,7 @@ func render(input: RID, overrides: Dictionary = {}) -> RID:
 			_fail("Cannot allocate video uniform set for pass %d" % index)
 			return RID()
 		var target_index: int = _frame % pass_data.outputs.size()
-		_rd.capture_timestamp("NTSCRT/pass%d/begin" % index)
+		if profile_passes: _rd.capture_timestamp("NTSCRT/pass%d/begin" % index)
 		var list := _rd.draw_list_begin(pass_data.framebuffers[target_index])
 		_rd.draw_list_bind_render_pipeline(list,pass_data.pipeline)
 		_rd.draw_list_bind_vertex_array(list,_vertex_array)
@@ -209,7 +219,7 @@ func render(input: RID, overrides: Dictionary = {}) -> RID:
 		_rd.draw_list_end()
 		_generate_mips(pass_data.outputs[target_index])
 		if not error.is_empty(): return RID()
-		_rd.capture_timestamp("NTSCRT/pass%d/end" % index)
+		if profile_passes: _rd.capture_timestamp("NTSCRT/pass%d/end" % index)
 		previous = pass_data.outputs[target_index]
 		previous_size = pass_extents[index]
 		var reference := {"texture":previous,"size":previous_size}

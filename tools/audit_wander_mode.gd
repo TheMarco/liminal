@@ -21,8 +21,15 @@ func run() -> void:
 	expect(not game._whispers.suspended,
 		"Wander startup left ambient whispers suspended")
 
+	expect(game._events.is_processing(), "Wander startup left room sounds suspended")
+	game._events._play_knocks()
 	game._show_return_prompt()
+	expect(not game._events.is_processing(), "return prompt kept running room ambience")
+	for sound in game._events.get_children():
+		if sound is AudioStreamPlayer3D:
+			expect(not sound.playing, "a knock continued behind the return prompt")
 	game._cancel_return_to_title()
+	expect(game._events.is_processing(), "cancelling the return prompt left the rooms silent")
 	expect(game._figures.suspended,
 		"cancelling the return prompt enabled Wander figures")
 

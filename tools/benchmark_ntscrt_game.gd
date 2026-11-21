@@ -290,6 +290,7 @@ func _memory() -> Dictionary:
 func benchmark(config: Dictionary, round_index: int, batches: int) -> void:
 	if not apply_case(config):
 		return
+	if _presenter_active(): host.presenter.profile_gpu_passes = true
 	await settle(60 if full_matrix and not tape_looks and not authored_looks and not quality_ladder else 20)
 	if _presenter_active(): expect(host.presenter.last_error.is_empty(),str(config.name)+": "+host.presenter.last_error)
 	var samples: Array[float] = []

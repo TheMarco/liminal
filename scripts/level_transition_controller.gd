@@ -119,6 +119,11 @@ func jump_to(level: int, requested_position: Vector3,
 	var position: Vector3 = prepared.get("position", requested_position)
 	exact = bool(prepared.get("exact", exact))
 	yaw = float(prepared.get("yaw", yaw))
+	# Place the camera before submitting the destination's first draw. Otherwise
+	# GI and shadows are first populated at the old lift, then again on arrival.
+	player_node.teleport(position)
+	if is_finite(yaw):
+		player_node.rotation.y = yaw
 	_port.build_level.call(level, position)
 	await _port.post_build.call(level)
 	await get_tree().physics_frame
@@ -147,9 +152,8 @@ func jump_to(level: int, requested_position: Vector3,
 			settle_waits, Engine.get_physics_frames() - settle_pf0,
 			str(get_tree().paused)])
 	var safe := _resolve_live_arrival(level, cell, position, exact, player_node)
-	player_node.teleport(safe)
-	if is_finite(yaw):
-		player_node.rotation.y = yaw
+	if safe != position:
+		player_node.teleport(safe)
 	await get_tree().process_frame
 	var fade_in := create_tween()
 	fade_in.tween_property(_fade, "color:a", 0.0, 0.5)

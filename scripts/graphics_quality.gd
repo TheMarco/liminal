@@ -99,6 +99,38 @@ static func apply_resolution(viewport: Viewport, settings: GameSettings, crt_ena
 		viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	if not is_equal_approx(viewport.scaling_3d_scale,scale): viewport.scaling_3d_scale = scale
 
+## Match the pixels the opening actually occupies in the source world's 3D
+## image. Keep the off-axis frustum and its output texture at their original
+## aspect. Only the destination's internal 3D buffers change resolution.
+static func doorway_render_scale(camera: Camera3D, window: MeshInstance3D,
+		preview: SubViewport) -> float:
+	var aperture := (window.mesh as QuadMesh).size
+	var half_x := window.global_basis.x * aperture.x * 0.5
+	var half_y := window.global_basis.y * aperture.y * 0.5
+	var centre := window.global_position
+	var top_left := centre - half_x + half_y
+	var top_right := centre + half_x + half_y
+	var bottom_left := centre - half_x - half_y
+	var bottom_right := centre + half_x - half_y
+	if camera.is_position_behind(top_left) or camera.is_position_behind(top_right) \
+			or camera.is_position_behind(bottom_left) or camera.is_position_behind(bottom_right):
+		return 1.0
+	var top_left_pixel := camera.unproject_position(top_left)
+	var top_right_pixel := camera.unproject_position(top_right)
+	var bottom_left_pixel := camera.unproject_position(bottom_left)
+	var bottom_right_pixel := camera.unproject_position(bottom_right)
+	var width := maxf(top_left_pixel.distance_to(top_right_pixel), bottom_left_pixel.distance_to(bottom_right_pixel))
+	var height := maxf(top_left_pixel.distance_to(bottom_left_pixel), top_right_pixel.distance_to(bottom_right_pixel))
+	var density := maxf(width / preview.size.x, height / preview.size.y) * camera.get_viewport().scaling_3d_scale
+	# Switch up before exhausting texel density and down only after moving
+	# farther away. Looking around a threshold must not reallocate every frame.
+	for tier: float in [0.25, 0.5, 0.75]:
+		var headroom := 0.8 if tier < preview.scaling_3d_scale else 0.92
+		if density <= tier * headroom:
+			return tier
+	return 1.0
+
+
 static func apply_viewport(viewport: Viewport, settings: GameSettings, disable_taa := false, crt_enabled := false, tape_enabled := false) -> void:
 	apply_resolution(viewport, settings, crt_enabled, tape_enabled)
 	apply_viewport_features(viewport, settings, disable_taa)

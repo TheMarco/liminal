@@ -744,9 +744,11 @@ func _begin_blackout() -> void:
 		ranker = blackout_mutation_fallback_ranker
 	elif _blackout_visibility_retries >= 2:
 		ranker = Callable()
+	var selection_started := Time.get_ticks_usec()
 	var proposal := route.topology.find_transition(
 		route, _cell, visited, mercy_armed, ranker,
 		blackout_mutation_validator)
+	RuntimeDiagnostics.slow("blackout_selection", selection_started, {"cell": str(_cell)})
 	if proposal == null or proposal.is_empty():
 		_blackout_visibility_retries += 1
 		_blackout_due = 3.0

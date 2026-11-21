@@ -32,8 +32,9 @@ static func from_settings(settings: GameSettings) -> NtscrtProfile:
 	# Make the game's shared calibration explicit before saved overrides.
 	for name: String in PROFILE.CRT_NAMES.slice(1):
 		var knobs := {}
-		for key: String in PROFILE.crt_descriptors(name):
-			knobs[key] = PROFILE.crt_descriptors(name)[key].default
+		var descriptors := PROFILE.crt_descriptors(name)
+		for key: String in descriptors:
+			knobs[key] = descriptors[key].default
 		knobs.merge(PROFILE.CRT_CALIBRATION.get(name,{}),true)
 		knobs.merge(settings.get_value("crt_shader_parameters").get(name,{}),true)
 		models[name] = knobs

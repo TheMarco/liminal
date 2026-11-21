@@ -165,6 +165,14 @@ func run() -> void:
 	route(2, true, false, false)
 	await progressing("signal only")
 	expect(host.presenter.signal_enabled and not host.presenter.receiver_enabled and host.presenter.preset_name == "none", "Signal independent")
+	await read_snapshot()
+	expect(not snapshot.has("crt_output"), "Native-size signal allocated a redundant output pass")
+	var previous_limit: int = host.presenter.output_height_limit
+	host.presenter.output_height_limit = 320
+	await progressing("capped signal output")
+	await read_snapshot()
+	expect(snapshot.get("crt_output", Vector2i.ZERO).y == 320, "Signal bypassed its requested output cap")
+	host.presenter.output_height_limit = previous_limit
 	route(2, false, true, false)
 	await progressing("receiver only")
 	expect(not host.presenter.signal_enabled and host.presenter.receiver_enabled, "Receiver independent")

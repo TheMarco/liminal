@@ -39,6 +39,9 @@ static func bulb(parent: Node3D, lens: MeshInstance3D, color: Color,
 	var bounds := mesh_bounds_in(lens,parent)
 	var light := OmniLight3D.new()
 	light.name = "OpalLight"
+	# These short-range ceiling fittings use the same subdivided room blockers
+	# as the area lights. Render two hemispheres for each shadow update.
+	light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
 	light.position = bounds.get_center()
 	light.light_color = color
 	light.light_energy = energy

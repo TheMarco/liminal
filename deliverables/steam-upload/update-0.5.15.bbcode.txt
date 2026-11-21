@@ -1,0 +1,13 @@
+[h1]Update 0.5.15 — Smoother exploration and fewer pauses[/h1]
+
+This update tackles pauses you could feel when walking up to a doorway, taking a photo, or waiting for the Casino lights to go out.
+
+[list]
+[*]Looking through a doorway into another realm now takes less time to render as you approach. The view reaches full detail up close. On an M3 Max, 95% of frames finished within 15.5 ms on our doorway walk, down from 19.7 ms.
+[*]The Casino lights still go out together. When a blackout changes the layout, nearby rooms start rebuilding on the following frame. The first blackout can still hitch briefly, but it was shorter in our Mac tests.
+[*]Rooms that are partly loaded can now finish where they left off after a power change. This reduces pauses as you move into a new part of the floor.
+[*]Saving a photo to the album now writes the image in the background, reducing the chance of a pause a moment after the shutter.
+[*]Reopening Settings takes less time. Several floors also generate faster, including the Mall, Poolrooms, and late Annex.
+[/list]
+
+If you feel a pause in 0.5.15, please tell us what floor you were on, what happened just before it, and which operating system and graphics card you use. Thank you for helping us track these down.

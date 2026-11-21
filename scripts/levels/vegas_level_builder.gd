@@ -233,14 +233,16 @@ func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 	var scale := minf(Chunk.CASINO_SLOT_SCALE, (ctx.ceiling_height - headroom) / height)
 	inst.scale = Vector3.ONE * scale
 	pivot.add_child(inst)
-	for mesh: MeshInstance3D in inst.find_children("LightGuides", "MeshInstance3D", true, false):
-		mesh.material_override = Mats.casino_slot_lights()
-	if not powered:
-		# Idle cabinets must still read as complete machines. Retain the actual
-		# reel/paytable artwork with a dim backlight, not featureless black holes.
-		for mesh: MeshInstance3D in inst.find_children("*", "MeshInstance3D", true, false):
-			if str(mesh.name) in ["Displays", "PrintedGlass", "LightGuides"]:
-				mesh.material_override = Mats.casino_slot_standby(mesh.get_active_material(0))
+	for mesh: MeshInstance3D in inst.find_children("*", "MeshInstance3D", true, false):
+		if mesh.name not in [&"Displays", &"PrintedGlass", &"LightGuides"]:
+			continue
+		# These luminous inlays sit on the opaque cabinet. The shell and hardware
+		# already cast its silhouette into every nearby light's shadow map.
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if mesh.name == &"LightGuides":
+			mesh.material_override = Mats.casino_slot_lights()
+		if not powered:
+			mesh.material_override = Mats.casino_slot_standby(mesh.get_active_material(0))
 	var b0 := scene.collider_mark()
 	scene.collider_box(Vector3(x, height * scale * 0.5, z + f * 0.09 * scale),
 		Vector3(0.96, height, 0.90) * scale)

@@ -90,7 +90,10 @@ func run_test() -> void:
 		var destination_image := visit.preview.get_texture().get_image()
 		destination_image.save_png(OUT.path_join("destination-" + label + ".png"))
 		if stance == Vector2(20.0, 0.0):
+			assert(visit.preview.scaling_3d_scale < 1.0, "distant aperture still renders a full-size destination")
 			_check_office_detail(destination_image)
+		elif stance == Vector2(0.6, 0.0):
+			assert(visit.preview.scaling_3d_scale == 1.0, "destination lost detail at the threshold")
 		camera._lower()
 		visit._process(0.0)
 		assert(not visit.window.visible and not visit.seal.opened, "unphotographed realm exposed without camera")

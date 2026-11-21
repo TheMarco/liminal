@@ -279,11 +279,27 @@ static func make_profile(index: int) -> NtscrtProfile:
 	profile.resource_name = recipe.name
 	return profile
 
+static var _comparison_settings: Dictionary[int, Dictionary] = {}
+
 static func matching_index(profile: NtscrtProfile) -> int:
-	var settings: Dictionary = IO.encode(profile).settings
+	return matching_settings(IO.encode(profile).settings)
+
+## The caller can reuse its encoded settings when refreshing the menu.
+static func matching_settings(settings: Dictionary) -> int:
 	for index in LOOKS.size():
-		var candidate: Dictionary = IO.encode(make_profile(index)).settings
-		for key: String in ["quality","reduced_flashing","auto_world_resolution"]:
+		var recipe: Dictionary = LOOKS[index]
+		var crt := int(recipe.get("crt", 0))
+		if settings.tape != int(recipe.get("tape", 1)) or settings.crt_model != crt \
+				or settings.crt_enabled != (crt > 0) \
+				or not is_equal_approx(settings.film_grain, float(recipe.get("grain", 0.0))):
+			continue
+		if not _comparison_settings.has(index):
+			_comparison_settings[index] = IO.encode(make_profile(index)).settings
+		# These three preferences belong to the player. Use a shallow copy
+		# for them and compare every nested signal and shader setting exactly.
+		var candidate := _comparison_settings[index].duplicate()
+		for key: String in ["quality", "reduced_flashing", "auto_world_resolution"]:
 			candidate[key] = settings[key]
-		if candidate==settings: return index
+		if candidate == settings:
+			return index
 	return -1

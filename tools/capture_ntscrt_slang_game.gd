@@ -53,6 +53,7 @@ func run() -> void:
 	camera.global_transform = game.player.cam.global_transform
 	camera.current = true
 	presenter = host.presenter
+	presenter.profile_gpu_passes = true
 	await settle(40)
 	DirAccess.make_dir_recursive_absolute("res://build/ntscrt-review/slang-game")
 	var modes := [1] if OS.get_cmdline_user_args().has("--quick") else [0,1]

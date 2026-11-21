@@ -31,13 +31,22 @@ func set_level(root: Node3D, floor_theme := 0) -> void:
 	theme = floor_theme
 	_bag.clear()
 	_last_kind = ""
-	# Do not carry a sound from the previous floor through the transition.
+	_stop_sounds()
+	_busy = false
+	_time_left = randf_range(24.0, 46.0)
+
+
+func set_suspended(suspended: bool) -> void:
+	set_process(not suspended)
+	if suspended:
+		_stop_sounds()
+
+
+func _stop_sounds() -> void:
 	for child in get_children():
 		if child is AudioStreamPlayer3D:
 			child.stop()
 			child.queue_free()
-	_busy = false
-	_time_left = randf_range(24.0, 46.0)
 
 
 func _process(dt: float) -> void:
