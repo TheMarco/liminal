@@ -162,9 +162,10 @@ func run() -> void:
 		"sprint is disabled despite the Descent attention contract")
 	expect(game.cm.descent and game.cm.descent_route == game.descent_route,
 		"explicit route config did not reach ChunkManager")
-	expect(ChunkManager.BUDGET == 1 \
+	expect(not game.cm.preparing_arrival \
+		and ChunkManager.BUILD_BUDGET_USEC < ChunkManager.COVERED_BUILD_BUDGET_USEC \
 		and ChunkManager.UNLOAD_R == ChunkManager.LOAD_R + 1,
-		"streaming can stack chunk builds or retain an oversized end-zone ring")
+		"playable Descent kept the covered streaming budget or an oversized end-zone ring")
 	expect(game.descent_route.topology != null \
 		and game.cm.descent_topology == game.descent_route.topology \
 		and game.run.route == game.descent_route,

@@ -1988,10 +1988,13 @@ func _allow_realm_visit_retry(floor_idx: int) -> void:
 
 
 func _prepare_realm_visit() -> void:
+	var eligible := descent and run != null and not run.is_last_floor() and not _realm_visit_used(run.floor_idx)
 	if is_instance_valid(_realm_visit) and _realm_visit._source_cm == cm:
-		return
+		if _realm_visit.is_away() or (eligible and _realm_visit.phase in [
+				RealmExcursion.Phase.PREPARING, RealmExcursion.Phase.WAITING]):
+			return
 	_dispose_realm_visit()
-	if not descent or run == null or run.is_last_floor() or _realm_visit_used(run.floor_idx):
+	if not eligible:
 		return
 	if descent_route == null or descent_route.realm_door_hint.is_empty():
 		push_warning("No realm entrance reserved on floor %d" % run.floor_idx)

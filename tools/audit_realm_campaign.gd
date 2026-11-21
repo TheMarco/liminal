@@ -22,6 +22,8 @@ func run_test() -> void:
 		quit()
 		return
 	check(visit != null, "normal floor has controller")
+	game._prepare_realm_visit()
+	check(game._realm_visit == visit, "floor preparation reuses the waiting doorway")
 	# Exercise real checkpoint I/O without touching the player's save.
 	var save_path := "/tmp/realm-campaign-%d-%d.cfg" % [game.world_seed, game.run.floor_idx]
 	game._descent_progress = DescentProgress.new(save_path)

@@ -31,10 +31,12 @@ static func prepare_floor(paths: Array[String]) -> void:
 			_ready_order.erase(path)
 	# Overlap independent scene decodes only while the floor is covered. Keep the
 	# same manifest order and bound decoder scratch space on lower-memory PCs.
+	# Concurrent scene loads can leave the headless renderer with invalid shader handles.
+	var threaded := not OS.has_feature("web") and DisplayServer.get_name() != "headless"
 	var requests: Array[String] = []
 	for path in paths:
 		if _ready.has(path) or requests.has(path): continue
-		if OS.has_feature("web") or ResourceLoader.load_threaded_request(path, "PackedScene", false) != OK:
+		if not threaded or ResourceLoader.load_threaded_request(path, "PackedScene", false) != OK:
 			_collect_floor_scene(path, false)
 			continue
 		requests.append(path)
