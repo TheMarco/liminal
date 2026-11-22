@@ -13,5 +13,8 @@ Open [b]Settings → Video[/b] to choose how the world renders and how the camer
 [*]Prison cell gates now block the player where the bars are visible and leave the opening clear when the gate is open.
 [*]Fixed overlapping surfaces at Airport door frames and lowered hanging signs that could disappear into the ceiling tiles.
 [*]Flashlight chargers now check that you can reach the panel before showing the interaction prompt or starting a charge.
-[*]Deep water no longer plays dry footsteps or walking bob while you wade. Entering and leaving the water is quieter.
+[*]In chest-deep water, dry footsteps stop and the camera no longer bobs as if you were walking. Entering and leaving the water is quieter.
 [/list]
+
+[h2]Known issue[/h2]
+Loading directly into the Airport on Ultra can still cause a long pause on Mac. In a foreground test on an M3 Max, we measured a 59-second pause in 0.6.0. The same route also paused for 73 seconds in 0.5.15. We’re still investigating.
