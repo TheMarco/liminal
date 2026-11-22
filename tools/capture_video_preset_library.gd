@@ -77,7 +77,7 @@ func _run() -> void:
 		await frames(8)
 		game._apply_hud_scaling()
 	game._open_settings()
-	game._pause_menu._select_tab("Visual Effects")
+	game._pause_menu._select_tab("Video")
 	await frames(4)
 	root.get_texture().get_image().save_png(output.path_join("complete-look-menu.png"))
 	game._pause_menu.preset_workshop_requested.emit()

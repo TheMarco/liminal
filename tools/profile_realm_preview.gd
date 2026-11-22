@@ -7,6 +7,10 @@ var view: SubViewport
 func _init() -> void:
 	call_deferred("run_profile")
 
+func _keep_running() -> void:
+	if paused and is_instance_valid(game) and is_instance_valid(game._pause_menu):
+		game._close_settings()
+
 func report(label: String, samples: Array[float], draws: Array[float]) -> void:
 	if samples.is_empty():
 		return
@@ -42,16 +46,20 @@ func run_profile() -> void:
 	root.add_child(view)
 	game = load("res://scenes/main.tscn").instantiate()
 	view.add_child(game)
+	process_frame.connect(_keep_running)
 	game.run.set_physics_process(false)
 	game.player.set_physics_process(false)
 	game.player.set_process(false)
 	game._set_presence(game.Presence.SILENT)
 	var visit: RealmExcursion = game._realm_visit
 	await sample_frames("arrival", 90)
-	var eye: Vector3 = visit._record.discovery_origin
-	var forward: Vector3 = visit._record.discovery_forward
-	game.player.teleport(eye - Vector3.UP * Player.CAM_H)
-	game.player.cam.rotation.y = atan2(-forward.x, -forward.z)
+	# Reserved doors can use the shared approach without a discovery pose.
+	# Use the same approach as the rendered doorway regression.
+	var approach := visit.source_centre - visit.source_forward * 5.8
+	game.player.teleport(approach + Vector3.UP * 0.15)
+	game.player.cam.global_position = approach + Vector3.UP * Player.CAM_H
+	game.player.cam.look_at(visit.source_centre + Vector3.UP * 1.35)
+	game.cm.stream_focus = game.player.global_position
 	var samples: Array[float] = []
 	var draws: Array[float] = []
 	var prepared := Time.get_ticks_usec()
@@ -69,6 +77,7 @@ func run_profile() -> void:
 	await sample_frames("sealed", 180)
 	print("REALM PERF sealed_preview_mode=%d size=%s" % [visit.preview.render_target_update_mode, visit.preview.size])
 	game._photo_camera._raise(true)
+	game._photo_camera.set_process(false)
 	await sample_frames("lens", 180)
 	print("REALM PERF lens_preview_mode=%d size=%s" % [visit.preview.render_target_update_mode, visit.preview.size])
 	game._photo_camera._lower()

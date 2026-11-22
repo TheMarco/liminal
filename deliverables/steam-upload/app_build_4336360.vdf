@@ -1,7 +1,7 @@
 "AppBuild"
 {
     "AppID" "4336360"
-    "Desc" "It Wants You To Stay 0.5.15 - Smoother exploration, doorways, photo saves and floor loading - Windows, Linux and macOS"
+    "Desc" "It Wants You To Stay 0.6.0 - Graphics modes, low-power lighting and independent camera looks - Windows, Linux and macOS"
     "ContentRoot" "../../build"
     "BuildOutput" "../../build/steam-upload-output"
     "Depots"

@@ -54,7 +54,7 @@ func run() -> void:
 		var menu_rect := menu._panel.get_global_rect()
 		expect(menu_rect.position.y >= 20 and menu_rect.end.y <= root.size.y - 20,
 			"pause menu exceeds safe vertical bounds: " + code)
-		expect(not menu._quality_status.text.contains("Balanced performance"), "assembled graphics note escaped translation: " + code)
+		expect(menu._quality_status.text.contains(Localization.text(PauseMenu.QUALITY_NOTES[model.get_value("quality_preset")])), "assembled graphics note escaped translation: " + code)
 		expect(Localization.text("PHOTOS 2 · MIN 3") != "PHOTOS 2 · MIN 3", "formatted message: " + code)
 		expect(Localization.text("Z — open door").begins_with("Z —"), "remapped action lost: " + code)
 		expect(Localization.text("Z — open door") != "Z — open door", "interaction untranslated: " + code)

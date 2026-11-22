@@ -1,5 +1,6 @@
 extends SceneTree
-## Actual-game image comparison for authored Data Center occluders.
+## Actual-game image comparison for authored occluders. Defaults to the Data
+## Center; --level and --pos can select another floor and sightline.
 ## Run with a GPU, not --headless:
 ## godot --path . --minimized --audio-driver Dummy --disable-render-loop \
 ##   --script tools/audit_occlusion_render.gd -- --nologo --mode=wander
@@ -62,10 +63,14 @@ func run() -> void:
 	game = load("res://scenes/main.tscn").instantiate()
 	game.world_seed = 240721
 	view.add_child(game)
-	game._switch_level(10)
+	var requested_level: int = game.opts.active_level if game.opts.active_level != 0 else 10
+	if game.active_level != requested_level:
+		game._switch_level(requested_level)
 	while game._switching:
 		await draw()
 	await draw(300)
+	print("OCCLUSION_SCENE level=%d seed=%d position=%s" % [
+		game.active_level, game.world_seed, game.player.global_position])
 	game._post_process.set_enabled(false)
 	game.process_mode = Node.PROCESS_MODE_DISABLED
 	Engine.time_scale = 0.0

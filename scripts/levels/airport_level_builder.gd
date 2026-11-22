@@ -109,20 +109,24 @@ func _air_lighting() -> void:
 ## text both sides, twin drop rods.
 
 
-func _hang_sign(pos: Vector3, yaw: float, text: String, top = 0.0) -> void:
+func _hang_sign(pos: Vector3, yaw: float, text: String, top := 0.0) -> void:
+	const BODY_HEIGHT := 0.55
+	const MIN_DROP := 0.15
+	var mount_height := top if top > 0.0 else ctx.ceiling_height
+	var clear_height := mount_height
 	if top <= 0.0 and AirportGrandCeiling.applies(ctx.ceiling_height, ctx.style):
-		var soffit := ctx.ceiling_height - AirportGrandCeiling.depth(ctx.ceiling_height, ctx.style)
-		pos.y = minf(pos.y, soffit - 0.43)
+		clear_height -= AirportGrandCeiling.depth(ctx.ceiling_height, ctx.style)
+	pos.y = minf(pos.y, clear_height - BODY_HEIGHT * 0.5 - MIN_DROP)
 	var v = Node3D.new()
 	v.position = pos
 	v.rotation.y = yaw
-	v.set_meta("airport_sign_body_height", 0.55)
+	v.set_meta("airport_sign_body_height", BODY_HEIGHT)
 	scene.add_node(v)
 	var w = maxf(1.6, 0.115 * float(text.length()) + 0.55)
-	var rod_h = maxf(0.1, (top if top > 0.0 else ctx.ceiling_height) - pos.y - 0.275)
+	var rod_h := mount_height - pos.y - BODY_HEIGHT * 0.5
 	for sx in [-w * 0.36, w * 0.36]:
-		scene.model_cylinder(v, Vector3(sx, 0.275 + rod_h / 2.0, 0), 0.016, rod_h, Mats.charcoal())
-	scene.model_rounded_box(v, Vector3.ZERO, Vector3(w, 0.55, 0.09), Mats.sign_navy(), 0.015)
+		scene.model_cylinder(v, Vector3(sx, (BODY_HEIGHT + rod_h) * 0.5, 0), 0.016, rod_h, Mats.charcoal())
+	scene.model_rounded_box(v, Vector3.ZERO, Vector3(w, BODY_HEIGHT, 0.09), Mats.sign_navy(), 0.015)
 	for sside in [-1.0, 1.0]:
 		var lb = Label3D.new()
 		lb.text = text
@@ -717,8 +721,7 @@ func _air_concourse() -> void:
 	for i in offs.size():
 		_travelator(scene.world_point(o, Vector3(0, 0, offs[i]), yw), yw,
 			flow0 * (1.0 if i == 0 else -1.0), 323 + i, run)
-		_hang_sign(o + Vector3(0, 3.55, 0), yw + PI / 2.0,
-			_air_zone_sign(326))
+	_hang_sign(o + Vector3(0, 3.55, 0), yw + PI / 2.0, _air_zone_sign(326))
 	# a seat row parked against the quiet side, only if there is room beside
 	# the belts for it
 	var side = lat / 2.0 - 1.6
@@ -966,12 +969,14 @@ func _air_transit_open_casing(o: Vector3, yw: float, side: float,
 		t: float, width: float) -> void:
 	var inn = side - signf(side) * (Chunk.T * 0.5 + 0.025)
 	var jamb_width := 0.2
+	var top := Chunk.AIR_FRAME_CLEAR_HEIGHT
+	var header := Chunk.AIR_DOOR + 0.2 - top
 	for edge in [t - width * 0.5, t + width * 0.5]:
-		var jamb = scene.model_box(null, scene.world_point(o, Vector3(edge, Chunk.AIR_DOOR * 0.5, inn), yw),
-			Vector3(jamb_width, Chunk.AIR_DOOR, Chunk.T + 0.2), Mats.steel())
+		var jamb = scene.model_box(null, scene.world_point(o, Vector3(edge, top * 0.5, inn), yw),
+			Vector3(jamb_width, top, Chunk.T + 0.2), Mats.steel())
 		jamb.rotation.y = yw
-	var lintel = scene.model_box(null, scene.world_point(o, Vector3(t, Chunk.AIR_DOOR + 0.1, inn), yw),
-		Vector3(width + jamb_width, 0.2, Chunk.T + 0.2), Mats.steel())
+	var lintel = scene.model_box(null, scene.world_point(o, Vector3(t, top + header * 0.5, inn), yw),
+		Vector3(width + jamb_width, header, Chunk.T + 0.2), Mats.steel())
 	lintel.rotation.y = yw
 	# Small backlit identifier fixed to the portal head, facing the transit lane.
 	var v = Node3D.new()

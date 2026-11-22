@@ -40,6 +40,7 @@ var _accepted_layout := ""
 var _display_fraction := Vector2.ZERO
 var _pending_layout := ""
 var _pending_layout_since := 0
+var _royale_prewarm_requested := false
 var _retired: Array[Dictionary] = []
 var _running := false
 var _pipeline_failed := false
@@ -290,6 +291,28 @@ func _render_frame(source_texture: RID, extent: Vector2i, linear: bool, display:
 func _report_setup(signature: String, elapsed_ms: float) -> void:
 	RuntimeDiagnostics.mark("video_pipeline_setup", {"configuration": signature, "elapsed_ms": elapsed_ms,
 		"builds": pipeline_builds})
+
+## The loading screen covers the first shader compilation. Render targets and
+## pipelines are still allocated at the selected size when the preset is used.
+func request_royale_prewarm() -> void:
+	if _royale_prewarm_requested or not _presets.has("royale"): return
+	_royale_prewarm_requested = true
+	RenderingServer.call_on_render_thread(_prewarm_royale_blocking.bind(_presets["royale"]))
+
+func _prewarm_royale_blocking(preset: Dictionary) -> void:
+	var rd := RenderingServer.get_rendering_device()
+	if rd == null:
+		_report_prewarm.call_deferred(false, 0.0, 0, "RenderingDevice unavailable")
+		return
+	var result: Dictionary = CHAIN.prewarm_shaders(rd, preset)
+	_report_prewarm.call_deferred(bool(result.get("ok", false)), float(result.get("elapsed_ms", 0.0)),
+		int(result.get("new_compilations", 0)), str(result.get("error", "")))
+
+func _report_prewarm(ok: bool, elapsed_ms: float, new_compilations: int, error_message: String) -> void:
+	if not _running: return
+	_royale_prewarm_requested = ok
+	RuntimeDiagnostics.mark("video_pipeline_prewarm", {"preset": "royale", "ok": ok,
+		"elapsed_ms": elapsed_ms, "new_compilations": new_compilations, "error": error_message})
 
 func _fail_pipeline(message: String) -> void:
 	# Render-thread latch: later queued frames cannot keep compiling/allocating

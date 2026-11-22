@@ -60,6 +60,18 @@ func run() -> void:
 	game._figures.despawn()
 	await process_frame
 	var catcher := _figure(game)
+	# The lift entrance can block the camera-forward approach. Exercise the
+	# moving catch on a clear route using the same clearance check as gameplay.
+	var feet: Vector3 = game.player.global_position
+	var forward: Vector3 = (catcher.global_position - feet).normalized()
+	var clear_approach := false
+	for bearing in 8:
+		var direction := forward.rotated(Vector3.UP, bearing * TAU / 8.0)
+		if catcher._clear_travel(feet + direction, feet + direction * 0.8):
+			catcher.global_position = feet + direction
+			clear_approach = true
+			break
+	expect(clear_approach, "catch fixture has no traversable final approach")
 	var other := _figure(game)
 	other.global_position += game.player.cam.global_basis.x * 3.0
 	game.player.head_bob_strength = 1.0

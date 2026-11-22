@@ -9,8 +9,8 @@ func run() -> void:
 	var path := "/tmp/liminal-ntscrt-settings-%d.cfg" % OS.get_process_id()
 	var settings := GameSettings.new(path)
 	settings.changed.connect(func(): change_count += 1)
-	expect(settings.matching_video_look() == 1 and settings.get_value("crt_shader") == GameSettings.CRT_AUTOMATIC,
-		"fresh settings must use the complete Home video preset with automatic CRT quality")
+	expect(settings.get_value("video_pipeline") == GameSettings.VIDEO_CAMCORDER and settings.get_value("vhs_enabled") and not settings.get_value("crt_enabled"),
+		"fresh settings must use the lightweight Camcorder look")
 	settings.set_value("video_pipeline", 1)
 	settings.set_value("vhs_enabled", false)
 	settings.set_value("reduced_flashing", true)
@@ -157,6 +157,7 @@ func run() -> void:
 	await process_frame
 	settings.set_value("video_pipeline", 0)
 	settings.set_value("crt_shader",0)
+	settings.set_value("crt_enabled",true)
 	game._apply_game_settings()
 	var post: PostProcessController = game._post_process
 	var before_menu := settings.values.duplicate(true)
@@ -166,13 +167,18 @@ func run() -> void:
 		expect(not menu._controls.has(key), "developer control exposed in player settings: " + key)
 	expect(not is_instance_valid(menu._video_advanced) and not is_instance_valid(menu._full_video_controls),
 		"player settings must not construct the developer video lab")
-	expect(menu._look_select.item_count==21 and menu._controls.has("vhs_distortion") and menu._controls.has("crt_enabled"),
-		"player settings must offer presets alongside direct tape/CRT controls")
+	expect(menu._look_select.item_count==4 and not menu._controls.has("vhs_distortion") and not menu._controls.has("crt_enabled"),
+		"player settings must offer the three camera looks")
 	expect(settings.values == before_menu, "opening simplified settings changed a saved custom look")
-	menu._look_select.item_selected.emit(10)
-	expect(menu._look_select.selected==10 and settings.get_value("video_fault_rate")==8.0,
-		"archive recording did not apply its complete signal and defects")
-	menu._look_select.item_selected.emit(15)
+	menu._look_select.item_selected.emit(2)
+	expect(menu._look_select.selected==2 and settings.get_value("video_pipeline")==GameSettings.VIDEO_CAMCORDER and not settings.get_value("crt_enabled")
+		and not post._overlay.visible and post._grain_overlay.visible,
+		"Camcorder did not select lightweight recording with CRT off")
+	game.descent_tape_watch(true)
+	expect(post._overlay.visible, "ritual tape lost its playback shader in Camcorder")
+	game.descent_tape_watch(false)
+	expect(not post._overlay.visible, "Camcorder did not resume its full-detail image after the ritual tape")
+	menu._look_select.item_selected.emit(3)
 	expect(settings.get_value("crt_enabled") and settings.get_value("vhs_enabled") and settings.get_value("crt_shader")==6,
 		"living-room look did not combine recording and CRT")
 	menu._look_select.item_selected.emit(1)
@@ -188,7 +194,7 @@ func run() -> void:
 	expect(not menu._video_advanced.visible, "technical controls must start collapsed")
 	expect(menu._video_advanced.is_ancestor_of(menu._controls["video_pipeline"]), "pipeline leaked into the simple view")
 	expect(menu._video_advanced.is_ancestor_of(menu._full_video_controls), "original controls leaked into the simple view")
-	expect(menu._look_select.item_count==21, "main view must offer complete looks")
+	expect(menu._look_select.item_count==4, "main view must offer complete looks")
 	expect(not menu._controls["crt_curvature"].disabled, "lab curvature should be available with the original game TV on")
 	settings.set_value("crt_enabled",false)
 	expect(menu._controls["crt_curvature"].disabled, "lab curvature should be disabled with TV off")
@@ -253,10 +259,10 @@ func run() -> void:
 	menu._refresh_controls()
 	expect(selector.get_selected_id() == 2 and not menu._controls["vhs_enabled"].button_pressed,
 		"menu must reflect the active launch overrides without saving them")
-	menu._look_select.item_selected.emit(15)
+	menu._look_select.item_selected.emit(3)
 	expect(game._video_pipeline_requested() == 2 and game.opts.video_pipeline_override == -1 and game.opts.vhs_override == -1 and game.opts.crt_override == -1,
 		"complete look must release all video launch overrides")
-	expect(menu._look_select.selected==15,"complete look did not synchronize the selector")
+	expect(menu._look_select.selected==3,"complete look did not synchronize the selector")
 	menu._set_menu_value("crt_enabled",false)
 	expect(game.opts.crt_override==-1 and settings.get_value("vhs_enabled"),
 		"developer CRT switch lost recording state")
@@ -274,12 +280,12 @@ func run() -> void:
 	settings.set_value("receiver_enabled", true)
 	expect((menu._controls["vhs_distortion"][0] as HSlider).editable,
 		"receiver-only tape wear must remain adjustable")
-	menu._look_select.item_selected.emit(15)
+	menu._look_select.item_selected.emit(3)
 	settings.apply_crt_screen(true)
 	var recording_before: Dictionary = settings.get_value("ntscrs_settings").duplicate(true)
+	var active_model := GraphicsQuality.crt_model(settings.values)
 	for tier in [0,2,3,1]:
 		settings.apply_quality_preset(tier)
-		var active_model := 1 if tier<2 else 6
 		expect(menu._crt_parameter_model==active_model,"developer controls did not follow the automatic CRT")
 		expect((menu._controls["crt_shader"] as OptionButton).get_selected_id()==GameSettings.CRT_AUTOMATIC,
 			"developer selector lost its explicit automatic mode")

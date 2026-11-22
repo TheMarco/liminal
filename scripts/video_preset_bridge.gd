@@ -1,6 +1,9 @@
 extends RefCounted
 ## Shared JSON schema; game-only render/camera controls are captured as context.
 const PROFILE = preload("res://scripts/video_preset_profile.gd")
+const LIBRARY = preload("res://scripts/video_preset_library.gd")
+const CAMERA_NAMES := ["Clean", "Camcorder", "VHS on TV"]
+const CAMERA_RECIPES := [0, 3, 14]
 const MAP := {
 	"ambient_fault_rate":"video_fault_rate", "ambient_fault_strength":"video_fault_strength",
 	"ambient_fault_kind":"video_fault_kind",
@@ -12,17 +15,16 @@ const MAP := {
 	"field_history":"ntscrs_field_history", "source_resolution":"ntscrs_source_resolution",
 	"downscale_filter":"ntscrt_downscale_filter", "signal_size_mode":"ntscrt_signal_size",
 	"signal_width":"ntscrt_signal_width", "presentation_scale":"ntscrt_scale_mode",
-	"auto_world_resolution":"video_auto_resolution",
+	"pipeline":"video_pipeline",
 }
-const SCENE_KEYS := ["render_resolution","anti_aliasing","shadow_quality","global_illumination",
-	"ambient_occlusion","reflections","volumetric_fog","hdr_enabled","hdr_brightness",
+const SCENE_KEYS := GameSettings.QUALITY_KEYS + ["hdr_enabled","hdr_brightness",
 	"field_of_view","head_bob","handheld_camera","handheld_strength"]
 
-static func from_settings(settings: GameSettings) -> NtscrtProfile:
+static func from_settings(settings: GameSettings, overrides: Dictionary = {}) -> NtscrtProfile:
 	var profile := PROFILE.new()
-	var look := settings.matching_tape_look()
-	profile.tape = maxi(1,look) if bool(settings.get_value("vhs_enabled")) else 0
-	for key: String in MAP: profile.set(key,settings.get_value(MAP[key]))
+	var look := settings.matching_tape_look(overrides)
+	profile.tape = maxi(1,look) if bool(overrides.get("vhs_enabled",settings.get_value("vhs_enabled"))) else 0
+	for key: String in MAP: profile.set(key,overrides.get(MAP[key],settings.get_value(MAP[key])))
 	profile.quality = GraphicsQuality.video_tier(settings.values)
 	var model := int(settings.get_value("crt_shader"))
 	profile.crt_model = model if model in range(1,8) else 0
@@ -41,10 +43,28 @@ static func from_settings(settings: GameSettings) -> NtscrtProfile:
 	profile.crt_parameters = models
 	return profile
 
-static func apply(profile: NtscrtProfile, settings: GameSettings) -> void:
+static func apply_camera_look(index: int, settings: GameSettings, notify := true) -> void:
+	if index < 0 or index >= CAMERA_RECIPES.size(): return
+	var profile := LIBRARY.make_profile(CAMERA_RECIPES[index])
+	if index == 1: profile.pipeline = GameSettings.VIDEO_CAMCORDER
+	profile.quality = GraphicsQuality.video_tier(settings.values)
+	apply(profile, settings, notify)
+
+static func matching_camera_look(snapshot: Dictionary) -> int:
+	var library_settings := snapshot
+	if snapshot.pipeline == GameSettings.VIDEO_CAMCORDER:
+		library_settings = snapshot.duplicate()
+		library_settings.pipeline = 2
+	var index := CAMERA_RECIPES.find(LIBRARY.matching_settings(library_settings))
+	if index < 0 or snapshot.pipeline != (GameSettings.VIDEO_CAMCORDER if index == 1 else 2): return -1
+	return index
+
+static func apply(profile: NtscrtProfile, settings: GameSettings, notify := true) -> bool:
 	var next := settings.values.duplicate(true)
-	for key: String in MAP: next[MAP[key]] = profile.get(key)
-	next.video_pipeline = 2
+	for key: String in MAP:
+		if key != "reduced_flashing": next[MAP[key]] = profile.get(key)
+	# The portable width is an integer; the game's saved slider uses a float.
+	next.ntscrt_signal_width = float(profile.signal_width)
 	# The portable look owns recurring defects. Keep legacy random tape faults
 	# from adding VHS glitches to clean digital captures; encounter cues remain.
 	next.ntsc_auto_faults = false
@@ -57,9 +77,10 @@ static func apply(profile: NtscrtProfile, settings: GameSettings) -> void:
 	next.crt_shader_parameters = {}
 	for model: String in PROFILE.CRT_NAMES.slice(1):
 		next.crt_shader_parameters[model] = profile.canonical_crt_parameters(model)
-	if next!=settings.values:
-		settings.values = next
-		settings.changed.emit()
+	if next == settings.values: return false
+	settings.values = next
+	if notify: settings.changed.emit()
+	return true
 
 static func capture_settings(settings: GameSettings) -> Dictionary:
 	var result := {}
@@ -67,18 +88,3 @@ static func capture_settings(settings: GameSettings) -> Dictionary:
 		if key in SCENE_KEYS or key.begins_with("ntsc") or key.begins_with("receiver_") or key.begins_with("crt_") or key.begins_with("video_") or key in ["vhs_enabled","vhs_distortion","film_grain","quality_preset","reduced_flashing"]:
 			result[key] = settings.get_value(key)
 	return result.duplicate(true)
-
-static func restore_scene_context(context: Dictionary, settings: GameSettings) -> void:
-	# Shared profile fields remain authoritative when a game capture has since
-	# been edited in the standalone workshop. Restore only game-specific extras.
-	if context.get("game")!="liminal" or not context.get("game_settings") is Dictionary: return
-	settings.set_block_signals(true)
-	for key: String in SCENE_KEYS:
-		if not context.game_settings.has(key): continue
-		var value: Variant = context.game_settings[key]
-		if GameSettings.ENUM_VALUES.has(key) and (value is int or value is float):
-			if not is_finite(float(value)) or float(value)!=floor(float(value)): continue
-			value = int(value)
-		settings.set_value(key,value)
-	settings.set_block_signals(false)
-	settings.changed.emit()

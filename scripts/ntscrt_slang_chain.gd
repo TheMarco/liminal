@@ -45,6 +45,58 @@ static func load_presets() -> Dictionary:
 	_preset_mutex.unlock()
 	return definitions.duplicate(true)
 
+## Warms the shared SPIRV cache for one preset without allocating GPU
+## textures, pipelines, or frames. Render thread only. Bounded: only the
+## passes in [preset] plus the shared mipmap blit are compiled; the first
+## real setup() then hits the cache instead of stalling gameplay.
+## Failures are reported in the returned Dictionary, never fatal.
+static func prewarm_shaders(rd: RenderingDevice, preset: Dictionary) -> Dictionary:
+	var started := Time.get_ticks_usec()
+	var compiled_before := shader_compilations
+	var hits_before := shader_cache_hits
+	var passes: Array = preset.get("passes", [])
+	var spirv := _compile(rd, _mip_shader_source())
+	for stage in [RenderingDevice.SHADER_STAGE_VERTEX, RenderingDevice.SHADER_STAGE_FRAGMENT]:
+		if not spirv.get_stage_compile_error(stage).is_empty():
+			return {"ok": false, "passes": 0, "new_compilations": 0, "cache_hits": 0,
+				"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0,
+				"error": "mipmap blit: " + spirv.get_stage_compile_error(stage)}
+	for index in passes.size():
+		var description: Dictionary = passes[index]
+		var pass_spirv := _compile_pass(rd, description)
+		for stage in [RenderingDevice.SHADER_STAGE_VERTEX, RenderingDevice.SHADER_STAGE_FRAGMENT]:
+			var message := pass_spirv.get_stage_compile_error(stage)
+			if not message.is_empty():
+				return {"ok": false, "passes": index, "new_compilations": shader_compilations - compiled_before,
+					"cache_hits": shader_cache_hits - hits_before,
+					"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0,
+					"error": str(description.get("path", index)) + ": " + message}
+	return {"ok": true, "passes": passes.size(), "new_compilations": shader_compilations - compiled_before,
+		"cache_hits": shader_cache_hits - hits_before,
+		"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0, "error": ""}
+
+static func _compile_pass(rd: RenderingDevice, description: Dictionary) -> RDShaderSPIRV:
+	var source := RDShaderSource.new()
+	source.source_vertex = description.vertex
+	source.source_fragment = description.fragment
+	return _compile(rd, source)
+
+static func _mip_shader_source() -> RDShaderSource:
+	var mip_source := RDShaderSource.new()
+	mip_source.source_vertex = """#version 450
+layout(location=0) out vec2 uv;
+void main() {
+    uv=vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
+    gl_Position=vec4(uv*2.0-1.0,0.0,1.0);
+}"""
+	mip_source.source_fragment = """#version 450
+layout(location=0) in vec2 uv;
+layout(location=0) out vec4 colour;
+layout(set=0,binding=0) uniform sampler2D source;
+void main() { colour=textureLod(source,uv,0.0); }
+"""
+	return mip_source
+
 static func _compile(rd: RenderingDevice, source: RDShaderSource) -> RDShaderSPIRV:
 	var key := str(rd.get_instance_id()) + ":" + (source.source_vertex + "\n--fragment--\n" + source.source_fragment).sha256_text()
 	if _compiled.has(key):
@@ -86,20 +138,7 @@ func setup(rd: RenderingDevice, preset: Dictionary, input_extent: Vector2i, disp
 	uv.stride = 24
 	_vertex_format = rd.vertex_format_create([position,uv])
 	_vertex_array = _own(rd.vertex_array_create(6,_vertex_format,[vertex_buffer,vertex_buffer]))
-	var mip_source := RDShaderSource.new()
-	mip_source.source_vertex = """#version 450
-layout(location=0) out vec2 uv;
-void main() {
-    uv=vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
-    gl_Position=vec4(uv*2.0-1.0,0.0,1.0);
-}"""
-	mip_source.source_fragment = """#version 450
-layout(location=0) in vec2 uv;
-layout(location=0) out vec4 colour;
-layout(set=0,binding=0) uniform sampler2D source;
-void main() { colour=textureLod(source,uv,0.0); }
-"""
-	_mip_shader = _own(rd.shader_create_from_spirv(_compile(rd,mip_source)))
+	_mip_shader = _own(rd.shader_create_from_spirv(_compile(rd,_mip_shader_source())))
 	if not _mip_shader.is_valid(): return _fail("Cannot create mipmap shader")
 	for name in preset.textures:
 		var info: Dictionary = preset.textures[name]
@@ -128,10 +167,7 @@ void main() { colour=textureLod(source,uv,0.0); }
 		var options: Dictionary = description.options
 		extent = _pass_size(options,extent,index == preset.passes.size()-1)
 		pass_extents.append(extent)
-		var shader_source := RDShaderSource.new()
-		shader_source.source_vertex = description.vertex
-		shader_source.source_fragment = description.fragment
-		var spirv := _compile(rd,shader_source)
+		var spirv := _compile_pass(rd, description)
 		for stage in [RenderingDevice.SHADER_STAGE_VERTEX,RenderingDevice.SHADER_STAGE_FRAGMENT]:
 			var message := spirv.get_stage_compile_error(stage)
 			if not message.is_empty(): return _fail(str(description.path) + ": " + message)

@@ -243,11 +243,11 @@ static func random_player_death() -> Array:
 # the water is silent rather than a tape running under you.
 
 static func water_enter() -> Array:
-	return [_stream("sound-water-enter", false), -6.0]
+	return [_stream("sound-water-enter", false), -14.0]
 
 
 static func water_exit() -> Array:
-	return [_stream("sound-water-exit", false), -6.0]
+	return [_stream("sound-water-exit", false), -14.0]
 
 
 static func water_wade() -> AudioStream:

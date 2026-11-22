@@ -17,7 +17,7 @@ func snapshot(label: String) -> Image:
 	var image := root.get_texture().get_image()
 	image.convert(Image.FORMAT_RGB8)
 	if root.use_hdr_2d: image.linear_to_srgb()
-	image.save_png(output_dir+label+".png")
+	image.save_png(output_dir.path_join(label+".png"))
 	return image
 
 func click(button: Button) -> void:
@@ -76,6 +76,7 @@ func run() -> void:
 		if arg.begins_with("--language="):
 			settings.set_value("language", Localization.normalize(arg.get_slice("=", 1)))
 			output_dir = OUT + Localization.current_locale() + "/"
+		if arg.begins_with("--out="): output_dir = arg.trim_prefix("--out=")
 	settings.apply_quality_preset(0)
 	settings.set_value("handheld_camera",false)
 	game._settings.changed.disconnect(game._apply_game_settings)
@@ -130,6 +131,13 @@ func run() -> void:
 	await frames()
 	expect(snapshot("game-glitch").get_region(prompt_rect).get_data()!=reference,
 		"the glitched recording bypassed gameplay text")
+	var world_scale := host.source.scaling_3d_scale
+	preload("res://scripts/video_preset_bridge.gd").apply_camera_look(1,settings)
+	await frames(6)
+	expect(snapshot("game-camcorder").get_region(prompt_rect).get_data()!=reference
+		and not host.presenter.visible and not game._post_process._overlay.visible,
+		"Camcorder failed to treat the recorded HUD in the full-detail color pass")
+	expect(host.source.scaling_3d_scale == world_scale, "native Camcorder changed the 3D viewport")
 	# Classic and native approximation must also include the gameplay HUD.
 	for pipeline in [0,1]:
 		settings.set_value("video_pipeline",pipeline)
@@ -139,9 +147,10 @@ func run() -> void:
 		expect(snapshot("game-pipeline-%d" % pipeline).get_region(prompt_rect).get_data()!=reference,
 			"pipeline %d bypassed the interaction prompt" % pipeline)
 	settings.apply_quality_preset(2)
+	settings.set_value("video_quality_override",2)
 	settings.apply_video_look(1)
 	await frames(20)
-	expect(host.presenter.preset_name=="royale","High Home video did not activate Royale")
+	expect(host.presenter.preset_name=="royale","High video signal detail did not activate Royale")
 	expect(snapshot("game-home-royale").get_region(prompt_rect).get_data()!=reference,
 		"Royale bypassed the interaction prompt")
 	expect(game._post_process._using_slang() and not game._post_process._tube_display.visible,
@@ -182,17 +191,17 @@ func run() -> void:
 		await frames()
 		snapshot("settings")
 		var menu: PauseMenu = game._pause_menu
-		menu._select_tab("Visual Effects")
+		menu._select_tab("Video")
 		await frames()
-		await choose_look(menu,15)
+		await choose_look(menu,3)
 		await frames(20)
-		expect(menu._look_select.selected==15 and host.presenter.signal_enabled and host.presenter.preset_name=="royale",
+		expect(menu._look_select.selected==3 and host.presenter.signal_enabled and host.presenter.preset_name=="royale",
 			"complete living-room look did not apply both renderers")
 		snapshot("settings-complete-look")
-		await choose_look(menu,19)
+		await choose_look(menu,2)
 		await frames(12)
-		expect(not host.presenter.signal_enabled and host.presenter.visible and host.presenter.preset_name=="hyllian",
-			"CRT viewfinder did not disable tape")
+		expect(not host.presenter.visible and game._post_process.is_vhs_enabled() and not game._post_process.is_crt_enabled(),
+			"Camcorder did not use the lightweight recording path")
 		await choose_look(menu,1)
 		await frames(12)
 		expect(not host.presenter.visible and menu._look_select.selected==1,

@@ -3,7 +3,7 @@ extends RefCounted
 const PROFILE = preload("res://scripts/video_preset_profile.gd")
 const FORMAT := "godot-ntscrt-preset"
 const VERSION := 1
-const FIELDS := ["tape", "tape_damage", "film_grain", "crt_enabled", "quality",
+const FIELDS := ["tape", "tape_damage", "film_grain", "crt_enabled", "quality", "pipeline",
 	"reduced_flashing", "crt_model", "receiver_enabled", "receiver_tape_coupling", "field_history",
 	"source_resolution", "downscale_filter", "signal_size_mode", "signal_width",
 	"presentation_scale", "auto_world_resolution", "color_saturation", "color_temperature", "color_shadow_lift", "ambient_fault_rate", "ambient_fault_strength", "ambient_fault_kind"]

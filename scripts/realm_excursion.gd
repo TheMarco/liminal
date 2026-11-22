@@ -110,8 +110,8 @@ func refresh_graphics_quality(settings: GameSettings) -> void:
 	if _source.has("env"):
 		GraphicsQuality.apply_environment(_source["env"], settings)
 	if is_instance_valid(preview):
-		GraphicsQuality.apply_viewport_features(preview, settings, game.opts.notaa if is_instance_valid(game) else false)
-		preview.positional_shadow_atlas_size = mini(preview.positional_shadow_atlas_size, 2048)
+		GraphicsQuality.apply_viewport_features(preview, settings, game.opts.notaa if is_instance_valid(game) else false,
+			GraphicsQuality.PREVIEW_SHADOW_ATLAS_SIZE)
 
 
 func allows_perception_effect() -> bool:
@@ -184,6 +184,11 @@ func _preload_preview_resources() -> void:
 		# not dependencies of any imported furnishing in theme_prop_paths.
 		for suffix in ["0.jpg", "1.png", "2.png"]:
 			paths.append("res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_" + suffix)
+	if destination_theme == 7:
+		# Generated shopfronts and posters are independent of the prop scenes.
+		for face in Chunk.MALL_SIGN_FACES:
+			paths.append(Chunk.MALL_SIGN_DIR + "sign_%s.webp" % face[0])
+		paths.append_array(Chunk.POSTER_MALL)
 	for path in paths:
 		if ResourceLoader.has_cached(path):
 			_preview_resources.append(ResourceLoader.get_cached_ref(path))
@@ -234,8 +239,7 @@ func _build_preview() -> void:
 	# into an HDR main window.
 	preview.use_hdr_2d = true
 	preview.size = Vector2i(960, 600)
-	GraphicsQuality.apply_viewport_features(preview, game._settings, game.opts.notaa)
-	preview.positional_shadow_atlas_size = mini(preview.positional_shadow_atlas_size, 2048)
+	GraphicsQuality.apply_viewport_features(preview, game._settings, game.opts.notaa, GraphicsQuality.PREVIEW_SHADOW_ATLAS_SIZE)
 	preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child(preview)
 	_preview_environment = WorldEnvironment.new()
@@ -269,12 +273,21 @@ func _build_preview() -> void:
 			RuntimeDiagnostics.slow("realm_preview_slice", started,
 				{"theme": destination_theme, "cell": str(cell)})
 			if complete:
-				# Installation gets a fresh frame when generation exhausted
-				# this allowance, instead of stacking both in one frame.
+				# The preview pocket starts lit with no saved furnishings. Finish
+				# mesh preparation off-tree before publishing the complete room.
 				if Time.get_ticks_usec() - started >= PREVIEW_BUILD_BUDGET_USEC:
 					await _preview_frame
 					if _preview_cancelled:
 						return
+					started = Time.get_ticks_usec()
+				while not _preview_chunk.prepare_runtime_rendering(ChunkManager.ROOM_LIGHT_FADE_BEGIN,
+						started + PREVIEW_BUILD_BUDGET_USEC):
+					await _preview_frame
+					if _preview_cancelled: return
+					started = Time.get_ticks_usec()
+				if Time.get_ticks_usec() - started >= PREVIEW_BUILD_BUDGET_USEC:
+					await _preview_frame
+					if _preview_cancelled: return
 				var install_started := Time.get_ticks_usec()
 				pocket._install_chunk(cell, _preview_chunk)
 				_preview_chunk = null
@@ -477,17 +490,16 @@ func _choose_destination() -> bool:
 	return false
 
 
-func _configure_interactions(node: Node) -> void:
+func _configure_interactions(node: Node3D) -> void:
 	# The pocket is isolated from source-floor progression. Preserve only real,
 	# healthy charging stations for the duration of the visit.
-	if node is Interactable:
-		var station := node.get_parent() as ChargingStation
-		(node as Interactable).enabled = phase == Phase.VISITING \
-			and station != null and not station.broken
-	if node is AudioStreamPlayer or node is AudioStreamPlayer3D:
-		node.stream_paused = phase != Phase.VISITING
-	for child in node.get_children():
-		_configure_interactions(child)
+	for area in node.find_children("*", "Area3D", true, false):
+		if area is Interactable:
+			var station := area.get_parent() as ChargingStation
+			area.enabled = phase == Phase.VISITING and station != null and not station.broken
+	for kind in ["AudioStreamPlayer", "AudioStreamPlayer3D"]:
+		for audio in node.find_children("*", kind, true, false):
+			audio.stream_paused = phase != Phase.VISITING
 
 
 func prepare_nearby_preview() -> void:

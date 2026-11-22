@@ -2,6 +2,7 @@ extends "res://scripts/screen_ui.gd"
 const PANEL = preload("res://scripts/video_preset_workshop_panel.gd")
 const BRIDGE = preload("res://scripts/video_preset_bridge.gd")
 signal closed
+signal look_selected
 var panel: Control
 var settings: GameSettings
 var host: Control
@@ -9,7 +10,7 @@ var _layout: Control
 var _cue: Dictionary = {}
 var _cue_time := 0.0
 
-func setup(model: GameSettings, video_host: Control) -> void:
+func setup(model: GameSettings, video_host: Control, stage_overrides: Dictionary = {}) -> void:
 	settings = model
 	host = video_host
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -18,18 +19,20 @@ func setup(model: GameSettings, video_host: Control) -> void:
 	_layout.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_layout)
 	panel = PANEL.new()
-	panel.profile = BRIDGE.from_settings(settings)
+	panel.in_game = true
+	panel.profile = BRIDGE.from_settings(settings, stage_overrides)
 	panel.allow_close = true
 	panel.apply_profile = func(value: NtscrtProfile):
 		_cue.clear()
-		BRIDGE.apply(value,settings)
+		var had_overrides := not stage_overrides.is_empty()
+		if had_overrides: look_selected.emit()
+		if BRIDGE.apply(value,settings,false) or had_overrides: settings.changed.emit()
 		if host.presenter!=null: host.set_game_state(0.0,Vector2(0.5,0.5),0.0,0.0)
 	panel.capture_image = _capture_image
 	panel.capture_context = func(): return {
 		"game":"liminal","game_settings":BRIDGE.capture_settings(settings),
 		"source_width":host.source.size.x,"source_height":host.source.size.y,
 		"world_scale":host.source.scaling_3d_scale}
-	panel.restore_context = func(context: Dictionary): BRIDGE.restore_scene_context(context,settings)
 	panel.renderer_error = func(): return host.presenter.last_error if host.presenter!=null else ""
 	panel.play_glitch = _play_glitch
 	panel.preview_damage = func():

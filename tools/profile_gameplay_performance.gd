@@ -18,6 +18,9 @@ var events := false
 var occlusion := false
 var hdr := false
 var with_tape := false
+var fixed_view := false
+var windowed := false
+var render_batch := 0
 var frame_events := 0
 
 func run() -> void:
@@ -26,7 +29,8 @@ func run() -> void:
 		if arg.begins_with("--out="): out = arg.trim_prefix("--out=")
 		if arg.begins_with("--tiers="): tiers = arg.trim_prefix("--tiers=").split(",")
 		if arg.begins_with("--looks="): looks = arg.trim_prefix("--looks=").split(",")
-		if arg.begins_with("--frames="): sample_count = maxi(30,int(arg.trim_prefix("--frames=")))
+		if arg.begins_with("--frames="): sample_count = maxi(1,int(arg.trim_prefix("--frames=")))
+		if arg.begins_with("--render-batch="): render_batch = clampi(int(arg.trim_prefix("--render-batch=")), 1, 32)
 		if arg.begins_with("--warmup="): warmup_count = maxi(30,int(arg.trim_prefix("--warmup=")))
 		if arg == "--capture": capture = true
 		if arg == "--walk": walk = true
@@ -34,15 +38,39 @@ func run() -> void:
 		if arg == "--occlusion": occlusion = true
 		if arg == "--hdr": hdr = true
 		if arg == "--with-tape": with_tape = true
+		if arg == "--fixed-view": fixed_view = true
+		if arg == "--windowed-profile": windowed = true
 	if occlusion: Chunk.occlusion_themes.assign([0,1,2,4,5,6,7,8,9,10,11])
+	if render_batch > 0:
+		assert(fixed_view and not walk and not events)
+		RenderingServer.render_loop_enabled = false
 	DirAccess.make_dir_recursive_absolute(out.get_base_dir())
 	root.use_hdr_2d = true
 	host = HOST.new()
 	root.add_child(host)
 	game = load("res://scenes/main.tscn").instantiate()
 	game.world_seed = 240721
+	var profile_path := OS.get_temp_dir().path_join("liminal-gameplay-profile-%d.cfg" % OS.get_process_id())
+	settings = GameSettings.new(profile_path)
+	settings.values.fullscreen = not windowed
+	settings.values.frame_limit = 0
+	settings.values.vsync = false
+	settings.values.hdr_enabled = hdr
+	settings.values.handheld_camera = false
+	settings.values.head_bob = 0.0
+	settings.values.film_grain = 0.0
+	game._settings = settings
+	if windowed:
+		root.mode = Window.MODE_WINDOWED
+		root.size = Vector2i(1280, 720)
 	host.attach(game)
 	assert(not game._progress_enabled)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--level=") and game.active_level != int(arg.trim_prefix("--level=")):
+			fail("launched the wrong floor; use --nologo alone for Wander. --test-mode starts Descent.")
+			await teardown_game(game)
+			finish()
+			return
 	if not events:
 		# Architecture can add a second world/aftershock mid-case. Isolate the
 		# ordinary render cost; --events separately measures live horror events.
@@ -50,37 +78,44 @@ func run() -> void:
 		for key in ["_events","_architectural_events","_breathing","_native_doorways","_self_return_door"]:
 			var controller: Node = game.get(key)
 			if is_instance_valid(controller): controller.process_mode = Node.PROCESS_MODE_DISABLED
-	var profile_path := "/tmp/liminal-gameplay-profile-%d.cfg"%OS.get_process_id()
-	settings = GameSettings.new(profile_path)
-	settings.values.fullscreen = true
-	settings.values.frame_limit = 0
-	settings.values.vsync = false
-	settings.values.hdr_enabled = hdr
-	settings.values.handheld_camera = false
-	settings.values.head_bob = 0.0
-	settings.values.film_grain = 0.0
-	game._settings.changed.disconnect(game._apply_game_settings)
-	game._settings = settings
-	GameSettings.current = settings
-	settings.changed.connect(game._apply_game_settings)
 	game._apply_game_settings()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	RenderingServer.frame_post_draw.connect(func(): frame_events += 1)
+	var viewport_rid: RID = host.source.get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(viewport_rid, true)
 	# Let initial streaming, GI and window sizing settle before any case.
 	await settle(180)
+	if windowed:
+		root.size = Vector2i(1280, 720)
+		await settle(45)
+		var mode := DisplayServer.window_get_mode()
+		if mode != DisplayServer.WINDOW_MODE_WINDOWED or root.size != Vector2i(1280, 720):
+			fail("expected a 1280x720 window, observed display mode %d and size %s" % [mode, root.size])
+			await teardown_game(game)
+			finish()
+			return
+	var stream_started := Time.get_ticks_msec()
+	while not game.cm.arrival_stream_ready() and Time.get_ticks_msec() - stream_started < 60000:
+		await next_frame()
+	expect(game.cm.arrival_stream_ready(), "initial room streaming did not finish")
 	var origin: Vector3 = game.player.position
 	var rotation: Vector3 = game.player.rotation
 	var report := {"device":RenderingServer.get_video_adapter_name(),"theme":game.active_level,
 		"seed":game.world_seed,"display":str(root.size),"walk":walk,"events":events,"occlusion":occlusion,"samples":[],
+		"position":str(origin),"yaw_degrees":rad_to_deg(rotation.y),"fixed_view":fixed_view,"windowed":windowed,
+		"renders_per_sample":maxi(1, render_batch),
 		"hdr_requested":hdr,"hdr_active":HdrOutput.is_active(root),"with_tape":with_tape,
 		"monitor_note":"Godot Performance TIME_PROCESS/TIME_PHYSICS_PROCESS are periodically updated samples and can contain preceding-case stalls; use wall-clock frame_ms for comparisons, not those monitor averages.",
-		"method":"Native fullscreen production host; live simulation and streaming, uncapped/VSync off. HDR state recorded separately. Wall-clock intervals between normally scheduled frame_post_draw events; no forced draws/readbacks in measurement. Camera sweeps one turn per case. Image capture after measurement only.",
+		"method":"Production video host, uncapped with VSync off. Wall-clock intervals between normally scheduled frame_post_draw events. World GPU time covers the 3D source viewport. Captures occur after measurement.",
 		"warmup_frames":warmup_count,"measured_frames":sample_count}
+	if render_batch > 0:
+		report.method = "Same production world and viewport, fixed camera. Time to draw a batch without presenting and read back the last world image, divided by draws per batch. Measures stationary render throughput independently of window focus. Sample percentiles describe batch averages."
 	for look in looks:
 		for tier_text in tiers:
 			var tier := int(tier_text.get_slice(":",0))
 			var variant := tier_text.get_slice(":",1) if ":" in tier_text else "base"
 			settings.apply_quality_preset(tier)
+			settings.set_value("cheap_lighting", variant == "cheap")
 			settings.apply_video_look(1 if look == "home" or with_tape else (2 if look == "tape" else 0))
 			if look in GameSettings.CRT_SHADER_IDS:
 				settings.values.crt_enabled = true
@@ -132,9 +167,13 @@ func run() -> void:
 			game.player.dev_walk = false
 			game.player.set_physics_process(walk)
 			await settle(warmup_count)
+			if render_batch > 0:
+				RenderingServer.force_sync()
+				await process_frame
 			var frames: Array[float] = []
 			var cpu: Array[float] = []
 			var physics: Array[float] = []
+			var gpu: Array[float] = []
 			var draws: Array[float] = []
 			var shadow_draws: Array[float] = []
 			var visible_draws: Array[float] = []
@@ -144,14 +183,21 @@ func run() -> void:
 			var start_ready: int = host.presenter.ready_frames if is_instance_valid(host.presenter) else 0
 			var cells := {}
 			var travel := 0.0
+			var unfocused_frames := 0
 			var previous_position: Vector3 = game.player.position
 			game.player.dev_walk = walk
 			for index in sample_count:
-				game.player.rotation.y = rotation.y+TAU*float(index)/sample_count
-				await next_frame()
-				var now := Time.get_ticks_usec()
-				frames.append(float(now-previous)/1000.0)
-				previous = now
+				if not fixed_view:
+					game.player.rotation.y = rotation.y+TAU*float(index)/sample_count
+				if render_batch > 0:
+					await process_frame
+					frames.append(measure_render_batch())
+				else:
+					await next_frame()
+					var now := Time.get_ticks_usec()
+					frames.append(float(now-previous)/1000.0)
+					previous = now
+				if not root.has_focus(): unfocused_frames += 1
 				var position: Vector3 = game.player.position
 				cells[Vector2i(floori(position.x/WorldGen.CELL_SIZE),floori(position.z/WorldGen.CELL_SIZE))] = true
 				travel += position.distance_to(previous_position)
@@ -159,7 +205,8 @@ func run() -> void:
 				cpu.append(Performance.get_monitor(Performance.TIME_PROCESS)*1000.0)
 				physics.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000.0)
 				draws.append(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
-				var viewport_rid: RID = host.source.get_viewport_rid()
+				var gpu_ms := RenderingServer.viewport_get_measured_render_time_gpu(viewport_rid)
+				if gpu_ms > 0.0: gpu.append(gpu_ms)
 				shadow_draws.append(RenderingServer.viewport_get_render_info(viewport_rid,
 					RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME))
 				visible_draws.append(RenderingServer.viewport_get_render_info(viewport_rid,
@@ -171,17 +218,25 @@ func run() -> void:
 				"shadow_draw_calls":stats(shadow_draws),"visible_draw_calls":stats(visible_draws),
 				"zero_shadow_frames":shadow_draws.count(0.0),
 				"world_height":host.source.size.y*host.source.scaling_3d_scale,"source_size":str(host.source.size),
-				"rendered_frames":frame_events-start_frames,"resident_chunks":game.cm.chunks.size(),
+				"rendered_frames":frame_events-start_frames,"unfocused_frames":unfocused_frames,"resident_chunks":game.cm.chunks.size(),
 				"visited_cells":cells.size(),"travel_meters":travel,"end_level":game.active_level,
 				"video_memory_mib":Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED)/1048576.0,
 				"settings":settings.values.duplicate(true),"frames_ms":frames}
+			record["world_gpu_ms"] = stats(gpu) if not gpu.is_empty() else null
+			record["realtime_gi"] = game.we.environment.sdfgi_enabled
+			record["volumetric_fog"] = game.we.environment.volumetric_fog_enabled
 			record["average_fps"] = 1000.0/record.frame_ms.mean
 			if is_instance_valid(host.presenter) and host.presenter.visible:
 				record["video"] = {"model":host.presenter.preset_name,"signal_size":str(host.presenter.effective_signal_size(root.size)),
 					"output_height_limit":host.presenter.output_height_limit,"ready_frames":host.presenter.ready_frames-start_ready,
 					"last_cpu_submit_usec":host.presenter.cpu_usec,"last_error":host.presenter.last_error}
 				expect(host.presenter.last_error.is_empty(),host.presenter.last_error)
-			expect(record.rendered_frames==sample_count,"rendered frame count differs from sampled intervals")
+			var timed_draws := sample_count * maxi(1, render_batch)
+			record["timed_draws"] = timed_draws
+			# A queued window redraw can also publish a callback between
+			# timed batches. It falls outside their clocks.
+			expect(record.rendered_frames == timed_draws or (render_batch > 0 and record.rendered_frames == timed_draws + 1),
+				"rendered frame count differs from sampled intervals")
 			report.samples.append(record)
 			FileAccess.open(out,FileAccess.WRITE).store_string(JSON.stringify(report,"\t"))
 			print("GAMEPLAY_PROFILE theme=",game.active_level," ",look," tier=",tier_text," fps=",record.average_fps,
@@ -190,7 +245,7 @@ func run() -> void:
 				game.player.rotation = rotation
 				await settle(30)
 				var screenshot := root.get_texture().get_image()
-				expect(screenshot.save_png(out.get_basename()+"-"+look+"-"+tier_text+".png")==OK,"capture failed")
+				expect(screenshot.save_png(out.get_basename()+"-"+look+"-"+tier_text.replace(":", "-")+".png")==OK,"capture failed")
 	await teardown_game(game)
 	if is_instance_valid(host): host.queue_free()
 	DirAccess.remove_absolute(profile_path)
@@ -199,7 +254,21 @@ func run() -> void:
 func next_frame() -> void:
 	if is_instance_valid(game._pause_menu): game._close_settings()
 	await process_frame
-	await RenderingServer.frame_post_draw
+	if render_batch > 0:
+		RenderingServer.force_draw(false, 1.0/60.0)
+	else:
+		await RenderingServer.frame_post_draw
+
+func measure_render_batch() -> float:
+	var started := Time.get_ticks_usec()
+	for frame in render_batch:
+		RenderingServer.force_draw(false, 1.0/60.0)
+	# A blocking readback drains the GPU. Its cost is amortized equally in
+	# both modes and this interval excludes desktop presentation and idle time.
+	var pixels: Image = host.source.get_texture().get_image()
+	var elapsed := Time.get_ticks_usec() - started
+	expect(not pixels.is_empty(), "world viewport readback failed")
+	return float(elapsed) / (1000.0 * render_batch)
 
 func settle(count: int) -> void:
 	for index in count: await next_frame()

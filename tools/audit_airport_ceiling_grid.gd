@@ -144,17 +144,23 @@ func _scan(ws: int, cell: Vector2i) -> void:
 		regular_escalator_cells += 1
 	for grand in grand_nodes:
 		_audit_grand(grand as Node3D, chunk.ceil_h, style)
+	var soffit := 3.5 if style == WorldGen.AIR_TRANSIT else chunk.ceil_h
 	if wants_grand:
-		var soffit := chunk.ceil_h - AirportGrandCeiling.depth(chunk.ceil_h, style)
-		for node in chunk.get_children():
-			if node.has_meta("airport_sign_body_height"):
-				fitted_signs += 1
-				check(node.position.y + 0.275 <= soffit - 0.10, "wayfinding sign clips coffer")
-			if node.has_meta("airport_hanging_board_height"):
-				fitted_boards += 1
-				var half_h := float(node.get_meta("airport_hanging_board_height")) * 0.5
-				check(node.position.y + half_h <= soffit - 0.17, "departures board clips coffer")
-				check(node.position.y - half_h >= 2.25 - EPS, "departures board crowds passenger headroom")
+		soffit -= AirportGrandCeiling.depth(chunk.ceil_h, style)
+	var sign_positions := {}
+	for node in chunk.get_children():
+		if node.has_meta("airport_sign_body_height"):
+			fitted_signs += 1
+			var half_h := float(node.get_meta("airport_sign_body_height")) * 0.5
+			check(node.position.y + half_h <= soffit - 0.15 + EPS, "wayfinding sign clips ceiling at %s" % cell)
+			check(node.position.y - half_h >= 2.25 - EPS, "wayfinding sign crowds passenger headroom at %s" % cell)
+			check(not sign_positions.has(node.position), "duplicate wayfinding signs at %s" % cell)
+			sign_positions[node.position] = true
+		if wants_grand and node.has_meta("airport_hanging_board_height"):
+			fitted_boards += 1
+			var half_h := float(node.get_meta("airport_hanging_board_height")) * 0.5
+			check(node.position.y + half_h <= soffit - 0.17, "departures board clips coffer")
+			check(node.position.y - half_h >= 2.25 - EPS, "departures board crowds passenger headroom")
 	for fixture in _fixture_nodes(chunk):
 		var kind := String(fixture.get_meta("airport_ceiling_fixture", ""))
 		check(not wants_grand, "ordinary airport fixture %s exists in grand ceiling cell" % fixture.name)
@@ -224,7 +230,7 @@ func run() -> void:
 	check(regular_mid_height_cells > 0 and regular_escalator_cells > 0, "sample missed intermediate rooms/escalators")
 	check(fitted_boards > 0 and fitted_signs > 0, "sample missed hanging boards/signs")
 	print("Regular panels retained: %d intermediate rooms, %d escalator cells" % [regular_mid_height_cells, regular_escalator_cells])
-	print("Grand ceiling clearances: %d fitted boards, %d hanging signs" % [fitted_boards, fitted_signs])
+	print("Airport ceiling clearances: %d fitted grand-hall boards, %d hanging signs" % [fitted_boards, fitted_signs])
 	print("AIRPORT_CEILING_GRID_AUDIT: cells=147 lights=%d vents=%d transit=%d grand=%d depths=%s shared_meshes=%d failures=%d" % [lights, vents, transit_cells, grand_cells, grand_depths, grand_meshes.size(), failures])
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(1 if failures else 0)

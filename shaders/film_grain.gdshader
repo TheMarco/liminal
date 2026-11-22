@@ -9,6 +9,9 @@ uniform float color_saturation = 1.0;
 uniform float color_temperature = 0.0;
 uniform float color_shadow_lift = 0.0;
 uniform bool linear_source = false;
+uniform bool camcorder = false;
+uniform float camcorder_stress = 0.0;
+uniform vec4 camcorder_entity = vec4(0.0);
 vec3 encode_srgb(vec3 c) {
 	return mix(c * 12.92, 1.055 * pow(max(c, vec3(0.0)), vec3(1.0/2.4)) - 0.055, step(vec3(0.0031308), c));
 }
@@ -39,6 +42,16 @@ float gaussian(uvec2 pixel, uint frame) {
 
 void fragment() {
 	vec4 source = texture(screen_texture, SCREEN_UV);
+	if (camcorder) {
+		float halo = 1.0 - smoothstep(0.0, max(camcorder_entity.z, 0.001), distance(SCREEN_UV, camcorder_entity.xy));
+		float stress = max(camcorder_stress, halo * camcorder_entity.w);
+		float line_offset = stress * (4.0 + 3.0 * sin(floor(FRAGCOORD.y / 5.0) + floor(TIME * 24.0)));
+		vec3 delayed = texture(screen_texture, SCREEN_UV - vec2((1.3 + line_offset) * SCREEN_PIXEL_SIZE.x, 0.0)).rgb;
+		vec3 delta = delayed - source.rgb;
+		// Delay chroma alone. Lettering, highlights and silhouettes retain
+		// their original luminance at the chosen world resolution.
+		source.rgb = max(vec3(0.0), source.rgb + (0.22 + 0.55 * stress) * (delta - vec3(dot(delta, vec3(0.2126, 0.7152, 0.0722)))));
+	}
 	if (color_saturation != 1.0 || color_temperature != 0.0 || color_shadow_lift > 0.0) {
 		vec3 rgb = linear_source ? encode_srgb(source.rgb) : source.rgb;
 		float luma = dot(rgb, vec3(0.2126,0.7152,0.0722));
@@ -49,6 +62,10 @@ void fragment() {
 	}
 	if (intensity <= 0.0) {
 		COLOR = source;
+	} else if (camcorder) {
+		uint grain = pcg3(uvec3(uvec2(FRAGCOORD.xy), uint(floor(TIME * 24.0)))).x;
+		float noise = float(grain >> 8u) * (1.0 / 16777216.0) - 0.5;
+		COLOR = vec4(max(vec3(0.0), source.rgb + vec3(noise * intensity * 0.048)), source.a);
 	} else {
 		uint frame = uint(floor(TIME * 24.0));
 		uvec3 bits = pcg3(uvec3(uvec2(FRAGCOORD.xy), frame));

@@ -234,7 +234,7 @@ func run() -> void:
 
 	game.opts.video_lab = true
 	game._open_settings(true)
-	game._pause_menu._select_tab("Visual Effects")
+	game._pause_menu._select_tab("Video")
 	await settle(2)
 	var controls: Dictionary = game._pause_menu._full_video_controls.controls
 	expect(controls.size() == 79, "All 79 canonical menu controls available")

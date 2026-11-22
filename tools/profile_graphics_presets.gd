@@ -3,8 +3,8 @@ extends "res://tools/capture_level_overhaul.gd"
 ## readback included. Game simulation frozen, camera moves, not gameplay FPS.
 ## godot --path . --script tools/profile_graphics_presets.gd -- --nologo
 ## --level=1 --styles=12 --quality=3 --out=res://build/graphics-preset-review/office
-const OLD_PRESETS := [[0,1,0,0,0,0,0],[1,1,1,0,1,0,0],[2,2,2,1,2,1,1],[5,5,3,2,2,2,2]]
-const CANDIDATES := [[1,1,0,0,0,0,0],[2,2,1,1,1,1,1],[3,2,2,1,2,1,1],[4,2,3,2,2,2,2]]
+const OLD_PRESETS := [[0,1,0,0,0,0,0,false],[1,1,1,0,1,0,0,false],[2,2,2,1,2,1,1,false],[5,5,3,2,2,2,2,false]]
+const CANDIDATES := [[1,1,0,0,0,0,0,false],[2,2,1,1,1,1,1,false],[3,2,2,1,2,1,1,false],[4,2,3,2,2,2,2,false]]
 var review_modes := PackedStringArray(["old-0","candidate-0","old-1","candidate-1","old-2","candidate-2","old-3","candidate-3"])
 
 func _init() -> void:

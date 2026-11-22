@@ -31,4 +31,4 @@ Damaged presets demonstrate a first short defect after about 1.6 seconds, then u
 
 Camera names describe artistic AV-capture interpretations, not exact device or codec emulations. IR-style surveillance does not add infrared illumination. CRT-only looks do not receive tape defects.
 
-Browsing preserves the current video budget and automatic world-resolution policy. Recurring-defect type, rate and strength are included with all other settings in captures. The library does not enable the receiver or supersampling.
+Browsing keeps the current video budget and 3D resolution. Recurring-defect type, rate and strength are included with all other settings in captures. The library does not enable the receiver or supersampling.

@@ -94,7 +94,16 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 				source.subdivide_depth = clampi(ceili(maxf(metres.y, metres.z)/0.24)-1, 0, 64)
 		var motion := ArrayMesh.new()
 		motion.blend_shape_mode = Mesh.BLEND_SHAPE_MODE_NORMALIZED
-		for k in Profile.KEYS: motion.add_blend_shape("wave_%d" % k)
+		# A narrow fixture moves only while the wave crosses it. Zero-weight
+		# normalized blend shapes already render the exact base mesh.
+		var shape_indices := {}
+		for k in range(1, Profile.KEYS - 1):
+			var center := lerpf(-6.0-Profile.BAND, 6.0+Profile.BAND, float(k)/(Profile.KEYS-1))
+			if bounds.position.z > center+Profile.BAND+0.005 or bounds.end.z < center-Profile.BAND-0.005:
+				continue
+			shape_indices[k] = motion.get_blend_shape_count()
+			motion.add_blend_shape("wave_%d" % k)
+		if shape_indices.is_empty(): continue
 		var materials: Array[Material] = []
 		var overrides: Array[Material] = []
 		for s in source.get_surface_count():
@@ -115,8 +124,8 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 			if source is ArrayMesh:
 				for shift in [Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT, Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT, Mesh.ARRAY_FORMAT_CUSTOM2_SHIFT, Mesh.ARRAY_FORMAT_CUSTOM3_SHIFT]:
 					flags |= source.surface_get_format(s) & (Mesh.ARRAY_FORMAT_CUSTOM_MASK << shift)
-			if material is StandardMaterial3D and material.uv1_triplanar and _axis_aligned(material, node, arrays):
-				material = native._anchor_triplanar(material, node, arrays)
+			if material is StandardMaterial3D and material.uv1_triplanar and await _axis_aligned(material, node, arrays):
+				material = await native.anchor_wave_triplanar(material, node, arrays, _budget)
 				if material == null:
 					failure = "Non-planar triplanar material: " + str(node.get_path())
 					native.free()
@@ -128,19 +137,15 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 					failure = "Native vertex animation needs a dedicated adapter: " + str(node.get_path())
 					native.free()
 					return false
-				var rest := PackedFloat32Array()
-				var normals := PackedFloat32Array()
-				for v: Vector3 in arrays[Mesh.ARRAY_VERTEX]: rest.append_array([v.x,v.y,v.z])
-				for n: Vector3 in arrays[Mesh.ARRAY_NORMAL]: normals.append_array([n.x,n.y,n.z])
-				arrays[Mesh.ARRAY_CUSTOM0] = rest
-				arrays[Mesh.ARRAY_CUSTOM1] = normals
+				arrays[Mesh.ARRAY_CUSTOM0] = await _custom_attribute(arrays[Mesh.ARRAY_VERTEX])
+				arrays[Mesh.ARRAY_CUSTOM1] = await _custom_attribute(arrays[Mesh.ARRAY_NORMAL])
 				flags &= ~((Mesh.ARRAY_FORMAT_CUSTOM_MASK << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_FORMAT_CUSTOM_MASK << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT))
 				flags |= (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
 				material = native._wrap_native_shader(material)
 			materials.append(material)
 			var shapes: Array[Array] = []
 			var samples: Dictionary = await _samples(arrays, xf)
-			for k in Profile.KEYS:
+			for k: int in shape_indices:
 				shapes.append(await _shape(arrays, xf, float(k)/(Profile.KEYS-1), samples))
 				await _budget()
 			motion.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, shapes, {}, flags)
@@ -148,7 +153,8 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 				failure = "Could not preserve mesh surface: " + str(node.get_path())
 				native.free()
 				return false
-		pieces.append({"node": node, "original": original, "motion": motion, "materials": materials, "overrides": overrides, "override": node.material_override, "margin": node.extra_cull_margin})
+		pieces.append({"node": node, "original": original, "motion": motion, "keys": shape_indices,
+			"materials": materials, "overrides": overrides, "override": node.material_override, "margin": node.extra_cull_margin})
 		await _budget()
 	native.free()
 	for node: CollisionShape3D in chunk.find_children("*", "CollisionShape3D", true, false):
@@ -272,12 +278,24 @@ func _convex_arrays(shape: ConvexPolygonShape3D, xf: Transform3D) -> Array:
 
 func _axis_aligned(material: StandardMaterial3D, node: MeshInstance3D, arrays: Array) -> bool:
 	var basis := node.global_basis.inverse().transposed() if material.uv1_world_triplanar else Basis.IDENTITY
-	for n: Vector3 in arrays[Mesh.ARRAY_NORMAL]:
-		var direction := (basis*n).normalized().abs()
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	for i in normals.size():
+		if i % 256 == 255: await _budget()
+		var direction := (basis*normals[i]).normalized().abs()
 		if direction[direction.max_axis_index()] < 0.9999: return false
 	# Curved fixtures keep their native triplanar material; only planar room
 	# faces use the exact rest-UV bake, where the projections are equivalent.
 	return true
+
+func _custom_attribute(vectors: PackedVector3Array) -> PackedFloat32Array:
+	var data := PackedFloat32Array()
+	data.resize(vectors.size()*3)
+	for i in vectors.size():
+		data[i*3] = vectors[i].x
+		data[i*3+1] = vectors[i].y
+		data[i*3+2] = vectors[i].z
+		if i % 256 == 255: await _budget()
+	return data
 
 func _samples(arrays: Array, xf: Transform3D) -> Dictionary:
 	var points := PackedVector3Array()
@@ -349,7 +367,6 @@ func _install_piece(piece: Dictionary) -> void:
 	node.material_override = null
 	node.extra_cull_margin = piece.margin + Profile.AMPLITUDE*2
 	for s in piece.materials.size(): node.set_surface_override_material(s, piece.materials[s])
-	for k in Profile.KEYS: node.set_blend_shape_value(k, 1.0 if k == 0 else 0.0)
 
 func pose(value: float) -> void:
 	if not ready_to_pose: return
@@ -362,14 +379,14 @@ func pose(value: float) -> void:
 	var mix := at-lo
 	for piece in pieces:
 		var node: MeshInstance3D = piece.node
+		var keys: Dictionary = piece.keys
 		if not installed:
 			_install_piece(piece)
-			node.set_blend_shape_value(0, 0.0)
 		elif _last_lo >= 0 and _last_lo != lo:
-			node.set_blend_shape_value(_last_lo, 0.0)
-			node.set_blend_shape_value(_last_lo+1, 0.0)
-		node.set_blend_shape_value(lo, 1.0-mix)
-		node.set_blend_shape_value(lo+1, mix)
+			if keys.has(_last_lo): node.set_blend_shape_value(keys[_last_lo], 0.0)
+			if keys.has(_last_lo+1): node.set_blend_shape_value(keys[_last_lo+1], 0.0)
+		if keys.has(lo): node.set_blend_shape_value(keys[lo], 1.0-mix)
+		if keys.has(lo+1): node.set_blend_shape_value(keys[lo+1], mix)
 	for item in attachments:
 		var xf: Transform3D = item.frame
 		var center: Vector3 = item.center

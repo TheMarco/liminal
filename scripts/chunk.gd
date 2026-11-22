@@ -95,6 +95,7 @@ const SCH_BAND := 1.42   # height of the red line that runs the whole school
 const T := 0.15
 const DOOR_TOP := 2.25
 const AIR_DOOR := 3.15   # airport portal head height
+const AIR_FRAME_CLEAR_HEIGHT := AIR_DOOR - 0.01  # steel underside below the plaster opening
 const BRUTAL_DOOR_TOP := 3.15 # monumental portal head; casing must match the cut
 const BLOOM_DOOR_TOP := 2.55
 const DOOR_CLEAR_DEPTH := 3.6
@@ -340,6 +341,7 @@ const DESK_PHONE_SCALE := 5.25
 # a corrective turn. Its native 0.764m height already matches the old model's
 # displayed size, so it remains at 1:1 scale.
 const MALL_PAYPHONE_PATH := "res://models/provided/mall_payphone/mall_payphone.glb"
+const MALL_PALM_CROWN_PATH := "res://models/generated/mall/kentia_crown.scn"
 const MALL_PAYPHONE_SCALE := 1.0
 ## The cabinet intentionally crosses the 1.21m brass rail. Keeping the whole
 ## model above it put the handset well above the player's 1.377m eye line.
@@ -1126,6 +1128,7 @@ static func _prop_preload_paths() -> Array[String]:
 	paths.append(POOL_LOUNGE_CHAIR_PATH)
 	paths.append(DESK_PHONE_PATH)
 	paths.append(MALL_PAYPHONE_PATH)
+	paths.append(MALL_PALM_CROWN_PATH)
 	paths.append(MALL_DIRECTORY_PATH)
 	paths.append(CASINO_BLACKJACK_PATH)
 	paths.append(CASINO_ROULETTE_PATH)
@@ -1264,7 +1267,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
 		7:
-			paths.append_array([MALL_PAYPHONE_PATH, MALL_DIRECTORY_PATH, MALL_SHOPPING_CART_PATH,
+			paths.append_array([MALL_PALM_CROWN_PATH, MALL_PAYPHONE_PATH, MALL_DIRECTORY_PATH, MALL_SHOPPING_CART_PATH,
 				MALL_GARMENT_RACK_PATH, MALL_MERCHANDISE_PATH, MALL_DISPLAY_PATH])
 			paths.append_array([CITY_BENCH_PATH, FOOD_COURT_SET_PATH, MALL_HOTDOG_PATH])
 			paths.append_array([ROPE_BARRIER_PATH, GARBAGE_BIN_PATH])
@@ -1468,6 +1471,9 @@ var _occluder_walls: Array[MeshInstance3D] = []
 var native_doorway_sites: Dictionary = {}
 var native_doorway_plan: NativeDoorwayPlan
 var _rendering_prepared := false
+var _render_meshes: Array[Node] = []
+var _render_mesh_index := 0
+var _render_blackout_variants := {}
 var casino_landmark := ""
 
 
@@ -1653,9 +1659,9 @@ static func _unit_sphere() -> SphereMesh:
 	return mesh
 
 
-## Solid walls hide most of the Casino and Data Center at typical sightlines.
+## Solid walls hide most of the Casino, Prison and Data Center at typical sightlines.
 ## Other floors need their own measurement because occlusion also costs CPU.
-static var occlusion_themes: Array[int] = [0, 10]
+static var occlusion_themes: Array[int] = [0, 8, 10]
 
 
 ## Only explicitly authored opaque walls can occlude. Store references until
@@ -1688,30 +1694,37 @@ func _drop_small_shadow_caster(instance: MeshInstance3D) -> bool:
 	return true
 
 
-func prepare_runtime_rendering(room_light_fade_begin := 0.0) -> void:
+func prepare_runtime_rendering(room_light_fade_begin := 0.0, deadline_usec := 0) -> bool:
 	if _rendering_prepared:
-		return
-	_rendering_prepared = true
-	var blackout_variants := {}
-	for mesh in find_children("*", "MeshInstance3D", true, false):
+		return true
+	if _render_mesh_index == 0:
+		_render_meshes = find_children("*", "MeshInstance3D", true, false)
+	while _render_mesh_index < _render_meshes.size():
+		var mesh := _render_meshes[_render_mesh_index] as MeshInstance3D
+		_render_mesh_index += 1
 		if not _blackout:
-			_blackout_surfaces.prepare_mesh(mesh, blackout_variants)
-		if _drop_small_shadow_caster(mesh):
-			continue
-		preload("res://scripts/fixture_lighting.gd").prepare_shadow_mesh(mesh)
+			_blackout_surfaces.prepare_mesh(mesh, _render_blackout_variants)
+		if not _drop_small_shadow_caster(mesh):
+			preload("res://scripts/fixture_lighting.gd").prepare_shadow_mesh(mesh)
+		if deadline_usec > 0 and _render_mesh_index % 8 == 0 and Time.get_ticks_usec() >= deadline_usec:
+			return false
+	_render_meshes.clear()
+	_render_blackout_variants.clear()
+	_rendering_prepared = true
 	# Builders keep their authored close-up illumination and short shadow budget.
 	# Extend only architectural lighting, not little indicators/prop glows. This
 	# is an installation policy shared by streaming and blackout replacements.
-	if room_light_fade_begin > 0.0:
-		for node in find_children("*", "Light3D", true, false):
-			var light := node as Light3D
-			if not light.get_meta("stream_room_light", false) or not light.distance_fade_enabled:
-				continue
+	for node in find_children("*", "Light3D", true, false):
+		var light := node as Light3D
+		var room_light := bool(light.get_meta("stream_room_light", false))
+		if room_light_fade_begin > 0.0 and room_light and light.distance_fade_enabled:
 			# Light and shadow share a fade length. Preserve that length, and the
 			# original effective shadow horizon even when shadow fade was left at
 			# its default (previously the whole light disappeared before it).
 			light.distance_fade_shadow = minf(light.distance_fade_shadow, light.distance_fade_begin)
 			light.distance_fade_begin = maxf(light.distance_fade_begin, room_light_fade_begin)
+		if room_light or light.has_meta("visible_source"):
+			GraphicsQuality.configure_room_accent(light)
 	for mesh in _occluder_walls:
 		if not is_instance_valid(mesh) or mesh.get_parent() == null:
 			continue
@@ -1723,6 +1736,7 @@ func prepare_runtime_rendering(room_light_fade_begin := 0.0) -> void:
 		occluder.scale = mesh.mesh.get_aabb().size * 0.998
 		mesh.add_child(occluder)
 	_occluder_walls.clear()
+	return true
 
 
 func _profile_stage(label: String, started_usec: int) -> void:
@@ -4760,50 +4774,72 @@ func _door_casing(dir: int, plane: float, a: float, b: float) -> void:
 			piece.set_meta("brutal_door_casing", true)
 			piece.set_meta("brutal_door_head", top)
 		return
-	if theme == 11:
-		# A clean black-steel frame remains a reliable route cue beneath the
-		# overgrowth. The cut and surround share the same 2.55m head datum.
-		var cm := Mats.bloom_metal()
-		var top := BLOOM_DOOR_TOP
-		var jamb := 0.12
-		var depth := T + 0.16
+	if theme == 8 or theme == 11:
+		var cm := Mats.prison_iron() if theme == 8 else Mats.bloom_metal()
+		var opening_top := DOOR_TOP if theme == 8 else BLOOM_DOOR_TOP
+		var jamb := 0.18 if theme == 8 else 0.12
+		var header := 0.20 if theme == 8 else 0.12
+		# Each chunk supplies its own half of the reveal. The steel soffit
+		# sits below the structural wall, with one visible face on either side.
+		var overhang := 0.09 if theme == 8 else 0.08
+		var depth := T + overhang
+		plane += (-0.5 if dir == 0 or dir == 2 else 0.5) * overhang
+		var top := opening_top - 0.012
+		header += opening_top - top
 		if dir < 2:
 			_box(Vector3(plane, top * 0.5, a), Vector3(depth, top, jamb), cm, false)
 			_box(Vector3(plane, top * 0.5, b), Vector3(depth, top, jamb), cm, false)
-			_box(Vector3(plane, top + jamb * 0.5, (a + b) * 0.5),
-				Vector3(depth, jamb, b - a + jamb), cm, false)
+			_box(Vector3(plane, top + header * 0.5, (a + b) * 0.5),
+				Vector3(depth, header, b - a + jamb), cm, false)
 		else:
 			_box(Vector3(a, top * 0.5, plane), Vector3(jamb, top, depth), cm, false)
 			_box(Vector3(b, top * 0.5, plane), Vector3(jamb, top, depth), cm, false)
-			_box(Vector3((a + b) * 0.5, top + jamb * 0.5, plane),
-				Vector3(b - a + jamb, jamb, depth), cm, false)
+			_box(Vector3((a + b) * 0.5, top + header * 0.5, plane),
+				Vector3(b - a + jamb, header, depth), cm, false)
 		return
-	if theme == 7 or theme == 8:
-		var cm: Material = Mats.mall_trim() if theme == 7 else Mats.prison_iron()
-		var top := 3.15 if theme == 7 else DOOR_TOP
-		var depth := 0.22 if theme == 7 else 0.18
+	if theme == 7:
+		# Half-reveal trim like the Prison/Bloom steel surround: each chunk
+		# supplies its own half, and the header soffit sits just below the
+		# structural wall so neither the plaster underside nor the
+		# neighbouring chunk's trim shares a face with it.
+		var cm := Mats.mall_trim()
+		var opening_top := AIR_DOOR
+		var jamb := 0.22
+		var header := 0.20
+		var overhang := 0.11
+		var depth := T + overhang
+		plane += (-0.5 if dir == 0 or dir == 2 else 0.5) * overhang
+		var top := opening_top - 0.012
+		header += opening_top - top
 		if dir < 2:
-			_box(Vector3(plane, top * 0.5, a), Vector3(T + depth, top, depth), cm, false)
-			_box(Vector3(plane, top * 0.5, b), Vector3(T + depth, top, depth), cm, false)
-			_box(Vector3(plane, top + 0.10, (a + b) * 0.5),
-				Vector3(T + depth, 0.20, b - a + depth), cm, false)
+			_box(Vector3(plane, top * 0.5, a), Vector3(depth, top, jamb), cm, false)
+			_box(Vector3(plane, top * 0.5, b), Vector3(depth, top, jamb), cm, false)
+			_box(Vector3(plane, top + header * 0.5, (a + b) * 0.5),
+				Vector3(depth, header, b - a + jamb), cm, false)
 		else:
-			_box(Vector3(a, top * 0.5, plane), Vector3(depth, top, T + depth), cm, false)
-			_box(Vector3(b, top * 0.5, plane), Vector3(depth, top, T + depth), cm, false)
-			_box(Vector3((a + b) * 0.5, top + 0.10, plane),
-				Vector3(b - a + depth, 0.20, T + depth), cm, false)
+			_box(Vector3(a, top * 0.5, plane), Vector3(jamb, top, depth), cm, false)
+			_box(Vector3(b, top * 0.5, plane), Vector3(jamb, top, depth), cm, false)
+			_box(Vector3((a + b) * 0.5, top + header * 0.5, plane),
+				Vector3(b - a + jamb, header, depth), cm, false)
 		return
 	if theme == 4:
-		# brushed-steel portal surround, airport-tall
+		# Both rooms dress the opening. Each steel half ends at the shared edge.
 		var sm := Mats.steel()
+		var overhang := 0.10
+		var depth := T + overhang
+		plane += (-0.5 if dir == 0 or dir == 2 else 0.5) * overhang
+		var top := AIR_FRAME_CLEAR_HEIGHT
+		var header := 0.26
 		if dir < 2:
-			_box(Vector3(plane, AIR_DOOR * 0.5, a - 0.02), Vector3(T + 0.2, AIR_DOOR, 0.26), sm)
-			_box(Vector3(plane, AIR_DOOR * 0.5, b + 0.02), Vector3(T + 0.2, AIR_DOOR, 0.26), sm)
-			_box(Vector3(plane, AIR_DOOR + 0.12, (a + b) * 0.5), Vector3(T + 0.2, 0.26, b - a + 0.3), sm, false)
+			_box(Vector3(plane, top * 0.5, a - 0.02), Vector3(depth, top, 0.26), sm)
+			_box(Vector3(plane, top * 0.5, b + 0.02), Vector3(depth, top, 0.26), sm)
+			_box(Vector3(plane, top + header * 0.5, (a + b) * 0.5),
+				Vector3(depth, header, b - a + 0.3), sm, false)
 		else:
-			_box(Vector3(a - 0.02, AIR_DOOR * 0.5, plane), Vector3(0.26, AIR_DOOR, T + 0.2), sm)
-			_box(Vector3(b + 0.02, AIR_DOOR * 0.5, plane), Vector3(0.26, AIR_DOOR, T + 0.2), sm)
-			_box(Vector3((a + b) * 0.5, AIR_DOOR + 0.12, plane), Vector3(b - a + 0.3, 0.26, T + 0.2), sm, false)
+			_box(Vector3(a - 0.02, top * 0.5, plane), Vector3(0.26, top, depth), sm)
+			_box(Vector3(b + 0.02, top * 0.5, plane), Vector3(0.26, top, depth), sm)
+			_box(Vector3((a + b) * 0.5, top + header * 0.5, plane),
+				Vector3(b - a + 0.3, header, depth), sm, false)
 		return
 	if theme == 2:
 		# The 30cm native wall segments already expose substantial returns at
@@ -7184,7 +7220,10 @@ func _ready() -> void:
 	if not tree.node_added.is_connected(Chunk._power_tree_changed):
 		tree.node_added.connect(Chunk._power_tree_changed)
 		tree.node_removed.connect(Chunk._power_tree_changed)
-	_index_power_visuals()
+	# A room streamed in during an outage is already displaying its dark
+	# overrides. Index its restored bindings at the next cut.
+	if not _blackout:
+		_index_power_visuals()
 
 
 func _exit_tree() -> void:
@@ -8816,6 +8855,9 @@ func _attributed_floor_prop(path: String, p: Vector3, yaw: float, scl: float,
 		return null
 	pivot.set_meta("attributed_furnishing", kind)
 	inst.set_meta("authored_model", kind)
+	if path in [CASINO_BLACKJACK_PATH, CASINO_BAR_PATH, CASINO_ROULETTE_PATH,
+			CASINO_STOOL_PATH, CASINO_POPUP_PATH]:
+		inst.set_meta(&"fixed_power_bindings", true)
 	return pivot
 
 

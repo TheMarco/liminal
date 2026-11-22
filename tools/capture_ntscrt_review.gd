@@ -179,7 +179,7 @@ func run() -> void:
 	view.size = Vector2i(1920, 1080)
 	select_mode(1)
 	game._open_settings(true)
-	game._pause_menu._select_tab("Visual Effects")
+	game._pause_menu._select_tab("Video")
 	for i in 4:
 		await process_frame
 	await RenderingServer.frame_post_draw

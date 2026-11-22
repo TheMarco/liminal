@@ -51,7 +51,7 @@ func run() -> void:
 	expect(is_instance_valid(director.active) and scheduler._pending == "breath",
 		"shared scheduler did not hand a visible wall to the effect director")
 	if is_instance_valid(director.active):
-		finish_preparing(director)
+		await finish_preparing(director)
 		director._physics_process(0.016)
 		scheduler._physics_process(0.016)
 		expect(scheduler.events_started == 0 and scheduler._pending == "breath",
@@ -66,7 +66,7 @@ func run() -> void:
 			"cancelled wall cannot be selected again by the ordinary search")
 		if is_instance_valid(director.active):
 			scheduler._pending = "breath"
-			finish_preparing(director)
+			await finish_preparing(director)
 			game.player.cam.rotate_y(PI)
 			director._physics_process(2.0)
 			scheduler._physics_process(0.016)
@@ -128,7 +128,7 @@ func run() -> void:
 	var surface: Node = director.active
 	expect(not surface.prepared and surface.originals_restored(), "preparation touched the visible wall early")
 	expect(not director.start_event(chunk, choice), "event stacked")
-	finish_preparing(director)
+	await finish_preparing(director)
 	director._physics_process(2.0)
 	expect(director.elapsed > 0 and surface.weights[0] > 0, "active event did not advance")
 	game.player.global_position = focus + normal * 0.8 - Vector3.UP * 0.6
@@ -139,7 +139,7 @@ func run() -> void:
 	expect(director.start_event(chunk, choice, "travel"), "travelling event did not start")
 	surface = director.active
 	if is_instance_valid(surface):
-		finish_preparing(director)
+		await finish_preparing(director)
 		director._physics_process(3.0)
 		game._photo_camera._raised = true
 		director._physics_process(0.016)
@@ -148,7 +148,7 @@ func run() -> void:
 	await physics_frame
 	expect(director.start_event(chunk, choice), "event did not restart after capture")
 	if is_instance_valid(director.active):
-		finish_preparing(director)
+		await finish_preparing(director)
 		director._physics_process(2.0)
 		director.cancel()
 		expect(director.start_event(chunk, choice, "travel"), "preparation restart failed")
@@ -172,11 +172,12 @@ func run() -> void:
 	finish("breathing runtime: pacing, visibility, gates, actor withdrawal and teardown")
 
 func finish_preparing(director: Node) -> void:
-	# Preparation now yields within targets. Allow the director's existing
-	# 45-second preparation window rather than assuming <=100 whole targets.
+	# Live preparation can advance once per rendered frame, even when several
+	# physics ticks catch up. Drive each tick on a fresh frame within the deadline.
 	var steps := 0
 	for step in 2800:
 		if not is_instance_valid(director.active) or director.active.prepared: break
+		await process_frame
 		director._physics_process(0.016)
 		steps += 1
 	expect(is_instance_valid(director.active) and director.active.prepared, "incremental preparation failed")
@@ -208,7 +209,7 @@ func check_ceiling(game: Node, director: Node) -> void:
 	expect(is_instance_valid(director.active) and director.kind == "ceiling", "live search did not start ceiling breath")
 	if not is_instance_valid(director.active): return
 	var surface: Node = director.active
-	finish_preparing(director)
+	await finish_preparing(director)
 	director._physics_process(3.5)
 	expect(surface.weights[0] > 0.9, "ceiling did not reach peak")
 	game.player.velocity = Vector3.UP * 8.0

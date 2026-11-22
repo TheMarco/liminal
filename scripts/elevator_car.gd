@@ -89,7 +89,14 @@ func _init(scene: PackedScene = null) -> void:
 	light.light_color = Color(1.0, 0.82, 0.62)
 	light.light_energy = 1.25
 	light.omni_range = 6.5
-	light.shadow_enabled = false
+	# The broad, flat door leaves leak with a dual-paraboloid shadow.
+	# Use a cubemap close to the car, including while the doors move.
+	light.shadow_enabled = true
+	light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = 10.0
+	light.distance_fade_length = 6.0
+	light.distance_fade_shadow = light.distance_fade_begin + light.distance_fade_length
 	light.set_meta("visible_source", "elevator_ceiling_panel")
 	add_child(light)
 

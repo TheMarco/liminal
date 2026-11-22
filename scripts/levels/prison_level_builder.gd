@@ -1,6 +1,10 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 
 const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
+const CELL_GATE_WIDTH := 2.4
+const CELL_GATE_TRAVEL := 0.90
+# Inside face of the model's left steel jamb when fitted to a 2.4 m bay.
+const CELL_GATE_JAMB_X := -0.99
 
 
 func _prison_generated_bounds(inst: Node3D) -> AABB:
@@ -364,12 +368,48 @@ func _prison_gate_leaf(dir: int, plane: float, off: float, centre: float) -> voi
 		0.20, 0.04, Mats.prison_iron())
 
 
-## A strip of real cells along one wall: masonry fins split it into 2.4m
-## bays, each fronted floor-to-header with round bars, rails and a slid-open
-## or shut gate — bunk, toilet and shelf inside, number plate over the door.
-## Bays never cross a doorway lane, so a strip can never seal a room.
+func _cell_gate(dir: int, centre: float, deep: float, height: float, open: bool, side: float) -> void:
+	var yaw := _wall_facing(dir)
+	var pivot := scene.furnishing_pivot(_wall_pt(dir, centre, deep), yaw, "prison_cell_gate_generated")
+	pivot.set_meta("fixed_furnishing", true)
+	var first := scene.collider_mark()
+	var model := _prison_generated_model(pivot, Chunk.PRISON_GEN_CELL_GATE_PATH,
+		Vector3(CELL_GATE_WIDTH, height, 0.16))
+	if model == null:
+		_prison_bars(pivot.position, yaw, CELL_GATE_WIDTH, height, open)
+		scene.bind_furnishing_colliders(pivot, first)
+		return
+
+	# The door opens toward local +X; mirror the assembly if this bay opens
+	# on the other side. The jamb, overhead track and fixed bars stay put.
+	var local_left := -1.0 if dir == 0 or dir == 3 else 1.0
+	if side != local_left:
+		pivot.scale.x = -1.0
+	var spans: Array[Vector2] = [Vector2(-CELL_GATE_WIDTH / 2, CELL_GATE_WIDTH / 2)]
+	if open:
+		var leaf := model.find_child("SlidingLeaf", true, false) as MeshInstance3D
+		var hardware := model.find_child("LeafHardware", true, false) as MeshInstance3D
+		if leaf != null and hardware != null:
+			leaf.position.x += CELL_GATE_TRAVEL / model.scale.x
+			hardware.position.x = leaf.position.x
+			var leaf_edge := model.position.x + model.scale.x * (leaf.position.x + leaf.get_aabb().position.x)
+			spans = [Vector2(-CELL_GATE_WIDTH / 2, CELL_GATE_JAMB_X),
+				Vector2(leaf_edge, CELL_GATE_WIDTH / 2)]
+	# Fasteners are visible at arm's length. Distant cells retain the actual
+	# gate, bars and lock without submitting each set of screws and rollers.
+	for part in [&"FrameHardware", &"LeafHardware"]:
+		var hardware := model.find_child(part, true, false) as MeshInstance3D
+		if hardware != null:
+			hardware.visibility_range_end = 9.0
+			hardware.visibility_range_end_margin = 1.0
+			hardware.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for span in spans:
+		var mid := pivot.transform * Vector3((span.x + span.y) * 0.5, height * 0.5, 0)
+		scene.collider_yaw_box(mid, Vector3(span.y - span.x, height, 0.16), yaw)
+	scene.bind_furnishing_colliders(pivot, first)
 
 
+## Gates fill the 2.4 m cell bays. Keep every bay clear of the room doorway lane.
 func _prison_cell_strip(dir: int, salt: int) -> void:
 	var plane = (WorldGen.CELL_SIZE - Chunk.T / 2.0) if (dir == 0 or dir == 2) else (Chunk.T / 2.0)
 	var info = scene.edge_info(ctx.cell, dir)
@@ -401,17 +441,8 @@ func _prison_cell_strip(dir: int, salt: int) -> void:
 		if ctx.ceiling_height > bh + 0.45:
 			scene.surface_facing_box(dir, plane, deep, bc, (bh + 0.22 + ctx.ceiling_height) / 2.0, 2.4,
 				ctx.ceiling_height - bh - 0.22, 0.12, Mats.prison_wall())
-		# Scenario replacement for the former hand-built bars, rails and gate.
-		# Park the complete assembly to one side when this cell is open, matching
-		# the old visual state while keeping the gate geometry authored as one unit.
 		var gside = -1.0 if WorldGen.hr01(giv, 2) < 0.5 else 1.0
-		var gc = bc + gside * 0.62
-		var gate_centre = bc - gside * 0.62 if open_gate else gc
-		var gate_pivot = scene.furnishing_pivot(
-			_wall_pt(dir, gate_centre, deep, 0.0), _wall_facing(dir),
-			"prison_cell_gate_generated")
-		_prison_generated_model(gate_pivot, Chunk.PRISON_GEN_CELL_GATE_PATH,
-			Vector3(2.4, bh, 0.16))
+		_cell_gate(dir, bc, deep, bh, open_gate, gside)
 		# what a man's whole world was: bunk, toilet, shelf
 		_prison_bunk(_wall_pt(dir, bc - 0.58, 1.30), byaw, true)
 		_prison_toilet(_wall_pt(dir, bc + 0.74, 0.62),
@@ -447,24 +478,6 @@ func _prison_cell_strip(dir: int, salt: int) -> void:
 		lab.rotation.y = (-PI / 2.0 if dir == 0 else PI / 2.0) if dir < 2 \
 			else (PI if dir == 2 else 0.0)
 		scene.add_node(lab)
-		# collider along the bar line, split at an open gate
-		var n = -1.0 if dir == 0 or dir == 2 else 1.0
-		var bp = plane + n * (Chunk.T * 0.5 + deep)
-		if open_gate:
-			for seg in [[bc - 1.2, gc - 0.40], [gc + 0.40, bc + 1.2]]:
-				var sc: float = (seg[0] + seg[1]) / 2.0
-				var sw: float = seg[1] - seg[0]
-				if sw < 0.1:
-					continue
-				if dir < 2:
-					scene.collider_box(Vector3(bp, bh / 2.0, sc), Vector3(0.12, bh, sw))
-				else:
-					scene.collider_box(Vector3(sc, bh / 2.0, bp), Vector3(sw, bh, 0.12))
-		else:
-			if dir < 2:
-				scene.collider_box(Vector3(bp, bh / 2.0, bc), Vector3(0.12, bh, 2.4))
-			else:
-				scene.collider_box(Vector3(bc, bh / 2.0, bp), Vector3(2.4, bh, 0.12))
 
 
 func _prison_cellblock() -> void:
@@ -488,14 +501,18 @@ func _prison_cellblock() -> void:
 
 func _prison_cells() -> void:
 	# a small room of close cells: one strip along the first solid wall
+	var desk_position := Vector3(8.8, 0, 6.4)
 	for d in 4:
 		if scene.solid_wall(d):
 			_prison_cell_strip(d, 1870 + d * 25)
+			if d == 0:
+				# Leave a walkable aisle between the desk and the east gate track.
+				desk_position.x = 7.4
 			break
 	# Bolted writing shelf with two real supports. The previous single leg made
 	# the slab read as a floating or half-deleted table from most approaches.
 	var desk_b0 = scene.collider_mark()
-	var desk = scene.furnishing_pivot(Vector3(8.8, 0, 6.4), 0.0, "prison_writing_table")
+	var desk = scene.furnishing_pivot(desk_position, 0.0, "prison_writing_table")
 	scene.model_rounded_box(desk, Vector3(0, 0.72, 0), Vector3(1.35, 0.08, 0.62),
 		Mats.prison_green(), 0.02)
 	for lx in [-0.55, 0.55]:
@@ -509,7 +526,7 @@ func _prison_cells() -> void:
 		for x in [-0.55, 0.55]:
 			d.box(Vector3(x, 0.025, 0), Vector3(0.20, 0.05, 0.58), Mats.prison_iron(), 0.008)
 	)
-	scene.collider_yaw_box(Vector3(8.8, 0.42, 6.4), Vector3(1.35, 0.84, 0.64), 0)
+	scene.collider_yaw_box(desk_position + Vector3.UP * 0.42, Vector3(1.35, 0.84, 0.64), 0)
 	scene.bind_furnishing_colliders(desk, desk_b0)
 	if ctx.random01(1877) < 0.5:
 		scene.cc0_prop("wooden_crate_02", Vector3(2.3, 0, 2.4), ctx.random01(1878) * TAU, 0.8)

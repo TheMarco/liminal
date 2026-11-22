@@ -13,7 +13,9 @@ const BLOOM_FIXTURE_FLICKER_SCRIPT := preload(
 const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 
 const PASSAGE_HALF_WIDTH := 1.90
-const PASSAGE_HEIGHT := 3.20
+## Keep the visible passage liner below the structural ceiling at Chunk.HBLOOM.
+## The full roof still encloses adjoining rooms and the space above the liner.
+const PASSAGE_HEIGHT := 3.16
 const PASSAGE_WALL_T := 0.18
 const OPENING_HEAD := 2.55
 const FIXTURE_SCALE := 1.34
@@ -641,6 +643,10 @@ func _authored_flesh_blob(pos: Vector3, yaw: float, scale: float,
 		pulse.free()
 		return null
 	inst.set_meta("authored_model", "flesh_blob")
+	# One inexpensive stationary box fits the low floor bulk. It stays clear
+	# of walk lanes and overhead tendrils by following the instance footprint.
+	scene.collider_yaw_box(pos + Vector3(0, 0.55, 0) * scale,
+		Vector3(2.2, 1.1, 2.2) * scale, yaw)
 	for staged_name in ["Plane_0", "Plane_001_2"]:
 		var staged := inst.find_child(staged_name, true, false) as Node3D
 		if staged != null:
@@ -658,6 +664,9 @@ func _authored_flesh_blob(pos: Vector3, yaw: float, scale: float,
 func _root_column(pos: Vector3, height: float, radius := 0.34) -> void:
 	scene.box(pos + Vector3(0, height * 0.5, 0),
 		Vector3(0.55, height, 0.55), Mats.bloom_wall())
+	# Stationary collision only for the protruding flared base; corner
+	# placement and low height preserve walk lanes and overhead tendrils.
+	scene.collider_box(pos + Vector3(0, 0.25, 0), Vector3(1.15, 0.5, 1.15))
 	var growth := _growth_root("BloomRootColumn")
 	for i in 5:
 		var ang := float(i) * TAU / 5.0 + ctx.random01(3400 + i) * 0.4

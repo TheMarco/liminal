@@ -44,6 +44,13 @@ func _render() -> void:
 	var names: Array = presets.keys() if selected == "all" else [selected]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build/ntscrt-review/slang"))
 	for name in names:
+		var before_setup := -1
+		if name == "royale":
+			var warm := CHAIN.prewarm_shaders(rd, presets[name])
+			if not warm.ok:
+				_failures.append("Royale prewarm failed: " + str(warm.error))
+			before_setup = CHAIN.shader_compilations
+			print("SLANG_PREWARM ", name, " ms=", warm.elapsed_ms, " compiled=", warm.new_compilations)
 		var chain := CHAIN.new()
 		var setup_started := Time.get_ticks_usec()
 		if not chain.setup(rd,presets[name],Vector2i(320,240),Vector2i(640,480)):
@@ -51,6 +58,8 @@ func _render() -> void:
 			chain.dispose()
 			continue
 		var first_setup_ms := (Time.get_ticks_usec()-setup_started)/1000.0
+		if name == "royale" and CHAIN.shader_compilations != before_setup:
+			_failures.append("first Royale selection recompiled prewarmed shaders")
 		var output: RID = chain.render(input)
 		if not output.is_valid():
 			_failures.append(str(name) + ": " + chain.error)

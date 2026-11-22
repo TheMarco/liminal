@@ -7,7 +7,6 @@ signal quit_requested
 signal video_stage_selected(key: String)
 signal preset_workshop_requested
 
-const LOOKS = preload("res://scripts/video_preset_library.gd")
 const LOOK_BRIDGE = preload("res://scripts/video_preset_bridge.gd")
 const LOOK_IO = preload("res://scripts/video_preset_io.gd")
 
@@ -35,12 +34,14 @@ var _pages: Dictionary = {}
 var _tab_buttons: Dictionary = {}
 var _tabs: GridContainer
 var _footer: GridContainer
-var _current_tab := "Graphics"
+var _current_tab := "Video"
+var _preset_grid: GridContainer
 var _preset_buttons: Array[Button] = []
 var _quality_status: Label
 var _advanced: VBoxContainer
 var _advanced_button: Button
 var _display_grid: GridContainer
+var _hdr_button: Button
 var _hdr_group: VBoxContainer
 var _hdr_status: Label
 var _binding_buttons: Dictionary = {}
@@ -90,7 +91,7 @@ func _focus_resume() -> void:
 	if is_instance_valid(_resume_button):
 		_resume_button.grab_focus()
 
-const TABS := ["Graphics", "Visual Effects", "Controls", "Audio", "Accessibility"]
+const TABS := ["Video", "Controls", "Audio", "Accessibility"]
 const CREAM := Color(0.94, 0.90, 0.78)
 const GOLD := Color(0.88, 0.72, 0.43)
 const MUTED := Color(0.65, 0.66, 0.61)
@@ -103,8 +104,8 @@ const OPTION_LABELS := {
 	"reflections": ["Off", "Low", "High"],
 	"volumetric_fog": ["Off", "Low", "High"],
 	"frame_limit": ["Unlimited", "30 FPS", "60 FPS", "90 FPS", "120 FPS", "144 FPS"],
-	"video_pipeline": ["Classic", "NTSCRT approximation", "Full ntsc-rs"],
-	"crt_shader": ["Pipeline default", "Aperture", "EasyMode", "Glow Gaussian", "Glow Lanczos", "Hyllian", "Royale", "Crtsim", "Native NTSCRT", "Automatic (graphics quality)"],
+	"video_pipeline": ["Classic", "NTSCRT approximation", "Full ntsc-rs", "Camcorder"],
+	"crt_shader": ["Pipeline default", "Aperture", "EasyMode", "Glow Gaussian", "Glow Lanczos", "Hyllian", "Royale", "Crtsim", "Native NTSCRT", "Automatic (video quality)"],
 	"ntscrt_downscale_filter": ["Fast bilinear", "Nearest", "Nearest+", "Filtered bilinear", "Bicubic", "Lanczos", "Area"],
 	"ntscrt_signal_size": ["Standard signal", "Custom width", "Source size"],
 	"ntscrt_scale_mode": ["Window resolution", "Original supersampling", "Original integer fit"],
@@ -151,11 +152,16 @@ const NTSCRT_SLIDER_HELP := {
 	"ntsc_rf_noise": "Fine background snow over the whole picture.",
 }
 const QUALITY_NOTES := [
-	"For slower GPUs. Up to 480p, simple shadows and lighter tape/TV processing. Menus stay sharp.",
-	"Balanced performance. Up to 720p, soft shadows, bounce lighting, reflections and atmospheric haze.",
-	"Sharper detail. Up to 1080p, finer shadows and contact shading, plus finer tape/TV detail.",
-	"Richest lighting. Up to 1440p, finest shadows, full reflections and fog. Full-resolution TV output remains demanding.",
-	"Custom rendering options. Select a preset to replace these graphics choices.",
+	"Short-range lights and hard shadows for slower GPUs.",
+	"Efficient lighting with smoother edges and subtle reflections.",
+	"Full lighting with soft shadows and illuminated haze.",
+	"Finest shadows, reflections and volumetric fog.",
+	"Your custom world settings are active.",
+]
+const CAMERA_NOTES := [
+	"A clear picture with recording and TV effects off.",
+	"Subtle camcorder grain and color bleed.",
+	"Warm VHS playback on a softly glowing CRT.",
 ]
 
 func _build_ui() -> void:
@@ -200,7 +206,7 @@ func _build_ui() -> void:
 	state.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	header.add_child(state)
 	_tabs = GridContainer.new()
-	_tabs.columns = 5
+	_tabs.columns = TABS.size()
 	_tabs.add_theme_constant_override("h_separation", 4)
 	_tabs.add_theme_constant_override("v_separation", 4)
 	column.add_child(_tabs)
@@ -229,8 +235,7 @@ func _build_ui() -> void:
 		scroll.add_child(rows)
 		_pages[tab] = scroll
 		match tab:
-			"Graphics": _build_graphics(rows)
-			"Visual Effects": _build_effects(rows)
+			"Video": _build_video(rows)
 			"Controls": _build_controls(rows)
 			"Audio": _build_audio(rows)
 			"Accessibility": _build_accessibility(rows)
@@ -284,33 +289,19 @@ func _note(parent: VBoxContainer, text: String) -> Label:
 	parent.add_child(label)
 	return label
 
-func _build_graphics(rows: VBoxContainer) -> void:
+func _build_video(rows: VBoxContainer) -> void:
 	rows.add_theme_constant_override("separation", 8)
-	_section(rows, "Quality preset")
-	var presets := HBoxContainer.new()
-	presets.add_theme_constant_override("separation", 6)
-	rows.add_child(presets)
-	for i in 4:
-		var button := _button(GameSettings.QUALITY_NAMES[i], presets)
+	_section(rows, "Graphics mode")
+	_preset_grid = GridContainer.new()
+	_preset_grid.add_theme_constant_override("h_separation", 6)
+	rows.add_child(_preset_grid)
+	for i in GameSettings.QUALITY_PRESETS.size():
+		var button := _button(GameSettings.QUALITY_NAMES[i], _preset_grid)
 		button.toggle_mode = true
-		button.pressed.connect(func(): settings.apply_quality_preset(i))
+		button.pressed.connect(settings.apply_quality_preset.bind(i))
 		_preset_buttons.append(button)
 	_quality_status = _note(rows, "")
-	_add_option(rows, "render_resolution", "3D resolution", "Limits world resolution; menus stay sharp. Higher values cost more GPU time.")
-	_advanced_button = _button("Advanced rendering  +", rows)
-	_advanced_button.pressed.connect(func():
-		_advanced.visible = not _advanced.visible
-		_advanced_button.text = "Advanced rendering  −" if _advanced.visible else "Advanced rendering  +")
-	_advanced = VBoxContainer.new()
-	_advanced.add_theme_constant_override("separation", 8)
-	rows.add_child(_advanced)
-	_advanced.visible = false
-	_add_option(_advanced, "anti_aliasing", "Anti-aliasing", "Smooths edges. TAA can soften motion; MSAA costs additional GPU memory.")
-	_add_option(_advanced, "shadow_quality", "Shadow quality", "Resolution and softness of real-time shadows.")
-	_add_option(_advanced, "global_illumination", "Bounce lighting", "Indirect light and colour bleed. Turning this off reduces work when entering new rooms.")
-	_add_option(_advanced, "ambient_occlusion", "Contact shading", "Adds depth where surfaces meet.")
-	_add_option(_advanced, "reflections", "Screen reflections", "Reflections of visible surfaces; static water reflections remain available.")
-	_add_option(_advanced, "volumetric_fog", "Volumetric fog", "Light shafts and lit haze. Distance fog remains in every mode.")
+	_build_camera_looks(rows)
 	_section(rows, "Display")
 	_display_grid = GridContainer.new()
 	_display_grid.add_theme_constant_override("h_separation", 16)
@@ -322,12 +313,10 @@ func _build_graphics(rows: VBoxContainer) -> void:
 		_add_toggle(group, entry[0], entry[1])
 	_controls["vsync"].tooltip_text = "Synchronizes frames with the display to prevent tearing."
 	_add_option(rows, "frame_limit", "Frame limit", "A cap reduces GPU load, heat and power use. Independent of the quality preset.")
-	_add_toggle(rows, "show_fps", "SHOW FPS COUNTER")
-	_controls["show_fps"].tooltip_text = "Shows rendered frames per second and average frame time in milliseconds. Updates twice a second; stays readable over video effects."
-	var calibration := _button("HDR calibration  +", rows)
-	calibration.pressed.connect(func():
+	_hdr_button = _button("HDR calibration  +", rows)
+	_hdr_button.pressed.connect(func():
 		_hdr_group.visible = not _hdr_group.visible
-		calibration.text = "HDR calibration  −" if _hdr_group.visible else "HDR calibration  +")
+		_hdr_button.text = "HDR calibration  −" if _hdr_group.visible else "HDR calibration  +")
 	_hdr_group = VBoxContainer.new()
 	_hdr_group.add_theme_constant_override("separation", 8)
 	rows.add_child(_hdr_group)
@@ -337,9 +326,24 @@ func _build_graphics(rows: VBoxContainer) -> void:
 	_add_slider(_hdr_group, "hdr_brightness")
 	_hdr_status = _note(_hdr_group, "")
 
-func _build_effects(rows: VBoxContainer) -> void:
-	rows.add_theme_constant_override("separation", 8)
-	_section(rows, "Recording look")
+	_advanced_button = _button("Advanced rendering  +", rows)
+	_advanced_button.pressed.connect(func():
+		_advanced.visible = not _advanced.visible
+		_advanced_button.text = "Advanced rendering  −" if _advanced.visible else "Advanced rendering  +")
+	_advanced = VBoxContainer.new()
+	_advanced.visible = false
+	rows.add_child(_advanced)
+	_add_option(_advanced, "render_resolution", "3D resolution", "Changes the resolution of the 3D world. Menus stay sharp.")
+	_add_toggle(_advanced, "cheap_lighting", "CHEAP LIGHTING")
+	_controls["cheap_lighting"].tooltip_text = "Shortens room lighting range, simplifies shadows, and turns off indirect lighting and volumetric fog. The flashlight still casts shadows."
+	_add_toggle(_advanced, "show_fps", "SHOW FPS COUNTER")
+	if video_lab:
+		_video_advanced = _add_collapsed_section(rows, "Developer video lab")
+		_build_quick_effects(_video_advanced)
+		_build_advanced_effects(_video_advanced)
+
+func _build_camera_looks(rows: VBoxContainer) -> void:
+	_section(rows, "Camera look")
 	_look_select = OptionButton.new()
 	_style_button(_look_select)
 	_look_select.get_popup().add_theme_font_override("font",VhsOsd.FONT)
@@ -347,26 +351,16 @@ func _build_effects(rows: VBoxContainer) -> void:
 	_look_select.fit_to_longest_item = false
 	_look_select.custom_minimum_size.y = 48
 	_look_select.add_theme_font_size_override("font_size", 24)
-	_look_select.add_item("Current custom look")
+	_look_select.add_item("Custom camera look")
 	_look_select.set_item_disabled(0,true)
-	for index in LOOKS.LOOKS.size():
-		_look_select.add_item("%02d  %s" % [index+1,LOOKS.LOOKS[index].name])
+	for look_name: String in LOOK_BRIDGE.CAMERA_NAMES:
+		_look_select.add_item(look_name)
 	_look_select.item_selected.connect(_choose_complete_look)
 	rows.add_child(_look_select)
 	_look_description = _note(rows, "")
-	_note(rows,"Start with a preset, then adjust the controls below. Choosing another preset replaces those adjustments. Clean reference removes all video effects.")
-	_build_quick_effects(rows)
-	_section(rows, "Detailed tuning")
 	if not options_only:
-		var workshop := _button("Preview & fine-tune looks…",rows)
+		var workshop := _button("Video Workshop…", rows)
 		workshop.pressed.connect(func(): preset_workshop_requested.emit())
-		_note(rows,"Compare looks in this room, adjust a favorite or save your own preset.")
-	else:
-		_note(rows,"Live preview and detailed signal / CRT tuning are available from the pause menu during gameplay.")
-	if video_lab:
-		_video_advanced = _add_collapsed_section(rows, "Developer video lab")
-		_note(_video_advanced, "Individual signal and CRT controls. Choosing a complete look replaces these adjustments.")
-		_build_advanced_effects(_video_advanced)
 
 func _build_quick_effects(rows: VBoxContainer) -> void:
 	_section(rows, "Recording")
@@ -377,21 +371,14 @@ func _build_quick_effects(rows: VBoxContainer) -> void:
 	_section(rows, "Screen")
 	_add_toggle(rows, "crt_enabled", "CRT SCREEN")
 	_controls["crt_enabled"].tooltip_text = "Switch CRT playback on or off while keeping the chosen model and its tuning."
-	_add_option(rows, "crt_shader", "CRT model", "Choose a screen independently of the recording. Automatic follows graphics quality. Each model keeps its own tuning; detailed controls are available in the live preview.")
+	_add_option(rows, "crt_shader", "CRT model", "Automatic (video quality)")
 	(_controls["crt_shader"] as OptionButton).fit_to_longest_item = false
 
 func _choose_complete_look(item: int) -> void:
-	if item<1 or item>LOOKS.LOOKS.size(): return
+	if item < 1 or item > LOOK_BRIDGE.CAMERA_NAMES.size(): return
 	video_stage_selected.emit("look")
-	var previous := LOOK_BRIDGE.from_settings(settings)
-	var profile := LOOKS.make_profile(item-1)
-	profile.quality = previous.quality
-	profile.reduced_flashing = previous.reduced_flashing
-	profile.auto_world_resolution = previous.auto_world_resolution
-	var before := settings.values.duplicate(true)
-	LOOK_BRIDGE.apply(profile,settings)
-	# An explicit choice also releases launch-only overrides when already saved.
-	if before==settings.values: settings.changed.emit()
+	LOOK_BRIDGE.apply_camera_look(item-1, settings, false)
+	settings.changed.emit()
 
 ## A deliberate menu selection supersedes the corresponding launch override,
 ## including when the saved value already equals the user's selection.
@@ -560,7 +547,8 @@ func _fit_viewport() -> void:
 	_layout.size = logical_size
 	_panel.custom_minimum_size.x = minf(900.0, maxf(300.0, logical_size.x - 48.0))
 	var narrow := logical_size.x < 760.0
-	_tabs.columns = 3 if narrow else 5
+	_tabs.columns = 2 if narrow else TABS.size()
+	_preset_grid.columns = 2 if narrow else _preset_buttons.size()
 	_footer.columns = 2 if narrow else mini(4, _footer.get_child_count())
 	_display_grid.columns = 1 if narrow else 2
 	for page: ScrollContainer in _pages.values():
@@ -784,31 +772,12 @@ func _refresh_controls() -> void:
 			continue
 		var select := _controls[key] as OptionButton
 		select.select(select.get_item_index(int(_menu_value(key))))
-	var crt_enabled := bool(_menu_value("crt_enabled"))
-	var recording := bool(_menu_value("vhs_enabled")) or bool(settings.get_value("receiver_enabled"))
-	var resolution_limit := GraphicsQuality.resolution_limit(crt_enabled,recording) if bool(settings.get_value("video_auto_resolution")) else 5
-	var effective_resolution := GraphicsQuality.resolution_index(settings,crt_enabled,recording)
-	var resolution_label: String = OPTION_LABELS["render_resolution"][effective_resolution]
-	var resolution := _controls["render_resolution"] as OptionButton
-	resolution.disabled = resolution_limit < 5
-	if resolution.disabled:
-		resolution.select(resolution.get_item_index(effective_resolution))
-		resolution.tooltip_text = "Tape and CRT effects limit world resolution to %s to save GPU work. Lower graphics presets stay lower. Turn both off to use your saved %s resolution; menus stay sharp." % [OPTION_LABELS["render_resolution"][resolution_limit], OPTION_LABELS["render_resolution"][int(settings.get_value("render_resolution"))]]
-	else:
-		resolution.tooltip_text = "Limits world resolution; menus stay sharp. Higher values cost more GPU time."
 	var preset := int(settings.get_value("quality_preset"))
 	for i in _preset_buttons.size():
 		_preset_buttons[i].set_pressed_no_signal(preset == i)
-	var quality_note: String = Localization.text(QUALITY_NOTES[preset])
-	if resolution.disabled:
-		var look_resolution := Localization.text("%s for this look") % resolution_label
-		for label in ["360p", "480p", "720p", "1080p", "1440p", "Native resolution"]:
-			if quality_note.contains(label):
-				quality_note = quality_note.replace(label,look_resolution)
-				break
-		if preset == 4:
-			quality_note += Localization.text(" This look uses %s.") % resolution_label
-	_quality_status.text = "%s · %s" % [GameSettings.QUALITY_NAMES[preset].to_upper(), quality_note]
+	var resolution: String = OPTION_LABELS.render_resolution[GraphicsQuality.resolution_index(settings)]
+	_quality_status.text = "%s · %s · %s" % [Localization.text(GameSettings.QUALITY_NAMES[preset]),
+		Localization.text(resolution), Localization.text(QUALITY_NOTES[preset])]
 	_refresh_binding_buttons()
 	if is_instance_valid(_binding_status) and _capturing.is_empty():
 		_binding_status.text = ""
@@ -823,13 +792,14 @@ func _refresh_controls() -> void:
 
 func _refresh_video_controls() -> void:
 	if not settings: return
-	var profile := LOOK_BRIDGE.from_settings(settings)
+	var profile := LOOK_BRIDGE.from_settings(settings, video_overrides)
 	var snapshot: Dictionary = LOOK_IO.encode(profile).settings
-	if snapshot!=_last_look_settings:
+	if snapshot != _last_look_settings:
 		_last_look_settings = snapshot
-		var index := LOOKS.matching_settings(snapshot)
+		var index := LOOK_BRIDGE.matching_camera_look(snapshot)
 		_look_select.select(index+1)
-		_look_description.text = LOOKS.LOOKS[index].description if index>=0 else "Your custom settings are active. Adjust them below, or choose a preset to start over."
+		_look_description.visible = index >= 0
+		if index >= 0: _look_description.text = CAMERA_NOTES[index]
 	if not _controls.has("vhs_distortion"): return
 	var pair: Array = _controls["vhs_distortion"]
 	var slider := pair[0] as HSlider
@@ -915,7 +885,9 @@ func _refresh_hdr_controls() -> void:
 	if not settings or not _controls.has("hdr_enabled") \
 			or not _controls.has("hdr_brightness"):
 		return
-	var supported := HdrOutput.display_server_supported()
+	var supported := HdrOutput.available_on_display(get_window())
+	_hdr_button.visible = supported
+	if not supported: _hdr_group.hide()
 	var requested := bool(settings.get_value("hdr_enabled"))
 	var toggle := _controls["hdr_enabled"] as CheckButton
 	toggle.disabled = not supported

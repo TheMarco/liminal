@@ -226,6 +226,8 @@ func _authored_slot_machine(x: float, z: float, f: float, idx: int,
 	pivot.set_meta("slot_variant", variant)
 	pivot.set_meta("powered", powered)
 	inst.name = "AuthoredCabinet"
+	# Display and standby bindings below are finalized before installation.
+	inst.set_meta(&"fixed_power_bindings", true)
 	inst.set_meta("slot_front_shell", true)
 	inst.set_meta("slot_rear_shell", true)
 	var headroom := Chunk.CASINO_SLOT_SIGN_HEADROOM \

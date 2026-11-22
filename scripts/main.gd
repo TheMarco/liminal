@@ -181,6 +181,9 @@ var _title_covered := false
 var _title_floor_pending := false
 var _diagnostic_settings: Dictionary = {}
 var _applied_graphics: Dictionary = {}
+var _applied_frame_pacing: Array = []
+var _graphics_change_started := 0
+var _graphics_apply_usec := 0
 var _quitting := false
 var _quit_prompt: ReturnPrompt
 var _pause_menu: PauseMenu
@@ -215,7 +218,8 @@ func _ready() -> void:
 	RuntimeDiagnostics.world_viewport = get_viewport()
 	if has_meta("ntscrt_video_host"):
 		get_meta("ntscrt_video_host").pipeline_failed.connect(_on_video_pipeline_failed)
-	_settings = GameSettings.new()
+	if _settings == null:
+		_settings = GameSettings.new()
 	GameSettings.current = _settings
 	_settings.changed.connect(_apply_game_settings)
 	randomize()
@@ -876,6 +880,8 @@ func _prepare_covered_encounters(level: int) -> void:
 	# Draw the destination camera under the opaque menu along with the encounter
 	# samples. Its first frame must be ready before handing control to the player.
 	var host = get_meta("ntscrt_video_host") if has_meta("ntscrt_video_host") else null
+	if host != null and is_instance_valid(host.presenter) and _crt_requested() and DisplayServer.get_name() != "headless":
+		host.presenter.request_royale_prewarm()
 	if _title_covered and host != null:
 		host.set_title_covered(false)
 	cm.set_process(true)
@@ -952,7 +958,7 @@ func _apply_game_settings() -> void:
 	if _settings == null:
 		return
 	var diagnostic_settings := {}
-	for key in GameSettings.QUALITY_KEYS + ["quality_preset", "frame_limit", "vsync", "fullscreen", "hdr_enabled", "vhs_enabled", "crt_enabled", "crt_shader", "video_pipeline", "video_quality_override", "video_auto_resolution"]:
+	for key in GameSettings.QUALITY_KEYS + ["quality_preset", "frame_limit", "vsync", "fullscreen", "hdr_enabled", "vhs_enabled", "crt_enabled", "crt_shader", "video_pipeline", "video_quality_override"]:
 		diagnostic_settings[key] = _settings.get_value(key)
 	if opts != null:
 		diagnostic_settings["launch_video_override"] = opts.video_pipeline_override
@@ -1010,9 +1016,6 @@ func _apply_game_settings() -> void:
 	if _post_process != null:
 		_post_process.set_video_pipeline(_video_pipeline_requested(), _settings.values)
 	_post_enabled = post_enabled
-	# Video choices can change without a graphics-quality change (including
-	# receiver-only and launch overrides). The setter skips unchanged scales.
-	_apply_world_resolution()
 	for mat in [Mats.casino_slot_lights(), Mats.ticker()]:
 		if mat is ShaderMaterial:
 			mat.set_shader_parameter("reduced_flashing", GameSettings.flashing_reduced())
@@ -1021,24 +1024,44 @@ func _apply_game_settings() -> void:
 func _apply_graphics_settings() -> void:
 	if _settings == null:
 		return
+	var cheap_lighting := bool(_settings.get_value("cheap_lighting"))
+	if cheap_lighting != _applied_graphics.get("cheap_lighting", false):
+		GraphicsQuality.refresh_practical_lights(get_tree(), _settings.values)
 	var next := {}
-	for key in GameSettings.QUALITY_KEYS + ["frame_limit", "vsync"]:
+	for key in GameSettings.QUALITY_KEYS:
 		next[key] = _settings.get_value(key)
+	var pacing := [_settings.get_value("frame_limit"), _settings.get_value("vsync")]
 	# Sensitivity, volume and effects sliders also emit changed. They must not
 	# recreate GPU buffers or reconfigure the shadow atlas on every drag.
 	if next == _applied_graphics:
+		if pacing != _applied_frame_pacing:
+			GraphicsQuality.apply_frame_pacing(_settings)
+			_applied_frame_pacing = pacing
 		return
+	var record_change := not _applied_graphics.is_empty() and DisplayServer.get_name() != "headless"
+	var started := Time.get_ticks_usec()
 	_applied_graphics = next
-	GraphicsQuality.apply_viewport(get_viewport(), _settings, opts.notaa, _crt_requested(), _recording_requested())
+	_applied_frame_pacing = pacing
+	GraphicsQuality.apply_viewport(get_viewport(), _settings, opts.notaa)
 	GraphicsQuality.apply_global(_settings)
-	for light in find_children("*", "Light3D", true, false):
-		GraphicsQuality.apply_practical_light(light, _settings.values)
 	if is_instance_valid(we):
 		GraphicsQuality.apply_environment(we.environment, _settings)
 	if is_instance_valid(_realm_visit):
 		_realm_visit.refresh_graphics_quality(_settings)
 	if is_instance_valid(_self_return_door) and is_instance_valid(_self_return_door.site):
 		_self_return_door.site.refresh_graphics_quality(_settings, opts.notaa)
+	if record_change:
+		_graphics_apply_usec += Time.get_ticks_usec() - started
+		if not RenderingServer.frame_post_draw.is_connected(_record_graphics_change):
+			_graphics_change_started = started
+			RenderingServer.frame_post_draw.connect(_record_graphics_change, CONNECT_ONE_SHOT)
+
+
+func _record_graphics_change() -> void:
+	RuntimeDiagnostics.slow("graphics_settings_first_draw", _graphics_change_started,
+		{"apply_ms": _graphics_apply_usec / 1000.0, "quality_preset": _settings.get_value("quality_preset"),
+		"cheap_lighting": _settings.get_value("cheap_lighting")})
+	_graphics_apply_usec = 0
 
 
 func _on_progress_save_failed(error: Error) -> void:
@@ -1225,11 +1248,11 @@ func _open_settings(only_options := false) -> void:
 
 func _open_video_workshop() -> void:
 	if is_instance_valid(_video_workshop) or not has_meta("ntscrt_video_host"): return
-	_select_video_stage("look")
 	_pause_menu.visible = false
 	_video_workshop = preload("res://scripts/video_preset_workshop.gd").new()
 	add_child(_video_workshop)
-	_video_workshop.setup(_settings,get_meta("ntscrt_video_host"))
+	_video_workshop.look_selected.connect(_select_video_stage.bind("look"))
+	_video_workshop.setup(_settings,get_meta("ntscrt_video_host"),_pause_menu.video_overrides)
 	_video_workshop.closed.connect(func():
 		_video_workshop.queue_free()
 		_video_workshop = null
@@ -1472,7 +1495,6 @@ func descent_tape_watch(on: bool) -> void:
 	# together. The decoded video itself has no separate CRT/footage pass.
 	if _post_process != null:
 		_post_process.set_tape_playback(on)
-		_apply_world_resolution()
 	# The tape also owns the soundtrack: score and room tone hold their
 	# breath for it and pick up where they left off.
 	if _music != null:
@@ -2778,16 +2800,9 @@ func _crt_requested() -> bool:
 	return _settings != null and bool(_settings.get_value("crt_enabled"))
 
 
-func _recording_requested() -> bool:
-	if _settings == null: return false
-	var tape := bool(_settings.get_value("vhs_enabled")) if opts == null or opts.vhs_override < 0 else opts.vhs_override == 1
-	return tape or bool(_settings.get_value("receiver_enabled")) \
-		or (is_instance_valid(_post_process) and _post_process._tape_hold)
-
-
 func _apply_world_resolution() -> void:
 	if _settings != null:
-		GraphicsQuality.apply_resolution(get_viewport(), _settings, _crt_requested(), _recording_requested())
+		GraphicsQuality.apply_resolution(get_viewport(), _settings)
 
 
 func _apply_scaling() -> void:
@@ -2823,13 +2838,16 @@ func _apply_hud_scaling() -> void:
 	_interact_panel.set_deferred("size", _interact_panel.custom_minimum_size)
 	call_deferred("_position_interaction_prompt")
 
-	_event_panel.custom_minimum_size = Vector2(
-		viewport_size.x - inset.x * 2.0, 88.0 * scale)
-	_event_panel.position = Vector2(inset.x, viewport_size.y * 0.5 + 24.0 * scale)
 	_event_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_event_hint.custom_minimum_size = Vector2(
 		viewport_size.x - inset.x * 2.0, 0.0)
 	_event_hint.add_theme_font_size_override("font_size", roundi(56.0 * scale))
+	_event_panel.custom_minimum_size = Vector2(
+		viewport_size.x - inset.x * 2.0, 88.0 * scale)
+	# Reset the panel after the label minimum changes so a smaller window does
+	# not retain a stale fullscreen width and captions stay centered.
+	_event_panel.size = _event_panel.custom_minimum_size
+	_event_panel.position = Vector2(inset.x, viewport_size.y * 0.5 + 24.0 * scale)
 
 	# The battery is secondary transport metadata: a compact glyph immediately
 	# left of the counter, aligned to its optical centre. It must never rival the

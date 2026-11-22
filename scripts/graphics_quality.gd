@@ -6,6 +6,9 @@ extends RefCounted
 const RESOLUTION_HEIGHTS := [360.0, 480.0, 720.0, 1080.0, 1440.0, 0.0]
 const VIDEO_SIGNAL_SIZES := [Vector2i(360,240), Vector2i(540,360), Vector2i(720,480), Vector2i(720,480)]
 const VIDEO_OUTPUT_HEIGHTS := [720,1080,1440,0]
+const PREVIEW_SHADOW_ATLAS_SIZE := 2048
+const PRACTICAL_LIGHTS := &"quality_practical_lights"
+const AUTHORED_LIGHT_FADE := &"_quality_authored_light_fade"
 const AUTHORED_META := &"_quality_authored_environment"
 const AUTHORED_KEYS := ["sdfgi_enabled", "sdfgi_cascades", "sdfgi_min_cell_size",
 	"ssao_enabled", "ssr_enabled", "ssr_max_steps", "volumetric_fog_enabled"]
@@ -16,33 +19,81 @@ static func atmosphere_tier(values: Dictionary) -> int:
 	return clampi(int(values.get("shadow_quality", 1)), 0, 3)
 
 ## Walls must occlude fixture light on every tier, including specular highlights.
-## Quality scales the atlas/filter, never whether a source shines through walls.
-## The authored tier is retained as metadata for source audits.
 static func configure_practical_light(light: Light3D, shadow_tier: int) -> void:
 	light.set_meta("practical_shadow_tier", shadow_tier)
-	light.distance_fade_enabled = true
-	light.distance_fade_begin = 24.0
-	light.distance_fade_length = 8.0
-	light.distance_fade_shadow = light.distance_fade_begin
-	var values: Dictionary = GameSettings.current.values if GameSettings.current != null else {"shadow_quality":2}
-	apply_practical_light(light, values)
+	_register_room_light(light)
+	apply_practical_light(light, GameSettings.current.values if GameSettings.current != null else {})
 
-static func apply_practical_light(light: Light3D, _values: Dictionary) -> void:
+## Capture the finished room's normal distances, including any streaming extension.
+## Emitting meshes and gameplay-controlled visibility/energy remain independent.
+static func configure_room_accent(light: Light3D) -> void:
+	if light.has_meta("practical_shadow_tier") or light.has_meta(AUTHORED_LIGHT_FADE):
+		return
+	light.set_meta(AUTHORED_LIGHT_FADE, [light.distance_fade_enabled, light.distance_fade_begin,
+		light.distance_fade_length, light.distance_fade_shadow])
+	_register_room_light(light)
+	apply_practical_light(light, GameSettings.current.values if GameSettings.current != null else {})
+
+static func _register_room_light(light: Light3D) -> void:
+	if not light.is_in_group(PRACTICAL_LIGHTS):
+		light.add_to_group(PRACTICAL_LIGHTS)
+		# A partially built or parked room can miss an in-menu quality switch.
+		light.tree_entered.connect(_sync_practical_light.bind(light))
+
+static func _sync_practical_light(light: Light3D) -> void:
+	var values: Dictionary = GameSettings.current.values if GameSettings.current != null else {}
+	if light.get_meta(&"cheap_lighting") != values.get("cheap_lighting", false):
+		apply_practical_light(light, values)
+
+static func refresh_practical_lights(tree: SceneTree, values: Dictionary) -> void:
+	for light: Light3D in tree.get_nodes_in_group(PRACTICAL_LIGHTS):
+		apply_practical_light(light, values)
+
+static func apply_practical_light(light: Light3D, values: Dictionary) -> void:
+	var cheap := bool(values.get("cheap_lighting", false))
+	light.set_meta(&"cheap_lighting", cheap)
+	if light.has_meta(AUTHORED_LIGHT_FADE):
+		var base: Array = light.get_meta(AUTHORED_LIGHT_FADE)
+		var begin := 16.0 if light.get_meta("stream_room_light", false) else 7.0
+		var length := 6.0
+		if base[0]:
+			begin = minf(begin, base[1])
+			length = minf(length, base[2])
+		light.distance_fade_enabled = cheap or bool(base[0])
+		light.distance_fade_begin = begin if cheap else float(base[1])
+		light.distance_fade_length = length if cheap else float(base[2])
+		light.distance_fade_shadow = begin + length if cheap else float(base[3])
+		return
 	if not light.has_meta("practical_shadow_tier"): return
+	var begin := 24.0
+	var length := 8.0
+	if cheap:
+		# Keep the main pool of light visible farther down the hall. Secondary
+		# fixtures and ceiling bounce yield first as the player moves away.
+		var tier := int(light.get_meta("practical_shadow_tier"))
+		if light.get_meta("fixture_upward", false):
+			begin = 4.0
+			length = 5.0
+		else:
+			begin = 7.0
+			if tier <= 1: begin = 16.0
+			elif tier == 2: begin = 10.0
+			length = 6.0
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = begin
+	light.distance_fade_length = length
 	light.shadow_enabled = true
 	light.shadow_opacity = 1.0
-	# Fading the blocker earlier than the source reintroduces phantom highlights.
-	light.distance_fade_shadow = light.distance_fade_begin
+	# Godot fades shadow opacity separately. If both fades start together,
+	# a distant fixture shines through the wall for part of its fade.
+	light.distance_fade_shadow = begin + length if cheap else begin
 
 static func video_tier(values: Dictionary) -> int:
 	var explicit := int(values.get("video_quality_override",-1))
 	if explicit in range(4): return explicit
-	# Standalone/reference callers without game quality retain original sizing.
-	var preset := int(values.get("quality_preset",3))
-	if preset in range(4): return preset
-	# Custom keeps a predictable budget based on the saved world resolution.
-	# The look's temporary world cap must not promote/demote the video tier.
-	return [0,1,2,2,2,3][clampi(int(values.get("render_resolution",1)),0,5)]
+	# The game's default recording budget is fixed. Standalone reference
+	# renderers without game settings use the original full signal size.
+	return 1 if values.has("video_quality_override") else 3
 
 static func video_signal_size(values: Dictionary) -> Vector2i:
 	# The developer's Efficient choice can reduce the budget further. Explicit
@@ -67,33 +118,26 @@ static func apply_environment(environment: Environment, settings: GameSettings) 
 			authored[key] = environment.get(key)
 		environment.set_meta(AUTHORED_META, authored)
 	var base: Dictionary = environment.get_meta(AUTHORED_META)
+	var cheap := bool(settings.get_value("cheap_lighting"))
 	var gi := int(settings.get_value("global_illumination"))
 	# Configure before enabling: switching from Low to Ultra should allocate
 	# only the destination GI grid, rather than an intermediate one.
 	environment.sdfgi_cascades = 2 if gi == 1 else int(base.sdfgi_cascades)
 	environment.sdfgi_min_cell_size = 0.3 if gi == 1 else float(base.sdfgi_min_cell_size)
-	environment.sdfgi_enabled = bool(base.sdfgi_enabled) and gi > 0
+	environment.sdfgi_enabled = not cheap and bool(base.sdfgi_enabled) and gi > 0
 	environment.ssao_enabled = bool(base.ssao_enabled) and int(settings.get_value("ambient_occlusion")) > 0
 	var reflections := int(settings.get_value("reflections"))
 	environment.ssr_max_steps = mini(16, int(base.ssr_max_steps)) if reflections == 1 else int(base.ssr_max_steps)
 	environment.ssr_enabled = bool(base.ssr_enabled) and reflections > 0
-	environment.volumetric_fog_enabled = bool(base.volumetric_fog_enabled) and int(settings.get_value("volumetric_fog")) > 0
+	environment.volumetric_fog_enabled = not cheap and bool(base.volumetric_fog_enabled) and int(settings.get_value("volumetric_fog")) > 0
 	# Ordinary distance fog, direct lights and emissive glow remain authored:
 	# even Low keeps navigable rooms and a concealed streaming horizon.
 
-static func resolution_limit(crt_enabled: bool, tape_enabled: bool) -> int:
-	# Indices follow RESOLUTION_HEIGHTS; Native (5) means no cap.
-	return 1 if crt_enabled else (2 if tape_enabled else 5)
+static func resolution_index(settings: GameSettings, _crt_enabled := false, _tape_enabled := false) -> int:
+	return int(settings.get_value("render_resolution"))
 
-static func resolution_index(settings: GameSettings, crt_enabled: bool, tape_enabled: bool) -> int:
-	if not bool(settings.get_value("video_auto_resolution")):
-		return int(settings.get_value("render_resolution"))
-	# A degraded recording cannot retain native/Retina world detail. Keep
-	# lower quality choices lower, and preserve the saved choice for Clean.
-	return mini(int(settings.get_value("render_resolution")), resolution_limit(crt_enabled,tape_enabled))
-
-static func apply_resolution(viewport: Viewport, settings: GameSettings, crt_enabled := false, tape_enabled := false) -> void:
-	var height: float = RESOLUTION_HEIGHTS[resolution_index(settings,crt_enabled,tape_enabled)]
+static func apply_resolution(viewport: Viewport, settings: GameSettings, _crt_enabled := false, _tape_enabled := false) -> void:
+	var height: float = RESOLUTION_HEIGHTS[resolution_index(settings)]
 	var scale := clampf(height / maxf(1.0, viewport.get_visible_rect().size.y), 0.05, 1.0) if height > 0.0 else 1.0
 	if viewport.scaling_3d_mode != Viewport.SCALING_3D_MODE_BILINEAR:
 		viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
@@ -131,13 +175,13 @@ static func doorway_render_scale(camera: Camera3D, window: MeshInstance3D,
 	return 1.0
 
 
-static func apply_viewport(viewport: Viewport, settings: GameSettings, disable_taa := false, crt_enabled := false, tape_enabled := false) -> void:
-	apply_resolution(viewport, settings, crt_enabled, tape_enabled)
+static func apply_viewport(viewport: Viewport, settings: GameSettings, disable_taa := false) -> void:
+	apply_resolution(viewport, settings)
 	apply_viewport_features(viewport, settings, disable_taa)
 
 ## Realm preview textures already follow the main world's pixel density. They
 ## need the same AA/shadows without a second resolution reduction.
-static func apply_viewport_features(viewport: Viewport, settings: GameSettings, disable_taa := false) -> void:
+static func apply_viewport_features(viewport: Viewport, settings: GameSettings, disable_taa := false, atlas_limit := 0) -> void:
 	var aa := int(settings.get_value("anti_aliasing"))
 	viewport.use_taa = (aa == 2 or aa == 5) and not disable_taa
 	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if aa == 1 else Viewport.SCREEN_SPACE_AA_DISABLED
@@ -146,7 +190,13 @@ static func apply_viewport_features(viewport: Viewport, settings: GameSettings, 
 	var shadows := int(settings.get_value("shadow_quality"))
 	# Uniform 8x8 quadrants (see configure_shadow_atlas): every tile is 1/16 of
 	# the atlas edge, so 128/256/512/512 pixels per fixture.
-	viewport.positional_shadow_atlas_size = [2048, 4096, 8192, 8192][shadows]
+	var atlas_size: int = [2048, 4096, 8192, 8192][shadows]
+	if settings.get_value("cheap_lighting"):
+		atlas_size = mini(atlas_size, 4096)
+	if atlas_limit > 0:
+		atlas_size = mini(atlas_size, atlas_limit)
+	if viewport.positional_shadow_atlas_size != atlas_size:
+		viewport.positional_shadow_atlas_size = atlas_size
 	configure_shadow_atlas(viewport)
 	# The world is at most 480/720 lines under the default looks: a two to
 	# three pixel LOD error and 4x anisotropy are invisible there, but they cut
@@ -172,6 +222,8 @@ static func apply_global(settings: GameSettings) -> void:
 	var shadow_filter: RenderingServer.ShadowQuality = [
 		RenderingServer.SHADOW_QUALITY_HARD, RenderingServer.SHADOW_QUALITY_SOFT_LOW,
 		RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM][shadows]
+	if settings.get_value("cheap_lighting"):
+		shadow_filter = RenderingServer.SHADOW_QUALITY_HARD
 	RenderingServer.positional_soft_shadow_filter_set_quality(shadow_filter)
 	RenderingServer.directional_soft_shadow_filter_set_quality(shadow_filter)
 	var ao := int(settings.get_value("ambient_occlusion"))
@@ -184,6 +236,9 @@ static func apply_global(settings: GameSettings) -> void:
 	RenderingServer.environment_set_sdfgi_frames_to_update_light(RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_8_FRAMES if gi < 2 else RenderingServer.ENV_SDFGI_UPDATE_LIGHT_IN_4_FRAMES)
 	var fog := int(settings.get_value("volumetric_fog"))
 	RenderingServer.environment_set_volumetric_fog_volume_size(64 if fog < 2 else 96, 64 if fog < 2 else 96)
+	apply_frame_pacing(settings)
+
+static func apply_frame_pacing(settings: GameSettings) -> void:
 	Engine.max_fps = int(settings.get_value("frame_limit"))
 	if DisplayServer.get_name() != "headless":
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(settings.get_value("vsync")) else DisplayServer.VSYNC_DISABLED)

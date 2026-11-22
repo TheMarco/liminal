@@ -206,6 +206,14 @@ func _indexed_room() -> void:
 	changed.mesh = replaced.mesh
 	changed.material_override = original
 	holder.add_child(changed)
+	var fixed_root := Node3D.new()
+	fixed_root.set_meta(&"fixed_power_bindings", true)
+	holder.add_child(fixed_root)
+	var fixed := MeshInstance3D.new()
+	fixed.mesh = BoxMesh.new()
+	fixed.mesh.material = original
+	fixed_root.add_child(fixed)
+	fixed.owner = fixed_root
 	root.add_child(room)
 	var current := original.duplicate() as StandardMaterial3D
 	current.emission_enabled = true
@@ -213,9 +221,12 @@ func _indexed_room() -> void:
 	replaced.material_override = current
 	original.emission_enabled = true
 	room.set_blackout(true)
+	expect(fixed.get_active_material(0) != original, "A fixed imported surface stayed lit")
 	expect(replaced.material_override != current and replaced.material_override.albedo_color == Color.CORAL
 		and changed.material_override != original, "indexed bindings missed a replacement or newly powered material")
 	room.set_blackout(false)
+	expect(fixed.get_surface_override_material(0) == null and fixed.get_active_material(0) == original,
+		"Restoring a fixed imported surface left a stale override")
 	expect(replaced.material_override == current and changed.material_override == original, "indexed bindings restored stale materials")
 	var late := OmniLight3D.new()
 	holder.add_child(late)
@@ -224,6 +235,7 @@ func _indexed_room() -> void:
 	removed.free()
 	room.set_blackout(true)
 	expect(not late.visible, "late nested light stayed powered")
+	fixed.free()
 	replaced.free()
 	room.set_blackout(false)
 	expect(late.visible, "late light failed to recover after removing an indexed mesh")

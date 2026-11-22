@@ -323,6 +323,12 @@
     "scripts/pause_menu.gd:285",
     "scripts/pause_menu.gd:781"
   ],
+  "CHEAP LIGHTING": [
+    "scripts/pause_menu.gd:300"
+  ],
+  "Shortens room lighting range, simplifies shadows, and turns off indirect lighting and volumetric fog. The flashlight still casts shadows.": [
+    "scripts/pause_menu.gd:301"
+  ],
   "Advanced rendering  +": [
     "scripts/pause_menu.gd:286",
     "scripts/pause_menu.gd:289"
@@ -2332,9 +2338,9 @@
     "scripts/video_preset_workshop_panel.gd:114",
     "scripts/video_preset_workshop_panel.gd:440"
   ],
-  "Browsing keeps your graphics budget and reduced-flashing preference.": [
-    "scripts/video_preset_workshop_panel.gd:115",
-    "scripts/video_preset_workshop_panel.gd:441"
+  "Browsing keeps your signal detail and Reduced Flashing settings.": [
+    "scripts/video_preset_workshop_panel.gd:116",
+    "scripts/video_preset_workshop_panel.gd:443"
   ],
   "Preview this look's tape damage": [
     "scripts/video_preset_workshop_panel.gd:116"
@@ -4413,5 +4419,70 @@
   ],
   "5 · Fashion and Accessories": [
     "localization/art_text.json"
+  ],
+  "Video": [
+    "scripts/pause_menu.gd:37",
+    "scripts/pause_menu.gd:94",
+    "scripts/pause_menu.gd:238"
+  ],
+  "GRAPHICS MODE": [
+    "scripts/pause_menu.gd:294"
+  ],
+  "CAMERA LOOK": [
+    "scripts/pause_menu.gd:346"
+  ],
+  "Performance": [
+    "scripts/game_settings.gd:173"
+  ],
+  "Quality": [
+    "scripts/game_settings.gd:173"
+  ],
+  "Camcorder": [
+    "scripts/pause_menu.gd:107",
+    "scripts/video_preset_bridge.gd:5",
+    "scripts/video_preset_profile.gd:58",
+    "scripts/video_preset_workshop_panel.gd:193"
+  ],
+  "VHS on TV": [
+    "scripts/video_preset_bridge.gd:5"
+  ],
+  "Short-range lights and hard shadows for slower GPUs.": [
+    "scripts/pause_menu.gd:155"
+  ],
+  "Efficient lighting with smoother edges and subtle reflections.": [
+    "scripts/pause_menu.gd:156"
+  ],
+  "Full lighting with soft shadows and illuminated haze.": [
+    "scripts/pause_menu.gd:157"
+  ],
+  "Finest shadows, reflections and volumetric fog.": [
+    "scripts/pause_menu.gd:158"
+  ],
+  "Your custom world settings are active.": [
+    "scripts/pause_menu.gd:159"
+  ],
+  "A clear picture with recording and TV effects off.": [
+    "scripts/pause_menu.gd:162"
+  ],
+  "Subtle camcorder grain and color bleed.": [
+    "scripts/pause_menu.gd:163"
+  ],
+  "Warm VHS playback on a softly glowing CRT.": [
+    "scripts/pause_menu.gd:164"
+  ],
+  "Video Workshop…": [
+    "scripts/pause_menu.gd:362"
+  ],
+  "Changes the resolution of the 3D world. Menus stay sharp.": [
+    "scripts/pause_menu.gd:336"
+  ],
+  "Custom camera look": [
+    "scripts/pause_menu.gd:354"
+  ],
+  "Automatic (video quality)": [
+    "scripts/pause_menu.gd:108",
+    "scripts/pause_menu.gd:374",
+    "scripts/video_preset_workshop_panel.gd:231",
+    "scripts/video_preset_workshop_panel.gd:234"
   ]
 }

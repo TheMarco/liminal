@@ -37,41 +37,27 @@ func run() -> void:
 	menu.open()
 	paused = true
 	await settle()
-	check(menu._look_select.item_count==21, "player settings omitted complete looks")
-	menu._select_tab("Visual Effects")
-	for name in ["vhs_enabled", "vhs_distortion", "film_grain", "crt_enabled", "crt_shader"]:
-		var control: Control = menu._controls[name][0] if menu._controls[name] is Array else menu._controls[name]
-		check(control.is_visible_in_tree(), "everyday video control hidden: " + name)
-	check(not menu._controls.has("video_pipeline") and not is_instance_valid(menu._video_advanced),
-		"developer signal controls leaked into the everyday menu")
-	menu._look_select.item_selected.emit(10)
-	check(menu._look_select.selected==10 and settings.get_value("vhs_enabled")
-		and not settings.get_value("crt_enabled"), "archive tape look did not apply completely")
-	menu._look_select.item_selected.emit(15)
-	check(menu._look_select.selected==15 and settings.get_value("vhs_enabled")
-		and settings.get_value("crt_enabled"), "living-room look did not restore both stages")
-	menu._controls["crt_shader"].item_selected.emit(4)
-	check(settings.get_value("crt_shader")==4, "direct CRT model choice did not apply")
+	check(menu._look_select.item_count == 4 and menu._look_select.selected == 2, "expected three camera looks and Camcorder selected")
+	menu._select_tab("Video")
+	for key in ["vhs_enabled", "vhs_distortion", "film_grain", "crt_enabled", "crt_shader", "video_pipeline"]:
+		check(not menu._controls.has(key), "detailed video control leaked into the player menu: " + key)
+	check(not is_instance_valid(menu._video_advanced), "developer controls constructed in player settings")
+	menu._look_select.item_selected.emit(3)
+	check(menu._look_select.selected == 3 and settings.get_value("vhs_enabled")
+		and settings.get_value("crt_enabled"), "VHS on TV did not restore both stages")
+	settings.set_value("film_grain", 0.23)
+	settings.set_value("vhs_distortion", 0.37)
 	var custom := settings.values.duplicate(true)
-	for key in ["crt_enabled", "vhs_enabled"]:
-		menu._controls[key].toggled.emit(false)
-		check(not settings.get_value(key), "direct switch did not bypass " + key)
-		menu._controls[key].toggled.emit(true)
-		check(settings.values==custom, "video switch replaced the chosen model or tuning: " + key)
-	menu._controls["film_grain"][0].value = 0.23
-	custom.film_grain = 0.23
-	menu._controls["vhs_distortion"][0].value = 0.37
-	custom.vhs_distortion = 0.37
-	check(settings.values==custom and menu._look_select.selected==0,
-		"direct sliders changed unrelated settings or failed to mark the look custom")
+	check(menu._look_select.selected == 0, "adjusted camera look is not marked Custom")
+	menu._preset_buttons[3].pressed.emit()
 	settings.save_to_disk()
-	var restored := GameSettings.new(path)
+	var restored_world := GameSettings.new(path)
 	for key: String in custom:
-		check(restored.values[key]==custom[key], "direct video adjustments did not persist: " + key)
+		if key not in GameSettings.QUALITY_KEYS and key != "quality_preset":
+			check(restored_world.get_value(key) == custom[key], "graphics or reload changed camera settings: " + key)
 	menu._look_select.item_selected.emit(1)
 	check(not settings.get_value("vhs_enabled") and not settings.get_value("crt_enabled")
-		and is_zero_approx(settings.get_value("film_grain")), "clean look left recording effects active")
-	check(not menu._controls["vhs_distortion"][0].editable, "tape strength remained active with recording off")
+		and is_zero_approx(settings.get_value("film_grain")), "Clean left recording effects active")
 	var resumes: Array[bool] = []
 	var quits: Array[bool] = []
 	menu.resumed.connect(func(): resumes.append(true))
@@ -91,7 +77,7 @@ func run() -> void:
 	await settle()
 	check(is_equal_approx(settings.get_value("sensitivity"), GameSettings.DEFAULTS.sensitivity), "confirm reset did not restore defaults")
 	check(menu._reset_button.has_focus(), "confirm reset lost keyboard focus")
-	menu._select_tab("Visual Effects")
+	menu._select_tab("Video")
 	for extent in [Vector2i(640, 480), Vector2i(720, 1280), Vector2i(1280, 720), Vector2i(3840, 2160), Vector2i(640, 480)]:
 		root.size = extent
 		await settle()
@@ -104,11 +90,11 @@ func run() -> void:
 			await settle()
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_png("/tmp/liminal-video-menu-top.png")
-		for control in [menu._controls["film_grain"][0], menu._controls["crt_shader"]]:
+		for control in [menu._preset_buttons[0], menu._look_select, menu._controls["frame_limit"]]:
 			control.grab_focus()
 			await settle()
 			check(menu._scroll.get_global_rect().grow(1).encloses(control.get_global_rect()),
-				"direct video control cannot be reached at %s" % extent)
+				"video control cannot be reached at %s" % extent)
 		if DisplayServer.get_name() != "headless" and extent == Vector2i(1280, 720):
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_png("/tmp/liminal-video-menu-controls.png")

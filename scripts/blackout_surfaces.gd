@@ -11,6 +11,11 @@ var _labels := {}
 var _by_override: Dictionary[Material, Array] = {}
 var _other_visuals: Array[Node] = []
 var _switched_overrides: Dictionary[Material, Array] = {}
+## Opt-in authored meshes keep their bindings for their lifetime. Group the
+## bindings at room installation so inert cabinet parts cost nothing to switch.
+## Source properties (including next passes) are still read at each outage.
+var _fixed_bindings: Dictionary[Material, Array] = {}
+var _switched_fixed: Array[Array] = []
 
 static func clear_cache() -> void:
 	_shader_power.clear()
@@ -91,10 +96,20 @@ func apply(root: Node, variants: Dictionary = {}) -> void:
 
 func index_visuals(visuals: Array[Node]) -> void:
 	_by_override.clear()
+	_fixed_bindings.clear()
 	_other_visuals.clear()
 	for node in visuals:
 		var mesh := node as MeshInstance3D
-		if mesh != null and mesh.material_override != null and mesh.material_overlay == null:
+		if mesh != null and mesh.mesh != null and mesh.material_overlay == null \
+				and mesh.owner != null and mesh.owner.has_meta(&"fixed_power_bindings"):
+			if mesh.material_override != null:
+				_fixed_bindings.get_or_add(mesh.material_override, []).append([mesh, -1, mesh.material_override])
+			else:
+				for surface in mesh.mesh.get_surface_count():
+					var source := mesh.get_active_material(surface)
+					if source != null:
+						_fixed_bindings.get_or_add(source, []).append([mesh, surface, mesh.get_surface_override_material(surface)])
+		elif mesh != null and mesh.material_override != null and mesh.material_overlay == null:
 			var group: Array = _by_override.get_or_add(mesh.material_override, [])
 			group.append(mesh)
 		else:
@@ -102,6 +117,18 @@ func index_visuals(visuals: Array[Node]) -> void:
 
 
 func apply_indexed(variants: Dictionary) -> void:
+	for source: Material in _fixed_bindings:
+		var dark := off_material(source, variants)
+		if dark == source:
+			continue
+		var bindings: Array = _fixed_bindings[source]
+		for binding: Array in bindings:
+			var mesh: MeshInstance3D = binding[0]
+			if binding[1] == -1:
+				mesh.material_override = dark
+			else:
+				mesh.set_surface_override_material(binding[1], dark)
+		_switched_fixed.append(bindings)
 	# Group by original binding only. Read its current shader, emission and
 	# next pass at the switch, and check for changes to individual instances.
 	var rebound: Array[Node] = []
@@ -170,6 +197,15 @@ func apply_visuals(visuals: Array[Node], variants: Dictionary) -> void:
 				mesh.material_overlay = dark_overlay
 
 func restore() -> void:
+	for bindings in _switched_fixed:
+		for binding: Array in bindings:
+			if is_instance_valid(binding[0]):
+				var mesh: MeshInstance3D = binding[0]
+				if binding[1] == -1:
+					mesh.material_override = binding[2]
+				else:
+					mesh.set_surface_override_material(binding[1], binding[2])
+	_switched_fixed.clear()
 	for source: Material in _switched_overrides:
 		for mesh in _switched_overrides[source]:
 			if is_instance_valid(mesh):

@@ -9,7 +9,6 @@ static var _fountain_meshes: Dictionary = {}
 static func clear_runtime_cache() -> void:
 	_painted_sign_materials.clear()
 	_fountain_meshes.clear()
-	MallPalm.clear_runtime_cache()
 
 
 ## Prepare finite gallery, shop-sign and poster families behind the floor fade.
@@ -824,8 +823,12 @@ func _mall_store() -> void:
 		if runs >= 3:
 			break
 		if _solid_wall(d):
-			_mall_shelves(d, 1644 + d)
+			scene.build_job(_mall_shelves.bind(d, 1644 + d))
 			runs += 1
+	scene.build_job(_mall_store_furnishings)
+
+
+func _mall_store_furnishings() -> void:
 	_mall_display_table(Vector3(4.6, 0, 6.0), PI / 2.0, 1640)
 	_mall_rack(Vector3(7.6, 0, 4.6), ctx.random01(1646) * 0.5, 1647)
 	_mall_rack(Vector3(7.2, 0, 7.6), PI / 2.0 + ctx.random01(1648) * 0.5, 1649)
@@ -885,8 +888,12 @@ func _mall_anchor() -> void:
 	for p in [Vector3(3, 0, 3), Vector3(9, 0, 3), Vector3(3, 0, 9), Vector3(9, 0, 9)]:
 		scene.cylinder(p + Vector3(0, ctx.ceiling_height * 0.5, 0), 0.26, ctx.ceiling_height, Mats.mall_trim())
 	# gondola rows down the sales floor, aisles between
-	_mall_gondola(Vector3(6.0, 0, 4.3), 0, 5.2, 1660)
-	_mall_gondola(Vector3(6.0, 0, 7.7), 0, 5.2, 1665)
+	scene.build_job(_mall_gondola.bind(Vector3(6.0, 0, 4.3), 0, 5.2, 1660))
+	scene.build_job(_mall_gondola.bind(Vector3(6.0, 0, 7.7), 0, 5.2, 1665))
+	scene.build_job(_mall_anchor_checkout)
+
+
+func _mall_anchor_checkout() -> void:
 	_mall_display_table(Vector3(6, 0, 1.9), 0, 1670)
 	# checkout lane by one clear corner
 	_mall_counter(Vector3(9.8, 0, 10.0), -PI / 2.0)
@@ -947,7 +954,11 @@ func _mall_foodcourt() -> void:
 	# six bolted tables in ranks, an aisle down the middle
 	for i in 6:
 		var p = Vector3(2.9 + 3.1 * float(i % 3), 0, 3.6 + 4.6 * float(i / 3))
-		_mall_food_table(p, 1680 + i)
+		scene.build_job(_mall_food_table.bind(p, 1680 + i))
+	scene.build_job(_mall_foodcourt_serving_line)
+
+
+func _mall_foodcourt_serving_line() -> void:
 	# the serving line: counter run and dead menu boxes on the first solid wall
 	for d in [3, 2, 1, 0]:
 		if not _solid_wall(d):

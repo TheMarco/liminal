@@ -35,8 +35,8 @@ func run() -> void:
 	settings.changed.connect(game._apply_game_settings)
 	settings.apply_quality_preset(3)
 	game._apply_game_settings()
-	expect(is_equal_approx(root.scaling_3d_scale, minf(480.0 / root.get_visible_rect().size.y, 1.0)),
-		"CRT on did not force its 480p source at Ultra")
+	expect(is_equal_approx(root.scaling_3d_scale, minf(1440.0 / root.get_visible_rect().size.y, 1.0)),
+		"Ultra did not select its 1440p world budget")
 	game._build_title(true)
 	await process_frame
 	var title: TitleScreen = game._title
@@ -46,10 +46,11 @@ func run() -> void:
 		title_text += str(button.text) + "\n"
 	expect(not title_text.contains("VHS EFFECT") and not title_text.contains("CRT EFFECT"),
 		"title still exposes video-effect switches")
-	expect(game._post_process.is_vhs_enabled() and game._post_process.is_crt_enabled(),
-		"default did not restore the combined VHS + CRT presentation")
+	expect(game._post_process.is_vhs_enabled() and not game._post_process.is_crt_enabled(),
+		"default Camcorder did not restore tape with the CRT off")
 	expect(not game._post_process.is_curvature_enabled(),
 		"default flat CRT preference did not reach the display stage")
+	settings.set_value("crt_enabled", true)
 	settings.set_value("crt_curvature", true)
 	game._apply_game_settings()
 	expect(game._post_process.is_crt_enabled()
@@ -64,7 +65,7 @@ func run() -> void:
 	game._apply_game_settings()
 	expect(game._post_process.is_vhs_enabled() and not game._post_process.is_crt_enabled()
 		and game._post_enabled, "saved CRT switch did not isolate VHS")
-	expect(is_equal_approx(root.scaling_3d_scale, minf(720.0/root.get_visible_rect().size.y,1.0)), "VHS-only did not cap Ultra at 720p")
+	expect(is_equal_approx(root.scaling_3d_scale, minf(1440.0/root.get_visible_rect().size.y,1.0)), "VHS-only changed Ultra world resolution")
 	expect(not bool(GameSettings.new(path).get_value("crt_enabled")),
 		"CRT choice was not persisted")
 	settings.set_value("vhs_enabled", false)
@@ -81,8 +82,8 @@ func run() -> void:
 	game._apply_game_settings()
 	expect(not game._post_process.is_vhs_enabled() and game._post_process.is_crt_enabled()
 		and game._post_enabled, "saved CRT switch did not apply independently")
-	expect(is_equal_approx(root.scaling_3d_scale, minf(480.0 / root.get_visible_rect().size.y, 1.0)),
-		"CRT-only did not force 480p while VHS stayed off")
+	expect(is_equal_approx(root.scaling_3d_scale, minf(1440.0 / root.get_visible_rect().size.y, 1.0)),
+		"CRT-only changed Ultra world resolution")
 	expect(bool(GameSettings.new(path).get_value("crt_enabled")),
 		"CRT choice was not persisted")
 	expect(not game._post_process.is_curvature_enabled()
@@ -92,7 +93,9 @@ func run() -> void:
 	expect(not game._fps_counter.visible and not game._fps_counter.is_processing(),
 		"FPS counter should be opt-in and idle when hidden")
 	var fps_toggle: CheckButton = game._pause_menu._controls["show_fps"]
-	expect(fps_toggle.is_visible_in_tree(), "FPS toggle hidden behind advanced settings")
+	expect(not fps_toggle.is_visible_in_tree(), "Advanced should start collapsed")
+	game._pause_menu._advanced_button.pressed.emit()
+	expect(fps_toggle.is_visible_in_tree(), "Advanced did not expose the FPS counter")
 	fps_toggle.button_pressed = true
 	expect(game._fps_counter.visible and game._fps_counter.is_processing(),
 		"FPS toggle did not enable the live counter")
@@ -105,10 +108,10 @@ func run() -> void:
 		"FPS counter keeps running after being disabled")
 	# Restore the CRT-only state expected by the remaining input checks.
 	settings.set_value("crt_enabled", true)
-	expect(game._pause_menu._look_select.item_count==21
-		and game._pause_menu._controls.has("vhs_enabled")
-		and game._pause_menu._controls.has("crt_enabled"),
-		"title settings omitted presets or direct video controls")
+	expect(game._pause_menu._look_select.item_count==4
+		and not game._pause_menu._controls.has("vhs_enabled")
+		and not game._pause_menu._controls.has("crt_enabled"),
+		"title settings should expose three camera looks and keep detailed controls in the workshop")
 	game._close_settings()
 	await process_frame
 	# Activate Wander through its focused button, not an action-specific shortcut.
@@ -129,10 +132,10 @@ func run() -> void:
 		expect(paused and is_instance_valid(game._pause_menu) and game._pause_menu.visible,
 			"Escape did not show Wander pause (physical_only=%s)" % physical_only)
 		if is_instance_valid(game._pause_menu):
-			expect(game._pause_menu._look_select.item_count==21
-				and game._pause_menu._controls.has("vhs_enabled")
-				and game._pause_menu._controls.has("crt_enabled"),
-				"gameplay settings omitted presets or direct video controls")
+			expect(game._pause_menu._look_select.item_count==4
+				and not game._pause_menu._controls.has("vhs_enabled")
+				and not game._pause_menu._controls.has("crt_enabled"),
+				"gameplay settings should expose three camera looks and keep detailed controls in the workshop")
 		key(KEY_ESCAPE, physical_only, true, true)
 		expect(paused, "held Escape immediately dismissed pause")
 		key(KEY_ESCAPE, physical_only)

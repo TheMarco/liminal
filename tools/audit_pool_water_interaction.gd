@@ -114,6 +114,7 @@ func run() -> void:
 	player.teleport(Vector3(5, 1.8, 0))
 	check(player_fx.events.is_empty() and not player_fx._initialized, "Player teleport retained disturbances/contact history")
 	check(not player._water_audio_primed, "Player teleport retained water audio history")
+	await check_walking_in_water(player)
 	player.water_y = -1.0e9
 	check(player._water_surface_here() < DRY and player._water_fx == null, "Player retained pool effects on a dry floor")
 	await process_frame
@@ -123,3 +124,28 @@ func run() -> void:
 	if failures.is_empty(): print("PASS pool water interaction audit")
 	else: quit(1); return
 	quit()
+
+func check_walking_in_water(player: Player) -> void:
+	var basin := plane(Vector2(10, 10), Vector3(16, 0.18, 0))
+	var bottom := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(10, 0.2, 10)
+	shape.shape = box
+	bottom.add_child(shape)
+	bottom.position = Vector3(16, -0.1, 0)
+	world.add_child(bottom)
+	player.teleport(Vector3(16, 0.03, 2))
+	player.dev_walk = true
+	player.set_physics_process(true)
+	for tick in 24: await physics_frame
+	check(player.is_on_floor() and player._bob > 0.0 and player._walk_p.playing,
+		"shallow water lost grounded footsteps or head bob")
+	basin.position.y = 0.95
+	var last_step := player._bob
+	for tick in 42: await physics_frame
+	check(player.is_on_floor() and player._water_fx._wet and player._wade_p.playing,
+		"deep water movement lost its contact or water audio")
+	check(not player._walk_p.playing and is_equal_approx(player._bob, last_step),
+		"deep water kept grounded footsteps or head bob")
+	player.set_physics_process(false)

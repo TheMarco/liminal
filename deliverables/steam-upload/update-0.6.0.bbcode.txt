@@ -1,0 +1,17 @@
+[h1]Update 0.6.0 — Graphics modes and camera looks[/h1]
+
+Open [b]Settings → Video[/b] to choose how the world renders and how the camera records it. You can play on Performance with VHS on TV, or turn the tape effects off and explore on Ultra.
+
+[list]
+[*][b]Performance and Balanced[/b] use shorter-range lighting to ease the load on your GPU. Start with Performance if the game feels uneven. Balanced sharpens the picture and smooths edges. Both keep the flashlight working and let rooms go dark during blackouts.
+[*][b]Quality and Ultra[/b] add higher 3D resolutions, soft shadows, reflections and volumetric fog. Under Advanced rendering, you can also try Cheap Lighting at your preferred resolution.
+[*][b]Clean, Camcorder and VHS on TV[/b] work with every graphics mode. Camcorder keeps fine detail with a little grain and color bleed. VHS on TV adds tape playback and a glowing CRT. Existing custom looks carry over, and all 20 looks are still in the Video Workshop.
+[/list]
+
+[h2]Fixes around the building[/h2]
+[list]
+[*]Prison cell gates now block the player where the bars are visible and leave the opening clear when the gate is open.
+[*]Fixed overlapping surfaces at Airport door frames and lowered hanging signs that could disappear into the ceiling tiles.
+[*]Flashlight chargers now check that you can reach the panel before showing the interaction prompt or starting a charge.
+[*]Deep water no longer plays dry footsteps or walking bob while you wade. Entering and leaving the water is quieter.
+[/list]

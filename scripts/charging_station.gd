@@ -27,6 +27,9 @@ const IDLE_HUM_DB := -28.0
 const CHARGING_HUM_DB := -6.0
 const LOCATOR_GROUP := "charging_stations"
 
+static var _lit_materials: Dictionary[BaseMaterial3D, BaseMaterial3D] = {}
+static var _broken_materials: Dictionary[BaseMaterial3D, BaseMaterial3D] = {}
+
 ## Assigned by the chunk before this enters the tree; config-driven so a
 ## streamed-out trap rebuilds in the same state.
 var broken := false
@@ -61,6 +64,7 @@ func _ready() -> void:
 
 	_hit = Interactable.new()
 	_hit.prompt_text = "E — CHARGE FLASHLIGHT"
+	_hit.access_check = _panel_is_reachable
 	_hit.position = Vector3(0, 0.92, -0.02)
 	_hit.add_box(Vector3(0.95, 1.85, 0.90))
 	_hit.activated.connect(_toggle_charge)
@@ -110,20 +114,38 @@ static func nearest_to(observer: Node3D) -> ChargingStation:
 func _apply_authored_textures(root: Node) -> void:
 	var mesh_instance := root as MeshInstance3D
 	if mesh_instance != null and mesh_instance.mesh != null:
+		var variants := _broken_materials if broken else _lit_materials
 		for surface_index in mesh_instance.mesh.get_surface_count():
-			var source := mesh_instance.get_active_material(surface_index)
-			var material := source.duplicate() as BaseMaterial3D if source != null else null
-			if material == null:
+			var source := mesh_instance.get_active_material(surface_index) as BaseMaterial3D
+			if source == null:
 				continue
-			material.albedo_texture = MODEL_ALBEDO
-			# A dead unit's panel does not glow. This is the strongest of its
-			# quiet tells, and the only visual one.
-			if not broken:
-				material.emission_enabled = true
-				material.emission_texture = MODEL_EMISSION
+			# Streamed stations share the fixed panel textures. Keep one binding
+			# per source and power state, including when a station leaves view.
+			var material: BaseMaterial3D = variants.get(source)
+			if material == null:
+				material = source.duplicate() as BaseMaterial3D
+				material.albedo_texture = MODEL_ALBEDO
+				material.emission_enabled = not broken
+				if not broken:
+					material.emission_texture = MODEL_EMISSION
+				variants[source] = material
 			mesh_instance.set_surface_override_material(surface_index, material)
 	for child in root.get_children():
 		_apply_authored_textures(child)
+
+
+func _panel_is_reachable(actor: Node) -> bool:
+	var player := actor as Player
+	if player == null or not player.is_inside_tree() or not is_inside_tree() \
+			or player.get_world_3d() != get_world_3d():
+		return false
+	# The generous interaction box can protrude through a thin wall. Check
+	# the cabinet itself, both when showing the prompt and when E is pressed.
+	var query := PhysicsRayQueryParameters3D.create(player.cam.global_position,
+		_hit.global_position, player.collision_mask, [player.get_rid()])
+	query.hit_from_inside = true
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.is_empty() or is_ancestor_of(hit["collider"])
 
 
 func _toggle_charge(actor: Node) -> void:

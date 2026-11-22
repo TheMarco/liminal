@@ -80,7 +80,7 @@ func run() -> void:
 	game.opts.video_lab = not capture_looks
 	game._open_settings(true)
 	print("SLANG_MENU opened")
-	game._pause_menu._select_tab("Visual Effects")
+	game._pause_menu._select_tab("Video")
 	expect(game._pause_menu.custom_viewport == root,"Settings should render above the processed source")
 	if not capture_looks:
 		expect(game._pause_menu._crt_parameter_controls.size() == 20,"Crtsim original parameters should be available in the developer lab")
@@ -90,7 +90,7 @@ func run() -> void:
 	if OS.get_cmdline_user_args().has("--looks"):
 		var panel: PauseMenu = game._pause_menu
 		expect(not is_instance_valid(panel._video_advanced), "player menu must omit the video lab")
-		for index in [0,8,9,14]:
+		for index in range(3):
 			panel._look_select.item_selected.emit(index+1)
 			panel.visible = false
 			for frame in 12: await process_frame
@@ -99,7 +99,7 @@ func run() -> void:
 			expect(panel._look_select.selected == index+1, "look selection did not reach the live game")
 			_save_review_image("look-%d" % index)
 		panel.visible = true
-		panel._look_select.item_selected.emit(9)
+		panel._look_select.item_selected.emit(2)
 	for frame in 4: await process_frame
 	print("SLANG_MENU frames drawn")
 	await RenderingServer.frame_post_draw
@@ -109,8 +109,8 @@ func run() -> void:
 	menu.save_png("res://build/ntscrt-review/slang-game/settings.png")
 	if OS.get_cmdline_user_args().has("--looks"):
 		var panel: PauseMenu = game._pause_menu
-		var page := panel._pages["Visual Effects"] as ScrollContainer
-		expect(not page.get_v_scroll_bar().visible, "simple effects should fit at 1280x720 without scrolling")
+		var page := panel._pages["Video"] as ScrollContainer
+		expect(page.get_global_rect().encloses(panel._look_select.get_global_rect()), "camera looks should be visible at the top of Video")
 		expect(not panel._controls.has("crt_enabled"), "player presets must own the TV treatment")
 		root.size = Vector2i(640, 600)
 		for frame in 6: await process_frame

@@ -95,9 +95,7 @@ func _begin_piece(node: MeshInstance3D, transform_to_room: Transform3D) -> bool:
 		"stage": "anchor", "cursor": 0}
 	return true
 
-# Triplanar anchor pass, sliced to the preparation budget. Vertex-for-vertex
-# the same math as _anchor_triplanar, which stays the shared reference (and
-# the hallway-wave caller); only the pacing moved here.
+# Bake the original axis-aligned triplanar mapping before a wall deforms.
 func _step_anchor() -> bool:
 	var node: MeshInstance3D = _building.node
 	if not is_instance_valid(node): return false
@@ -124,6 +122,10 @@ func _step_anchor() -> bool:
 	var baked: PackedFloat32Array = state.tangents
 	var mapping: Transform3D = state.mapping
 	var normal_basis: Basis = state.basis
+	var tangent_basis := normal_basis.inverse()
+	var right := (tangent_basis * Vector3.RIGHT).normalized()
+	var up := (tangent_basis * Vector3.UP).normalized()
+	var forward := (tangent_basis * Vector3.FORWARD).normalized()
 	var cursor: int = _building.cursor
 	var total := vertices.size()
 	var start := Time.get_ticks_usec()
@@ -137,19 +139,17 @@ func _step_anchor() -> bool:
 				push_error("Breathing surfaces require axis-aligned triplanar faces: " + source.resource_name)
 				return false
 			var p := (mapping * vertices[cursor]) * source.uv1_scale + source.uv1_offset
-			var t := Vector3.RIGHT
-			var b := Vector3.UP
+			var t := right
+			var b := up
 			match axis:
 				Vector3.AXIS_X:
 					uvs[cursor] = Vector2(-p.z, -p.y)
-					t = Vector3.FORWARD
+					t = forward
 				Vector3.AXIS_Y:
 					uvs[cursor] = Vector2(p.x, p.z)
-					b = Vector3.FORWARD
+					b = forward
 				Vector3.AXIS_Z:
 					uvs[cursor] = Vector2(p.x, -p.y)
-			t = (normal_basis.inverse() * t).normalized()
-			b = (normal_basis.inverse() * b).normalized()
 			baked[cursor * 4] = t.x
 			baked[cursor * 4 + 1] = t.y
 			baked[cursor * 4 + 2] = t.z
@@ -430,50 +430,18 @@ func originals_restored() -> bool:
 
 func _exit_tree() -> void:
 	restore()
-func _anchor_triplanar(source: StandardMaterial3D, mesh_node: MeshInstance3D, source_arrays: Array) -> StandardMaterial3D:
-	# These architectural primitives have flat, axis-aligned faces. Bake the
-	# native projection before bending: using the bent normal for triplanar
-	# weights introduces ghost tile grids around the bulge's steep slopes.
-	# Match Godot's projection signs, scale, phase and tangent basis.
-	var vertices: PackedVector3Array = source_arrays[Mesh.ARRAY_VERTEX]
-	var normals: PackedVector3Array = source_arrays[Mesh.ARRAY_NORMAL]
-	var uvs := PackedVector2Array()
-	var tangents := PackedFloat32Array()
-	uvs.resize(vertices.size())
-	tangents.resize(vertices.size() * 4)
-	var mapping := mesh_node.global_transform if source.uv1_world_triplanar else Transform3D.IDENTITY
-	var normal_basis := mapping.basis.inverse().transposed()
-	for i in vertices.size():
-		var n := (normal_basis * normals[i]).normalized()
-		var axis := n.abs().max_axis_index()
-		if absf(n[axis]) < 0.9999:
-			push_error("Breathing surfaces require axis-aligned triplanar faces: " + source.resource_name)
+## The hallway wave uses the same rest-UV and tangent bake as a breathing wall.
+## Its private helper yields to the wave's shared frame budget between batches.
+func anchor_wave_triplanar(source: StandardMaterial3D, node: MeshInstance3D, arrays: Array,
+		check_budget: Callable) -> StandardMaterial3D:
+	_building = {"node": node, "material": source, "arrays": arrays,
+		"vertices": arrays[Mesh.ARRAY_VERTEX], "normals": arrays[Mesh.ARRAY_NORMAL],
+		"cursor": 0, "stage": "anchor"}
+	while _building.stage == "anchor":
+		await check_budget.call()
+		if not _step_anchor():
+			_building.clear()
 			return null
-		var p := (mapping * vertices[i]) * source.uv1_scale + source.uv1_offset
-		var t := Vector3.RIGHT
-		var b := Vector3.UP
-		match axis:
-			Vector3.AXIS_X:
-				uvs[i] = Vector2(-p.z, -p.y)
-				t = Vector3.FORWARD
-			Vector3.AXIS_Y:
-				uvs[i] = Vector2(p.x, p.z)
-				b = Vector3.FORWARD
-			Vector3.AXIS_Z:
-				uvs[i] = Vector2(p.x, -p.y)
-		t = (normal_basis.inverse() * t).normalized()
-		b = (normal_basis.inverse() * b).normalized()
-		tangents[i * 4] = t.x
-		tangents[i * 4 + 1] = t.y
-		tangents[i * 4 + 2] = t.z
-		tangents[i * 4 + 3] = signf(normals[i].cross(t).dot(b))
-	source_arrays[Mesh.ARRAY_TEX_UV] = uvs
-	source_arrays[Mesh.ARRAY_TANGENT] = tangents
-	var result := source.duplicate() as StandardMaterial3D
-	result.uv1_triplanar = false
-	result.uv1_world_triplanar = false
-	result.uv1_scale = Vector3.ONE
-	result.uv1_offset = Vector3.ZERO
-	# Godot ignores height mapping while triplanar is enabled; keep that behavior.
-	result.heightmap_enabled = false
+	var result: StandardMaterial3D = _building.render_material
+	_building.clear()
 	return result

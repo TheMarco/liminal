@@ -36,6 +36,7 @@ var _last_mesh_id := 0
 var _wave_started := false
 var _wave_reserved := false
 var _prepare_elapsed := 0.0
+var _last_prepare_frame := -1
 var _audio: Node
 var _audio_started := false
 var _visibility_left := 0.0
@@ -83,6 +84,11 @@ func _physics_process(dt: float) -> void:
 			if _prepare_elapsed > 45.0:
 				cancel("preparation timed out; press F6 to retry")
 				return
+			# Physics can catch up several ticks before a single draw. Grant
+			# architecture one preparation allowance per rendered game frame.
+			var frame := Engine.get_process_frames()
+			if _last_prepare_frame == frame: return
+			_last_prepare_frame = frame
 			var begin := Time.get_ticks_usec()
 			active.prepare_step()
 			var cost := (Time.get_ticks_usec() - begin) / 1000.0
@@ -249,6 +255,7 @@ func start_event(chunk: Chunk, candidate: Dictionary, shape_kind := "breath") ->
 	kind = shape_kind
 	elapsed = 0.0
 	_prepare_elapsed = 0.0
+	_last_prepare_frame = -1
 	_wave_started = false
 	_wave_wait = 0.0
 	_audio_started = false

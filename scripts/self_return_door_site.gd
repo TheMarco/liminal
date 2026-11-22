@@ -107,18 +107,16 @@ func build(actor: Player, landing: Vector3, wall_material: Material,
 func refresh_graphics_quality(settings: GameSettings, disable_taa := false) -> void:
 	if _preview == null: return
 	if settings != null:
-		GraphicsQuality.apply_viewport_features(_preview, settings, disable_taa)
+		GraphicsQuality.apply_viewport_features(_preview, settings, disable_taa, GraphicsQuality.PREVIEW_SHADOW_ATLAS_SIZE)
 	else:
 		GraphicsQuality.configure_shadow_atlas(_preview)
-	# A doorway peek does not need a second 8K shadow atlas alongside the main
-	# world; uniform 64-tile quadrants stay cached at 2048 without VRAM bloat.
-	_preview.positional_shadow_atlas_size = mini(_preview.positional_shadow_atlas_size, 2048)
+		_preview.positional_shadow_atlas_size = mini(_preview.positional_shadow_atlas_size, GraphicsQuality.PREVIEW_SHADOW_ATLAS_SIZE)
 	_sync_preview_resolution()
 
 
 func _sync_preview_resolution() -> void:
 	# This is another view of the streamed room, not an independent high-res
-	# scene. Follow the actual world resolution, including tape/CRT caps, and
+	# scene. Follow the actual world resolution and
 	# retain the original maximum for Native. Do not downscale it twice.
 	var source := _actor.get_viewport()
 	var height := clampi(roundi(source.get_visible_rect().size.y

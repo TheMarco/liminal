@@ -52,6 +52,32 @@ func positive_difference(a: Image, b: Image) -> float:
 			total += maxf(b.get_pixel(x,y).get_luminance()-a.get_pixel(x,y).get_luminance(),0.0)
 	return total/(a.get_width()*a.get_height()/2.0)
 
+func check_cabin_light(camera: Camera3D) -> void:
+	var car := ElevatorCar.new(load(ElevatorCar.MODEL_PATH))
+	car.position = Vector3(30,0,0)
+	view.add_child(car)
+	camera.look_at_from_position(car.to_global(Vector3(0.15,1.33,4.05)),car.to_global(Vector3(-0.05,1.95,2.43)))
+	car.light.visible = false
+	var dark := await capture("cabin-closed-dark")
+	car.light.visible = true
+	var closed := await capture("cabin-closed-lit")
+	car.light.shadow_enabled = false
+	var leaking := await capture("cabin-closed-shadowless-control")
+	var leak := positive_difference(dark,leaking)
+	var blocked := positive_difference(dark,closed)
+	expect(leak > 0.005 and blocked < leak * 0.1, "cabin light escaped through the closed doors")
+	car.light.shadow_enabled = true
+	car.openness = 1.0
+	camera.look_at_from_position(car.to_global(Vector3(0,1.55,4.7)),car.to_global(Vector3(0,1.13,1.25)))
+	car.light.visible = false
+	var open_dark := await capture("cabin-open-dark")
+	car.light.visible = true
+	var open_lit := await capture("cabin-open-lit")
+	var response := positive_difference(open_dark,open_lit)
+	expect(response > 0.01, "open cabin lost its ceiling light")
+	print("CABIN_LIGHT closed=%.6f shadowless=%.6f open=%.6f"%[blocked,leak,response])
+	car.free()
+
 func run() -> void:
 	if DisplayServer.get_name()=="headless":
 		fail("fixture occlusion pixels require a native GPU renderer")
@@ -81,24 +107,27 @@ func run() -> void:
 	var local_light := fixture(Vector3(-3,3.5,-1))
 	var hidden_light := fixture(Vector3(2,3.5,-1))
 	var quality := GameSettings.new("/tmp/liminal-fixture-quality-%d.cfg"%OS.get_process_id())
-	for tier in [0,2,3]:
+	for mode in [[0, false], [0, true], [2, false], [3, false]]:
+		var tier := int(mode[0])
 		quality.apply_quality_preset(tier)
+		quality.set_value("cheap_lighting", mode[1])
 		GraphicsQuality.apply_viewport_features(view,quality)
 		GraphicsQuality.apply_global(quality)
 		for quadrant in 4: view.set_positional_shadow_atlas_quadrant_subdiv(quadrant,Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_16)
-		GraphicsQuality.apply_practical_light(local_light,{"shadow_quality":tier})
-		GraphicsQuality.apply_practical_light(hidden_light,{"shadow_quality":tier})
+		GraphicsQuality.apply_practical_light(local_light,quality.values)
+		GraphicsQuality.apply_practical_light(hidden_light,quality.values)
 		hidden_light.visible = false
-		var own_only := await capture("tier-%d-own"%tier)
+		var label := "tier-%d"%tier + ("-cheap" if mode[1] else "")
+		var own_only := await capture(label+"-own")
 		hidden_light.visible = true
-		var blocked := await capture("tier-%d-blocked"%tier)
+		var blocked := await capture(label+"-blocked")
 		hidden_light.shadow_enabled = false
-		var leaking := await capture("tier-%d-shadowless-control"%tier)
+		var leaking := await capture(label+"-shadowless-control")
 		var corrected := positive_difference(own_only,blocked)
 		var control := positive_difference(own_only,leaking)
 		expect(control>0.005,"control failed to expose through-wall floor reflection")
-		expect(corrected<0.001 and corrected<control*0.05,"fixture reflects through wall at tier %d"%tier)
-		print("FIXTURE_OCCLUSION tier=%d corrected=%.6f shadowless=%.6f"%[tier,corrected,control])
+		expect(corrected<0.001 and corrected<control*0.05,"fixture reflects through wall on "+label)
+		print("FIXTURE_OCCLUSION %s corrected=%.6f shadowless=%.6f"%[label,corrected,control])
 	if office_diffuser:
 		# The ceiling receiver exclusion must still allow the player's torch to
 		# illuminate the slab during a blackout. A ceiling-only beam isolates it.
@@ -118,6 +147,11 @@ func run() -> void:
 		var response := positive_difference(dark,lit)
 		expect(response>0.005,"Office ceiling disappeared or lost flashlight illumination")
 		print("OFFICE_CEILING_TORCH response=",response)
+		torch.free()
+	quality.apply_quality_preset(2)
+	GraphicsQuality.apply_viewport_features(view,quality)
+	GraphicsQuality.apply_global(quality)
+	await check_cabin_light(camera)
 	DirAccess.remove_absolute(quality._path)
 	view.free()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)

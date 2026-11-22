@@ -11,6 +11,7 @@ var apply_profile: Callable
 var capture_image: Callable
 var capture_context: Callable
 var restore_context: Callable
+var in_game := false
 var renderer_error: Callable
 var play_glitch: Callable
 var preview_damage: Callable
@@ -66,7 +67,7 @@ func _ready() -> void:
 		_name.text = LIBRARY.LOOKS[_library_index].name
 		_library_snapshot = PRESETS.encode(profile).settings
 	profile.changed.connect(_refresh)
-	_refresh()
+	_refresh(not in_game)
 
 func close() -> void:
 	if _capturing: return
@@ -112,7 +113,7 @@ func _build_ui() -> void:
 	next.tooltip_text = "Next look"
 	_browse_buttons.assign([previous,next])
 	_look_description = _note(rows,"Browse 20 camera, tape and TV looks with the arrows. Choose a favorite, then Capture preset to save it.")
-	_look_route = _note(rows,"Browsing keeps your graphics budget and reduced-flashing preference.")
+	_look_route = _note(rows,"Browsing keeps your signal detail and Reduced Flashing settings.")
 	_damage_preview = _button(rows,"Preview this look's tape damage",func():
 		if preview_damage.is_valid(): preview_damage.call())
 	_name = LineEdit.new()
@@ -188,8 +189,10 @@ func _build_look(rows: VBoxContainer) -> void:
 	_number(rows,"ambient_fault_rate","Brief defects per minute",0,20,0.5)
 	_number(rows,"ambient_fault_strength","Defect strength",0,1,0.01)
 	_choice(rows,"ambient_fault_kind","Defect type",["Tracking","Color unlock","Dropout","RF static","Sync slip"])
-	_choice(rows,"quality","Graphics budget",["Low","Medium","High","Ultra"])
-	_toggle(rows,"reduced_flashing","Reduced flashing")
+	if in_game:
+		_choice(rows,"pipeline","Video signal",["Classic","NTSCRT approximation","Full ntsc-rs","Camcorder"])
+	_choice(rows,"quality","Signal detail",["Low","Medium","High","Ultra"])
+	if not in_game: _toggle(rows,"reduced_flashing","Reduced flashing")
 	var cues := _row(rows)
 	_button(cues,"Glitch pop",func(): _play_glitch("glitch_pop",0.53))
 	_button(cues,"Two blips",func(): _play_glitch("two_blips",1.1))
@@ -225,17 +228,15 @@ func _build_signal(rows: VBoxContainer) -> void:
 
 func _build_output(rows: VBoxContainer) -> void:
 	_note(rows,"These settings change processing cost and the detail that reaches the CRT. They are included in your preset.")
-	_choice(rows,"signal_size_mode","Signal resolution",["Automatic (graphics budget)","Custom width","Source size"])
+	_choice(rows,"signal_size_mode","Signal resolution",["Automatic (video quality)","Custom width","Source size"])
 	_number(rows,"signal_width","Custom signal width",16,4096,2)
 	_choice(rows,"downscale_filter","Resize filter",["Fast bilinear","Nearest","Nearest+","Bilinear","Bicubic","Lanczos3","Area"])
-	_choice(rows,"presentation_scale","Output sizing",["Graphics budget","Original supersampling","Original integer fit"])
+	_choice(rows,"presentation_scale","Output sizing",["Automatic (video quality)","Original supersampling","Original integer fit"])
 	_toggle(rows,"source_resolution","Process tape at full source resolution")
 	_note(rows,"Full-source processing and supersampling can be expensive. Custom width is usually the better tuning starting point.")
 	_toggle(rows,"field_history","Blend previous video field")
-	_toggle(rows,"auto_world_resolution","Automatically lower 3D resolution")
-	_note(rows,"The 3D option affects game content, not this 2D test chart. Reduced flashing disables previous-field history.")
 
-func _refresh() -> void:
+func _refresh(apply_changes := true) -> void:
 	for key: String in _controls:
 		var control: Control = _controls[key]
 		var value: Variant = profile.get(key)
@@ -249,7 +250,7 @@ func _refresh() -> void:
 	_signal_controls.refresh(profile.canonical_ntsc_settings(),PROFILE.SETTINGS.sanitize_receiver(profile.receiver_overrides))
 	_refresh_crt()
 	_refresh_library_description()
-	_apply_visible()
+	if apply_changes: _apply_visible()
 
 func _play_glitch(identifier: String,duration: float) -> void:
 	if play_glitch.is_valid(): play_glitch.call(identifier,duration)
@@ -385,6 +386,7 @@ func load_preset(path: String) -> void:
 		return
 	_library_index = -1
 	_library_select.select(0)
+	if in_game: result.profile.reduced_flashing = profile.reduced_flashing
 	_replace_profile(result.profile,result.name)
 	_loaded_context = result.capture.duplicate(true)
 	if select_test_image.is_valid() and result.capture.get("test_image") in ["tv_test_card","animated_chart"]:
@@ -438,7 +440,7 @@ func _refresh_library_description() -> void:
 	_damage_preview.tooltip_text = "Disabled by Reduced flashing" if shown.reduced_flashing else "Briefly previews the defect built into this look. It also happens occasionally during play."
 	if _library_index<0:
 		_look_description.text = "Browse 20 camera, tape and TV looks with the arrows. Choose a favorite, then Capture preset to save it."
-		_look_route.text = "Browsing keeps your graphics budget and reduced-flashing preference."
+		_look_route.text = "Browsing keeps your signal detail and Reduced Flashing settings."
 		return
 	var entry: Dictionary = LIBRARY.LOOKS[_library_index]
 	_look_description.text = entry.description

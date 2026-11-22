@@ -18,7 +18,8 @@ func _run() -> void:
 	if game==null: check(false,"Game startup"); quit(1); return
 	var host: Control = game.get_meta("ntscrt_video_host")
 	game._settings._path = "/tmp/liminal-workshop-native-%d.cfg" % OS.get_process_id()
-	game._settings.values = GameSettings.DEFAULTS.duplicate(true)
+	game._settings.reset_defaults(false)
+	preload("res://scripts/video_preset_bridge.gd").apply_camera_look(2, game._settings, false)
 	game._settings.values.fullscreen = false
 	game._settings.values.hdr_enabled = false
 	game._settings.changed.emit()
@@ -27,10 +28,12 @@ func _run() -> void:
 	root.size = Vector2i(1280,800)
 	await frames(20)
 	game._open_settings()
-	game._pause_menu._select_tab("Visual Effects")
+	game._pause_menu._select_tab("Video")
+	var before_open: Dictionary = game._settings.values.duplicate(true)
 	game._pause_menu.preset_workshop_requested.emit()
 	await frames(16)
 	check(paused and not game._pause_menu.visible,"Workshop did not replace pause overlay")
+	check(game._settings.values == before_open, "Opening the workshop changed saved settings")
 	var workshop: CanvasLayer = game._video_workshop
 	check(workshop!=null and workshop.custom_viewport==root,"Workshop UI does not target crisp root viewport")
 	var panel: Control = workshop.panel
@@ -50,7 +53,7 @@ func _run() -> void:
 	panel.show_reference(true)
 	await frames()
 	check(host.presenter.preset_name=="royale","Game A/B reference did not apply")
-	var directory := "/tmp/liminal-workshop-review"
+	var directory := "/tmp/liminal-workshop-review-%d" % OS.get_process_id()
 	DirAccess.make_dir_recursive_absolute(directory)
 	panel._tabs.current_tab = 1
 	root.get_texture().get_image().save_png(directory.path_join("workshop.png"))
@@ -63,9 +66,15 @@ func _run() -> void:
 	panel.show_reference(false)
 	await frames()
 	check(host.presenter.preset_name=="aperture","Game A/B did not restore B")
+	game._settings.apply_quality_preset(0)
+	game._settings.set_value("hdr_brightness",1.25)
+	game._settings.set_value("reduced_flashing",true)
 	panel.load_preset(directory.path_join("preset/preset.json"))
 	await frames()
 	check(host.presenter.preset_name=="royale" and panel._controls.crt_model.selected==6,"Game load did not restore renderer and UI")
+	check(game._settings.get_value("quality_preset") == 0 and game._settings.get_value("cheap_lighting")
+		and game._settings.get_value("hdr_brightness") == 1.25 and game._settings.get_value("reduced_flashing"),
+		"Importing a saved look replaced the current world, HDR or comfort preferences")
 	for argument in OS.get_cmdline_user_args():
 		if not argument.begins_with("--import-preset="): continue
 		panel.load_preset(argument.trim_prefix("--import-preset="))

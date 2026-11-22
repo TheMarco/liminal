@@ -12,6 +12,7 @@ static func flashing_reduced() -> bool:
 
 ## The automatic CRT keeps dark rooms readable on both renderers.
 const CRT_AUTOMATIC := 9
+const VIDEO_CAMCORDER := 3
 const CRT_CALIBRATION = preload("res://scripts/crt_calibration.gd")
 const HOME_CRT_PARAMETERS := CRT_CALIBRATION.DEFAULTS
 
@@ -25,6 +26,7 @@ const DEFAULTS: Dictionary = {
 	"ambient_occlusion": 1,
 	"reflections": 1,
 	"volumetric_fog": 1,
+	"cheap_lighting": true,
 	"frame_limit": 60,
 	"vsync": true,
 	"show_fps": false,
@@ -56,8 +58,7 @@ const DEFAULTS: Dictionary = {
 	"hdr_enabled": true,
 	"hdr_brightness": 1.0,
 	"video_pipeline": 2,
-	"video_quality_override": -1,
-	"video_auto_resolution": true,
+	"video_quality_override": 1,
 	"crt_shader": CRT_AUTOMATIC,
 	"crt_shader_parameters": HOME_CRT_PARAMETERS,
 	"ntscrs_settings": {},
@@ -109,11 +110,11 @@ const DEFAULTS: Dictionary = {
 	"ntsc_auto_faults": true,
 }
 
-const BOOLEAN_KEYS := ["vsync", "show_fps", "invert_y", "toggle_sprint", "handheld_camera", "fullscreen",
+const BOOLEAN_KEYS := ["vsync", "show_fps", "cheap_lighting", "invert_y", "toggle_sprint", "handheld_camera", "fullscreen",
 	"reduced_flashing", "death_hints", "vhs_enabled", "crt_enabled", "crt_curvature",
 	"hdr_enabled", "story_subtitles", "ntsc_dropout_compensation", "ntsc_interlaced",
 	"ntsc_auto_faults", "ntsc_caption_data", "receiver_enabled", "ntscrs_field_history",
-	"ntscrs_source_resolution", "video_auto_resolution", "receiver_tape_coupling"]
+	"ntscrs_source_resolution", "receiver_tape_coupling"]
 
 const RANGES: Dictionary = {
 	"ntscrt_signal_width": Vector2(16.0,4096.0),
@@ -168,13 +169,13 @@ const BINDINGS_SECTION := "bindings"
 ## Presets are applied in one transaction so live rendering never sees a
 ## partially selected mode. Presentation and comfort preferences are separate.
 const QUALITY_KEYS := ["render_resolution", "anti_aliasing", "shadow_quality",
-	"global_illumination", "ambient_occlusion", "reflections", "volumetric_fog"]
-const QUALITY_NAMES := ["Low", "Medium", "High", "Ultra", "Custom"]
+	"global_illumination", "ambient_occlusion", "reflections", "volumetric_fog", "cheap_lighting"]
+const QUALITY_NAMES := ["Performance", "Balanced", "Quality", "Ultra", "Custom"]
 const QUALITY_PRESETS := [
-	[1, 1, 0, 0, 0, 0, 0],
-	[2, 2, 1, 1, 1, 1, 1],
-	[3, 2, 2, 1, 2, 1, 1],
-	[4, 2, 3, 2, 2, 2, 2],
+	[1, 1, 0, 0, 0, 0, 0, true],
+	[2, 2, 1, 1, 1, 1, 1, true],
+	[3, 2, 2, 1, 2, 1, 1, false],
+	[4, 2, 3, 2, 2, 2, 2, false],
 ]
 const ENUM_VALUES := {
 	"quality_preset": [0, 1, 2, 3, 4],
@@ -186,8 +187,8 @@ const ENUM_VALUES := {
 	"reflections": [0, 1, 2],
 	"volumetric_fog": [0, 1, 2],
 	"frame_limit": [0, 30, 60, 90, 120, 144],
-	"video_pipeline": [0, 1, 2],
-	"video_quality_override": [-1, 0, 1, 2, 3],
+	"video_pipeline": [0, 1, 2, VIDEO_CAMCORDER],
+	"video_quality_override": [0, 1, 2, 3],
 	"video_fault_kind": [0,1,2,3,4],
 	"crt_shader": [0, 1, 2, 3, 4, 5, 6, 7, 8, CRT_AUTOMATIC],
 	"ntscrt_downscale_filter": [0,1,2,3,4,5,6],
@@ -205,16 +206,14 @@ var _path := "user://settings.cfg"
 
 func _init(config_path: String = "user://settings.cfg") -> void:
 	_path = config_path
-	reset_defaults(false)
 	values["language"] = Localization.normalize(OS.get_locale())
 	if not load_from_disk():
-		if values["language"] != "en": values["story_subtitles"] = true
+		reset_defaults(false)
 		_apply_first_run_hardware_default()
 	Localization.apply(str(values["language"]))
 
-## A new player on integrated graphics should not start on the Medium budget
-## (SDFGI, volumetric fog, SSR, SSAO). Only a profile that has never been saved
-## is affected; Apple silicon reports "integrated" and keeps the authored default.
+## New profiles on an integrated GPU start in Performance. Apple silicon also
+## reports "integrated" and starts in Balanced.
 func _apply_first_run_hardware_default() -> void:
 	if _path != "user://settings.cfg" or DisplayServer.get_name() == "headless" \
 			or OS.get_name() == "macOS":
@@ -230,6 +229,9 @@ func load_from_disk() -> bool:
 	var err: Error = config.load(_path)
 	if err != OK:
 		return false
+	_reset_base_values()
+	# Saves from before the lighting toggle used full lighting on every tier.
+	values["cheap_lighting"] = false
 	for key: String in DEFAULTS:
 		if not config.has_section_key("settings", key):
 			continue
@@ -258,11 +260,10 @@ func load_from_disk() -> bool:
 	_load_bindings(config)
 	var stored_quality := int(values["quality_preset"])
 	values["quality_preset"] = matching_quality_preset()
-	# A revised preset table must not also change an older profile's tape/TV
-	# budget when its unchanged rendering values are now classified as Custom.
-	if values["quality_preset"] == 4 and stored_quality in range(4) \
-			and int(values["video_quality_override"]) < 0:
-		values["video_quality_override"] = stored_quality
+	# Pin the signal budget that older Automatic settings actually used.
+	if config.get_value("settings", "video_quality_override", -1) == -1:
+		values["video_quality_override"] = stored_quality if stored_quality in range(4) \
+			else [0, 1, 2, 2, 2, 3][int(values["render_resolution"])]
 	values["crt_shader_parameters"] = CRT_CALIBRATION.upgrade_saved(values["crt_shader_parameters"])
 	_upgrade_worn_tape_look()
 	_upgrade_home_video_look()
@@ -351,25 +352,18 @@ func set_value(key: String, value: Variant) -> void:
 		next = _sanitize(key, number)
 	if values.get(key) == next:
 		return
-	var previous_quality := int(values["quality_preset"])
 	values[key] = next
 	if key in QUALITY_KEYS:
 		values["quality_preset"] = matching_quality_preset()
-		# Tweaking world resolution/shadows should not unexpectedly swap CRT
-		# shaders or their processing budget. A new preset restores Automatic.
-		if values["quality_preset"] == 4 and previous_quality in range(4) \
-				and int(values["video_quality_override"]) < 0:
-			values["video_quality_override"] = previous_quality
 	changed.emit()
 
 func apply_quality_preset(index: int) -> void:
 	if index < 0 or index >= QUALITY_PRESETS.size():
 		return
-	var dirty := int(values.get("video_quality_override",-1))>=0
-	values["video_quality_override"] = -1
+	var dirty := int(values["quality_preset"]) != index
 	for i in QUALITY_KEYS.size():
 		var key: String = QUALITY_KEYS[i]
-		var next: int = QUALITY_PRESETS[index][i]
+		var next: Variant = QUALITY_PRESETS[index][i]
 		dirty = dirty or values.get(key) != next
 		values[key] = next
 	values["quality_preset"] = index
@@ -586,6 +580,14 @@ func apply_ntscrt_preset(index: int) -> void:
 		changed.emit()
 
 func reset_defaults(emit_signal: bool = true) -> void:
+	_reset_base_values()
+	# The complete look is shared with the player menu and the portable workshop.
+	# Load the bridge here because its API also takes a GameSettings instance.
+	load("res://scripts/video_preset_bridge.gd").apply_camera_look(1, self, false)
+	if emit_signal:
+		changed.emit()
+
+func _reset_base_values() -> void:
 	var language: String = str(values.get("language", "en"))
 	values = DEFAULTS.duplicate(true)
 	values["language"] = language
@@ -593,8 +595,6 @@ func reset_defaults(emit_signal: bool = true) -> void:
 	values["ntscrs_settings"] = FULL_SETTINGS.ntsc_defaults()
 	values["receiver_settings"] = FULL_SETTINGS.receiver_defaults()
 	bindings = GameInput.default_bindings()
-	if emit_signal:
-		changed.emit()
 
 func get_value(key: String) -> Variant:
 	return values.get(key, DEFAULTS.get(key))

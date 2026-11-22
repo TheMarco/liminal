@@ -55,6 +55,10 @@ static var _crt_presets: Dictionary = {}
 	set(value):
 		crt_enabled = value
 		emit_changed()
+@export_enum("Classic","NTSCRT approximation","Full ntsc-rs","Camcorder") var pipeline := 2:
+	set(value):
+		pipeline = clampi(value,0,3)
+		emit_changed()
 @export var quality: Quality = Quality.MEDIUM:
 	set(value):
 		quality = clampi(value,0,3) as Quality
@@ -99,6 +103,7 @@ static var _crt_presets: Dictionary = {}
 	set(value):
 		presentation_scale = clampi(value,0,2)
 		emit_changed()
+## Retained for reading and exchanging older version-one preset files.
 @export var auto_world_resolution := true:
 	set(value):
 		auto_world_resolution = value

@@ -14,6 +14,8 @@ var _grain_copy: BackBufferCopy
 var _grain_overlay: ColorRect
 var _grain_intensity := 0.0
 var _color_adjusted := false
+var _camcorder_stress := 0.0
+var _camcorder_entity := Vector4.ZERO
 var _vhs_enabled := true
 var _crt_enabled := true
 var _crt_curvature_enabled := false
@@ -303,7 +305,7 @@ func set_curvature_enabled(enabled: bool) -> void:
 ## Select an independent implementation of the same signal/display choices.
 ## Built lazily, so Classic never allocates the experimental atlas/controller.
 func set_video_pipeline(mode: int, settings: Dictionary) -> void:
-	_video_pipeline = clampi(mode, 0, 2)
+	_video_pipeline = clampi(mode, 0, GameSettings.VIDEO_CAMCORDER)
 	_experiment_settings = settings.duplicate()
 	var saturation := float(settings.get("video_color_saturation",1.0))
 	var temperature := float(settings.get("video_color_temperature",0.0))
@@ -367,17 +369,23 @@ func set_tape_playback(on: bool) -> void:
 func _sync_visible() -> void:
 	var show_vhs := _presentation_enabled and (_vhs_enabled or _tape_hold)
 	var show_crt := _presentation_enabled and _crt_enabled
-	var show_grain := _presentation_enabled and (_grain_intensity > 0.0 or _color_adjusted)
+	# Use the full tape shader for an in-world recording. Live Camcorder
+	# shares the grain/color pass and keeps the original luminance detail.
+	var camcorder := _video_pipeline == GameSettings.VIDEO_CAMCORDER
+	var live_capture := camcorder and show_vhs and not _tape_hold
+	var tape_pass := _video_pipeline == 0 or (camcorder and _tape_hold)
+	var show_grain := _presentation_enabled and (_grain_intensity > 0.0 or _color_adjusted or live_capture)
 	if _scene_copy != null:
-		_scene_copy.visible = (show_vhs or show_crt) and _video_pipeline == 0
+		_scene_copy.visible = (show_vhs or show_crt) and tape_pass
 	if _overlay != null:
-		_overlay.visible = show_vhs and _video_pipeline == 0
+		_overlay.visible = show_vhs and tape_pass
 	if _tube_display != null:
 		_tube_display.visible = show_crt and _video_pipeline != 1 and not _tube_in_host()
 	if _grain_copy != null:
 		_grain_copy.visible = show_grain
 	if _grain_overlay != null:
 		_grain_overlay.visible = show_grain
+		(_grain_overlay.material as ShaderMaterial).set_shader_parameter("camcorder", live_capture)
 	_sync_experimental()
 	if _video_host != null:
 		_video_host.configure_video(_experiment_settings,_video_pipeline,show_vhs,show_crt,_presentation_enabled,_crt_curvature_enabled)
@@ -477,6 +485,17 @@ func update() -> void:
 		_glitch_until = now + _encounter_left
 		_encounter_left = maxf(0.0, _encounter_left - get_process_delta_time())
 	var fault := _video_fault(now)
+	if _video_pipeline == GameSettings.VIDEO_CAMCORDER and _vhs_enabled and _grain_overlay != null:
+		var stress := maxf(maxf(_signal_corruption * 0.6, _presence * 0.7), maxf(_damage_intensity, float(fault.get("amount", 0.0))))
+		var wear := 0.0 if bool(_experiment_settings.get("reduced_flashing",false)) else float(_experiment_settings.get("vhs_distortion",0.5))
+		var material := _grain_overlay.material as ShaderMaterial
+		var entity := Vector4(_entity_position.x, _entity_position.y, _entity_radius, _entity_amount * wear) if _entity_amount * wear > 0.0 else Vector4.ZERO
+		if not is_equal_approx(stress * wear, _camcorder_stress):
+			_camcorder_stress = stress * wear
+			material.set_shader_parameter("camcorder_stress", _camcorder_stress)
+		if entity != _camcorder_entity:
+			_camcorder_entity = entity
+			material.set_shader_parameter("camcorder_entity", entity)
 	if _experimental != null and _video_pipeline == 1:
 		_experimental.set_game_state(maxf(_signal_corruption,float(fault.get("amount",0.0))), _presence, _damage_intensity,
 			now < _burst_until, _noise_multiplier, _entity_position, _entity_radius, _entity_amount)

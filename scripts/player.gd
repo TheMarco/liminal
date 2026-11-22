@@ -69,6 +69,7 @@ const FLASH_DUST := preload("res://scripts/flashlight_dust.gd")
 ## the player's chest applies the slower swimming pace.
 const WADE_SPEED := 0.52
 const WADE_ACCEL := 0.45
+const DEEP_WATER_DEPTH := 0.55
 ## Physics layer the pool ladders register on. Climbing is resolved with a
 ## point query rather than an Area3D on the player, so nothing else in the
 ## game has to grow a collision shape it did not need.
@@ -598,7 +599,7 @@ func _physics_process(dt: float) -> void:
 	# Actual basin/spa footprint and surface height; dry decking and islands
 	# must not generate a wake, and the inset spas sit above the pool basins.
 	var local_water := _water_surface_here()
-	var submerged := global_position.y + 0.55 < local_water
+	var submerged := global_position.y + DEEP_WATER_DEPTH < local_water
 	if submerged:
 		speed *= WADE_SPEED
 
@@ -689,11 +690,13 @@ func _physics_process(dt: float) -> void:
 	_sprinting = sprinting
 	if sliding:
 		_sprinting = false
-	_update_walk(dt)
-
-	# footsteps stay on the physics clock
-	var hs := Vector2(velocity.x, velocity.z).length()
-	if not sliding and is_on_floor() and hs > 0.4:
+	# Shallow steps can disturb the water. Once chest-deep, the wading loop
+	# carries movement even if the player capsule still rests on the bottom.
+	var hs := 0.0
+	if not sliding and is_on_floor() and global_position.y + DEEP_WATER_DEPTH >= local_water:
+		hs = Vector2(velocity.x, velocity.z).length()
+	_update_walk(dt, hs)
+	if hs > 0.4:
 		_bob += dt * hs * 1.6
 		_cam_y = CAM_H + sin(_bob * 2.0) * 0.035 * head_bob_strength - _land
 		_step_acc += hs * dt
@@ -1001,9 +1004,8 @@ func _surface() -> String:
 
 ## Fade the walking loop with how fast you are actually moving, and pitch it
 ## up when running so the stride rate matches your legs.
-func _update_walk(dt: float) -> void:
-	var hs := Vector2(velocity.x, velocity.z).length()
-	var moving := not is_pool_sliding() and is_on_floor() and hs > 0.5
+func _update_walk(dt: float, hs: float) -> void:
+	var moving := hs > 0.5
 	if moving:
 		var surf := _surface()
 		if surf != _walk_surface:

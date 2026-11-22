@@ -9,12 +9,12 @@ func _init() -> void:
 	_assert(settings.get_value("sensitivity") == 1.0, "defaults")
 	_assert(settings.get_value("dialogue_volume") == 1.0, "dialogue default")
 	_assert(settings.get_value("vhs_enabled") == true, "vhs default")
-	_assert(settings.get_value("crt_enabled") == true, "CRT effect default")
+	_assert(settings.get_value("crt_enabled") == false, "CRT effect default")
 	_assert(settings.get_value("crt_curvature") == false, "CRT curvature default")
 	_assert(settings.get_value("hdr_enabled") == true, "HDR default")
 	_assert(settings.get_value("hdr_brightness") == 1.0, "HDR brightness default")
 	_assert(settings.get_value("vhs_distortion") == 0.5, "VHS effect strength default")
-	_assert(settings.get_value("film_grain") == 0.4, "film grain default")
+	_assert(settings.get_value("film_grain") == 0.12, "film grain default")
 	_assert(settings.get_value("handheld_camera") == true, "handheld camera default")
 	_assert(is_equal_approx(settings.get_value("handheld_strength"), 0.55),
 		"handheld strength default")
@@ -95,14 +95,14 @@ func _init() -> void:
 		_assert(roundtrip.get_value(key) == false, key + " reset")
 	_assert(roundtrip.get_value("sensitivity") == 1.0 and not roundtrip.get_value("reduced_flashing"), "reset")
 	_assert(roundtrip.get_value("vhs_enabled") == true, "vhs reset")
-	_assert(roundtrip.get_value("crt_enabled") == true, "CRT effect reset")
+	_assert(roundtrip.get_value("crt_enabled") == false, "CRT effect reset")
 	_assert(roundtrip.get_value("crt_curvature") == false, "CRT curvature reset")
 	_assert(roundtrip.get_value("hdr_enabled") == true, "HDR reset")
 	_assert(roundtrip.get_value("hdr_brightness") == 1.0,
 		"HDR brightness reset")
 	_assert(roundtrip.get_value("vhs_distortion") == 0.5,
 		"VHS effect strength reset")
-	_assert(roundtrip.get_value("film_grain") == 0.4, "film grain reset")
+	_assert(roundtrip.get_value("film_grain") == 0.12, "film grain reset")
 	_assert(roundtrip.get_value("handheld_camera") == true,
 		"handheld camera reset")
 	_assert(is_equal_approx(roundtrip.get_value("handheld_strength"), 0.55),

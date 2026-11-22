@@ -20,33 +20,56 @@ func run() -> void:
 	root.add_child(approximation)
 	var signals := [Vector2i(360,240),Vector2i(540,360),Vector2i(720,480),Vector2i(720,480)]
 	var outputs := [Vector2i(1280,720),Vector2i(1920,1080),Vector2i(2560,1440),Vector2i(3840,2160)]
-	for tier in [0,1,2,3,0,3]:
-		settings.apply_quality_preset(tier)
+	settings.apply_video_look(3)
+	# Independence both ways: world modes never move the video budget, and the
+	# explicit budget moves video while the world stays put.
+	for budget in range(4):
+		settings.set_value("video_quality_override", budget)
+		for world in range(4):
+			settings.apply_quality_preset(world)
+			configure(host,settings)
+			expect(host.presenter.signal_extent==signals[budget],"world mode %d moved explicit video budget %d" % [world, budget])
+			expect(host.presenter.render_target_size(Vector2i(3840,2160),signals[budget])==outputs[budget],"world mode %d moved explicit output budget %d" % [world, budget])
+			expect(GraphicsQuality.video_tier(settings.values)==budget,"world mode %d moved the explicit video tier" % world)
+			expect(host._signal_knobs.scale_with_video_size==(budget<2),"tape damage scaling did not follow the explicit video budget")
+		approximation.configure(settings.values,true,false,false)
+		expect(approximation.buffer_size==signals[budget],"approximation did not follow the explicit video budget")
+	for world in range(4):
+		settings.apply_quality_preset(world)
 		for look in [1,2,3,0]:
 			settings.apply_video_look(look)
 			var saved := settings.values.duplicate(true)
 			configure(host,settings)
-			expect(settings.values==saved and settings.matching_video_look()==look,"runtime quality changed the saved look")
-			expect(host.presenter.signal_extent==signals[tier],"wrong tape size for tier %d" % tier)
-			expect(host.presenter.render_target_size(Vector2i(3840,2160),signals[tier])==outputs[tier],"wrong output budget for tier %d" % tier)
-			expect(host.presenter.visible==(look!=0),"Clean did not bypass video work")
-			expect(not host.presenter.receiver_enabled,"quality enabled expensive receiver timing")
-			expect(host._signal_knobs.scale_with_video_size==(tier<2),"automatic tape damage scaling did not follow/restore the buffer size")
-			if look==1:
-				var model := "aperture" if tier < 2 else "royale"
-				expect(host.presenter.preset_name==model,"Home video's automatic CRT did not follow quality")
-				# The host also fills every upstream shader default; verify the
-				# authored calibration subset rather than rejecting those defaults.
-				for key in GameSettings.HOME_CRT_PARAMETERS[model]:
-					expect(is_equal_approx(float(host.presenter.parameters.get(key,NAN)),
-						float(GameSettings.HOME_CRT_PARAMETERS[model][key])),"quality changed shadow calibration: "+key)
-		approximation.configure(settings.values,true,false,false)
-		expect(approximation.buffer_size==signals[tier],"approximation did not resize after a graphics quality change")
+			expect(settings.values==saved and settings.matching_video_look()==look,"runtime configuration changed the saved look")
+		for budget in [0,3]:
+			settings.set_value("video_quality_override", budget)
+			configure(host,settings)
+			expect(host.presenter.signal_extent==signals[budget],"explicit video budget did not move video in world mode %d" % world)
+			expect(settings.get_value("render_resolution")==world+1 and settings.get_value("quality_preset")==world,
+				"explicit video budget moved the world choice")
+	# Home video's automatic CRT follows the video budget, not the world mode.
+	settings.apply_quality_preset(0)
+	settings.apply_video_look(1)
+	for budget in range(4):
+		settings.set_value("video_quality_override", budget)
+		configure(host,settings)
+		var model := "aperture" if budget < 2 else "royale"
+		expect(host.presenter.preset_name==model,"Home video's automatic CRT did not follow the video budget")
+		# The host also fills every upstream shader default; verify the
+		# authored calibration subset rather than rejecting those defaults.
+		for key in GameSettings.HOME_CRT_PARAMETERS[model]:
+			expect(is_equal_approx(float(host.presenter.parameters.get(key,NAN)),
+				float(GameSettings.HOME_CRT_PARAMETERS[model][key])),"video budget changed shadow calibration: "+key)
+	expect(host.presenter.visible,"Home video bypassed video work")
+	settings.apply_video_look(0)
+	configure(host,settings)
+	expect(not host.presenter.visible,"Clean did not bypass video work")
+	expect(not host.presenter.receiver_enabled,"video configuration enabled expensive receiver timing")
 	settings.apply_video_look(3)
-	settings.apply_quality_preset(3)
-	# Explicit lab models must never silently switch with graphics quality.
-	for tier in range(4):
-		settings.apply_quality_preset(tier)
+	settings.set_value("video_quality_override", 3)
+	# Explicit lab models must never silently switch with the world choice.
+	for world in range(4):
+		settings.apply_quality_preset(world)
 		for model in [1,6]:
 			settings.set_value("crt_shader",model)
 			settings.set_value("crt_enabled",true)
@@ -54,22 +77,26 @@ func run() -> void:
 			expect(host.presenter.preset_name==GameSettings.CRT_SHADER_IDS[model],"automatic CRT overrode an explicit developer model")
 	settings.apply_video_look(3)
 	settings.apply_quality_preset(3)
+	settings.set_value("video_quality_override",3)
 	settings.set_value("ntsc_quality",0)
 	configure(host,settings)
-	expect(host.presenter.signal_extent==Vector2i(360,240),"Ultra overrode an explicit Efficient setting")
+	expect(host.presenter.signal_extent==Vector2i(360,240),"explicit video budget overrode an explicit Efficient setting")
 	settings.set_value("ntsc_quality",1)
 	for resolution in [0,1,3,5]:
 		settings.set_value("render_resolution",resolution)
 		configure(host,settings)
 		expect(host.presenter.signal_extent==signals[3] and GraphicsQuality.video_tier(settings.values)==3,
-			"Custom graphics unexpectedly changed the previous preset's video budget")
+			"Custom world unexpectedly changed the explicit video budget")
+	settings.set_value("video_quality_override",1)
 	settings.apply_quality_preset(1)
 	settings.set_value("render_resolution",5)
 	configure(host,settings)
 	expect(host.presenter.signal_extent==signals[1] and host.presenter.output_height_limit==1080,
-		"raising Custom world resolution also promoted the video renderer")
-	settings.apply_quality_preset(3)
-	expect(settings.get_value("video_quality_override")==-1,"selecting a preset did not restore automatic video quality")
+		"world choice moved the explicit video renderer")
+	for world in range(4):
+		settings.apply_quality_preset(world)
+		expect(settings.get_value("video_quality_override")==1 and GraphicsQuality.video_tier(settings.values)==1,
+			"selecting a world mode moved the explicit video budget")
 	settings.set_value("ntscrt_signal_size",1)
 	settings.set_value("ntscrt_signal_width",960.0)
 	settings.set_value("ntscrt_scale_mode",2)
@@ -82,6 +109,8 @@ func run() -> void:
 	host.presenter.signal_size_mode = 0
 	host.presenter.source_resolution = false
 	host.presenter.presentation_scale = 0
+	settings.set_value("video_quality_override", 3)
+	host.presenter.output_height_limit = GraphicsQuality.video_output_height(settings.values)
 	host.presenter.signal_extent = Vector2i(720,480)
 	expect(host.presenter.effective_signal_size(Vector2i(1280,720))==Vector2i(360,240),"windowed CRT undersampled scanlines")
 	expect(host.presenter.effective_signal_size(Vector2i(1920,1080))==Vector2i(540,360),"1080p CRT undersampled scanlines")
@@ -101,7 +130,7 @@ func run() -> void:
 	expect(GraphicsQuality.video_signal_size({})==Vector2i(720,480),"standalone reference callers lost original sizing")
 	approximation.free()
 	host.free()
-	finish("video quality tiers, look preservation, restoration, custom graphics and developer overrides")
+	finish("independent video budgets, look preservation, restoration, custom worlds and developer overrides")
 
 func check_resize_coalescing() -> void:
 	var presenter := HOST.PRESENTER.new()

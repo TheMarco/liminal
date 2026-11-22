@@ -20,6 +20,11 @@ static func display_server_supported() -> bool:
 	return engine_supported() \
 		and DisplayServer.has_feature(DisplayServer.FEATURE_HDR_OUTPUT)
 
+static func available_on_display(window: Window) -> bool:
+	return window != null and display_server_supported() \
+		and DisplayServer.has_method("window_is_hdr_output_supported") \
+		and bool(DisplayServer.call("window_is_hdr_output_supported", window.get_window_id()))
+
 
 static func request(window: Window, enabled: bool) -> bool:
 	if window == null or not engine_supported() \
