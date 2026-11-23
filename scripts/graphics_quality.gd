@@ -9,6 +9,8 @@ const VIDEO_OUTPUT_HEIGHTS := [720,1080,1440,0]
 const PREVIEW_SHADOW_ATLAS_SIZE := 2048
 const PRACTICAL_LIGHTS := &"quality_practical_lights"
 const AIRPORT_FILL_LIGHTS := &"airport_ceiling_fill_lights"
+const AIRPORT_AREA_BANKS := &"airport_coffer_area_lights"
+const AIRPORT_SPOT_BANKS := &"airport_coffer_spot_lights"
 const RECTANGULAR_SHADOW_SIZE := 0.08
 const ROOM_REFLECTIONS := &"quality_room_reflections"
 const AUTHORED_LIGHT_FADE := &"_quality_authored_light_fade"
@@ -27,12 +29,13 @@ static func configure_practical_light(light: Light3D, shadow_tier: int) -> void:
 	_register_room_light(light)
 	apply_practical_light(light, GameSettings.current.values if GameSettings.current != null else {})
 
-## These secondary panels still cast blocking shadows. Ultra also samples
-## the variable-width penumbra around their shadow edges.
+## Ultra renders each terminal coffer as a rectangular light source.
+static func full_airport_lighting(values: Dictionary) -> bool:
+	return int(values.get("shadow_quality", 3)) == 3 and not bool(values.get("cheap_lighting", false))
+
+## Secondary panels cast blocking shadows on every preset.
 static func airport_fill_shadow_size(values: Dictionary) -> float:
-	if int(values.get("shadow_quality", 3)) == 3 and not bool(values.get("cheap_lighting", false)):
-		return RECTANGULAR_SHADOW_SIZE
-	return 0.0
+	return RECTANGULAR_SHADOW_SIZE if full_airport_lighting(values) else 0.0
 
 static func configure_airport_fill(light: Light3D) -> void:
 	light.add_to_group(AIRPORT_FILL_LIGHTS)

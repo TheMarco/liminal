@@ -167,8 +167,8 @@ func run() -> void:
 		view.scaling_3d_scale = 1.0
 		if style == 141:
 			var coffer_count := 0
-			for node in chunk.find_children("*","AreaLight3D",true,false):
-				if node.get_meta("visible_source","") == "airport_grand_coffer": coffer_count += 1
+			for light: Light3D in chunk.find_children("*","Light3D",true,false):
+				if light.is_visible_in_tree() and light.get_meta("visible_source","") == "airport_grand_coffer": coffer_count += 1
 			print("COFFER_SOURCES count=",coffer_count)
 		await draw(45)
 		assert(view.get_texture().get_image().save_png(output.path_join("room-%d-clean.png" % style)) == OK)

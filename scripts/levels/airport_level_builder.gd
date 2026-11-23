@@ -104,7 +104,7 @@ func _air_lighting() -> void:
 	if dead:
 		return
 	for light in lights:
-		if int(light.get_meta("practical_shadow_tier")) >= 4:
+		if light is AreaLight3D and int(light.get_meta("practical_shadow_tier")) >= 4:
 			GraphicsQuality.configure_airport_fill(light)
 	if flicker:
 		FIXTURE_LIGHTING.ballast(scene,lights,pmat,WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),

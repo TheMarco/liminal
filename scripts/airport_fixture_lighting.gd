@@ -26,7 +26,7 @@ static func wall_heights(room: Node3D, candidates: Array[MeshInstance3D]) -> Pac
 	return heights
 
 
-static func restrict_ceiling_fixture(light: AreaLight3D, room: Node3D, cell: Vector2i,
+static func restrict_ceiling_fixture(light: Light3D, room: Node3D, cell: Vector2i,
 		walls: PackedFloat32Array) -> void:
 	var placement := light.transform
 	var parent := light.get_parent()
@@ -36,8 +36,15 @@ static func restrict_ceiling_fixture(light: AreaLight3D, room: Node3D, cell: Vec
 	if parent != room or not placement.basis.z.is_equal_approx(Vector3.UP):
 		return
 	var centre := Vector2(placement.origin.x, placement.origin.z)
-	var emitter_radius := 0.5 * light.area_size.length()
-	var reach := light.area_range + emitter_radius + 0.001
+	var emitter_radius := 0.0
+	var reach: float
+	if light is AreaLight3D:
+		emitter_radius = 0.5 * light.area_size.length()
+		reach = light.area_range + emitter_radius + 0.001
+	elif light is SpotLight3D:
+		reach = light.spot_range + 0.001
+	else:
+		return
 	var margin := minf(minf(centre.x, centre.y), CELL_SIZE - maxf(centre.x, centre.y))
 	# Keep the full mask when an emitter straddles the boundary or could
 	# reach a second cell sharing a neighbour's bit.

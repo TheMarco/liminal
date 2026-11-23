@@ -32,6 +32,7 @@ func run() -> void:
 			var fixtures := 0
 			var live_lenses := 0
 			var shafts := 0
+			var inactive_coffers := 0
 			var lamps: Array[Light3D] = []
 			var skylights: Array[Light3D] = []
 			for node in chunk.find_children("*","Node3D",true,false):
@@ -56,9 +57,11 @@ func run() -> void:
 				var bounds: AABB = relative*emitter.get_aabb()
 				var upward: bool = light.get_meta("fixture_upward",false)
 				if light.get_meta("visible_source","") == "airport_grand_coffer":
-					_check_coffer_face(light,emitter,relative)
+					if not light.get_parent().is_visible_in_tree(): inactive_coffers += 1
+					var face_size: Vector2 = light.area_size if light is AreaLight3D else Vector2.ZERO
+					_check_coffer_face(light.get_meta("fixture_face"), face_size, emitter, relative)
 					# Each source is a real rim segment in a shared batched mesh.
-					var size := Vector3(light.area_size.x,0,light.area_size.y)
+					var size := Vector3(face_size.x,0,face_size.y)
 					bounds = AABB(light.get_meta("fixture_face")-size*0.5,size)
 				var face := bounds.get_center()
 				face.y = bounds.end.y if upward else bounds.position.y
@@ -94,7 +97,7 @@ func run() -> void:
 			if lamps.is_empty(): dead += 1
 			elif theme in [0,10]:
 				expect(lamps.size()==live_lenses+shafts,"illuminated lens has no matching source")
-			else: expect(lamps.size()==fixtures*(1 if theme in [2,4] else 2)+skylights.size(),"live fitting is missing an emitting face")
+			else: expect(lamps.size()-inactive_coffers==fixtures*(1 if theme in [2,4] else 2)+skylights.size(),"live fitting is missing an emitting face")
 			for node in chunk.get_children():
 				if not node is BloomFixtureFlicker: continue
 				flickering += 1
@@ -182,13 +185,12 @@ func _check_school_gym_grid() -> void:
 			expect(positions.has(Vector2(x, z)), "School gym has a gap in its ceiling grid")
 
 
-func _check_coffer_face(light: AreaLight3D, lens: MeshInstance3D, relative: Transform3D) -> void:
+func _check_coffer_face(centre: Vector3, size: Vector2, lens: MeshInstance3D, relative: Transform3D) -> void:
 	var triangles := lens.mesh.get_faces()
-	var centre: Vector3 = light.get_meta("fixture_face")
 	# Check centre and corners against actual emissive triangles. The whole
 	# ceiling's AABB would also contain dark insets and cannot prove alignment.
 	for offset in [Vector2.ZERO,Vector2(-0.499,-0.499),Vector2(0.499,-0.499),Vector2(-0.499,0.499),Vector2(0.499,0.499)]:
-		var point := centre+Vector3(offset.x*light.area_size.x,0,offset.y*light.area_size.y)
+		var point := centre+Vector3(offset.x*size.x,0,offset.y*size.y)
 		var covered := false
 		for i in range(0,triangles.size(),3):
 			if Geometry3D.ray_intersects_triangle(point+Vector3.UP*0.1,Vector3.DOWN,

@@ -1736,7 +1736,7 @@ func prepare_runtime_rendering(room_light_fade_begin := 0.0, deadline_usec := 0)
 	# is an installation policy shared by streaming and blackout replacements.
 	for node in find_children("*", "Light3D", true, false):
 		var light := node as Light3D
-		if not airport_walls.is_empty() and light is AreaLight3D and light.has_meta("fixture_face"):
+		if not airport_walls.is_empty() and light.has_meta("fixture_face"):
 			AIRPORT_FIXTURE_LIGHTING.restrict_ceiling_fixture(light, self, cell, airport_walls)
 		var room_light := bool(light.get_meta("stream_room_light", false))
 		if room_light_fade_begin > 0.0 and room_light and light.distance_fade_enabled:
@@ -7352,7 +7352,8 @@ func set_blackout(on: bool, variants: Dictionary = {}) -> void:
 		for light in _power_lights:
 			# Keep installed ceiling fixtures in the renderer's spatial index.
 			# A ballast can keep changing energy, so isolate all light channels.
-			if installed and light.visible and light is AreaLight3D and light.has_meta(&"fixture_emitter") \
+			if installed and light.visible and light.has_meta(&"fixture_emitter") \
+					and (light is AreaLight3D or (light is SpotLight3D and light.has_meta(&"fixture_face"))) \
 					and light.get_child_count() == 0 and light.get_script() == null:
 				_blackout_fixture_channels[light] = [light.layers, light.light_energy,
 					light.light_indirect_energy, light.light_volumetric_fog_energy]

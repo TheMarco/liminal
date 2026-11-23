@@ -222,6 +222,13 @@ func _check_fixture_light_masks() -> void:
 	check((fixture.light_cull_mask & east) == 0, "full wall did not exclude the adjacent cell")
 	check((fixture.light_cull_mask & diagonal) != 0, "light cannot reach a diagonal through its open side")
 	check((fixture.light_cull_mask & 1) != 0, "room masks removed light from moving props")
+	var spot := SpotLight3D.new()
+	spot.transform = fixture.transform
+	spot.spot_range = fixture.area_range
+	room.add_child(spot)
+	lighting.restrict_ceiling_fixture(spot, room, cell, heights)
+	check((spot.light_cull_mask & east) == 0 and (spot.light_cull_mask & diagonal) != 0
+		and (spot.light_cull_mask & 1) != 0, "coffer spotlight mask lost an open side or crossed a solid wall")
 	heights[2] = 3.5
 	fixture.light_cull_mask = original
 	lighting.restrict_ceiling_fixture(fixture, room, cell, heights)

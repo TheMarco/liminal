@@ -1034,9 +1034,12 @@ func _apply_graphics_settings() -> void:
 	var cheap_lighting := bool(_settings.get_value("cheap_lighting"))
 	if cheap_lighting != _applied_graphics.get("cheap_lighting", false):
 		GraphicsQuality.refresh_practical_lights(get_tree(), _settings.values)
-	var fill_size := GraphicsQuality.airport_fill_shadow_size(_settings.values)
-	if fill_size != GraphicsQuality.airport_fill_shadow_size(_applied_graphics):
-		get_tree().set_group(GraphicsQuality.AIRPORT_FILL_LIGHTS, &"light_size", fill_size)
+	var full_airport := GraphicsQuality.full_airport_lighting(_settings.values)
+	if full_airport != GraphicsQuality.full_airport_lighting(_applied_graphics):
+		get_tree().set_group(GraphicsQuality.AIRPORT_AREA_BANKS, &"visible", full_airport)
+		get_tree().set_group(GraphicsQuality.AIRPORT_SPOT_BANKS, &"visible", not full_airport)
+		get_tree().set_group(GraphicsQuality.AIRPORT_FILL_LIGHTS, &"light_size",
+			GraphicsQuality.airport_fill_shadow_size(_settings.values))
 	var reflections := int(_settings.get_value("reflections"))
 	if reflections != _applied_graphics.get("reflections", -1):
 		get_tree().call_group(GraphicsQuality.ROOM_REFLECTIONS, &"set_visible", reflections > 0)

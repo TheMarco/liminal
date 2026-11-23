@@ -278,6 +278,43 @@ func check_airport_fill_shadows(settings: GameSettings) -> void:
 	settings.apply_quality_preset(2)
 
 
+func check_airport_coffer_modes(settings: GameSettings) -> void:
+	# The D7 lounge has a dead circuit on this seed. The adjoining tall hall
+	# supplies the ceiling lights visible from its gate.
+	var room := Chunk.new(WorldGen.level_seed(1307988285, 4), Vector2i(-5, 4), 4)
+	root.add_child(room)
+	var areas := room.find_child("AreaLights", true, false) as Node3D
+	var spots := room.find_child("SpotLights", true, false) as Node3D
+	expect(areas != null and spots != null, "the hall beside Gate D7 has no coffer lighting")
+	if areas != null and spots != null:
+		expect(areas.get_child_count() == 16 and spots.get_child_count() == 16,
+			"Gate D7 lost a ceiling source")
+		for preset in 4:
+			settings.apply_quality_preset(preset)
+			expect(areas.is_visible_in_tree() == (preset == 3) and spots.is_visible_in_tree() == (preset < 3),
+				"Airport coffer illumination doubled or used the wrong preset")
+		settings.set_value("cheap_lighting", true)
+		expect(spots.is_visible_in_tree() and not areas.is_visible_in_tree(),
+			"Cheap Lighting with Ultra shadows did not select spotlights")
+		room.set_blackout(true)
+		settings.apply_quality_preset(3)
+		root.remove_child(room)
+		settings.apply_quality_preset(1)
+		root.add_child(room)
+		expect(spots.is_visible_in_tree() and not areas.is_visible_in_tree(), "parked gate missed a preset change")
+		for light: Light3D in spots.get_children() + areas.get_children():
+			expect(not light.visible or (light.layers == 0 and light.light_energy == 0.0
+				and light.light_indirect_energy == 0.0 and light.light_volumetric_fog_energy == 0.0),
+				"switching coffer lights in a blackout left a light channel on")
+		room.set_blackout(false)
+		for light: SpotLight3D in spots.get_children():
+			expect(light.is_visible_in_tree() and light.layers != 0 and light.light_energy > 0.0 and light.shadow_enabled,
+				"the active coffer spotlight did not restore illumination and shadows")
+	stop_audio(room)
+	room.free()
+	settings.apply_quality_preset(2)
+
+
 func run() -> void:
 	var path := "/tmp/liminal-quality-%d.cfg" % OS.get_process_id()
 	var settings := GameSettings.new(path)
@@ -491,6 +528,7 @@ func run() -> void:
 	var menu: PauseMenu = game._pause_menu
 	check_cheap_lighting(game, menu, settings)
 	check_airport_fill_shadows(settings)
+	check_airport_coffer_modes(settings)
 	expect(menu.TABS.size() == 4, "player menu tab count changed")
 	for tab in ["Video", "Controls", "Audio", "Accessibility"]:
 		expect(menu._pages.has(tab) and tab in menu.TABS, "player menu lost tab " + tab)
