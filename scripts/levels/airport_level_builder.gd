@@ -103,6 +103,9 @@ func _air_lighting() -> void:
 				Mats.charcoal(), ctx.ceiling_height, true)
 	if dead:
 		return
+	for light in lights:
+		if int(light.get_meta("practical_shadow_tier")) >= 4:
+			GraphicsQuality.configure_airport_fill(light)
 	if flicker:
 		FIXTURE_LIGHTING.ballast(scene,lights,pmat,WorldGen.h(ctx.world_seed,ctx.cell.x,ctx.cell.y,10),
 			Vector3(3.0,ctx.ceiling_height-0.1,2.5))

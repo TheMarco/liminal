@@ -78,7 +78,7 @@ static func rectangular(parent: Node3D, lens: MeshInstance3D, size: Vector2,
 	light.area_attenuation = 0.4 if upward else 1.0
 	light.light_color = color
 	light.light_energy = energy
-	light.light_size = 0.08
+	light.light_size = GraphicsQuality.RECTANGULAR_SHADOW_SIZE
 	light.light_specular = 1.0
 	light.light_volumetric_fog_energy = 0.15 if upward else 0.45
 	light.shadow_opacity = 0.8

@@ -8,6 +8,8 @@ const VIDEO_SIGNAL_SIZES := [Vector2i(360,240), Vector2i(540,360), Vector2i(720,
 const VIDEO_OUTPUT_HEIGHTS := [720,1080,1440,0]
 const PREVIEW_SHADOW_ATLAS_SIZE := 2048
 const PRACTICAL_LIGHTS := &"quality_practical_lights"
+const AIRPORT_FILL_LIGHTS := &"airport_ceiling_fill_lights"
+const RECTANGULAR_SHADOW_SIZE := 0.08
 const ROOM_REFLECTIONS := &"quality_room_reflections"
 const AUTHORED_LIGHT_FADE := &"_quality_authored_light_fade"
 const AUTHORED_META := &"_quality_authored_environment"
@@ -24,6 +26,17 @@ static func configure_practical_light(light: Light3D, shadow_tier: int) -> void:
 	light.set_meta("practical_shadow_tier", shadow_tier)
 	_register_room_light(light)
 	apply_practical_light(light, GameSettings.current.values if GameSettings.current != null else {})
+
+## These secondary panels still cast blocking shadows. Ultra also samples
+## the variable-width penumbra around their shadow edges.
+static func airport_fill_shadow_size(values: Dictionary) -> float:
+	if int(values.get("shadow_quality", 3)) == 3 and not bool(values.get("cheap_lighting", false)):
+		return RECTANGULAR_SHADOW_SIZE
+	return 0.0
+
+static func configure_airport_fill(light: Light3D) -> void:
+	light.add_to_group(AIRPORT_FILL_LIGHTS)
+	_sync_practical_light(light)
 
 ## Capture the finished room's normal distances, including any streaming extension.
 ## Emitting meshes and gameplay-controlled visibility/energy remain independent.
@@ -43,6 +56,10 @@ static func _register_room_light(light: Light3D) -> void:
 
 static func _sync_practical_light(light: Light3D) -> void:
 	var values: Dictionary = GameSettings.current.values if GameSettings.current != null else {}
+	if light.is_in_group(AIRPORT_FILL_LIGHTS):
+		var size := airport_fill_shadow_size(values)
+		if not is_equal_approx(light.light_size, size):
+			light.light_size = size
 	if light.get_meta(&"cheap_lighting") != values.get("cheap_lighting", false):
 		apply_practical_light(light, values)
 

@@ -238,6 +238,46 @@ func check_cheap_lighting(game: Node, menu: PauseMenu, settings: GameSettings) -
 	room.free()
 
 
+func check_airport_fill_shadows(settings: GameSettings) -> void:
+	settings.apply_quality_preset(2)
+	var room := Chunk.new(985078973, Vector2i.ZERO, 4)
+	root.add_child(room)
+	var fill: AreaLight3D
+	var key_light: AreaLight3D
+	for light: AreaLight3D in room.find_children("*", "AreaLight3D", true, false):
+		if light.get_meta("visible_source", "") not in ["airport_ceiling_fixture", "airport_grand_coffer"]:
+			continue
+		if int(light.get_meta("practical_shadow_tier")) >= 4:
+			fill = light
+		else:
+			key_light = light
+	expect(fill != null and key_light != null, "Airport sample needs both primary and secondary panels")
+	if fill != null and key_light != null:
+		var emitter := fill.area_size
+		var energy := fill.light_energy
+		var radius := key_light.light_size
+		expect(radius > 0.0 and fill.light_size == 0.0 and fill.shadow_enabled,
+			"Quality lost a primary penumbra or a secondary blocker")
+		settings.apply_quality_preset(3)
+		expect(is_equal_approx(fill.light_size, radius), "Ultra did not restore secondary penumbras")
+		settings.set_value("cheap_lighting", true)
+		expect(fill.light_size == 0.0 and is_equal_approx(key_light.light_size, radius),
+			"Cheap Lighting did not simplify just the secondary Airport shadows")
+		settings.apply_quality_preset(2)
+		room.set_blackout(true)
+		root.remove_child(room)
+		settings.apply_quality_preset(3)
+		root.add_child(room)
+		expect(is_equal_approx(fill.light_size, radius) and (not fill.visible or fill.light_energy == 0.0),
+			"a parked Airport room missed the shadow setting or relit during blackout")
+		room.set_blackout(false)
+		expect(fill.shadow_enabled and fill.area_size == emitter and is_equal_approx(fill.light_energy, energy),
+			"restoring power changed an Airport emitter or its shadow blocker")
+	stop_audio(room)
+	room.free()
+	settings.apply_quality_preset(2)
+
+
 func run() -> void:
 	var path := "/tmp/liminal-quality-%d.cfg" % OS.get_process_id()
 	var settings := GameSettings.new(path)
@@ -450,6 +490,7 @@ func run() -> void:
 	await settle()
 	var menu: PauseMenu = game._pause_menu
 	check_cheap_lighting(game, menu, settings)
+	check_airport_fill_shadows(settings)
 	expect(menu.TABS.size() == 4, "player menu tab count changed")
 	for tab in ["Video", "Controls", "Audio", "Accessibility"]:
 		expect(menu._pages.has(tab) and tab in menu.TABS, "player menu lost tab " + tab)
