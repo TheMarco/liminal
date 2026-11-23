@@ -29,7 +29,7 @@ const SPAWN_SEPARATION := 4.0
 ## All runtime arrivals reserve space relative to the player's current feet,
 ## including directed photo/tape encounters and developer placements.
 const MIN_PLAYER_SPAWN_DISTANCE := 6.0
-const PHOTO_REACTION_SECONDS := 1.25
+const PLAYER_REACTION_SECONDS := 1.25
 
 # revenant, drowned, pilgrim, trailing, gaoler, reacher, drifter.
 # Seven animated wraiths, weighted close to evenly — none of them is a
@@ -88,9 +88,7 @@ var photo_reviewing := false:
 		if photo_reviewing == value: return
 		photo_reviewing = value
 		if not value:
-			hold_new_spawns(PHOTO_REACTION_SECONDS)
-			for figure in active_figures():
-				figure.hold_approach(PHOTO_REACTION_SECONDS)
+			give_player_reaction_time()
 		_sync_suppression()
 var interval_scale := 1.0
 ## Descent floor index, mirrored in by main on every level switch; gates the
@@ -228,6 +226,12 @@ func force_encounter(delay := 1.6, respect_pacing := false) -> void:
 ## and leaving every figure already in the world free to move and burn.
 func hold_new_spawns(seconds: float) -> void:
 	_new_spawn_hold = maxf(_new_spawn_hold, seconds)
+
+
+func give_player_reaction_time() -> void:
+	hold_new_spawns(PLAYER_REACTION_SECONDS)
+	for figure in active_figures():
+		figure.hold_approach(PLAYER_REACTION_SECONDS)
 
 
 func _forced_spawn() -> bool:
@@ -485,7 +489,7 @@ func _try_spawn() -> bool:
 func _spawn_at(ground: Vector3, announce: bool, grace: float) -> bool:
 	# Keep the invariant at the creation boundary too (including debug and
 	# authored spawns), rather than relying on every caller remembering it.
-	if photo_reviewing or _new_spawn_hold > 0.0 \
+	if passive or suspended or photo_reviewing or _new_spawn_hold > 0.0 \
 			or not _player_spawn_clear(ground) \
 			or not _can_add_figure() or not _spawn_separated(ground):
 		return false

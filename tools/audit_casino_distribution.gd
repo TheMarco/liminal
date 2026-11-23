@@ -62,10 +62,10 @@ func run() -> void:
 				furnished.free()
 		if si < 8:
 			var route := DescentRoute.build(seed, 0, 0)
-			var from_arrival := nearest_slots(seed, route.origin)
+			var from_arrival := nearest_slots(seed, route.arrival_cell)
 			descent_max = maxi(descent_max, int(from_arrival.distance))
 			if not report:
-				check(from_arrival.distance <= 4, "Descent arrival is far from slots: seed %d, origin %s" % [seed, route.origin])
+				check(from_arrival.distance <= 4, "Descent arrival is far from slots: seed %d, arrival %s" % [seed, route.arrival_cell])
 		for x in range(-12, 13):
 			for z in range(-12, 13):
 				var cell := Vector2i(x, z)

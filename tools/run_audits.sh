@@ -106,6 +106,7 @@ AUDITS=(
 	"survivability|tools/audit_survivability.gd|"
 	"prop_overlap|tools/audit_prop_overlap.gd|"
 	"airport_colliders|tools/audit_airport_colliders.gd|"
+	"airport_queue|tools/audit_airport_queue.gd|"
 	"airport_ceiling_grid|tools/audit_airport_ceiling_grid.gd|"
 	"office_ceiling_grid|tools/audit_office_ceiling_grid.gd|"
 	"office_shadow_batch|tools/audit_office_shadow_batch.gd|"

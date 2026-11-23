@@ -8,6 +8,7 @@ const VIDEO_SIGNAL_SIZES := [Vector2i(360,240), Vector2i(540,360), Vector2i(720,
 const VIDEO_OUTPUT_HEIGHTS := [720,1080,1440,0]
 const PREVIEW_SHADOW_ATLAS_SIZE := 2048
 const PRACTICAL_LIGHTS := &"quality_practical_lights"
+const ROOM_REFLECTIONS := &"quality_room_reflections"
 const AUTHORED_LIGHT_FADE := &"_quality_authored_light_fade"
 const AUTHORED_META := &"_quality_authored_environment"
 const AUTHORED_KEYS := ["sdfgi_enabled", "sdfgi_cascades", "sdfgi_min_cell_size",
@@ -240,5 +241,9 @@ static func apply_global(settings: GameSettings) -> void:
 
 static func apply_frame_pacing(settings: GameSettings) -> void:
 	Engine.max_fps = int(settings.get_value("frame_limit"))
-	if DisplayServer.get_name() != "headless":
-		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(settings.get_value("vsync")) else DisplayServer.VSYNC_DISABLED)
+	if DisplayServer.get_name() == "headless":
+		return
+	var mode := DisplayServer.VSYNC_ENABLED if bool(settings.get_value("vsync")) else DisplayServer.VSYNC_DISABLED
+	# A redundant VSync request makes Vulkan recreate the window's swapchain.
+	if DisplayServer.window_get_vsync_mode() != mode:
+		DisplayServer.window_set_vsync_mode(mode)

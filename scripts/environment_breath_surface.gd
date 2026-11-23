@@ -14,6 +14,7 @@ var collision: CollisionShape3D
 var _flat_grid := PackedVector3Array()
 var _grid_heights: Array[PackedFloat32Array] = []
 var _triangles := PackedInt32Array()
+var _collision_weights := PackedFloat32Array()
 var _installed := false
 var _spacing := 0.12
 ## Preparation slicing: at most PREPARE_BATCH_MAX vertices per prepare_step,
@@ -34,6 +35,11 @@ func begin_setup(selection: Dictionary, kind: String) -> void:
 	var face: SurfaceWear.Face = selection.face
 	frame = Transform3D(Basis(face.u, face.v, face.normal), selection.center)
 	_patch_size = selection.size
+	# At 360/480 lines the dense blend mesh costs more to upload and skin
+	# than its extra vertices show. Preserve detail on narrow patches and
+	# leave the independently sampled collision surface at full resolution.
+	if GameSettings.current != null and int(GameSettings.current.get_value("render_resolution")) <= 1:
+		_spacing = clampf(minf(_patch_size.x, _patch_size.y) / 8.0, 0.12, 0.24)
 	targets = Profile.targets(kind, _patch_size, float(selection.depth))
 	weights.resize(targets.size())
 	_pending = [{"mesh": face.mesh, "transform": face.transform}]
@@ -182,7 +188,7 @@ func _step_custom() -> bool:
 	var node: MeshInstance3D = _building.node
 	if not is_instance_valid(node): return false
 	var material: Material = _building.material
-	if not (material is ShaderMaterial):
+	if not (material is ShaderMaterial) or material.shader == SurfaceWear.PATCH_SHADER:
 		_building.stage = "morph"
 		_building.cursor = 0
 		return true
@@ -359,6 +365,8 @@ func _prepare_collision(size: Vector2) -> void:
 
 func pose(values: PackedFloat32Array) -> void:
 	if not prepared or values.size() != targets.size(): return
+	if _installed and values == weights: return
+	var previous := weights
 	weights = values.duplicate()
 	var nonzero := false
 	for i in weights.size():
@@ -374,7 +382,9 @@ func pose(values: PackedFloat32Array) -> void:
 			node.mesh = piece.mesh
 			node.material_override = piece.render_material
 			node.extra_cull_margin = piece.expanded_margin
-		for i in weights.size(): node.set_blend_shape_value(i, weights[i])
+		for i in weights.size():
+			if not _installed or weights[i] != previous[i]:
+				node.set_blend_shape_value(i, weights[i])
 	_installed = true
 
 func height_at(point: Vector2) -> float:
@@ -387,6 +397,7 @@ func sync_collision() -> void:
 	if not _installed:
 		collision.disabled = true
 		return
+	if not collision.disabled and _collision_weights == weights: return
 	var positions := _flat_grid.duplicate()
 	for k in weights.size():
 		if weights[k] <= 0: continue
@@ -396,6 +407,7 @@ func sync_collision() -> void:
 	faces.resize(_triangles.size())
 	for i in _triangles.size(): faces[i] = positions[_triangles[i]]
 	(collision.shape as ConcavePolygonShape3D).set_faces(faces)
+	_collision_weights = weights
 	collision.disabled = false
 
 func restore() -> void:

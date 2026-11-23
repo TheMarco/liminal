@@ -15,6 +15,12 @@ func shot(label: String) -> void:
 		await process_frame
 	view.get_texture().get_image().save_png(OUT.path_join(label + ".png"))
 
+func wait_for_playable_frames() -> void:
+	# The rendered evidence PNGs can cause stall recovery. A simulated catch
+	# must reach the player during a frame where a real catch is allowed.
+	while GameplayFrameGuard.is_recovering():
+		await process_frame
+
 func figure(at: Vector3, manager: ShadowFigures) -> ShadowFigure:
 	var f := ShadowFigure.new()
 	f.player = game.player
@@ -78,7 +84,14 @@ func run_test() -> void:
 	for child in visit.bounty.get_children():
 		if child is MeshInstance3D or child is Label3D:
 			assert(child.layers & 1, "reward cue needs the camera to be seen")
-	assert(not visit.bounty.bounds.has_point(visit.bounty._lamp.position), "reward light buried inside prop")
+	# Bounty bounds follow the glowing bolt. Check the actual room geometry
+	# for a buried lamp, and ensure the light stays attached to the glyph.
+	var lamp := visit.bounty._lamp
+	assert(lamp.global_position.is_equal_approx(visit.bounty._icon.global_position))
+	var lamp_query := PhysicsPointQueryParameters3D.new()
+	lamp_query.position = lamp.global_position
+	lamp_query.collision_mask = 1
+	assert(lamp.get_world_3d().direct_space_state.intersect_point(lamp_query, 1).is_empty(), "reward light buried inside prop")
 	await shot("00-reward-from-entrance")
 	assert(hud._panel.visible and hud._label.text == "FLASH", "realm flash locator is missing")
 	assert(not hud._evidence_row.visible, "realm shows source-floor objectives")
@@ -144,8 +157,9 @@ func run_test() -> void:
 	# trigger a caught return. A previously owned charge may be spent here.
 	game.player.grant_emergency_flash()
 	var realm_attacker := figure(game.player.global_position + Vector3.FORWARD, visit.threats)
+	await wait_for_playable_frames()
 	realm_attacker._seize()
-	assert(saves == 1 and visit.phase == RealmExcursion.Phase.VISITING)
+	assert(saves == 1 and visit.phase == RealmExcursion.Phase.VISITING, "realm attacker failed to spend the held flash")
 	assert(realm_attacker._fade == ShadowFigure.BURN_FADE and not game.player.emergency_flash_held)
 	# The live award/use signals must update the checkpoint, not just the HUD.
 	var save_path := "/tmp/emergency_flash_runtime_%d.cfg" % Time.get_ticks_usec()
@@ -177,6 +191,7 @@ func run_test() -> void:
 	game._figures.reached_player.connect(func(): catches += 1)
 	var battery: float = game.player.flashlight_charge()
 	photo._raise() # A save must still be visible while using the camera.
+	await wait_for_playable_frames()
 	attacker._seize()
 	assert(saves == 2 and catches == 0 and not game.run.ended and not game._dying)
 	assert(not game.player.emergency_flash_held and not game._flash_icon.held)
@@ -190,6 +205,7 @@ func run_test() -> void:
 	await shot("04-saved-by-flash")
 	assert(game._event_hint.text == "SAVED BY THE FLASH", "save message was immediately overwritten")
 	assert(not DescentProgress.new(save_path).emergency_flash_held, "spent flash would resurrect on Continue")
+	await wait_for_playable_frames()
 	nearby._seize()
 	assert(catches == 1 and saves == 2, "second catch received unrequested immunity")
 	assert(not game.player.emergency_flash_held)

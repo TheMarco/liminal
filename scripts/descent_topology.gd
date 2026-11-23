@@ -338,21 +338,11 @@ func is_wall(cell: Vector2i, dir: int, route: DescentRoute = null) -> bool:
 ## reuse the immutable scan's neighbours; resolve both sides of every mutable
 ## edge now, without caching a door or reality state across transitions.
 func route_neighbour_overrides(route: DescentRoute) -> Dictionary:
-	return _route_neighbour_overrides(route, _current_edges(), true)
-
-
-func _route_neighbour_overrides(route: DescentRoute,
-		state_edges: Dictionary, include_native: bool) -> Dictionary:
 	var affected := {}
-	var layers := [state_edges, _shortcuts, _photo_doors]
-	if include_native:
-		layers.append(_native_doorway_open)
-	for edges in layers:
-		for key in edges:
-			var edge := _base_record_from_key(str(key))
-			var at: Vector2i = edge["cell"]
-			affected[at] = true
-			affected[at + WorldGen.DIRV[edge_dir(edge)]] = true
+	for edge in _route_connection_changes(route, _current_edges(), true):
+		var at := Vector2i(edge.x, edge.y)
+		affected[at] = true
+		affected[at + WorldGen.DIRV[edge.z]] = true
 	var neighbours := {}
 	for at: Vector2i in affected:
 		var connected: Array[Vector2i] = []
@@ -360,12 +350,31 @@ func _route_neighbour_overrides(route: DescentRoute,
 			var other: Vector2i = at + WorldGen.DIRV[dir]
 			if not route.scanned_contains(other):
 				continue
-			var wall := is_wall(at, dir, route) if include_native else \
-				_is_wall_for_route(route, state_edges, at, dir)
-			if not wall:
+			if not is_wall(at, dir, route):
 				connected.append(other)
 		neighbours[at] = connected
 	return neighbours
+
+
+## Canonical (cell.x, cell.y, direction) -> connected, only where a boundary
+## differs from the scanned floor. Live guidance also considers native doors.
+func _route_connection_changes(route: DescentRoute, state_edges: Dictionary,
+		include_native: bool) -> Dictionary[Vector3i, bool]:
+	var edges := state_edges.duplicate()
+	edges.merge(_shortcuts)
+	edges.merge(_photo_doors)
+	if include_native:
+		edges.merge(_native_doorway_open)
+	var changes: Dictionary[Vector3i, bool] = {}
+	for key in edges:
+		var edge := _base_record_from_key(str(key))
+		var at: Vector2i = edge.cell
+		var dir := edge_dir(edge)
+		var wall := is_wall(at, dir, route) if include_native else \
+				_is_wall_for_route(route, state_edges, at, dir)
+		if wall != route.base_is_wall(at, dir):
+			changes[Vector3i(at.x, at.y, dir)] = not wall
+	return changes
 
 
 func shortcut_count() -> int:
@@ -473,8 +482,7 @@ func find_transition(route: DescentRoute, from: Vector2i,
 				touches_player = true
 			var span := (at - from).abs()
 			nearest = mini(nearest, maxi(span.x, span.y))
-			if visited.has(at) or _near_visited(
-					at, visited, EXPLORED_WITNESS_RADIUS):
+			if not visible and _near_visited(at, visited, EXPLORED_WITNESS_RADIUS):
 				visible = true
 		if touches_player or nearest > MUTATION_REVEAL_RADIUS or not visible:
 			continue
@@ -520,11 +528,10 @@ func find_transition(route: DescentRoute, from: Vector2i,
 
 func _near_visited(at: Vector2i, visited: Dictionary,
 		radius: int) -> bool:
-	for key in visited:
-		var seen := key as Vector2i
-		var span := (seen - at).abs()
-		if maxi(span.x, span.y) <= radius:
-			return true
+	for y in range(at.y - radius, at.y + radius + 1):
+		for x in range(at.x - radius, at.x + radius + 1):
+			if visited.has(Vector2i(x, y)):
+				return true
 	return false
 
 
@@ -534,25 +541,9 @@ func distance_to_target_for_state(route: DescentRoute, from: Vector2i,
 		return -1
 	var state_edges: Dictionary = _states[state_id].edges \
 		if state_id >= 0 and state_id < _states.size() else {}
-	# Planning deliberately excludes transient native doors, exactly as the
-	# edge-by-edge search did. Photo doors and durable shortcuts remain live.
-	var neighbours := _route_neighbour_overrides(route, state_edges, false)
-	var distance := {route.target: 0}
-	var queue: Array[Vector2i] = [route.target]
-	var head := 0
-	while head < queue.size():
-		var at := queue[head]
-		head += 1
-		if at == from:
-			return int(distance[at])
-		var connected: Array[Vector2i] = neighbours[at] \
-			if neighbours.has(at) else route.base_neighbours(at)
-		for other in connected:
-			if distance.has(other):
-				continue
-			distance[other] = int(distance[at]) + 1
-			queue.append(other)
-	return -1
+	# Evaluate the prospective layout with the current photo doors and durable
+	# shortcuts. Transient native doors participate only in live lift guidance.
+	return route.candidate_distance(from, _route_connection_changes(route, state_edges, false))
 
 
 func _current_edges() -> Dictionary:

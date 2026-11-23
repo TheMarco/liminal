@@ -159,7 +159,9 @@ static func prepare_shadow_mesh(instance: MeshInstance3D) -> void:
 	var size := instance.mesh.get_aabb().size*basis.get_scale().abs()
 	var segments := Vector3i(maxi(0,ceili(size.x)-1),maxi(0,ceili(size.y)-1),maxi(0,ceili(size.z)-1))
 	if segments == Vector3i.ZERO: return
-	var key := str(instance.mesh.get_rid())+str(segments)
+	# Asking a PrimitiveMesh for its server RID can upload the original
+	# immediately, even though the instance is about to use its subdivision.
+	var key := [instance.mesh.get_instance_id(), segments]
 	if not _shadow_meshes.has(key):
 		var mesh := instance.mesh.duplicate()
 		if mesh is BoxMesh:

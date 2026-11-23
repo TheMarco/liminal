@@ -218,14 +218,15 @@ func can_commit(proposal: TopologyDelta) -> bool:
 		if passer != null and _point_near(
 				passer.global_position, cells, 0.8):
 			return false
+	var hostiles := player.get_tree().get_nodes_in_group(&"hostile_shadow_figure")
 	for at in cells:
 		var chunk := manager.chunk_at(at)
 		if chunk == null:
 			continue
-		if not chunk.find_children("*", "ShadowFigure", true, false).is_empty():
+		if chunk.has_moving_swing_door():
 			return false
-		for node in chunk.find_children("*", "Node3D", true, false):
-			if bool(node.get_meta("moving", false)):
+		for hostile in hostiles:
+			if chunk.is_ancestor_of(hostile):
 				return false
 	return true
 
@@ -429,21 +430,12 @@ func rebuild_cells(proposal: TopologyDelta) -> Array[Vector2i]:
 	if proposal == null or route == null:
 		return out
 	for edge in proposal.edges:
-		for at in _endpoint_rooms(edge["cell"], edge["other"]):
-			if not out.has(at):
-				out.append(at)
+		for endpoint: Vector2i in [edge.cell, edge.other]:
+			for member in route.base_room_members(endpoint):
+				if not out.has(member):
+					out.append(member)
 	for room in proposal.rooms:
-		for at in _endpoint_rooms(room, room):
-			if not out.has(at):
-				out.append(at)
-	return out
-
-
-func _endpoint_rooms(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	for endpoint in [a, b]:
-		for member in WorldGen.owning_room_members(
-				route.world_seed, endpoint, route.theme):
+		for member in route.base_room_members(room):
 			if not out.has(member):
 				out.append(member)
 	return out

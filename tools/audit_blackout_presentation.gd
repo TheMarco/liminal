@@ -214,6 +214,11 @@ func _indexed_room() -> void:
 	fixed.mesh.material = original
 	fixed_root.add_child(fixed)
 	fixed.owner = fixed_root
+	var fixture := preload("res://scripts/fixture_lighting.gd").lower_face(holder, replaced,
+		Color.WHITE, 2.75, 8.0, 2, "audit fixture")
+	fixture.layers = 5
+	fixture.light_indirect_energy = 0.625
+	fixture.light_volumetric_fog_energy = 0.375
 	root.add_child(room)
 	var current := original.duplicate() as StandardMaterial3D
 	current.emission_enabled = true
@@ -221,10 +226,19 @@ func _indexed_room() -> void:
 	replaced.material_override = current
 	original.emission_enabled = true
 	room.set_blackout(true)
+	expect(fixture.visible and fixture.layers == 0 and fixture.light_energy == 0.0
+		and fixture.light_indirect_energy == 0.0 and fixture.light_volumetric_fog_energy == 0.0,
+		"installed fixture still contributes direct, indirect or volumetric light")
+	fixture.light_energy = 1.5 # A running ballast writes energy during an outage.
+	room.set_blackout(true)
+	expect(fixture.layers == 0, "ballast repowered a fixture during an outage")
 	expect(fixed.get_active_material(0) != original, "A fixed imported surface stayed lit")
 	expect(replaced.material_override != current and replaced.material_override.albedo_color == Color.CORAL
 		and changed.material_override != original, "indexed bindings missed a replacement or newly powered material")
 	room.set_blackout(false)
+	expect(fixture.visible and fixture.layers == 5 and fixture.light_energy == 2.75
+		and fixture.light_indirect_energy == 0.625 and fixture.light_volumetric_fog_energy == 0.375,
+		"installed fixture did not recover its original light channels")
 	expect(fixed.get_surface_override_material(0) == null and fixed.get_active_material(0) == original,
 		"Restoring a fixed imported surface left a stale override")
 	expect(replaced.material_override == current and changed.material_override == original, "indexed bindings restored stale materials")
@@ -236,6 +250,7 @@ func _indexed_room() -> void:
 	room.set_blackout(true)
 	expect(not late.visible, "late nested light stayed powered")
 	fixed.free()
+	fixture.free()
 	replaced.free()
 	room.set_blackout(false)
 	expect(late.visible, "late light failed to recover after removing an indexed mesh")

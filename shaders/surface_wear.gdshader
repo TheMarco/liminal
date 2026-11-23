@@ -20,8 +20,11 @@ varying flat vec3 patch_axis_u;
 varying flat vec3 patch_axis_v;
 
 void vertex() {
-    world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-    world_normal = normalize(MODEL_NORMAL_MATRIX * NORMAL);
+    // Each mark is a centered XY quad. Its UVs and physical size keep the
+    // tile pattern attached to the same spot while a wall or floor bends.
+    vec2 rest = vec2(UV.x - 0.5, 0.5 - UV.y) * patch_size;
+    world_position = (MODEL_MATRIX * vec4(rest, 0.0, 1.0)).xyz;
+    world_normal = normalize(MODEL_NORMAL_MATRIX[2]);
     patch_origin = MODEL_MATRIX[3].xyz;
     patch_axis_u = normalize(MODEL_MATRIX[0].xyz);
     patch_axis_v = normalize(MODEL_MATRIX[1].xyz);

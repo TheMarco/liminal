@@ -10,10 +10,13 @@ class Figure extends ShadowFigure:
 	func _seize() -> void: catches += 1
 
 class ReviewCamera extends PhotoCamera:
-	# Substitute only the GPU readback; exercise the real shutter/review state.
-	func _render_snapshot() -> Image:
+	# Headless stand-in for the GPU exposure and download.
+	var print_image := Image.create(4, 4, false, Image.FORMAT_RGB8)
+	func _draw_snapshot() -> Texture2D:
 		await get_tree().process_frame
-		return Image.create(4, 4, false, Image.FORMAT_RGB8)
+		return ImageTexture.create_from_image(print_image)
+	func _download_snapshot(_texture: Texture2D) -> Image:
+		return print_image
 
 func _initialize() -> void: call_deferred("_run")
 

@@ -43,8 +43,8 @@ func _run() -> void:
 			var ws := _level_seed(base, theme)
 			var route := DescentRoute.build(ws, theme, floor_idx)
 			if verbose:
-				print("seed=%d floor=%d theme=%d origin=%s/%d target=%s/%d distance=%d band=%d-%d tier=%d" % [
-					base, floor_idx + 1, theme, route.origin, route.origin_wall,
+				print("seed=%d floor=%d theme=%d arrival=%s/%d target=%s/%d distance=%d band=%d-%d tier=%d" % [
+					base, floor_idx + 1, theme, route.arrival_cell, route.origin_wall,
 					route.target, route.target_wall, route.graph_distance,
 					route.min_dist, route.max_dist, route.fallback_tier])
 			fallback_counts[route.fallback_tier] += 1
@@ -65,6 +65,14 @@ func _run() -> void:
 				per_floor_edges[floor_idx] += edges
 				run_edge_total += edges
 
+	# This shipped Hospital layout put the player in a split room without a car.
+	var hospital_seed := _level_seed(453645223, 5)
+	var hospital := DescentRoute.build(hospital_seed, 5, 6)
+	var hospital_error := _validate(hospital_seed, 5, hospital, hospital.path_from_origin(), true, 6)
+	if not hospital_error.is_empty() or hospital.origin_wall < 0 or hospital.arrival_cell == hospital.origin \
+			or hospital.origin != Vector2i(32, 43) or hospital.target != Vector2i(11, 33):
+		failures += 1
+		print("FAIL Hospital fallback elevator or saved route: ", hospital_error)
 	print("descent route audit: %d seeds × %d floors = %d routes" % [
 		seed_count, DescentRun.FLOOR_COUNT, seed_count * DescentRun.FLOOR_COUNT])
 	print("  route length: %d..%d edges | fallback tiers: ideal=%d styled=%d generic=%d" % [
@@ -102,11 +110,11 @@ func _validate(ws: int, theme: int, route: DescentRoute,
 	if check_repeat:
 		var again := DescentRoute.build(ws, theme, floor_idx)
 		if again.target != route.target or again.target_wall != route.target_wall \
-				or again.origin != route.origin \
+				or again.origin != route.origin or again.arrival_cell != route.arrival_cell \
 				or again.origin_wall != route.origin_wall:
 			return "route is not deterministic"
 	if path.is_empty() or path[0] != route.origin:
-		return "path does not start at the arrival room"
+		return "path does not start at the seeded origin"
 	if path[-1] != route.target:
 		return "path does not reach target"
 	if route.graph_distance != path.size() - 1:
@@ -128,25 +136,29 @@ func _validate(ws: int, theme: int, route: DescentRoute,
 	# The arrival car is a sealed island against a real wall, and the player is
 	# teleported inside it, so its room has to satisfy the same contract.
 	if route.origin_wall >= 0:
-		var origin_root := WorldGen.annex_room_id(ws, route.origin) \
-				if theme == 2 else WorldGen.room_id(ws, route.origin)
-		var origin_size := WorldGen.annex_room_size(ws, route.origin) \
-				if theme == 2 else WorldGen.room_size(ws, route.origin)
-		if origin_root != route.origin or origin_size != 1:
+		var arrival := route.arrival_cell
+		var origin_root := WorldGen.annex_room_id(ws, arrival) \
+				if theme == 2 else WorldGen.room_id(ws, arrival)
+		var origin_size := WorldGen.annex_room_size(ws, arrival) \
+				if theme == 2 else WorldGen.room_size(ws, arrival)
+		if origin_root != arrival or origin_size != 1:
 			return "arrival is not a single-cell room"
-		if not WorldGen.room_split(ws, route.origin, theme).is_empty():
+		if not WorldGen.room_split(ws, arrival, theme).is_empty():
 			return "arrival room is split"
-		var origin_is_corridor := WorldGen.annex_corridor_axis(ws, route.origin) != 0 \
-				if theme == 2 else WorldGen.corridor(ws, route.origin) != 0
+		var origin_is_corridor := WorldGen.annex_corridor_axis(ws, arrival) != 0 \
+				if theme == 2 else WorldGen.corridor(ws, arrival) != 0
 		if origin_is_corridor:
 			return "arrival room is a corridor"
-		if not WorldGen.is_wall(ws, route.origin, route.origin_wall, theme):
+		if not WorldGen.is_wall(ws, arrival, route.origin_wall, theme):
 			return "arrival car is not backed by a solid wall"
-		var reach := _reachable_from(ws, theme, route.arrival_search_center, route.origin)
+		var limit := DescentRoute.ARRIVAL_RADIUS
+		if arrival != route.origin:
+			limit = int(route._origin_distance.get(arrival, -1))
+			if route.next_room_exit(arrival).is_empty() or PhotoDirector.build_plan(route).has(arrival):
+				return "alternate lift lacks guidance or occupies an evidence room"
+		var reach := _reachable_from(ws, theme, route.arrival_search_center, arrival, limit)
 		if reach < 0:
 			return "arrival room is unreachable from the arrival search centre"
-		if reach > DescentRoute.ARRIVAL_RADIUS:
-			return "arrival room is %d cells from the arrival search centre" % reach
 	# A depth-scaled band is the whole point of the length ramp; only a
 	# documented fallback tier is allowed outside it.
 	if route.fallback_tier == 0:
@@ -182,7 +194,7 @@ func _validate(ws: int, theme: int, route: DescentRoute,
 	return ""
 
 
-func _reachable_from(ws: int, theme: int, start: Vector2i, goal: Vector2i) -> int:
+func _reachable_from(ws: int, theme: int, start: Vector2i, goal: Vector2i, limit: int) -> int:
 	var dist := {start: 0}
 	var queue: Array[Vector2i] = [start]
 	var head := 0
@@ -192,7 +204,7 @@ func _reachable_from(ws: int, theme: int, start: Vector2i, goal: Vector2i) -> in
 		var d := int(dist[c])
 		if c == goal:
 			return d
-		if d >= DescentRoute.ARRIVAL_RADIUS:
+		if d >= limit:
 			continue
 		for dir in 4:
 			var nb: Vector2i = c + WorldGen.DIRV[dir]

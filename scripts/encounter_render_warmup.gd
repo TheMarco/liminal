@@ -21,11 +21,13 @@ var _power_surfaces := PowerSurfaces.new()
 var _power_environment := PowerEnvironment.new()
 var _blackout_materials: Array = []
 var _view: SubViewport
+var _covered_source: SubViewport
 var _retained: Node
 var _figures: Array[ShadowFigure] = []
 var _draw_times := {}
 
 func _exit_tree() -> void:
+	_resume_covered_source()
 	if is_instance_valid(_retained):
 		_retained.free()
 		_retained = null
@@ -37,8 +39,13 @@ func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := fal
 		completed.emit()
 		return
 	if live_power_pass:
-		# Submit the destination before adding a second scene full of encounters.
+		# Submit the real arrival, then hold that covered frame while only the
+		# sample tray changes. Drawing both worlds re-runs the full floor's
+		# shadows, GI and post-processing on every encounter warmup frame.
 		await _draw_state("arrival")
+		if source is SubViewport and source.render_target_update_mode == SubViewport.UPDATE_ALWAYS:
+			_covered_source = source
+			_covered_source.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_view = SubViewport.new()
 	_view.size = Vector2i(256, 128)
 	_view.own_world_3d = true
@@ -142,9 +149,10 @@ func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := fal
 		if is_instance_valid(actor._burn_particles):
 			actor._burn_particles.set_process(false)
 		actor._flash.light_energy = 1.0
-		await _draw_state("burn")
+	# Fragments and the mutation samples occupy separate meshes. Exercise
+	# both layouts in the same submission.
 	_warm_mutation_reveal()
-	await _draw_state("reveal")
+	await _draw_state("burn_and_reveal")
 	# The live effect shares the cached materials and meshes. Its temporary
 	# bodies and particle emitter can go away with the loading scene.
 	corner_samples.free()
@@ -154,10 +162,16 @@ func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := fal
 func _finish(theme: int, started: int) -> void:
 	finished = true
 	_release_view()
+	_resume_covered_source()
 	process_mode = Node.PROCESS_MODE_DISABLED
 	RuntimeDiagnostics.mark("encounter_warmup_finished", {"level": theme,
 		"elapsed_ms": (Time.get_ticks_usec() - started) / 1000.0, "draw_ms": _draw_times})
 	completed.emit()
+
+func _resume_covered_source() -> void:
+	if is_instance_valid(_covered_source):
+		_covered_source.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		_covered_source = null
 
 func _release_view() -> void:
 	# Keep only the resource owners, outside the scene/physics tree. Dropping
@@ -230,7 +244,8 @@ func _prepare_lighting(rooms: Node3D) -> void:
 		if sample is SpotLight3D:
 			sample.spot_range = 24.0
 			sample.spot_angle = 65.0
-	if not rooms.find_children("*", "ReflectionProbe", true, false).is_empty():
+	if (GameSettings.current == null or int(GameSettings.current.get_value("reflections")) > 0) \
+			and not rooms.find_children("*", "ReflectionProbe", true, false).is_empty():
 		var probe := ReflectionProbe.new()
 		probe.size = Vector3(24, 16, 24)
 		# Exercise receiving reflections without rendering the sample tray from

@@ -11,7 +11,11 @@ const SAVED_POSITION := Vector3(-6.0, 0.0, 6.0)
 
 func run() -> void:
 	var game := await boot_game(REGRESSION_SEED)
+	# This scenario exercises GI retirement and restoration. Performance mode
+	# deliberately disables GI, so select Quality in memory for this run.
+	game._settings.apply_quality_preset(GameSettings.QUALITY_NAMES.find("Quality"))
 	var casino_environment: Environment = game.we.environment
+	expect(casino_environment.sdfgi_enabled, "Casino indirect lighting was inactive before the transition")
 
 	# Theme 10 intentionally lives on 0 rather than becoming an awkward tenth
 	# item in the 1-N arithmetic used by the original floors.

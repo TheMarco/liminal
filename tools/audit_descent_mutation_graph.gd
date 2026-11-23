@@ -210,9 +210,7 @@ func _audit_theme(theme: int) -> void:
 			"theme %d selector admitted a transition with no visible witness" % theme)
 	var helpful: TopologyDelta
 	var helpful_from := Vector2i.ZERO
-	# At most one BFS per generated state/probe cluster; route construction is
-	# already the expensive part of this audit, so avoid a scan-cell-squared
-	# search for a witness.
+	# Bound the search for a witness to the changed rooms and their neighbours.
 	for from in probes.slice(0, mini(40, probes.size())):
 		var before_probe := route.distance_from_target(from)
 		for state_id in range(1, states.size()):
@@ -266,6 +264,20 @@ func _audit_theme(theme: int) -> void:
 	_audit_route_map(route, topology)
 	_expect(route.path_from_origin() == base_path,
 		"photo doorway reversal retained stale cached adjacency")
+	# Even an unreachable proposed layout must restore the graph before the
+	# next query. Seal all base exits from the origin for this one probe.
+	var sealed: Dictionary[Vector3i, bool] = {}
+	for dir in 4:
+		var other: Vector2i = route.origin + WorldGen.DIRV[dir]
+		if not route.scanned_contains(other) or route.base_is_wall(route.origin, dir):
+			continue
+		var edge := DescentTopology.canonical_edge(route.origin, dir)
+		var at: Vector2i = edge.cell
+		sealed[Vector3i(at.x, at.y, DescentTopology.edge_dir(edge))] = false
+	_expect(route.candidate_distance(route.origin, sealed) == -1,
+		"isolated candidate origin must be unreachable")
+	_expect(topology.distance_to_target_for_state(route, route.origin, 0) == base_distance,
+		"an unreachable candidate leaked its closed edges into the next query")
 
 
 func _audit_route_map(route: DescentRoute, topology: DescentTopology) -> void:
@@ -354,7 +366,6 @@ func _audit_door_rebuild_state(theme: int, at: Vector2i,
 		return
 	source.rotation.y = 1.11
 	source.set_meta("open", true)
-	source.set_meta("last_open_angle", 1.11)
 	rebuilt.restore_runtime_state(first.capture_runtime_state())
 	_expect(bool(restored.get_meta("open", false)) \
 			and is_equal_approx(restored.rotation.y, 1.11),
@@ -362,8 +373,8 @@ func _audit_door_rebuild_state(theme: int, at: Vector2i,
 	for body_node in restored.find_children("*", "StaticBody3D", true, false):
 		for shape_node in body_node.find_children(
 				"*", "CollisionShape3D", true, false):
-			_expect((shape_node as CollisionShape3D).disabled,
-				"theme %d rebuilt open door retained collision at %s" % [theme, at])
+			_expect(not (shape_node as CollisionShape3D).disabled,
+				"theme %d rebuilt open door lost its solid leaf at %s" % [theme, at])
 	for hit_node in restored.find_children("*", "Interactable", true, false):
 		_expect((hit_node as Interactable).prompt_text == "E — close door",
 			"theme %d rebuilt open door lost prompt state at %s" % [theme, at])

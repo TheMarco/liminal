@@ -406,8 +406,35 @@ func mark_documented(anomaly_id: String) -> bool:
 func _on_chunk_built(chunk: Chunk) -> void:
 	_register_photo_doors()
 	_register_bleed_props(chunk)
+	if chunk.theme != 1 or _chunk_manager == null or chunk.room_n <= 1:
+		_spawn_planned_anomaly(chunk)
+		return
+	# The member owns its wall art. The anchor owns desks, dividers and AC
+	# units for the whole Office room. Either can finish streaming first.
+	if not chunk.is_room_anchor:
+		var anchor := _chunk_manager.chunk_at(chunk.room_root)
+		if anchor != null:
+			_spawn_planned_anomaly(chunk, anchor)
+		return
+	_spawn_planned_anomaly(chunk, chunk)
+	for at in chunk._room_members():
+		if at != chunk.cell and plan.has(at):
+			var member := _chunk_manager.chunk_at(at)
+			if member != null:
+				_spawn_planned_anomaly(member, chunk)
+
+
+func _spawn_planned_anomaly(chunk: Chunk, room_owner: Chunk = null) -> void:
 	if not plan.has(chunk.cell):
 		return
+	var existing: Variant = _live.get(chunk.cell)
+	if is_instance_valid(existing) and existing.get_parent() == chunk:
+		if room_owner == null or existing.get_meta("placement_room", 0) == room_owner.get_instance_id():
+			return
+		# A blackout rebuilt the furniture anchor while this member stayed
+		# installed. Refit the subject and recover its documented state below.
+		chunk.remove_child(existing)
+		existing.queue_free()
 	var spec: Dictionary = plan[chunk.cell]
 	# Target and arrival rooms never carry evidence; the plan already avoids
 	# them, and the arrival flag guards a respawned arrival reality too.
@@ -437,7 +464,7 @@ func _on_chunk_built(chunk: Chunk) -> void:
 	if int(spec["type"]) in [PhotoAnomaly.Type.WRITING,
 			PhotoAnomaly.Type.PRINT, PhotoAnomaly.Type.PORTAL] \
 			and route != null:
-		var spot := PhotoAnomaly.writing_spot_for_chunk(route, chunk.cell, chunk)
+		var spot := PhotoAnomaly.writing_spot_for_chunk(route, chunk.cell, chunk, room_owner)
 		if not spot.is_empty():
 			wall_dir = int(spot["dir"])
 			wall_along = float(spot["along"])
@@ -447,6 +474,8 @@ func _on_chunk_built(chunk: Chunk) -> void:
 			# evidence objective itself.
 			spawn_type = PhotoAnomaly.Type.PLACEMENT
 	var node := PhotoAnomaly.new()
+	if room_owner != null:
+		node.set_meta("placement_room", room_owner.get_instance_id())
 	node.debug_visible = debug_visible
 	# The tear looks into the next floor's air; past the end it looks out.
 	var order: Array = DescentRun.FIXED_ORDER
@@ -460,7 +489,7 @@ func _on_chunk_built(chunk: Chunk) -> void:
 	# collision bookkeeping for clearance.
 	chunk.add_child(node)
 	node.configure(str(spec["id"]), spawn_type, chunk.cell,
-		world_seed, theme, wall_dir, wall_along)
+		world_seed, theme, wall_dir, wall_along, room_owner)
 	_live[chunk.cell] = node
 	if _documented.has(node.id):
 		node.resolve(true)
@@ -609,7 +638,8 @@ func _register_bleed_props(chunk: Chunk) -> void:
 	var visuals: Array[Node3D] = []
 	for child in chunk.get_children():
 		if child is Node3D and child.has_meta("bleed_prop"):
-			points.append((child as Node3D).position + Vector3(0, 0.9, 0))
+			var height := float(child.get_meta("bleed_photo_height", 0.9))
+			points.append((child as Node3D).position + Vector3.UP * height)
 			visuals.append(child)
 	if points.is_empty():
 		return

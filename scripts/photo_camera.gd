@@ -67,6 +67,7 @@ var _snap_viewport: SubViewport
 var _snap_cam: Camera3D
 var _photo: TextureRect
 var _review_back: ColorRect
+var _covered_viewport: Viewport
 var _paper: PhotoPaper
 var _marks: EvidenceMarks
 var _reticle: PhotoReticle
@@ -127,6 +128,8 @@ func _ready() -> void:
 	_review_back.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_review_back.visible = false
 	add_child(_review_back)
+	_review_back.visibility_changed.connect(_sync_review_rendering)
+	visibility_changed.connect(_sync_review_rendering)
 	_paper = PhotoPaper.new()
 	_paper.visible = false
 	add_child(_paper)
@@ -214,7 +217,11 @@ func _input(event: InputEvent) -> void:
 
 
 func _can_shoot() -> bool:
-	return _raised and not _capturing and _review_left <= 0.0 and _allowed()
+	return _raised and not _capturing and not is_reviewing() and _allowed()
+
+
+func is_reviewing() -> bool:
+	return _review_left > 0.0 or (is_instance_valid(_review_back) and _review_back.visible)
 
 
 func _process(dt: float) -> void:
@@ -227,7 +234,7 @@ func _process(dt: float) -> void:
 	# nearer the thing — a converging search, not a blind pixel hunt — and
 	# bite fully when it is framed. The only way photo-only writing can be
 	# found at all.
-	if _raised and not _capturing and _review_left <= 0.0:
+	if _raised and not _capturing and not is_reviewing():
 		_focus_scan_left -= dt
 		if _focus_scan_left <= 0.0:
 			_focus_scan_left = 0.12
@@ -251,9 +258,9 @@ func _process(dt: float) -> void:
 		_reticle.focused = false
 		_reticle.warmth = 0.0
 		_reticle.feedback = ""
-	if _review_left > 0.0:
-		_review_left -= dt
-		if _review_left <= 0.0:
+	if is_reviewing():
+		_review_left = maxf(0.0, _review_left - dt)
+		if _review_left == 0.0 and not _capturing:
 			_photo.visible = false
 			_review_back.visible = false
 			_paper.visible = false
@@ -393,7 +400,7 @@ func _on_facing_side(anomaly: PhotoAnomaly, from: Vector3) -> bool:
 
 
 func _raise(toggled := false) -> void:
-	if _raised:
+	if _raised or _capturing or is_reviewing():
 		return
 	_raised = true
 	_toggled = toggled
@@ -438,8 +445,9 @@ func emergency_flash_feedback() -> void:
 
 
 func _take_photo() -> void:
-	if not _raised or _capturing:
+	if not _raised or _capturing or is_reviewing():
 		return
+	var shutter_at := Time.get_ticks_usec()
 	_capturing = true
 	_begin_review_safety()
 	_shutter.pitch_scale = randf_range(1.35, 1.5)
@@ -449,21 +457,28 @@ func _take_photo() -> void:
 	fade.tween_property(_flash, "color:a", 0.0, FLASH_SECONDS * 3.0)
 	# Judge the framing from the live camera at shutter time, before the
 	# render — what you saw is what you shot.
-	var captured := _captured_anomalies()
+	var framing: Dictionary[PhotoAnomaly, bool] = {}
 	# Screen positions at shutter time, for the evidence circles the review
 	# draws — the investigator marks the print, so even an easy-to-miss
 	# wrongness is legible once it is on film.
 	var marks: Array[Rect2] = []
+	var evidence: Array[Dictionary] = []
+	var skip_risk := false
 	var cam := player.cam
-	for anomaly in captured:
+	var source_size := Vector2(get_viewport().size)
+	for anomaly in _captured_anomalies(false, framing):
 		if director == null or director._documented.has(anomaly.id):
 			continue
+		# Its chunk can stream out during the download or album write.
+		evidence.append({"id": anomaly.id, "caption": anomaly.count_caption(),
+			"node": weakref(anomaly), "passage": anomaly._doorway_resolve})
+		skip_risk = skip_risk or anomaly.type in [PhotoAnomaly.Type.NUMBERED_DOOR, PhotoAnomaly.Type.BOUNTY]
 		var bounds := evidence_screen_bounds(anomaly, cam)
 		if bounds.has_area():
-			marks.append(evidence_ellipse(bounds, Vector2(get_viewport().size)))
+			marks.append(evidence_ellipse(bounds, source_size))
 	var descriptions: Array[String] = []
 	var ids: Array[String] = []
-	for anomaly in _captured_anomalies(true):
+	for anomaly in _captured_anomalies(true, framing):
 		if ids.has(anomaly.id):
 			continue
 		ids.append(anomaly.id)
@@ -478,67 +493,84 @@ func _take_photo() -> void:
 		"caption": " · ".join(descriptions), "anomaly_ids": ids,
 	}
 	var capture_started := Time.get_ticks_usec()
-	var image := await _render_snapshot()
+	var texture := await _draw_snapshot()
+	var exposed_at := Time.get_ticks_usec()
+	var image: Image
+	if texture != null:
+		_show_print(texture, marks, source_size)
+		image = await _download_snapshot(texture)
 	var captured_at := Time.get_ticks_usec()
 	if image != null and archive_photograph.is_valid():
 		await archive_photograph.call(image, metadata)
-	_capturing = false
+	var album_wait_ms := (Time.get_ticks_usec() - captured_at) / 1000.0
 	if image != null:
 		photograph_taken.emit(image, metadata)
-		_photo.texture = ImageTexture.create_from_image(image)
-		RuntimeDiagnostics.mark("photo_capture", {"render_and_readback_ms": (captured_at - capture_started) / 1000.0,
-			"album_and_upload_ms": (Time.get_ticks_usec() - captured_at) / 1000.0})
-		# Black card, centred print at exactly the live viewfinder's size; the
-		# viewfinder chrome leaves with it. The same covered-image transform maps
-		# the evidence marks, so annotations cannot drift away from the image.
-		var review_rect := _review_rect()
-		_paper.photo_rect = review_rect
-		_photo.position = review_rect.position
-		_photo.size = review_rect.size
-		_review_back.visible = true
-		_paper.visible = true
-		_photo.visible = true
-		_mask.visible = false
-		_reticle.visible = false
-		# Evidence marks were projected in the live viewport's pixel space.
-		var mark_source_size := Vector2(get_viewport().size)
-		var scale := maxf(review_rect.size.x / maxf(1.0, mark_source_size.x),
-			review_rect.size.y / maxf(1.0, mark_source_size.y))
-		var crop := (mark_source_size * scale - review_rect.size) * 0.5
-		for i in marks.size():
-			var m := marks[i]
-			marks[i] = Rect2(m.position * scale + review_rect.position - crop,
-				m.size * scale)
-	_review_left = REVIEW_SECONDS
+		RuntimeDiagnostics.mark("photo_capture", {"shutter_to_print_ms": (exposed_at - shutter_at) / 1000.0,
+			"readback_ms": (captured_at - exposed_at) / 1000.0,
+			"render_and_readback_ms": (captured_at - capture_started) / 1000.0,
+			"album_wait_ms": album_wait_ms})
+	if texture == null:
+		_review_left = REVIEW_SECONDS
 	var counted := false
-	for anomaly in captured:
-		if director != null and director.mark_documented(anomaly.id):
-			counted = true
-			if anomaly.type in [PhotoAnomaly.Type.DOORWAY, PhotoAnomaly.Type.OBSTRUCTION]:
-				_review_callbacks.append(anomaly._doorway_resolve)
-			elif anomaly.resolves_after_review():
+	for subject in evidence:
+		if not director.mark_documented(subject.id):
+			continue
+		counted = true
+		var passage: Callable = subject.passage
+		if passage.is_valid():
+			_review_callbacks.append(passage)
+		else:
+			var anomaly := (subject.node as WeakRef).get_ref() as PhotoAnomaly
+			if anomaly != null and anomaly.resolves_after_review():
 				_review_resolves.append(anomaly)
-			else:
+			elif anomaly != null:
 				anomaly.resolve()
-			photo_documented.emit(anomaly.id, director.documented_count(),
-				director.required_count(), anomaly.count_caption())
-	# The ternary must stay typed: `[] ` unifies the whole expression to a
-	# plain Array, and assigning that to Array[Rect2] is a runtime error
-	# that also skipped the risk roll (found in a play log, 2026-08-20).
-	var none: Array[Rect2] = []
-	_marks.marks = marks if counted else none
-	_marks.visible = _photo.visible and not _marks.marks.is_empty()
-	# Only evidence provokes; snapshots of nothing stay free.
-	var number_reveal := false
-	for anomaly in captured:
-		if anomaly.type == PhotoAnomaly.Type.NUMBERED_DOOR:
-			number_reveal = true
-	# The timed realm encounter already supplies the bounty's danger.
-	var bounty_photo := false
-	for anomaly in captured:
-		bounty_photo = bounty_photo or anomaly.type == PhotoAnomaly.Type.BOUNTY
-	_pending_risk = counted and not number_reveal and not bounty_photo
+		photo_documented.emit(subject.id, director.documented_count(),
+			director.required_count(), subject.caption)
+	if not counted:
+		_marks.marks.clear()
+		_marks.visible = false
+	_pending_risk = counted and not skip_risk
 	_pending_unnatural_photo = counted and image != null
+	_capturing = false
+
+
+func _show_print(texture: Texture2D, marks: Array[Rect2], source_size: Vector2) -> void:
+	# The one-shot texture stays frozen while the album reads and saves its copy.
+	var rect := _review_rect()
+	_paper.photo_rect = rect
+	_photo.position = rect.position
+	_photo.size = rect.size
+	_photo.texture = texture
+	var scale := maxf(rect.size.x / maxf(1.0, source_size.x), rect.size.y / maxf(1.0, source_size.y))
+	var crop := (source_size * scale - rect.size) * 0.5
+	for i in marks.size():
+		var mark := marks[i]
+		marks[i] = Rect2(mark.position * scale + rect.position - crop, mark.size * scale)
+	_marks.marks = marks
+	_marks.visible = not marks.is_empty()
+	_mask.visible = false
+	_reticle.visible = false
+	_paper.visible = true
+	_photo.visible = true
+	_review_left = REVIEW_SECONDS
+	_review_back.visible = true
+
+
+func _sync_review_rendering() -> void:
+	if is_inside_tree() and visible and _review_back.is_visible_in_tree():
+		var viewport := get_viewport()
+		if not viewport.disable_3d:
+			_covered_viewport = viewport
+			viewport.disable_3d = true
+	else:
+		_resume_world_rendering()
+
+
+func _resume_world_rendering() -> void:
+	if is_instance_valid(_covered_viewport):
+		_covered_viewport.disable_3d = false
+	_covered_viewport = null
 
 
 func _release_review_resolutions(allow_aftershock := true) -> void:
@@ -550,7 +582,7 @@ func _release_review_resolutions(allow_aftershock := true) -> void:
 		if callback.is_valid():
 			callback.call()
 	_review_callbacks.clear()
-	for anomaly in _review_resolves:
+	for anomaly: Variant in _review_resolves:
 		if is_instance_valid(anomaly):
 			anomaly.resolve()
 	_review_resolves.clear()
@@ -593,10 +625,11 @@ func _end_review_safety() -> void:
 	_review_figures.photo_reviewing = false
 	_review_figures = null
 	RuntimeDiagnostics.mark("photo_threat_hold_ended", {
-		"reaction_seconds": ShadowFigures.PHOTO_REACTION_SECONDS})
+		"reaction_seconds": ShadowFigures.PLAYER_REACTION_SECONDS})
 
 
 func _exit_tree() -> void:
+	_resume_world_rendering()
 	_end_review_safety()
 
 
@@ -610,7 +643,7 @@ func _review_rect() -> Rect2:
 	return Rect2((viewport_size - window_size) * 0.5, window_size)
 
 
-func _captured_anomalies(for_album := false) -> Array[PhotoAnomaly]:
+func _captured_anomalies(for_album := false, framing: Dictionary[PhotoAnomaly, bool] = {}) -> Array[PhotoAnomaly]:
 	var out: Array[PhotoAnomaly] = []
 	if director == null or player == null:
 		return out
@@ -619,37 +652,42 @@ func _captured_anomalies(for_album := false) -> Array[PhotoAnomaly]:
 	var forward := -cam.global_transform.basis.z
 	var candidates := director.album_subjects() if for_album else director.capturable()
 	for anomaly in candidates:
-		var points := anomaly.framing_points(cam)
-		if points.is_empty():
-			continue
-		if not _on_facing_side(anomaly, cam.global_position):
-			continue
-		var excludes: Array[RID] = [player.get_rid()]
-		excludes.append_array(anomaly.occlusion_excludes())
-		var all_good := true
-		for point in points:
-			var to_point: Vector3 = point - cam.global_position
-			if to_point.length() > minf(cam.far, anomaly.capture_distance()) \
-					or not cam.is_position_in_frustum(point) \
-					or forward.dot(to_point.normalized()) < FRAME_DOT:
-				all_good = false
-				break
-			var query := PhysicsRayQueryParameters3D.create(
-				cam.global_position, point, 1, excludes)
-			var hit := space.intersect_ray(query)
-			if not hit.is_empty() and Vector3(hit["position"]) \
-					.distance_to(point) > OCCLUSION_TOLERANCE:
-				all_good = false
-				break
-		if all_good:
+		if not framing.has(anomaly):
+			framing[anomaly] = _subject_is_framed(anomaly, cam, space, forward)
+		if framing[anomaly]:
 			out.append(anomaly)
 	return out
+
+
+func _subject_is_framed(anomaly: PhotoAnomaly, cam: Camera3D, space: PhysicsDirectSpaceState3D, forward: Vector3) -> bool:
+	var origin := cam.global_position
+	if not _on_facing_side(anomaly, origin):
+		return false
+	var points := anomaly.framing_points(cam)
+	var reach := minf(cam.far, anomaly.capture_distance())
+	var query: PhysicsRayQueryParameters3D
+	for point in points:
+		var offset := point - origin
+		if offset.length_squared() > reach * reach or not cam.is_position_in_frustum(point) \
+				or forward.dot(offset.normalized()) < FRAME_DOT:
+			return false
+		if query == null:
+			var excludes: Array[RID] = [player.get_rid()]
+			excludes.append_array(anomaly.occlusion_excludes())
+			query = PhysicsRayQueryParameters3D.create(origin, point, 1, excludes)
+		else:
+			query.to = point
+		var hit := space.intersect_ray(query)
+		if not hit.is_empty() and Vector3(hit.position).distance_to(point) > OCCLUSION_TOLERANCE:
+			return false
+	return not points.is_empty()
 
 
 ## Hints are earned by a visible subject close to the centre of the lens.
 ## A fully occluded object, its back face, or an off-screen clue stays silent.
 func viewfinder_feedback() -> Dictionary:
-	if not _captured_anomalies().is_empty():
+	var framing: Dictionary[PhotoAnomaly, bool] = {}
+	if not _captured_anomalies(false, framing).is_empty():
 		return {"focused": true, "text": "FOCUS"}
 	if director == null or player == null:
 		return {"focused": false, "text": ""}
@@ -657,7 +695,7 @@ func viewfinder_feedback() -> Dictionary:
 	var space := player.get_world_3d().direct_space_state
 	var best_dot := 0.94
 	var message := ""
-	var framed := _captured_anomalies(true)
+	var framed := _captured_anomalies(true, framing)
 	for anomaly in framed:
 		if not anomaly.realm_destination.is_empty() and director._documented.has(anomaly.id):
 			return {"focused": false, "text": "ALREADY DOCUMENTED"}
@@ -737,8 +775,7 @@ static func evidence_ellipse(bounds: Rect2, extent: Vector2) -> Rect2:
 ## Allocate the photo viewport's render buffers under the floor's opaque load.
 ## Each shutter draws again at the live pose, with the current print-only layers.
 func prepare_snapshot_buffers() -> void:
-	_request_snapshot_draw()
-	await RenderingServer.frame_post_draw
+	await _draw_snapshot()
 
 
 func _request_snapshot_draw() -> void:
@@ -795,14 +832,15 @@ func _snapshot_environment(cam: Camera3D) -> Environment:
 	return print_env
 
 
-func _render_snapshot() -> Image:
+func _draw_snapshot() -> Texture2D:
 	_request_snapshot_draw()
 	await RenderingServer.frame_post_draw
-	if not is_instance_valid(_snap_viewport):
-		return null
-	var texture := _snap_viewport.get_texture()
+	return _snap_viewport.get_texture() if is_instance_valid(_snap_viewport) else null
+
+
+func _download_snapshot(texture: Texture2D) -> Image:
 	if RenderingServer.get_rendering_device() != null:
-		RenderingServer.call_on_render_thread(_read_snapshot.bind(texture.get_rid(), _snap_viewport.size))
+		RenderingServer.call_on_render_thread(_read_snapshot.bind(texture.get_rid(), Vector2i(texture.get_size())))
 		var image: Image = await _snapshot_downloaded
 		if image != null:
 			return image

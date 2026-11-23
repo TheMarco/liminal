@@ -85,6 +85,11 @@ func _run() -> void:
 	# Power must not throw away unfinished geometry. A topology change that
 	# actually edits the unfinished room must still cancel and requeue it.
 	manager._cancel_pending()
+	# The reversal can retire the origin. This case needs an installed room
+	# with live collision regardless of how many slices completed on the way back.
+	var resident := manager.chunk_at(Vector2i.ZERO)
+	if resident == null:
+		resident = manager._build(Vector2i.ZERO)
 	var staged_cell := Vector2i(15, 0)
 	manager._wanted[staged_cell] = true
 	manager._pending_cell = staged_cell
@@ -100,7 +105,6 @@ func _run() -> void:
 	var keep := func(): return false
 	if not manager.stage_rebuild_cells([Vector2i.ZERO], 1, keep):
 		failures.append("unrelated resident room could not be staged")
-	var resident := manager.chunk_at(Vector2i.ZERO)
 	manager._process(1.0 / 60.0)
 	if manager._staged_build != null or manager._staged_cells.is_empty() \
 			or manager.chunk_at(Vector2i.ZERO) != resident or not resident.body.is_inside_tree():

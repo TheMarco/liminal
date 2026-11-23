@@ -63,6 +63,18 @@ func _door_leaf_moved_away(pivot: Node3D, actor: Node3D, dir: int) -> bool:
 	return leaf_displacement.dot(toward_actor) < -0.01
 
 
+func _ray_hits_leaf(body: StaticBody3D, point: Vector3, normal: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(point - normal * 0.18, point + normal * 0.18)
+	var result := body.get_world_3d().direct_space_state.intersect_ray(query)
+	return result.get("collider") == body
+
+
+func _player_can_cross(actor: Player, point: Vector3, normal: Vector3) -> bool:
+	var feet := Vector3(point.x, actor.global_position.y + 0.02, point.z)
+	var start := Transform3D(Basis.IDENTITY, feet - normal * 0.5)
+	return not actor.test_move(start, normal)
+
+
 func _run() -> void:
 	var failures := []
 	var office_ws := _level_seed(1)
@@ -133,16 +145,25 @@ func _run() -> void:
 	var door_cell := _find_cell(office_ws, 1, func(c: Vector2i) -> bool:
 		return _has_working_door(office_ws, 1, c))
 	var dc := _chunk(office_ws, 1, door_cell)
+	dc.position.x += 500.0 # isolate the real physics queries from the other fixture rooms
 	var door := _hit(dc, "E — open door")
 	if door == null:
 		failures.append("working swing door not built")
 	else:
 		var pivot := door.get_parent() as Node3D
 		var door_dir := int(pivot.get_meta("door_dir", -1))
-		var actor := Node3D.new()
+		var actor := Player.new()
 		get_root().add_child(actor)
+		actor.set_physics_process(false)
+		actor.set_process(false)
 		var normal_local := Vector3.RIGHT if door_dir == 0 else Vector3(0, 0, 1)
 		var normal_world := (dc.global_transform.basis * normal_local).normalized()
+		var body := pivot.find_children("*", "StaticBody3D", true, false)[0] as StaticBody3D
+		var leaf := body.get_child(0) as CollisionShape3D
+		var closed_centre := leaf.global_position
+		await physics_frame
+		if not _ray_hits_leaf(body, closed_centre, normal_world):
+			failures.append("closed Office door panel allowed passage")
 		actor.global_position = pivot.global_position + normal_world * 1.5
 		var before: float = pivot.rotation.y
 		door.interact(actor)
@@ -153,6 +174,26 @@ func _run() -> void:
 		if not _door_leaf_moved_away(pivot, actor, door_dir):
 			failures.append("door opened toward the actor from its first side")
 		var first_angle := pivot.rotation.y
+		if not _ray_hits_leaf(body, leaf.global_position, pivot.global_basis * normal_local) \
+				or _ray_hits_leaf(body, closed_centre, normal_world):
+			failures.append("open Office door did not move its solid panel clear of the doorway")
+		var through := pivot.global_position + (closed_centre - pivot.global_position) * 1.15
+		if not _player_can_cross(actor, through, normal_world) \
+				or _player_can_cross(actor, leaf.global_position, pivot.global_basis * normal_local):
+			failures.append("player capsule could not use the opening or passed through the swung panel")
+		var saved := dc.capture_runtime_state()
+		dc._apply_swing_door_state(pivot, {"open": false})
+		dc.restore_runtime_state(saved)
+		await physics_frame
+		if not _ray_hits_leaf(body, leaf.global_position, pivot.global_basis * normal_local) \
+				or _ray_hits_leaf(body, closed_centre, normal_world):
+			failures.append("streamed Office door did not restore the solid open panel")
+		actor.global_position = Vector3(closed_centre.x, pivot.global_position.y, closed_centre.z)
+		door.interact(actor)
+		await create_timer(0.7).timeout
+		if absf(pivot.rotation.y) < 0.1 or door.prompt_text != "E — close door":
+			failures.append("closing Office door swung through the player's capsule")
+		actor.global_position = pivot.global_position + normal_world * 1.5
 		door.interact(actor)
 		await create_timer(0.7).timeout
 		if absf(pivot.rotation.y) > 0.01 or door.prompt_text != "E — open door":
@@ -164,6 +205,9 @@ func _run() -> void:
 			failures.append("door opened toward the actor from its opposite side")
 		if signf(first_angle) == signf(pivot.rotation.y):
 			failures.append("door did not reverse its swing between approach sides")
+		if not _ray_hits_leaf(body, leaf.global_position, pivot.global_basis * normal_local) \
+				or _ray_hits_leaf(body, closed_centre, normal_world):
+			failures.append("reverse swing lost the door panel or blocked the opening")
 		actor.queue_free()
 
 	var prison_ws := _level_seed(8)
@@ -188,7 +232,7 @@ func _run() -> void:
 	print("interaction audit: office=%s elevator=%s annex_elevator=%s door=%s prison_door=%s" % [
 		terminal_cell, lift_cell, annex_lift_cell, door_cell, prison_door_cell])
 	if failures.is_empty():
-		print("  PASS — office uses authored VT100s without E prompts; lift responds; selected door opens away from both approach sides")
+		print("  PASS — Office terminals and lift, solid door leaf, open passage, obstructed swing and restored door")
 	else:
 		for failure in failures:
 			print("FAIL ", failure)

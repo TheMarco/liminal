@@ -50,11 +50,33 @@ func run() -> void:
 	manager.photo_reviewing = false
 	expect(not manager._spawn_at(ground, true, 1.2),
 		"arrival bypassed the post-photo reaction window")
-	manager._physics_process(ShadowFigures.PHOTO_REACTION_SECONDS + 0.1)
+	manager._physics_process(ShadowFigures.PLAYER_REACTION_SECONDS + 0.1)
+	manager.passive = true
+	expect(not manager._spawn_at(ground, true, 1.2), "directed arrival bypassed blackout")
+	manager.passive = false
 	expect(manager._spawn_at(ground, true, 1.2),
 		"legal spawn did not resume at the minimum distance after review")
+	var figure := manager.active_figures()[0]
+	actor.cam.look_at(ground + Vector3.UP)
+	actor.flashlight.visible = false
+	figure.appearance_delay = 0.0
+	manager.passive = true
+	var grace := figure.grace
+	figure._physics_process(0.2)
+	expect(is_equal_approx(figure.grace, grace) and not figure._seen,
+		"blackout spent arrival protection or triggered an unseen figure's sting")
+	actor.flashlight.visible = true
+	figure._physics_process(0.1)
+	expect(figure._burn > 0.0 and figure._seen, "torch did not reveal and burn the passive figure")
+	manager.give_player_reaction_time()
+	manager.passive = false
+	var before := figure.global_position
+	figure._physics_process(0.2)
+	expect(figure.grace < grace and figure.global_position.is_equal_approx(before)
+		and figure._approach_hold > 0.0 and manager._new_spawn_hold > 0.0,
+		"hostile did not give the player time to react when control returned")
 	await teardown_game(world)
-	finish("shadow spawn visibility, current-player distance and photo hold")
+	finish("shadow spawn visibility, current-player distance, blackout torch and reaction time")
 
 
 func _wall(parent: Node, at: Vector3, size: Vector3) -> StaticBody3D:

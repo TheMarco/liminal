@@ -243,9 +243,9 @@ func _office_air_conditioners(split: Array) -> void:
 				if not art.is_empty():
 					var art_size: Vector2 = art["size"]
 					var horizontal_overlap := absf(along - float(art["along"])) \
-						< 0.625 + art_size.x * 0.5 + 0.10
+						< (Chunk.OFFICE_AC_FACE_SIZE.x + art_size.x) * 0.5 + 0.10
 					var vertical_overlap := absf(mount_y - float(art["y"])) \
-						< 0.21 + art_size.y * 0.5 + 0.08
+						< (Chunk.OFFICE_AC_FACE_SIZE.y + art_size.y) * 0.5 + 0.08
 					if horizontal_overlap and vertical_overlap:
 						continue
 				var p: Vector3

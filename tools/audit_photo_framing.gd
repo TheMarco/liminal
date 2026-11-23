@@ -1,6 +1,17 @@
 extends SceneTree
 ## Production capture predicate and complete geometry bounds, without a profile.
 var failures: Array[String] = []
+signal archive_started
+signal release_archive
+var shutter_events: Array[String] = []
+var archived_image: Image
+
+func hold_archive(image: Image, _metadata: Dictionary) -> void:
+	archived_image = image
+	shutter_events.append("archiving")
+	archive_started.emit()
+	await release_archive
+	shutter_events.append("archived")
 
 func _init() -> void:
 	call_deferred("run")
@@ -10,6 +21,30 @@ func check(ok: bool, message: String) -> void:
 
 func settle() -> void:
 	for frame in 3: await physics_frame
+
+func check_review_pixels(capture: PhotoCamera, print_image: Image, hdr: bool) -> void:
+	# Sample the live review and the archived image through identical UI draws.
+	var viewport := SubViewport.new()
+	var half := Vector2i(128, 72)
+	viewport.size = Vector2i(half.x * 2, half.y)
+	viewport.use_hdr_2d = hdr
+	viewport.disable_3d = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	root.add_child(viewport)
+	for texture: Texture2D in [capture._photo.texture, ImageTexture.create_from_image(print_image)]:
+		var rect := TextureRect.new()
+		rect.position.x = viewport.get_child_count() * half.x
+		rect.size = half
+		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		rect.modulate = capture._photo.modulate
+		rect.texture = texture
+		viewport.add_child(rect)
+	await RenderingServer.frame_post_draw
+	var pair := viewport.get_texture().get_image()
+	var left := pair.get_region(Rect2i(Vector2i.ZERO, half))
+	var right := pair.get_region(Rect2i(Vector2i(half.x, 0), half))
+	check(left.get_data() == right.get_data(), "review colours differ from the archived print (HDR %s)" % hdr)
+	viewport.free()
 
 func check_mark(subject: PhotoAnomaly, camera: Camera3D, extent: Vector2) -> void:
 	var bounds := PhotoCamera.evidence_screen_bounds(subject, camera)
@@ -48,6 +83,33 @@ func check_print_lighting(capture: PhotoCamera, player: Player) -> void:
 	player.cam.environment = null
 	world.environment = previous
 
+func check_floor_growth(capture: PhotoCamera, director: PhotoDirector, player: Player) -> void:
+	var at := Vector3(6, 0, 6)
+	var chunk := Chunk.new(WorldGen.level_seed(9137, 6), Vector2i.ZERO, 6,
+		{"descent": true, "bleed_theme": 8}, true)
+	chunk._place_bleed_prop(at, PI / 4.0)
+	root.add_child(chunk)
+	director._register_bleed_props(chunk)
+	await settle()
+	var anomaly := director._live_bleed.get(chunk.cell) as PhotoAnomaly
+	check(anomaly != null, "School floor growth was not registered as evidence")
+	if anomaly != null:
+		var from := Transform3D(Basis.IDENTITY, at + Vector3(-1.5, 0.01, 0))
+		check(player.test_move(from, Vector3.RIGHT * 3.0), "player could walk through floor growth")
+		from.origin.z += 1.3
+		check(not player.test_move(from, Vector3.RIGHT * 3.0), "growth blocks clear floor beside it")
+		var focus := anomaly.photo_points()[0]
+		check(focus.y > at.y and focus.y < at.y + 0.35, "camera aims above the growth")
+		player.cam.global_position = at + Vector3(0, 1.6, 2.8)
+		player.cam.look_at(at + Vector3.UP * 0.17)
+		check(capture._captured_anomalies().has(anomaly), "visible growth cannot be photographed")
+		chunk._box(at + Vector3(0, 1, 1.4), Vector3(3, 2, 0.15), Mats.sch_trim())
+		await settle()
+		check(not capture._captured_anomalies().has(anomaly), "growth was photographed through a wall")
+	director._live_bleed.erase(chunk.cell)
+	chunk.free()
+
+
 func run() -> void:
 	root.size = Vector2i(1280, 720)
 	var player := Player.new()
@@ -61,6 +123,7 @@ func run() -> void:
 	capture.director = director
 	root.add_child(capture)
 	capture.set_process(false)
+	await check_floor_growth(capture, director, player)
 	var writing := PhotoAnomaly.new()
 	writing.id = "audit:writing"
 	writing.type = PhotoAnomaly.Type.WRITING
@@ -170,7 +233,15 @@ func run() -> void:
 		await settle()
 		var original_mark := PhotoCamera.evidence_ellipse(PhotoCamera.evidence_screen_bounds(writing, player.cam), Vector2(root.size))
 		capture._raised = true
-		await capture._take_photo()
+		capture.archive_photograph = hold_archive
+		capture.photograph_taken.connect(func(_image: Image, _metadata: Dictionary): shutter_events.append("taken"))
+		capture.photo_documented.connect(func(_id: String, _count: int, _required: int, _caption: String): shutter_events.append("documented"))
+		capture._take_photo()
+		await capture._review_back.visibility_changed
+		check(shutter_events.is_empty() and capture._photo.visible and capture._capturing,
+			"review waited for readback or disk")
+		check(root.disable_3d and not capture._snap_viewport.disable_3d, "opaque print still renders the game world")
+		check(capture._photo.texture == capture._snap_viewport.get_texture(), "review uploaded a second photo texture")
 		check(capture._marks.marks.size() == 1, "rendered print did not receive evidence mark")
 		if not capture._marks.marks.is_empty():
 			var review := capture._review_rect()
@@ -178,6 +249,16 @@ func run() -> void:
 			var crop := (Vector2(root.size) * ratio - review.size) * 0.5
 			check(capture._marks.marks[0].position.is_equal_approx(original_mark.position * ratio + review.position - crop), "print mark centre drifted")
 			check(capture._marks.marks[0].size.is_equal_approx(original_mark.size * ratio), "print mark scale drifted")
+		await archive_started
+		await process_frame
+		capture._process(PhotoCamera.REVIEW_SECONDS + 0.1)
+		check(capture.is_reviewing() and capture._capturing and not director._documented.has(writing.id),
+			"slow album write uncovered the world or awarded evidence before publication")
+		capture.visible = false
+		check(not root.disable_3d, "hiding the photo overlay left the world hidden")
+		capture.visible = true
+		check(root.disable_3d, "showing the pending review drew the world again")
+		await check_review_pixels(capture, archived_image, root.use_hdr_2d)
 		await create_timer(0.4).timeout
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("/tmp/liminal-round3-photo-proof.png")
@@ -186,17 +267,39 @@ func run() -> void:
 		var saved_hdr := root.use_hdr_2d
 		for hdr in [false, true]:
 			root.use_hdr_2d = hdr
-			var print_image := await capture._render_snapshot()
+			var exposure := await capture._draw_snapshot()
+			var print_image := await capture._download_snapshot(exposure)
 			var reference := capture._snap_viewport.get_texture().get_image()
 			check(print_image != null and print_image.get_format() == reference.get_format()
 				and print_image.get_size() == reference.get_size() and print_image.get_data() == reference.get_data(),
 				"shutter readback changed the print (HDR %s)" % hdr)
+			if print_image != null:
+				await check_review_pixels(capture, print_image, hdr)
 		root.use_hdr_2d = saved_hdr
-		# The last capture resumes its caller from the camera's completion signal.
 		await process_frame
+		var photographed_id := writing.id
+		writing.free()
+		release_archive.emit()
+		check(shutter_events == ["archiving", "archived", "taken", "documented"],
+			"photo publication order changed: %s" % str(shutter_events))
+		check(not capture._capturing and director._documented.has(photographed_id),
+			"unloading the photographed room lost the archived evidence")
+		capture._process(0.016)
+		check(not capture.is_reviewing() and not root.disable_3d, "finished album restarted the review timer or left the world hidden")
+		capture._show_print(capture._photo.texture, [], Vector2(root.size))
+		capture.finish_for_transition()
+		check(not root.disable_3d, "transition left the world hidden")
+		root.disable_3d = true
+		capture._show_print(capture._photo.texture, [], Vector2(root.size))
+		capture.finish_for_transition()
+		check(root.disable_3d, "review enabled another owner's disabled viewport")
+		root.disable_3d = false
+		capture._show_print(capture._photo.texture, [], Vector2(root.size))
 		wall.free()
-	writing.free()
+	if is_instance_valid(writing):
+		writing.free()
 	capture.free()
+	check(not root.disable_3d, "removing a visible review stranded the viewport")
 	director.free()
 	player.free()
 	for failure in failures: push_error(failure)

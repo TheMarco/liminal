@@ -295,23 +295,8 @@ static func moan() -> AudioStreamWAV:
 ## Three-tone descending airport PA chime — the sound before every departure
 ## nobody is here to catch.
 static func pa_chime() -> AudioStreamWAV:
-	if _c.has("pa_chime"):
-		return _c["pa_chime"]
-	var n := int(RATE * 1.7)
-	var s := PackedFloat32Array()
-	s.resize(n)
-	var tones := [830.6, 659.3, 554.4]
-	for ti in 3:
-		var t0 := 0.42 * float(ti)
-		var f: float = tones[ti]
-		for i in n:
-			var t := float(i) / RATE - t0
-			if t < 0.0:
-				continue
-			var v := 0.30 * sin(TAU * f * t) * exp(-3.2 * t)
-			v += 0.10 * sin(TAU * f * 2.0 * t + 0.6) * exp(-6.0 * t)
-			s[i] += v * minf(1.0, t * 120.0)
-	_c["pa_chime"] = _wav(s)
+	if not _c.has("pa_chime"):
+		_c["pa_chime"] = load("res://sounds/airport/pa_chime.wav")
 	return _c["pa_chime"]
 
 
@@ -324,28 +309,8 @@ static func pa_voice() -> AudioStreamWAV:
 ## Distant heavy jet spooling somewhere out on the field: a long low swell
 ## of filtered thunder that arrives, leans on the glass, and leaves.
 static func jet_far() -> AudioStreamWAV:
-	if _c.has("jet_far"):
-		return _c["jet_far"]
-	var dur := 9.0
-	var n := int(RATE * dur)
-	var s := PackedFloat32Array()
-	s.resize(n)
-	var lp1 := 0.0
-	var lp2 := 0.0
-	var lp3 := 0.0
-	for i in n:
-		var t := float(i) / RATE
-		lp1 = lerpf(lp1, randf() * 2.0 - 1.0, 0.06)
-		lp2 = lerpf(lp2, lp1, 0.09)
-		lp3 = lerpf(lp3, lp2, 0.12)
-		# slow attack, long release
-		var env := pow(sin(PI * clampf(t / dur, 0.0, 1.0)), 1.6)
-		var v := lp3 * 1.6 * env
-		v += 0.10 * sin(TAU * 32.0 * t + 3.0 * lp3) * env
-		# faint turbine whine riding on top, drifting down in pitch
-		v += 0.03 * sin(TAU * (860.0 - 120.0 * t / dur) * t) * env * env
-		s[i] = v * 0.6
-	_c["jet_far"] = _wav(s)
+	if not _c.has("jet_far"):
+		_c["jet_far"] = load("res://sounds/airport/jet_far.wav")
 	return _c["jet_far"]
 
 

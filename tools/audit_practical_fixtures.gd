@@ -3,6 +3,7 @@ extends "res://tools/lib/audit_base.gd"
 ## real generated rooms, dead fittings, flicker and power restoration.
 
 func run() -> void:
+	_check_school_gym_grid()
 	var checked := 0
 	var flickering := 0
 	var dead := 0
@@ -117,22 +118,68 @@ func run() -> void:
 						continue
 					expect(light.light_energy>0.0 and light.light_energy<before[light],"ballast dropout does not dim both faces")
 			var state := {}
-			for light in lamps: state[light] = [light.visible,light.light_energy]
+			for light in lamps:
+				state[light] = [light.visible, light.light_energy, light.layers,
+					light.light_indirect_energy, light.light_volumetric_fog_energy]
 			chunk.set_blackout(true)
 			for light in lamps:
-				expect(not light.visible,"blackout leaves a diffuser illuminating the room")
+				expect(not light.visible or (light.layers == 0 and light.light_energy == 0.0
+					and light.light_indirect_energy == 0.0 and light.light_volumetric_fog_energy == 0.0),
+					"blackout leaves a diffuser illuminating the room")
 				var mesh := light.get_node(light.get_meta("fixture_emitter")) as MeshInstance3D
 				var mat := mesh.get_active_material(0) as StandardMaterial3D
 				expect(mat != null and (not mat.emission_enabled or is_zero_approx(mat.emission_energy_multiplier)),
 					"blackout leaves a lens glowing")
 			chunk.set_blackout(false)
 			for light in lamps:
-				expect(light.visible==state[light][0] and light.light_energy==state[light][1],"power restoration changes the fixture state")
+				expect([light.visible, light.light_energy, light.layers, light.light_indirect_energy,
+					light.light_volumetric_fog_energy] == state[light], "power restoration changes the fixture state")
 			chunk.free()
 	expect(checked>0 and flickering>0 and dead>0,"fixture coverage lacks live, flickering or dead fittings")
 	print("PRACTICAL_FIXTURES checked=%d flickering_rooms=%d dead_rooms=%d" % [checked,flickering,dead])
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	finish("visible practical fixtures")
+
+
+func _check_school_gym_grid() -> void:
+	# All four cells of this gym from a recorded Descent run have working lamps.
+	var seed_value := WorldGen.level_seed(985078973, 6)
+	var gym := Vector2i(28, 42)
+	var positions := {}
+	var lamp_count := 0
+	for dx in 2:
+		for dz in 2:
+			var offset := Vector2i(dx, dz)
+			var chunk := Chunk.new(seed_value, gym + offset, 6)
+			root.add_child(chunk)
+			expect(chunk.room_root == gym and chunk.style == WorldGen.SCH_GYM, "sample no longer contains the School gym")
+			var lamps: Array[Light3D] = []
+			var count := 0
+			for fixture in chunk.find_children("*", "Node3D", true, false):
+				if fixture.get_meta("practical_fixture", "") != "school_ceiling_strip":
+					continue
+				var local_pos := chunk.to_local(fixture.global_position)
+				var centre := Vector2(local_pos.x, local_pos.z)
+				expect(Rect2(Vector2.ZERO, Vector2.ONE * WorldGen.CELL_SIZE).has_point(centre),
+					"School gym strip belongs to a different streaming cell")
+				positions[Vector2(offset) * WorldGen.CELL_SIZE + centre] = true
+				count += 1
+				for child in fixture.get_children():
+					if child is AreaLight3D:
+						lamps.append(child)
+			expect(count == (dx + 1) * (dz + 1), "wrong number of School gym strips in cell %s" % chunk.cell)
+			lamp_count += lamps.size()
+			chunk.set_blackout(true)
+			for lamp in lamps:
+				expect(not lamp.visible or (lamp.layers == 0 and lamp.light_energy == 0.0), "School gym stays lit during a blackout")
+			chunk.set_blackout(false)
+			for lamp in lamps:
+				expect(lamp.visible and lamp.layers != 0 and lamp.light_energy > 0.0, "School gym lamp fails to relight")
+			chunk.free()
+	expect(positions.size() == 9 and lamp_count == 18, "School gym must have nine two-sided fittings")
+	for x in [4.0, 12.0, 20.0]:
+		for z in [4.0, 12.0, 20.0]:
+			expect(positions.has(Vector2(x, z)), "School gym has a gap in its ceiling grid")
 
 
 func _check_coffer_face(light: AreaLight3D, lens: MeshInstance3D, relative: Transform3D) -> void:

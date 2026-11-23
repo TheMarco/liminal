@@ -19,7 +19,8 @@ func _init() -> void:
 	set_meta("pool_water_reflection", true)
 
 func _ready() -> void:
-	_manager = get_parent().get_parent()
+	var room := get_parent().get_parent() as Chunk
+	_manager = room.get_parent()
 	if _manager != null and _manager.has_signal("chunk_built"):
 		_manager.connect("chunk_built", _on_chunk_built)
 	set_process(not _blackout)

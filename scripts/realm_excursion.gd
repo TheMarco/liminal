@@ -65,7 +65,7 @@ var _source_cm: ChunkManager
 var _building := false
 var _preview_chunk: Chunk
 var _preview_resources: Array[Resource] = []
-var _preview_resource_pending := ""
+var _preview_requests: Array[String] = []
 var _preview_resources_ready := false
 var _preview_has_frame := false
 var _bind_left := 0.0
@@ -169,8 +169,8 @@ func prepare(owner_game: Node3D) -> void:
 	game._photo_director.realm_preview_ready = false
 	game._photo_director._register_photo_doors()
 	_preload_preview_resources()
-	# Build only when the player approaches. The controller and reserved edge
-	# survive streaming; no distant source rooms are force-loaded.
+	# Covered campaign arrivals prepare the destination before play. Direct
+	# starts can still build on approach without loading distant source rooms.
 	if game.opts.realm_visit:
 		_build_preview()
 
@@ -179,6 +179,8 @@ func _preload_preview_resources() -> void:
 	# Start disk decoding while the player is still at the floor arrival.
 	# Keep the next realm's requests separate from source-floor streaming.
 	var paths := Chunk.theme_prop_paths(destination_theme)
+	if destination_theme in Mats.RIPPLE_THEMES:
+		paths.append(Mats.RIPPLE_NORMAL_PATH)
 	if destination_theme == 1:
 		# These textures belong to the procedural office ceiling, so they are
 		# not dependencies of any imported furnishing in theme_prop_paths.
@@ -189,22 +191,26 @@ func _preload_preview_resources() -> void:
 		for face in Chunk.MALL_SIGN_FACES:
 			paths.append(Chunk.MALL_SIGN_DIR + "sign_%s.webp" % face[0])
 		paths.append_array(Chunk.POSTER_MALL)
-	for path in paths:
-		if ResourceLoader.has_cached(path):
-			_preview_resources.append(ResourceLoader.get_cached_ref(path))
-			continue
-		if ResourceLoader.load_threaded_request(path) != OK:
-			continue
-		_preview_resource_pending = path
-		while ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+	var batch := 1 if DisplayServer.get_name() == "headless" or OS.has_feature("web") else FloorResourcePreloader.FLOOR_LOAD_BATCH
+	var next := 0
+	while next < paths.size() or not _preview_requests.is_empty():
+		while next < paths.size() and _preview_requests.size() < batch:
+			var path := paths[next]
+			next += 1
+			if ResourceLoader.has_cached(path):
+				_preview_resources.append(ResourceLoader.get_cached_ref(path))
+			elif not _preview_requests.has(path) and ResourceLoader.load_threaded_request(path) == OK:
+				_preview_requests.append(path)
+		for i in range(_preview_requests.size() - 1, -1, -1):
+			var path := _preview_requests[i]
+			var status := ResourceLoader.load_threaded_get_status(path)
+			if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS: continue
+			if status == ResourceLoader.THREAD_LOAD_LOADED:
+				_preview_resources.append(ResourceLoader.load_threaded_get(path))
+			_preview_requests.remove_at(i)
+		if not _preview_requests.is_empty():
 			await _preview_frame
-			if _preview_cancelled:
-				return
-		if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_LOADED:
-			var resource := ResourceLoader.load_threaded_get(path)
-			if resource != null:
-				_preview_resources.append(resource)
-		_preview_resource_pending = ""
+			if _preview_cancelled: return
 	_preview_resources_ready = true
 
 
@@ -224,7 +230,7 @@ func _preview_only_environment(full: Environment) -> Environment:
 	return lean
 
 
-func _build_preview() -> void:
+func _build_preview(budget_usec := PREVIEW_BUILD_BUDGET_USEC, covered := false) -> void:
 	if _building or _preview_cancelled:
 		return
 	_building = true
@@ -268,24 +274,24 @@ func _build_preview() -> void:
 				complete = _preview_chunk.build_next_slice()
 				if complete:
 					break
-				if Time.get_ticks_usec() - started >= PREVIEW_BUILD_BUDGET_USEC:
+				if Time.get_ticks_usec() - started >= budget_usec:
 					break
 			RuntimeDiagnostics.slow("realm_preview_slice", started,
 				{"theme": destination_theme, "cell": str(cell)})
 			if complete:
 				# The preview pocket starts lit with no saved furnishings. Finish
 				# mesh preparation off-tree before publishing the complete room.
-				if Time.get_ticks_usec() - started >= PREVIEW_BUILD_BUDGET_USEC:
+				if Time.get_ticks_usec() - started >= budget_usec:
 					await _preview_frame
 					if _preview_cancelled:
 						return
 					started = Time.get_ticks_usec()
 				while not _preview_chunk.prepare_runtime_rendering(ChunkManager.ROOM_LIGHT_FADE_BEGIN,
-						started + PREVIEW_BUILD_BUDGET_USEC):
+						started + budget_usec):
 					await _preview_frame
 					if _preview_cancelled: return
 					started = Time.get_ticks_usec()
-				if Time.get_ticks_usec() - started >= PREVIEW_BUILD_BUDGET_USEC:
+				if Time.get_ticks_usec() - started >= budget_usec:
 					await _preview_frame
 					if _preview_cancelled: return
 				var install_started := Time.get_ticks_usec()
@@ -332,6 +338,16 @@ func _build_preview() -> void:
 	preview_camera.current = true
 	var source_yaw := atan2(-source_forward.x, -source_forward.z)
 	_rotation = Basis(Vector3.UP, destination_yaw - source_yaw)
+	if covered and DisplayServer.get_name() != "headless":
+		# Submit the actual pocket materials once while the floor transition is opaque.
+		# The first visible image still uses the player's position at the seal.
+		var eye := destination_position + Vector3.UP * Player.CAM_H
+		preview_camera.look_at_from_position(eye, eye + _rotation * source_forward)
+		preview.render_target_update_mode = SubViewport.UPDATE_ONCE
+		await RenderingServer.frame_post_draw
+		if _preview_cancelled:
+			return
+		RuntimeDiagnostics.mark("realm_preview_covered_draw", {"theme": destination_theme})
 	phase = Phase.WAITING
 	game._photo_director.realm_preview_ready = true
 	game._photo_director._register_photo_doors()
@@ -502,11 +518,11 @@ func _configure_interactions(node: Node3D) -> void:
 			audio.stream_paused = phase != Phase.VISITING
 
 
-func prepare_nearby_preview() -> void:
-	if phase != Phase.PREPARING or game.player.global_position.distance_to(source_centre) >= 42.0:
+func prepare_preview(covered := false) -> void:
+	if phase != Phase.PREPARING:
 		return
 	if not _building:
-		await _build_preview()
+		await _build_preview(ChunkManager.COVERED_BUILD_BUDGET_USEC if covered else PREVIEW_BUILD_BUDGET_USEC, covered)
 	else:
 		while phase == Phase.PREPARING and not _preview_cancelled:
 			await _preview_frame
@@ -516,8 +532,8 @@ func _process(dt: float) -> void:
 	if game == null:
 		return
 	if phase == Phase.PREPARING:
-		if not _building:
-			prepare_nearby_preview()
+		if not _building and game.player.global_position.distance_squared_to(source_centre) < 42.0 * 42.0:
+			prepare_preview()
 		return
 	if phase == Phase.WAITING:
 		_bind_left -= dt
@@ -595,7 +611,7 @@ func _process(dt: float) -> void:
 		if seal.opened and _previous_side < 0.0 and side >= 0.0 \
 				and absf(offset.dot(source_forward.cross(Vector3.UP))) < seal.width * 0.5 \
 				and absf(offset.y) < 1.0 and not game.run.blackout \
-				and game._photo_camera._review_left <= 0.0:
+				and not game._photo_camera.is_reviewing():
 			enter()
 		_previous_side = side
 	elif phase == Phase.VISITING:
@@ -928,11 +944,11 @@ func _exit_tree() -> void:
 	_preview_physics_frame.emit()
 	if is_instance_valid(_caught_sequence):
 		_caught_sequence.restore()
-	if not _preview_resource_pending.is_empty():
-		var status := ResourceLoader.load_threaded_get_status(_preview_resource_pending)
+	for path in _preview_requests:
+		var status := ResourceLoader.load_threaded_get_status(path)
 		if status in [ResourceLoader.THREAD_LOAD_IN_PROGRESS, ResourceLoader.THREAD_LOAD_LOADED]:
-			ResourceLoader.load_threaded_get(_preview_resource_pending)
-		_preview_resource_pending = ""
+			ResourceLoader.load_threaded_get(path)
+	_preview_requests.clear()
 	_preview_resources.clear()
 	# A quit/retry can interrupt construction before this off-tree chunk has
 	# been installed in the preview world.

@@ -1,35 +1,45 @@
 class_name RuntimeDiagnostics
 extends Node
-## Bounded, flushed diagnostics for exported builds. Main-thread calls only.
+## Captures diagnostics on the game thread. Disk writes run on a dedicated thread.
 ## Engine allocation/VRAM estimates are NOT Windows process commit or GPU budget.
 
 const LOG_PATH := "user://logs/performance.jsonl"
+const LogWriter := preload("res://scripts/performance_log_writer.gd")
 const MAX_BYTES := 1024 * 1024
 const HITCH_USEC := 100000
 const SLOW_USEC := 20000
 const REPORT_USEC := 2000000
 const SAMPLE_USEC := 30000000
 static var _instance: RuntimeDiagnostics
-static var world_viewport: Viewport
+static var world_viewport: Viewport:
+	set(value):
+		world_viewport = value
+		if is_instance_valid(value) and is_instance_valid(_instance) and _instance._measure_world_render:
+			RenderingServer.viewport_set_measure_render_time(value.get_viewport_rid(), true)
 
-var _file: FileAccess
+var _writer := LogWriter.new()
+var _enabled := false
 var _path := LOG_PATH
 var _context := Callable()
 var _last_frame := 0
+var _last_physics_frame := 0
 var _last_report := 0
 var _last_sample := 0
 var _hitches := 0
 var _worst_gap := 0
+var _worst_gap_physics_steps := 0
 var _slow_last: Dictionary = {}
 var _slow_counts: Dictionary = {}
 var _last_write_usec := 0
 var _max_write_usec := 0
+var _measure_world_render := false
 
 
 func _ready() -> void:
 	_instance = self
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	process_priority = 1000000
+	_measure_world_render = OS.get_cmdline_user_args().has("--profile-world-render") and DisplayServer.get_name() != "headless"
 	# Audits/support can isolate this file without changing player settings.
 	if _path == LOG_PATH:
 		var audit_path := OS.get_environment("LIMINAL_DIAGNOSTICS_LOG")
@@ -37,11 +47,18 @@ func _ready() -> void:
 		for argument in OS.get_cmdline_user_args():
 			if argument.begins_with("--diagnostics-log="):
 				_path = argument.trim_prefix("--diagnostics-log=")
-	_open_log()
+	var error := _writer.start(ProjectSettings.globalize_path(_path), MAX_BYTES)
+	if error != OK:
+		push_warning("Performance diagnostics could not start its writer: %s" % error_string(error))
+		set_process(false)
+		return
+	_enabled = true
 	_last_frame = Time.get_ticks_usec()
+	_last_physics_frame = Engine.get_physics_frames()
 	_last_sample = _last_frame
 	_write("session_start", {
-		"schema": 1, "diagnostics_revision": "frame-pacing-5", "utc": Time.get_datetime_string_from_system(true),
+		"schema": 1, "diagnostics_revision": "frame-pacing-8", "utc": Time.get_datetime_string_from_system(true),
+		"world_render_timing_requested": _measure_world_render,
 		"engine": Engine.get_version_info().string, "os": OS.get_name(),
 		"game_version": ProjectSettings.get_setting("application/config/version", "unknown"),
 		"os_version": OS.get_version(), "cpu": OS.get_processor_name(),
@@ -85,12 +102,17 @@ static func slow(event: String, started_usec: int, fields: Dictionary = {}) -> v
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_usec()
 	var gap := now - _last_frame
+	var physics_frame := Engine.get_physics_frames()
 	_last_frame = now
 	if gap >= HITCH_USEC:
 		_hitches += 1
-		_worst_gap = maxi(_worst_gap, gap)
+		if gap > _worst_gap:
+			_worst_gap = gap
+			_worst_gap_physics_steps = physics_frame - _last_physics_frame
+	_last_physics_frame = physics_frame
 	if _hitches > 0 and now - _last_report >= REPORT_USEC:
-		_write("frame_hitch", {"count": _hitches, "worst_gap_ms": _worst_gap / 1000.0}, true)
+		_write("frame_hitch", {"count": _hitches, "worst_gap_ms": _worst_gap / 1000.0,
+			"worst_gap_physics_steps": _worst_gap_physics_steps}, true)
 		_hitches = 0
 		_worst_gap = 0
 		_last_report = now
@@ -115,9 +137,9 @@ func _snapshot() -> Dictionary:
 			"rendered_objects": Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
 			"primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 		},
-		# Include the previous write's snapshot/serialization/flush cost. Logging
-		# must not hide its own stalls or recursively log a slow write.
+		# Main-thread snapshot, serialization and enqueue cost for the previous event.
 		"diagnostic_write_ms": {"last": _last_write_usec / 1000.0, "max": _max_write_usec / 1000.0},
+		"diagnostic_disk_ms": _writer.disk_stats(),
 		"pipelines": {
 			"canvas": Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_CANVAS),
 			"mesh": Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_MESH),
@@ -127,11 +149,12 @@ func _snapshot() -> Dictionary:
 		},
 		"focused": get_window().has_focus(), "paused": get_tree().paused,
 		"window_size": str(get_window().size), "fps": Engine.get_frames_per_second(),
+		"frame_limit": Engine.max_fps, "physics_ticks_per_second": Engine.physics_ticks_per_second,
+		"vsync_mode": DisplayServer.window_get_vsync_mode(get_window().get_window_id()) if DisplayServer.get_name() != "headless" else null,
 	}
 	if _context.is_valid(): result["game"] = _context.call()
-	# Unlike the Performance monitors above, per-viewport render info is live
-	# in release builds. Shadow draws that never fall to zero while nothing
-	# moves mean lights are fighting over shadow atlas slots.
+	# Per-viewport draw counts are live in release builds. Both moving casters
+	# and shadow atlas eviction can cause recurring shadow draws at a fixed view.
 	if is_instance_valid(world_viewport):
 		var rid := world_viewport.get_viewport_rid()
 		result["world_draws"] = {
@@ -140,6 +163,15 @@ func _snapshot() -> Dictionary:
 			"shadow": RenderingServer.viewport_get_render_info(rid,
 				RenderingServer.VIEWPORT_RENDER_INFO_TYPE_SHADOW, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME),
 		}
+		if _measure_world_render:
+			# The latest completed world draw can precede this snapshot. These
+			# timings exclude presentation and the separate VHS/CRT viewport.
+			var gpu_ms := RenderingServer.viewport_get_measured_render_time_gpu(rid)
+			var cpu_ms := RenderingServer.viewport_get_measured_render_time_cpu(rid)
+			result["world_render_ms"] = {
+				"gpu": gpu_ms if is_finite(gpu_ms) and gpu_ms > 0.0 else null,
+				"cpu": cpu_ms if is_finite(cpu_ms) and cpu_ms > 0.0 else null,
+			}
 	return result
 
 
@@ -150,35 +182,19 @@ static func _valid_memory_counter(value: float) -> Variant:
 	return value if is_finite(value) and value >= 0.0 and value < 1125899906842624.0 else null
 
 
-func _open_log() -> void:
-	_file = null
-	var absolute := ProjectSettings.globalize_path(_path)
-	if DirAccess.make_dir_recursive_absolute(absolute.get_base_dir()) != OK: return
-	if FileAccess.file_exists(absolute + ".2"):
-		DirAccess.remove_absolute(absolute + ".2")
-	if FileAccess.file_exists(absolute + ".1"):
-		DirAccess.rename_absolute(absolute + ".1", absolute + ".2")
-	if FileAccess.file_exists(absolute):
-		DirAccess.rename_absolute(absolute, absolute + ".1")
-	_file = FileAccess.open(absolute, FileAccess.WRITE)
-	if _file == null:
-		push_warning("Performance diagnostics could not open its log: %s" % FileAccess.get_open_error())
-
-
-func _write(event: String, fields: Dictionary = {}, snapshot := false) -> void:
-	if _file == null: return
+func _write(event: String, fields: Dictionary = {}, snapshot := false, final_record := false) -> void:
+	if not _enabled: return
 	var started := Time.get_ticks_usec()
-	if _file.get_position() >= MAX_BYTES: _open_log()
-	if _file == null: return
 	var record := {"event": event, "uptime_ms": Time.get_ticks_msec(), "details": fields}
 	if snapshot: record["snapshot"] = _snapshot()
-	_file.store_line(JSON.stringify(record))
-	_file.flush()
+	if _writer.submit(JSON.stringify(record), final_record) == ERR_UNAVAILABLE:
+		_enabled = false
+		set_process(false)
 	_last_write_usec = Time.get_ticks_usec() - started
 	_max_write_usec = maxi(_max_write_usec, _last_write_usec)
 
 
 func _exit_tree() -> void:
-	_write("session_end")
-	_file = null
+	_write("session_end", {}, false, true)
+	_writer.close()
 	if _instance == self: _instance = null

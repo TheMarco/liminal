@@ -5,6 +5,10 @@ const CELL_GATE_WIDTH := 2.4
 const CELL_GATE_TRAVEL := 0.90
 # Inside face of the model's left steel jamb when fitted to a 2.4 m bay.
 const CELL_GATE_JAMB_X := -0.99
+const SHOWER_BENCH_SIZE := Vector3(5.8, 0.58, 0.48)
+# Measured from the GLB vertices. The rotated brace's bounding box extends
+# below the feet and above the seat, although none of its steel does.
+const SHOWER_BENCH_BOUNDS := AABB(Vector3(-1.6125, 0, -0.4345), Vector3(3.225, 0.9104, 0.869))
 
 
 func _prison_generated_bounds(inst: Node3D) -> AABB:
@@ -33,11 +37,13 @@ func _prison_generated_bounds(inst: Node3D) -> AABB:
 ## approved prop to the old procedural footprint, centre it on the furnishing
 ## pivot, and land its lowest vertex on local Y=0. This keeps the game layout
 ## deterministic while preserving the generated model's straight geometry.
-func _prison_generated_model(parent: Node3D, path: String, target_size: Vector3) -> Node3D:
+func _prison_generated_model(parent: Node3D, path: String, target_size: Vector3,
+		bounds := AABB()) -> Node3D:
 	var inst := scene.attributed_prop_local(parent, path, Vector3.ZERO, 0.0)
 	if inst == null:
 		return null
-	var bounds := _prison_generated_bounds(inst)
+	if not bounds.has_volume():
+		bounds = _prison_generated_bounds(inst)
 	if bounds.size.x <= 0.001 or bounds.size.y <= 0.001 or bounds.size.z <= 0.001:
 		return inst
 	var fit := Vector3(
@@ -50,6 +56,9 @@ func _prison_generated_model(parent: Node3D, path: String, target_size: Vector3)
 		-centre.z * fit.z)
 	inst.set_meta("scenario_generated", true)
 	inst.set_meta("scenario_generated_path", path)
+	# These fitted models keep their material bindings. Index shared materials
+	# at room install so an outage doesn't inspect every faucet and fastener.
+	inst.set_meta(&"fixed_power_bindings", true)
 	return inst
 
 
@@ -617,11 +626,11 @@ func _prison_shower() -> void:
 	var bench_pos = _wall_pt(wall, 6.0, 9.75)
 	var bench = scene.furnishing_pivot(bench_pos, scene.yaw_for(wall),
 		"prison_shower_bench")
-	_prison_generated_model(bench, Chunk.PRISON_GEN_SHOWER_BENCH_PATH,
-		Vector3(5.8, 0.84, 0.48))
-	scene.collider_yaw_box(bench_pos + Vector3(0, 0.42, 0),
-		Vector3(5.8, 0.84, 0.48), scene.yaw_for(wall))
-	scene.bind_furnishing_colliders(bench, bench_b0)
+	if _prison_generated_model(bench, Chunk.PRISON_GEN_SHOWER_BENCH_PATH,
+			SHOWER_BENCH_SIZE, SHOWER_BENCH_BOUNDS) != null:
+		scene.collider_yaw_box(bench_pos + Vector3.UP * (SHOWER_BENCH_SIZE.y * 0.5),
+			SHOWER_BENCH_SIZE, bench.rotation.y)
+		scene.bind_furnishing_colliders(bench, bench_b0)
 	if ctx.random01(1885) < 0.5:
 		scene.cc0_prop("WetFloorSign_01", Vector3(4.4, 0, 6.6), ctx.random01(1886) * TAU, 0.9)
 	# A coherent sanitation cluster: the downloaded props are small enough not

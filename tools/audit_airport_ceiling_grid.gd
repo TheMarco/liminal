@@ -196,7 +196,47 @@ func _scan(ws: int, cell: Vector2i) -> void:
 		transit_cells += 1
 	chunk.free()
 
+func _check_fixture_light_masks() -> void:
+	var lighting := preload("res://scripts/airport_fixture_lighting.gd")
+	var cell := Vector2i(-2, 3)
+	var room := Node3D.new()
+	var fixture := AreaLight3D.new()
+	room.add_child(fixture)
+	fixture.position = Vector3(6, 3, 6)
+	fixture.rotation.x = -PI / 2
+	fixture.area_size = Vector2.ONE
+	fixture.area_range = 9.0
+	var original := fixture.light_cull_mask
+	var wall := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.15, 3.5, 12)
+	wall.mesh = box
+	wall.position = Vector3(11.925, 1.75, 6)
+	wall.set_meta(lighting.SOLID_EDGE, 0)
+	room.add_child(wall)
+	var candidates: Array[MeshInstance3D] = [wall]
+	var heights := lighting.wall_heights(room, candidates)
+	lighting.restrict_ceiling_fixture(fixture, room, cell, heights)
+	var east := lighting.cell_layer(cell + Vector2i.RIGHT)
+	var diagonal := lighting.cell_layer(cell + Vector2i.ONE)
+	check((fixture.light_cull_mask & east) == 0, "full wall did not exclude the adjacent cell")
+	check((fixture.light_cull_mask & diagonal) != 0, "light cannot reach a diagonal through its open side")
+	check((fixture.light_cull_mask & 1) != 0, "room masks removed light from moving props")
+	heights[2] = 3.5
+	fixture.light_cull_mask = original
+	lighting.restrict_ceiling_fixture(fixture, room, cell, heights)
+	check((fixture.light_cull_mask & diagonal) == 0, "two full walls left their diagonal lit")
+	box.size.z = 6.0
+	check(lighting.wall_heights(room, candidates)[0] == 0.0, "cutout treated as a full wall")
+	fixture.area_range = 24.0
+	fixture.light_cull_mask = original
+	lighting.restrict_ceiling_fixture(fixture, room, cell, heights)
+	check(fixture.light_cull_mask == original, "long-range fixture excluded a repeated cell layer")
+	room.free()
+
+
 func run() -> void:
+	_check_fixture_light_masks()
 	for style in [WorldGen.AIR_GATE, WorldGen.AIR_CONCOURSE, WorldGen.AIR_HALL,
 			WorldGen.AIR_CHECKIN, WorldGen.AIR_BAGGAGE, WorldGen.AIR_ESCALATOR, WorldGen.AIR_TRANSIT]:
 		for height in [3.2, 3.5, 3.8, 4.4, 6.2]:

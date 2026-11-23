@@ -36,6 +36,11 @@ func capture_crt_modes(settings: GameSettings) -> void:
 	root.size = Vector2i(1280,720)
 	await settle()
 
+func world_height_matches(lines: float) -> bool:
+	var height := root.get_visible_rect().size.y
+	return is_equal_approx(root.scaling_3d_scale * height, minf(lines, height))
+
+
 func check_recording_resolution(game: Node, settings: GameSettings) -> void:
 	var saved := settings.values.duplicate(true)
 	var extent := root.size
@@ -58,27 +63,27 @@ func check_recording_resolution(game: Node, settings: GameSettings) -> void:
 	# the world: every actual height follows the world choice.
 	settings.apply_video_look(0)
 	settings.set_value("receiver_enabled",true)
-	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"receiver-only moved the Ultra world resolution")
+	expect(world_height_matches(1440.0),"receiver-only moved the Ultra world resolution")
 	settings.set_value("receiver_enabled",false)
-	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"receiver off did not keep the Ultra world")
+	expect(world_height_matches(1440.0),"receiver off did not keep the Ultra world")
 	game.opts.vhs_override = 1
 	game._apply_game_settings()
-	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"launch tape override moved the Ultra world resolution")
+	expect(world_height_matches(1440.0),"launch tape override moved the Ultra world resolution")
 	game.opts.vhs_override = -1
 	settings.apply_video_look(3)
 	game.opts.vhs_override = 0
 	game._apply_game_settings()
-	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"launch clean override moved the Ultra world resolution")
+	expect(world_height_matches(1440.0),"launch clean override moved the Ultra world resolution")
 	game.opts.vhs_override = -1
 	for pipeline in [0,1,2]:
 		settings.set_value("video_pipeline",pipeline)
 		game._apply_game_settings()
-		expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"video pipeline moved the Ultra world resolution")
+		expect(world_height_matches(1440.0),"video pipeline moved the Ultra world resolution")
 	settings.apply_video_look(0)
 	game.descent_tape_watch(true)
-	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"forced tape playback moved the Ultra world resolution")
+	expect(world_height_matches(1440.0),"forced tape playback moved the Ultra world resolution")
 	game.descent_tape_watch(false)
-	expect(is_equal_approx(root.scaling_3d_scale,2.0/3.0),"playback did not keep the Ultra world resolution")
+	expect(world_height_matches(1440.0),"playback did not keep the Ultra world resolution")
 	settings.apply_video_look(3)
 	root.size = Vector2i(3456,2234)
 	await settle()
@@ -198,7 +203,9 @@ func check_cheap_lighting(game: Node, menu: PauseMenu, settings: GameSettings) -
 	button.button_pressed = true
 	root.add_child(room)
 	for light: Light3D in original:
-		expect(not light.visible and light.distance_fade_begin < original[light][0],
+		var dark := not light.visible or (light.layers == 0 and light.light_energy == 0.0
+			and light.light_indirect_energy == 0.0 and light.light_volumetric_fog_energy == 0.0)
+		expect(dark and light.distance_fade_begin < original[light][0],
 			"a parked room missed the toggle or relit during the blackout")
 	expect(flashlight.visible and flashlight.shadow_enabled and not flashlight.distance_fade_enabled,
 		"power cut or room budget changed the player's flashlight")
@@ -211,6 +218,21 @@ func check_cheap_lighting(game: Node, menu: PauseMenu, settings: GameSettings) -
 		and accent.distance_fade_length == 8.0 and accent.distance_fade_shadow == 13.0,
 		"turning Cheap Lighting off lost the accent's authored distances")
 	expect(game.we.environment.sdfgi_enabled, "live lighting switch did not restore the selected GI")
+	var probe := ReflectionProbe.new()
+	room._add_room_probe(probe)
+	expect(probe.is_visible_in_tree(), "Quality lost local reflections")
+	settings.apply_quality_preset(0)
+	expect(not probe.is_visible_in_tree(), "Performance still renders room captures")
+	room.set_blackout(true)
+	settings.apply_quality_preset(2)
+	expect(not probe.is_visible_in_tree(), "turning reflections on relit a blacked-out room")
+	room.set_blackout(false)
+	expect(probe.is_visible_in_tree(), "restoring power lost the room reflection")
+	root.remove_child(room)
+	settings.apply_quality_preset(0)
+	root.add_child(room)
+	expect(not probe.is_visible_in_tree(), "a parked room missed the reflection preset")
+	settings.apply_quality_preset(2)
 	game.player.set_flashlight(torch_was_on)
 	stop_audio(room)
 	room.free()
@@ -344,10 +366,12 @@ func run() -> void:
 			and environment.volumetric_fog_enabled == authored.volumetric_fog_enabled,
 			"Quality lost full GI/fog on authored theme %s" % theme)
 	# Exercise the real startup/apply path and a cached realm source/destination.
-	var game := await boot_game(1315734997)
+	var game := preload("res://scenes/main.tscn").instantiate()
+	game.world_seed = 1315734997
 	game._settings = settings
-	GameSettings.current = settings
-	settings.changed.connect(game._apply_game_settings)
+	root.add_child(game)
+	await physics_frame
+	await process_frame
 	game.player.set_physics_process(false)
 	var saved_extent := root.size
 	root.size = Vector2i(1280, 720)
@@ -361,7 +385,9 @@ func run() -> void:
 			if light.has_meta("practical_shadow_tier"):
 				expect(light.shadow_enabled and light.shadow_opacity==1.0, "quality permits fixture light through walls")
 				expect(light.distance_fade_shadow>=light.distance_fade_begin, "fixture occlusion fades before its source")
-		expect(is_equal_approx(root.scaling_3d_scale, [2.0 / 3.0, 1.0, 1.0, 1.0][preset]), "preset selected wrong world resolution")
+		var target_height: float = [480.0, 720.0, 1080.0, 1440.0][preset]
+		expect(world_height_matches(target_height),
+			"preset selected wrong world resolution")
 		expect(root.scaling_3d_scale <= 1.0 and root.scaling_3d_scale > 0.0, "invalid runtime resolution")
 		expect(root.msaa_3d == Viewport.MSAA_DISABLED, "runtime MSAA mismatch")
 		expect(root.use_taa == (preset >= 1 and not game.opts.notaa), "runtime TAA mismatch")
@@ -384,10 +410,10 @@ func run() -> void:
 	# player's saved CRT preference and resolution untouched.
 	game.opts.crt_override = 1
 	game._apply_game_settings()
-	expect(is_equal_approx(root.scaling_3d_scale, 2.0/3.0), "CRT QA override moved the Low world resolution")
+	expect(world_height_matches(480.0), "CRT QA override moved the Low world resolution")
 	game.opts.crt_override = 0
 	game._apply_game_settings()
-	expect(is_equal_approx(root.scaling_3d_scale, 2.0/3.0), "clean QA override moved the Low world resolution")
+	expect(world_height_matches(480.0), "clean QA override moved the Low world resolution")
 	game.opts.crt_override = -1
 	game._apply_game_settings()
 	await check_recording_resolution(game,settings)

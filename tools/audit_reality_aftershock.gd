@@ -30,6 +30,7 @@ class CameraStub extends Node:
 	var _capturing := false
 	var _review_left := 0.0
 	var run = RunStub.new()
+	func is_reviewing() -> bool: return _review_left > 0.0
 
 class RealmStub:
 	var away := false

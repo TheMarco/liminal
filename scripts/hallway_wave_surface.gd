@@ -23,6 +23,7 @@ var max_prepare_step_ms := 0.0
 var _deadline := 0
 var _cancelled := false
 const PREPARE_BUDGET_USEC := 2000
+const INSTALL_SURFACES_PER_FRAME := 8
 
 func begin_setup(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> void:
 	_prepare(chunk, axis, lane_width, lane_height)
@@ -130,7 +131,7 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 					failure = "Non-planar triplanar material: " + str(node.get_path())
 					native.free()
 					return false
-			elif material is ShaderMaterial:
+			elif material is ShaderMaterial and material.shader != SurfaceWear.PATCH_SHADER:
 				var mutates_vertex := RegEx.new()
 				mutates_vertex.compile("\\b(VERTEX|NORMAL|TANGENT|BINORMAL)\\s*[+*/-]?=")
 				if mutates_vertex.search(_vertex_body(material.shader.code)) != null:
@@ -168,7 +169,7 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 		var xf := frame.affine_inverse() * Placement.relative(node, chunk)
 		var original := node.shape
 		if original == null: continue
-		var bounds: AABB = xf * original.get_debug_mesh().get_aabb()
+		var bounds: AABB = xf * _collision_bounds(original)
 		if bounds.position.x > width/2+0.65 or bounds.end.x < -width/2-0.65: continue
 		if bounds.position.z >= 6 or bounds.end.z <= -6: continue
 		var arrays: Array = []
@@ -200,16 +201,7 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 			failure = "Unsupported " + original.get_class() + ": " + str(node.get_path())
 			return false
 		if primitive != null: arrays = primitive.get_mesh_arrays()
-		var keys: Array[PackedVector3Array] = []
-		var inverse := xf.affine_inverse()
-		for k in Profile.KEYS:
-			var points := PackedVector3Array()
-			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			for i in vertices.size():
-				points.append(inverse * Profile.deform(xf*vertices[i], float(k)/(Profile.KEYS-1), width, height))
-				if i % 128 == 127: await _budget()
-			keys.append(points)
-			await _budget()
+		var keys := await _collision_keys(arrays[Mesh.ARRAY_VERTEX], xf)
 		var motion := ConcavePolygonShape3D.new()
 		motion.backface_collision = true
 		colliders.append({"node": node, "original": original, "motion": motion, "keys": keys, "indices": arrays[Mesh.ARRAY_INDEX]})
@@ -218,11 +210,18 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 			var xf := frame.affine_inverse() * Placement.relative(node, chunk)
 			var center: Vector3 = node.get_aabb().get_center() if node is Label3D else Vector3.ZERO
 			attachments.append({"node": node, "rest": node.transform, "frame": xf, "center": center, "to_parent": node.transform * xf.affine_inverse()})
-	# Install at the exact rest pose incrementally, not in the first wave tick.
+	# The renderer creates pipelines after the mesh swap. Its time is outside
+	# our CPU budget, so also limit how many new surfaces reach one draw.
+	var surfaces_this_frame := 0
 	for piece in pieces:
+		var surface_count: int = piece.materials.size()
+		var batch_full := surfaces_this_frame > 0 and surfaces_this_frame + surface_count > INSTALL_SURFACES_PER_FRAME
+		if batch_full or Time.get_ticks_usec() >= _deadline:
+			await _prepare_continue
+			surfaces_this_frame = 0
+		surfaces_this_frame += surface_count
 		_install_piece(piece)
 		installed = true
-		await _budget()
 	_last_lo = 0
 	ready_to_pose = true
 	return true
@@ -239,16 +238,58 @@ func _vertex_body(code: String) -> String:
 		end += 1
 	return code.substr(opening+1, end-opening-2)
 
+func _collision_bounds(shape: Shape3D) -> AABB:
+	# Primitive dimensions are already on the CPU. Building a debug mesh
+	# just to read its bounds can stall the renderer during exploration.
+	var size: Vector3
+	if shape is BoxShape3D:
+		size = shape.size
+	elif shape is CylinderShape3D:
+		size = Vector3(shape.radius * 2.0, shape.height, shape.radius * 2.0)
+	else:
+		return shape.get_debug_mesh().get_aabb()
+	return AABB(-0.5 * size, size)
+
+func _collision_keys(vertices: PackedVector3Array, xf: Transform3D) -> Array[PackedVector3Array]:
+	var points := PackedVector3Array()
+	var fields := PackedVector3Array()
+	points.resize(vertices.size())
+	fields.resize(vertices.size())
+	for i in vertices.size():
+		points[i] = xf * vertices[i]
+		fields[i] = Profile.field(points[i], width, height)
+		if i % 128 == 127: await _budget()
+	var inverse := xf.affine_inverse()
+	var keys: Array[PackedVector3Array] = []
+	for k in Profile.KEYS:
+		var key := PackedVector3Array()
+		key.resize(vertices.size())
+		var at := float(k) / (Profile.KEYS - 1)
+		var pulses: Dictionary[float, float] = {}
+		for i in points.size():
+			var p := points[i]
+			if not pulses.has(p.z):
+				pulses[p.z] = Profile.pulse(p.z, at)
+			key[i] = inverse * (p + pulses[p.z] * fields[i])
+			if i % 128 == 127: await _budget()
+		keys.append(key)
+		await _budget()
+	return keys
+
 func _convex_arrays(shape: ConvexPolygonShape3D, xf: Transform3D) -> Array:
 	# Godot 4.7 exposes both wire edges and filled hull faces in the debug
 	# mesh. get_faces() selects the triangles, retaining the authored hull.
 	var faces := shape.get_debug_mesh().get_faces()
 	if faces.is_empty(): return []
 	var pending: Array[PackedVector3Array] = []
-	for i in range(0, faces.size(), 3): pending.append(PackedVector3Array([faces[i], faces[i+1], faces[i+2]]))
+	for i in range(0, faces.size(), 3):
+		pending.append(PackedVector3Array([faces[i], faces[i+1], faces[i+2]]))
+		if i % 384 == 381: await _budget()
 	var vertices := PackedVector3Array()
+	var processed := 0
 	while not pending.is_empty():
-		if pending.size() % 128 == 0: await _budget()
+		processed += 1
+		if processed % 128 == 0: await _budget()
 		if vertices.size()+pending.size()*3 > 30000: return []
 		var triangle: PackedVector3Array = pending.pop_back()
 		var longest := -1
@@ -269,7 +310,9 @@ func _convex_arrays(shape: ConvexPolygonShape3D, xf: Transform3D) -> Array:
 			pending.append(PackedVector3Array([middle,b,c]))
 	var indices := PackedInt32Array()
 	indices.resize(vertices.size())
-	for i in indices.size(): indices[i] = i
+	for i in indices.size():
+		indices[i] = i
+		if i % 512 == 511: await _budget()
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
@@ -305,16 +348,26 @@ func _samples(arrays: Array, xf: Transform3D) -> Dictionary:
 	var along_max := -INF
 	const E := 0.005
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var cross_sections: Dictionary[Vector2, int] = {}
 	for i in vertices.size():
 		var p := xf * vertices[i]
 		along_min = minf(along_min, p.z)
 		along_max = maxf(along_max, p.z)
 		points.append(p)
-		fields.append(Profile.field(p, width, height))
-		derivatives.append(Basis(
-			(Profile.field(p+Vector3.RIGHT*E,width,height)-Profile.field(p-Vector3.RIGHT*E,width,height))/(2*E),
-			(Profile.field(p+Vector3.UP*E,width,height)-Profile.field(p-Vector3.UP*E,width,height))/(2*E),
-			Vector3.ZERO))
+		# The displacement field is constant along the corridor. Grid rows
+		# sharing x/y also share both transverse derivatives.
+		var xy := Vector2(p.x, p.y)
+		var prior: int = cross_sections.get(xy, -1)
+		if prior >= 0:
+			fields.append(fields[prior])
+			derivatives.append(derivatives[prior])
+		else:
+			cross_sections[xy] = i
+			fields.append(Profile.field(p, width, height))
+			derivatives.append(Basis(
+				(Profile.field(p+Vector3.RIGHT*E,width,height)-Profile.field(p-Vector3.RIGHT*E,width,height))/(2*E),
+				(Profile.field(p+Vector3.UP*E,width,height)-Profile.field(p-Vector3.UP*E,width,height))/(2*E),
+				Vector3.ZERO))
 		if i % 64 == 63: await _budget()
 	return {"points": points, "fields": fields, "derivatives": derivatives, "along_min": along_min, "along_max": along_max}
 
@@ -338,16 +391,19 @@ func _shape(arrays: Array, xf: Transform3D, at: float, samples: Dictionary) -> A
 	var ts := tangents.duplicate()
 	var inverse := xf.affine_inverse()
 	# Most room vertices share the same longitudinal grid coordinates.
-	var pulses := {}
+	var pulses: Dictionary[float, Vector2] = {}
+	var points: PackedVector3Array = samples.points
+	var fields: PackedVector3Array = samples.fields
+	var derivatives: Array[Basis] = samples.derivatives
 	for i in vertices.size():
 		if i % 64 == 63: await _budget()
-		var p: Vector3 = samples.points[i]
-		var field: Vector3 = samples.fields[i]
-		var derivative: Basis = samples.derivatives[i]
+		var p := points[i]
 		if not pulses.has(p.z):
 			pulses[p.z] = Vector2(Profile.pulse(p.z, at), (Profile.pulse(p.z+0.005, at)-Profile.pulse(p.z-0.005, at))/0.01)
 		var wave: Vector2 = pulses[p.z]
 		if wave == Vector2.ZERO: continue
+		var field := fields[i]
+		var derivative := derivatives[i]
 		positions[i] = inverse * (p + field * wave.x)
 		var j := inverse.basis * Basis(Vector3.RIGHT+derivative.x*wave.x, Vector3.UP+derivative.y*wave.x, Vector3.BACK+field*wave.y) * xf.basis
 		directions[i] = (j.inverse().transposed() * normals[i]).normalized()
@@ -364,9 +420,12 @@ func _shape(arrays: Array, xf: Transform3D, at: float, samples: Dictionary) -> A
 func _install_piece(piece: Dictionary) -> void:
 	var node: MeshInstance3D = piece.node
 	node.mesh = piece.motion
-	node.material_override = null
 	node.extra_cull_margin = piece.margin + Profile.AMPLITUDE*2
-	for s in piece.materials.size(): node.set_surface_override_material(s, piece.materials[s])
+	if piece.materials.size() == 1:
+		node.material_override = piece.materials[0]
+	else:
+		node.material_override = null
+		for s in piece.materials.size(): node.set_surface_override_material(s, piece.materials[s])
 
 func pose(value: float) -> void:
 	if not ready_to_pose: return

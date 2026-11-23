@@ -38,11 +38,15 @@ func _sch_strip(at: Vector3, along_x: bool, ln: float,
 	var body_size = Vector3(ln, 0.09, 0.24) if along_x else Vector3(0.24, 0.09, ln)
 	var lens_size = Vector3(ln - 0.12, 0.03, 0.15) if along_x else Vector3(0.15, 0.03, ln - 0.12)
 	var tall := ctx.ceiling_height > 4.5
+	var down_energy := 1.5 if tall else 1.15
+	if ctx.style == WorldGen.SCH_GYM:
+		# The high-bay strips are spaced eight metres apart over the court.
+		down_energy = 4.0
 	# The upper face is close to the ceiling; bound its overlap independently
 	# of the downward throw that supplies floor illumination and reflections.
 	return FIXTURE_LIGHTING.suspended_strip(scene,at,ctx.ceiling_height,
 		body_size,lens_size,Mats.sch_trim(),pmat,dead,Color(0.94,0.97,1.0),
-		1.5 if tall else 1.15,1.8,11.0 if tall else 8.0,shadow_tier,"school_ceiling_strip",5.0)
+		down_energy,1.8,11.0 if tall else 8.0,shadow_tier,"school_ceiling_strip",5.0)
 
 
 func _sch_lighting() -> void:
@@ -71,10 +75,20 @@ func _sch_lighting() -> void:
 			var at = Vector3(t, 0, WorldGen.CELL_SIZE / 2.0) if along_x else Vector3(WorldGen.CELL_SIZE / 2.0, 0, t)
 			lights.append_array(_sch_strip(at,along_x,2.6,pmat,dead,1 if t == 6.0 else 4))
 	elif ctx.style == WorldGen.SCH_GYM:
-		source = Vector3(4.0, ctx.ceiling_height - 0.5, 4.0)
+		# The grid spans the whole gym. Each streaming cell owns the strips
+		# whose centres fall inside its half-open bounds.
+		var cell_origin := Vector2(ctx.cell - ctx.room_root) * WorldGen.CELL_SIZE
+		var cell_bounds := Rect2(cell_origin, Vector2.ONE * WorldGen.CELL_SIZE)
 		for gx in [4.0, 12.0, 20.0]:
 			for gz in [4.0, 12.0, 20.0]:
-				lights.append_array(_sch_strip(Vector3(gx,0,gz),true,3.2,pmat,dead,
+				var point := Vector2(gx, gz)
+				if not cell_bounds.has_point(point):
+					continue
+				var offset := point - cell_origin
+				var at := Vector3(offset.x, 0.0, offset.y)
+				if lights.is_empty():
+					source = at + Vector3.UP * (ctx.ceiling_height - 0.5)
+				lights.append_array(_sch_strip(at,true,3.2,pmat,dead,
 					1 if gx == 12.0 and gz == 12.0 else 4))
 	else:
 		for gx in [3.4, 8.6]:
@@ -652,6 +666,7 @@ func _sch_chalkboard(dir: int) -> void:
 	# with it instead of surviving as text painted directly on the wall.
 	var board_root = Node3D.new()
 	board_root.set_meta("school_chalkboard", dir)
+	board_root.set_meta("cell_wall_mount", true)
 	scene.add_node(board_root)
 	var bm: Material = Mats.sch_board()
 	var d0 = inner + n * 0.03
@@ -820,7 +835,8 @@ func _sch_chalk(board_root: Node3D, dir: int, cen: float, ln: float) -> void:
 func _sch_screen(dir: int) -> void:
 	# The working lift is a complete wall set piece. A classroom roller on that
 	# same wall used to read as an unexplained grey square covering its doors.
-	if WorldGen.elevator_cell(ctx.world_seed, ctx.cell, ctx.theme):
+	if WorldGen.elevator_cell(ctx.world_seed, ctx.cell, ctx.theme) \
+			or not scene.edge_info(ctx.cell, dir)["wall"]:
 		return
 	var n = -1.0 if (dir == 0 or dir == 2) else 1.0
 	var plane = (WorldGen.CELL_SIZE - Chunk.T / 2.0) if (dir == 0 or dir == 2) else (Chunk.T / 2.0)
@@ -834,6 +850,7 @@ func _sch_screen(dir: int) -> void:
 	# wall as the classroom board and owns every one of its pieces.
 	var screen = scene.furnishing_pivot(Vector3.ZERO, 0.0,
 		"school_projector_screen", false)
+	screen.set_meta("cell_wall_mount", true)
 	screen.set_meta("school_projector_screen", dir)
 	screen.set_meta("school_projector_screen_compact", true)
 	if dir < 2:

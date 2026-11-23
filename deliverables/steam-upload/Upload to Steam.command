@@ -30,7 +30,7 @@ cd "$upload_dir"
 
 printf '\nIt Wants You To Stay — Steam upload\n'
 printf 'Account: %s\n' "$steam_user"
-printf 'App: 4336360 | Build: 0.6.0 | Windows, Linux and macOS\n\n'
+printf 'App: 4336360 | Build: 0.6.1 | Windows, Linux and macOS\n\n'
 printf 'Enter your Steam password and Steam Guard code here if requested.\n'
 printf 'This uploads the existing builds; it does not release the game.\n\n'
 

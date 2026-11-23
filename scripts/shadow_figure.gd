@@ -550,6 +550,10 @@ func _physics_process(dt: float) -> void:
 		_walker.begin_motion_frame()
 	ground_velocity = Vector3.ZERO
 	if GameplayFrameGuard.is_recovering(): return
+	if _burn_disintegration_started:
+		# Fragments already own the pose. Only the dying light and fog need to tick.
+		_advance_fade(dt)
+		return
 	# Keep the entire encounter dormant during its recording warning. Pause
 	# and passive beats preserve both this delay and the later contact grace.
 	if appearance_delay > 0.0:
@@ -561,8 +565,8 @@ func _physics_process(dt: float) -> void:
 	# Room crossings define the original encounter lifetime. Movement and path
 	# finding remain fully active until a clean, separated-room retirement.
 	_update_chase_lifetime()
-	if grace > 0.0:
-		grace -= dt
+	if grace > 0.0 and not suppressed:
+		grace = maxf(0.0, grace - dt)
 	# Pause/passive holds do not spend the warning's reaction window.
 	var approach_was_held := _approach_hold > 0.0
 	if approach_was_held and not suppressed:
@@ -584,7 +588,7 @@ func _physics_process(dt: float) -> void:
 			# You turned back into it. If it used the dark to cover real ground,
 			# that is an event in its own right and gets its own cue.
 			if _lost_dist < INF and _lost_dist - dist >= REVEAL_GAIN \
-					and _fade < 0.0 and _seen:
+					and _fade < 0.0 and _seen and not suppressed:
 				_reveal_scare()
 		else:
 			_lost_dist = dist
@@ -630,7 +634,7 @@ func _physics_process(dt: float) -> void:
 	# the real frustum at three heights, because a tall figure can have its
 	# middle in view while its head and feet are not, then confirm something
 	# is not standing in the way.
-	if not _seen and _fade < 0.0:
+	if not _seen and _fade < 0.0 and (not suppressed or beam):
 		var base := global_position
 		var visible := cam.is_position_in_frustum(base + Vector3(0, _eye_h, 0)) \
 			or cam.is_position_in_frustum(base + Vector3(0, _eye_h * 0.55, 0)) \
@@ -640,29 +644,33 @@ func _physics_process(dt: float) -> void:
 			_seen = true
 			_maybe_scare()
 	if _fade >= 0.0:
-		_fade -= dt
-		# Normalise against the length this particular exit started with: a burn
-		# runs longer than a stare-out and a seize is shorter, and dividing all
-		# three by FADE_T would make two of them jump.
-		var left := clampf(_fade / maxf(_fade_len, 0.001), 0.0, 1.0)
+		_advance_fade(dt)
+
+
+func _advance_fade(dt: float) -> void:
+	_fade -= dt
+	# Normalise against the length this particular exit started with: a burn
+	# runs longer than a stare-out and a seize is shorter, and dividing all
+	# three by FADE_T would make two of them jump.
+	var left := clampf(_fade / maxf(_fade_len, 0.001), 0.0, 1.0)
+	if not _burn_disintegration_started:
 		_set_visual_parameter("fade", left)
-		# The shed matter and the gathered dark go with the body.
 		if _wisps != null:
 			_wisps.emitting = left > 0.35
-			_wisps.visible = left > 0.02 and not _burn_disintegration_started
-		if _gloom != null and _gloom.material != null:
-			(_gloom.material as FogMaterial).density = GLOOM_DENSITY * 0.28 * left
-		if _flash != null:
-			var t := 1.0 - left
-			var flick := 0.78 + 0.22 * sin(t * 71.0) * sin(t * 23.0 + _bob_t)
-			# A fast, whole-body flare that remains bright long enough to read,
-			# then falls with the creature instead of climbing through it.
-			var env := smoothstep(0.0, 0.30, t) \
-				* (1.0 - smoothstep(0.45, 1.0, t))
-			_flash.light_energy = 0.45 * env * flick
-			_flash.position.y = _eye_h * (0.35 + 0.60 * t)
-		if _fade <= 0.0:
-			queue_free()
+			_wisps.visible = left > 0.02
+	if _gloom != null and _gloom.material != null:
+		(_gloom.material as FogMaterial).density = GLOOM_DENSITY * 0.28 * left
+	if _flash != null:
+		var t := 1.0 - left
+		var flick := 0.78 + 0.22 * sin(t * 71.0) * sin(t * 23.0 + _bob_t)
+		# A fast, whole-body flare that remains bright long enough to read,
+		# then falls with the creature instead of climbing through it.
+		var env := smoothstep(0.0, 0.30, t) \
+			* (1.0 - smoothstep(0.45, 1.0, t))
+		_flash.light_energy = 0.45 * env * flick
+		_flash.position.y = _eye_h * (0.35 + 0.60 * t)
+	if _fade <= 0.0:
+		queue_free()
 
 
 ## Restore the pre-3D encounter lifetime. A pursuer follows through its room
@@ -1423,6 +1431,10 @@ func _ignite(refund_torch := true, play_sound := true) -> void:
 	# There is no intact flare or spotted erosion phase underneath it.
 	_spawn_burn_particles()
 	_set_visual_parameter("fragmented", 1.0)
+	# The zero-alpha body and its halo still submit their full skinned meshes.
+	# The fragments are a sibling and keep their own transform and lifetime.
+	if is_instance_valid(_walker):
+		_walker.hide()
 	if refund_torch:
 		burned_away.emit()
 	# The room should be lit by the thing burning, which means the light has to

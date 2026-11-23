@@ -28,15 +28,20 @@ func _check_aperture_projection(visit: RealmExcursion) -> void:
 		"destination geometry before the entrance is not clipped")
 
 func _check_office_detail(image: Image) -> void:
-	var darkest := INF
-	var lightest := 0.0
-	for x in range(6, 18):
-		for y in range(6, 18):
-			var color := image.get_pixel(image.get_width() * x / 24, image.get_height() * y / 24)
-			var value := (color.r + color.g + color.b) / 3.0
-			darkest = minf(darkest, value)
-			lightest = maxf(lightest, value)
-	assert(lightest - darkest > 0.15, "Office shelves disappeared behind a flat destination wall")
+	# At 20 m this seed frames the bare back wall between two racks. Sample
+	# the shelves and their open gaps on both sides, above the floor trim.
+	for side in [0.035, 0.965]:
+		var shelf_rows := 0
+		var open_rows := 0
+		for row in range(4, 20):
+			var y := image.get_height() * row / 24
+			var wall := image.get_pixel(image.get_width() / 2, y).get_luminance()
+			var edge := image.get_pixel(int(image.get_width() * side), y).get_luminance()
+			if wall - edge > 0.10:
+				shelf_rows += 1
+			if absf(wall - edge) < 0.04:
+				open_rows += 1
+		assert(shelf_rows >= 2 and open_rows >= 2, "Office shelf detail lost in the distant doorway")
 
 func run_test() -> void:
 	Engine.max_fps = 60
@@ -115,6 +120,7 @@ func run_test() -> void:
 	assert(visit.seal.opened, "review did not open doorway")
 	camera._lower()
 	await process_frame
+	visit._process(0.0)
 	assert((visit.window.layers & cam.cull_mask) != 0, "documented opening hidden from eye")
 	# Retire subjects as streaming does, then register against the retained
 	# topology and evidence. Recorded doors must still be identifiable in film.

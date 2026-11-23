@@ -21,6 +21,7 @@ const VEGAS_LEVEL_BUILDER = preload("res://scripts/levels/vegas_level_builder.gd
 const OFFICE_LEVEL_BUILDER = preload("res://scripts/levels/office_level_builder.gd")
 const ANNEX_LEVEL_BUILDER = preload("res://scripts/levels/annex_level_builder.gd")
 const AIRPORT_LEVEL_BUILDER = preload("res://scripts/levels/airport_level_builder.gd")
+const AIRPORT_FIXTURE_LIGHTING := preload("res://scripts/airport_fixture_lighting.gd")
 const ASYLUM_LEVEL_BUILDER = preload("res://scripts/levels/asylum_level_builder.gd")
 const SCHOOL_LEVEL_BUILDER = preload("res://scripts/levels/school_level_builder.gd")
 const MALL_LEVEL_BUILDER = preload("res://scripts/levels/mall_level_builder.gd")
@@ -105,6 +106,8 @@ static var BOX := BoxMesh.new()
 static var _wall_occluder := BoxOccluder3D.new()
 static var CYL := _unit_cylinder()
 static var SPH := _unit_sphere()
+static var _bleed_growth_mesh := SphereMesh.new()
+static var _bleed_growth_shape: ConvexPolygonShape3D
 static var TOR := TorusMesh.new()
 static var QUAD := QuadMesh.new()
 static var CONE := CylinderMesh.new()
@@ -331,6 +334,7 @@ const OFFICE_WATER_COOLER_COLLIDER_SIZE := Vector3(0.37, 1.38, 0.36)
 const OFFICE_AIR_CONDITIONER_PATH := \
 	"res://models/cc_by/indoor_air_conditioner/indoor_air_conditioner_unit.glb"
 const OFFICE_AIR_CONDITIONER_SCALE := 2.35
+const OFFICE_AC_FACE_SIZE := Vector2(1.25, 0.42)
 # Imported visual bounds: x 0.088965..0.619921, y 0.003381..0.184028,
 # z -0.064694..0.066597. Re-origin on the centre of the wall-mounted housing.
 const OFFICE_AIR_CONDITIONER_CENTRE := Vector3(0.354443, 0.093705, 0.000952)
@@ -1033,6 +1037,7 @@ var _descent_lift_rig := {}
 var _descent_arrival_rig := {}
 var _blackout := false
 var _blackout_lights := {}
+var _blackout_fixture_channels := {}
 var _blackout_probes := {}
 var _blackout_surfaces := preload("res://scripts/blackout_surfaces.gd").new()
 var _power_lights: Array[Light3D] = []
@@ -1214,6 +1219,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/cc0/potted_plant_01/potted_plant_01_1k.gltf")
 		1:
 			paths.append_array([OFFICE_AIR_CONDITIONER_PATH, OFFICE_PHONE_PATH, OFFICE_PRINTER_PATH])
+			paths.append(ANNEX_SHELVING_PATH) # Office photographic obstruction.
 			paths.append_array([OFFICE_WATER_COOLER_PATH, OFFICE_CHAIR_PATH, OFFICE_MODERN_CHAIR_PATH, OFFICE_TERMINAL_PATH])
 			paths.append_array([OFFICE_BOXES_PATH, OFFICE_SCHOOL_BIN_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
@@ -1236,6 +1242,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 				AIRPORT_TROLLEY_PATH, AIRPORT_JETWAY_PATH, AIRPORT_PLANE_PATH, AIRPORT_CAROUSEL_PATH, AIRPORT_GATE_DESK_PATH])
 			paths.append_array([CHECKIN_DESK_PATH, AIRPORT_ESCALATOR_PATH, AIRPORT_WALKWAY_PATH, AIRPORT_WALKWAY_LONG_PATH])
 			paths.append(GARBAGE_BIN_PATH)
+			paths.append("res://models/cc0/potted_plant_01/potted_plant_01_1k.gltf")
+			paths.append("res://models/cc0/security_camera_01/security_camera_01_1k.gltf")
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/wooden_picnic_table/wooden_picnic_table_1k.gltf")
 			paths.append("res://models/cc0/CoffeeCart_01/CoffeeCart_01_1k.gltf")
@@ -1259,6 +1267,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
 		6:
 			paths.append_array([LOCKERS_PATH, GYM_LOCKER_PATH, SCH_CLEANING_CART_PATH, OFFICE_SCHOOL_BIN_PATH])
+			paths.append(OFFICE_CHAIR_PATH)
+			paths.append("res://models/cc0/security_camera_01/security_camera_01_1k.gltf")
 			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH, CHEMISTRY_GLASSWARE_PATH])
 			paths.append_array([SCH_TOILET_PATH, SCH_SINK_PATH, SCH_URINAL_PATH, SCH_SHELF_PATH])
 			paths.append_array([SCH_FOUNTAIN_PATH, SCH_TROPHY_CASE_PATH, SCH_BLEACHERS_PATH,
@@ -1269,6 +1279,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 		7:
 			paths.append_array([MALL_PALM_CROWN_PATH, MALL_PAYPHONE_PATH, MALL_DIRECTORY_PATH, MALL_SHOPPING_CART_PATH,
 				MALL_GARMENT_RACK_PATH, MALL_MERCHANDISE_PATH, MALL_DISPLAY_PATH])
+			paths.append(OFFICE_BOXES_PATH) # Mall photographic obstruction.
 			paths.append_array([CITY_BENCH_PATH, FOOD_COURT_SET_PATH, MALL_HOTDOG_PATH])
 			paths.append_array([ROPE_BARRIER_PATH, GARBAGE_BIN_PATH])
 			for model in ["CashRegister_01", "hand_truck", "metal_trash_can"]:
@@ -1283,6 +1294,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/cc0/plastic_crate_03/plastic_crate_03_1k.gltf")
 			paths.append("res://models/cc0/trashbag/trashbag_1k.gltf")
 		8:
+			paths.append(OFFICE_CHAIR_PATH)
 			paths.append_array([PRISON_DOOR_OLD_PATH, PRISON_BUNK_PATH, PRISON_TOILET_PATH,
 				PRISON_SHOWER_PATH, PRISON_MESS_TABLE_PATH, PRISON_EXECUTION_CHAIR_PATH,
 			PRISON_EXECUTION_TABLE_PATH, PRISON_EXECUTION_DAIS_PATH,
@@ -1401,6 +1413,8 @@ static func prepare_floor_resources(p_theme: int) -> void:
 	_release_floor_caches()
 	Mats.clear_runtime_caches(true)
 	FloorResourcePreloader.prepare_floor(theme_prop_paths(p_theme))
+	if p_theme in Mats.RIPPLE_THEMES:
+		Mats.pool_ripple_normal()
 	SoundBank.prepare_floor(p_theme)
 	Sfx.prepare_floor(p_theme)
 	PhotoAnomaly.prepare_floor()
@@ -1659,9 +1673,9 @@ static func _unit_sphere() -> SphereMesh:
 	return mesh
 
 
-## Solid walls hide most of the Casino, Prison and Data Center at typical sightlines.
+## Solid walls hide large parts of the Airport, Casino, Prison and Data Center.
 ## Other floors need their own measurement because occlusion also costs CPU.
-static var occlusion_themes: Array[int] = [0, 8, 10]
+static var occlusion_themes: Array[int] = [0, 4, 8, 10]
 
 
 ## Only explicitly authored opaque walls can occlude. Store references until
@@ -1678,6 +1692,10 @@ func record_occluder_wall(mesh: MeshInstance3D) -> void:
 ## that reaches it (hundreds per room on the Office and Casino floors).
 const SMALL_SHADOW_CASTER := 0.22
 
+static func small_shadow_caster(mesh: Mesh, basis: Basis) -> bool:
+	var size := mesh.get_aabb().size * basis.get_scale().abs()
+	return maxf(size.x, maxf(size.y, size.z)) < SMALL_SHADOW_CASTER
+
 func _drop_small_shadow_caster(instance: MeshInstance3D) -> bool:
 	if instance.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
 			or instance.mesh == null:
@@ -1687,8 +1705,7 @@ func _drop_small_shadow_caster(instance: MeshInstance3D) -> bool:
 	while ancestor is Node3D and ancestor != self:
 		basis = ancestor.basis * basis
 		ancestor = ancestor.get_parent()
-	var size := instance.mesh.get_aabb().size * basis.get_scale().abs()
-	if maxf(size.x, maxf(size.y, size.z)) >= SMALL_SHADOW_CASTER:
+	if not small_shadow_caster(instance.mesh, basis):
 		return false
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return true
@@ -1711,11 +1728,16 @@ func prepare_runtime_rendering(room_light_fade_begin := 0.0, deadline_usec := 0)
 	_render_meshes.clear()
 	_render_blackout_variants.clear()
 	_rendering_prepared = true
+	var airport_walls := PackedFloat32Array()
+	if theme == 4 and not is_inside_tree():
+		airport_walls = AIRPORT_FIXTURE_LIGHTING.wall_heights(self, _occluder_walls)
 	# Builders keep their authored close-up illumination and short shadow budget.
 	# Extend only architectural lighting, not little indicators/prop glows. This
 	# is an installation policy shared by streaming and blackout replacements.
 	for node in find_children("*", "Light3D", true, false):
 		var light := node as Light3D
+		if not airport_walls.is_empty() and light is AreaLight3D and light.has_meta("fixture_face"):
+			AIRPORT_FIXTURE_LIGHTING.restrict_ceiling_fixture(light, self, cell, airport_walls)
 		var room_light := bool(light.get_meta("stream_room_light", false))
 		if room_light_fade_begin > 0.0 and room_light and light.distance_fade_enabled:
 			# Light and shadow share a fade length. Preserve that length, and the
@@ -1924,6 +1946,7 @@ const BLEED_PROPS := {
 	9: [POOL_LOUNGE_CHAIR_PATH, POOL_LOUNGE_CHAIR_SCALE,
 		POOL_LOUNGE_CHAIR_CENTRE, Vector3(0.7, 0.8, 1.7)],
 }
+const BLEED_GROWTH_SIZE := Vector3(1.4, 0.341, 1.15)
 
 
 ## Environmental bleed, at build time. As the run's ratchet rises, freshly
@@ -1945,6 +1968,11 @@ func _build_bleed_dressing() -> void:
 	# the objective room, lift and tape set enter the retained neighbourhood.
 	var count := 1
 	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 6105), 25)
+	var radius := 0.55
+	var approaches: Array[Rect2] = []
+	if not BLEED_PROPS.has(bleed_theme) and bleed_theme != 10:
+		radius = BLEED_GROWTH_SIZE.x * 0.5
+		approaches = _doorway_clearance_rects()
 	var placed := 0
 	for i in 25:
 		if placed >= count:
@@ -1952,7 +1980,10 @@ func _build_bleed_dressing() -> void:
 		var lattice := (start + i) % 25
 		var at := Vector3(2.0 + float(lattice % 5) * 2.0, _floor_h(),
 			2.0 + float(lattice / 5) * 2.0)
-		if not _floor_spot_clear(at, 0.55, 1.9):
+		if not _floor_spot_clear(at, radius, 1.9):
+			continue
+		if not approaches.is_empty() and _rect_hits_zones(
+				Rect2(Vector2(at.x, at.z), Vector2.ZERO).grow(radius), approaches):
 			continue
 		var yaw := float(posmod(WorldGen.h(wseed, cell.x, cell.y,
 			6107 + placed), 8)) * PI * 0.25
@@ -1980,13 +2011,10 @@ func _place_bleed_prop(at: Vector3, yaw: float) -> void:
 		_disable_streamed_gi(prop)
 		return
 	# Themes without a portable authored prop intrude as raw matter instead.
-	var intrusion := Node3D.new()
-	intrusion.position = at
-	intrusion.rotation.y = yaw
-	intrusion.set_meta("bleed_prop", true)
-	add_child(intrusion)
+	var intrusion: Node3D
 	if bleed_theme == 10:
 		# A concrete pier that belongs to the Data Center, run floor to ceiling.
+		intrusion = Node3D.new()
 		var h := ceil_h - _floor_h()
 		_mbox(intrusion, Vector3(0, h * 0.5, 0), Vector3(0.82, h, 0.82),
 			Mats.brutal_structure())
@@ -1995,18 +2023,28 @@ func _place_bleed_prop(at: Vector3, yaw: float) -> void:
 	else:
 		# The Upside Down arrives as flesh: a low dark growth, warm to look
 		# at and wrong in every theme it appears in.
+		intrusion = StaticBody3D.new()
 		var blob := MeshInstance3D.new()
-		var sphere := SphereMesh.new()
-		sphere.radius = 0.5
-		sphere.height = 0.62
-		blob.mesh = sphere
-		var flesh := StandardMaterial3D.new()
-		flesh.albedo_color = Color(0.20, 0.05, 0.06)
-		flesh.roughness = 0.55
-		blob.material_override = flesh
-		blob.position = Vector3(0, 0.18, 0)
-		blob.scale = Vector3(1.4, 0.55, 1.15)
+		blob.mesh = _bleed_growth_mesh
+		blob.material_override = Mats.bleed_growth()
+		blob.position.y = BLEED_GROWTH_SIZE.y * 0.5
+		blob.scale = BLEED_GROWTH_SIZE
 		intrusion.add_child(blob)
+		# Size the hull in metres. Non-uniform scaling on a physics sphere
+		# would give it a different footprint from the visible growth.
+		if _bleed_growth_shape == null:
+			_bleed_growth_shape = ConvexPolygonShape3D.new()
+			var vertices: PackedVector3Array = SPH.get_mesh_arrays()[Mesh.ARRAY_VERTEX]
+			_bleed_growth_shape.points = Transform3D(blob.basis, Vector3.ZERO) * vertices
+		var hit := CollisionShape3D.new()
+		hit.position = blob.position
+		hit.shape = _bleed_growth_shape
+		intrusion.add_child(hit)
+		intrusion.set_meta("bleed_photo_height", blob.position.y)
+	intrusion.position = at
+	intrusion.rotation.y = yaw
+	intrusion.set_meta("bleed_prop", true)
+	add_child(intrusion)
 	_disable_streamed_gi(intrusion)
 
 
@@ -2384,7 +2422,7 @@ func _maybe_probe() -> void:
 	probe.box_projection = true
 	probe.interior = true
 	probe.max_distance = 24.0
-	add_child(probe)
+	_add_room_probe(probe)
 
 
 func _maybe_pool_probe() -> void:
@@ -2427,7 +2465,19 @@ func _maybe_pool_probe() -> void:
 	probe.max_distance = maxf(24.0, probe.size.length())
 	probe.set_blackout(_blackout)
 	_pool_reflection = probe
-	add_child(probe)
+	_add_room_probe(probe)
+
+
+func _add_room_probe(probe: ReflectionProbe) -> void:
+	# Keep the quality gate separate from the probe's own power and streaming
+	# state. A preset change during a blackout must never turn the room back on.
+	var gate := Node3D.new()
+	gate.name = "LocalReflections"
+	gate.add_to_group(GraphicsQuality.ROOM_REFLECTIONS)
+	gate.tree_entered.connect(func():
+		gate.visible = GameSettings.current == null or int(GameSettings.current.get_value("reflections")) > 0)
+	gate.add_child(probe)
+	add_child(gate)
 
 
 func _r(salt: int) -> float:
@@ -2988,10 +3038,13 @@ func _build_floor_ceiling() -> void:
 		ceiling.layers = OfficeCeilingGrid.CEILING_RENDER_LAYER
 		return
 	if theme == 4:
-		_box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.terrazzo_photo())
+		var layer := AIRPORT_FIXTURE_LIGHTING.cell_layer(cell)
+		var floor_slab := _box(Vector3(S / 2.0, -0.15, S / 2.0), Vector3(S, 0.3, S), Mats.terrazzo_photo())
+		floor_slab.layers = layer
 		var ceiling_material := Mats.air_coffer_inset() \
 			if AirportGrandCeiling.applies(ceil_h, style) else Mats.airport_ceiling()
-		_box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), ceiling_material)
+		var ceiling_slab := _box(Vector3(S / 2.0, ceil_h + 0.15, S / 2.0), Vector3(S, 0.3, S), ceiling_material)
+		ceiling_slab.layers = layer
 		return
 	if theme == 5:
 		var fmat: Material = Mats.asy_floor()
@@ -3088,7 +3141,7 @@ func _build_wall_edge(dir: int) -> void:
 				_pool_wall_with_circular_aperture(
 					dir, plane, wtop)
 			else:
-				_wall_seg(dir, plane, 0.0, S, 0.0, wtop)
+				_wall_seg(dir, plane, 0.0, S, 0.0, wtop, theme == 4 and not bool(info.get("runtime_seal", false)))
 		_wall_decor(dir, plane)
 		if not skip_doorway_utilities and (theme == 1 or theme == 2) \
 				and (theme != 2 or owns_annex_wall) \
@@ -3649,21 +3702,42 @@ func _toggle_swing_door(actor: Node, pivot: Node3D, cs: CollisionShape3D,
 	var target_angle := 0.0
 	if opening:
 		target_angle = _door_swing_away_from(actor, pivot, dir)
-		pivot.set_meta("last_open_angle", target_angle)
 	pivot.set_meta("moving", true)
-	if opening:
-		cs.disabled = true
 	hit.prompt_text = "E — close door" if opening else "E — open door"
 	get_tree().call_group("level_manager", "door_activity")
-	var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(pivot, "rotation:y", target_angle, 0.58)
-	await tw.finished
-	if not is_instance_valid(pivot):
-		return
-	pivot.set_meta("open", opening)
-	pivot.set_meta("moving", false)
-	if not opening:
-		cs.disabled = false
+	var tw := pivot.create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
+	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	var half := (cs.shape as BoxShape3D).size * 0.5
+	# The solid leaf follows the hinge. Stop at the last clear angle if the
+	# operator steps into its arc, allowing a door touching them to swing away.
+	var turn_leaf := func(angle: float) -> void:
+		if pivot.has_meta("swing_obstructed"):
+			return
+		if is_instance_valid(actor) and actor is Node3D:
+			var feet := pivot.to_local((actor as Node3D).global_position)
+			if feet.y < cs.position.y + half.y \
+					and feet.y + Player.BODY_HEIGHT > cs.position.y - half.y:
+				var next := feet.rotated(Vector3.UP, pivot.rotation.y - angle)
+				var clearance := _door_leaf_distance_squared(next, cs.position, half)
+				if clearance < Player.BODY_RADIUS * Player.BODY_RADIUS \
+						and clearance < _door_leaf_distance_squared(feet, cs.position, half):
+					pivot.set_meta("swing_obstructed", true)
+					return
+		pivot.rotation.y = angle
+	tw.tween_method(turn_leaf, pivot.rotation.y, target_angle, 0.58)
+	tw.tween_callback(func() -> void:
+		if pivot.has_meta("swing_obstructed"):
+			pivot.remove_meta("swing_obstructed")
+		var opened := not is_zero_approx(pivot.rotation.y)
+		pivot.set_meta("open", opened)
+		pivot.set_meta("moving", false)
+		hit.prompt_text = "E — close door" if opened else "E — open door")
+
+
+func _door_leaf_distance_squared(point: Vector3, centre: Vector3, half: Vector3) -> float:
+	var dx := maxf(absf(point.x - centre.x) - half.x, 0.0)
+	var dz := maxf(absf(point.z - centre.z) - half.z, 0.0)
+	return dx * dx + dz * dz
 
 
 ## Allowlisted transient room state that generation must not rewind. The
@@ -3681,9 +3755,8 @@ func capture_runtime_state() -> ChunkRuntimeState:
 		match str(record.get("kind", "")):
 			"swing_door":
 				out.put(str(key), "swing_door", {
-					"open": bool(node.get_meta("open", false)),
-					"angle": float(node.get_meta(
-						"last_open_angle", node.rotation.y)),
+					"open": not is_zero_approx(node.rotation.y),
+					"angle": node.rotation.y,
 				})
 	return out
 
@@ -3875,6 +3948,15 @@ func runtime_identity_violations() -> int:
 	return _runtime_identity_errors
 
 
+func has_moving_swing_door() -> bool:
+	for key in _runtime_objects:
+		var record: Dictionary = _runtime_objects[key]
+		if record.kind == "swing_door" and is_instance_valid(record.node) \
+				and bool(record.node.get_meta("moving", false)):
+			return true
+	return false
+
+
 func _register_runtime_object(kind: String, local_id: String,
 		node: Node3D) -> String:
 	var key := ChunkRuntimeState.object_key(cell, kind, local_id)
@@ -3894,11 +3976,6 @@ func _apply_swing_door_state(pivot: Node3D, state: Dictionary) -> void:
 	pivot.rotation.y = angle
 	pivot.set_meta("open", opened)
 	pivot.set_meta("moving", false)
-	pivot.set_meta("last_open_angle", angle)
-	for body_node in pivot.find_children("*", "StaticBody3D", true, false):
-		for shape_node in body_node.find_children(
-				"*", "CollisionShape3D", true, false):
-			(shape_node as CollisionShape3D).disabled = opened
 	for hit_node in pivot.find_children("*", "Interactable", true, false):
 		(hit_node as Interactable).prompt_text = \
 			"E — close door" if opened else "E — open door"
@@ -4401,7 +4478,7 @@ func _casino_upper_neon(dir: int, plane: float, from: float, to: float,
 		(a + b) * 0.5, b - a, 0.08, 0.06, neon)
 
 
-func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: float) -> void:
+func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: float, fixed_airport_edge := false) -> void:
 	# One opaque finish per height range. Splitting construction (including
 	# collision) keeps wallpaper below the datum and paint above it without
 	# coplanar faces. The existing y0/y1 trim guards still emit each trim once.
@@ -4514,6 +4591,10 @@ func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: fl
 				Vector3(c, 0.0, plane), ln, wall_t, 0.0, y1)
 	if theme in [0, 1, 7]:
 		wall_mesh.set_meta("fixture_backing_wall", true)
+	if theme == 4:
+		wall_mesh.layers = AIRPORT_FIXTURE_LIGHTING.cell_layer(cell)
+		if fixed_airport_edge:
+			wall_mesh.set_meta(AIRPORT_FIXTURE_LIGHTING.SOLID_EDGE, dir)
 	record_occluder_wall(wall_mesh)
 	if theme == 9:
 		# Final extents let the audit verify the topology contract: true L ends
@@ -6115,14 +6196,14 @@ func _finish_room_props(off: Vector3, n0: int, b0: int) -> void:
 	_clear_furnishings_from_doorways(n0, b0)
 
 
-## Move everything the prop pass just built onto the room centre — meshes,
-## lights, sounds and colliders alike, whatever node they were parented to.
+## Move room furnishings and their colliders together. Wall mounts use the
+## owning cell's wall and its collision, including in merged rooms.
 func _shift_props(off: Vector3, n0: int, b0: int) -> void:
 	if off == Vector3.ZERO:
 		return
 	for i in range(n0, get_child_count()):
 		var ch := get_child(i)
-		if ch is Node3D:
+		if ch is Node3D and not ch.has_meta("cell_wall_mount"):
 			(ch as Node3D).position += off
 	for i in range(b0, body.get_child_count()):
 		var cs := body.get_child(i)
@@ -7011,7 +7092,7 @@ func _descent_ride(rig: Dictionary) -> void:
 	travel.tween_method(
 		func(v: float): _descent_ride_indicator(display, v), 0.0, 1.0, 4.4)
 
-	await get_tree().create_timer(4.4).timeout
+	await travel.finished
 	if not is_inside_tree():
 		return
 
@@ -7257,8 +7338,8 @@ func _index_power_visuals() -> void:
 	_power_index_valid = is_inside_tree()
 
 
-## Blackout is a reversible overlay. Snapshot each light's exact visible and
-## energy state; restoring never resurrects a fixture that was already dead.
+## Blackout is a reversible overlay. Restore the state each fixture had at
+## lights-out, including any lamp that was already off.
 func set_blackout(on: bool, variants: Dictionary = {}) -> void:
 	if is_instance_valid(_pool_reflection):
 		_pool_reflection.set_blackout(on)
@@ -7267,9 +7348,21 @@ func set_blackout(on: bool, variants: Dictionary = {}) -> void:
 			return
 		if not _power_index_valid:
 			_index_power_visuals()
+		var installed := is_inside_tree()
 		for light in _power_lights:
-			_blackout_lights[light] = [light.visible, light.light_energy]
-			light.visible = false
+			# Keep installed ceiling fixtures in the renderer's spatial index.
+			# A ballast can keep changing energy, so isolate all light channels.
+			if installed and light.visible and light is AreaLight3D and light.has_meta(&"fixture_emitter") \
+					and light.get_child_count() == 0 and light.get_script() == null:
+				_blackout_fixture_channels[light] = [light.layers, light.light_energy,
+					light.light_indirect_energy, light.light_volumetric_fog_energy]
+				light.layers = 0
+				light.light_energy = 0.0
+				light.light_indirect_energy = 0.0
+				light.light_volumetric_fog_energy = 0.0
+			else:
+				_blackout_lights[light] = [light.visible, light.light_energy]
+				light.visible = false
 		for probe in _power_probes:
 			_blackout_probes[probe] = [probe.intensity, probe.visible]
 			probe.intensity = 0.0
@@ -7284,12 +7377,21 @@ func set_blackout(on: bool, variants: Dictionary = {}) -> void:
 			var state: Array = _blackout_lights[light]
 			light.visible = bool(state[0])
 			light.light_energy = float(state[1])
+	for light in _blackout_fixture_channels:
+		if is_instance_valid(light):
+			var channels: Array = _blackout_fixture_channels[light]
+			light.light_energy = channels[1]
+			light.light_indirect_energy = channels[2]
+			light.light_volumetric_fog_energy = channels[3]
+			light.layers = channels[0]
+			light.visible = true
 	for probe in _blackout_probes:
 		if is_instance_valid(probe):
 			probe.intensity = float(_blackout_probes[probe][0])
 			probe.visible = bool(_blackout_probes[probe][1])
 	_blackout_surfaces.restore()
 	_blackout_lights.clear()
+	_blackout_fixture_channels.clear()
 	_blackout_probes.clear()
 	_blackout = false
 

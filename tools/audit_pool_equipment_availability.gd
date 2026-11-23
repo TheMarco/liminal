@@ -17,8 +17,8 @@ func run() -> void:
 		# State zero uses the seeded edges. Geometry receives the same resolver
 		# and arrival/target flags as ChunkManager's initial Descent build.
 		var topology := DescentTopology.new(ws, 9)
-		var queue: Array[Vector2i] = [route.origin]
-		var distances := {route.origin: 0}
+		var queue: Array[Vector2i] = [route.arrival_cell]
+		var distances := {route.arrival_cell: 0}
 		var seen_rooms := {}
 		var nearest := [-1, -1, -1]
 		var nearest_cells := [Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO]
@@ -38,7 +38,7 @@ func run() -> void:
 					spec.topology = topology
 					spec.target = owner == route.target
 					spec.target_wall = route.target_wall
-					spec.arrival = owner == route.origin and route.origin_wall >= 0
+					spec.arrival = owner == route.arrival_cell and route.origin_wall >= 0
 					spec.arrival_wall = route.origin_wall
 					var chunk := Chunk.new(ws, owner, 9, spec)
 					var plan: Dictionary = chunk.get_meta("pool_equipment_plan", {})
@@ -58,7 +58,7 @@ func run() -> void:
 				distances[next] = hops + 1
 				queue.append(next)
 		print("POOL AVAILABILITY base=%d arrival=%s nearest_hops=%s cells=%s rooms=%d" % [
-			base, route.origin, nearest, nearest_cells, seen_rooms.size()])
+			base, route.arrival_cell, nearest, nearest_cells, seen_rooms.size()])
 		if nearest[1] < 0 and nearest[2] < 0:
 			failures.append("No slide within %d open-edge hops of arrival, base=%d" % [MAX_HOPS, base])
 		await process_frame

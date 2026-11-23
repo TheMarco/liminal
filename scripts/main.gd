@@ -556,9 +556,10 @@ func _runtime_diagnostic_context() -> Dictionary:
 		"queued_chunks": cm.queued.size() if is_instance_valid(cm) else 0,
 		"building_cell": str(cm._pending_cell) if is_instance_valid(cm) and cm._pending_chunk != null else "",
 		"player_position": str(player.position) if is_instance_valid(player) else "",
+		"camera_forward": str(-player.cam.global_basis.z) if is_instance_valid(player) and is_instance_valid(player.cam) and player.cam.is_inside_tree() else "",
 		"player_physics_enabled": player.is_physics_processing() if is_instance_valid(player) else false,
 		"mouse_mode": Input.mouse_mode,
-		"photo_reviewing": _photo_camera._review_left > 0.0 if is_instance_valid(_photo_camera) else false,
+		"photo_reviewing": _photo_camera.is_reviewing() if is_instance_valid(_photo_camera) else false,
 		"photo_capturing": _photo_camera._capturing if is_instance_valid(_photo_camera) else false,
 		"architecture_kind": _breathing.kind if is_instance_valid(_breathing) and is_instance_valid(_breathing.active) else "",
 		"architecture_elapsed": _breathing.elapsed if is_instance_valid(_breathing) and is_instance_valid(_breathing.active) else 0.0,
@@ -790,7 +791,7 @@ func _breathing_allowed() -> bool:
 	if descent and run != null and (run.blackout or run.arrival_grace > 0 or run.lift_called): return false
 	if cm == null or not cm._staged_cells.is_empty(): return false
 	if _director != null and (_director.scripted_hold or _director._hostile_count > 0): return false
-	if _photo_camera != null and (_photo_camera._raised or _photo_camera._capturing or _photo_camera._review_left > 0.0 or _photo_camera.doorway_reveal_active()): return false
+	if _photo_camera != null and (_photo_camera._raised or _photo_camera._capturing or _photo_camera.is_reviewing() or _photo_camera.doorway_reveal_active()): return false
 	return true
 
 
@@ -888,6 +889,10 @@ func _prepare_covered_encounters(level: int) -> void:
 	var live_power_pass := descent and not cm.blackout and DisplayServer.get_name() != "headless"
 	if live_power_pass:
 		_prepare_realm_visit()
+		if is_instance_valid(_realm_visit):
+			# Build the hidden destination alongside encounter warmup. A room's
+			# first GPU uploads can stall even when its CPU builder is sliced.
+			_realm_visit.prepare_preview(true)
 	_prepare_encounter_rendering(level, live_power_pass, not descent)
 	if is_instance_valid(_encounter_warmup) and not _encounter_warmup.finished:
 		await _encounter_warmup.completed
@@ -898,17 +903,17 @@ func _prepare_covered_encounters(level: int) -> void:
 		cm.preparing_arrival = true
 		while cm.can_process() and not cm.arrival_stream_ready():
 			await get_tree().process_frame
-		if live_power_pass and level == 0:
+		if live_power_pass and level in [0, 7]:
 			await cm.prepare_lift_exit_lookahead()
 		cm.preparing_arrival = false
 		if live_power_pass:
-			var arrival := cm.chunk_at(descent_route.origin) if descent_route != null else null
+			var arrival := cm.chunk_at(descent_route.arrival_cell) if descent_route != null else null
 			if arrival != null:
 				await arrival.draw_arrival_corridor()
 			await _draw_arrival_blackout()
 			await _photo_camera.prepare_snapshot_buffers()
 			if is_instance_valid(_realm_visit):
-				await _realm_visit.prepare_nearby_preview()
+				await _realm_visit.prepare_preview(true)
 		await RenderingServer.frame_post_draw
 	# A Descent still has its arrival safety check and fade to finish. Keep
 	# drawing the real floor through that fade, then let the ready card idle.
@@ -946,6 +951,8 @@ func _populate_floor(level: int, around: Vector3) -> void:
 	var track := _music_track_for(level)
 	_floor_music = load(track) as AudioStreamMP3 if not track.is_empty() else null
 	Chunk.prepare_floor_resources(level)
+	if descent and descent_route != null and not descent_route.obstruction_hint.is_empty():
+		PhotoObstruction.prepare(level)
 	ShadowWalkerVisual.retain_models([0, 1, 2, 3,
 		int(ShadowFigures.THEME_WALKER.get(level, -1))])
 	Chunk.prewarm_theme_content(_level_seed(level), level)
@@ -1027,6 +1034,9 @@ func _apply_graphics_settings() -> void:
 	var cheap_lighting := bool(_settings.get_value("cheap_lighting"))
 	if cheap_lighting != _applied_graphics.get("cheap_lighting", false):
 		GraphicsQuality.refresh_practical_lights(get_tree(), _settings.values)
+	var reflections := int(_settings.get_value("reflections"))
+	if reflections != _applied_graphics.get("reflections", -1):
+		get_tree().call_group(GraphicsQuality.ROOM_REFLECTIONS, &"set_visible", reflections > 0)
 	var next := {}
 	for key in GameSettings.QUALITY_KEYS:
 		next[key] = _settings.get_value(key)
@@ -1200,7 +1210,7 @@ func _open_photo_album() -> bool:
 			or is_instance_valid(_descent_intro) or _photo_camera == null:
 		return false
 	if not _photo_camera._allowed() or _photo_camera._capturing \
-			or _photo_camera._review_left > 0.0 or _photo_camera.doorway_reveal_active():
+			or _photo_camera.is_reviewing() or _photo_camera.doorway_reveal_active():
 		return false
 	_photo_camera._lower()
 	player.stop_motion_audio()
@@ -1393,7 +1403,7 @@ func _test_floor_jump_allowed() -> bool:
 	if is_instance_valid(_realm_visit) and _realm_visit.is_away():
 		return false
 	if _photo_camera != null and (_photo_camera._capturing \
-			or _photo_camera._review_left > 0.0 or _photo_camera.doorway_reveal_active()):
+			or _photo_camera.is_reviewing() or _photo_camera.doorway_reveal_active()):
 		return false
 	# An off-tree reality rebuild still owns callbacks to the current run.
 	return cm != null and cm._staged_cells.is_empty()
@@ -1438,8 +1448,8 @@ func use_elevator(dest: int) -> void:
 func _descent_arrival(theme: int) -> Dictionary:
 	if descent_route != null and descent_route.origin_wall >= 0:
 		var floor_y := Chunk.cell_floor_h(_level_seed(theme),
-			descent_route.origin, theme)
-		var car := Chunk.car_interior_point(descent_route.origin,
+			descent_route.arrival_cell, theme)
+		var car := Chunk.car_interior_point(descent_route.arrival_cell,
 			descent_route.origin_wall, floor_y)
 		car["exact"] = true
 		return car
@@ -1454,10 +1464,11 @@ func _descent_arrival(theme: int) -> Dictionary:
 func _print_descent_route() -> void:
 	if descent_route == null or run == null:
 		return
+	var edges := descent_route.distance_from_target(descent_route.arrival_cell)
 	print("Descent floor %d — arrive %s wall %d → target %s wall %d, %d edges (%.0fm), band %d-%d" % [
-		run.floor_idx + 1, descent_route.origin, descent_route.origin_wall,
+		run.floor_idx + 1, descent_route.arrival_cell, descent_route.origin_wall,
 		descent_route.target, descent_route.target_wall,
-		descent_route.graph_distance, descent_route.walk_metres(),
+		edges, edges * WorldGen.CELL_SIZE,
 		descent_route.min_dist, descent_route.max_dist])
 
 
@@ -1827,7 +1838,7 @@ func _finish_reveal_arrival(floor_name: String) -> void:
 		return
 	if not descent or run == null or run.ended or cm == null:
 		return
-	var chunk := cm.chunk_at(descent_route.origin)
+	var chunk := cm.chunk_at(descent_route.arrival_cell)
 	if chunk != null and chunk.has_descent_arrival():
 		_play_descent_cue(SoundBank.ding(), -8.0)
 		chunk.open_descent_arrival()
@@ -2296,6 +2307,8 @@ func _on_descent_blackout(on: bool) -> void:
 		_show_event_message("BLACKOUT — STAND STILL · THE TORCH STILL WORKS", true)
 	else:
 		_blackout_environment.restore()
+		if is_instance_valid(_figures):
+			_figures.give_player_reaction_time()
 		_blackout_locate_cue = 0
 		if _pending_mutation_reveal:
 			_pending_mutation_reveal = false
@@ -2428,7 +2441,7 @@ func _play_descent_cue_at(stream: AudioStream, volume: float,
 
 func _on_descent_anomaly(at: Vector2i, kind: int) -> void:
 	if not descent or cm == null or descent_route == null \
-			or at == descent_route.target or at == descent_route.origin:
+			or at == descent_route.target or at == descent_route.origin or at == descent_route.arrival_cell:
 		return
 	if kind == 1:
 		# Use the same clearance-checked, routed hunter path as every ordinary

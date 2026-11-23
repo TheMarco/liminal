@@ -92,7 +92,7 @@ func _physics_process(dt: float) -> void:
 			var begin := Time.get_ticks_usec()
 			active.prepare_step()
 			var cost := (Time.get_ticks_usec() - begin) / 1000.0
-			RuntimeDiagnostics.slow("architecture_prepare_step", begin, {"kind": kind})
+			RuntimeDiagnostics.slow("architecture_prepare_step", begin, {"kind": kind, "cell": active_chunk.cell})
 			last_setup_ms += cost
 			max_prepare_step_ms = maxf(max_prepare_step_ms, cost)
 			if active.failed:

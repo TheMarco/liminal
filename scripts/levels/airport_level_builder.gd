@@ -7,6 +7,9 @@ static var _walkway_glass_material: StandardMaterial3D
 # floor cross-aisle beyond them (over 1.1m clear even beside a boundary wall).
 const WALKWAY_RAMP_OVERHANG := 0.56
 const WALKWAY_END_AISLE := 1.24
+const STANCHION_BASE_RADIUS := 0.16
+const STANCHION_SOCKET_Y := 0.91
+const STANCHION_SOCKET_Z := 0.049
 
 static func clear_runtime_cache() -> void:
 	_carousel_belt_material = null
@@ -447,32 +450,56 @@ func _air_trolley(p: Vector3, yaw: float, salt: int, count = 1) -> void:
 	scene.bind_furnishing_colliders(rank, b0)
 
 
-## Chrome queue posts with retractable belts strung between them.
+## Split a row at doorway approaches before building it. Each surviving run
+## owns its belts, posts and collision together.
+func _stanchion_line(a: Vector3, b: Vector3, count: int, doorways: Array[Rect2] = []) -> void:
+	if count < 2:
+		return
+	var step := (b - a) / float(count - 1)
+	if step.length() <= 2.0 * STANCHION_SOCKET_Z:
+		return
+	var first := 0
+	for i in range(count - 1):
+		var p := a + step * i
+		var span := Rect2(Vector2(p.x, p.z), Vector2(step.x, step.z)).abs().grow(STANCHION_BASE_RADIUS)
+		for zone in doorways:
+			if span.intersects(zone):
+				_stanchion_run(a + step * first, step, i - first + 1)
+				first = i + 1
+				break
+	_stanchion_run(a + step * first, step, count - first)
 
 
-func _stanchion_line(a: Vector3, b: Vector3, n: int) -> void:
-	var line_yaw = atan2((b - a).x, (b - a).z)
-	for i in n:
-		var t = float(i) / float(n - 1)
-		var pp = a.lerp(b, t)
-		scene.cylinder(pp + Vector3(0, 0.49, 0), 0.028, 0.98, Mats.chrome())
-		scene.cylinder(pp + Vector3(0, 0.015, 0), 0.16, 0.03, Mats.chrome(), false)
-		scene.cylinder(pp + Vector3(0, 0.95, 0), 0.045, 0.06, Mats.charcoal(), false)
-		var reel = Node3D.new()
-		reel.position = pp
-		reel.rotation.y = line_yaw
-		scene.add_node(reel)
-		ProceduralDetails.attach(reel, "air_stanchion_reel_v2", func(d: ProceduralDetails) -> void:
+func _stanchion_run(start: Vector3, step: Vector3, count: int) -> void:
+	if count < 2:
+		return
+	var yaw := atan2(step.x, step.z)
+	var spacing := step.length()
+	var first_shape := scene.collider_mark()
+	var run := scene.furnishing_pivot(start, yaw, "airport_queue_barrier")
+	run.set_meta("fixed_furnishing", true)
+	for i in count:
+		var post := Node3D.new()
+		post.position.z = spacing * i
+		run.add_child(post)
+		var shaft_center := Vector3(0, 0.49, 0)
+		scene.model_cylinder(post, shaft_center, 0.028, 0.98, Mats.chrome())
+		scene.collider_cylinder(run.transform * (post.position + shaft_center), 0.028, 0.98)
+		scene.model_cylinder(post, Vector3(0, 0.015, 0), STANCHION_BASE_RADIUS, 0.03, Mats.chrome())
+		scene.model_cylinder(post, Vector3(0, 0.95, 0), 0.045, 0.06, Mats.charcoal())
+		ProceduralDetails.attach(post, "air_stanchion_reel_v2", func(d: ProceduralDetails) -> void:
 			d.box(Vector3(0, 0.95, 0), Vector3(0.13, 0.105, 0.085), Mats.charcoal(), 0.025)
-			d.box(Vector3(0, 0.91, -0.049), Vector3(0.065, 0.07, 0.014), Mats.steel(), 0.004)
-			d.box(Vector3(0, 0.91, 0.049), Vector3(0.065, 0.07, 0.014), Mats.steel(), 0.004)
+			for z in [-STANCHION_SOCKET_Z, STANCHION_SOCKET_Z]:
+				d.box(Vector3(0, STANCHION_SOCKET_Y, z), Vector3(0.065, 0.07, 0.014), Mats.steel(), 0.004)
 		)
-	for i in n - 1:
-		var p0 = a.lerp(b, float(i) / float(n - 1)) + Vector3(0, 0.88, 0)
-		var p1 = a.lerp(b, float(i + 1) / float(n - 1)) + Vector3(0, 0.88, 0)
-		var bl = scene.beam(p0 + (p1 - p0) * 0.06, p1 - (p1 - p0) * 0.06, 0.045, Mats.rubber_black())
-		bl.scale.y = 0.022
-		bl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The strip enters the slots at both ends and runs through the opaque intermediate reels.
+	var length := spacing * (count - 1)
+	var center := Vector3(0, STANCHION_SOCKET_Y, length * 0.5)
+	var size := Vector3(0.016, 0.045, length - 2.0 * STANCHION_SOCKET_Z)
+	var belt := scene.model_box(run, center, size, Mats.rubber_black())
+	belt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	scene.collider_yaw_box(run.transform * center, size, yaw)
+	scene.bind_furnishing_colliders(run, first_shape)
 
 
 # --- airport: gate ------------------------------------------------------------
@@ -1063,10 +1090,14 @@ func _air_checkin() -> void:
 	# the big board hanging over the queue
 	_fids(null, scene.world_point(o, Vector3(0, 3.15, 1.1), yw), yw + PI, true, true)
 	# serpentine of queue barriers holding a line for no one
-	_stanchion_line(scene.world_point(o, Vector3(-4.2, 0, 1.6), yw), scene.world_point(o, Vector3(4.2, 0, 1.6), yw), 6)
-	_stanchion_line(scene.world_point(o, Vector3(4.2, 0, 0.4), yw), scene.world_point(o, Vector3(-4.2, 0, 0.4), yw), 6)
+	var doorways := scene.doorway_clearance_rects()
+	_stanchion_line(scene.world_point(o, Vector3(-4.2, 0, 1.6), yw),
+		scene.world_point(o, Vector3(4.2, 0, 1.6), yw), 6, doorways)
+	_stanchion_line(scene.world_point(o, Vector3(4.2, 0, 0.4), yw),
+		scene.world_point(o, Vector3(-4.2, 0, 0.4), yw), 6, doorways)
 	if ctx.random01(374) < 0.5:
-		_stanchion_line(scene.world_point(o, Vector3(-4.2, 0, -0.8), yw), scene.world_point(o, Vector3(4.2, 0, -0.8), yw), 6)
+		_stanchion_line(scene.world_point(o, Vector3(-4.2, 0, -0.8), yw),
+			scene.world_point(o, Vector3(4.2, 0, -0.8), yw), 6, doorways)
 	if ctx.random01(375) < 0.55:
 		_air_trolley(scene.world_point(o, Vector3(-4.6 + 9.2 * ctx.random01(376), 0, -2.6), yw), ctx.random01(377) * TAU, 378, 1)
 	if ctx.random01(379) < 0.68:
@@ -1297,7 +1328,8 @@ func _air_escalator() -> void:
 		scene.cylinder(scp, 0.11, 2.1, Mats.steel())
 	# out-of-service barrier across one flight
 	var bx = -1.15 if ctx.random01(399) < 0.5 else 1.15
-	_stanchion_line(scene.world_point(o, Vector3(bx - 0.6, 0, -2.3), yw), scene.world_point(o, Vector3(bx + 0.6, 0, -2.3), yw), 2)
+	_stanchion_line(scene.world_point(o, Vector3(bx - 0.6, 0, -2.3), yw),
+		scene.world_point(o, Vector3(bx + 0.6, 0, -2.3), yw), 2, scene.doorway_clearance_rects())
 
 
 ## Landing-edge glass rail segment, centred at p, running along local x.

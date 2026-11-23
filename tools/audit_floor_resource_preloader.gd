@@ -90,8 +90,19 @@ func run() -> void:
 	check(FloorResourcePreloader.cached_scene(PATHS[0]) == fixture,
 		"synchronous first-use model was not retained")
 	for theme in WorldGen.THEMES:
-		check(Chunk.theme_prop_paths(theme).size() <= FloorResourcePreloader.CACHE_LIMIT,
+		var paths := Chunk.theme_prop_paths(theme)
+		check(paths.size() <= FloorResourcePreloader.CACHE_LIMIT,
 			"floor %d manifest exceeds its preparation allowance" % theme)
+		check(paths.has(PhotoObstruction._spec(theme).path),
+			"floor %d discovers its obstruction model during play" % theme)
+	for theme in [6, 8]:
+		check(Chunk.theme_prop_paths(theme).has(Chunk.OFFICE_CHAIR_PATH),
+			"floor %d omitted its desk chair" % theme)
+	for theme in [4, 6]:
+		check(Chunk.theme_prop_paths(theme).has("res://models/cc0/security_camera_01/security_camera_01_1k.gltf"),
+			"floor %d omitted its security camera" % theme)
+	check(Chunk.theme_prop_paths(4).has("res://models/cc0/potted_plant_01/potted_plant_01_1k.gltf"),
+		"airport and its preview omitted their planter")
 	for theme in [1, 5, 6, 7]:
 		check(Chunk.theme_prop_paths(theme).has("res://models/cc0/wall_clock/wall_clock_1k.gltf"),
 			"floor %d omitted its streamed wall clock" % theme)

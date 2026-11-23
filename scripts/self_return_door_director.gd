@@ -130,7 +130,7 @@ func _try_stage() -> bool:
 	var at := _actor_cell()
 	if route != null:
 		if (manager.theme != 2 and not route.is_path_room(at)) \
-				or at == route.origin or at == route.target \
+				or at == route.origin or at == route.arrival_cell or at == route.target \
 				or route.is_intro_door_room(at):
 			return false
 	var chunk := manager.chunk_at(at)

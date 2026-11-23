@@ -132,6 +132,30 @@ func _run() -> void:
 
 func _push_probe(body: RigidBody3D, start_distance: float,
 		label: String) -> bool:
+	var visual := body.get_node("FloatVisual") as Node3D
+	var visible_parts := visual.find_children("*", "MeshInstance3D", true, false)
+	var casters := body.find_children("*", "MeshInstance3D", false, false)
+	if visible_parts.is_empty() or casters.is_empty():
+		push_error("POOL_FLOAT_PUSH: %s shadow geometry is incomplete" % label)
+		return false
+	var index := 0
+	for visible_part: MeshInstance3D in visible_parts:
+		var pose := visual.global_transform.affine_inverse() * visible_part.global_transform
+		if visible_part.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			push_error("POOL_FLOAT_PUSH: %s still casts its animated shadow" % label)
+			return false
+		if Chunk.small_shadow_caster(visible_part.mesh, pose.basis):
+			continue
+		var caster := casters[index] as MeshInstance3D if index < casters.size() else null
+		if caster == null or caster.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY \
+				or caster.mesh != visible_part.mesh \
+				or not caster.transform.is_equal_approx(pose):
+			push_error("POOL_FLOAT_PUSH: %s lost its body-mounted silhouette" % label)
+			return false
+		index += 1
+	if index != casters.size():
+		push_error("POOL_FLOAT_PUSH: %s has extra shadow geometry" % label)
+		return false
 	var player := Player.new()
 	player.level_theme = 9
 	player.water_y = Chunk.POOL_WATER_Y
@@ -158,7 +182,7 @@ func _push_probe(body: RigidBody3D, start_distance: float,
 func _draft_probe(body: RigidBody3D, label: String) -> bool:
 	var low := INF
 	var high := -INF
-	for node in body.find_children("*", "MeshInstance3D", true, false):
+	for node in body.get_node("FloatVisual").find_children("*", "MeshInstance3D", true, false):
 		var mesh := node as MeshInstance3D
 		if mesh.mesh == null:
 			continue

@@ -15,7 +15,8 @@ static var _wall_art_preloads_requested := false
 static func clear_runtime_caches(keep_shaders := false) -> void:
 	# Freeing the last material of a shader discards its compiled pipelines;
 	# the next floor then recompiles the surfaces both floors share. Between
-	# floors only the (small) Shader objects are retained, never textures.
+	# floors this cache keeps only Shader objects. The small, shared surface
+	# detail texture is a script preload.
 	if keep_shaders:
 		for material in _c.values():
 			if material is ShaderMaterial and material.shader != null:
@@ -50,21 +51,8 @@ static func _std(key: String, fn: Callable) -> StandardMaterial3D:
 
 ## Shared seamless mipmapped noise — micro surface detail that filters
 ## correctly at distance, unlike per-pixel math noise.
-static func detail_noise() -> NoiseTexture2D:
-	if _c.has("detail_noise"):
-		return _c["detail_noise"]
-	var n := FastNoiseLite.new()
-	n.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	n.frequency = 0.02
-	n.fractal_octaves = 4
-	var t := NoiseTexture2D.new()
-	t.noise = n
-	t.width = 512
-	t.height = 512
-	t.seamless = true
-	t.generate_mipmaps = true
-	_c["detail_noise"] = t
-	return t
+static func detail_noise() -> Texture2D:
+	return preload("res://textures/shared/surface_detail.png")
 
 
 static func carpet() -> Material:
@@ -2176,6 +2164,12 @@ static func bloom_growth() -> ShaderMaterial:
 	return m
 
 
+static func bleed_growth() -> StandardMaterial3D:
+	return _std("bleed_growth", func(m: StandardMaterial3D):
+		m.albedo_color = Color(0.20, 0.05, 0.06)
+		m.roughness = 0.55)
+
+
 static func bloom_flesh() -> StandardMaterial3D:
 	return _std("bloom_flesh", func(m: StandardMaterial3D):
 		m.albedo_texture = load(
@@ -2287,28 +2281,15 @@ static func bloom_spore() -> StandardMaterial3D:
 
 # --- the Poolrooms ------------------------------------------------------------
 
-## Seamless 1024px ripple normal map for the water. Generating it keeps the floor free of
-## another downloaded dependency and lets the ripple be tuned in code. Low
-## frequency and many octaves is what makes it read as calm water rather than
-## as hammered metal.
-static func pool_ripple_normal() -> NoiseTexture2D:
-	if _c.has("pool_ripple_normal"):
-		return _c["pool_ripple_normal"]
-	var n := FastNoiseLite.new()
-	n.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	n.frequency = 0.014
-	n.fractal_octaves = 4
-	n.fractal_gain = 0.42
-	var t := NoiseTexture2D.new()
-	t.noise = n
-	t.width = 1024
-	t.height = 1024
-	t.seamless = true
-	t.generate_mipmaps = true
-	t.as_normal_map = true
-	t.bump_strength = 1.6
-	_c["pool_ripple_normal"] = t
-	return t
+## These floors share the same seamless normal map. Retain it only while
+## one of their materials or a prepared realm preview needs it.
+const RIPPLE_NORMAL_PATH := "res://textures/pool/ripple_normal.png"
+const RIPPLE_THEMES := [2, 7, 9]  # flooded Annex, Mall fountains, Pools
+
+static func pool_ripple_normal() -> Texture2D:
+	if not _c.has("pool_ripple_normal"):
+		_c["pool_ripple_normal"] = load(RIPPLE_NORMAL_PATH)
+	return _c["pool_ripple_normal"]
 
 
 ## Small white mosaic tile. One material dresses the basin, the piers, the

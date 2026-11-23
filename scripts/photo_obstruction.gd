@@ -6,6 +6,14 @@ extends RefCounted
 static var _templates: Dictionary = {}
 static var _hulls: Dictionary = {}
 
+## Building a convex collision hull reads the imported mesh synchronously. Prepare
+## the floor's actual obstruction once while its arrival is still covered.
+static func prepare(theme: int) -> void:
+	var spec := _spec(theme)
+	var template := _template(spec.path, spec.get("selection", ""))
+	for part: Dictionary in template.get("parts", []):
+		_hull(part.mesh)
+
 
 static func build(fill: Node3D, barrier: StaticBody3D, centre: Vector3,
 		dir: int, width: float, height: float, _seed: int, theme: int = 7) -> float:

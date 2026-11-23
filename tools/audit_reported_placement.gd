@@ -22,7 +22,9 @@ func run() -> void:
 	await check_writing()
 	check_airport()
 	check_asylum()
+	await check_prison_shower_bench()
 	check_school_support()
+	check_school_wall_mounts()
 	for failure in failures:
 		print("  FAIL " + failure)
 	print("reported placement audit: %d failures; %d phrases/poses, %d booths, %d doors" \
@@ -30,6 +32,70 @@ func run() -> void:
 	Chunk.finish_prop_preloads()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit(0 if failures.is_empty() else 1)
+
+
+func check_prison_shower_bench() -> void:
+	var chunk := Chunk.new(WorldGen.level_seed(9137, 8), Vector2i(-7, 4), 8)
+	root.add_child(chunk)
+	await physics_frame
+	await physics_frame
+	var plates := chunk.find_children("AnchorBasePlate_*", "MeshInstance3D", true, false)
+	check(plates.size() == 3, "Prison shower is missing bench feet")
+	var world := chunk.get_world_3d()
+	for plate: MeshInstance3D in plates:
+		var bounds := plate.global_transform * plate.get_aabb()
+		# Sample adjacent tile so the ray clears the bench's own collider.
+		var beside := bounds.get_center() + plate.global_basis.z.normalized() * 0.6
+		var tile := ArrivalSafety.support_top(world, beside.x, beside.z, -0.1)
+		check(absf(bounds.position.y - tile) < 0.005, "Prison bench foot does not touch tile")
+	var slat := chunk.find_child("SeatSlat_02", true, false) as MeshInstance3D
+	check(slat != null, "Prison shower is missing its bench seat")
+	if slat != null:
+		var bounds := slat.global_transform * slat.get_aabb()
+		var centre := bounds.get_center()
+		var seat := ArrivalSafety.support_top(world, centre.x, centre.z, -0.1)
+		check(absf(seat - bounds.end.y) < 0.01, "Prison bench collider misses its visible seat")
+	chunk.free()
+
+
+func check_school_wall_mounts() -> void:
+	var ws := WorldGen.level_seed(9137, 6)
+	var boards := 0
+	var screens := 0
+	# Joined classrooms and a lab. These layouts shift room furniture along
+	# the mounting wall in two cases and six metres away from it in the third.
+	for cell in [Vector2i(-6, -3), Vector2i(-2, -2), Vector2i(-2, 7)]:
+		var chunk := Chunk.new(ws, cell, 6, null, true)
+		while not chunk.build_next_slice():
+			pass
+		for fixture in chunk.get_children():
+			var dir := -1
+			if fixture.has_meta("school_chalkboard"):
+				dir = int(fixture.get_meta("school_chalkboard"))
+				boards += 1
+			elif fixture.has_meta("school_projector_screen"):
+				dir = int(fixture.get_meta("school_projector_screen"))
+				screens += 1
+			else:
+				continue
+			var bounds := mesh_bounds(fixture)
+			var axis := Vector3.AXIS_X if dir < 2 else Vector3.AXIS_Z
+			var along := Vector3.AXIS_Z if dir < 2 else Vector3.AXIS_X
+			var normal := Vector3(WorldGen.DIRV[dir].x, 0, WorldGen.DIRV[dir].y)
+			var positive := normal[axis] > 0.0
+			var back := bounds.end[axis] if positive else bounds.position[axis]
+			var wall := Chunk.S - Chunk.T if positive else Chunk.T
+			check(absf(back - wall) < 0.10, "School fixture detached from its wall in %s" % cell)
+			check(bounds.position[along] > Chunk.T and bounds.end[along] < Chunk.S - Chunk.T,
+				"School fixture slid off its reserved wall in %s" % cell)
+			# Probe the actual backing wall near both ends of the visible fixture.
+			for side in [-0.4, 0.4]:
+				var p := bounds.get_center()
+				p[along] += bounds.size[along] * side
+				check(not chunk._segment_clear(p - normal * 0.18, p + normal * 0.18, 0.01),
+					"School fixture has no backing wall in %s" % cell)
+		chunk.free()
+	check(boards == 3 and screens > 0, "expected classroom and lab boards and a roller screen")
 
 
 func check_school_support() -> void:

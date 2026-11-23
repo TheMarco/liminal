@@ -651,11 +651,12 @@ A floor begins inside a sealed car, facing shut doors, which then part onto the
 new world. It is the same shell as the objective lift, so the ride out of one
 car and into another reads as one continuous descent across the fade.
 
-`DescentRoute.origin` is a second authored cell, chosen under the same contract
-as the target — single-cell room anchor, unsplit, non-corridor, wall-backed —
-and as close to `Vector2i.ZERO` as that contract allows. Cell `(0,0)` itself is
-almost never usable: every one of its edges is a guaranteed doorway, so it owns
-no solid wall to back a car against.
+`DescentRoute.arrival_cell` houses the car in an unsplit, single-cell room with
+a solid backing wall. It normally coincides with the seeded route origin.
+When the first four steps of open passages offer no suitable room, the game
+keeps the original route and selects the nearest available lift room from the
+connected floor. Existing checkpoints retain their objective and evidence
+locations.
 
 Consequences:
 
@@ -675,10 +676,8 @@ Consequences:
   `_switching`, since freeing the outgoing floor makes its arrival area report
   the player as having left it.
 
-If a floor genuinely has no wall-backed room near the origin, `origin_wall`
-stays `-1`, no car is built and the floor uses the ordinary audited arrival.
-The route audit reports how often that happens; across 200 seeds × 8 floors it
-is currently never.
+If the entire scanned floor has no available lift room, the floor uses its
+ordinary physics-checked spawn. The route audit counts these plain arrivals.
 
 ### 6.5 Lift behaviour
 

@@ -261,6 +261,23 @@ func run() -> void:
 			(float(assistance_from.y) + 0.5) * ChunkManager.CELL)
 		expect(game._can_commit_blackout_mutation(assistance["proposal"]),
 			"safe unoccupied mutation was rejected")
+		var resident: Chunk = game.cm.chunk_at(occupied)
+		var door := Node3D.new()
+		resident.add_child(door)
+		var door_key := resident._register_runtime_object("swing_door", "audit", door)
+		door.set_meta("moving", true)
+		expect(not game._can_commit_blackout_mutation(assistance["proposal"]),
+			"mutation preflight allowed a moving door to be replaced")
+		door.set_meta("moving", false)
+		expect(game._can_commit_blackout_mutation(assistance["proposal"]),
+			"a settled door still blocked a safe mutation")
+		resident._runtime_objects.erase(door_key)
+		door.free()
+		var nested_hostile := ShadowFigure.new()
+		resident.add_child(nested_hostile)
+		expect(not game._can_commit_blackout_mutation(assistance["proposal"]),
+			"mutation preflight allowed a resident hostile to be replaced")
+		nested_hostile.free()
 		var assistance_before := route.distance_from_target(assistance_from)
 		var old_state := route.topology.current_state_id()
 		var old_history := route.topology.state_history()
@@ -441,10 +458,10 @@ func run() -> void:
 	# sealed car and the player starts standing inside it facing shut doors.
 	expect(route.origin_wall >= 0,
 		"floor has no wall-backed arrival room")
-	expect(route.origin != route.target,
+	expect(route.arrival_cell != route.target,
 		"arrival room and objective are the same cell")
 	if route.origin_wall >= 0:
-		var arrival_chunk: Chunk = game.cm.chunk_at(route.origin)
+		var arrival_chunk: Chunk = game.cm.chunk_at(route.arrival_cell)
 		expect(arrival_chunk != null,
 			"arrival room was not streamed in at startup")
 		if arrival_chunk != null:
@@ -453,8 +470,8 @@ func run() -> void:
 			expect(arrival_chunk.has_descent_arrival(),
 				"arrival car is not in a usable state at floor start")
 		var seat_floor := Chunk.cell_floor_h(game._level_seed(game.active_level),
-			route.origin, game.active_level)
-		var seat: Dictionary = Chunk.car_interior_point(route.origin,
+			route.arrival_cell, game.active_level)
+		var seat: Dictionary = Chunk.car_interior_point(route.arrival_cell,
 			route.origin_wall, seat_floor)
 		expect(game.player.global_position.distance_to(
 			seat["position"]) < 1.0,
@@ -645,11 +662,6 @@ func run() -> void:
 			"lift ride took %d ms, outside its authored window" % ride_ms)
 		expect(game.player._rumble < 0.35,
 			"lift ride left the camera shaking after deceleration")
-		# The ride coroutine sets ride_done before its final indicator write has
-		# necessarily been processed, so sampling the label in the same frame is a
-		# race. Under load it reads the still-descending '▼' and fails a contract
-		# that actually holds. One frame settles it.
-		await process_frame
 		var ride_display: Label3D = ride_rig["display"]
 		expect(ride_display.text.contains("02"),
 			"ride indicator did not land on the floor below, got '%s'" \
@@ -665,7 +677,7 @@ func run() -> void:
 		expect(game._descent_hud._panel.visible,
 			"room-aware route marker is hidden")
 		var exit: Dictionary = game.descent_route.next_room_exit(
-			game.descent_route.origin)
+			game.descent_route.arrival_cell)
 		expect(not exit.is_empty(), "arrival room has no route exit")
 
 	# The real async lift callback must rebuild the next floor at the origin,
@@ -685,7 +697,7 @@ func run() -> void:
 		next_arrival["position"]) < 1.0,
 		"Descent floor did not arrive inside its car")
 	expect(game.descent_route.origin_wall < 0 \
-		or game.cm.chunk_at(game.descent_route.origin) != null,
+		or game.cm.chunk_at(game.descent_route.arrival_cell) != null,
 		"new floor did not stream in its arrival room")
 	expect(not game.run.lift_called and not game.run.lift_open \
 		and not game.run.arrival_used,
@@ -717,7 +729,7 @@ func run() -> void:
 		"title world left haunt timers active behind its rule card")
 
 	print("descent runtime audit: seed=%d arrive=%s/%d target=%s distance=%d" % [
-		SEED, route.origin, route.origin_wall, route.target,
+		SEED, route.arrival_cell, route.origin_wall, route.target,
 		route.graph_distance])
 	await teardown_game(game)
 	finish("arrival car, HUD guidance, lift wait, pressure, rules and transition hold")

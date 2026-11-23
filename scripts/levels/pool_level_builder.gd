@@ -1903,7 +1903,7 @@ func _pool_float(salt: int, guaranteed := false) -> bool:
 			mi.material_override = _buoy_material(tint)
 		inst.set_meta("pool_float_tint", tint)
 		body.set_meta("pool_ring_float", true)
-		_pool_float_spots.append({"point": point, "radius": 0.60})
+		_register_pool_float(body, point, 0.60)
 		return true
 	return false
 
@@ -1943,7 +1943,7 @@ func _pool_flamingo_float(salt: int, guaranteed := false) -> bool:
 			body.get_parent().free()
 			return false
 		body.set_meta("pool_flamingo_float", true)
-		_pool_float_spots.append({"point": point, "radius": 1.30})
+		_register_pool_float(body, point, 1.30)
 		return true
 	return false
 
@@ -1997,7 +1997,7 @@ func _pool_mattress_float(salt: int, guaranteed := false) -> bool:
 						_pool_mattress_material(source, color_index))
 		body.set_meta("pool_mattress_float", true)
 		body.set_meta("pool_mattress_color", color_index)
-		_pool_float_spots.append({"point": point, "radius": 1.10})
+		_register_pool_float(body, point, 1.10)
 		return true
 	return false
 
@@ -2068,7 +2068,7 @@ func _pool_striped_float(salt: int, guaranteed := false) -> bool:
 						mesh_instance.set_surface_override_material(surface, material)
 		body.set_meta("pool_striped_float", true)
 		body.set_meta("pool_striped_colors", color_index)
-		_pool_float_spots.append({"point": point, "radius": 0.80})
+		_register_pool_float(body, point, 0.80)
 		return true
 	return false
 
@@ -2099,6 +2099,37 @@ static func _pool_striped_material(source: StandardMaterial3D,
 		material = weld
 	_striped_material_cache[key] = material
 	return material
+
+
+func _register_pool_float(body: RigidBody3D, point: Vector2, radius: float) -> void:
+	_pool_float_spots.append({"point": point, "radius": radius})
+	# A few centimetres of visual swell would invalidate the shadow maps of
+	# every nearby lamp each frame. The same meshes cast from the floating
+	# body's resting pose and still travel and turn when a player pushes it.
+	var visual := body.get_node("FloatVisual")
+	for part: MeshInstance3D in visual.find_children("*", "MeshInstance3D", true, false):
+		if part.mesh == null or part.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON:
+			continue
+		var pose := part.transform
+		var parent := part.get_parent_node_3d()
+		while parent != body:
+			pose = parent.transform * pose
+			parent = parent.get_parent_node_3d()
+		part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if Chunk.small_shadow_caster(part.mesh, pose.basis):
+			continue
+		var shadow := MeshInstance3D.new()
+		shadow.mesh = part.mesh
+		shadow.transform = pose
+		shadow.layers = part.layers
+		shadow.material_override = part.material_override
+		for surface in part.get_surface_override_material_count():
+			var material := part.get_surface_override_material(surface)
+			if material != null:
+				shadow.set_surface_override_material(surface, material)
+		shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+		shadow.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		body.add_child(shadow)
 
 
 func _pool_pushable_float(at: Vector3, yaw: float, kind: String,

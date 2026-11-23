@@ -136,7 +136,7 @@ func arrival_stream_ready() -> bool:
 ## Build those same strips with the covered budget and ordinary room ordering.
 func prepare_lift_exit_lookahead() -> void:
 	if not preparing_arrival or descent_route == null or descent_route.origin_wall < 0 \
-			or _last_center != descent_route.origin:
+			or _last_center != descent_route.arrival_cell:
 		return
 	var normal_ahead := _ahead
 	var exit_cell: Vector2i = _last_center - WorldGen.DIRV[descent_route.origin_wall]
@@ -306,6 +306,14 @@ func _stream_one_chunk(pc: Vector2i, prediction: Vector3, run_state: Array,
 				# Installation gets the next allowance if generation used this one.
 				if not urgent and Time.get_ticks_usec() >= deadline:
 					break
+				# Blackout variants and shadow meshes can take longer than
+				# geometry generation. Prepare a lit room within the same
+				# allowance, before publishing its collision and interactions.
+				if not urgent and not blackout:
+					if not _pending_chunk.prepare_runtime_rendering(ROOM_LIGHT_FADE_BEGIN, deadline):
+						break
+					if Time.get_ticks_usec() >= deadline:
+						break
 				var complete := _pending_chunk
 				var at := _pending_cell
 				_pending_chunk = null
@@ -434,7 +442,7 @@ func _build_spec(c: Vector2i, topology_state_override := -1) -> ChunkBuildSpec:
 		spec.topology = descent_topology
 		spec.topology_state_override = topology_state_override
 		spec.blackout = blackout
-		spec.arrival = descent_route.origin_wall >= 0 and c == descent_route.origin
+		spec.arrival = descent_route.origin_wall >= 0 and c == descent_route.arrival_cell
 		spec.arrival_wall = descent_route.origin_wall
 		spec.arrival_used = descent_arrival_used
 		spec.lift_called = descent_lift_called
@@ -603,7 +611,7 @@ func _exit_tree() -> void:
 
 func _is_optional_vhs_cell(c: Vector2i) -> bool:
 	if not descent or descent_route == null \
-			or c == descent_route.origin or c == descent_route.target:
+			or c == descent_route.origin or c == descent_route.arrival_cell or c == descent_route.target:
 		return false
 	if descent_route.optional_vhs_cells().has(c):
 		return true

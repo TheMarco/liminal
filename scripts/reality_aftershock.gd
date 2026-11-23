@@ -68,7 +68,7 @@ func presentation_allowed() -> bool:
 			or active_run.watching or active_run.suspended):
 		return false
 	var camera = host._photo_camera
-	return camera == null or not (camera._raised or camera._capturing or camera._review_left > 0.0)
+	return camera == null or not (camera._raised or camera._capturing or camera.is_reviewing())
 
 
 func trigger() -> void:

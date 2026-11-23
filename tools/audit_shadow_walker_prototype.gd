@@ -193,6 +193,9 @@ func _run() -> void:
 	alternate._ignite(false, false)
 	expect(alternate._burn_disintegration_started,
 		"walker ignition did not schedule its mesh disintegration")
+	expect(not visual.is_visible_in_tree() and is_instance_valid(alternate._burn_particles)
+		and alternate._burn_particles.is_visible_in_tree(),
+		"the ignition frame must draw only the detached fragment body")
 	await create_timer(0.14).timeout
 	expect(alternate._burn_particles != null
 		and alternate._burn_particles.fragment_count >= 2200,
@@ -201,8 +204,11 @@ func _run() -> void:
 		and alternate._flash.get_meta("visible_source", "")
 			== "walker_burning_body_and_particles",
 		"walker burn light is not contracted to its visible body and particles")
-	expect(not alternate._wisps.visible,
-		"dark ambient wisps stayed visible over the bright disintegration")
+	alternate._advance_fade(0.1)
+	expect(not alternate._wisps.visible and not alternate._wisps.emitting,
+		"dark ambient wisps stayed active over the bright disintegration")
+	expect(alternate._flash.light_energy > 0.0,
+		"hiding the disintegrated body also stopped its fading light")
 	if is_instance_valid(alternate._burn_particles):
 		var burn_mesh := alternate._burn_particles.multimesh.mesh
 		var burn_material := alternate._burn_particles.material_override as ShaderMaterial

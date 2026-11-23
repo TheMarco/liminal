@@ -7,13 +7,11 @@ extends RefCounted
 ## actually open next edge for every scanned cell, so HUD guidance cannot point
 ## through a wall.
 ##
-## A floor has two authored cells. `origin` is the arrival room — the one the
-## player steps out into, backed by a real solid wall so the arrival car is a
-## sealed island like the objective. `target` holds the lift down (or, on the
-## last floor, the way out). Distances are measured from `origin`, not from
-## Vector2i.ZERO, because that is where the player actually starts walking.
+## The route from origin to target determines the floor's seeded objectives.
+## The player starts in arrival_cell, normally the origin itself. The live
+## guidance map covers the alternate entrance when a district needs one.
 
-## Graph distance from the arrival room to the objective, first → last floor.
+## Graph distance from the seeded route origin to the objective, first → last floor.
 ## The needle degrades with depth (see DescentHUD), so later floors are longer
 ## in searching as well as in metres.
 ## Roughly doubled 2026-08-03: a needle-guided 16-edge walk was a one-minute
@@ -28,9 +26,7 @@ const MAX_DIST_LAST := 52
 ## toward these caps, floor 4+ runs the authored band untouched — the
 ## airport audit depends on floor 4's route crossing baggage claim.
 const EARLY_SHORTEN := [0.62, 0.78, 0.9]
-## How far from the world origin the arrival room is allowed to sit. Cell (0,0)
-## is almost never wall-backed — every edge is a guaranteed doorway — so the
-## arrival car needs a nearby room that owns a solid wall.
+## Prefer a wall-backed room this close to the seeded starting point.
 const ARRIVAL_RADIUS := 4
 const INTRO_TARGET_ATTEMPTS := 12
 const OBSTRUCTION_TARGET_ATTEMPTS := 16
@@ -97,7 +93,12 @@ var theme := 0
 var floor_idx := 0
 var origin := Vector2i.ZERO
 var arrival_search_center := Vector2i.ZERO
+## The physical lift can occupy a nearby room while origin stays fixed for
+## seeded objectives and saved evidence.
+var arrival_cell: Vector2i:
+	get: return origin if _fallback_arrival == NO_CELL else _fallback_arrival
 var origin_wall := -1
+var _fallback_arrival := NO_CELL
 var target := Vector2i.ZERO
 var target_wall := -1
 var graph_distance := 0
@@ -128,6 +129,8 @@ var _ritual_cell := Vector2i(1 << 30, 1 << 30)
 var _base_wall_cache := {}
 var _base_room_cache := {}
 var _base_neighbours := {}
+var _candidate_graph: AStar2D
+var _candidate_ids: Dictionary[Vector2i, int] = {}
 var _photo_cell_base_cache := {}
 var _base_room_members_cache := {}
 
@@ -167,6 +170,8 @@ static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 	route.casino_landmarks = CasinoLandmarks.plan(route)
 	route.landmark_rooms = RouteSetpieces.plan_landmarks(route)
 	route.discovery_rooms = RouteSetpieces.plan_discoveries(route)
+	if route.origin_wall < 0:
+		route._place_fallback_arrival()
 	return route
 
 
@@ -249,6 +254,8 @@ func distance_from_target(at: Vector2i) -> int:
 ## changing the seed-authored base world.
 func set_topology(value: DescentTopology) -> void:
 	topology = value
+	if value != null and not _origin_distance.is_empty():
+		_prepare_candidate_graph()
 	if not _origin_distance.is_empty() and target != origin:
 		_build_reverse_map()
 
@@ -295,6 +302,56 @@ func base_neighbours(at: Vector2i) -> Array[Vector2i]:
 				neighbours.append(other)
 		_base_neighbours[at] = neighbours
 	return _base_neighbours[at]
+
+
+## Build under the floor transition. The live lift guidance keeps its own map.
+func _prepare_candidate_graph() -> void:
+	if _candidate_graph != null:
+		return
+	_candidate_graph = AStar2D.new()
+	_candidate_graph.reserve_space(_origin_distance.size())
+	for at: Vector2i in _origin_distance:
+		var id := _candidate_ids.size()
+		_candidate_ids[at] = id
+		_candidate_graph.add_point(id, Vector2(at))
+	for at: Vector2i in _origin_distance:
+		var id := _candidate_ids[at]
+		for other in base_neighbours(at):
+			var other_id := _candidate_ids[other]
+			if id < other_id:
+				_candidate_graph.connect_points(id, other_id)
+
+
+## Test only the boundaries that differ from the base, then restore the private
+## query graph before another reality or a camera/safety callback can run.
+func candidate_distance(from: Vector2i, changes: Dictionary[Vector3i, bool]) -> int:
+	if not scanned_contains(from) or not scanned_contains(target):
+		return -1
+	if from == target:
+		return 0
+	_prepare_candidate_graph()
+	var opened: Array[Vector2i] = []
+	var closed: Array[Vector2i] = []
+	for edge in changes:
+		var at := Vector2i(edge.x, edge.y)
+		var id: int = _candidate_ids.get(at, -1)
+		var other_id: int = _candidate_ids.get(at + WorldGen.DIRV[edge.z], -1)
+		if id < 0 or other_id < 0:
+			continue
+		if changes[edge]:
+			_candidate_graph.connect_points(id, other_id)
+			opened.append(Vector2i(id, other_id))
+		else:
+			_candidate_graph.disconnect_points(id, other_id)
+			closed.append(Vector2i(id, other_id))
+	# Every edge costs one step. An empty path gives the unreachable sentinel.
+	var distance := _candidate_graph.get_id_path(
+			_candidate_ids[from], _candidate_ids[target]).size() - 1
+	for pair in opened:
+		_candidate_graph.disconnect_points(pair.x, pair.y)
+	for pair in closed:
+		_candidate_graph.connect_points(pair.x, pair.y)
+	return distance
 
 
 func base_room_members(at: Vector2i) -> Array[Vector2i]:
@@ -350,7 +407,8 @@ func _blackout_doorway_pass(from: Vector2i, visited: Dictionary,
 	if old_distance < 0:
 		return {}
 	var nearby := _runtime_distances(from, radius)
-	var optional_cells := optional_vhs_cells()
+	var reserved_cells := optional_vhs_cells()
+	reserved_cells.append(arrival_cell)
 	var best_helpful := {}
 	var best_helpful_score := -INF
 	var best_shortcut := {}
@@ -363,7 +421,7 @@ func _blackout_doorway_pass(from: Vector2i, visited: Dictionary,
 		var at: Vector2i = key
 		var was_visited := visited.has(at)
 		if (not require_help and not was_visited) \
-				or not _blackout_cell_ok(at, from, optional_cells, true, true):
+				or not _blackout_cell_ok(at, from, reserved_cells, true, true):
 			continue
 		var approach := int(nearby[at])
 		for dir in 4:
@@ -371,7 +429,7 @@ func _blackout_doorway_pass(from: Vector2i, visited: Dictionary,
 					or topology.has_shortcut(at, dir):
 				continue
 			var other: Vector2i = at + WorldGen.DIRV[dir]
-			if not _blackout_cell_ok(other, from, optional_cells, true):
+			if not _blackout_cell_ok(other, from, reserved_cells, true):
 				continue
 			if not is_equal_approx(Chunk.cell_floor_h(world_seed, at, theme),
 					Chunk.cell_floor_h(world_seed, other, theme)):
@@ -811,8 +869,8 @@ func _pick_origin() -> void:
 		eligible.append(c)
 	var pool := preferred if not preferred.is_empty() else eligible
 	if pool.is_empty():
-		# Nothing wall-backed nearby. The floor still works: main falls back to
-		# the ordinary audited arrival and simply builds no car.
+		# Finish the original route before placing a car farther away. Moving
+		# the starting point here would also move objectives in existing saves.
 		return
 	# Nearest first, so the arrival never drifts far from the audited spawn, and
 	# a seed hash only breaks ties between equally close rooms.
@@ -827,9 +885,54 @@ func _pick_origin() -> void:
 	origin_wall = WorldGen.anchor_wall(world_seed, origin, ARRIVAL_WALL_SALT, theme)
 
 
+func _place_fallback_arrival() -> void:
+	# Only reached for a carless district. Reserve the original floor's evidence,
+	# recordings and mutable rooms before placing a permanent elevator in it.
+	var reserved := PhotoDirector.build_plan(self)
+	reserved.merge(casino_landmarks)
+	reserved.merge(landmark_rooms)
+	for at in discovery_rooms + optional_vhs_cells():
+		reserved[at] = true
+	var layout := DescentTopology.new(world_seed, theme)
+	set_topology(layout)
+	layout.plan_floor(self)
+	for door in layout.photo_doorways():
+		var at: Vector2i = door["cell"]
+		reserved[at] = true
+		reserved[at + WorldGen.DIRV[DescentTopology.edge_dir(door)]] = true
+	# Continue can restore any authored reality before the evidence is placed.
+	for state in layout.state_count():
+		layout.restore_state(state)
+		refresh_topology()
+		reserved.merge(PhotoDirector.build_plan(self))
+		if state > 0:
+			for at in layout.state_delta(0, state).cells:
+				reserved[at] = true
+	set_topology(null)
+	var doorways := NativeDoorwayPlan.new()
+	doorways.configure(world_seed, theme, layout)
+	# _scan inserted these cells in walking-distance order. Only visit the
+	# existing reachable graph, stopping at the first empty, suitable room.
+	for at: Vector2i in _origin_distance:
+		if reserved.has(at) or not _base_candidate(at, target):
+			continue
+		# Leave the charging-station lattice, including the seeded dead unit, intact.
+		if posmod(at.x, 3) == 1 and posmod(at.y, 3) == 1:
+			continue
+		if theme == 9 and not Chunk.pool_style_dry(WorldGen.cell_style(world_seed, at, theme)):
+			continue
+		for wall in 4:
+			if base_is_wall(at, wall) and doorways.candidate(at, wall).is_empty():
+				_fallback_arrival = at
+				origin_wall = wall
+				return
+
+
 func _scan(from: Vector2i, radius: int) -> void:
 	_photo_graph_cache.clear()
 	_base_neighbours.clear()
+	_candidate_graph = null
+	_candidate_ids.clear()
 	_origin_distance.clear()
 	var queue: Array[Vector2i] = [from]
 	_origin_distance[from] = 0

@@ -193,19 +193,24 @@ var realm_destination := ""
 var _realm_centre := Vector3.ZERO
 var _realm_width := 0.0
 var _realm_height := 0.0
+var _placement_owner: Chunk
+var _placement_offset := Vector3.ZERO
 
 
 func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
-		p_theme: int, wall_dir: int, wall_along: float) -> void:
+		p_theme: int, wall_dir: int, wall_along: float, room_owner: Chunk = null) -> void:
 	id = p_id
 	type = p_type as Type
 	cell = p_cell
 	world_seed = p_world_seed
 	theme = p_theme
+	if room_owner != null and room_owner.cell != cell:
+		_placement_owner = room_owner
+		_placement_offset = Vector3(cell.x - room_owner.cell.x, 0.0,
+			cell.y - room_owner.cell.y) * WorldGen.CELL_SIZE
 	var floor_h := Chunk.cell_floor_h(world_seed, cell, theme)
 	_floor_y = floor_h
 	set_process(false)   # only TURNED tracks the camera per frame
-	# configure() is called before add_child, so debug_visible is already set.
 	match type:
 		Type.TURNED:
 			_build_turned(floor_h)
@@ -225,6 +230,7 @@ func configure(p_id: String, p_type: int, p_cell: Vector2i, p_world_seed: int,
 			_build_portal(floor_h, wall_dir, wall_along)
 		_:
 			_build_props(floor_h, 1)
+	_placement_owner = null
 	if debug_visible:
 		print("photo anomaly %s built, points %s" % [id, str(photo_points())])
 
@@ -324,6 +330,10 @@ func configure_bleed(p_id: String, p_cell: Vector2i,
 	cell = p_cell
 	_points = points
 	_evidence_roots = visuals
+	_body_rids.clear()
+	for visual in visuals:
+		if visual is StaticBody3D:
+			_body_rids.append((visual as StaticBody3D).get_rid())
 
 
 func configure_doorway(seal: PhotoDoorSeal, at: Vector2i,
@@ -498,16 +508,31 @@ static func writing_spot_for(route: DescentRoute, at: Vector2i) -> Dictionary:
 ## Alternate along-wall positions rescue dense rooms where the topology's
 ## preferred midpoint happens to be occupied by a lounge or workstation.
 static func writing_spot_for_chunk(route: DescentRoute, at: Vector2i,
-		chunk: Chunk) -> Dictionary:
+		chunk: Chunk, room_owner: Chunk = null) -> Dictionary:
 	if chunk == null:
 		return writing_spot_for(route, at)
+	var mounts: Array[Array] = [[], [], [], []]
+	if chunk.theme == 1:
+		for node in chunk.get_children():
+			if node.has_meta("wall_art_mount"):
+				var dir := int(node.get_meta("wall_art_dir"))
+				var size: Vector2 = node.get_meta("wall_art_size")
+				var pos := (node as Node3D).position
+				var centre := Vector2(pos.z if dir < 2 else pos.x, pos.y)
+				mounts[dir].append(Rect2(centre - size * 0.5, size))
+		var owner := room_owner if room_owner != null else chunk
+		for node in owner.get_children():
+			if node.has_meta("office_ac_mount") and node.get_meta("office_ac_member") == at:
+				var centre := Vector2(float(node.get_meta("office_ac_along")), (node as Node3D).position.y)
+				var size := Chunk.OFFICE_AC_FACE_SIZE
+				mounts[int(node.get_meta("office_ac_dir"))].append(Rect2(centre - size * 0.5, size))
 	for spot in _writing_spot_candidates(route, at):
 		var dir := int(spot["dir"])
 		if chunk._edge_info(at, dir).has("photo_door_id"):
 			continue # writing must not float across the lens-only aperture
 		var along := float(spot["along"])
 		if _writing_approach_clear(chunk, dir, along) \
-				and _writing_sightline_clear(chunk, dir, along):
+				and _writing_sightline_clear(chunk, dir, along, mounts[dir]):
 			return spot
 	return {}
 
@@ -577,7 +602,7 @@ static func _writing_approach_clear(chunk: Chunk, dir: int,
 ## other side furniture can leave a walkable lane while hiding one of the label
 ## corners, and PhotoCamera correctly requires every corner to be visible.
 static func _writing_sightline_clear(chunk: Chunk, dir: int,
-		along: float) -> bool:
+		along: float, mounts: Array = []) -> bool:
 	var floor_h := Chunk.cell_floor_h(chunk.wseed, chunk.cell, chunk.theme)
 	var dirv3 := Vector3(WorldGen.DIRV[dir].x, 0.0, WorldGen.DIRV[dir].y)
 	var inward := -dirv3
@@ -591,6 +616,11 @@ static func _writing_sightline_clear(chunk: Chunk, dir: int,
 		- WRITING_CEILING_MARGIN
 	var height := minf(WRITING_MAX_HEIGHT, top - bottom)
 	centre.y = clampf(centre.y, bottom + height * 0.5, top - height * 0.5)
+	var size := Vector2(WRITING_MAX_WIDTH, height)
+	var surface := Rect2(Vector2(along, centre.y) - size * 0.5, size).grow(0.08)
+	for mount: Rect2 in mounts:
+		if surface.intersects(mount):
+			return false
 	var targets: Array[Vector3] = [centre]
 	for side in [-1.0, 1.0]:
 		for vertical in [-1.0, 1.0]:
@@ -913,7 +943,11 @@ func _build_missing(floor_h: float) -> void:
 	var scl := float(row[1])
 	var centre_off: Vector3 = row[2]
 	var extents: Vector3 = row[3]
-	var spot := _find_spot(floor_h, 1.0, maxf(extents.y, 1.0))
+	var spot := _find_spot(floor_h, 1.0, maxf(extents.y, 1.0), false)
+	if spot == Vector3.INF:
+		type = Type.PLACEMENT
+		_build_universal_photo(floor_h)
+		return
 	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25
 	var pivot := Node3D.new()
@@ -1008,13 +1042,16 @@ func _build_props(floor_h: float, count: int) -> void:
 	var scl := float(row[1])
 	var centre_off: Vector3 = row[2]
 	var extents: Vector3 = row[3]
-	# Search the built room, not just six lucky random points. The exhaustive
-	# lattice and doorway-lane fallback share the same collision bookkeeping as
-	# authored furniture, so a planned prop cannot exist inside the set dressing.
+	# A full-size prop needs clear space even after the print drops it to the
+	# floor. Use the small paper photograph when only a circulation lane is free.
 	var spacing := maxf(0.72, extents.x + 0.10)
 	var footprint := maxf(1.0, maxf(extents.x, extents.z) * 0.5
 		+ (spacing * 0.5 if count > 1 else 0.10))
-	var spot := _find_spot(floor_h, footprint, maxf(extents.y, 2.1))
+	var spot := _find_spot(floor_h, footprint, maxf(extents.y, 2.1), false)
+	if spot == Vector3.INF:
+		type = Type.PLACEMENT
+		_build_universal_photo(floor_h)
+		return
 	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25
 	if count == 1:
@@ -1164,7 +1201,13 @@ func _build_giant(floor_h: float) -> void:
 	# less than the preferred 1.5x enlargement. Never bury its top in the slab.
 	# Reserve the 30cm light offset and its 5.5cm visible mote above the prop.
 	var factor := minf((ceil_h - floor_h - 0.25 - 0.355) / base_h, GIANT_SCALE_MAX)
-	var spot := _find_spot(floor_h, 1.5, base_h * factor)
+	var footprint := maxf(1.5, maxf(extents.x, extents.z) * factor * 0.5 + 0.10)
+	var spot := _find_spot(floor_h, footprint, base_h * factor, false)
+	if spot == Vector3.INF:
+		inst.free()
+		type = Type.PLACEMENT
+		_build_universal_photo(floor_h)
+		return
 	var yaw := float(WorldGen.h(world_seed, cell.x, cell.y, 9283) % 8) \
 		* PI * 0.25
 	var pivot := Node3D.new()
@@ -1290,7 +1333,7 @@ func _find_spot(floor_h: float, radius: float, height: float,
 			half + (WorldGen.r01(world_seed, cell.x, cell.y,
 				9277 + attempt * 7) - 0.5) * 5.0)
 		spot = candidate
-		if chunk == null or (chunk._floor_spot_clear(candidate, radius, height)
+		if chunk == null or (_placement_clear(chunk, candidate, radius, height)
 				and _photo_approach_clear(chunk, candidate, radius)):
 			return spot
 	if chunk == null:
@@ -1303,7 +1346,7 @@ func _find_spot(floor_h: float, radius: float, height: float,
 		var candidate := Vector3(
 			float(lattice[index % lattice.size()]), floor_h,
 			float(lattice[int(index / lattice.size())]))
-		if chunk._floor_spot_clear(candidate, radius, height) \
+		if _placement_clear(chunk, candidate, radius, height) \
 				and _photo_approach_clear(chunk, candidate, radius):
 			return candidate
 	if not allow_doorway_fallback:
@@ -1324,6 +1367,11 @@ func _find_spot(floor_h: float, radius: float, height: float,
 	return spot
 
 
+func _placement_clear(chunk: Chunk, at: Vector3, radius: float, height: float) -> bool:
+	return chunk._floor_spot_clear(at, radius, height) and (_placement_owner == null
+		or _placement_owner._floor_spot_clear(at + _placement_offset, radius, height))
+
+
 ## At least one player-sized stance and the sight lane back to the prop must
 ## be clear. Merely finding an empty square for the anomaly stranded props in
 ## auditorium seating and dense lounges where the camera could never frame it.
@@ -1336,13 +1384,13 @@ func _photo_approach_clear(chunk: Chunk, target: Vector3,
 			var stand := target + direction * float(distance)
 			if stand.x < 0.5 or stand.x > 11.5 \
 					or stand.z < 0.5 or stand.z > 11.5 \
-					or not chunk._floor_spot_clear(stand, 0.38, 1.8):
+				or not _placement_clear(chunk, stand, 0.38, 1.8):
 				continue
 			var clear := true
 			var first := maxf(target_radius + 0.35, 0.75)
 			var travel := first
 			while travel < float(distance) - 0.35:
-				if not chunk._floor_spot_clear(
+				if not _placement_clear(chunk,
 						target + direction * travel, 0.20, 1.8):
 					clear = false
 					break

@@ -9,6 +9,7 @@ static var enabled := true # Also permits clean/reference captures in audits.
 const MAX_PATCHES := 20
 const MAX_PROP_MESHES := 24
 const MAX_STRENGTH := 0.36
+const PATCH_SHADER := preload("res://shaders/surface_wear.gdshader")
 const PROP_SHADER := preload("res://shaders/prop_wear.gdshader")
 
 enum Motif { SPILL, LEAK, MOLD, CRACK, SCUFF, REPAIR, ADHESIVE, SCORCH,
@@ -60,8 +61,7 @@ static func _patch_material(motif: int, mask_id: int,
 	var material_key := "surface_wear_%d_%d_%s" % [motif, mask_id, authored_mask]
 	if Mats._c.has(material_key):
 		return Mats._c[material_key]
-	var material := Mats._shader(material_key,
-		"res://shaders/surface_wear.gdshader")
+	var material := Mats._shader(material_key, PATCH_SHADER.resource_path)
 	material.set_shader_parameter("motif", motif)
 	material.set_shader_parameter("damp_spread", mask_id >= 0)
 	material.set_shader_parameter("authored_mask", not authored_mask.is_empty())
