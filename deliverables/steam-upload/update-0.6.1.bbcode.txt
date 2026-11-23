@@ -7,7 +7,9 @@ This patch tackles the pauses you reported when the power cuts out, a hallway st
 [*]Taking a photo now shows the print while the game prepares the album copy. The game also stops drawing the hidden world while you’re looking at the print.
 [*]Reduced the time it takes to prepare a shadow figure’s burn effect. When the lights come back on, figures give you a moment to react before closing in.
 [*]Removed duplicate ceiling lights in the School gym, reduced lighting work around Airport gates, and stopped gently bobbing floats from making nearby lights redraw their shadows every frame in Pools.
+[*]Changing other graphics options now leaves VSync alone when it already matches your setting.
 [*]Fixed Airport queue belts that looked disconnected or let you walk through them. Open doors now block you where the door itself sits. School blackboards and Prison shower benches also sit properly against the wall or floor.
+[*]Fixed a Hospital layout that could start you outside the arrival lift. Office wall writing now avoids air conditioners and pictures.
 [/list]
 
 We’re still investigating reports of very low frame rates in Pools on Windows, including after switching VSync. If you hit a slowdown, the floor, the time on the camera, and your performance log will help us match it to the right moment.
