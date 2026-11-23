@@ -32,7 +32,7 @@ func run() -> void:
 			var fixtures := 0
 			var live_lenses := 0
 			var shafts := 0
-			var inactive_coffers := 0
+			var inactive_variants := 0
 			var lamps: Array[Light3D] = []
 			var skylights: Array[Light3D] = []
 			for node in chunk.find_children("*","Node3D",true,false):
@@ -47,6 +47,10 @@ func run() -> void:
 				if node.has_meta("airport_grand_ceiling"): fixtures += 16
 				if not node is Light3D or not node.has_meta("fixture_emitter"): continue
 				var light = node
+				var parent: Node3D = light.get_parent()
+				if not parent.is_visible_in_tree() and (parent.is_in_group(GraphicsQuality.AREA_LIGHT_BANKS)
+						or parent.is_in_group(GraphicsQuality.SPOT_LIGHT_BANKS)):
+					inactive_variants += 1
 				if light is SpotLight3D: shafts += 1
 				lamps.append(light)
 				if light.get_meta("visible_source","") == "mall_laylight": skylights.append(light)
@@ -57,7 +61,6 @@ func run() -> void:
 				var bounds: AABB = relative*emitter.get_aabb()
 				var upward: bool = light.get_meta("fixture_upward",false)
 				if light.get_meta("visible_source","") == "airport_grand_coffer":
-					if not light.get_parent().is_visible_in_tree(): inactive_coffers += 1
 					var face_size: Vector2 = light.area_size if light is AreaLight3D else Vector2.ZERO
 					_check_coffer_face(light.get_meta("fixture_face"), face_size, emitter, relative)
 					# Each source is a real rim segment in a shared batched mesh.
@@ -97,7 +100,7 @@ func run() -> void:
 			if lamps.is_empty(): dead += 1
 			elif theme in [0,10]:
 				expect(lamps.size()==live_lenses+shafts,"illuminated lens has no matching source")
-			else: expect(lamps.size()-inactive_coffers==fixtures*(1 if theme in [2,4] else 2)+skylights.size(),"live fitting is missing an emitting face")
+			else: expect(lamps.size()-inactive_variants==fixtures*(1 if theme in [2,4] else 2)+skylights.size(),"live fitting is missing an emitting face")
 			for node in chunk.get_children():
 				if not node is BloomFixtureFlicker: continue
 				flickering += 1

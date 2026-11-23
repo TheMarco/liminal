@@ -4,6 +4,7 @@ extends RefCounted
 ## Intermediate 4.4m rooms retain the regular acoustic panels.
 ## Four batched, shared meshes per 12m cell.
 ## Each coffer casts light from an actual luminous rim.
+const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 const MIN_HEIGHT := 6.2
 const BAY := 3.0
 const COUNT := 4
@@ -29,8 +30,8 @@ static func clear_runtime_cache() -> void:
 static func attach_lights(parent: Node3D, height: float) -> Array[Light3D]:
 	var result: Array[Light3D] = []
 	var lens := parent.get_node("CoveLights") as MeshInstance3D
-	var areas := _light_bank(parent, true)
-	var spots := _light_bank(parent, false)
+	var areas := GraphicsQuality.strip_light_bank(parent, true)
+	var spots := GraphicsQuality.strip_light_bank(parent, false)
 	var height_scale := maxf(1.0,(height-0.1)/6.1)
 	for x in COUNT:
 		for z in COUNT:
@@ -41,46 +42,13 @@ static func attach_lights(parent: Node3D, height: float) -> Array[Light3D]:
 			var along_x := (x+z)%2 == 0
 			face += Vector3(0,0,-0.99) if along_x else Vector3(0.99,0,0)
 			var tier := 1 if x == 1 and z == 1 else (2 if x == 2 and z == 2 else 4)
-			var light := preload("res://scripts/fixture_lighting.gd").rectangular(areas,lens,
+			var light := FIXTURE_LIGHTING.rectangular(areas,lens,
 				Vector2(1.88,0.1) if along_x else Vector2(0.1,1.88),face,false,Color(1.0,0.95,0.84),
 				0.9*height_scale*height_scale,height+6.0,tier,"airport_grand_coffer")
 			light.area_attenuation = 0.7
 			result.append(light)
-			# Both representations follow the same ballast and blackout. Their
-			# parents select which one renders, independently of gameplay power.
-			var spot := SpotLight3D.new()
-			spot.transform = light.transform
-			spot.light_color = light.light_color
-			# Match the measured floor illumination from the rectangular strip.
-			spot.light_energy = light.light_energy * 1.25
-			spot.light_volumetric_fog_energy = light.light_volumetric_fog_energy
-			spot.spot_range = light.area_range
-			spot.spot_attenuation = light.area_attenuation
-			spot.spot_angle = 78.0
-			spot.spot_angle_attenuation = 0.8
-			# A wide projected shadow needs bias at grazing angles on the walls.
-			spot.shadow_normal_bias = 1.5
-			spot.shadow_bias = 0.09
-			spot.set_meta("visible_source", "airport_grand_coffer")
-			spot.set_meta("fixture_face", face)
-			spots.add_child(spot)
-			spot.set_meta("fixture_emitter", spot.get_path_to(lens))
-			GraphicsQuality.configure_practical_light(spot, tier)
-			result.append(spot)
+			result.append(FIXTURE_LIGHTING.strip_spot(spots, light, lens, 78.0, 0.8))
 	return result
-
-
-static func _light_bank(ceiling: Node3D, rectangular: bool) -> Node3D:
-	var bank := Node3D.new()
-	bank.name = "AreaLights" if rectangular else "SpotLights"
-	bank.add_to_group(GraphicsQuality.AIRPORT_AREA_BANKS if rectangular else GraphicsQuality.AIRPORT_SPOT_BANKS)
-	var sync := func() -> void:
-		var values: Dictionary = GameSettings.current.values if GameSettings.current != null else {}
-		bank.visible = rectangular == GraphicsQuality.full_airport_lighting(values)
-	sync.call()
-	bank.tree_entered.connect(sync)
-	ceiling.add_child(bank)
-	return bank
 
 
 static func attach(parent: Node3D, height: float, style: int,

@@ -90,11 +90,35 @@ static func rectangular(parent: Node3D, lens: MeshInstance3D, size: Vector2,
 	GraphicsQuality.configure_practical_light(light, shadow_tier)
 	return light
 
+## Co-located alternative to a rectangular strip. Both parents use the same
+## fixture coordinates and the same visible lens.
+static func strip_spot(parent: Node3D, area: AreaLight3D, lens: MeshInstance3D,
+		angle: float, angle_attenuation: float) -> SpotLight3D:
+	var spot := SpotLight3D.new()
+	spot.transform = area.transform
+	spot.light_color = area.light_color
+	spot.light_energy = area.light_energy * 1.25
+	spot.light_volumetric_fog_energy = area.light_volumetric_fog_energy
+	spot.spot_range = area.area_range
+	spot.spot_attenuation = area.area_attenuation
+	spot.spot_angle = angle
+	spot.spot_angle_attenuation = angle_attenuation
+	# Wide projected shadows need bias at grazing angles on the walls.
+	spot.shadow_normal_bias = 1.5
+	spot.shadow_bias = 0.09
+	spot.set_meta("visible_source", area.get_meta("visible_source"))
+	spot.set_meta("fixture_face", area.get_meta("fixture_face"))
+	parent.add_child(spot)
+	spot.set_meta("fixture_emitter", spot.get_path_to(lens))
+	GraphicsQuality.configure_practical_light(spot, int(area.get_meta("practical_shadow_tier")))
+	return spot
+
 static func suspended_strip(scene: ChunkSceneWriter, at: Vector3,
 		ceiling: float, body_size: Vector3, lens_size: Vector3,
 		trim: Material, material: StandardMaterial3D, dead: bool,
 		color: Color, down_energy: float, up_energy: float,
-		reach: float, shadow_tier: int, source: String, up_reach := 9.0) -> Array[Light3D]:
+		reach: float, shadow_tier: int, source: String, up_reach := 9.0,
+		switchable_downlight := false) -> Array[Light3D]:
 	var fixture := Node3D.new()
 	fixture.name = "SuspendedFixture"
 	fixture.position = Vector3(at.x, ceiling - 0.48, at.z)
@@ -119,8 +143,13 @@ static func suspended_strip(scene: ChunkSceneWriter, at: Vector3,
 	var lights: Array[Light3D] = []
 	if dead: return lights
 	var size := Vector2(lens_size.x,lens_size.z)
-	lights.append(rectangular(fixture,lower,size,Vector3(0,-0.12-lens_size.y*0.5,0),
-		false,color,down_energy,reach,shadow_tier,source))
+	var down_parent := GraphicsQuality.strip_light_bank(fixture, true) if switchable_downlight else fixture
+	var down := rectangular(down_parent,lower,size,Vector3(0,-0.12-lens_size.y*0.5,0),
+		false,color,down_energy,reach,shadow_tier,source)
+	lights.append(down)
+	if switchable_downlight:
+		var spots := GraphicsQuality.strip_light_bank(fixture, false)
+		lights.append(strip_spot(spots, down, lower, 84.0, 0.65))
 	lights.append(rectangular(fixture,upper,size,Vector3(0,upper_face,0),
 		true,color,up_energy,up_reach,4,source))
 	return lights

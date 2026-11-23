@@ -315,6 +315,41 @@ func check_airport_coffer_modes(settings: GameSettings) -> void:
 	settings.apply_quality_preset(2)
 
 
+func check_prison_strip_modes(settings: GameSettings) -> void:
+	# The tester's guardroom has a central fitting and eight secondary fittings.
+	var room := Chunk.new(WorldGen.level_seed(1307988285, 8), Vector2i(1, 1), 8)
+	root.add_child(room)
+	var lamps := room.find_children("*", "Light3D", true, false)
+	for preset in 4:
+		settings.apply_quality_preset(preset)
+		var upward := 0
+		var rectangular := 0
+		var spots := 0
+		for light: Light3D in lamps:
+			if light.get_meta("visible_source", "") != "prison_troffer" or not light.is_visible_in_tree(): continue
+			expect(light.shadow_enabled, "a Prison strip lost its blocking shadow")
+			if light.get_meta("fixture_upward", false) and light is AreaLight3D: upward += 1
+			elif light is AreaLight3D: rectangular += 1
+			elif light is SpotLight3D: spots += 1
+		expect(upward == 9 and rectangular == (9 if preset == 3 else 1) and spots == (0 if preset == 3 else 8),
+			"Prison preset lost a ceiling face or doubled a downlight")
+	room.set_blackout(true)
+	root.remove_child(room)
+	settings.apply_quality_preset(0)
+	root.add_child(room)
+	for light: Light3D in lamps:
+		if light.get_meta("visible_source", "") == "prison_troffer" and light.is_visible_in_tree():
+			expect(light.layers == 0 and light.light_energy == 0.0, "a returning Prison strip relit during blackout")
+	room.set_blackout(false)
+	for light: Light3D in lamps:
+		if light is SpotLight3D and light.get_meta("visible_source", "") == "prison_troffer":
+			expect(light.is_visible_in_tree() and light.layers != 0 and light.light_energy > 0.0,
+				"returning Prison downlight missed the preset change or power restoration")
+	stop_audio(room)
+	room.free()
+	settings.apply_quality_preset(2)
+
+
 func run() -> void:
 	var path := "/tmp/liminal-quality-%d.cfg" % OS.get_process_id()
 	var settings := GameSettings.new(path)
@@ -529,6 +564,7 @@ func run() -> void:
 	check_cheap_lighting(game, menu, settings)
 	check_airport_fill_shadows(settings)
 	check_airport_coffer_modes(settings)
+	check_prison_strip_modes(settings)
 	expect(menu.TABS.size() == 4, "player menu tab count changed")
 	for tab in ["Video", "Controls", "Audio", "Accessibility"]:
 		expect(menu._pages.has(tab) and tab in menu.TABS, "player menu lost tab " + tab)

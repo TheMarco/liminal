@@ -82,7 +82,7 @@ func _prison_lighting() -> void:
 			var shadows := 1 if across == 6.0 and t == 6.0 else 4
 			lights.append_array(FIXTURE_LIGHTING.suspended_strip(scene,p,ctx.ceiling_height,
 				body,glass,Mats.prison_iron(),lens,dead,Color(0.83,0.88,0.91),
-				1.8,2.5,8.5,shadows,"prison_troffer"))
+				1.8,2.5,8.5,shadows,"prison_troffer",9.0,shadows == 4))
 	if dead:
 		return
 	if flicker:
