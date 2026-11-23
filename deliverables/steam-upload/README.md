@@ -50,7 +50,7 @@ Version **0.5.5** was uploaded and set live on the **default** branch on October
 
 Double-click **Upload to Steam.command** and sign in to Steam in Terminal when prompted. The account defaults to `marcovhv`, matching the Steamworks session used for setup. Enter passwords and Steam Guard codes only in SteamCMD's prompt.
 
-The script checks the existing game files and requires the Mac app to pass Developer ID signature verification, stapled notarization-ticket validation, and Gatekeeper assessment. It then runs a SteamPipe preview and uploads to app **4336360**. The configuration targets version **0.6.1**. Run `./build.sh` successfully before uploading; the uploader itself does not export a new game build from the source code. `BUILD_ARCHIVES=0 ./build.sh` omits optional standalone ZIP archives when only a Steam upload is needed.
+The script checks the existing game files and requires the Mac app to pass Developer ID signature verification, stapled notarization-ticket validation, and Gatekeeper assessment. It then runs a SteamPipe preview and uploads to app **4336360**. The configuration targets version **0.6.2**. Run `./build.sh` successfully before uploading; the uploader itself does not export a new game build from the source code. `BUILD_ARCHIVES=0 ./build.sh` omits optional standalone ZIP archives when only a Steam upload is needed.
 
 | Platform | Depot | Installed executable/bundle |
 | --- | --- | --- |

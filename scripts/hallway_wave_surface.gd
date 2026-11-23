@@ -169,7 +169,7 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 		var xf := frame.affine_inverse() * Placement.relative(node, chunk)
 		var original := node.shape
 		if original == null: continue
-		var bounds: AABB = xf * _collision_bounds(original)
+		var bounds: AABB = xf * ChargingStationPlacement.collision_bounds(original)
 		if bounds.position.x > width/2+0.65 or bounds.end.x < -width/2-0.65: continue
 		if bounds.position.z >= 6 or bounds.end.z <= -6: continue
 		var arrays: Array = []
@@ -237,18 +237,6 @@ func _vertex_body(code: String) -> String:
 		if code[end] == "}": depth -= 1
 		end += 1
 	return code.substr(opening+1, end-opening-2)
-
-func _collision_bounds(shape: Shape3D) -> AABB:
-	# Primitive dimensions are already on the CPU. Building a debug mesh
-	# just to read its bounds can stall the renderer during exploration.
-	var size: Vector3
-	if shape is BoxShape3D:
-		size = shape.size
-	elif shape is CylinderShape3D:
-		size = Vector3(shape.radius * 2.0, shape.height, shape.radius * 2.0)
-	else:
-		return shape.get_debug_mesh().get_aabb()
-	return AABB(-0.5 * size, size)
 
 func _collision_keys(vertices: PackedVector3Array, xf: Transform3D) -> Array[PackedVector3Array]:
 	var points := PackedVector3Array()

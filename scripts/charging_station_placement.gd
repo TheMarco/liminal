@@ -17,7 +17,23 @@ static func collision_bounds(shape: Shape3D) -> AABB:
 	if shape is SphereShape3D:
 		var extent: Vector3 = Vector3.ONE * shape.radius
 		return AABB(-extent, extent * 2.0)
+	# Curved Pools rooms have dozens of convex pieces. Their extreme points
+	# already give the hull bounds without building a debug mesh per piece.
+	if shape is ConvexPolygonShape3D:
+		return _point_bounds(shape.points)
+	if shape is ConcavePolygonShape3D:
+		return _point_bounds(shape.get_faces())
 	return shape.get_debug_mesh().get_aabb()
+
+static func _point_bounds(points: PackedVector3Array) -> AABB:
+	if points.is_empty():
+		return AABB()
+	var low := points[0]
+	var high := low
+	for point in points:
+		low = low.min(point)
+		high = high.max(point)
+	return AABB(low, high - low)
 
 func _init(chunk: Node3D) -> void:
 	for child in chunk.get_children():

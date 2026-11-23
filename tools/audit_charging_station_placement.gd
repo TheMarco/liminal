@@ -65,6 +65,24 @@ func synthetic() -> void:
 			check(actual.position.is_equal_approx(expected.position) \
 				and actual.size.is_equal_approx(expected.size),
 				"CPU bounds differ from debug geometry: %s radius %f" % [shape.get_class(), radius])
+	# Pool opening pieces have vertices in room coordinates. Including the
+	# local origin would turn a distant piece into a false placement blocker.
+	var a := Vector3(2.0, -1.5, 3.0)
+	var b := Vector3(4.0, -1.5, 3.0)
+	var c := Vector3(2.0, 1.0, 3.0)
+	var d := Vector3(2.0, -1.5, 6.0)
+	var hull := ConvexPolygonShape3D.new()
+	var triangles := ConcavePolygonShape3D.new()
+	for empty_shape in [hull, triangles]:
+		check(ChargingStationPlacement.collision_bounds(empty_shape) == AABB(),
+			"empty polygon has nonempty bounds")
+	hull.points = PackedVector3Array([a, b, c, d, (a + b + c + d) * 0.25])
+	triangles.set_faces(PackedVector3Array([a, b, c, a, c, d]))
+	for polygon in [hull, triangles]:
+		var actual := ChargingStationPlacement.collision_bounds(polygon)
+		var rendered: AABB = polygon.get_debug_mesh().get_aabb()
+		check(actual == AABB(a, Vector3(2.0, 2.5, 3.0)) and actual.is_equal_approx(rendered),
+			"CPU polygon bounds differ from collision geometry: %s" % polygon.get_class())
 	var chunk := Node3D.new()
 	slab(chunk, Vector3(6, -0.1, 6), Vector3(12, 0.2, 12))
 	box(chunk, Vector3(2.0, 0.9, 2.0), Vector3(1.0, 1.8, 1.0))

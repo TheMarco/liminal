@@ -1,0 +1,7 @@
+[h1]Update 0.6.2 — Smoother exploration in Pools[/h1]
+
+Walking through Pools could make the game pause as a nearby room loaded. While finding a spot for a flashlight charger, the game rebuilt the shapes of curved pool edges just to measure them. It now measures those edges directly. Chargers still appear in the same places.
+
+We replayed the same route on an M3 Max at 720p in Performance mode. On 0.6.1, four frames took longer than 50 milliseconds, with the longest at 99 ms. On 0.6.2, the longest frame on that run was 18 ms.
+
+The fix applies on Windows, Linux and Mac. We’re still investigating reports of sustained low frame rates in Pools on Windows.
