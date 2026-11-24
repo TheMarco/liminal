@@ -91,6 +91,8 @@ func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := fal
 		desk.position = FIXTURE_LIGHT_POSITION + Vector3(-1.5, -2.0, -0.1)
 		desk.rotation.y = 0.5
 		_view.add_child(desk)
+	if theme == 4 or realm_theme == 4:
+		_warm_airport_terminal()
 	var warm_water := theme in [2, 9] or realm_theme in [2, 9]
 	if wander_only:
 		# Wander suspends hostile figures, hallway apparitions and Descent rules.
@@ -336,6 +338,37 @@ func _warm_mutation_reveal() -> void:
 	reveal.configure({"kind": "door", "nodes": [_samples], "ghost": ghost,
 		"position": Vector3(0, 0, 3), "edge": {"dir": 2, "after": {"w": 3.0}}})
 	reveal.set_process(false)
+
+## The first gate can also stream into the hidden Airport while the player
+## is walking through the Office. Loading its assets doesn't exercise their
+## render pipelines. Use the same covered draw for both entry paths.
+func _warm_airport_terminal() -> void:
+	# These samples only need a lit draw. The active floor supplies its own
+	# blackout and reveal samples.
+	var terminal := Node3D.new()
+	_view.add_child(terminal)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.55, 0.55)
+	var materials: Array[Material] = [
+		Mats.terrazzo_photo(), Mats.airport_ceiling(), Mats.airport_wall(),
+		Mats.steel(), Mats.air_panel(), Mats.airport_glass(),
+		Mats.airport_carpet(), Mats.asphalt(), Mats.apron_night(),
+		Mats.poster_lightbox(Chunk.POSTER_AIRPORT[0]), Mats.adbox(0),
+	]
+	for i in materials.size():
+		_add_effect_quad(terminal, quad, materials[i], Vector3(-3.0 + i * 0.62, 4.2, 2.0))
+
+	# Exercise the imported vertex formats with the belt and glass overrides
+	# used on the moving walkway in the concourse.
+	var packed := load(Chunk.AIRPORT_WALKWAY_PATH) as PackedScene
+	if packed != null:
+		var walkway := packed.instantiate() as Node3D
+		Chunk.AIRPORT_LEVEL_BUILDER.apply_walkway_materials(walkway, 1.0)
+		walkway.scale = Vector3.ONE * 0.32
+		walkway.position = Vector3(0.5, 2.0, 3.0)
+		walkway.rotation = Vector3(0.4, 0.3, 0.1)
+		terminal.add_child(walkway)
+
 
 func _warm_surfaces(rooms: Node3D) -> void:
 	# Hallway waves wrap the same shaders as breathing walls, including

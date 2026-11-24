@@ -810,6 +810,26 @@ func _walkway_fit_length(model: Node3D, length: float, source_length: float) -> 
 		mi.mesh = _walkway_fitted_meshes[key]
 
 
+static func apply_walkway_materials(model: Node3D, flow: float) -> void:
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if mi.name == "WalkwayBelt":
+			mi.material_override = Mats.belt()
+			mi.set_instance_shader_parameter("speed", flow * 0.75)
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		elif mi.name == "WalkwayGlass":
+			if _walkway_glass_material == null:
+				_walkway_glass_material = mi.mesh.surface_get_material(0).duplicate()
+				_walkway_glass_material.albedo_color = Color(0.53, 0.72, 0.78, 0.18)
+				_walkway_glass_material.cull_mode = BaseMaterial3D.CULL_BACK
+			mi.material_override = _walkway_glass_material
+			mi.set_meta("airport_barrier_glass", true)
+			mi.set_meta("barrier_alpha", 0.18)
+			# The continuous black perimeter and steel skirt visibly mark
+			# the barrier even through clear glass. Audit that physical frame.
+			mi.set_meta("barrier_frame_path", mi.get_path_to(model.find_child("*_Body", true, false)))
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
 func _travelator(p: Vector3, yaw: float, flow: float, _salt: int, L = 8.4) -> void:
 	var b0 := scene.collider_mark()
 	var v := scene.furnishing_pivot(p, yaw, "airport_travelator")
@@ -822,24 +842,7 @@ func _travelator(p: Vector3, yaw: float, flow: float, _salt: int, L = 8.4) -> vo
 		Vector3.ZERO, 0.0)
 	if model != null:
 		_walkway_fit_length(model, L, 10.4 if long_model else 8.4)
-		for node in model.find_children("*", "MeshInstance3D", true, false):
-			var mi := node as MeshInstance3D
-			if mi.name == "WalkwayBelt":
-				mi.material_override = Mats.belt()
-				mi.set_instance_shader_parameter("speed", flow * 0.75)
-				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			elif mi.name == "WalkwayGlass":
-				if _walkway_glass_material == null:
-					_walkway_glass_material = mi.mesh.surface_get_material(0).duplicate()
-					_walkway_glass_material.albedo_color = Color(0.53, 0.72, 0.78, 0.18)
-					_walkway_glass_material.cull_mode = BaseMaterial3D.CULL_BACK
-				mi.material_override = _walkway_glass_material
-				mi.set_meta("airport_barrier_glass", true)
-				mi.set_meta("barrier_alpha", 0.18)
-				# The continuous black perimeter and steel skirt visibly mark
-				# the barrier even through clear glass. Audit that physical frame.
-				mi.set_meta("barrier_frame_path", mi.get_path_to(model.find_child("*_Body", true, false)))
-				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		apply_walkway_materials(model, flow)
 	var BW := 1.15
 	for side in [-1.0, 1.0]:
 		scene.collider_yaw_box(scene.world_point(p, Vector3(0, 0.6, side * 0.735), yaw),
