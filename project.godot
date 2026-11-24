@@ -41,6 +41,8 @@ common/max_physics_steps_per_frame=4
 
 rendering_device/d3d12/max_resource_descriptors=131072
 rendering_device/driver.windows="d3d12"
+; Vulkan rewrites the entire pipeline cache at each checkpoint and on clean exit.
+rendering_device/pipeline_cache/save_chunk_size_mb=128.0
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
 textures/default_filters/anisotropic_filtering_level=4

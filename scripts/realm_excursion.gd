@@ -696,12 +696,17 @@ func enter() -> void:
 	preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	if not await _move_room_tree(game.level_root, game.cm, null):
 		return
+	# The fade is opaque and player physics is suspended. Draw the landing
+	# from its final pose as each batch of rooms enters the world.
+	game.we.environment = _destination_environment
+	game.player.teleport(destination_position)
+	game.player.rotation.y = destination_yaw
+	game.player._pitch = 0.0
 	if not await _move_room_tree(pocket, pocket, game):
 		return
 	pocket.player = game.player
 	pocket.stream_focus = destination_position
 	pocket.set_process(true)
-	game.we.environment = _destination_environment
 	game.player.world_seed = pocket.world_seed
 	game.player.level_theme = destination_theme
 	game.player.water_y = game._water_level_for(destination_theme)
@@ -747,9 +752,6 @@ func enter() -> void:
 	_prepare_collapse_effect()
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	game.player.teleport(destination_position)
-	game.player.rotation.y = destination_yaw
-	game.player._pitch = 0.0
 	await _fade_to(0.0, 0.35)
 	phase = Phase.VISITING
 	sync_flash_hud()
@@ -811,13 +813,16 @@ func collapse(caught := false) -> void:
 	game.remove_child(threats)
 	threats.queue_free()
 	_destination_ambience.queue_free()
-	# Until teleport completes, the player is still at the destination coordinates.
-	# Pin source streaming before reattachment so it cannot unload the return
-	# room while its physics is settling.
+	# Restore the source view under cover so the return fade opens on rooms
+	# that have already been drawn from the player's landing point.
 	game.cm.stream_focus = return_position
+	game.we.environment = _source["env"]
+	game.player.teleport(return_position)
+	game.player.rotation.y = return_yaw
+	game.player._pitch = 0.0
+	game.player.cam.rotation.x = 0.0
 	if not await _move_room_tree(_source["root"], game.cm, game):
 		return
-	game.we.environment = _source["env"]
 	game.player.world_seed = int(_source["player_seed"])
 	game.player.level_theme = int(_source["player_theme"])
 	game.player.water_y = float(_source["water"])
@@ -837,10 +842,6 @@ func collapse(caught := false) -> void:
 	game._switch_music(game.active_level)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	game.player.teleport(return_position)
-	game.player.rotation.y = return_yaw
-	game.player._pitch = 0.0
-	game.player.cam.rotation.x = 0.0
 	game._post_process.set_corruption(game.run.threat())
 	# The caught sequence's curtain is opaque here and the ordinary transition
 	# fade is opaque behind it. Remove the former before revealing the retained
