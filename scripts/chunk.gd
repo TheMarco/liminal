@@ -1681,7 +1681,7 @@ static func _unit_sphere() -> SphereMesh:
 
 
 ## Floors where culling behind solid walls reduces measured rendering work.
-static var occlusion_themes: Array[int] = [0, 4, 5, 7, 8, 9, 10]
+static var occlusion_themes: Array[int] = [0, 4, 5, 6, 7, 8, 9, 10]
 
 
 ## Only explicitly authored opaque walls can occlude. Store references until

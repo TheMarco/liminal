@@ -44,9 +44,11 @@ func _sch_strip(at: Vector3, along_x: bool, ln: float,
 		down_energy = 4.0
 	# The upper face is close to the ceiling; bound its overlap independently
 	# of the downward throw that supplies floor illumination and reflections.
+	# The strip rows overlap on the court and classroom walls. The projected
+	# downlights match their brightness at the authored energy.
 	return FIXTURE_LIGHTING.suspended_strip(scene,at,ctx.ceiling_height,
 		body_size,lens_size,Mats.sch_trim(),pmat,dead,Color(0.94,0.97,1.0),
-		down_energy,1.8,11.0 if tall else 8.0,shadow_tier,"school_ceiling_strip",5.0)
+		down_energy,1.8,11.0 if tall else 8.0,shadow_tier,"school_ceiling_strip",5.0,true,1.0)
 
 
 func _sch_lighting() -> void:

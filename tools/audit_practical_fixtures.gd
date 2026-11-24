@@ -156,7 +156,6 @@ func _check_school_gym_grid() -> void:
 	var seed_value := WorldGen.level_seed(985078973, 6)
 	var gym := Vector2i(28, 42)
 	var positions := {}
-	var lamp_count := 0
 	for dx in 2:
 		for dz in 2:
 			var offset := Vector2i(dx, dz)
@@ -174,11 +173,17 @@ func _check_school_gym_grid() -> void:
 					"School gym strip belongs to a different streaming cell")
 				positions[Vector2(offset) * WorldGen.CELL_SIZE + centre] = true
 				count += 1
-				for child in fixture.get_children():
-					if child is AreaLight3D:
-						lamps.append(child)
+				var sources := fixture.find_children("*", "Light3D", true, false)
+				var active_faces := {}
+				var active_count := 0
+				for lamp: Light3D in sources:
+					lamps.append(lamp)
+					if lamp.is_visible_in_tree():
+						active_count += 1
+						active_faces[lamp.get_node(lamp.get_meta("fixture_emitter"))] = true
+				expect(sources.size() == 3 and active_count == 2 and active_faces.size() == 2,
+					"School gym strip must light each diffuser once")
 			expect(count == (dx + 1) * (dz + 1), "wrong number of School gym strips in cell %s" % chunk.cell)
-			lamp_count += lamps.size()
 			chunk.set_blackout(true)
 			for lamp in lamps:
 				expect(not lamp.visible or (lamp.layers == 0 and lamp.light_energy == 0.0), "School gym stays lit during a blackout")
@@ -186,7 +191,7 @@ func _check_school_gym_grid() -> void:
 			for lamp in lamps:
 				expect(lamp.visible and lamp.layers != 0 and lamp.light_energy > 0.0, "School gym lamp fails to relight")
 			chunk.free()
-	expect(positions.size() == 9 and lamp_count == 18, "School gym must have nine two-sided fittings")
+	expect(positions.size() == 9, "School gym must have nine two-sided fittings")
 	for x in [4.0, 12.0, 20.0]:
 		for z in [4.0, 12.0, 20.0]:
 			expect(positions.has(Vector2(x, z)), "School gym has a gap in its ceiling grid")

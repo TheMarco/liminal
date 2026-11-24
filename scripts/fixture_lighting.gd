@@ -164,7 +164,7 @@ static func suspended_strip(scene: ChunkSceneWriter, at: Vector3,
 		trim: Material, material: StandardMaterial3D, dead: bool,
 		color: Color, down_energy: float, up_energy: float,
 		reach: float, shadow_tier: int, source: String, up_reach := 9.0,
-		switchable_downlight := false) -> Array[Light3D]:
+		switchable_downlight := false, spot_energy_scale := 1.25) -> Array[Light3D]:
 	var fixture := Node3D.new()
 	fixture.name = "SuspendedFixture"
 	fixture.position = Vector3(at.x, ceiling - 0.48, at.z)
@@ -195,7 +195,7 @@ static func suspended_strip(scene: ChunkSceneWriter, at: Vector3,
 	lights.append(down)
 	if switchable_downlight:
 		var spots := GraphicsQuality.strip_light_bank(fixture, false)
-		lights.append(strip_spot(spots, down, lower, 84.0, 0.65))
+		lights.append(strip_spot(spots, down, lower, 84.0, 0.65, spot_energy_scale))
 	lights.append(rectangular(fixture,upper,size,Vector3(0,upper_face,0),
 		true,color,up_energy,up_reach,4,source))
 	return lights
