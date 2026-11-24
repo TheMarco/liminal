@@ -382,6 +382,8 @@ Without this explicit flag, Descent's floor keys remain disabled.
 - Combine with `--seed=12345` for repeatable rooms or `--descent-floor=8` to
   start at a particular **campaign floor** (8 is Poolrooms). The brief test-mode
   controls hint fades away normally, leaving footage free of a debug watermark.
+- To replay a position from a performance log, add `--pos3d=x,y,z`. This
+  includes the player's elevation on raised decks and in sunken rooms.
 
 ### Animated 3D monster roster
 

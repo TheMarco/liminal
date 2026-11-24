@@ -114,6 +114,12 @@ static func parse_args(args: PackedStringArray) -> CliOptions:
 			if parts.size() >= 2:
 				o.spawn = Vector3(float(parts[0]), 0.15, float(parts[1]))
 				o.spawn_given = true
+		elif arg.begins_with("--pos3d="):
+			var parts := arg.trim_prefix("--pos3d=").split(",")
+			if parts.size() == 3 and parts[0].is_valid_float() \
+					and parts[1].is_valid_float() and parts[2].is_valid_float():
+				o.spawn = Vector3(float(parts[0]), float(parts[1]), float(parts[2]))
+				o.spawn_given = true
 		elif arg.begins_with("--yaw="):
 			o.yaw = deg_to_rad(float(arg.substr(6)))
 			o.yaw_given = true

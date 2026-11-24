@@ -25,6 +25,13 @@ func run() -> void:
 		"ordinary startup changed")
 	var cli_descent := CliOptions.parse_args(["--mode=descent", "--nologo"])
 	expect(cli_descent.descent and not cli_descent.test_mode, "ordinary CLI Descent gained floor keys")
+	var deck := CliOptions.parse_args(["--pos3d=354.0277,1.420818,467.8183"])
+	expect(deck.spawn_given and deck.spawn.is_equal_approx(Vector3(354.0277, 1.420818, 467.8183)),
+		"replay lost the position recorded on the raised pool deck")
+	var ground := CliOptions.parse_args(["--pos=-3,9"])
+	expect(ground.spawn_given and ground.spawn.is_equal_approx(Vector3(-3, 0.15, 9)),
+		"two-coordinate replay spawn changed")
+	expect(not CliOptions.parse_args(["--pos3d=1,,2"]).spawn_given, "missing elevation accepted")
 	for args in [["--test-mode"], ["--test-mode", "--descent-floor=8", "--seed=12345"],
 			["--descent-floor=8", "--seed=12345", "--test-mode"]]:
 		var options := CliOptions.parse_args(PackedStringArray(args))
