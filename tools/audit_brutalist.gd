@@ -77,7 +77,15 @@ func _run() -> void:
 	for cell in passage_cells:
 		var chunk := Chunk.new(seed, cell, THEME)
 		root.add_child(chunk)
-		var fixtures := _count_meta(chunk, "brutal_fluorescent_fixture")
+		var fixtures := 0
+		for pivot in chunk.find_children("*", "Node3D", true, false):
+			if not pivot.has_meta("brutal_fluorescent_fixture"): continue
+			fixtures += 1
+			var housings := pivot.find_children("Fluorescent Lamp - Lowpoly *", "Node3D", true, false)
+			var expected := "Fluorescent Lamp - Lowpoly %02d" % int(pivot.get_meta("brutal_fixture_variant"))
+			if housings.size() != 1 or housings[0].name != expected:
+				failures += 1
+				print("FAIL passage %s expected one %s housing, found %s" % [cell, expected, housings])
 		var ceilings := _count_meta_value(chunk, "brutal_tunnel_part", "ceiling")
 		var side_walls := _count_meta_value(chunk, "brutal_tunnel_part", "side_wall")
 		if fixtures != 4 or ceilings != 1 or side_walls < 2:

@@ -14,24 +14,9 @@ const TUNNEL_HALF_WIDTH := 1.65
 const TUNNEL_HEIGHT := 3.45
 const TUNNEL_WALL_T := 0.22
 const FIXTURE_SCALE := 1.36
-const FIXTURE_VARIANTS := [
-	"Fluorescent Lamp - Lowpoly 01",
-	"Fluorescent Lamp - Lowpoly 02",
-	"Fluorescent Lamp - Lowpoly 03",
-	"Fluorescent Lamp - Lowpoly 04",
-]
-# Combined imported-space centres measured from the four source variants. The
-# top of every housing is y=0, so only plan offsets are corrected at mounting.
-const FIXTURE_CENTRES := [
-	Vector3(0.4000, 0.0, 0.5000),
-	Vector3(-0.4500, 0.0, 0.0000),
-	Vector3(0.4000, 0.0, -0.4000),
-	Vector3(-0.1000, 0.0, 0.0000),
-]
 const INCURSION_VINES_CENTRE := Vector3(0.593594, 2.021460, -0.205125)
 const WALL_THICKNESS := 0.15
 const BRUTAL_DOOR_TOP := 3.15
-const BRUTAL_LIGHT_PATH := "res://models/cc_by/fluorescent_light_fixtures/fluorescent_light_fixtures.glb"
 const BLOOM_VINES_PATH := "res://models/cc_by/modular_vines/modular_vines.glb"
 const ANNEX_EXIT_DOOR_PATH := "res://models/cc_by/backrooms_vr_exit_door/backrooms_exit_door.scn"
 
@@ -343,31 +328,19 @@ func _brutal_fluorescent_fixture(at: Vector3, yaw: float, variant: int,
 		dead: bool, flicker: bool,
 		emission_mats: Array[StandardMaterial3D], upper_material: StandardMaterial3D,
 		lights: Array[Light3D]) -> void:
-	variant = clampi(variant, 0, FIXTURE_VARIANTS.size() - 1)
+	variant = clampi(variant, 0, FIXTURE_LIGHTING.FLUORESCENT_VARIANTS.size() - 1)
 	var pivot := Node3D.new()
 	pivot.position = at
 	pivot.rotation.y = yaw
 	pivot.set_meta("brutal_fluorescent_fixture", true)
 	pivot.set_meta("brutal_fixture_variant", variant + 1)
 	scene.add_node(pivot)
-	var centre: Vector3 = FIXTURE_CENTRES[variant]
-	var inst := scene.attributed_prop_local(pivot, BRUTAL_LIGHT_PATH,
-		Vector3(-centre.x * FIXTURE_SCALE, 0.0,
-			-centre.z * FIXTURE_SCALE), 0.0, Vector3.ONE * FIXTURE_SCALE)
-	if inst == null:
+	var selected := FIXTURE_LIGHTING.fluorescent_housing(scene, pivot, variant, FIXTURE_SCALE)
+	if selected == null:
 		pivot.get_parent().remove_child(pivot)
 		pivot.free()
 		return
-	inst.set_meta("authored_model", "monolith_fluorescent_fixture")
-	var selected: Node3D
-	for i in FIXTURE_VARIANTS.size():
-		var candidate := inst.find_child(FIXTURE_VARIANTS[i], true, false) as Node3D
-		if candidate == null:
-			continue
-		candidate.visible = i == variant
-		if i == variant:
-			selected = candidate
-	if selected == null: return
+	selected.set_meta("authored_model", "monolith_fluorescent_fixture")
 	# Retain the four authored tube/louvre designs. An exposed opal cap above
 	# each suspended housing supplies real ceiling bounce on every quality tier.
 	pivot.set_meta("practical_fixture","brutal_fluorescent_upper")
@@ -666,9 +639,13 @@ func _machine_room_light(at: Vector3, energy := 2.0) -> void:
 	if ctx.ceiling_height>fixture_y+0.10:
 		scene.beam(Vector3(at.x,fixture_y+0.08,at.z),
 			Vector3(at.x,ctx.ceiling_height-0.04,at.z),0.018,Mats.brutal_steel())
-	var light := FIXTURE_LIGHTING.lower_face(frame,lens,Color(0.42,0.72,0.92),
-		energy,7.0,2,"suspended_data_center_strip")
-	light.set_meta("data_center_aisle_light",true)
+	var area_bank := GraphicsQuality.strip_light_bank(frame, true)
+	var area := FIXTURE_LIGHTING.lower_face(frame, lens, Color(0.42,0.72,0.92),
+		energy, 7.0, 2, "suspended_data_center_strip", area_bank)
+	var spot_bank := GraphicsQuality.strip_light_bank(frame, false)
+	var spot := FIXTURE_LIGHTING.strip_spot(spot_bank, area, lens, 84.0, 0.65, 1.0, area.light_size)
+	for light: Light3D in [area, spot]:
+		light.set_meta("data_center_aisle_light", true)
 
 
 func _rack_aisle(axis_x: bool, service_half_width := 1.60) -> void:

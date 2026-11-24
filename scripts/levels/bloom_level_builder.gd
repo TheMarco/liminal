@@ -19,18 +19,6 @@ const PASSAGE_HEIGHT := 3.16
 const PASSAGE_WALL_T := 0.18
 const OPENING_HEAD := 2.55
 const FIXTURE_SCALE := 1.34
-const FIXTURE_VARIANTS := [
-	"Fluorescent Lamp - Lowpoly 01",
-	"Fluorescent Lamp - Lowpoly 02",
-	"Fluorescent Lamp - Lowpoly 03",
-	"Fluorescent Lamp - Lowpoly 04",
-]
-const FIXTURE_CENTRES := [
-	Vector3(0.4000, 0.0, 0.5000),
-	Vector3(-0.4500, 0.0, 0.0000),
-	Vector3(0.4000, 0.0, -0.4000),
-	Vector3(-0.1000, 0.0, 0.0000),
-]
 ## Combined imported bounds. Keeping these offsets beside the placement code
 ## makes the CC BY scenes behave like authored modular props instead of staged
 ## Sketchfab dioramas with unpredictable origins.
@@ -39,7 +27,6 @@ const FLESH_FLOOR_OFFSET := Vector3(0.204127, 0.295808, -0.004298)
 
 static var _vine_cylinder: CylinderMesh
 static var _pine_roots_prototype: Node3D
-static var _fixture_models: Dictionary[int, Node3D] = {}
 static var _bloom_hoop_mesh: TorusMesh
 static var _particle_quad_meshes: Dictionary = {}
 
@@ -347,26 +334,6 @@ func _passage_side(along_x: bool, side: float, _dir: int,
 			else Vector3(depth, 0.20, width), "return_ceiling")
 
 
-func _fixture_model(pivot: Node3D, variant: int) -> Node3D:
-	var model: Node3D = _fixture_models.get(variant)
-	if model == null:
-		var centre: Vector3 = FIXTURE_CENTRES[variant]
-		model = scene.attributed_prop_local(pivot, Chunk.BRUTAL_LIGHT_PATH,
-			Vector3(-centre.x, 0.0, -centre.z) * FIXTURE_SCALE,
-			0.0, Vector3.ONE * FIXTURE_SCALE)
-		if model == null: return null
-		pivot.remove_child(model)
-		for variant_name: String in FIXTURE_VARIANTS:
-			if variant_name == FIXTURE_VARIANTS[variant]: continue
-			var unused := model.find_child(variant_name, true, false)
-			if unused != null: unused.free()
-		_fixture_models[variant] = model
-	# Instantiating the original glTF would recreate all four housings.
-	var copy := model.duplicate(0) as Node3D
-	pivot.add_child(copy)
-	return copy.find_child(FIXTURE_VARIANTS[variant], true, false) as Node3D
-
-
 func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 		dead: bool, flicker: bool, primary: bool,
 		emission_mats: Array[StandardMaterial3D],
@@ -378,7 +345,7 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 	pivot.set_meta("bloom_fluorescent_fixture", true)
 	pivot.set_meta("practical_fixture", "fluorescent_fixture")
 	scene.add_node(pivot)
-	var selected := _fixture_model(pivot, variant)
+	var selected := FIXTURE_LIGHTING.fluorescent_housing(scene, pivot, variant, FIXTURE_SCALE)
 	var bounds := AABB(Vector3(-1.175,-0.03,-0.11),Vector3(2.35,0.06,0.22))
 	if selected == null:
 		scene.model_box(pivot, Vector3.ZERO, Vector3(2.35, 0.06, 0.22),
@@ -600,9 +567,6 @@ func _pine_roots(pos: Vector3, yaw: float, scale: float) -> Node3D:
 
 static func clear_runtime_cache() -> void:
 	ORGANIC.clear_runtime_cache()
-	for model: Node3D in _fixture_models.values():
-		model.free()
-	_fixture_models.clear()
 	if _pine_roots_prototype != null:
 		_pine_roots_prototype.free()
 		_pine_roots_prototype = null

@@ -2,8 +2,48 @@ extends RefCounted
 ## Visible direct/indirect fittings. Geometry, emitting faces and light origins
 ## are authored together so a lighting change cannot leave a detached source.
 const BALLAST := preload("res://scripts/bloom_fixture_flicker.gd")
+const FLUORESCENT_VARIANTS := [
+	"Fluorescent Lamp - Lowpoly 01", "Fluorescent Lamp - Lowpoly 02",
+	"Fluorescent Lamp - Lowpoly 03", "Fluorescent Lamp - Lowpoly 04",
+]
+# Horizontal centres in the four-model source scene. All four mount at y = 0.
+const FLUORESCENT_CENTRES := [
+	Vector3(0.4, 0, 0.5), Vector3(-0.45, 0, 0),
+	Vector3(0.4, 0, -0.4), Vector3(-0.1, 0, 0),
+]
 static var _round_mask: ImageTexture
 static var _shadow_meshes := {}
+static var _fluorescent_housings: Dictionary[int, PackedScene] = {}
+
+## Keep one unscaled template for each housing in the imported set. Rooms
+## can mount it at their own scale and override their own emissive materials.
+static func fluorescent_housing(scene: ChunkSceneWriter, pivot: Node3D, variant: int,
+		model_scale: float) -> Node3D:
+	var housing: PackedScene = _fluorescent_housings.get(variant)
+	if housing == null:
+		var model := scene.attributed_prop_local(pivot, Chunk.BRUTAL_LIGHT_PATH, Vector3.ZERO, 0.0)
+		if model == null: return null
+		pivot.remove_child(model)
+		for variant_name: String in FLUORESCENT_VARIANTS:
+			if variant_name == FLUORESCENT_VARIANTS[variant]: continue
+			var unused := model.find_child(variant_name, true, false)
+			if unused != null: unused.free()
+		if model.find_child(FLUORESCENT_VARIANTS[variant], true, false) == null:
+			model.free()
+			return null
+		housing = PackedScene.new()
+		var error := housing.pack(model)
+		model.free()
+		if error != OK: return null
+		_fluorescent_housings[variant] = housing
+	var copy := housing.instantiate() as Node3D
+	copy.position = -FLUORESCENT_CENTRES[variant] * model_scale
+	copy.scale = Vector3.ONE * model_scale
+	pivot.add_child(copy)
+	return copy
+
+static func clear_fluorescent_housings() -> void:
+	_fluorescent_housings.clear()
 
 static func round_mask() -> ImageTexture:
 	if _round_mask == null:
