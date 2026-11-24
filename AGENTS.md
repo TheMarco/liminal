@@ -1,5 +1,6 @@
 # Lean workflow and delegation
 
+- Use `godot --headless` for automated checks on the shared development Mac. Run GPU benchmarks on a separate machine or an isolated display session. Open a Godot window on the user's desktop only when they ask to play or see the test.
 - For status, usage, and explanation requests, inspect existing evidence, answer, and stop. Do not start tests, fixes, or audits unless requested. Already-running work may be observed, not restarted.
 - Delegate only bounded, independently reviewable work when it replaces primary work and the benefit outweighs coordination and review overhead. Handle small tasks directly; do not repeat a worker's investigation.
 - Use the global Astra/Muse routing: Astra owns planning, difficult decisions, review, and integration; Muse handles delegated investigation and implementation. Do not automatically fall back to Sol/Terra/Luna or native `explorer`/`mechanical` workers. Follow global `jev-context` guidance for broad reads.
