@@ -188,6 +188,21 @@ func _run() -> void:
 	expect(sampled_points.size() == 2400
 		and sampled_normals.size() == sampled_points.size(),
 		"walker burn did not build area-weighted 3D surface samples")
+	var surfaces: Array[Dictionary] = visual.prepare_burn_cache()["surfaces"]
+	if not surfaces.is_empty():
+		var surface := surfaces[0]
+		expect(int(surface["verified_bind_count"]) > 0, "walker burn missed its verified skin layout")
+		var general := surface.duplicate()
+		general.erase("verified_bind_count")
+		var mesh := visual._meshes(visual._model)[int(surface["mesh_idx"])]
+		var corners: PackedInt32Array = surface["corners"]
+		var frame := visual.global_transform.affine_inverse()
+		var posed := ShadowWalkerVisual._pose_burn_vertices(
+			surface, mesh, frame, {}, corners, 0, corners.size())
+		var reference := ShadowWalkerVisual._pose_burn_vertices(
+			general, mesh, frame, {}, corners, 0, corners.size())
+		expect(posed == reference,
+			"verified burn skinning moved vertices away from the current pose")
 	alternate._walker.rotation.y = 0.73
 	var burn_facing := alternate._walker.global_basis.z.normalized()
 	alternate._ignite(false, false)

@@ -37,6 +37,8 @@ const SOURCE_HEIGHTS := [1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7, 0.75, 1.7,
 ## renders two centimetres tall. Everything else is authored in metres.
 const MODEL_PRESCALE := [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 100.0, 1.0, 1.0]
 const TARGET_HEIGHT := 2.08
+const MIN_SKIN_WEIGHT := 0.0001
+const UNIT_WEIGHT_TOLERANCE := 0.001
 ## The hound stages smaller than the humanoids: between its 0.75m authored
 ## size and the 2.08m roster standard.
 const MODEL_TARGET_HEIGHTS := [2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 2.08, 1.55, 2.08, 2.08]
@@ -261,13 +263,16 @@ func _normalize_model_origin() -> void:
 	var box := AABB()
 	var first := true
 	var mesh_bounds := {}
+	var burn_bind_counts_by_mesh := {}
 	for mesh in _meshes(_model):
 		if mesh.mesh == null:
 			continue
 		var local_points := PackedVector3Array()
+		var burn_bind_counts := PackedInt32Array()
+		burn_bind_counts.resize(mesh.mesh.get_surface_count())
 		for surface in mesh.mesh.get_surface_count():
 			local_points.append_array(
-				_posed_surface_vertices(mesh, surface, true))
+				_posed_surface_vertices(mesh, surface, true, burn_bind_counts))
 		if local_points.is_empty():
 			continue
 		var local_box := AABB(local_points[0], Vector3.ZERO)
@@ -277,6 +282,7 @@ func _normalize_model_origin() -> void:
 		mesh.custom_aabb = mesh.mesh.get_aabb().merge(local_box).grow(0.2)
 		mesh_bounds[_model.get_path_to(mesh)] = {
 			"foot_base": local_box.position.y - 0.005, "aabb": mesh.custom_aabb}
+		burn_bind_counts_by_mesh[mesh.mesh.get_instance_id()] = burn_bind_counts
 		var staged: AABB = global_transform.affine_inverse() \
 			* (mesh.global_transform * local_box)
 		box = staged if first else box.merge(staged)
@@ -290,7 +296,8 @@ func _normalize_model_origin() -> void:
 	shift.z = 0.0 if absf(shift.z) < 0.15 else shift.z
 	var offset := shift / _presentation.scale.x if shift.length() > 0.0001 else Vector3.ZERO
 	_model.position += offset
-	_initial_bounds[model_index] = {"meshes": mesh_bounds, "offset": offset}
+	_initial_bounds[model_index] = {"meshes": mesh_bounds, "offset": offset,
+		"burn_bind_counts": burn_bind_counts_by_mesh}
 
 
 func _set_mesh_foot_base(mesh: MeshInstance3D, foot_base: float) -> void:
@@ -344,10 +351,14 @@ func prepare_burn_cache() -> Dictionary:
 	var surface_cdf := PackedFloat32Array()
 	var total_area := 0.0
 	var meshes := _meshes(_model)
+	var bind_counts_by_mesh: Dictionary = _initial_bounds.get(model_index, {}).get(
+		"burn_bind_counts", {})
 	for mesh_idx in meshes.size():
 		var mesh_instance := meshes[mesh_idx]
 		if mesh_instance.mesh == null:
 			continue
+		var bind_counts: PackedInt32Array = bind_counts_by_mesh.get(
+			mesh_instance.mesh.get_instance_id(), PackedInt32Array())
 		for surface in mesh_instance.mesh.get_surface_count():
 			if mesh_instance.mesh.surface_get_primitive_type(surface) \
 					!= Mesh.PRIMITIVE_TRIANGLES:
@@ -404,6 +415,7 @@ func prepare_burn_cache() -> Dictionary:
 				"bones": bones,
 				"weights": weights,
 				"influences": influences,
+				"verified_bind_count": bind_counts[surface] if surface < bind_counts.size() else 0,
 				"corners": corners,
 				"cumulative_area": cumulative_area,
 				"area_start": area_start,
@@ -515,6 +527,9 @@ static func _pose_burn_vertices(surface: Dictionary, mesh_instance: MeshInstance
 	var visited := PackedByteArray()
 	posed.resize(vertices.size())
 	visited.resize(vertices.size())
+	var verified_bind_count: int = surface.get("verified_bind_count", 0)
+	var four_weights := verified_bind_count > 0 and verified_bind_count == bind_count \
+		and not valid_binds.has(0)
 	for corner in range(first, end):
 		var vertex := selected[corner]
 		if visited[vertex]: continue
@@ -522,25 +537,38 @@ static func _pose_burn_vertices(surface: Dictionary, mesh_instance: MeshInstance
 		var source := vertices[vertex]
 		var base := vertex * influences
 		var position := Vector3.ZERO
+		if four_weights:
+			position = (bind_transforms[bones[base]] * source) * weights[base]
+			var second := weights[base + 1]
+			var third := weights[base + 2]
+			var fourth := weights[base + 3]
+			if second > MIN_SKIN_WEIGHT:
+				position += (bind_transforms[bones[base + 1]] * source) * second
+			if third > MIN_SKIN_WEIGHT:
+				position += (bind_transforms[bones[base + 2]] * source) * third
+			if fourth > MIN_SKIN_WEIGHT:
+				position += (bind_transforms[bones[base + 3]] * source) * fourth
+			posed[vertex] = position
+			continue
 		var weight_total := 0.0
 		if bones.size() >= base + influences:
 			for i in range(base, base + influences):
 				var weight := weights[i]
-				if weight <= 0.0001: continue
+				if weight <= MIN_SKIN_WEIGHT: continue
 				var bind := bones[i]
 				if bind < 0 or bind >= bind_count or not valid_binds[bind]: continue
 				position += (bind_transforms[bind] * source) * weight
 				weight_total += weight
-		if weight_total <= 0.0001:
+		if weight_total <= MIN_SKIN_WEIGHT:
 			position = static_xf * source
-		elif absf(weight_total - 1.0) > 0.001:
+		elif absf(weight_total - 1.0) > UNIT_WEIGHT_TOLERANCE:
 			position /= weight_total
 		posed[vertex] = position
 	return posed
 
 
-func _posed_surface_vertices(mesh_instance: MeshInstance3D,
-		surface: int, mesh_local := false) -> PackedVector3Array:
+func _posed_surface_vertices(mesh_instance: MeshInstance3D, surface: int, mesh_local := false,
+		burn_bind_counts := PackedInt32Array()) -> PackedVector3Array:
 	var frame := mesh_instance.global_transform.affine_inverse() \
 		if mesh_local else global_transform.affine_inverse()
 	var arrays := mesh_instance.mesh.surface_get_arrays(surface)
@@ -576,6 +604,14 @@ func _posed_surface_vertices(mesh_instance: MeshInstance3D,
 			bind_transforms[bind_index] = skeleton.get_bone_global_pose(bone_index) \
 				* skin.get_bind_pose(bind_index)
 			valid_binds[bind_index] = 1
+	# Bounds already visit every vertex. Remember which imported surfaces use
+	# four slots, valid binds and unit weight sums for the later ignition frame.
+	var four_weights := surface < burn_bind_counts.size() and influences == 4 \
+		and weights.size() == vertices.size() * 4 and bones.size() == weights.size() \
+		and not valid_binds.is_empty() and not valid_binds.has(0)
+	var mesh_transform := mesh_instance.global_transform
+	var skeleton_transform := skeleton.global_transform if skeleton != null else Transform3D.IDENTITY
+	result.resize(vertices.size())
 	for vertex_index in vertices.size():
 		var point := vertices[vertex_index]
 		var posed := false
@@ -587,19 +623,25 @@ func _posed_surface_vertices(mesh_instance: MeshInstance3D,
 				var array_index := vertex_index * influences + influence
 				var weight := weights[array_index]
 				var bind_index := bones[array_index]
-				if weight <= 0.0001 or bind_index < 0 \
-						or bind_index >= valid_binds.size() or valid_binds[bind_index] == 0:
+				if weight <= MIN_SKIN_WEIGHT: continue
+				if bind_index < 0 or bind_index >= valid_binds.size() or valid_binds[bind_index] == 0:
+					four_weights = false
 					continue
 				var skinning_transform := bind_transforms[bind_index]
 				skinned += (skinning_transform * point) * weight
 				weight_total += weight
-			if weight_total > 0.0001:
+			if four_weights and not (weights[vertex_index * 4] > MIN_SKIN_WEIGHT
+					and absf(weight_total - 1.0) <= UNIT_WEIGHT_TOLERANCE):
+				four_weights = false
+			if weight_total > MIN_SKIN_WEIGHT:
 				skinned /= weight_total
-				point = frame * (skeleton.global_transform * skinned)
+				point = frame * (skeleton_transform * skinned)
 				posed = true
 		if not posed:
-			point = frame * (mesh_instance.global_transform * point)
-		result.append(point)
+			point = frame * (mesh_transform * point)
+		result[vertex_index] = point
+	if four_weights:
+		burn_bind_counts[surface] = valid_binds.size()
 	return result
 
 
