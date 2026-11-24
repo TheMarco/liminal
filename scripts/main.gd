@@ -183,6 +183,7 @@ var _diagnostic_settings: Dictionary = {}
 var _applied_graphics: Dictionary = {}
 var _applied_frame_pacing: Array = []
 var _graphics_change_started := 0
+var _draw_pipelines_before_change := 0
 var _graphics_apply_usec := 0
 var _quitting := false
 var _quit_prompt: ReturnPrompt
@@ -1031,18 +1032,6 @@ func _apply_game_settings() -> void:
 func _apply_graphics_settings() -> void:
 	if _settings == null:
 		return
-	var cheap_lighting := bool(_settings.get_value("cheap_lighting"))
-	if cheap_lighting != _applied_graphics.get("cheap_lighting", false):
-		GraphicsQuality.refresh_practical_lights(get_tree(), _settings.values)
-	var rectangular_strips := GraphicsQuality.use_rectangular_strips(_settings.values)
-	if rectangular_strips != GraphicsQuality.use_rectangular_strips(_applied_graphics):
-		get_tree().set_group(GraphicsQuality.AREA_LIGHT_BANKS, &"visible", rectangular_strips)
-		get_tree().set_group(GraphicsQuality.SPOT_LIGHT_BANKS, &"visible", not rectangular_strips)
-		get_tree().set_group(GraphicsQuality.AIRPORT_FILL_LIGHTS, &"light_size",
-			GraphicsQuality.airport_fill_shadow_size(_settings.values))
-	var reflections := int(_settings.get_value("reflections"))
-	if reflections != _applied_graphics.get("reflections", -1):
-		get_tree().call_group(GraphicsQuality.ROOM_REFLECTIONS, &"set_visible", reflections > 0)
 	var next := {}
 	for key in GameSettings.QUALITY_KEYS:
 		next[key] = _settings.get_value(key)
@@ -1056,6 +1045,22 @@ func _apply_graphics_settings() -> void:
 		return
 	var record_change := not _applied_graphics.is_empty() and DisplayServer.get_name() != "headless"
 	var started := Time.get_ticks_usec()
+	if record_change and not RenderingServer.frame_post_draw.is_connected(_record_graphics_change):
+		_graphics_change_started = started
+		_draw_pipelines_before_change = int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW))
+		RenderingServer.frame_post_draw.connect(_record_graphics_change, CONNECT_ONE_SHOT)
+	var cheap_lighting := bool(_settings.get_value("cheap_lighting"))
+	if cheap_lighting != _applied_graphics.get("cheap_lighting", false):
+		GraphicsQuality.refresh_practical_lights(get_tree(), _settings.values)
+	var rectangular_strips := GraphicsQuality.use_rectangular_strips(_settings.values)
+	if rectangular_strips != GraphicsQuality.use_rectangular_strips(_applied_graphics):
+		get_tree().set_group(GraphicsQuality.AREA_LIGHT_BANKS, &"visible", rectangular_strips)
+		get_tree().set_group(GraphicsQuality.SPOT_LIGHT_BANKS, &"visible", not rectangular_strips)
+		get_tree().set_group(GraphicsQuality.AIRPORT_FILL_LIGHTS, &"light_size",
+			GraphicsQuality.airport_fill_shadow_size(_settings.values))
+	var reflections := int(_settings.get_value("reflections"))
+	if reflections != _applied_graphics.get("reflections", -1):
+		get_tree().call_group(GraphicsQuality.ROOM_REFLECTIONS, &"set_visible", reflections > 0)
 	_applied_graphics = next
 	_applied_frame_pacing = pacing
 	GraphicsQuality.apply_viewport(get_viewport(), _settings, opts.notaa)
@@ -1068,14 +1073,13 @@ func _apply_graphics_settings() -> void:
 		_self_return_door.site.refresh_graphics_quality(_settings, opts.notaa)
 	if record_change:
 		_graphics_apply_usec += Time.get_ticks_usec() - started
-		if not RenderingServer.frame_post_draw.is_connected(_record_graphics_change):
-			_graphics_change_started = started
-			RenderingServer.frame_post_draw.connect(_record_graphics_change, CONNECT_ONE_SHOT)
 
 
 func _record_graphics_change() -> void:
+	var draw_pipelines := int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW))
 	RuntimeDiagnostics.slow("graphics_settings_first_draw", _graphics_change_started,
-		{"apply_ms": _graphics_apply_usec / 1000.0, "quality_preset": _settings.get_value("quality_preset"),
+		{"apply_ms": _graphics_apply_usec / 1000.0, "draw_pipeline_compilations": draw_pipelines - _draw_pipelines_before_change,
+		"quality_preset": _settings.get_value("quality_preset"),
 		"cheap_lighting": _settings.get_value("cheap_lighting")})
 	_graphics_apply_usec = 0
 

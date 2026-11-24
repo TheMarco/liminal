@@ -18,6 +18,8 @@ const AUTHORED_META := &"_quality_authored_environment"
 const AUTHORED_KEYS := ["sdfgi_enabled", "sdfgi_cascades", "sdfgi_min_cell_size",
 	"ssao_enabled", "ssr_enabled", "ssr_max_steps", "volumetric_fog_enabled"]
 
+static var _applied_shadow_filter := RenderingServer.SHADOW_QUALITY_MAX
+
 ## World effects follow the lighting budget even with a custom resolution or
 ## video look. Changing CRT/tape quality must not rebuild the room's particles.
 static func atmosphere_tier(values: Dictionary) -> int:
@@ -258,8 +260,12 @@ static func apply_global(settings: GameSettings) -> void:
 		RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM][shadows]
 	if settings.get_value("cheap_lighting"):
 		shadow_filter = RenderingServer.SHADOW_QUALITY_HARD
-	RenderingServer.positional_soft_shadow_filter_set_quality(shadow_filter)
-	RenderingServer.directional_soft_shadow_filter_set_quality(shadow_filter)
+	# Both setters invalidate Forward+ shader pipelines even for the same value.
+	# This filter is shared by every viewport and scene in the process.
+	if shadow_filter != _applied_shadow_filter:
+		RenderingServer.positional_soft_shadow_filter_set_quality(shadow_filter)
+		RenderingServer.directional_soft_shadow_filter_set_quality(shadow_filter)
+		_applied_shadow_filter = shadow_filter
 	var ao := int(settings.get_value("ambient_occlusion"))
 	# High keeps the richer sample pattern, reconstructed from half-size AO.
 	RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_LOW if ao < 2 else RenderingServer.ENV_SSAO_QUALITY_HIGH,

@@ -81,6 +81,17 @@ func diagnose_reflections(_chunk: Chunk, style: int) -> void:
 				costs.append(elapsed)
 				calls.append(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
 			if frame == 30: assert(capture.save_png(output.path_join("room-%d-%s.png"%[style,mode])) == OK)
+		# A warmed view must reuse its GPU pipelines when another settings
+		# change reapplies the same global lighting configuration.
+		var compiled := int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW))
+		GraphicsQuality.apply_global(game._settings)
+		RenderingServer.force_draw(false, 0.0)
+		view.get_texture().get_image()
+		var recompiled := int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW)) - compiled
+		if recompiled != 0:
+			push_error("reapplying %s compiled %d draw pipelines" % [mode, recompiled])
+			quit(1)
+			return
 		var record := {"mode":mode,"values":values,"world_height":view.scaling_3d_scale*view.size.y,
 			"median_ms":median(costs),"draw_calls":median(calls),"frames_ms":costs,
 			"msaa":view.msaa_3d,"taa":view.use_taa,"shadow_atlas":view.positional_shadow_atlas_size}
