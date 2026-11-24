@@ -221,7 +221,7 @@ godot --path . --audio-driver Dummy --script tools/audit_ntscrt_full_pipeline.gd
 godot --path . --audio-driver Dummy --script tools/capture_ntscrt_slang_game.gd -- --nologo --level=1 --full
 
 # Import first so packaged compute shaders have compiled resources.
-godot --path . --editor --import
+godot --headless --path . --editor --import
 GODOT_BIN=godot tools/ntscrt/check_export_assets.sh
 
 # Complete LDR 2D matrix, then core routes with production linear/HDR 2D canvases.

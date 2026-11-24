@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Reproduce the asset-only pack check with production Linux export filters.
-# Requires Python 3, Godot, and current native-editor imports (RDShaderFile).
+# Requires Python 3, Godot 4.7+, and current project imports (RDShaderFile).
 # No GPU process is started. GODOT_BIN selects Godot; KEEP_EXPORT_AUDIT=1
 # retains the small staging project, PCK, and logs after a successful run.
 set -euo pipefail
@@ -21,22 +21,21 @@ from pathlib import Path
 import hashlib,re,shutil,sys
 repo,stage=map(Path,sys.argv[1:])
 folders=['third_party/ntscrt','shaders/ntscrs_gpu','shaders/ntscrt_receiver_gpu','shaders/ntscrt_downscale_gpu']
-# Never silently package stale/missing shader bytecode. Native import is an
-# explicit prerequisite, because the headless dummy RD cannot compile GLSL.
+# Check that the staged bytecode matches the shader sources.
 for folder in folders[1:]:
  for shader in (repo/folder).glob('*.glsl'):
   sidecar=Path(str(shader)+'.import')
   if not sidecar.exists():
-   sys.exit(f'Missing {sidecar}: open/import the project with native Godot first; this check does not start a GPU job.')
+   sys.exit(f'Missing {sidecar}: run godot --headless --path . --editor --import first.')
   text=sidecar.read_text()
   found=re.search(r'^path="res://([^"]+)"',text,re.M)
   if not found or not (repo/found[1]).exists():
-   sys.exit(f'Missing imported RDShaderFile for {shader}; run native editor import first.')
+   sys.exit(f'Missing imported RDShaderFile for {shader}; run godot --headless --path . --editor --import first.')
   md5_path=(repo/found[1]).with_suffix('.md5')
   if md5_path.exists():
    source_hash=re.search(r'source_md5="([^"]+)"',md5_path.read_text())
    if source_hash and source_hash[1]!=hashlib.md5(shader.read_bytes()).hexdigest():
-    sys.exit(f'Stale imported RDShaderFile for {shader}; rerun native editor import first.')
+    sys.exit(f'Stale imported RDShaderFile for {shader}; rerun godot --headless --path . --editor --import.')
 for folder in folders:
  shutil.copytree(repo/folder,stage/folder)
 shutil.copy(repo/'tools/audit_ntscrt_export.gd',stage/'audit.gd')
@@ -48,7 +47,7 @@ section=next((s for s in sections if re.search(r'^name="Linux"$',s,re.M)),None)
 if section is None: sys.exit('Production Linux export preset not found')
 section=re.sub(r'\[preset\.\d+(\.options)?\]',lambda m:'[preset.0'+(m[1] or '')+']',section)
 (stage/'export_presets.cfg').write_text(section)
-# Retain native shader imports and exact texture imports; cache metadata avoids
+# Retain shader imports and exact texture imports; cache metadata avoids
 # unnecessary headless reimport. No project scripts/scenes or game saves copied.
 for sidecar in stage.rglob('*.import'):
  for resource in set(re.findall(r'res://(\.godot/imported/[^"\n]+)',sidecar.read_text())):

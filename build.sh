@@ -14,7 +14,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-GODOT_VERSION="$(godot --version)"
+GODOT_VERSION="$(godot --headless --version)"
 IFS=. read -r GODOT_MAJOR GODOT_MINOR _ <<< "$GODOT_VERSION"
 if (( GODOT_MAJOR < 4 || (GODOT_MAJOR == 4 && GODOT_MINOR < 7) )); then
 	echo "Godot 4.7+ is required for HDR display output (found $GODOT_VERSION)." >&2
@@ -65,9 +65,8 @@ echo "validation logs: $BUILD_LOG_DIR"
 # Generated screenshots, benchmarks and upload tools are not project assets.
 mkdir -p build
 touch build/.gdignore
-# Compute shaders require a real RenderingDevice during import. The headless
-# dummy renderer cannot compile GLSL; exports and audits remain headless.
-godot --path . --editor --import
+# Godot 4.7 can compile the game's compute shaders during a headless import.
+godot --headless --path . --editor --import
 
 echo "==> audits"
 AUDIT_ARGS=(--no-import --log-dir "$BUILD_LOG_DIR")
