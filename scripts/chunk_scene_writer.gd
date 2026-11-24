@@ -37,8 +37,8 @@ func occluder_wall(mesh: MeshInstance3D) -> void:
 
 
 func model_box(parent: Node3D, pos: Vector3, size: Vector3,
-		material: Material) -> MeshInstance3D:
-	return _host._mbox(_model_parent(parent), pos, size, material)
+		material: Material, powered_lens := false) -> MeshInstance3D:
+	return _host._mbox(_model_parent(parent), pos, size, material, powered_lens)
 
 
 func cylinder(pos: Vector3, radius: float, height: float,

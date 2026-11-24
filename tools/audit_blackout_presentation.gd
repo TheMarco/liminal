@@ -264,10 +264,42 @@ func _indexed_room() -> void:
 	room.free()
 
 
+func _room_diffusers() -> void:
+	var first := SURFACE_POWER.new()
+	var adjacent := SURFACE_POWER.new()
+	var source := StandardMaterial3D.new()
+	source.emission_enabled = true
+	var first_lens := MeshInstance3D.new()
+	first_lens.mesh = first.emitter_box(source)
+	var second_lens := MeshInstance3D.new()
+	second_lens.mesh = first.emitter_box(source)
+	var adjacent_box := adjacent.emitter_box(source)
+	expect(first_lens.mesh == second_lens.mesh and first_lens.mesh != adjacent_box,
+		"strip diffusers must share geometry only within their room")
+	first.index_visuals([first_lens, second_lens])
+	var alternate := source.duplicate() as StandardMaterial3D
+	alternate.albedo_color = Color.CORAL
+	second_lens.set_surface_override_material(0, alternate)
+	first.apply_indexed({})
+	var switched := first_lens.get_active_material(0) as StandardMaterial3D
+	expect(switched != source and is_zero_approx(switched.emission_energy_multiplier)
+		and first_lens.get_surface_override_material(0) == null, "room diffuser missed the shared power switch")
+	var overridden := second_lens.get_active_material(0) as StandardMaterial3D
+	expect(overridden.albedo_color == Color.CORAL and is_zero_approx(overridden.emission_energy_multiplier),
+		"room power skipped a replacement diffuser surface")
+	expect(adjacent_box.material == source and source.emission_energy_multiplier > 0,
+		"cutting one room dimmed a separately powered room")
+	first.restore()
+	expect(first_lens.get_active_material(0) == source and second_lens.get_surface_override_material(0) == alternate,
+		"restoration lost the original diffuser bindings")
+	first_lens.free()
+	second_lens.free()
+
 func run() -> void:
 	_environments()
 	_surface_cases()
 	_indexed_room()
+	_room_diffusers()
 	for theme in WorldGen.THEMES:
 		for cell in [Vector2i.ZERO, Vector2i(3, 3), Vector2i(-4, 2)]:
 			_chunk(theme, cell)

@@ -172,12 +172,12 @@ static func suspended_strip(scene: ChunkSceneWriter, at: Vector3,
 	scene.add_node(fixture)
 	var body := scene.model_box(fixture,Vector3(0,-0.06,0),body_size,trim)
 	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var lower := scene.model_box(fixture,Vector3(0,-0.12,0),lens_size,material)
+	var lower := scene.model_box(fixture,Vector3(0,-0.12,0),lens_size,material,not dead)
 	lower.name = "LowerDiffuser"
 	lower.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var upper_size := Vector3(lens_size.x,0.05,lens_size.z)
 	var upper_y := -0.06+body_size.y*0.5+upper_size.y*0.5
-	var upper := scene.model_box(fixture,Vector3(0,upper_y,0),upper_size,material)
+	var upper := scene.model_box(fixture,Vector3(0,upper_y,0),upper_size,material,not dead)
 	upper.name = "UpperDiffuser"
 	upper.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var upper_face := upper_y+upper_size.y*0.5

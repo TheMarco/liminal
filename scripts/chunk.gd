@@ -2879,10 +2879,14 @@ func _quad(pos: Vector3, size: Vector2, mat: Material) -> MeshInstance3D:
 	return mi
 
 
-func _mbox(parent: Node3D, pos: Vector3, size: Vector3, mat: Material) -> MeshInstance3D:
+func _mbox(parent: Node3D, pos: Vector3, size: Vector3, mat: Material,
+		powered_lens := false) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
-	mi.mesh = BOX
-	mi.material_override = mat
+	if powered_lens:
+		mi.mesh = _blackout_surfaces.emitter_box(mat)
+	else:
+		mi.mesh = BOX
+		mi.material_override = mat
 	mi.position = pos
 	mi.scale = size
 	parent.add_child(mi)

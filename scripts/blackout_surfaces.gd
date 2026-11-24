@@ -16,6 +16,18 @@ var _switched_overrides: Dictionary[Material, Array] = {}
 ## Source properties (including next passes) are still read at each outage.
 var _fixed_bindings: Dictionary[Material, Array] = {}
 var _switched_fixed: Array[Array] = []
+## A room's suspended strips share one box per lens material. Switching the
+## box binding keeps the individual fixtures and the source material intact.
+var _emitter_boxes: Dictionary[Material, BoxMesh] = {}
+var _switched_boxes: Dictionary[BoxMesh, Material] = {}
+
+func emitter_box(source: Material) -> BoxMesh:
+	var box: BoxMesh = _emitter_boxes.get(source)
+	if box == null:
+		box = BoxMesh.new()
+		box.material = source
+		_emitter_boxes[source] = box
+	return box
 
 static func clear_cache() -> void:
 	_shader_power.clear()
@@ -117,6 +129,14 @@ func index_visuals(visuals: Array[Node]) -> void:
 
 
 func apply_indexed(variants: Dictionary) -> void:
+	for source: Material in _emitter_boxes:
+		var box := _emitter_boxes[source]
+		var current := box.material
+		var dark := off_material(current, variants)
+		if dark != current:
+			_switched_boxes[box] = current
+			box.material = dark
+			variants[dark] = dark
 	for source: Material in _fixed_bindings:
 		var dark := off_material(source, variants)
 		if dark == source:
@@ -165,6 +185,11 @@ func apply_visuals(visuals: Array[Node], variants: Dictionary) -> void:
 			continue
 		var original := mesh.material_override
 		var overlay := mesh.material_overlay
+		# A wave or a prop effect can replace the mesh or add its own override.
+		# Only skip a lens that still draws the room's switched box directly.
+		if original == null and overlay == null and mesh.mesh is BoxMesh and _switched_boxes.has(mesh.mesh) \
+				and mesh.get_surface_override_material(0) == null:
+			continue
 		var dark := original
 		if original != null:
 			dark = variants.get(original)
@@ -197,6 +222,9 @@ func apply_visuals(visuals: Array[Node], variants: Dictionary) -> void:
 				mesh.material_overlay = dark_overlay
 
 func restore() -> void:
+	for box: BoxMesh in _switched_boxes:
+		box.material = _switched_boxes[box]
+	_switched_boxes.clear()
 	for bindings in _switched_fixed:
 		for binding: Array in bindings:
 			if is_instance_valid(binding[0]):
