@@ -56,10 +56,8 @@ func run() -> void:
 
 func _audit_shader_reuse() -> void:
 	var source := Mats.office_wall() as ShaderMaterial
-	var first: Node3D = Surface.new()
-	var second: Node3D = Surface.new()
-	var first_material := first.call("_wrap_native_shader", source) as ShaderMaterial
-	var second_material := second.call("_wrap_native_shader", source) as ShaderMaterial
+	var first_material := Surface.call("wrap_native_shader", source) as ShaderMaterial
+	var second_material := Surface.call("wrap_native_shader", source.duplicate()) as ShaderMaterial
 	expect(first_material.shader == second_material.shader \
 		and first_material.shader != source.shader,
 		"repeated Office effects rebuilt their morph shader")
@@ -68,8 +66,6 @@ func _audit_shader_reuse() -> void:
 		and second_material.get_shader_parameter("scenario_drywall_tex") == \
 		source.get_shader_parameter("scenario_drywall_tex"),
 		"cached morph shader lost source material parameters")
-	first.free()
-	second.free()
 
 # Profile: pure math, no assets, no renderer. -------------------------------
 

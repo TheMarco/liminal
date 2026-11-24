@@ -169,6 +169,13 @@ func _step_anchor() -> bool:
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_TANGENT] = baked
 	_building.tangents = baked
+	_building.render_material = anchored_material(source)
+	_building.erase("anchor")
+	_building.stage = "custom"
+	_building.cursor = 0
+	return true
+
+static func anchored_material(source: StandardMaterial3D) -> StandardMaterial3D:
 	var result := source.duplicate() as StandardMaterial3D
 	result.uv1_triplanar = false
 	result.uv1_world_triplanar = false
@@ -176,11 +183,7 @@ func _step_anchor() -> bool:
 	result.uv1_offset = Vector3.ZERO
 	# Godot ignores height mapping while triplanar is enabled; keep that behavior.
 	result.heightmap_enabled = false
-	_building.render_material = result
-	_building.erase("anchor")
-	_building.stage = "custom"
-	_building.cursor = 0
-	return true
+	return result
 
 # Rest-attribute pass for native shaders, sliced. Same floats, same order as
 # the old inline append loop; pre-sized instead of appended.
@@ -227,7 +230,7 @@ func _step_custom() -> bool:
 	arrays[Mesh.ARRAY_CUSTOM0] = rest_position
 	arrays[Mesh.ARRAY_CUSTOM1] = rest_normal
 	_building.flags = (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
-	_building.render_material = _wrap_native_shader(material)
+	_building.render_material = wrap_native_shader(material)
 	_building.erase("custom")
 	_building.stage = "morph"
 	_building.cursor = 0
@@ -307,7 +310,7 @@ func _finish_piece() -> bool:
 		"expanded_margin": maxf(node.extra_cull_margin, margin)})
 	return true
 
-func _wrap_native_shader(source: ShaderMaterial) -> ShaderMaterial:
+static func wrap_native_shader(source: ShaderMaterial) -> ShaderMaterial:
 	var original := source.shader
 	var wrapped: Shader = _wrapped_shaders.get(original)
 	if wrapped == null:

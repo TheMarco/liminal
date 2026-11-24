@@ -142,7 +142,7 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 				arrays[Mesh.ARRAY_CUSTOM1] = await _custom_attribute(arrays[Mesh.ARRAY_NORMAL])
 				flags &= ~((Mesh.ARRAY_FORMAT_CUSTOM_MASK << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_FORMAT_CUSTOM_MASK << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT))
 				flags |= (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
-				material = native._wrap_native_shader(material)
+				material = Native.wrap_native_shader(material)
 			materials.append(material)
 			var shapes: Array[Array] = []
 			var samples: Dictionary = await _samples(arrays, xf)
@@ -204,7 +204,15 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 		var keys := await _collision_keys(arrays[Mesh.ARRAY_VERTEX], xf)
 		var motion := ConcavePolygonShape3D.new()
 		motion.backface_collision = true
-		colliders.append({"node": node, "original": original, "motion": motion, "keys": keys, "indices": arrays[Mesh.ARRAY_INDEX]})
+		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var rest_faces := PackedVector3Array()
+		rest_faces.resize(indices.size())
+		for corner in indices.size():
+			rest_faces[corner] = keys[0][indices[corner]]
+			if corner % 256 == 255: await _budget()
+		var moving := await _moving_corners(keys, indices)
+		colliders.append({"node": node, "original": original, "motion": motion, "keys": keys,
+			"indices": indices, "rest_faces": rest_faces, "moving": moving, "at_rest": false})
 	for node: Node3D in chunk.find_children("*", "Node3D", true, false):
 		if node is Light3D or node is Label3D:
 			var xf := frame.affine_inverse() * Placement.relative(node, chunk)
@@ -263,6 +271,26 @@ func _collision_keys(vertices: PackedVector3Array, xf: Transform3D) -> Array[Pac
 		keys.append(key)
 		await _budget()
 	return keys
+
+func _moving_corners(keys: Array[PackedVector3Array], indices: PackedInt32Array) -> Array[PackedInt32Array]:
+	var intervals: Array[PackedInt32Array] = []
+	var rest := keys[0]
+	for k in keys.size() - 1:
+		var a := keys[k]
+		var b := keys[k + 1]
+		var corners := PackedInt32Array()
+		if a != rest or b != rest:
+			var moving := PackedByteArray()
+			moving.resize(rest.size())
+			for i in rest.size():
+				moving[i] = int(a[i] != rest[i] or b[i] != rest[i])
+				if i % 256 == 255: await _budget()
+			for corner in indices.size():
+				if moving[indices[corner]]: corners.append(corner)
+				if corner % 256 == 255: await _budget()
+		intervals.append(corners)
+		await _budget()
+	return intervals
 
 func _convex_arrays(shape: ConvexPolygonShape3D, xf: Transform3D) -> Array:
 	# Godot 4.7 exposes both wire edges and filled hull faces in the debug
@@ -449,19 +477,23 @@ func sync_collision() -> void:
 	if not installed: return
 	var at := phase*(Profile.KEYS-1)
 	var lo := mini(Profile.KEYS-2, floori(at))
+	var mix := at-lo
 	for item in colliders:
-		var a: PackedVector3Array = item.keys[lo]
-		var b: PackedVector3Array = item.keys[lo+1]
-		var points := a.duplicate()
-		var mix := at-lo
-		# Interpolate each indexed vertex once, not once per triangle corner.
-		for i in points.size(): points[i] = a[i].lerp(b[i], mix)
-		var indices: PackedInt32Array = item.indices
-		var faces := PackedVector3Array()
-		faces.resize(indices.size())
-		for i in indices.size(): faces[i] = points[indices[i]]
-		item.motion.set_faces(faces)
-		item.node.shape = item.motion
+		var corners: PackedInt32Array = item.moving[lo]
+		var at_rest := corners.is_empty()
+		if not at_rest or not item.at_rest:
+			# Only the travelling band changes. Start from the exact rest faces
+			# each tick, so jumps in phase also clear the previous band.
+			var faces: PackedVector3Array = item.rest_faces.duplicate()
+			var a: PackedVector3Array = item.keys[lo]
+			var b: PackedVector3Array = item.keys[lo+1]
+			var indices: PackedInt32Array = item.indices
+			for corner in corners:
+				var vertex := indices[corner]
+				faces[corner] = a[vertex].lerp(b[vertex], mix)
+			item.motion.set_faces(faces)
+			item.at_rest = at_rest
+		if item.node.shape != item.motion: item.node.shape = item.motion
 
 func restore() -> void:
 	if not installed: return

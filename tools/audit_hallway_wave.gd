@@ -149,6 +149,11 @@ func run() -> void:
 	expect(game.player.global_position.distance_to(initial) > 0.75, "player could not walk through wave")
 	game.player.dev_walk = false
 	game.player.set_physics_process(false)
+	var playing_phase: float = surface.phase
+	for phase in [0.88, 0.12, playing_phase]:
+		surface.pose(phase)
+		surface.sync_collision()
+		_check_collision_faces(surface)
 	print("Wave max tick ms: ",max_tick_ms,"; feet error: ",max_floor_error)
 	for node in meshes: expect(node.mesh == meshes[node], "neighbor geometry changed")
 	# Audio contract: every supplied loop loads, no immediate repeats, smooth
@@ -190,6 +195,25 @@ func run() -> void:
 	await process_frame
 	await teardown_game(game)
 	finish("hallway wave: streamed Office, boundaries, walking, audio, cancellation and unload")
+
+func _check_collision_faces(surface: Node3D) -> void:
+	# After the band moves away, every corner it touched must return to the
+	# dense reference pose, including when the animation seeks backwards.
+	var at: float = surface.phase * (Profile.KEYS - 1)
+	var lo := mini(Profile.KEYS - 2, floori(at))
+	for item: Dictionary in surface.colliders:
+		var faces: PackedVector3Array = item.node.shape.get_faces()
+		var indices: PackedInt32Array = item.indices
+		var a: PackedVector3Array = item.keys[lo]
+		var b: PackedVector3Array = item.keys[lo + 1]
+		if faces.size() != indices.size():
+			fail("wave changed the number of collision faces")
+			return
+		for corner in faces.size():
+			var v := indices[corner]
+			if faces[corner] != a[v].lerp(b[v], at - lo):
+				fail("stale collision face after moving the wave")
+				return
 
 func capture_live_wave(game: Node) -> void:
 	# Automated render capture must not consume the user's keyboard input.

@@ -93,6 +93,8 @@ func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := fal
 		_view.add_child(desk)
 	if theme == 4 or realm_theme == 4:
 		_warm_airport_terminal()
+	if theme in [2, 11] or realm_theme in [2, 11]:
+		_warm_hallway_props(theme, realm_theme)
 	var warm_water := theme in [2, 9] or realm_theme in [2, 9]
 	if wander_only:
 		# Wander suspends hostile figures, hallway apparitions and Descent rules.
@@ -368,6 +370,98 @@ func _warm_airport_terminal() -> void:
 		walkway.position = Vector3(0.5, 2.0, 3.0)
 		walkway.rotation = Vector3(0.4, 0.3, 0.1)
 		terminal.add_child(walkway)
+
+
+func _warm_hallway_props(theme: int, realm_theme: int) -> void:
+	# A hallway wave is these props' first draw with blend shapes. Sample the
+	# source assets even when a seeded arrival has none of them in view.
+	var host := Node3D.new()
+	_view.add_child(host)
+	if theme == 2 or realm_theme == 2:
+		_warm_wave_model(host, Chunk.LIGHT_SWITCH_PATH)
+		_warm_wave_model(host, Chunk.OUTLET_PATH)
+	if theme == 11 or realm_theme == 11:
+		# The generated canopy has ordinary position, normal, tangent and UV
+		# streams. Its membrane normals are axial, so the live wave bakes UVs.
+		_add_wave_prop(host, 0, Mats.bloom_growth())
+		_add_wave_prop(host, 0, Surface.anchored_material(Mats.bloom_tissue()))
+		_warm_wave_model(host, Chunk.BLOOM_VINES_PATH, Mats.bloom_growth())
+		_warm_wave_model(host, Chunk.BRUTAL_LIGHT_PATH)
+
+
+func _warm_wave_model(host: Node3D, path: String, override: Material = null) -> void:
+	var packed := load(path) as PackedScene
+	if packed == null: return
+	var model := packed.instantiate()
+	var seen := {}
+	for node: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		var source := node.mesh as ArrayMesh
+		if source == null: continue
+		for i in source.get_surface_count():
+			var material := override if override != null else node.get_active_material(i)
+			if material == null: continue
+			var format := source.surface_get_format(i)
+			var key := [format, material]
+			if seen.has(key): continue
+			_add_wave_prop(host, format, material)
+			seen[key] = true
+	model.free()
+
+
+func _add_wave_prop(host: Node3D, format: int, material: Material) -> void:
+	var sample := MeshInstance3D.new()
+	sample.mesh = _wave_prop_mesh(format, material is ShaderMaterial)
+	sample.material_override = Surface.wrap_native_shader(material) if material is ShaderMaterial else material
+	var i := host.get_child_count()
+	sample.position = FIXTURE_LIGHT_POSITION + Vector3(-2.0 + i % 8 * 0.6, -1.0, 0.15 + i / 8)
+	sample.set_blend_shape_value(0, 0.5)
+	host.add_child(sample)
+
+
+func _wave_prop_mesh(format: int, wrapped: bool) -> ArrayMesh:
+	# Match the production morph's vertex layout without reading an entire
+	# imported mesh back from the GPU just to draw a few pixels at load time.
+	var box := BoxMesh.new()
+	box.size = Vector3(0.45, 0.45, 0.45)
+	box.add_uv2 = bool(format & Mesh.ARRAY_FORMAT_TEX_UV2)
+	var arrays := box.get_mesh_arrays()
+	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	if format & Mesh.ARRAY_FORMAT_COLOR:
+		var colors := PackedColorArray()
+		colors.resize(positions.size())
+		colors.fill(Color.WHITE)
+		arrays[Mesh.ARRAY_COLOR] = colors
+	var flags := 0
+	for channel in 4:
+		var slot := Mesh.ARRAY_CUSTOM0 + channel
+		var shift := Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT + channel * Mesh.ARRAY_FORMAT_CUSTOM_BITS
+		var encoding := (format >> shift) & Mesh.ARRAY_FORMAT_CUSTOM_MASK
+		if wrapped and channel < 2:
+			var rest := positions if channel == 0 else normals
+			arrays[slot] = rest.to_byte_array().to_float32_array()
+			encoding = Mesh.ARRAY_CUSTOM_RGB_FLOAT
+		elif format & (1 << slot):
+			if encoding >= Mesh.ARRAY_CUSTOM_R_FLOAT:
+				var floats := PackedFloat32Array()
+				floats.resize(positions.size() * (encoding - Mesh.ARRAY_CUSTOM_R_FLOAT + 1))
+				arrays[slot] = floats
+			else:
+				var bytes := PackedByteArray()
+				bytes.resize(positions.size() * (8 if encoding == Mesh.ARRAY_CUSTOM_RGBA_HALF else 4))
+				arrays[slot] = bytes
+		else:
+			continue
+		flags |= encoding << shift
+	var blend := []
+	blend.resize(Mesh.ARRAY_MAX)
+	for slot in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TANGENT]:
+		blend[slot] = arrays[slot]
+	var mesh := ArrayMesh.new()
+	mesh.blend_shape_mode = Mesh.BLEND_SHAPE_MODE_NORMALIZED
+	mesh.add_blend_shape("wave")
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [blend], {}, flags)
+	return mesh
 
 
 func _warm_surfaces(rooms: Node3D) -> void:
