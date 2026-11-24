@@ -13,6 +13,8 @@ const REASSEMBLY_SECONDS := 1.3
 const WINDOW_SHADER := preload("res://shaders/realm_window.gdshader")
 const CAUGHT_SEQUENCE := preload("res://scripts/caught_sequence.gd")
 const PREVIEW_BUILD_BUDGET_USEC := 2000
+const TRANSFER_BUDGET_USEC := 3500
+const TRANSFER_ROOMS_PER_FRAME := 6
 ## The small doorway view doesn't need the full gameplay streaming radius.
 ## Normal streaming expands this neighbourhood after the player enters it.
 const PREVIEW_LOAD_R := 2
@@ -22,6 +24,7 @@ const PREVIEW_LOAD_R := 2
 signal _preview_frame
 signal _preview_physics_frame
 var _preview_cancelled := false
+var _rooms_in_transit: Node
 
 
 var phase := Phase.PREPARING
@@ -169,6 +172,9 @@ func prepare(owner_game: Node3D) -> void:
 	game._photo_director.realm_preview_ready = false
 	game._photo_director._register_photo_doors()
 	_preload_preview_resources()
+	# The first registration of the collapse shaders can block the render
+	# thread. Create the dormant effect during floor arrival.
+	_prepare_collapse_effect()
 	# Covered campaign arrivals prepare the destination before play. Direct
 	# starts can still build on approach without loading distant source rooms.
 	if game.opts.realm_visit:
@@ -688,9 +694,10 @@ func enter() -> void:
 	game._descent_hud.set_active(false)
 	await _fade_to(1.0, 0.16)
 	preview.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	# Removing the source removes its physics, audio, and streaming together.
-	game.remove_child(game.level_root)
-	pocket.reparent(game)
+	if not await _move_room_tree(game.level_root, game.cm, null):
+		return
+	if not await _move_room_tree(pocket, pocket, game):
+		return
 	pocket.player = game.player
 	pocket.stream_focus = destination_position
 	pocket.set_process(true)
@@ -737,9 +744,7 @@ func enter() -> void:
 	game._photo_camera.figures = threats
 	game._heart.figures = threats
 	game._heart.suspended = false
-	_collapse_effect = RealmCollapseEffect.new() if collapse_style == "fracture" else RealmWireframeCollapse.new()
-	add_child(_collapse_effect)
-	_collapse_effect.configure(game.player, game.world_seed)
+	_prepare_collapse_effect()
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	game.player.teleport(destination_position)
@@ -790,10 +795,17 @@ func collapse(caught := false) -> void:
 	if not caught and elapsed >= DURATION - collapse_seconds():
 		_collapse_effect.set_progress(1.0)
 	var completed_collapse := not caught and elapsed >= DURATION
+	var reassemble := completed_collapse and _collapse_effect is RealmWireframeCollapse
 	await _fade_to(1.0, 0.12 if completed_collapse else 0.25)
 	game.player.set_rumble(0.0)
-	_collapse_effect.finish()
+	if reassemble:
+		_collapse_effect.reset_for_reassembly()
+	else:
+		_collapse_effect.finish()
 	pocket.set_process(false)
+	pocket.chunks.clear()
+	if not await _move_rooms(pocket, null):
+		return
 	game.remove_child(pocket)
 	pocket.queue_free()
 	game.remove_child(threats)
@@ -803,7 +815,8 @@ func collapse(caught := false) -> void:
 	# Pin source streaming before reattachment so it cannot unload the return
 	# room while its physics is settling.
 	game.cm.stream_focus = return_position
-	game.add_child(_source["root"])
+	if not await _move_room_tree(_source["root"], game.cm, game):
+		return
 	game.we.environment = _source["env"]
 	game.player.world_seed = int(_source["player_seed"])
 	game.player.level_theme = int(_source["player_theme"])
@@ -836,7 +849,7 @@ func collapse(caught := false) -> void:
 		_caught_sequence.queue_free()
 		_caught_sequence = null
 		await get_tree().process_frame
-	if completed_collapse and collapse_style == "wireframe":
+	if reassemble:
 		await _reassemble_source()
 	else:
 		await _fade_to(0.0, 0.22 if completed_collapse else 0.65)
@@ -902,11 +915,9 @@ func _present_caught_in_realm() -> void:
 
 func _reassemble_source() -> void:
 	# The retained original scene is already attached and the player is at a
-	# supported return point. Install its own effect while the fade is opaque;
-	# no unmodified source frame can flash between destruction and assembly.
-	_rebuild_effect = RealmWireframeCollapse.new()
-	add_child(_rebuild_effect)
-	_rebuild_effect.configure(game.player, game.world_seed, true)
+	# supported return point. Sample its geometry into the prepared buffers
+	# while the fade is opaque so the restored floor appears in wireframe.
+	_rebuild_effect = _collapse_effect as RealmWireframeCollapse
 	_rebuild_effect.set_progress(1.0)
 	await get_tree().process_frame
 	await _fade_to(0.0, 0.08)
@@ -915,6 +926,65 @@ func _reassemble_source() -> void:
 	await rebuild.finished
 	_rebuild_effect.finish()
 	_rebuild_effect = null
+
+
+func _prepare_collapse_effect() -> void:
+	var fracture := collapse_style == "fracture"
+	if is_instance_valid(_collapse_effect):
+		if (_collapse_effect is RealmCollapseEffect) == fracture:
+			return
+		_collapse_effect.free()
+	_collapse_effect = RealmCollapseEffect.new() if fracture else RealmWireframeCollapse.new()
+	add_child(_collapse_effect)
+	_collapse_effect.configure(game.player, game.world_seed)
+
+
+## Move the same level and rooms between worlds under the opaque fade. Keeping
+## rooms off-tree during the root move lets physics and rendering register them
+## in batches, while the manager retains its layout and runtime state.
+func _move_room_tree(level: Node3D, manager: ChunkManager, destination: Node) -> bool:
+	var was_streaming := manager.is_processing()
+	manager.set_process(false)
+	_rooms_in_transit = Node.new()
+	if not await _move_rooms(manager, _rooms_in_transit):
+		return false
+	if destination == null:
+		level.get_parent().remove_child(level)
+	elif level.get_parent() == null:
+		destination.add_child(level)
+	else:
+		level.reparent(destination)
+	if not await _move_rooms(_rooms_in_transit, manager):
+		return false
+	_rooms_in_transit.free()
+	_rooms_in_transit = null
+	manager.set_process(was_streaming)
+	return true
+
+
+## A null destination disposes of a spent pocket. Limit live batches by count
+## as well as CPU time because queued renderer work finishes after this call.
+func _move_rooms(source: Node, destination: Node) -> bool:
+	var live := source.is_inside_tree() or (destination != null and destination.is_inside_tree())
+	var deadline := Time.get_ticks_usec() + TRANSFER_BUDGET_USEC
+	var batch := 0
+	for room in source.get_children():
+		if not is_instance_valid(room) or not room is Chunk or room.is_queued_for_deletion():
+			continue
+		if destination == null:
+			room.free()
+		else:
+			room.reparent(destination, false)
+		batch += 1
+		if live and (batch >= TRANSFER_ROOMS_PER_FRAME or Time.get_ticks_usec() >= deadline):
+			await _preview_frame
+			if _preview_cancelled:
+				return false
+			batch = 0
+			deadline = Time.get_ticks_usec() + TRANSFER_BUDGET_USEC
+	if live and batch > 0:
+		await _preview_frame
+	return not _preview_cancelled
 
 
 func _fade_to(alpha: float, seconds: float) -> void:
@@ -942,6 +1012,9 @@ func _exit_tree() -> void:
 		get_tree().physics_frame.disconnect(_preview_physics_frame.emit)
 	_preview_frame.emit()
 	_preview_physics_frame.emit()
+	if is_instance_valid(_rooms_in_transit):
+		_rooms_in_transit.free()
+		_rooms_in_transit = null
 	if is_instance_valid(_caught_sequence):
 		_caught_sequence.restore()
 	for path in _preview_requests:

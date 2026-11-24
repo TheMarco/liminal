@@ -13,7 +13,7 @@ func snapshot(second: int) -> void:
 		" timer=", game._figures._t, " grace=", game.run.arrival_grace,
 		" run_physics=", game.run.is_physics_processing(), " spawned=", spawned,
 		" director=", game._director.snapshot(), " tape_hold=", post._tape_hold,
-		" mode=", post._mode, " corruption=", post._signal_corruption,
+		" video_pipeline=", post._video_pipeline, " corruption=", post._signal_corruption,
 		" tracking=", post._found_footage_material.get_shader_parameter("tracking_error"),
 		" slip=", post._found_footage_material.get_shader_parameter("vertical_slip"))
 

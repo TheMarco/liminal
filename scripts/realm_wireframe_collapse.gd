@@ -106,6 +106,9 @@ func _sample_surface_cells() -> void:
 	var size := Vector2(cam.get_viewport().get_visible_rect().size)
 	var space := _player.get_world_3d().direct_space_state
 	var exclude: Array[RID] = [_player.get_rid()]
+	var origin := cam.global_position
+	var query := PhysicsRayQueryParameters3D.create(origin, origin, 1, exclude)
+	var cell_basis := Basis.IDENTITY.scaled(Vector3.ONE * CELL_SIZE)
 	var occupied := {}
 	for row in SAMPLE_ROWS:
 		for column in SAMPLE_COLUMNS:
@@ -113,13 +116,13 @@ func _sample_surface_cells() -> void:
 			var pixel := Vector2((column + 0.2 + r * 0.6) / SAMPLE_COLUMNS,
 				(row + 0.2 + fmod(r * 17.0, 0.6)) / SAMPLE_ROWS) * size
 			var ray := cam.project_ray_normal(pixel)
-			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(
-				cam.global_position, cam.global_position + ray * 24.0, 1, exclude))
+			query.to = origin + ray * 24.0
+			var hit := space.intersect_ray(query)
 			if hit.is_empty():
 				continue
 			var point: Vector3 = hit["position"]
 			var normal: Vector3 = hit["normal"]
-			if point.distance_to(cam.global_position) < 0.9:
+			if point.distance_squared_to(origin) < 0.9 * 0.9:
 				continue
 			var cell := Vector3i(((point - normal * 0.012) / CELL_SIZE).floor())
 			if occupied.has(cell):
@@ -129,7 +132,7 @@ func _sample_surface_cells() -> void:
 			# Bring the outside face just clear of the source surface's depth.
 			centre += normal * CELL_SIZE * 0.55
 			_voxels.multimesh.set_instance_transform(voxel_count,
-				Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * CELL_SIZE), centre))
+				Transform3D(cell_basis, centre))
 			_voxels.multimesh.set_instance_custom_data(voxel_count,
 				Color(r, fmod(r * 11.0, 1.0), fmod(r * 23.0, 1.0), 1))
 			voxel_count += 1
@@ -140,9 +143,22 @@ func set_hold(on: bool) -> void:
 	_erase.stream_paused = on
 
 
-func finish() -> void:
+func reset_for_reassembly() -> void:
+	_hide_effect()
+	set_hold(false)
+	rebuilding = true
+	sampled = false
+	voxel_count = 0
+	_erase_played = false
+
+
+func _hide_effect() -> void:
 	_screen.visible = false
 	_voxels.multimesh.visible_instance_count = 0
 	_hum.stop()
 	_erase.stop()
+
+
+func finish() -> void:
+	_hide_effect()
 	queue_free()

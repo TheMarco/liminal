@@ -32,7 +32,8 @@ func _exit_tree() -> void:
 		_retained.free()
 		_retained = null
 
-func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := false, wander_only := false) -> void:
+func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := false,
+		wander_only := false, realm_theme := -1) -> void:
 	var started := Time.get_ticks_usec()
 	if DisplayServer.get_name() == "headless":
 		finished = true
@@ -82,11 +83,12 @@ func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := fal
 	camera.position = Vector3(0, 2.5, 12)
 	camera.current = true
 	_prepare_torch(source_camera, camera)
+	var warm_water := theme in [2, 9] or realm_theme in [2, 9]
 	if wander_only:
 		# Wander suspends hostile figures, hallway apparitions and Descent rules.
 		# Its torch, living walls and native doorways still need their first draw.
 		_warm_surfaces(rooms)
-		_warm_gameplay_effects(rooms, theme, true)
+		_warm_gameplay_effects(rooms, theme, warm_water, true)
 		_torch.visible = true
 		await _draw_state("wander")
 		_finish(theme, started)
@@ -116,7 +118,7 @@ func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := fal
 	CornerApparitions.prepare_render_samples(corner_samples)
 	_warm_surfaces(rooms)
 	_warm_blackout_surfaces(rooms, live_power_pass)
-	_warm_gameplay_effects(rooms, theme)
+	_warm_gameplay_effects(rooms, theme, warm_water)
 	var effect := Aftershock.new()
 	_view.add_child(effect)
 	effect.set_process(false)
@@ -360,7 +362,7 @@ func _warm_surfaces(rooms: Node3D) -> void:
 		if material_count >= 24: break
 
 
-func _warm_gameplay_effects(rooms: Node3D, theme: int, wander_only := false) -> void:
+func _warm_gameplay_effects(rooms: Node3D, theme: int, warm_water: bool, wander_only := false) -> void:
 	var host := Node3D.new()
 	host.name = "GameplayEffectWarmup"
 	_view.add_child(host)
@@ -390,33 +392,13 @@ func _warm_gameplay_effects(rooms: Node3D, theme: int, wander_only := false) -> 
 	var vhs_mat := ShaderMaterial.new()
 	vhs_mat.shader = preload("res://shaders/vhs_tape.gdshader")
 	_add_effect_quad(host, quad, vhs_mat, Vector3(2.4, 2.4, 2.5))
-	if theme in [2, 9]:
-		var drop_mesh := SphereMesh.new()
-		drop_mesh.radius = 0.05
-		drop_mesh.height = 0.1
-		drop_mesh.radial_segments = 6
-		drop_mesh.rings = 3
-		var drop_mm := MultiMesh.new()
-		drop_mm.transform_format = MultiMesh.TRANSFORM_3D
-		drop_mm.use_custom_data = true
-		drop_mm.instance_count = 1
-		drop_mm.mesh = drop_mesh
-		drop_mm.set_instance_transform(0, Transform3D.IDENTITY)
-		drop_mm.set_instance_custom_data(0, Color(0.5, 0.5, 0.5, 0.0))
-		var drop_inst := MultiMeshInstance3D.new()
-		drop_inst.multimesh = drop_mm
-		drop_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		drop_inst.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-		var drop_mat := ShaderMaterial.new()
-		drop_mat.shader = preload("res://shaders/pool_splash_drop.gdshader")
-		drop_mat.render_priority = 1
-		drop_inst.material_override = drop_mat
-		drop_inst.position = Vector3(3.2, 2.4, 2.5)
-		host.add_child(drop_inst)
-		var sheet_mat := ShaderMaterial.new()
-		sheet_mat.shader = preload("res://shaders/pool_splash_sheet.gdshader")
-		sheet_mat.render_priority = 1
-		_add_effect_quad(host, quad, sheet_mat, Vector3(4.0, 2.4, 2.5))
+	if warm_water:
+		# Submit the same drop instances and sheet geometry the player creates
+		# on the first wet physics tick, including a visit from a dry floor.
+		var splash := Player.WaterInteraction.new()
+		host.add_child(splash)
+		splash._splash(Vector3(3.2, 2.4, 2.5), 0.7, Vector2.ZERO)
+		splash.advance(0.12)
 
 
 func _warm_photo_and_realm_effects(host: Node3D, quad: QuadMesh) -> void:

@@ -49,10 +49,17 @@ func run_test() -> void:
 	visit._previous_side = -0.1
 	game.player.teleport(visit.source_centre + visit.source_forward * 0.2 + Vector3.UP * 0.15)
 	visit._process(0.0)
+	if "--realm-test-close-entry" in OS.get_cmdline_user_args():
+		await _close_during_room_transfer(visit, false)
+		return
 	deadline = Time.get_ticks_msec() + 10000
 	while visit.phase == RealmExcursion.Phase.ENTERING and Time.get_ticks_msec() < deadline:
 		await process_frame
 	check(visit.phase == RealmExcursion.Phase.VISITING, "entered")
+	if "--realm-test-close-return" in OS.get_cmdline_user_args():
+		visit.collapse()
+		await _close_during_room_transfer(visit, true)
+		return
 	check(game.run == source_run and game.cm == source_cm and game.descent_route == source_route, "source identity retained")
 	check(not source_root.is_inside_tree(), "source collision detached")
 	check(game.run.suspended and not game.run.is_physics_processing(), "normal blackout clock frozen")
@@ -132,5 +139,30 @@ func run_test() -> void:
 	check(not game._progress_enabled, "prototype never writes normal checkpoint")
 	print("REALM AUDIT PASS: caught=%s duration=%.2f spawns=%d" % [caught, visit.elapsed, visit.total_spawned])
 	game.free()
+	await preload("res://tools/lib/audit_cleanup.gd").release(self)
+	quit()
+
+
+## Closing the window can interrupt a batch while its rooms have no scene tree.
+func _close_during_room_transfer(visit: RealmExcursion, returning: bool) -> void:
+	var owners: Array[WeakRef] = [weakref(game.level_root), weakref(visit.pocket)]
+	for manager: ChunkManager in [game.cm, visit.pocket]:
+		for room: Chunk in manager.chunks.values():
+			owners.append(weakref(room))
+	var deadline := Time.get_ticks_msec() + 10000
+	var observed := false
+	while Time.get_ticks_msec() < deadline:
+		if is_instance_valid(visit._rooms_in_transit) and visit._rooms_in_transit.get_child_count() > 0:
+			if not returning or game.level_root.is_inside_tree():
+				observed = true
+				break
+		await process_frame
+	check(observed, "observed a partially transferred room set")
+	owners.append(weakref(visit._rooms_in_transit))
+	game.free()
+	await process_frame
+	for owner in owners:
+		check(owner.get_ref() == null, "closing the scene left a room or world alive")
+	print("REALM TRANSFER SHUTDOWN PASS: ", "return" if returning else "entry")
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	quit()

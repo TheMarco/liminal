@@ -943,7 +943,10 @@ func _prepare_encounter_rendering(level: int, live_power_pass := false, wander_o
 		_encounter_warmup.free()
 	_encounter_warmup = preload("res://scripts/encounter_render_warmup.gd").new()
 	add_child(_encounter_warmup)
-	_encounter_warmup.prepare(get_viewport(), level, level_root, live_power_pass, wander_only)
+	var realm_theme := -1
+	if descent and run != null and not run.is_last_floor() and not _realm_visit_used(run.floor_idx):
+		realm_theme = run.order()[run.floor_idx + 1]
+	_encounter_warmup.prepare(get_viewport(), level, level_root, live_power_pass, wander_only, realm_theme)
 
 
 func _populate_floor(level: int, around: Vector3) -> void:
