@@ -2479,15 +2479,23 @@ func _mutation_mode_ready() -> bool:
 
 
 func _persist_committed_mutation(topology: DescentTopology) -> void:
-	if not _progress_enabled or _descent_progress.run_seed != world_seed:
+	if not _progress_enabled or _descent_progress == null \
+			or _descent_progress.run_seed != world_seed or run == null:
 		return
+	var started := Time.get_ticks_usec()
+	var history := topology.state_history()
+	var state := topology.current_state_id()
+	var signature := topology.state_signature(state)
 	var visited_signatures: Array[String] = []
-	for state_id in topology.state_history():
-		visited_signatures.append(topology.state_signature(state_id))
-	_descent_progress.record_mutation_state(run.floor_idx,
-		topology.current_state_id(), topology.state_history(),
-		topology.state_signature(), visited_signatures)
-	_persist_current_runtime_state()
+	for state_id in history:
+		visited_signatures.append(signature if state_id == state else topology.state_signature(state_id))
+	var runtime_state := cm.runtime_state_snapshot() if cm != null else null
+	var captured := Time.get_ticks_usec()
+	var error := _descent_progress.record_mutation_state(run.floor_idx, state,
+		history, signature, visited_signatures, runtime_state)
+	RuntimeDiagnostics.mark("mutation_checkpoint", {"floor_idx": run.floor_idx,
+		"snapshot_ms": (captured - started) / 1000.0,
+		"save_ms": (Time.get_ticks_usec() - captured) / 1000.0, "error": error})
 
 
 func _persist_current_runtime_state() -> Error:

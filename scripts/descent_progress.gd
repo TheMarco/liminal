@@ -164,9 +164,9 @@ func record_beginning_tapes_completed(count: int) -> void:
 
 func record_mutation_state(floor_idx: int, state_id: int,
 		visited_states: Array[int], state_signature: String,
-		visited_signatures: Array[String]) -> void:
+		visited_signatures: Array[String], runtime_state: ChunkRuntimeState = null) -> Error:
 	if not has_checkpoint():
-		return
+		return ERR_UNCONFIGURED
 	var floor := clampi(floor_idx, 0, DescentRun.FLOOR_COUNT - 1)
 	var visited: Array[int] = []
 	for value in visited_states:
@@ -181,7 +181,10 @@ func record_mutation_state(floor_idx: int, state_id: int,
 		"signature": state_signature,
 		"visited_signatures": visited_signatures.duplicate(),
 	}
-	save_to_disk()
+	# A committed room layout and its door positions belong to the same save.
+	if runtime_state != null:
+		runtime_states[str(floor)] = runtime_state.to_dictionary()
+	return save_to_disk()
 
 
 func mutation_state_for_floor(floor_idx: int) -> Dictionary:

@@ -18,6 +18,7 @@ func _expect(condition: bool, message: String) -> void:
 
 
 func _run() -> void:
+	_check_blackout_checkpoint()
 	var progress := DescentProgress.new(TEST_PATH)
 	progress.clear_from_disk()
 	_expect(not progress.has_checkpoint(), "cleared progress still has a checkpoint")
@@ -173,3 +174,30 @@ func _run() -> void:
 		quit()
 	else:
 		quit(1)
+
+
+func _check_blackout_checkpoint() -> void:
+	var path := TEST_PATH + ".blackout"
+	var progress := DescentProgress.new(path)
+	progress.start_new(42)
+	var writes := [0]
+	progress.saved.connect(func(): writes[0] += 1)
+	var runtime := ChunkRuntimeState.new()
+	var key := ChunkRuntimeState.object_key(Vector2i(-3, 8), "swing_door", "test")
+	runtime.put(key, "swing_door", {"open": false, "angle": 0.0})
+	var first := progress.record_mutation_state(0, 1, [0, 1], "first", ["first"], runtime)
+	runtime.put(key, "swing_door", {"open": true, "angle": 1.0})
+	var second := progress.record_mutation_state(0, 2, [0, 1, 2], "second", ["first", "second"], runtime)
+	_expect(first == OK and second == OK and writes[0] == 2, "a blackout must write its checkpoint once")
+	var live := DescentProgress.new(path)
+	_expect(live.mutation_state_for_floor(0).get("signature") == "second"
+		and live.runtime_state_for_floor(0).payload_for(key).get("angle") == 1.0,
+		"blackout reload mixed the current layout and door state")
+	var damaged := FileAccess.open(path, FileAccess.WRITE)
+	damaged.store_string("[descent]\nversion=0\n")
+	damaged.close()
+	var recovered := DescentProgress.new(path)
+	_expect(recovered.recovered_from_backup and recovered.mutation_state_for_floor(0).get("signature") == "first"
+		and recovered.runtime_state_for_floor(0).payload_for(key).get("angle") == 0.0,
+		"blackout backup mixed two different layouts and door states")
+	progress.clear_from_disk()
