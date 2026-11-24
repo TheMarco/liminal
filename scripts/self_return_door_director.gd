@@ -5,6 +5,7 @@ extends Node
 
 const Site := preload("res://scripts/self_return_door_site.gd")
 const Landmark := preload("res://scripts/self_return_landmark.gd")
+const Placement := preload("res://scripts/environment_breath_placement.gd")
 const LATCH := preload("res://sounds/return-latch.mp3")
 const TWO_KNOCKS := preload("res://sounds/return-two-knocks.mp3")
 const ONE_KNOCK := preload("res://sounds/return-one-knock.mp3")
@@ -135,8 +136,8 @@ func _try_stage() -> bool:
 			return false
 	var chunk := manager.chunk_at(at)
 	if chunk == null or _is_corridor(chunk.style): return false
-	for choice in preload("res://scripts/environment_breath_placement.gd").candidates(
-			chunk, "breath"):
+	var choices := Placement.candidates(chunk)
+	for choice in choices:
 		var face: SurfaceWear.Face = choice["face"]
 		if absf(face.normal.y) > 0.1 or absf(face.v.dot(Vector3.UP)) < 0.98:
 			continue
@@ -158,7 +159,7 @@ func _try_stage() -> bool:
 		if not ArrivalSafety.is_clear(player.get_world_3d(), entry, [player.get_rid()]) \
 				or not ArrivalSafety.has_floor(player.get_world_3d(), entry, [player.get_rid()]):
 			continue
-		var opposite := _opposite_wall_return(chunk, point, normal, at)
+		var opposite := _opposite_wall_return(chunk, point, normal, at, choices)
 		if opposite.is_empty(): continue
 		if not preview and pacing != null and not pacing.try_start_visual(
 				DISCOVERY_LEASE, HorrorDirector.ARCHITECTURE_RECOVERY):
@@ -249,7 +250,7 @@ func _restore_site() -> void:
 		var old_basis: Basis = _record["basis"]
 		var source := chunk.to_global(_record["origin"])
 		var normal: Vector3 = (chunk.global_basis * old_basis.z).normalized()
-		var paired := _opposite_wall_return(chunk, source, normal, at)
+		var paired := _opposite_wall_return(chunk, source, normal, at, Placement.candidates(chunk))
 		if paired.is_empty():
 			_record = {}
 		else:
@@ -320,12 +321,11 @@ func _safe_landing(desired: Vector3, at: Vector2i,
 
 
 func _opposite_wall_return(chunk: Chunk, source: Vector3,
-		source_normal: Vector3, at: Vector2i) -> Dictionary:
+		source_normal: Vector3, at: Vector2i, choices: Array[Dictionary]) -> Dictionary:
 	# Enter at the far wall with the same heading used on approach. A 180-degree
 	# turn in the source room reads as a mirror; this translation keeps the
 	# chair, lights, and left/right layout in their original orientation.
-	for choice in preload("res://scripts/environment_breath_placement.gd").candidates(
-			chunk, "breath"):
+	for choice in choices:
 		var face: SurfaceWear.Face = choice["face"]
 		var normal: Vector3 = (chunk.global_basis * face.normal).normalized()
 		if normal.dot(-source_normal) < 0.98: continue

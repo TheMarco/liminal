@@ -90,6 +90,17 @@ func _audit_profile() -> void:
 	expect(Profile.sample(target, Vector2(-9, 0.5)) == Vector3.ZERO, "sample leaks outside support")
 	var center_height: float = Profile.sample(target, Vector2.ZERO).x
 	expect(center_height > 0.2, "sample center height differs")
+	var grid := PackedVector3Array()
+	for y in [-0.8, 0.0, 0.45]:
+		for x in [-1.2, -0.4, 0.15, 0.8, 1.6]:
+			grid.append(Vector3(x, y, 0))
+	var offset_target := Profile.targets("travel", Vector2(3, 2), 0.35)[1]
+	for angle in [0.0, 0.37]:
+		offset_target.angle = angle
+		var heights := Profile.grid_heights(offset_target, grid, 5)
+		for i in grid.size():
+			expect(heights[i] == Profile.sample(offset_target, Vector2(grid[i].x, grid[i].y)).x,
+				"collision grid differs from the visible surface at %s, angle %s" % [grid[i], angle])
 	for ix in range(-40, 41):
 		for iy in [-10, -5, 0, 5, 10]:
 			var s := Profile.sample(target, Vector2(ix * 0.1, iy * 0.1))
@@ -153,8 +164,16 @@ func _audit_renderer_kind(kind: String) -> void:
 	var band_cull := band.extra_cull_margin
 	var phase := 0.5
 	var weights := Profile.weights(kind, phase)
+	var trim := MeshInstance3D.new()
+	trim.mesh = rig.band_mesh
+	trim.material_override = rig.finish
+	trim.position = Vector3(0, 2.9, 0.13)
+	room.add_child(trim)
+	selection.companions.append({"mesh": trim, "transform": trim.transform})
 	expect(effect.setup(selection, kind), "%s setup refused selection" % kind)
 	effect.pose(weights)
+	expect(trim.mesh == rig.band_mesh and trim.material_override == rig.finish,
+		"%s replaced trim outside the moving patch" % kind)
 	if not is_instance_valid(effect) or wall.mesh == rig.wall_mesh:
 		failures.append("%s setup did not build GPU meshes" % kind)
 		room.queue_free()

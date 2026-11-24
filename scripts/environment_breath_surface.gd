@@ -43,7 +43,22 @@ func begin_setup(selection: Dictionary, kind: String) -> void:
 	targets = Profile.targets(kind, _patch_size, float(selection.depth))
 	weights.resize(targets.size())
 	_pending = [{"mesh": face.mesh, "transform": face.transform}]
-	_pending.append_array(selection.companions)
+	if selection.companions.is_empty(): return
+	# A cornice or skirting wholly outside every bow keeps its original mesh.
+	# Work in the wall's frame so this also holds for rotated decorations.
+	var support: Rect2
+	for target in targets:
+		var size: Vector2 = target.size
+		var bounds := Transform2D(target.angle, target.center) * Rect2(-size * 0.5, size)
+		support = support.merge(bounds) if support.has_area() else bounds
+	var to_frame := frame.affine_inverse()
+	for item: Dictionary in selection.companions:
+		var node: MeshInstance3D = item.mesh
+		if is_instance_valid(node) and (node.mesh is BoxMesh or node.mesh is QuadMesh):
+			var bounds: AABB = to_frame * item.transform * node.mesh.get_aabb()
+			var projected := Rect2(bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y)
+			if not support.intersects(projected, true): continue
+		_pending.append(item)
 
 ## Live play prepares one bounded work unit per frame, before touching the wall.
 func prepare_step() -> void:
@@ -251,14 +266,8 @@ func _append_target() -> void:
 	var normal_out: Basis = _building.normal_out
 	if not _building.has("target"):
 		mesh.add_blend_shape("pressure_%d" % _building.shapes.size())
-		var positions := PackedVector3Array()
-		positions.resize(vertices.size())
-		var directions := PackedVector3Array()
-		directions.resize(vertices.size())
-		var tangent_delta := PackedFloat32Array()
-		tangent_delta.resize(tangents.size())
-		_building["target"] = {"index": _building.shapes.size(), "positions": positions,
-			"directions": directions, "delta": tangent_delta, "cursor": 0}
+		_building["target"] = {"index": _building.shapes.size(), "positions": vertices.duplicate(),
+			"directions": normals.duplicate(), "delta": tangents.duplicate(), "cursor": 0}
 	var state: Dictionary = _building.target
 	var target_index: int = state.index
 	var target := targets[target_index]
@@ -273,6 +282,9 @@ func _append_target() -> void:
 		while cursor < check:
 			var p := from_mesh * vertices[cursor]
 			var sample := Profile.sample(target, Vector2(p.x, p.y))
+			if sample == Vector3.ZERO:
+				cursor += 1
+				continue
 			positions[cursor] = vertices[cursor] + to_mesh.basis * Vector3(0, 0, sample.x)
 			var n := normal_in * normals[cursor]
 			directions[cursor] = (normals[cursor] + normal_out * Vector3(-sample.y * n.z, -sample.z * n.z, 0)).normalized()
@@ -346,9 +358,7 @@ func _prepare_collision(size: Vector2) -> void:
 		for x in range(GRID.x + 1):
 			_flat_grid.append(Vector3((float(x)/GRID.x-0.5)*size.x, (float(y)/GRID.y-0.5)*size.y, 0))
 	for target in targets:
-		var heights := PackedFloat32Array()
-		for p in _flat_grid: heights.append(Profile.sample(target, Vector2(p.x,p.y)).x)
-		_grid_heights.append(heights)
+		_grid_heights.append(Profile.grid_heights(target, _flat_grid, GRID.x + 1))
 	for y in GRID.y:
 		for x in GRID.x:
 			var a := y*(GRID.x+1)+x

@@ -1,6 +1,18 @@
 extends RefCounted
 ## Conservative, read-only discovery of usable wall surfaces.
 
+const BAND_FINISHES := {
+	0: ["darkwood", "crown"], 4: ["steel"], 5: ["asy_tile"],
+	6: ["sch_red", "charcoal"],
+	7: ["brass", "mall_trim", "mall_ceramic", "mall_rose_stone", "mall_wall", "mall_brass"],
+	8: ["prison_dado", "prison_iron"],
+}
+
+class WallClearance:
+	var to_face: Transform3D
+	var obstacles: Array[AABB] = []
+	var bands: Array[Dictionary] = []
+
 static func candidates(chunk: Chunk, kind := "breath", compact := false, camera: Camera3D = null) -> Array[Dictionary]:
 	var scanner := SurfaceWear.new()
 	scanner.host = chunk
@@ -11,11 +23,21 @@ static func candidates(chunk: Chunk, kind := "breath", compact := false, camera:
 		if node.mesh != null and node.visible:
 			blockers.append({"mesh": node, "transform": relative(node, chunk), "bounds": node.mesh.get_aabb()})
 	if kind == "ceiling": return ceiling_candidates(scanner, blockers, chunk, camera)
+	var per_face: Dictionary[SurfaceWear.Face, WallClearance] = {}
+	var result := _wall_candidates(scanner.walls, blockers, chunk, kind, compact, camera, per_face)
+	if result.is_empty() and not compact:
+		result = _wall_candidates(scanner.walls, blockers, chunk, kind, true, camera, per_face)
+	return result
+
+
+static func _wall_candidates(walls: Array[SurfaceWear.Face], blockers: Array[Dictionary],
+		chunk: Chunk, kind: String, compact: bool, camera: Camera3D,
+		per_face: Dictionary[SurfaceWear.Face, WallClearance]) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	for face: SurfaceWear.Face in scanner.walls:
+	for face in walls:
 		if not (face.mesh.mesh is BoxMesh or face.mesh.mesh is QuadMesh): continue
 		if face.size.x < 2.3 or face.size.y < 1.7: continue
-		var bands := wall_bands(face, blockers, chunk)
+		var clearance: WallClearance = per_face.get(face)
 		var base_size := Vector2(minf(3.8, face.size.x - 0.3), minf(2.4, face.size.y - 0.3))
 		if compact: base_size *= 0.65
 		for lateral in [0.0, -0.22, 0.22]:
@@ -26,20 +48,22 @@ static func candidates(chunk: Chunk, kind := "breath", compact := false, camera:
 				# Visibility depends on the surface and center, not the fitted size.
 				# Skip unseen walls before checking every size against room meshes.
 				if camera != null and not visible({"face": face, "center": center}, chunk, camera): continue
-				var fitted := fit_wall(face, center, blockers, bands, kind, compact)
+				if clearance == null:
+					clearance = _wall_clearance(face, blockers, chunk)
+					per_face[face] = clearance
+				var fitted := fit_wall(face, center, clearance, kind, compact)
 				if fitted.is_empty(): continue
 				var candidate := {"face": face, "center": center, "size": fitted.size,
-					"depth": fitted.depth, "companions": bands}
+					"depth": fitted.depth, "companions": clearance.bands}
 				# Filter before the bounded result fills. Outer shell walls and the
 				# backs of corridor walls otherwise consume every candidate slot.
 				result.append(candidate)
 				if result.size() >= 12: return result
-	return candidates(chunk, kind, true, camera) if result.is_empty() and not compact else result
+	return result
 
 
-static func fit_wall(face: SurfaceWear.Face, center: Vector3,
-		blockers: Array[Dictionary], bands: Array[Dictionary], kind: String,
-		compact: bool) -> Dictionary:
+static func fit_wall(face: SurfaceWear.Face, center: Vector3, clearance: WallClearance,
+		kind: String, compact: bool) -> Dictionary:
 	var offset := center - face.center
 	var limit := Vector2(face.size.x - 2.0 * absf(offset.dot(face.u)) - 0.3,
 		face.size.y - 2.0 * absf(offset.dot(face.v)) - 0.3)
@@ -47,8 +71,7 @@ static func fit_wall(face: SurfaceWear.Face, center: Vector3,
 		[Vector2(6.0, 3.6), Vector2(5.0, 3.0), Vector2(3.8, 2.4)]
 		if kind == "breath" else [Vector2(3.8, 2.4)])
 	var depths := [0.35] if compact or kind != "breath" else [0.65, 0.50, 0.35]
-	var frame := Transform3D(Basis(face.u, face.v, face.normal), center)
-	var inverse := frame.affine_inverse()
+	var local_center := clearance.to_face * center
 	# Fill the wall first; if the deepest bow is blocked, keep the panel broad
 	# and try a shallower breath before reducing its footprint.
 	for desired: Vector2 in sizes:
@@ -56,12 +79,10 @@ static func fit_wall(face: SurfaceWear.Face, center: Vector3,
 		if size.x < 1.5 or size.y < 1.2: continue
 		for depth: float in depths:
 			# The moving surface retains 1.6 m of space beyond the deepest bow.
-			var envelope := AABB(Vector3(-size.x/2, -size.y/2, -0.015),
+			var envelope := AABB(local_center + Vector3(-size.x/2, -size.y/2, -0.015),
 				Vector3(size.x, size.y, depth + 1.615))
 			var clear := true
-			for blocker in blockers:
-				if blocker.mesh == face.mesh or bands.has(blocker): continue
-				var bounds: AABB = inverse * blocker.transform * blocker.bounds
+			for bounds in clearance.obstacles:
 				if envelope.intersects(bounds):
 					clear = false
 					break
@@ -122,40 +143,37 @@ static func visible(selection: Dictionary, chunk: Chunk, camera: Camera3D) -> bo
 	if camera.get_parent() is CollisionObject3D: ray.exclude = [camera.get_parent().get_rid()]
 	return camera.get_world_3d().direct_space_state.intersect_ray(ray).is_empty()
 
-static func wall_bands(face: SurfaceWear.Face, blockers: Array[Dictionary], chunk: Chunk) -> Array[Dictionary]:
+static func _wall_clearance(face: SurfaceWear.Face, blockers: Array[Dictionary], chunk: Chunk) -> WallClearance:
+	# All candidate patches on a face share its axes. Project each mesh once
+	# for this search and move the clearance envelope for each trial position.
+	var clearance := WallClearance.new()
+	clearance.to_face = Transform3D(Basis(face.u, face.v, face.normal), face.center).affine_inverse()
+	var finishes: Array = BAND_FINISHES.get(chunk.theme, [])
+	for item in blockers:
+		var mesh: MeshInstance3D = item.mesh
+		if mesh == face.mesh: continue
+		var bounds: AABB = clearance.to_face * item.transform * item.bounds
+		if _is_wall_band(mesh, bounds, face.size, chunk, finishes):
+			clearance.bands.append(item)
+		else:
+			clearance.obstacles.append(bounds)
+	return clearance
+
+
+static func _is_wall_band(mesh: MeshInstance3D, bounds: AABB, face_size: Vector2,
+		chunk: Chunk, finishes: Array) -> bool:
 	# Only generated wall strips: same backing plane and span, shallow depth,
 	# direct room child, and a known architectural finish. Furniture stays solid.
-	var finishes: Array = {
-		0: ["darkwood", "crown"], 4: ["steel"], 5: ["asy_tile"],
-		6: ["sch_red", "charcoal"],
-		7: ["brass", "mall_trim", "mall_ceramic", "mall_rose_stone",
-			"mall_wall", "mall_brass"],
-		8: ["prison_dado", "prison_iron"],
-	}.get(chunk.theme, [])
-	var bands: Array[Dictionary] = []
-	var wall_frame := Transform3D(Basis(face.u, face.v, face.normal), face.center)
-	for item: Dictionary in blockers:
-		var mesh: MeshInstance3D = item.mesh
-		if mesh == face.mesh or mesh.get_parent() != chunk or not mesh.mesh is BoxMesh:
-			continue
-		if mesh.material_override == null or not mesh.material_override.resource_name in finishes:
-			continue
-		var bounds: AABB = wall_frame.affine_inverse() * item.transform * item.bounds
-		# The Mall cornice and its brass lip project farther than a dado,
-		# but share the backing wall and must travel with that full panel.
-		var mall_cornice := chunk.theme == 7 and mesh.material_override.resource_name in ["mall_wall", "mall_brass"]
-		var max_front := 0.25 if mall_cornice else 0.13
-		var max_back := 0.22 if mall_cornice else 0.04
-		if bounds.position.z < -0.015 or bounds.position.z > max_back or bounds.end.z > max_front:
-			continue
-		if bounds.size.x < face.size.x * 0.95 or bounds.size.y >= bounds.size.x:
-			continue
-		if absf(bounds.position.x + face.size.x * 0.5) > 0.08 or absf(bounds.end.x - face.size.x * 0.5) > 0.08:
-			continue
-		if bounds.end.y < -face.size.y * 0.5 or bounds.position.y > face.size.y * 0.5:
-			continue
-		bands.append(item)
-	return bands
+	if mesh.get_parent() != chunk or not mesh.mesh is BoxMesh: return false
+	if mesh.material_override == null or mesh.material_override.resource_name not in finishes: return false
+	# The Mall cornice and its brass lip project farther than a dado.
+	var mall_cornice := chunk.theme == 7 and mesh.material_override.resource_name in ["mall_wall", "mall_brass"]
+	var max_front := 0.25 if mall_cornice else 0.13
+	var max_back := 0.22 if mall_cornice else 0.04
+	if bounds.position.z < -0.015 or bounds.position.z > max_back or bounds.end.z > max_front: return false
+	if bounds.size.x < face_size.x * 0.95 or bounds.size.y >= bounds.size.x: return false
+	if absf(bounds.position.x + face_size.x * 0.5) > 0.08 or absf(bounds.end.x - face_size.x * 0.5) > 0.08: return false
+	return bounds.end.y >= -face_size.y * 0.5 and bounds.position.y <= face_size.y * 0.5
 
 
 static func relative(node: Node3D, ancestor: Node3D) -> Transform3D:

@@ -24,6 +24,35 @@ static func sample(target: Dictionary, point: Vector2) -> Vector3:
 		d * PI * sin(TAU * v) * sx * sx / size.y).rotated(float(target.angle))
 	return Vector3(d * sx * sx * sy * sy, g.x, g.y)
 
+## Physics needs only height on a row-major rectangular grid. The authored
+## bows are axis-aligned, so each row and column needs its sine only once.
+static func grid_heights(target: Dictionary, points: PackedVector3Array, columns: int) -> PackedFloat32Array:
+	var heights := PackedFloat32Array()
+	heights.resize(points.size())
+	if target.angle != 0.0:
+		for i in points.size():
+			heights[i] = sample(target, Vector2(points[i].x, points[i].y)).x
+		return heights
+	var center: Vector2 = target.center
+	var size: Vector2 = target.size
+	var depth: float = target.depth
+	var by_column := PackedFloat64Array()
+	by_column.resize(columns)
+	for x in columns:
+		var offset := Vector2(points[x].x, points[x].y) - center
+		var sx := _grid_sine(offset.x, size.x)
+		by_column[x] = depth * sx * sx
+	for row in range(0, points.size(), columns):
+		var offset := Vector2(points[row].x, points[row].y) - center
+		var sy := _grid_sine(offset.y, size.y)
+		for x in columns:
+			heights[row + x] = by_column[x] * sy * sy
+	return heights
+
+static func _grid_sine(offset: float, span: float) -> float:
+	var u := offset / span + 0.5
+	return sin(PI * u) if u > 0.0 and u < 1.0 else 0.0
+
 static func weights(kind: String, phase: float) -> PackedFloat32Array:
 	var p := clampf(phase, 0.0, 1.0)
 	var envelope := smoothstep(0.0, 0.24, p) * (1.0 - smoothstep(0.68, 1.0, p))
