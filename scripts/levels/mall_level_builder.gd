@@ -356,10 +356,13 @@ func _mall_lighting() -> void:
 func _mall_suspended_panel(at: Vector3, size: Vector2, material: StandardMaterial3D,
 		dead: bool, shadow_tier: int) -> Array[Light3D]:
 	var height_scale := maxf(1.0,(ctx.ceiling_height-0.6)/4.1)
+	# Keep the primary strip's rectangular reflection on the polished floor.
+	var switchable_downlight := shadow_tier > 1
 	return FIXTURE_LIGHTING.suspended_strip(scene,at,ctx.ceiling_height,
 		Vector3(size.x+0.1,0.08,size.y+0.1),Vector3(size.x,0.035,size.y),
 		Mats.mall_trim(),material,dead,Color(1.0,0.88,0.71),
-		0.85*height_scale*height_scale,0.65,maxf(9.0,ctx.ceiling_height+3.0),shadow_tier,"mall_troffer",5.0)
+		0.85*height_scale*height_scale,0.65,maxf(9.0,ctx.ceiling_height+3.0),
+		shadow_tier,"mall_troffer",5.0,switchable_downlight)
 
 
 func _mall_pendant(p: Vector3, lens: StandardMaterial3D) -> MeshInstance3D:

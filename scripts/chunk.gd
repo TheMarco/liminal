@@ -1674,9 +1674,8 @@ static func _unit_sphere() -> SphereMesh:
 	return mesh
 
 
-## Solid walls hide large parts of the Airport, Casino, Prison, Pools and Data Center.
-## Other floors need their own measurement because occlusion also costs CPU.
-static var occlusion_themes: Array[int] = [0, 4, 8, 9, 10]
+## Floors where culling behind solid walls reduces measured rendering work.
+static var occlusion_themes: Array[int] = [0, 4, 7, 8, 9, 10]
 
 
 ## Only explicitly authored opaque walls can occlude. Store references until
