@@ -1580,6 +1580,7 @@ var _build_jobs: Array[Callable] = []
 var _collect_build_jobs := false
 var _build_job_insert := 0
 var _slice_next_stage := 0
+var _slice_edges: Dictionary[Vector3i, Dictionary] = {}
 
 func queue_build_job(job: Callable) -> void:
 	if _collect_build_jobs:
@@ -1606,6 +1607,7 @@ func build_next_slice() -> bool:
 		if _build_jobs.is_empty():
 			_build_stage = _slice_next_stage
 	_collect_build_jobs = false
+	_slice_edges.clear()
 	return _build_stage == 8
 
 
@@ -3236,6 +3238,17 @@ func _build_wall_edge(dir: int) -> void:
 
 
 func _edge_info(at: Vector2i, dir: int) -> Dictionary:
+	# Fixtures in one synchronous build slice often test the same doorway.
+	# A blackout or photograph can change it before the next slice runs.
+	if not _collect_build_jobs:
+		return _resolve_edge_info(at, dir)
+	var key := Vector3i(at.x, at.y, dir)
+	if not _slice_edges.has(key):
+		_slice_edges[key] = _resolve_edge_info(at, dir)
+	return _slice_edges[key]
+
+
+func _resolve_edge_info(at: Vector2i, dir: int) -> Dictionary:
 	if native_doorway_plan != null:
 		var latent := native_doorway_plan.candidate(at, dir)
 		if not latent.is_empty(): return latent

@@ -12,6 +12,7 @@ func _run() -> void:
 			or ChunkManager.WARM_R != 1:
 		failures.append("streaming range or safe 3x3 warmup changed")
 	_audit_visible_rings(failures)
+	_audit_doorway_between_slices(failures)
 	var deferred := Chunk.new(99173, Vector2i(0, 0), 2, null, true)
 	var stages := 0
 	while not deferred.build_next_stage():
@@ -181,6 +182,22 @@ func _run() -> void:
 	Chunk.clear_runtime_caches()
 	Mats.clear_runtime_caches()
 	quit(0)
+
+
+func _audit_doorway_between_slices(failures: Array[String]) -> void:
+	var topology := DescentTopology.new(99173, 1)
+	var chunk := Chunk.new(99173, Vector2i.ZERO, 1, {"topology": topology}, true)
+	var observed: Array[bool] = []
+	var read_edge := func() -> void:
+		var edge := chunk._edge_info(chunk.cell, 0)
+		observed.append(bool(edge.get("native_latent", false)))
+	for open: bool in [false, true, false]:
+		topology.set_native_doorway_open(chunk.cell, 0, open, 6.0, 2.0)
+		chunk._build_jobs.append(read_edge)
+		chunk.build_next_slice()
+	if observed != [false, true, false]:
+		failures.append("later build slices used stale doorway geometry")
+	chunk.free()
 
 
 func _audit_visible_rings(failures: Array[String]) -> void:
