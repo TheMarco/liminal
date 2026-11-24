@@ -166,6 +166,16 @@ func _scan(ws: int, cell: Vector2i) -> void:
 		check(not wants_grand, "ordinary airport fixture %s exists in grand ceiling cell" % fixture.name)
 		var panels: Vector2i = fixture.get_meta("airport_ceiling_panels", Vector2i.ZERO)
 		check(panels.x > 0 and panels.y > 0, "%s has invalid panel metadata" % fixture.name)
+		var frames := 0
+		var grilles := 0
+		for mesh: MeshInstance3D in fixture.find_children("*", "MeshInstance3D", false, false):
+			if mesh.material_override == Mats.paint_white():
+				frames += 1
+			elif mesh.material_override == Mats.metal_gray():
+				grilles += 1
+				check(mesh.mesh.get_faces().size() >= 6 * 12 * 3, "vent grille lost its six slats")
+		check(frames == 1 and grilles == (1 if kind == "vent" else 0),
+			"fixture trim must use one mesh per material")
 		var b := _bounds(fixture, Vector3(cell.x * S, 0, cell.y * S))
 		var want := Vector2(panels) * PITCH
 		check(absf(b.size.x - want.x) < 0.012 and absf(b.size.z - want.y) < 0.012,

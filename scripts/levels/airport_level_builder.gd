@@ -51,15 +51,20 @@ func _air_ceiling_fixture(desired: Vector3, panels: Vector2i,
 	var lens := scene.model_box(fixture, Vector3(0, -0.028, 0),
 		Vector3(size.x - rim * 2.0, 0.025, size.y - rim * 2.0), material)
 	lens.name = "DiffuserLens"
-	for sign in [-1.0, 1.0]:
-		scene.model_box(fixture, Vector3(0, -0.052, sign * (size.y - rim) * 0.5),
-			Vector3(size.x, 0.045, rim), Mats.paint_white())
-		scene.model_box(fixture, Vector3(sign * (size.x - rim) * 0.5, -0.052, 0),
-			Vector3(rim, 0.045, size.y - rim * 2.0), Mats.paint_white())
-	if vent:
-		for i in 6:
-			scene.model_box(fixture, Vector3(0, -0.047, (float(i) - 2.5) * 0.074),
-				Vector3(size.x - 0.10, 0.016, 0.035), Mats.metal_gray())
+	var trim_key := "airport_ceiling_trim_%dx%d_%s" % [panels.x, panels.y, "vent" if vent else "light"]
+	ProceduralDetails.attach(fixture, trim_key, func(trim: ProceduralDetails) -> void:
+		# Match the shadow subdivisions of the original metre-long box sections.
+		trim.max_edge_length = 1.0
+		for sign in [-1.0, 1.0]:
+			trim.box(Vector3(0, -0.052, sign * (size.y - rim) * 0.5),
+				Vector3(size.x, 0.045, rim), Mats.paint_white())
+			trim.box(Vector3(sign * (size.x - rim) * 0.5, -0.052, 0),
+				Vector3(rim, 0.045, size.y - rim * 2.0), Mats.paint_white())
+		if vent:
+			for i in 6:
+				trim.box(Vector3(0, -0.047, (float(i) - 2.5) * 0.074),
+					Vector3(size.x - 0.10, 0.016, 0.035), Mats.metal_gray())
+	, true)
 	return fixture
 
 
