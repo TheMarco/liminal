@@ -2,7 +2,7 @@
 {
     "AppID" "4336360"
     "Preview" "1"
-    "Desc" "It Wants You To Stay 0.6.2 - Smoother exploration in Pools - Windows, Linux and macOS"
+    "Desc" "It Wants You To Stay 0.6.3 - Smoother exploration and blackout recovery - Windows, Linux and macOS"
     "ContentRoot" "../../build"
     "BuildOutput" "../../build/steam-upload-output"
     "Depots"

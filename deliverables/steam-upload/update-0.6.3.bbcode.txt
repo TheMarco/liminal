@@ -1,0 +1,12 @@
+[h1]Update 0.6.3 — Smoother exploration and blackout recovery[/h1]
+
+This update targets the pauses you reported while exploring, raising the camera and waiting for the lights to come back on.
+
+[list]
+[*]The Airport now prepares the gate and moving walkway during loading. On an M3 Max at 720p in Balanced mode with a fresh shader cache, the longest frame while preparing the gate fell from 384 ms to 19 ms. The first load can take a little longer.
+[*]The Prison cell block now does less shadow work when power returns in Performance and Balanced modes. In our 1080p Balanced replay on the same Mac, the first frame after the lights came back took 24 ms, down from 54 ms. Blackouts still go fully dark, and the flashlight still works.
+[*]Lighting takes less work in the Office, Mall, Hospital, School, Data Center and Bloom. In several areas the game can also skip drawing rooms hidden behind solid walls.
+[*]The camera prepares its reticle before you first raise it. Hallway shifts, first visits to School workstations, and transitions into and out of photographic realms also do more of their setup before you see them.
+[/list]
+
+The changes apply to Windows, Linux and Mac. If you still hit a slowdown, the floor, graphics preset and what happened just before the pause will help us match it to your performance log.

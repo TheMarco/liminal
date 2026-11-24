@@ -15,10 +15,11 @@ func _edge_info(at: Vector2i, dir: int) -> Dictionary:
 			"exit_sign": false, "runtime_shortcut": true}
 	return super(at, dir)
 
-func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: float) -> void:
+func _wall_seg(dir: int, plane: float, from: float, to: float, y0: float, y1: float,
+		fixed_airport_edge := false) -> void:
 	var n := get_child_count()
 	var c := body.get_child_count()
-	super(dir, plane, from, to, y0, y1)
+	super(dir, plane, from, to, y0, y1, fixed_airport_edge)
 	if dir == site_dir: _remember(n, c)
 
 func _door_casing(dir: int, plane: float, a: float, b: float) -> void:
