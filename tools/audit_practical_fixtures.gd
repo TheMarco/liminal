@@ -38,6 +38,10 @@ func run() -> void:
 			for node in chunk.find_children("*","Node3D",true,false):
 				if node.has_meta("practical_fixture"):
 					fixtures += 1
+					if node.has_meta("bloom_fluorescent_fixture"):
+						var housings := node.find_children("Fluorescent Lamp - Lowpoly *", "Node3D", true, false)
+						expect(housings.size() == 1 and housings[0].is_visible_in_tree(),
+							"Bloom fixture must contain one visible authored housing")
 					for lens in node.get_children():
 						if not lens is MeshInstance3D: continue
 						var mat = lens.get_active_material(0)

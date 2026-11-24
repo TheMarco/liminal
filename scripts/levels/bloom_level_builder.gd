@@ -39,6 +39,7 @@ const FLESH_FLOOR_OFFSET := Vector3(0.204127, 0.295808, -0.004298)
 
 static var _vine_cylinder: CylinderMesh
 static var _pine_roots_prototype: Node3D
+static var _fixture_models: Dictionary[int, Node3D] = {}
 static var _bloom_hoop_mesh: TorusMesh
 static var _particle_quad_meshes: Dictionary = {}
 
@@ -346,8 +347,28 @@ func _passage_side(along_x: bool, side: float, _dir: int,
 			else Vector3(depth, 0.20, width), "return_ceiling")
 
 
+func _fixture_model(pivot: Node3D, variant: int) -> Node3D:
+	var model: Node3D = _fixture_models.get(variant)
+	if model == null:
+		var centre: Vector3 = FIXTURE_CENTRES[variant]
+		model = scene.attributed_prop_local(pivot, Chunk.BRUTAL_LIGHT_PATH,
+			Vector3(-centre.x, 0.0, -centre.z) * FIXTURE_SCALE,
+			0.0, Vector3.ONE * FIXTURE_SCALE)
+		if model == null: return null
+		pivot.remove_child(model)
+		for variant_name: String in FIXTURE_VARIANTS:
+			if variant_name == FIXTURE_VARIANTS[variant]: continue
+			var unused := model.find_child(variant_name, true, false)
+			if unused != null: unused.free()
+		_fixture_models[variant] = model
+	# Instantiating the original glTF would recreate all four housings.
+	var copy := model.duplicate(0) as Node3D
+	pivot.add_child(copy)
+	return copy.find_child(FIXTURE_VARIANTS[variant], true, false) as Node3D
+
+
 func _bloom_fixture(at: Vector3, yaw: float, variant: int,
-		dead: bool, flicker: bool,
+		dead: bool, flicker: bool, primary: bool,
 		emission_mats: Array[StandardMaterial3D],
 		fixture_lights: Array[Light3D]) -> Node3D:
 	variant = clampi(variant, 0, 3)
@@ -357,26 +378,14 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 	pivot.set_meta("bloom_fluorescent_fixture", true)
 	pivot.set_meta("practical_fixture", "fluorescent_fixture")
 	scene.add_node(pivot)
-	var centre: Vector3 = FIXTURE_CENTRES[variant]
-	var inst := scene.attributed_prop_local(pivot, Chunk.BRUTAL_LIGHT_PATH,
-		Vector3(-centre.x * FIXTURE_SCALE, 0.0, -centre.z * FIXTURE_SCALE),
-		0.0, Vector3.ONE * FIXTURE_SCALE)
+	var selected := _fixture_model(pivot, variant)
 	var bounds := AABB(Vector3(-1.175,-0.03,-0.11),Vector3(2.35,0.06,0.22))
-	if inst == null:
+	if selected == null:
 		scene.model_box(pivot, Vector3.ZERO, Vector3(2.35, 0.06, 0.22),
 			Mats.panel_dead() if dead else Mats.bloom_panel())
 	else:
-		var selected: Node3D
-		for i in FIXTURE_VARIANTS.size():
-			var candidate := inst.find_child(FIXTURE_VARIANTS[i], true, false) as Node3D
-			if candidate == null:
-				continue
-			candidate.visible = i == variant
-			if i == variant:
-				selected = candidate
-		if selected != null:
-			bounds = FIXTURE_LIGHTING.bounds_in(selected,pivot)
-		if selected != null and (dead or flicker):
+		bounds = FIXTURE_LIGHTING.bounds_in(selected,pivot)
+		if dead or flicker:
 			for found in selected.find_children("*", "MeshInstance3D", true, false):
 				var mesh_node := found as MeshInstance3D
 				if mesh_node.mesh == null:
@@ -416,13 +425,21 @@ func _bloom_fixture(at: Vector3, yaw: float, variant: int,
 		# Recreation halls reach nine metres: their higher-output fittings must
 		# still reach the walking surface instead of cutting off above the floor.
 		var height_scale := maxf(1.0,(at.y-0.6)/4.2)
-		var down := FIXTURE_LIGHTING.rectangular(pivot,lower,size*0.82,
+		# Keep one physical downlight per cell for the main pool of light.
+		# The surrounding diffusers use wide spots below Ultra.
+		var down_parent := pivot if primary else GraphicsQuality.strip_light_bank(pivot, true)
+		var down := FIXTURE_LIGHTING.rectangular(down_parent,lower,size*0.82,
 			lower_at-Vector3.UP*0.01,false,color,2.4*height_scale*height_scale,
-			maxf(8.2,at.y+3.0),4,"fluorescent_fixture")
+			maxf(8.2,at.y+3.0),1 if primary else 4,"fluorescent_fixture")
 		down.area_attenuation = 0.72
 		down.light_specular = 0.35
 		down.set_meta("bloom_fixture_light",true)
 		fixture_lights.append(down)
+		if not primary:
+			var spots := GraphicsQuality.strip_light_bank(pivot, false)
+			var spot := FIXTURE_LIGHTING.strip_spot(spots, down, lower, 84.0, 0.65, 1.0)
+			spot.set_meta("bloom_fixture_light", true)
+			fixture_lights.append(spot)
 		var up := FIXTURE_LIGHTING.rectangular(pivot,upper,size,
 			upper_at+Vector3.UP*0.025,true,color,3.2,5.0,4,"fluorescent_fixture")
 		up.set_meta("bloom_fixture_light",true)
@@ -452,19 +469,13 @@ func _bloom_lighting() -> void:
 				Vector2(1.4,6.0), Vector2(10.6,6.0), Vector2(6.0,10.6)]:
 			fixture_positions.append(Vector3(xz.x, y, xz.y))
 	var fixture_pivots: Array[Node3D] = []
+	var primary_index := 1 if passage else int(ctx.random01(3317) * fixture_positions.size()) % fixture_positions.size()
 	for i in fixture_positions.size():
 		var p: Vector3 = fixture_positions[i]
 		fixture_pivots.append(_bloom_fixture(p,
 			PI * 0.5 if axis_x else 0.0,
 			posmod(i + int(ctx.random01(3305 + i) * 4.0), 4),
-			dead, flicker, emission_mats, fixture_lights))
-	# One lower face casts shadows per cell. Upper faces and the other lower
-	# lenses provide direct light without multiplying organic geometry in shadows.
-	if fixture_lights.size() > 1:
-		var shadow_index := 1 if passage else int(ctx.random01(3317) \
-			* float(fixture_pivots.size())) % fixture_pivots.size()
-		for i in fixture_lights.size():
-			GraphicsQuality.configure_practical_light(fixture_lights[i],1 if i == shadow_index*2 else 4)
+			dead, flicker, i == primary_index, emission_mats, fixture_lights))
 	if flicker and not emission_mats.is_empty():
 		var controller = BLOOM_FIXTURE_FLICKER_SCRIPT.new()
 		controller.mats = emission_mats
@@ -589,6 +600,9 @@ func _pine_roots(pos: Vector3, yaw: float, scale: float) -> Node3D:
 
 static func clear_runtime_cache() -> void:
 	ORGANIC.clear_runtime_cache()
+	for model: Node3D in _fixture_models.values():
+		model.free()
+	_fixture_models.clear()
 	if _pine_roots_prototype != null:
 		_pine_roots_prototype.free()
 		_pine_roots_prototype = null

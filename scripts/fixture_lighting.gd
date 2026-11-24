@@ -93,11 +93,12 @@ static func rectangular(parent: Node3D, lens: MeshInstance3D, size: Vector2,
 ## Co-located alternative to a rectangular strip. Both parents use the same
 ## fixture coordinates and the same visible lens.
 static func strip_spot(parent: Node3D, area: AreaLight3D, lens: MeshInstance3D,
-		angle: float, angle_attenuation: float) -> SpotLight3D:
+		angle: float, angle_attenuation: float, energy_scale := 1.25) -> SpotLight3D:
 	var spot := SpotLight3D.new()
 	spot.transform = area.transform
 	spot.light_color = area.light_color
-	spot.light_energy = area.light_energy * 1.25
+	spot.light_energy = area.light_energy * energy_scale
+	spot.light_specular = area.light_specular
 	spot.light_volumetric_fog_energy = area.light_volumetric_fog_energy
 	spot.spot_range = area.area_range
 	spot.spot_attenuation = area.area_attenuation

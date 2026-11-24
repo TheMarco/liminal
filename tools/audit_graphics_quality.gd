@@ -315,9 +315,9 @@ func check_airport_coffer_modes(settings: GameSettings) -> void:
 	settings.apply_quality_preset(2)
 
 
-func check_prison_strip_modes(settings: GameSettings) -> void:
-	# The tester's guardroom has a central fitting and eight secondary fittings.
-	var room := Chunk.new(WorldGen.level_seed(1307988285, 8), Vector2i(1, 1), 8)
+func check_strip_modes(settings: GameSettings, theme: int, cell: Vector2i,
+		source: String, fixture_count: int) -> void:
+	var room := Chunk.new(WorldGen.level_seed(1307988285, theme), cell, theme)
 	root.add_child(room)
 	var lamps := room.find_children("*", "Light3D", true, false)
 	for preset in 4:
@@ -325,26 +325,32 @@ func check_prison_strip_modes(settings: GameSettings) -> void:
 		var upward := 0
 		var rectangular := 0
 		var spots := 0
+		var lower_lenses := {}
 		for light: Light3D in lamps:
-			if light.get_meta("visible_source", "") != "prison_troffer" or not light.is_visible_in_tree(): continue
-			expect(light.shadow_enabled, "a Prison strip lost its blocking shadow")
+			if light.get_meta("visible_source", "") != source or not light.is_visible_in_tree(): continue
+			expect(light.shadow_enabled, "%s lost its blocking shadow" % source)
 			if light.get_meta("fixture_upward", false) and light is AreaLight3D: upward += 1
-			elif light is AreaLight3D: rectangular += 1
-			elif light is SpotLight3D: spots += 1
-		expect(upward == 9 and rectangular == (9 if preset == 3 else 1) and spots == (0 if preset == 3 else 8),
-			"Prison preset lost a ceiling face or doubled a downlight")
+			else:
+				var lens := light.get_node(light.get_meta("fixture_emitter"))
+				lower_lenses[lens] = true
+				if light is AreaLight3D: rectangular += 1
+				elif light is SpotLight3D: spots += 1
+		expect(upward == fixture_count and lower_lenses.size() == fixture_count
+			and rectangular == (fixture_count if preset == 3 else 1)
+			and spots == (0 if preset == 3 else fixture_count - 1),
+			"%s preset lost a ceiling face or doubled a downlight" % source)
 	room.set_blackout(true)
 	root.remove_child(room)
 	settings.apply_quality_preset(0)
 	root.add_child(room)
 	for light: Light3D in lamps:
-		if light.get_meta("visible_source", "") == "prison_troffer" and light.is_visible_in_tree():
-			expect(light.layers == 0 and light.light_energy == 0.0, "a returning Prison strip relit during blackout")
+		if light.get_meta("visible_source", "") == source and light.is_visible_in_tree():
+			expect(light.layers == 0 and light.light_energy == 0.0, "%s relit during blackout" % source)
 	room.set_blackout(false)
 	for light: Light3D in lamps:
-		if light is SpotLight3D and light.get_meta("visible_source", "") == "prison_troffer":
+		if light is SpotLight3D and light.get_meta("visible_source", "") == source:
 			expect(light.is_visible_in_tree() and light.layers != 0 and light.light_energy > 0.0,
-				"returning Prison downlight missed the preset change or power restoration")
+				"%s missed the preset change or power restoration" % source)
 	stop_audio(room)
 	room.free()
 	settings.apply_quality_preset(2)
@@ -564,7 +570,8 @@ func run() -> void:
 	check_cheap_lighting(game, menu, settings)
 	check_airport_fill_shadows(settings)
 	check_airport_coffer_modes(settings)
-	check_prison_strip_modes(settings)
+	check_strip_modes(settings, 8, Vector2i(1, 1), "prison_troffer", 9)
+	check_strip_modes(settings, 11, Vector2i(-1, 5), "fluorescent_fixture", 8)
 	expect(menu.TABS.size() == 4, "player menu tab count changed")
 	for tab in ["Video", "Controls", "Audio", "Accessibility"]:
 		expect(menu._pages.has(tab) and tab in menu.TABS, "player menu lost tab " + tab)

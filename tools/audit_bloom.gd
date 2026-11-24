@@ -45,10 +45,10 @@ func _find_meta(node: Node, key: String) -> Node:
 func _count_unsourced_fixture_lights(node: Node) -> int:
 	var count := 0
 	if node.has_meta("bloom_fixture_light"):
-		var owner := node.get_parent()
-		if not node is Light3D or owner == null \
-				or not owner.has_meta("bloom_fluorescent_fixture") \
-				or not node.has_meta("visible_source"):
+		var lens := node.get_node_or_null(node.get_meta("fixture_emitter", NodePath())) as MeshInstance3D
+		if not node is Light3D or lens == null or not node.has_meta("visible_source") \
+				or not lens.get_parent().has_meta("bloom_fluorescent_fixture") \
+				or not lens.get_parent().is_ancestor_of(node):
 			count += 1
 	for child in node.get_children():
 		count += _count_unsourced_fixture_lights(child)
