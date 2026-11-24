@@ -106,6 +106,18 @@ func run() -> void:
 	for theme in [1, 5, 6, 7]:
 		check(Chunk.theme_prop_paths(theme).has("res://models/cc0/wall_clock/wall_clock_1k.gltf"),
 			"floor %d omitted its streamed wall clock" % theme)
+	# These are loaded on demand by room builders. They must already be in
+	# Godot's resource cache before a player sees the first room.
+	FloorResourcePreloader.prepare_floor(Chunk.theme_prop_paths(1))
+	for path in ["res://models/scenario/office/ceiling_light.glb",
+			"res://models/scenario/office/office_desk.glb",
+			"res://models/scenario/office/ceiling_tile_office_patina_ceiling.png"]:
+		check(ResourceLoader.has_cached(path), "Office first room reads " + path)
+	FloorResourcePreloader.prepare_floor(Chunk.theme_prop_paths(4))
+	for path in ["res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_0.jpg",
+			"res://textures/cc0/Terrazzo005/Terrazzo005_1K-JPG_Color.jpg",
+			"res://shaders/apron_night.gdshader"]:
+		check(ResourceLoader.has_cached(path), "Airport first gate reads " + path)
 	FloorResourcePreloader.finish()
 	check(FloorResourcePreloader._pending.is_empty() and FloorResourcePreloader._queue.is_empty()
 		and FloorResourcePreloader._ready.is_empty(), "finish left pending work or cache entries")

@@ -187,11 +187,6 @@ func _preload_preview_resources() -> void:
 	var paths := Chunk.theme_prop_paths(destination_theme)
 	if destination_theme in Mats.RIPPLE_THEMES:
 		paths.append(Mats.RIPPLE_NORMAL_PATH)
-	if destination_theme == 1:
-		# These textures belong to the procedural office ceiling, so they are
-		# not dependencies of any imported furnishing in theme_prop_paths.
-		for suffix in ["0.jpg", "1.png", "2.png"]:
-			paths.append("res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_" + suffix)
 	if destination_theme == 7:
 		# Generated shopfronts and posters are independent of the prop scenes.
 		for face in Chunk.MALL_SIGN_FACES:

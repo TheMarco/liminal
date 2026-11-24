@@ -1,0 +1,44 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://models/scenario/office/archive_box.glb" id="archive_box"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/card_reader.glb" id="card_reader"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/ceiling_light.glb" id="ceiling_light"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/ceiling_vent.glb" id="ceiling_vent"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/cubicle_divider.glb" id="cubicle_divider"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/directory.glb" id="directory"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/exit_sign.glb" id="exit_sign"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/filing_cabinet_closed.glb" id="filing_cabinet_closed"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/filing_cabinet_open.glb" id="filing_cabinet_open"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/hanging_sign.glb" id="hanging_sign"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/office_desk.glb" id="office_desk"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/open_doorway_casing.glb" id="open_doorway_casing"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/poster_frame.glb" id="poster_frame"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/solid_door.glb" id="solid_door"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/vision_door.glb" id="vision_door"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/wall_vent.glb" id="wall_vent"]
+[ext_resource type="PackedScene" path="res://models/scenario/office/wood_shelf.glb" id="wood_shelf"]
+[ext_resource type="Texture2D" path="res://models/scenario/office/carpet_tile_office_dark_carpet.png" id="carpet_tile_office_dark_carpet"]
+[ext_resource type="Texture2D" path="res://models/scenario/office/ceiling_tile_office_patina_ceiling.png" id="ceiling_tile_office_patina_ceiling"]
+[ext_resource type="Texture2D" path="res://models/scenario/office/drywall_panel_office_patina_drywall.png" id="drywall_panel_office_patina_drywall"]
+[ext_resource type="Shader" path="res://shaders/office_carpet.gdshader" id="office_carpet"]
+[ext_resource type="Shader" path="res://shaders/office_ceiling.gdshader" id="office_ceiling"]
+[ext_resource type="Shader" path="res://shaders/office_wall.gdshader" id="office_wall"]
+
+[node name="OfficeRooms" type="ResourcePreloader"]
+resources = [PackedStringArray(
+    "archive_box", "card_reader", "ceiling_light", "ceiling_vent",
+    "cubicle_divider", "directory", "exit_sign", "filing_cabinet_closed",
+    "filing_cabinet_open", "hanging_sign", "office_desk", "open_doorway_casing",
+    "poster_frame", "solid_door", "vision_door", "wall_vent",
+    "wood_shelf", "carpet_tile_office_dark_carpet", "ceiling_tile_office_patina_ceiling", "drywall_panel_office_patina_drywall",
+    "office_carpet", "office_ceiling", "office_wall"
+), [
+    ExtResource("archive_box"), ExtResource("card_reader"), ExtResource("ceiling_light"),
+    ExtResource("ceiling_vent"), ExtResource("cubicle_divider"), ExtResource("directory"),
+    ExtResource("exit_sign"), ExtResource("filing_cabinet_closed"), ExtResource("filing_cabinet_open"),
+    ExtResource("hanging_sign"), ExtResource("office_desk"), ExtResource("open_doorway_casing"),
+    ExtResource("poster_frame"), ExtResource("solid_door"), ExtResource("vision_door"),
+    ExtResource("wall_vent"), ExtResource("wood_shelf"), ExtResource("carpet_tile_office_dark_carpet"),
+    ExtResource("ceiling_tile_office_patina_ceiling"), ExtResource("drywall_panel_office_patina_drywall"), ExtResource("office_carpet"),
+    ExtResource("office_ceiling"), ExtResource("office_wall")
+]]

@@ -1,0 +1,24 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_0.jpg" id="ceiling_tiles_texture_0"]
+[ext_resource type="Texture2D" path="res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_1.png" id="ceiling_tiles_texture_1"]
+[ext_resource type="Texture2D" path="res://models/cc_by/ceiling_tiles_texture/ceiling_tiles_texture_2.png" id="ceiling_tiles_texture_2"]
+[ext_resource type="Texture2D" path="res://textures/cc0/Terrazzo005/Terrazzo005_1K-JPG_Color.jpg" id="Terrazzo005_1K-JPG_Color"]
+[ext_resource type="Texture2D" path="res://textures/cc0/Terrazzo005/Terrazzo005_1K-JPG_NormalGL.jpg" id="Terrazzo005_1K-JPG_NormalGL"]
+[ext_resource type="Texture2D" path="res://textures/cc0/Terrazzo005/Terrazzo005_1K-JPG_Roughness.jpg" id="Terrazzo005_1K-JPG_Roughness"]
+[ext_resource type="Shader" path="res://shaders/apron_night.gdshader" id="apron_night"]
+[ext_resource type="Shader" path="res://shaders/asphalt.gdshader" id="asphalt"]
+[ext_resource type="Shader" path="res://shaders/office_carpet.gdshader" id="office_carpet"]
+[ext_resource type="Shader" path="res://shaders/office_wall.gdshader" id="office_wall"]
+
+[node name="AirportSurfaces" type="ResourcePreloader"]
+resources = [PackedStringArray(
+    "ceiling_tiles_texture_0", "ceiling_tiles_texture_1", "ceiling_tiles_texture_2", "Terrazzo005_1K-JPG_Color",
+    "Terrazzo005_1K-JPG_NormalGL", "Terrazzo005_1K-JPG_Roughness", "apron_night", "asphalt",
+    "office_carpet", "office_wall"
+), [
+    ExtResource("ceiling_tiles_texture_0"), ExtResource("ceiling_tiles_texture_1"), ExtResource("ceiling_tiles_texture_2"),
+    ExtResource("Terrazzo005_1K-JPG_Color"), ExtResource("Terrazzo005_1K-JPG_NormalGL"), ExtResource("Terrazzo005_1K-JPG_Roughness"),
+    ExtResource("apron_night"), ExtResource("asphalt"), ExtResource("office_carpet"),
+    ExtResource("office_wall")
+]]

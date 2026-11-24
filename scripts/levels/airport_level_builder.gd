@@ -517,28 +517,26 @@ func _air_gate() -> void:
 	var wdir = _air_pick_wall(310)
 	var yw = scene.yaw_for(wdir) if wdir >= 0 else float(int(ctx.random01(311) * 3.99)) * PI / 2.0
 	var o = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
-	var code = _gate_code()
 	if wdir >= 0:
-		_air_window_wall(o, yw)
-	# carpet island under the lounge
-	var cp = scene.world_point(o, Vector3(0, 0.008, -1.2), yw)
-	var cm = scene.model_box(null, cp, Vector3(10.6, 0.016, 6.6), Mats.airport_carpet())
-	cm.rotation.y = yw
-	# gate desk off to one side, facing the seats
-	_air_gate_desk(o, yw, code)
+		scene.build_job(_air_window_wall.bind(o, yw))
+	scene.build_job(func() -> void:
+		var cp := scene.world_point(o, Vector3(0, 0.008, -1.2), yw)
+		var carpet := scene.model_box(null, cp, Vector3(10.6, 0.016, 6.6), Mats.airport_carpet())
+		carpet.rotation.y = yw)
+	scene.build_job(_air_gate_desk.bind(o, yw, _gate_code()))
 	# Every lounge row faces the glass. A single deliberately flipped bank used
 	# to make the whole gate read as randomly rotated furniture.
 	var ri = 0
 	for rz in [0.7, -1.1, -2.9]:
 		for rx in [-1.9, 1.9]:
-			_seat_row(scene.world_point(o, Vector3(rx, 0, rz), yw), yw, 4, 313 + ri)
+			scene.build_job(_seat_row.bind(scene.world_point(o, Vector3(rx, 0, rz), yw), yw, 4, 313 + ri))
 			ri += 1
 	# a bag that never boarded
 	if ctx.random01(318) < 0.55:
-		_airport_luggage(scene.world_point(o, Vector3(-2.6 + 5.2 * ctx.random01(319), 0, 1.6), yw),
-			ctx.random01(320) * TAU, 321)
+		scene.build_job(_airport_luggage.bind(scene.world_point(o, Vector3(-2.6 + 5.2 * ctx.random01(319), 0, 1.6), yw),
+			ctx.random01(320) * TAU, 321))
 	if ctx.random01(330) < 0.72:
-		scene.security_camera(scene.world_point(o, Vector3(4.7, 3.55, 3.8), yw), yw + PI)
+		scene.build_job(scene.security_camera.bind(scene.world_point(o, Vector3(4.7, 3.55, 3.8), yw), yw + PI))
 
 
 ## Full-height glass curtain wall 2.2m inside the anchor wall; the strip
@@ -579,9 +577,13 @@ func _air_window_wall(o: Vector3, yw: float) -> void:
 	for sx in [-5.9, 5.9]:
 		scene.model_box(W, Vector3(sx, ctx.ceiling_height / 2.0, 4.85), Vector3(0.1, ctx.ceiling_height, 2.1), Mats.charcoal())
 		scene.collider_yaw_box(scene.world_point(o, Vector3(sx, ctx.ceiling_height / 2.0, 4.85), yw), Vector3(0.12, ctx.ceiling_height, 2.1), yw)
-	# apron floor and the night beyond
-	var ap = scene.model_box(W, Vector3(0, 0.012, 4.9), Vector3(WorldGen.CELL_SIZE, 0.022, 2.15), Mats.asphalt())
-	ap.rotation.y = 0.0
+	# The apron floor and backdrop each use a distinct first-use shader.
+	scene.build_job(func() -> void:
+		scene.model_box(W, Vector3(0, 0.012, 4.9), Vector3(WorldGen.CELL_SIZE, 0.022, 2.15), Mats.asphalt()))
+	scene.build_job(_air_apron_backdrop.bind(W, gz))
+
+
+func _air_apron_backdrop(W: Node3D, gz: float) -> void:
 	var night = scene.model_quad(W, Vector3(0, ctx.ceiling_height / 2.0, 5.82), Vector2(WorldGen.CELL_SIZE, ctx.ceiling_height), Mats.apron_night())
 	night.rotation.y = PI
 	# taxiway edge lights receding along the strip

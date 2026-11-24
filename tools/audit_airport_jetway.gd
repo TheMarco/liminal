@@ -37,9 +37,21 @@ func bounds(node: Node, parent_xf: Transform3D = Transform3D.IDENTITY) -> AABB:
 	return result
 
 
+func imported_meshes(assembly: Node3D) -> Array[Node]:
+	# The assembly also owns the separate red beacon. Inspect the source model
+	# for triangle counts, shared materials and authored shadow settings.
+	for child in assembly.get_children():
+		if child.scene_file_path == assembly.get_meta("authored_asset"):
+			var meshes := child.find_children("*", "MeshInstance3D", true, false)
+			if child is MeshInstance3D:
+				meshes.push_front(child)
+			return meshes
+	return []
+
+
 func inspect_asset(j: Node3D) -> void:
 	check(j.get_meta("authored_asset", "") == Chunk.AIRPORT_JETWAY_PATH, "Wrong asset path")
-	var meshes := j.find_children("*", "MeshInstance3D", true, false)
+	var meshes := imported_meshes(j)
 	check(meshes.size() == 2, "Expected structure and separate glazing")
 	var total := 0
 	for mi: MeshInstance3D in meshes:
@@ -68,7 +80,7 @@ func run() -> void:
 	check(Chunk.theme_prop_paths(4).has(Chunk.AIRPORT_JETWAY_PATH), "Airport preload missing")
 	check(Chunk._prop_preload_paths().has(Chunk.AIRPORT_PLANE_PATH), "Aircraft startup preload missing")
 	check(Chunk.theme_prop_paths(4).has(Chunk.AIRPORT_PLANE_PATH), "Aircraft airport preload missing")
-	var ws := WorldGen.level_seed(4242, 4)
+	var ws := WorldGen.level_seed(985078973, 4)
 	var chunk := Chunk.new(ws, Vector2i.ZERO, 4)
 	var placements := 0
 	for ceiling in [3.2, 3.5, 3.8, 4.4, 6.2]:
@@ -110,10 +122,19 @@ func run() -> void:
 	for x in range(-5, 6):
 		for z in range(-5, 6):
 			var cell := Vector2i(x, z)
-			var c := Chunk.new(ws, cell, 4)
+			# This gate keeps its jetway and aircraft after doorway clearance.
+			var streamed := cell == Vector2i(-4, -1)
+			var c := Chunk.new(ws, cell, 4, null, streamed)
+			if streamed:
+				while not c.build_next_slice():
+					pass
 			var report := c.airport_apron_setpiece_audit()
 			check(int(report.violations) == 0, "Generated apron overflows at %s" % cell)
-			generated_jetways += c.find_children("AirportJetway", "Node3D", true, false).size()
+			var count := c.find_children("AirportJetway", "Node3D", true, false).size()
+			if streamed:
+				check(count == 1 and int(report.setpieces) == 2,
+					"Streamed airport gate lost its jetway or aircraft")
+			generated_jetways += count
 			generated += 1
 			c.free()
 	check(generated_jetways > 0, "Generated gate placement was not exercised")
@@ -127,7 +148,7 @@ func run() -> void:
 
 func inspect_plane(plane: Node3D) -> void:
 	check(plane.get_meta("authored_asset", "") == Chunk.AIRPORT_PLANE_PATH, "Aircraft asset missing")
-	var meshes := plane.find_children("*", "MeshInstance3D", true, false)
+	var meshes := imported_meshes(plane)
 	check(meshes.size() == 1, "Expected one baked aircraft mesh")
 	for mi: MeshInstance3D in meshes:
 		check(mi.mesh.get_surface_count() == 1, "Aircraft uses extra material surfaces")

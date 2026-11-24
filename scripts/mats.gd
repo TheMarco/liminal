@@ -1094,8 +1094,7 @@ static func airport_wall_variant(idx: int) -> Material:
 static func airport_ceiling() -> Material:
 	if _c.has("airport_ceiling"):
 		return _c["airport_ceiling"]
-	# Reuse the office's authored mineral-fibre PBR maps, not its material:
-	# Airport has its own cooler finish, panel pitch and restrained bounce fill.
+	# Give the mineral-fibre maps the Airport's cooler finish and panel pitch.
 	var m := _airport_ceiling_source().duplicate() as StandardMaterial3D
 	m.albedo_color = Color(0.95, 0.97, 1.0)
 	m.emission = Color(0.21, 0.23, 0.25)

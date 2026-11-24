@@ -1218,6 +1218,9 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/cc0/Ottoman_01/Ottoman_01_1k.gltf")
 			paths.append("res://models/cc0/potted_plant_01/potted_plant_01_1k.gltf")
 		1:
+			# The preload scene retains the fitted Office models and surface maps
+			# together for both floor arrivals and the live doorway preview.
+			paths.append("res://scenes/preloads/office_rooms.tscn")
 			paths.append_array([OFFICE_AIR_CONDITIONER_PATH, OFFICE_PHONE_PATH, OFFICE_PRINTER_PATH])
 			paths.append(ANNEX_SHELVING_PATH) # Office photographic obstruction.
 			paths.append_array([OFFICE_WATER_COOLER_PATH, OFFICE_CHAIR_PATH, OFFICE_MODERN_CHAIR_PATH, OFFICE_TERMINAL_PATH])
@@ -1242,6 +1245,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 					"CoffeeTable_01", "coffee_table_round_01", "television_02"]:
 				paths.append("res://models/cc0/%s/%s_1k.gltf" % [model, model])
 		4:
+			paths.append("res://scenes/preloads/airport_surfaces.tscn")
 			paths.append_array([AIRPORT_SEATS_PATH, AIRPORT_DEPARTURE_BOARD_PATH, AIRPORT_LUGGAGE_PATH,
 				AIRPORT_TROLLEY_PATH, AIRPORT_JETWAY_PATH, AIRPORT_PLANE_PATH, AIRPORT_CAROUSEL_PATH, AIRPORT_GATE_DESK_PATH])
 			paths.append_array([CHECKIN_DESK_PATH, AIRPORT_ESCALATOR_PATH, AIRPORT_WALKWAY_PATH, AIRPORT_WALKWAY_LONG_PATH])
@@ -6066,7 +6070,7 @@ func _build_props() -> void:
 			_level_builder._annex_lobby()
 		WorldGen.AIR_GATE:
 			_level_builder._air_gate()
-			_level_builder._air_common()
+			queue_build_job(_level_builder._air_common)
 		WorldGen.AIR_CONCOURSE:
 			_level_builder._air_concourse()
 			_level_builder._air_common()
