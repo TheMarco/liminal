@@ -1185,6 +1185,7 @@ func _request_quit() -> void:
 
 
 func _finish_quit() -> void:
+	Chunk.release_floor_resources()
 	get_tree().quit()
 
 

@@ -1410,7 +1410,7 @@ static func prewarm_theme_content(ws: int, p_theme: int) -> void:
 ## active actors/previews keep their own references. Same-floor streaming
 ## retains shared materials and models throughout play.
 static func prepare_floor_resources(p_theme: int) -> void:
-	_release_floor_caches()
+	release_floor_resources()
 	Mats.clear_runtime_caches(true)
 	FloorResourcePreloader.prepare_floor(theme_prop_paths(p_theme))
 	if p_theme in Mats.RIPPLE_THEMES:
@@ -1437,10 +1437,11 @@ static func clear_runtime_caches() -> void:
 	finish_prop_preloads()
 	FloorResourcePreloader.finish()
 	_prop_preloads_requested = false
-	_release_floor_caches()
+	release_floor_resources()
 
 
-static func _release_floor_caches() -> void:
+## Free detached model prototypes and drop floor-owned resource references.
+static func release_floor_resources() -> void:
 	preload("res://scripts/office_shadow_batch.gd").clear_cache()
 	preload("res://scripts/blackout_surfaces.gd").clear_cache()
 	preload("res://scripts/environment_breath_surface.gd").clear_runtime_cache()
