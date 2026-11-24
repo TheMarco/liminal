@@ -4,9 +4,6 @@ extends AudioStreamPlayer3D
 ## recording loops continuously and 3D attenuation does the work: it is
 ## inaudible across the floor and unmistakable once you are among them, so
 ## walking toward a slot room fades it up on its own.
-##
-## This used to be synthesized pentatonic dings scheduled in bursts. The
-## recording replaced them — see sounds/sound-slots.mp3 and Sfx.slots().
 
 
 func _ready() -> void:

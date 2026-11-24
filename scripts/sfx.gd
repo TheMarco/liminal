@@ -50,7 +50,8 @@ const WALKS := {
 # Positional, not a bed: this is what a bank of machines sounds like from a
 # few metres away, so it is placed on the bank and left to 3D attenuation to
 # fade it up as you come down the room toward it.
-const SLOTS := ["sound-slots", -22.2]
+const SLOT_LOOP := "res://sounds/sound-slots.wav"
+const SLOT_MEAN_DB := -22.2
 const SLOT_TARGET := -30.0   # at unit_size distance; louder as you close in
 
 const SCARE_MEANS := [-11.0, -8.5, -8.8, -8.5, -9.8, -11.6, -9.5,
@@ -140,7 +141,11 @@ static func walk(surface: String) -> Array:
 
 ## The machines themselves, looping, for a slot bank to emit.
 static func slots() -> Array:
-	return [_stream(SLOTS[0], true), SLOT_TARGET - float(SLOTS[1])]
+	# Banks start at independent offsets. Share decoded samples so starting a
+	# bank during room streaming never needs to seek through compressed audio.
+	if not _c.has(SLOT_LOOP):
+		_c[SLOT_LOOP] = load(SLOT_LOOP)
+	return [_c[SLOT_LOOP], SLOT_TARGET - SLOT_MEAN_DB]
 
 
 ## How many scares the bank holds. Callers used to hardcode the count, so

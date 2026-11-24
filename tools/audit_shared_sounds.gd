@@ -21,7 +21,33 @@ func measure(stream: AudioStream, gain_db := 0.0) -> Vector2:
 		peak = maxf(peak, maxf(absf(sample.x), absf(sample.y)))
 	return Vector2(linear_to_db(sqrt(energy / (frames.size() * 2.0))) + gain_db, linear_to_db(peak) + gain_db)
 
+func check_slot_loop() -> void:
+	var entry := Sfx.slots()
+	var loop := entry[0] as AudioStreamWAV
+	check(loop != null, "Slot banks need a seekable PCM loop")
+	if loop == null:
+		return
+	check(Sfx.slots()[0] == loop and loop.format == AudioStreamWAV.FORMAT_16_BITS,
+		"Slot banks lost their shared PCM samples")
+	check(loop.stereo and loop.mix_rate == 48000 and is_equal_approx(loop.get_length(), 30.0),
+		"Slot recording format or duration changed")
+	check(is_equal_approx(entry[1], -7.8), "Slot emitter gain changed")
+	var frame_count := roundi(loop.get_length() * loop.mix_rate)
+	check(loop.loop_mode == AudioStreamWAV.LOOP_FORWARD and loop.loop_begin == 0
+		and absi(loop.loop_end - frame_count) <= 1, "Slot recording must loop in full")
+	var first := loop.instantiate_playback()
+	var second := loop.instantiate_playback()
+	first.start(12.5)
+	second.start(29.99)
+	check(absf(second.get_playback_position() - 29.99) < 0.01, "Slot loop did not start at the requested offset")
+	second.mix_audio(1.0, 2048)
+	check(second.is_playing() and second.get_playback_position() < 0.1, "Slot loop stopped at the end")
+	check(absf(first.get_playback_position() - 12.5) < 0.01, "Slot banks lost their independent playback positions")
+	first.stop()
+	second.stop()
+
 func run() -> void:
+	check_slot_loop()
 	var streams := {"buzz": SoundBank.buzz(), "drip": SoundBank.drip(), "moan": SoundBank.moan(), "pa_voice": SoundBank.pa_voice(), "shiver": SoundBank.shiver()}
 	check(SoundBank.RECORDINGS.size() == streams.size(), "recording registry mismatch")
 	for key in streams:
