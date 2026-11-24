@@ -409,6 +409,9 @@ func _warm_photo_and_realm_effects(host: Node3D, quad: QuadMesh) -> void:
 	mask_mat.shader = preload("res://shaders/viewfinder_mask.gdshader")
 	mask.material = mask_mat
 	_view.add_child(mask)
+	# The reticle's lines use a separate canvas pipeline. Draw them under the
+	# loading screen so the first camera raise doesn't compile it during play.
+	_view.add_child(PhotoCamera.PhotoReticle.new())
 	# Warm portal anomaly crack + outer glow shaders.
 	var portal_mat := ShaderMaterial.new()
 	portal_mat.shader = PhotoAnomaly.PORTAL_SHADER
