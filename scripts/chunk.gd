@@ -5432,9 +5432,9 @@ func _volume_behind_wall_face(vol: AABB, dir: int, inner: float, n: float) -> bo
 
 
 func _wall_art_site_clear(dir: int, inner: float, n: float, along: float,
-		y: float, size: Vector2, ignore: Node) -> bool:
+		y: float, size: Vector2, blockers: Array[AABB]) -> bool:
 	var box := _wall_art_site_box(dir, inner, n, along, y, size)
-	for vol in _wall_mount_blockers(ignore):
+	for vol in blockers:
 		if _volume_behind_wall_face(vol, dir, inner, n):
 			continue
 		if box.intersects(vol):
@@ -5472,6 +5472,7 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 		if not office_layout.is_empty() else -1.0
 	if office_layout.is_empty():
 		var split := _resolved_room_split()
+		var blockers: Array[AABB] = []
 		for candidate_idx in 6:
 			var candidate := lerpf(0.42 + size.x * 0.5,
 				S - 0.42 - size.x * 0.5,
@@ -5482,10 +5483,10 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 			if partition_hits_wall \
 					and absf(candidate - float(split[1])) < size.x * 0.5 + 0.30:
 				continue
-			# Fixtures share these walls and most go in before decoration
-			# runs, so test each bay against what is already hanging and
-			# try the next one when it is taken.
-			if not _wall_art_site_clear(dir, inner, n, candidate, y, size, null):
+			# Each bay sees the same fixtures until this picture is mounted.
+			if blockers.is_empty():
+				blockers = _wall_mount_blockers()
+			if not _wall_art_site_clear(dir, inner, n, candidate, y, size, blockers):
 				continue
 			along = candidate
 			break
@@ -5494,7 +5495,7 @@ func _wall_art(dir: int, plane: float, salt: int) -> void:
 	# Curated office bays still have to respect later floor fixtures, including
 	# coffee machines. Their deterministic layout is a preference, not a reservation.
 	if not office_layout.is_empty() \
-			and not _wall_art_site_clear(dir, inner, n, along, y, size, null):
+			and not _wall_art_site_clear(dir, inner, n, along, y, size, _wall_mount_blockers()):
 		return
 	var pos := Vector3(inner + n * 0.055, y, along) if dir < 2 \
 		else Vector3(along, y, inner + n * 0.055)
@@ -9511,7 +9512,7 @@ func wall_art_audit() -> Dictionary:
 			var nn := -1.0 if (dir == 0 or dir == 2) else 1.0
 			var inner := (p.x - nn * 0.055) if dir < 2 else (p.z - nn * 0.055)
 			fixture_overlap = not _wall_art_site_clear(dir, inner, nn, along,
-				p.y, size, node)
+				p.y, size, _wall_mount_blockers(node))
 			if fixture_overlap:
 				print("FAIL theme=%d cell=%s art %s overlaps a wall fixture at %s" % [
 					theme, cell, path, str(p)])

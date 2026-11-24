@@ -89,6 +89,7 @@ func run() -> void:
 	FloorResourcePreloader.retain_scene(PATHS[0], fixture)
 	check(FloorResourcePreloader.cached_scene(PATHS[0]) == fixture,
 		"synchronous first-use model was not retained")
+	_check_preview_pressure(fixture)
 	for theme in WorldGen.THEMES:
 		var paths := Chunk.theme_prop_paths(theme)
 		check(paths.size() <= FloorResourcePreloader.CACHE_LIMIT,
@@ -123,3 +124,34 @@ func run() -> void:
 		and FloorResourcePreloader._ready.is_empty(), "finish left pending work or cache entries")
 	print("PRELOADER_AUDIT failures=%d" % failures)
 	quit(1 if failures else 0)
+
+
+func _check_preview_pressure(fixture: PackedScene) -> void:
+	FloorResourcePreloader.prepare_floor(PATHS)
+	var shared := FloorResourcePreloader.cached_scene(PATHS[1])
+	for i in FloorResourcePreloader.CACHE_LIMIT + 2:
+		FloorResourcePreloader.retain_scene("preview:%d" % i, fixture)
+	check(FloorResourcePreloader.cached_scene(PATHS[0]) == fixture
+		and FloorResourcePreloader.cached_scene(PATHS[1]) == shared,
+		"preview evicted a prepared active-floor model")
+	check(FloorResourcePreloader.cached_count() == FloorResourcePreloader.CACHE_LIMIT
+		and FloorResourcePreloader.cached_scene("preview:0") == null,
+		"preview scenes exceeded their remaining cache space")
+	FloorResourcePreloader.prepare_floor([PATHS[1]])
+	check(FloorResourcePreloader.cached_scene(PATHS[0]) == null
+		and FloorResourcePreloader.cached_scene(PATHS[1]) == shared,
+		"changing floors did not retire and reuse the right models")
+
+	# A full-size manifest uses every slot. A visiting room can still obtain a
+	# scene for its own instance while the active floor keeps its resources.
+	FloorResourcePreloader.finish()
+	var full: Array[String] = []
+	for i in FloorResourcePreloader.CACHE_LIMIT:
+		var path := "floor:%d" % i
+		full.append(path)
+		FloorResourcePreloader.retain_scene(path, fixture)
+	FloorResourcePreloader.prepare_floor(full)
+	check(FloorResourcePreloader.retain_scene("preview:overflow", fixture) == fixture
+		and FloorResourcePreloader.cached_scene("preview:overflow") == null
+		and FloorResourcePreloader.cached_scene(full[0]) == fixture,
+		"a full floor manifest lost a model to an incidental scene")

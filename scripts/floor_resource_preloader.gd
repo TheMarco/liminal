@@ -1,7 +1,8 @@
 class_name FloorResourcePreloader
 extends RefCounted
 
-## One pending threaded PackedScene prefetch with a bounded LRU strong cache.
+## One pending threaded PackedScene prefetch with a bounded strong cache.
+## The active floor has priority. Extra scenes use the remaining slots in LRU order.
 ## This service has no scene-tree or Chunk dependencies; callers own scheduling.
 
 const CACHE_LIMIT := 64
@@ -11,6 +12,7 @@ static var _queue: Array[String] = []
 static var _pending: String = ""
 static var _ready: Dictionary = {}
 static var _ready_order: Array[String] = []
+static var _floor_paths: Dictionary[String, bool] = {}
 
 ## Called only behind a floor-transition fade. Retain this floor's complete
 ## manifest before streaming starts, so the first gate/slot room cannot block
@@ -18,15 +20,18 @@ static var _ready_order: Array[String] = []
 ## keep their own resources (including actors and realm previews) alive.
 static func prepare_floor(paths: Array[String]) -> void:
 	var started := Time.get_ticks_usec()
+	_floor_paths.clear()
+	for path in paths:
+		_floor_paths[path] = true
 	if not _pending.is_empty():
 		var status := ResourceLoader.load_threaded_get_status(_pending)
 		if status in [ResourceLoader.THREAD_LOAD_IN_PROGRESS, ResourceLoader.THREAD_LOAD_LOADED]:
 			var scene := ResourceLoader.load_threaded_get(_pending) as PackedScene
-			if scene != null and paths.has(_pending): _store(_pending, scene)
+			if scene != null and _floor_paths.has(_pending): _store(_pending, scene)
 		_pending = ""
 	_queue.clear()
 	for path in _ready.keys():
-		if not paths.has(path):
+		if not _floor_paths.has(path):
 			_ready.erase(path)
 			_ready_order.erase(path)
 	# Overlap independent scene decodes only while the floor is covered. Keep the
@@ -121,20 +126,33 @@ static func finish() -> void:
 	_queue.clear()
 	_ready.clear()
 	_ready_order.clear()
+	_floor_paths.clear()
 	_pending = ""
 
 static func _store(path: String, resource: Resource) -> void:
 	if _ready.has(path):
 		_touch(path)
 		return
-	while _ready_order.size() >= CACHE_LIMIT:
-		var oldest: String = _ready_order.pop_front()
-		_ready.erase(oldest)
+	if _ready_order.size() >= CACHE_LIMIT:
+		var oldest := -1
+		for i in _ready_order.size():
+			if not _floor_paths.has(_ready_order[i]):
+				oldest = i
+				break
+		if oldest < 0:
+			# All slots belong to the active floor. A preview still receives
+			# its loaded scene from retain_scene without displacing a floor prop.
+			if not _floor_paths.has(path):
+				return
+			# Preserve bounded replacement even for an oversized custom manifest.
+			oldest = 0
+		var retired: String = _ready_order.pop_at(oldest)
+		_ready.erase(retired)
 	_ready[path] = resource
 	_ready_order.append(path)
 
 static func _touch(path: String) -> void:
-	# A frequently used prop must not be retired just because it was the first
-	# item decoded during floor preparation. The entry bound stays unchanged.
+	if _floor_paths.has(path):
+		return
 	_ready_order.erase(path)
 	_ready_order.append(path)
