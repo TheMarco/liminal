@@ -150,6 +150,15 @@ func run() -> void:
 		failures.append("warmup changed the live room or environment")
 	if is_instance_valid(warmer._view): failures.append("warmup retained its GPU viewport")
 	await check_event("idle_control", func(): pass)
+	if theme == 6:
+		var desk := Chunk.school_workstation_render_sample()
+		desk.position = camera.position - camera.transform.basis.z * 2.0 - Vector3.UP * 0.6
+		var draw_before := int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW))
+		rooms.add_child(desk)
+		await frames(8)
+		if int(Performance.get_monitor(Performance.PIPELINE_COMPILATIONS_DRAW)) != draw_before:
+			failures.append("first School workstation compiled a draw pipeline during play")
+		desk.free()
 	var reticle := PhotoCamera.PhotoReticle.new()
 	await check_event("viewfinder_reticle", func(): root.add_child(reticle))
 	reticle.free()

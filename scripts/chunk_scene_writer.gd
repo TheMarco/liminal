@@ -438,9 +438,9 @@ func chemistry_glassware(parent: Node3D, pos: Vector3, yaw: float,
 
 func cc0_floor_prop(model_name: String, pos: Vector3, yaw: float,
 		scale: float, kind: String, collider_size: Vector3,
-		collider_center := Vector3.ZERO) -> Node3D:
+		collider_center := Vector3.ZERO, doorways: Array[Rect2] = []) -> Node3D:
 	return _host._cc0_floor_prop(model_name, pos, yaw, scale, kind,
-		collider_size, collider_center)
+		collider_size, collider_center, doorways)
 
 
 func set_model_material(node: Node, material: Material) -> void:

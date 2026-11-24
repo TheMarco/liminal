@@ -1212,7 +1212,7 @@ func _mall_fountain_water_disc(radius: float, segments: int) -> ArrayMesh:
 	return mesh
 
 
-func _mall_service() -> void:
+func _mall_service(doorways: Array[Rect2]) -> void:
 	scene.cc0_prop("steel_frame_shelves_01", Vector3(9.4, 0, 6.0), -PI / 2.0, 0.1)
 	scene.collider_yaw_box(Vector3(9.4, 0.9, 6), Vector3(2.0, 1.8, 0.7), -PI / 2.0)
 	for i in 4:
@@ -1223,14 +1223,14 @@ func _mall_service() -> void:
 		scene.cc0_prop("trashbag", Vector3(8.8, 0, 2.0), ctx.random01(1699) * TAU)
 	scene.cc0_floor_prop("hand_truck", Vector3(2.0, 0, 3.0),
 		0.22, 0.92, "mall_service_hand_truck",
-		Vector3(0.62, 1.32, 0.62), Vector3(0, 0.66, 0))
+		Vector3(0.62, 1.32, 0.62), Vector3(0, 0.66, 0), doorways)
 	scene.cc0_floor_prop("industrial_storage_cart", Vector3(6.1, 0, 9.7),
 		PI, 0.72, "mall_service_storage_cart",
-		Vector3(1.18, 1.0, 0.82), Vector3(0, 0.5, 0))
+		Vector3(1.18, 1.0, 0.82), Vector3(0, 0.5, 0), doorways)
 	if ctx.random01(1701) < 0.75:
 		scene.cc0_floor_prop("metal_trash_can", Vector3(9.6, 0, 2.1),
 			PI / 2.0, 0.68, "mall_service_refuse",
-			Vector3(1.28, 0.64, 0.44), Vector3(-0.06, 0.32, 0))
+			Vector3(1.28, 0.64, 0.44), Vector3(-0.06, 0.32, 0), doorways)
 	if ctx.random01(1702) < 0.65:
 		_mall_shopping_cart(Vector3(3.6, 0, 9.4), PI - 0.24, true)
 

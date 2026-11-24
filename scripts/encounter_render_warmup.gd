@@ -3,6 +3,7 @@ extends Node
 ## startup/the opaque transition. Loading a GLB alone never visits its runtime
 ## materials, posed bounds, morph variants or screen-reading canvas shader.
 const Surface := preload("res://scripts/environment_breath_surface.gd")
+const FIXTURE_LIGHT_POSITION := Vector3(0, 4, 3)
 const DoorwaySurface := preload("res://scripts/native_doorway_surface.gd")
 const Aftershock := preload("res://scripts/reality_aftershock.gd")
 const PowerSurfaces := preload("res://scripts/blackout_surfaces.gd")
@@ -83,6 +84,13 @@ func prepare(source: Viewport, theme: int, rooms: Node3D, live_power_pass := fal
 	camera.position = Vector3(0, 2.5, 12)
 	camera.current = true
 	_prepare_torch(source_camera, camera)
+	if theme == 6:
+		var desk := Chunk.school_workstation_render_sample()
+		# Straddle the fixture's shadow split so the CRT and case also cast
+		# their close-up shadows during the covered draw.
+		desk.position = FIXTURE_LIGHT_POSITION + Vector3(-1.5, -2.0, -0.1)
+		desk.rotation.y = 0.5
+		_view.add_child(desk)
 	var warm_water := theme in [2, 9] or realm_theme in [2, 9]
 	if wander_only:
 		# Wander suspends hostile figures, hallway apparitions and Descent rules.
@@ -239,7 +247,7 @@ func _prepare_lighting(rooms: Node3D) -> void:
 		sample.set_script(null)
 		for child in sample.get_children(): child.free()
 		_lights.add_child(sample)
-		sample.position = Vector3(0, 4, 3)
+		sample.position = FIXTURE_LIGHT_POSITION
 		sample.rotation = Vector3.ZERO
 		sample.visible = true
 		if sample is OmniLight3D: sample.omni_range = 24.0

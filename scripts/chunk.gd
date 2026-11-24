@@ -1237,6 +1237,10 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append_array([OFFICE_AIR_CONDITIONER_PATH, ANNEX_EXIT_DOOR_PATH, ANNEX_CHAIR_PATH])
 			paths.append_array([ANNEX_SHELVING_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
 			paths.append("res://models/asylum/SchoolChair_01/SchoolChair_01_1k.gltf")
+			# The rare furniture pile builds all seven imported pieces together.
+			for model in ["sofa_03", "drawer_cabinet", "ArmChair_01", "Ottoman_01",
+					"CoffeeTable_01", "coffee_table_round_01", "television_02"]:
+				paths.append("res://models/cc0/%s/%s_1k.gltf" % [model, model])
 		4:
 			paths.append_array([AIRPORT_SEATS_PATH, AIRPORT_DEPARTURE_BOARD_PATH, AIRPORT_LUGGAGE_PATH,
 				AIRPORT_TROLLEY_PATH, AIRPORT_JETWAY_PATH, AIRPORT_PLANE_PATH, AIRPORT_CAROUSEL_PATH, AIRPORT_GATE_DESK_PATH])
@@ -1267,7 +1271,8 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://models/asylum/metal_office_desk/metal_office_desk_1k.gltf")
 		6:
 			paths.append_array([LOCKERS_PATH, GYM_LOCKER_PATH, SCH_CLEANING_CART_PATH, OFFICE_SCHOOL_BIN_PATH])
-			paths.append(OFFICE_CHAIR_PATH)
+			paths.append_array([OFFICE_CHAIR_PATH, OFFICE_TERMINAL_PATH])
+			paths.append("res://models/cc0/office_notepads/office_notepads_1k.gltf")
 			paths.append("res://models/cc0/security_camera_01/security_camera_01_1k.gltf")
 			paths.append_array([SCH_DESK_PATH, SCH_CHEMISTRY_TABLE_PATH, CHEMISTRY_GLASSWARE_PATH])
 			paths.append_array([SCH_TOILET_PATH, SCH_SINK_PATH, SCH_URINAL_PATH, SCH_SHELF_PATH])
@@ -1282,7 +1287,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append(OFFICE_BOXES_PATH) # Mall photographic obstruction.
 			paths.append_array([CITY_BENCH_PATH, FOOD_COURT_SET_PATH, MALL_HOTDOG_PATH])
 			paths.append_array([ROPE_BARRIER_PATH, GARBAGE_BIN_PATH])
-			for model in ["CashRegister_01", "hand_truck", "metal_trash_can"]:
+			for model in ["CashRegister_01", "hand_truck", "metal_trash_can", "industrial_storage_cart"]:
 				paths.append("res://models/cc0/%s/%s_1k.gltf" % [model, model])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/potted_plant_02/potted_plant_02_1k.gltf")
@@ -6099,7 +6104,11 @@ func _build_props() -> void:
 		WorldGen.MALL_ATRIUM:
 			_level_builder._mall_atrium()
 		WorldGen.MALL_SERVICE:
-			_level_builder._mall_service()
+			var doorways := _doorway_clearance_rects(WorldGen.corridor(wseed, cell) != 0)
+			# Props move to the merged room centre before the final clearance pass.
+			for i in doorways.size():
+				doorways[i].position -= Vector2(off.x, off.z)
+			_level_builder._mall_service(doorways)
 		WorldGen.MALL_KIOSKS:
 			_level_builder._mall_kiosks()
 		WorldGen.MALL_CINEMA:
@@ -8702,7 +8711,7 @@ func _small_room_props(along_x: bool, off: float) -> void:
 
 ## A single desk with the same authored terminal as the cubicle clusters — for
 ## rooms too small for a cluster.
-func _small_desk(p: Vector3, yaw: float) -> void:
+func _small_desk(p: Vector3, yaw: float) -> Node3D:
 	var body0 := body.get_child_count()
 	var v := _furnishing_pivot(p, yaw, "office_small_workstation")
 	v.set_meta("office_workstation", true)
@@ -8731,6 +8740,17 @@ func _small_desk(p: Vector3, yaw: float) -> void:
 		chair = _task_chair(chair_pos, yaw)
 	_adopt_local(v, chair)
 	_bind_furnishing_colliders(v, body0)
+	return v
+
+
+## Draw the same School workstation as the generated admin offices, including
+## the replacement CRT material and chair. Only visuals enter the sample tray.
+static func school_workstation_render_sample() -> Node3D:
+	var room := Chunk.new(0, Vector2i.ZERO, 6, null, true)
+	var desk := room._small_desk(Vector3.ZERO, 0.0)
+	room.remove_child(desk)
+	room.free()
+	return desk
 
 
 # --- vegas: grand chandelier is above; shared below --------------------------
@@ -9046,14 +9066,20 @@ func _chemistry_glassware(parent: Node3D, pos: Vector3, yaw: float,
 ## one support-audited pivot.
 func _cc0_floor_prop(mname: String, pos: Vector3, yaw: float, scl: float,
 		kind: String, collider_size: Vector3,
-		collider_center := Vector3.ZERO) -> Node3D:
+		collider_center := Vector3.ZERO, doorways: Array[Rect2] = []) -> Node3D:
 	var b0 := body.get_child_count()
 	var pivot := _furnishing_pivot(pos, yaw, kind)
 	pivot.set_meta("enrichment_prop", mname)
-	_cc0_prop_local(pivot, mname, Vector3.ZERO, 0.0, scl)
 	if collider_size != Vector3.ZERO:
 		_collider_yaw_box(_wp(pos, collider_center, yaw), collider_size, yaw)
-	_bind_furnishing_colliders(pivot, b0)
+		_bind_furnishing_colliders(pivot, b0)
+		if not doorways.is_empty():
+			var footprint := _collision_floor_rect(body.get_child(b0) as CollisionShape3D)
+			# The final pass removes this entire group, including the collider.
+			# Leave borderline cases to its check after the room-centre shift.
+			if footprint.has_area() and _rect_hits_zones(footprint.grow(-0.001), doorways):
+				return pivot
+	_cc0_prop_local(pivot, mname, Vector3.ZERO, 0.0, scl)
 	return pivot
 
 
