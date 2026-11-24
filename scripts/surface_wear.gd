@@ -15,6 +15,7 @@ const PROP_SHADER := preload("res://shaders/prop_wear.gdshader")
 enum Motif { SPILL, LEAK, MOLD, CRACK, SCUFF, REPAIR, ADHESIVE, SCORCH,
 	DUST, RUST, MINERAL, MISSING_TILE, JOINT, ROOT, FOOTPRINT, VENT,
 	WATERLINE, BURNS, PLASTER, TRAFFIC, RUB, LETTERING }
+enum MaterialUse { WALL = 1, FLOOR = 2, CEILING = 4, FIXING = 8, GLAZING = 16 }
 
 class Face:
 	var mesh: MeshInstance3D
@@ -35,6 +36,7 @@ var walls: Array[Face] = []
 var ceilings: Array[Face] = []
 var skirtings: Array[Face] = []
 var props: Array[Dictionary] = []
+var _uses_by_material: Dictionary[String, int] = {}
 var growth_contacts: Array[Vector3] = []
 var vents: Array[Vector3] = []
 var annex_carpet_stains: Array[Vector3] = []
@@ -180,6 +182,29 @@ func _contains_any(value: String, needles: Array) -> bool:
 	return false
 
 
+## Meshes throughout a room share these material names. Cooling pads add their
+## floor role per mesh so that other meshes sharing the finish keep their roles.
+func _material_uses(name_: String) -> int:
+	var known := int(_uses_by_material.get(name_, -1))
+	if known >= 0:
+		return known
+	var uses := 0
+	if _contains_any(name_, ["wall", "wallpaper", "plaster", "dado", "pool_tile", "pool_coping",
+			"asy_tile", "sch_tile", "prison_tile", "brutal_structure", "annex_baseboard"]):
+		uses |= MaterialUse.WALL
+	if _contains_any(name_, ["floor", "carpet", "terrazzo", "marble", "pool_tile", "pool_coping",
+			"asy_checker", "sch_tile", "prison_tile"]):
+		uses |= MaterialUse.FLOOR
+	if name_.contains("ceiling"):
+		uses |= MaterialUse.CEILING
+	if _contains_any(name_, ["pipe_rust", "prison_iron", "brutal_steel", "brass"]):
+		uses |= MaterialUse.FIXING
+	if _contains_any(name_, ["airport_glass", "mall_glass", "prison_glass"]):
+		uses |= MaterialUse.GLAZING
+	_uses_by_material[name_] = uses
+	return uses
+
+
 func _kind(node: Node) -> String:
 	if node.has_meta("wall_mounted_prison_door"):
 		return "prison_door"
@@ -231,9 +256,12 @@ func _scan(node: Node, parent_transform: Transform3D, prop: int) -> void:
 			if prop >= 0:
 				props[prop].meshes.append({"mesh": mesh, "transform": xf})
 				if mesh.has_meta("data_center_cooling_pad"):
-					_gather_faces(mesh, xf, name_)
+					_gather_faces(mesh, xf, name_, _material_uses(name_) | MaterialUse.FLOOR)
 			else:
-				_gather_faces(mesh, xf, name_)
+				var uses := _material_uses(name_)
+				if mesh.has_meta("data_center_cooling_pad"):
+					uses |= MaterialUse.FLOOR
+				_gather_faces(mesh, xf, name_, uses)
 				var physical_size: Vector3 = (xf * mesh.mesh.get_aabb()).size
 				if ctx.theme == 0 and name_ == "brass" and xf.origin.y < 1.7:
 					props.append({"node": node, "transform": xf, "kind": "casino_brass",
@@ -242,65 +270,58 @@ func _scan(node: Node, parent_transform: Transform3D, prop: int) -> void:
 						and physical_size.y > 0.5 and minf(physical_size.x, physical_size.z) < 0.15:
 					props.append({"node": node, "transform": xf, "kind": "prison_bars",
 						"meshes": [{"mesh": mesh, "transform": xf}]})
-				if _contains_any(name_, ["pipe_rust", "prison_iron", "brutal_steel", "brass"]):
-					var fixing_size := (xf * mesh.mesh.get_aabb()).size
-					if fixing_size.length() < 0.6 and xf.origin.y > 0.4:
+				if uses & MaterialUse.FIXING:
+					if physical_size.length() < 0.6 and xf.origin.y > 0.4:
 						wall_fixings.append(xf.origin)
-				if _contains_any(name_, ["airport_glass", "mall_glass", "prison_glass"]):
+				if uses & MaterialUse.GLAZING:
 					props.append({"node": node, "transform": xf, "kind": "glazing",
 						"meshes": [{"mesh": mesh, "transform": xf}]})
 				elif ctx.theme == 6 and name_ == "sch_red" and xf.origin.y < 0.025:
 					props.append({"node": node, "transform": xf, "kind": "school_court_marking",
 						"meshes": [{"mesh": mesh, "transform": xf}]})
 				elif name_ == "metal_gray" and xf.origin.y > ctx.ceiling_height - 0.1:
-					var size_ := (xf * mesh.mesh.get_aabb()).size
-					if size_.x > 0.45 and size_.z > 0.45 and size_.y < 0.1:
+					if physical_size.x > 0.45 and physical_size.z > 0.45 and physical_size.y < 0.1:
 						vents.append(xf.origin)
 				elif ctx.theme == 0 and name_ == "brass" and xf.origin.y > ctx.ceiling_height - 0.13:
-					var size_ := (xf * mesh.mesh.get_aabb()).size
-					if size_.x > 0.4 and size_.z > 0.4:
+					if physical_size.x > 0.4 and physical_size.z > 0.4:
 						vents.append(xf.origin)
 	for child in node.get_children():
 		_scan(child, xf, prop)
 
 
-func _gather_faces(mesh: MeshInstance3D, xf: Transform3D, mat: String) -> void:
-	if mat.is_empty() or mat.begins_with("surface_wear"):
+func _gather_faces(mesh: MeshInstance3D, xf: Transform3D, mat: String, uses: int) -> void:
+	if (uses & (MaterialUse.WALL | MaterialUse.FLOOR | MaterialUse.CEILING)) == 0 \
+			or mat.is_empty() or mat.begins_with("surface_wear"):
 		return
-	var wall_mat := _contains_any(mat, ["wall", "wallpaper", "plaster", "dado",
-		"pool_tile", "pool_coping", "asy_tile", "sch_tile", "prison_tile", "brutal_structure", "annex_baseboard"])
-	var floor_mat := _contains_any(mat, ["floor", "carpet", "terrazzo", "marble",
-		"pool_tile", "pool_coping", "asy_checker", "sch_tile", "prison_tile"]) \
-		or mesh.has_meta("data_center_cooling_pad")
-	var ceiling_mat := mat.contains("ceiling")
-	if not wall_mat and not floor_mat and not ceiling_mat:
+	if not mesh.mesh is BoxMesh and not (mesh.mesh is QuadMesh and uses & MaterialUse.WALL):
 		return
 	var aabb := mesh.mesh.get_aabb()
+	var midpoint := aabb.get_center()
+	var normal_basis := xf.basis.inverse().transposed()
 	if mesh.mesh is BoxMesh:
 		for axis in 3:
 			for sign_ in [-1.0, 1.0]:
 				var n := Vector3.ZERO
 				n[axis] = sign_
-				var local_center := aabb.get_center()
+				var local_center := midpoint
 				local_center[axis] += aabb.size[axis] * sign_ * 0.5
 				_add_face(mesh, xf, local_center, n, aabb.size, mat,
-					wall_mat, floor_mat, ceiling_mat)
-	elif mesh.mesh is QuadMesh and wall_mat:
-		_add_face(mesh, xf, aabb.get_center(), Vector3.BACK, aabb.size,
-			mat, wall_mat, floor_mat, ceiling_mat)
+					uses, normal_basis)
+	else:
+		_add_face(mesh, xf, midpoint, Vector3.BACK, aabb.size, mat, uses, normal_basis)
 
 
 func _add_face(mesh: MeshInstance3D, xf: Transform3D, local_center: Vector3,
 		local_normal: Vector3, local_size: Vector3, mat: String,
-		wall_mat: bool, floor_mat: bool, ceiling_mat: bool) -> void:
-	var n := (xf.basis.inverse().transposed() * local_normal).normalized()
+		uses: int, normal_basis: Basis) -> void:
+	var n := (normal_basis * local_normal).normalized()
 	var center := xf * local_center
 	var role := ""
-	if floor_mat and n.y > 0.98 and center.y >= -0.02 and center.y < 1.6:
+	if uses & MaterialUse.FLOOR and n.y > 0.98 and center.y >= -0.02 and center.y < 1.6:
 		role = "floor"
-	elif ceiling_mat and n.y < -0.98 and center.y > 2.0:
+	elif uses & MaterialUse.CEILING and n.y < -0.98 and center.y > 2.0:
 		role = "ceiling"
-	elif wall_mat and absf(n.y) < 0.02:
+	elif uses & MaterialUse.WALL and absf(n.y) < 0.02:
 		role = "skirting" if mat == "annex_baseboard" else "wall"
 	if role.is_empty():
 		return

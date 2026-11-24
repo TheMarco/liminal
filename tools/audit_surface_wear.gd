@@ -99,8 +99,10 @@ func _check_chunk(ws: int, cell: Vector2i, theme: int) -> void:
 	if clean_colliders != decorated_colliders: failures.append("theme %d cell %s collider graph changed" % [theme, cell])
 	if clean_gameplay != decorated_gameplay: failures.append("theme %d cell %s gameplay counts changed" % [theme, cell])
 	var sig_a := _wear_signatures(decorated)
-	var decorated_again := Chunk.new(ws, cell, theme)
-	if sig_a != _wear_signatures(decorated_again): failures.append("theme %d cell %s wear is nondeterministic" % [theme, cell])
+	var streamed := Chunk.new(ws, cell, theme, null, true)
+	while not streamed.build_next_slice():
+		pass
+	if sig_a != _wear_signatures(streamed): failures.append("theme %d cell %s streamed wear differs" % [theme, cell])
 	_validate(decorated)
 	var summary: Dictionary = decorated.get_meta("surface_wear_summary", {})
 	var c: Dictionary = counts.get(theme, {"patches": 0, "props": 0, "causes": {}, "profiles": {}, "kinds": {}, "styles": [], "rooms": 0})
@@ -118,7 +120,7 @@ func _check_chunk(ws: int, cell: Vector2i, theme: int) -> void:
 			c.profiles[profile] = int(c.profiles.get(profile, 0)) + 1
 			c.kinds[kind] = int(c.kinds.get(kind, 0)) + 1
 	counts[theme] = c
-	decorated_again.free()
+	streamed.free()
 	decorated.free()
 
 func _colliders(root: Node) -> Array:
