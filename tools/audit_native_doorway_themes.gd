@@ -48,7 +48,7 @@ func _check_theme(theme: int) -> void:
 	manager.descent_route = route
 	manager.descent_topology = topology
 	manager.native_doorway_plan = NativeDoorwayPlan.new()
-	manager.native_doorway_plan.configure(ws, theme, topology)
+	manager.native_doorway_plan.configure(ws, theme, topology, route)
 	var arrival: Vector3 = LevelTransitionController.safe_arrival_for_seed(theme,
 		Vector2i.ZERO, Vector3(6.0, 0.15, 2.0), ws)
 	var arrival_cell := Vector2i(floori(arrival.x / 12.0),

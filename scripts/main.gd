@@ -673,7 +673,7 @@ func _build_level(level: int, around: Vector3) -> void:
 		cm.descent_topology = descent_route.topology
 		# A saved opening must be restored before any room is constructed.
 		cm.native_doorway_plan.configure(cm.world_seed, level,
-			cm.descent_topology)
+			cm.descent_topology, descent_route)
 		cm.descent_base_seed = world_seed
 		run.target_cell = descent_route.target
 		cm.blackout = run.blackout

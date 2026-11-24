@@ -921,7 +921,7 @@ func _place_fallback_arrival() -> void:
 				reserved[at] = true
 	set_topology(null)
 	var doorways := NativeDoorwayPlan.new()
-	doorways.configure(world_seed, theme, layout)
+	doorways.configure(world_seed, theme, layout, self)
 	# _scan inserted these cells in walking-distance order. Only visit the
 	# existing reachable graph, stopping at the first empty, suitable room.
 	for at: Vector2i in _origin_distance:

@@ -310,12 +310,24 @@ func edge_info_for_state(cell: Vector2i, dir: int, state_id: int,
 	return _edge_info_with(_states[state_id].edges, cell, dir, include_native)
 
 
+## A native doorway needs an ordinary seed wall in every authored reality.
+## Photo doors, durable shortcuts and authored openings or seals own their edge.
+func reserves_edge(cell: Vector2i, dir: int) -> bool:
+	var key := edge_key(cell, dir)
+	if _photo_doors.has(key) or _shortcuts.has(key): return true
+	for state in _states:
+		if state.edges.has(key): return true
+	return false
+
+
 ## Route searches only need wall occupancy. Avoid constructing a complete edge
 ## record for every visited neighbour in every generated reality.
-func is_wall_for_state(cell: Vector2i, dir: int, state_id: int) -> bool:
+func is_wall_for_state(cell: Vector2i, dir: int, state_id: int,
+		route: DescentRoute = null) -> bool:
 	if state_id < 0 or state_id >= _states.size():
-		return WorldGen.is_wall(world_seed, cell, dir, theme)
-	return _is_wall_with(_states[state_id].edges, cell, dir)
+		return route.base_is_wall(cell, dir) if route != null else \
+				WorldGen.is_wall(world_seed, cell, dir, theme)
+	return _is_wall_for_route(route, _states[state_id].edges, cell, dir)
 
 
 func is_wall(cell: Vector2i, dir: int, route: DescentRoute = null) -> bool:
@@ -1331,18 +1343,6 @@ func _state_connects(route: DescentRoute, edges: Dictionary,
 	return false
 
 
-func _is_wall_with(edges: Dictionary, cell: Vector2i, dir: int) -> bool:
-	var key := edge_key(cell, dir)
-	if _photo_doors.has(key):
-		return not photo_door_open(str(_photo_doors[key]["id"]))
-	var record: Dictionary = edges.get(key, {})
-	if record.is_empty():
-		record = _shortcuts.get(key, {})
-	if record.is_empty():
-		return WorldGen.is_wall(world_seed, cell, dir, theme)
-	return str(record.get("kind", "open")) == "wall"
-
-
 func _is_wall_for_route(route: DescentRoute, edges: Dictionary,
 		cell: Vector2i, dir: int) -> bool:
 	var key := edge_key(cell, dir)
@@ -1352,7 +1352,8 @@ func _is_wall_for_route(route: DescentRoute, edges: Dictionary,
 	if record.is_empty():
 		record = _shortcuts.get(key, {})
 	if record.is_empty():
-		return route.base_is_wall(cell, dir)
+		return route.base_is_wall(cell, dir) if route != null else \
+				WorldGen.is_wall(world_seed, cell, dir, theme)
 	return str(record.get("kind", "open")) == "wall"
 
 

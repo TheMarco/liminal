@@ -19,7 +19,7 @@ func run() -> void:
 	manager.descent = true
 	manager.descent_topology = topology
 	manager.native_doorway_plan = NativeDoorwayPlan.new()
-	manager.native_doorway_plan.configure(ws, 1, topology)
+	manager.native_doorway_plan.configure(ws, 1, topology, route)
 	world.add_child(manager)
 	manager.set_process(false)
 	var actor := Player.new()
