@@ -191,6 +191,12 @@ func _scan(ws: int, cell: Vector2i) -> void:
 		else:
 			flicker_rooms += 1
 	var room_lights: Array[Node] = []
+	var spots_by_lens: Dictionary[MeshInstance3D, SpotLight3D] = {}
+	for spot: SpotLight3D in chunk.find_children("*","SpotLight3D",true,false):
+		if spot.get_meta("visible_source","") != "office_troffer_grid": continue
+		var lens := spot.get_node_or_null(spot.get_meta("fixture_emitter")) as MeshInstance3D
+		check(lens != null and not spots_by_lens.has(lens),"fill has a missing or duplicate lens")
+		if lens != null: spots_by_lens[lens] = spot
 	for candidate in chunk.find_children("*", "AreaLight3D", true, false):
 		if str(candidate.get_meta("visible_source", "")) in [
 				"office_troffer_grid", "office_flickering_troffer"]:
@@ -201,6 +207,19 @@ func _scan(ws: int, cell: Vector2i) -> void:
 		var emitter := light.get_node_or_null(light.get_meta("fixture_emitter")) as MeshInstance3D
 		check(emitter != null,"ceiling light lost its actual diffuser")
 		if emitter == null: continue
+		var fill := int(light.get_meta("practical_shadow_tier")) > 1 and not emitter.has_meta("office_ceiling_flicker")
+		check(fill == light.get_parent().is_in_group(GraphicsQuality.AREA_LIGHT_BANKS),
+			"primary or flickering panel switched shape, or a fill never switched")
+		var spot: SpotLight3D = spots_by_lens.get(emitter)
+		check(fill == (spot != null),"secondary lighting does not match its physical panel")
+		if spot != null:
+			check(spot.get_parent().is_in_group(GraphicsQuality.SPOT_LIGHT_BANKS)
+					and spot.transform.is_equal_approx(light.transform)
+					and is_equal_approx(spot.spot_range,light.area_range),"fill moved off its diffuser")
+			check(spot.shadow_enabled and is_equal_approx(spot.light_size,light.light_size)
+					and spot.light_cull_mask == light.light_cull_mask
+					and spot.shadow_caster_mask == light.shadow_caster_mask,"fill shadows or ceiling mask changed")
+			spots_by_lens.erase(emitter)
 		var b := _local_box(emitter,Vector3.ZERO)
 		var face := b.get_center()
 		face.y = b.position.y-0.03
@@ -219,6 +238,7 @@ func _scan(ws: int, cell: Vector2i) -> void:
 		GraphicsQuality.apply_practical_light(light,{"shadow_quality":0})
 		check(light.shadow_enabled and light.shadow_opacity==1.0 and light.light_energy==energy,
 			"Low loses wall blocking or direct illumination")
+	check(spots_by_lens.is_empty(),"a fill lights a panel that should be dark")
 	var flicker_nodes := 0
 	for ballast in chunk.find_children("*","Node",true,false):
 		if not ballast is BloomFixtureFlicker: continue

@@ -1,6 +1,10 @@
 extends "res://scripts/levels/chunk_level_builder.gd"
 const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 
+var _ceiling_fixtures: Node3D
+var _area_fills: Node3D
+var _spot_fills: Node3D
+
 
 func _office_door_decor(dir: int, plane: float) -> void:
 	var along = WorldGen.CELL_SIZE / 2.0 + (ctx.random01(46 + dir) - 0.5) * 5.0
@@ -36,7 +40,7 @@ func _office_troffer(at: Vector3, panels: Vector2i,
 	var frame := Node3D.new()
 	frame.name = "OfficeTroffer"
 	frame.set_meta("practical_fixture","office_troffer")
-	scene.add_node(frame)
+	_ceiling_fixtures.add_child(frame)
 	var holder := scene.fitted_model("res://models/scenario/office/ceiling_light.glb",
 		frame, Vector3(at.x, ctx.ceiling_height - 0.04, at.z),
 		Vector3(1.5, 0.08, 0.75), PI / 2.0 if turned else 0.0, false)
@@ -68,8 +72,10 @@ func _office_troffer(at: Vector3, panels: Vector2i,
 func _office_panel_light(lens: MeshInstance3D, energy: float, shadow_tier: int,
 		flicker: bool, material: StandardMaterial3D) -> void:
 	var frame := lens.get_node(lens.get_meta("fixture_frame")) as Node3D
+	var switchable := shadow_tier > 1 and not flicker
 	var light := FIXTURE_LIGHTING.lower_face(frame,lens,Color(0.93,1.0,0.95),
-		energy,OfficeCeilingGrid.LIGHT_REACH,shadow_tier,"office_troffer_grid")
+		energy,OfficeCeilingGrid.LIGHT_REACH,shadow_tier,"office_troffer_grid",
+		_area_fills if switchable else null)
 	# This diffuser faces away from the ceiling. Skip its direct-light shader
 	# work there; bounce light and the player's flashlight still reach the slab.
 	light.light_cull_mask &= ~OfficeCeilingGrid.CEILING_RENDER_LAYER
@@ -78,6 +84,8 @@ func _office_panel_light(lens: MeshInstance3D, energy: float, shadow_tier: int,
 	# An equal-area disc approximates the panel for PCSS; reflections still use
 	# the exact rectangular lens dimensions and shadows remain fully opaque.
 	light.light_size = sqrt(light.area_size.x * light.area_size.y / PI)
+	if switchable:
+		FIXTURE_LIGHTING.strip_spot(_spot_fills,light,lens,84.0,0.65,1.25,light.light_size)
 	if flicker:
 		light.set_meta("visible_source","office_flickering_troffer")
 		light.light_volumetric_fog_energy = 0.0
@@ -110,6 +118,14 @@ func _office_ceiling_vent(at: Vector3, yaw := 0.0) -> MeshInstance3D:
 
 
 func _office_lighting() -> void:
+	# The fill lights share a pair of banks per room. Primary and flickering
+	# panels keep their rectangular light on every graphics preset.
+	_ceiling_fixtures = Node3D.new()
+	_ceiling_fixtures.name = "OfficeCeilingLights"
+	_ceiling_fixtures.set_meta("ceiling_service",true)
+	scene.add_node(_ceiling_fixtures)
+	_area_fills = GraphicsQuality.strip_light_bank(_ceiling_fixtures,true)
+	_spot_fills = GraphicsQuality.strip_light_bank(_ceiling_fixtures,false)
 	if ctx.style == WorldGen.OFFICE_CORRIDOR:
 		_office_corridor_lighting()
 		return

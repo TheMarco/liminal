@@ -24,12 +24,14 @@ static func mesh_bounds_in(mesh: MeshInstance3D, parent: Node3D) -> AABB:
 		ancestor = ancestor.get_parent()
 	return relative*mesh.get_aabb()
 
-static func lower_face(parent: Node3D, lens: MeshInstance3D, color: Color,
-		energy: float, reach: float, shadow_tier: int, source: String) -> AreaLight3D:
-	var bounds := mesh_bounds_in(lens,parent)
+## A switchable light bank must share the fixture frame's coordinate system.
+static func lower_face(frame: Node3D, lens: MeshInstance3D, color: Color,
+		energy: float, reach: float, shadow_tier: int, source: String,
+		bank: Node3D = null) -> AreaLight3D:
+	var bounds := mesh_bounds_in(lens,frame)
 	var face := bounds.get_center()
 	face.y = bounds.position.y
-	return rectangular(parent,lens,Vector2(bounds.size.x,bounds.size.z),
+	return rectangular(frame if bank == null else bank,lens,Vector2(bounds.size.x,bounds.size.z),
 		face,false,color,energy,reach,shadow_tier,source)
 
 ## Opal globes and glass cylinders emit around their luminous volume. Keep
@@ -93,11 +95,14 @@ static func rectangular(parent: Node3D, lens: MeshInstance3D, size: Vector2,
 ## Co-located alternative to a rectangular strip. Both parents use the same
 ## fixture coordinates and the same visible lens.
 static func strip_spot(parent: Node3D, area: AreaLight3D, lens: MeshInstance3D,
-		angle: float, angle_attenuation: float, energy_scale := 1.25) -> SpotLight3D:
+		angle: float, angle_attenuation: float, energy_scale := 1.25,
+		shadow_radius := 0.0) -> SpotLight3D:
 	var spot := SpotLight3D.new()
 	spot.transform = area.transform
 	spot.light_color = area.light_color
 	spot.light_energy = area.light_energy * energy_scale
+	spot.light_size = shadow_radius
+	spot.light_cull_mask = area.light_cull_mask
 	spot.light_specular = area.light_specular
 	spot.light_volumetric_fog_energy = area.light_volumetric_fog_energy
 	spot.spot_range = area.area_range
