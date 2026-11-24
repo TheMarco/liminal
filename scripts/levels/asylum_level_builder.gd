@@ -194,9 +194,15 @@ func _asy_fixture(at: Vector3, pmat: StandardMaterial3D, dead: bool,
 	var lights: Array[Light3D] = []
 	if dead: return lights
 	var height_scale := maxf(1.0,(ctx.ceiling_height-0.5)/4.0)
-	lights.append(FIXTURE_LIGHTING.rectangular(frame,lower,Vector2(0.8,0.55),
+	var secondary := shadow_tier > 1
+	var down_parent := GraphicsQuality.strip_light_bank(frame, true) if secondary else frame
+	var down := FIXTURE_LIGHTING.rectangular(down_parent,lower,Vector2(0.8,0.55),
 		Vector3(0,-0.055,0),false,Color(0.80,0.91,0.90),1.45*height_scale*height_scale,
-		maxf(8.5,ctx.ceiling_height+3),shadow_tier,"asylum_fluorescent"))
+		maxf(8.5,ctx.ceiling_height+3),shadow_tier,"asylum_fluorescent")
+	lights.append(down)
+	if secondary:
+		var spots := GraphicsQuality.strip_light_bank(frame, false)
+		lights.append(FIXTURE_LIGHTING.strip_spot(spots, down, lower, 84.0, 0.65, 1.0, down.light_size))
 	lights.append(FIXTURE_LIGHTING.rectangular(frame,upper,Vector2(0.8,0.55),
 		Vector3(0,0.05,0),true,Color(0.80,0.91,0.90),0.9,9,4,"asylum_fluorescent"))
 	return lights
