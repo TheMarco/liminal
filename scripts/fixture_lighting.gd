@@ -136,7 +136,7 @@ static func rectangular(parent: Node3D, lens: MeshInstance3D, size: Vector2,
 ## fixture coordinates and the same visible lens.
 static func strip_spot(parent: Node3D, area: AreaLight3D, lens: MeshInstance3D,
 		angle: float, angle_attenuation: float, energy_scale := 1.25,
-		shadow_radius := 0.0) -> SpotLight3D:
+		shadow_radius := 0.0, cheap_angle := 0.0) -> SpotLight3D:
 	var spot := SpotLight3D.new()
 	spot.transform = area.transform
 	spot.light_color = area.light_color
@@ -148,6 +148,8 @@ static func strip_spot(parent: Node3D, area: AreaLight3D, lens: MeshInstance3D,
 	spot.spot_range = area.area_range
 	spot.spot_attenuation = area.area_attenuation
 	spot.spot_angle = angle
+	if cheap_angle > 0.0 and cheap_angle < angle:
+		spot.set_meta(GraphicsQuality.STRIP_SPOT_ANGLES, Vector2(angle, cheap_angle))
 	spot.spot_angle_attenuation = angle_attenuation
 	# Wide projected shadows need bias at grazing angles on the walls.
 	spot.shadow_normal_bias = 1.5
@@ -164,7 +166,8 @@ static func suspended_strip(scene: ChunkSceneWriter, at: Vector3,
 		trim: Material, material: StandardMaterial3D, dead: bool,
 		color: Color, down_energy: float, up_energy: float,
 		reach: float, shadow_tier: int, source: String, up_reach := 9.0,
-		switchable_downlight := false, spot_energy_scale := 1.25) -> Array[Light3D]:
+		switchable_downlight := false, spot_energy_scale := 1.25,
+		cheap_spot_angle := 0.0) -> Array[Light3D]:
 	var fixture := Node3D.new()
 	fixture.name = "SuspendedFixture"
 	fixture.position = Vector3(at.x, ceiling - 0.48, at.z)
@@ -195,7 +198,8 @@ static func suspended_strip(scene: ChunkSceneWriter, at: Vector3,
 	lights.append(down)
 	if switchable_downlight:
 		var spots := GraphicsQuality.strip_light_bank(fixture, false)
-		lights.append(strip_spot(spots, down, lower, 84.0, 0.65, spot_energy_scale))
+		lights.append(strip_spot(spots, down, lower, 84.0, 0.65, spot_energy_scale,
+			0.0, cheap_spot_angle))
 	lights.append(rectangular(fixture,upper,size,Vector3(0,upper_face,0),
 		true,color,up_energy,up_reach,4,source))
 	return lights

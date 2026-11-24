@@ -5,6 +5,9 @@ const CELL_GATE_WIDTH := 2.4
 const CELL_GATE_TRAVEL := 0.90
 # Inside face of the model's left steel jamb when fitted to a 2.4 m bay.
 const CELL_GATE_JAMB_X := -0.99
+# At 8.5 m reach an 84° half-angle queries shadows up to 81 m sideways.
+# The narrower fill still covers the floor between neighbouring strips.
+const CHEAP_FILL_ANGLE := 70.0
 const SHOWER_BENCH_SIZE := Vector3(5.8, 0.58, 0.48)
 # Measured from the GLB vertices. The rotated brace's bounding box extends
 # below the feet and above the seat, although none of its steel does.
@@ -82,7 +85,7 @@ func _prison_lighting() -> void:
 			var shadows := 1 if across == 6.0 and t == 6.0 else 4
 			lights.append_array(FIXTURE_LIGHTING.suspended_strip(scene,p,ctx.ceiling_height,
 				body,glass,Mats.prison_iron(),lens,dead,Color(0.83,0.88,0.91),
-				1.8,2.5,8.5,shadows,"prison_troffer",9.0,shadows == 4))
+				1.8,2.5,8.5,shadows,"prison_troffer",9.0,shadows == 4,1.25,CHEAP_FILL_ANGLE))
 	if dead:
 		return
 	if flicker:

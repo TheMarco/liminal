@@ -11,6 +11,7 @@ const PRACTICAL_LIGHTS := &"quality_practical_lights"
 const AIRPORT_FILL_LIGHTS := &"airport_ceiling_fill_lights"
 const AREA_LIGHT_BANKS := &"quality_area_light_banks"
 const SPOT_LIGHT_BANKS := &"quality_spot_light_banks"
+const STRIP_SPOT_ANGLES := &"quality_strip_spot_angles"
 const RECTANGULAR_SHADOW_SIZE := 0.08
 const ROOM_REFLECTIONS := &"quality_room_reflections"
 const AUTHORED_LIGHT_FADE := &"_quality_authored_light_fade"
@@ -88,6 +89,11 @@ static func refresh_practical_lights(tree: SceneTree, values: Dictionary) -> voi
 static func apply_practical_light(light: Light3D, values: Dictionary) -> void:
 	var cheap := bool(values.get("cheap_lighting", false))
 	light.set_meta(&"cheap_lighting", cheap)
+	if light is SpotLight3D and light.has_meta(STRIP_SPOT_ANGLES):
+		var angles: Vector2 = light.get_meta(STRIP_SPOT_ANGLES)
+		var angle := angles.y if cheap else angles.x
+		if not is_equal_approx(light.spot_angle, angle):
+			light.spot_angle = angle
 	if light.has_meta(AUTHORED_LIGHT_FADE):
 		var base: Array = light.get_meta(AUTHORED_LIGHT_FADE)
 		var begin := 16.0 if light.get_meta("stream_room_light", false) else 7.0

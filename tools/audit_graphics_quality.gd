@@ -327,7 +327,11 @@ func check_strip_modes(settings: GameSettings, theme: int, cell: Vector2i,
 		var spots := 0
 		var lower_lenses := {}
 		for light: Light3D in lamps:
-			if light.get_meta("visible_source", "") != source or not light.is_visible_in_tree(): continue
+			if light.get_meta("visible_source", "") != source: continue
+			if source == "prison_troffer" and light is SpotLight3D:
+				expect(is_equal_approx(light.spot_angle, 70.0 if preset < 2 else 84.0),
+					"Prison fill spotlight failed to follow the active lighting budget")
+			if not light.is_visible_in_tree(): continue
 			expect(light.shadow_enabled, "%s lost its blocking shadow" % source)
 			if light.get_meta("fixture_upward", false) and light is AreaLight3D: upward += 1
 			else:
@@ -351,6 +355,8 @@ func check_strip_modes(settings: GameSettings, theme: int, cell: Vector2i,
 		if light is SpotLight3D and light.get_meta("visible_source", "") == source:
 			expect(light.is_visible_in_tree() and light.layers != 0 and light.light_energy > 0.0,
 				"%s missed the preset change or power restoration" % source)
+			if source == "prison_troffer":
+				expect(is_equal_approx(light.spot_angle, 70.0), "parked Prison fill missed the cheap cone")
 	stop_audio(room)
 	room.free()
 	settings.apply_quality_preset(2)
