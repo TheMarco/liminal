@@ -160,7 +160,9 @@ var _title_music := false
 ## fade, so the live stream lags the intent — guarding on the stream instead
 ## lets a second call stack another fade tween on the same property.
 var _music_target := ""
-var _floor_music: AudioStreamMP3
+var _cued_floor_music: AudioStreamPlayer
+var _music_fade: Tween
+var _music_held := false
 var _descent_summary: DescentSummary
 var _descent_hud: DescentHUD
 var _return_prompt: ReturnPrompt
@@ -206,6 +208,7 @@ const MUSIC_TRACKS := {
 # pressure without changing Wander mode's established per-level soundtrack.
 const DESCENT_LATE_TRACK := "res://music/lim9.mp3"
 const MUSIC_DB := -14.0
+const MUSIC_FADE_DB := -50.0
 ## The title has its own track, and nothing else. The world behind the card is
 ## already built and already running, but it is not meant to be heard yet:
 ## room tone, slot banks, fluorescent hum and the odd distant knock under a
@@ -485,7 +488,7 @@ func _ready() -> void:
 		func(): _show_event_message("PHOTOGRAPH WHAT IS WRONG"))
 	_music = AudioStreamPlayer.new()
 	_music.bus = MUSIC_BUS
-	_music.volume_db = -50.0
+	_music.volume_db = MUSIC_FADE_DB
 	add_child(_music)
 	# Decide before the first note: `_build_title` runs several lines later, and
 	# starting a floor track only to crossfade it out is audible.
@@ -950,10 +953,10 @@ func _prepare_encounter_rendering(level: int, live_power_pass := false, wander_o
 
 
 func _populate_floor(level: int, around: Vector3) -> void:
-	# The score fades in after control returns. Read its MP3 while this floor
-	# is covered so the delayed audio callback only starts playback.
-	var track := _music_track_for(level)
-	_floor_music = load(track) as AudioStreamMP3 if not track.is_empty() else null
+	# The title keeps its own music while the selected floor loads. Cue the
+	# floor's random start here, before the player gets control.
+	if _title_music:
+		_cue_floor_music(_music_track_for(level))
 	Chunk.prepare_floor_resources(level)
 	if descent and descent_route != null and not descent_route.obstruction_hint.is_empty():
 		PhotoObstruction.prepare(level)
@@ -1522,8 +1525,7 @@ func descent_tape_watch(on: bool) -> void:
 		_post_process.set_tape_playback(on)
 	# The tape also owns the soundtrack: score and room tone hold their
 	# breath for it and pick up where they left off.
-	if _music != null:
-		_music.stream_paused = on
+	_set_music_held(on)
 	if is_instance_valid(_bleed_bed):
 		_bleed_bed.stream_paused = on
 	_set_ambience_paused(on)
@@ -2649,7 +2651,7 @@ func _new_descent() -> void:
 	_commit_new_descent_checkpoint()
 	# This entry comes from the results screen rather than `_on_start`, so it
 	# must release the audio hold that the title path releases there.
-	_music.stream_paused = false
+	_set_music_held(false)
 	_set_world_audio(true)
 	await _resume_descent_at(0)
 
@@ -2798,28 +2800,74 @@ func _will_show_title() -> bool:
 	return not opts.skips_title()
 
 
+func _set_music_held(held: bool) -> void:
+	_music_held = held
+	if _music != null:
+		_music.stream_paused = held
+
+
+## Seek the floor's MP3 behind the loading screen. Keep that playback paused
+## so fading it in during gameplay only needs to resume it.
+func _cue_floor_music(path: String) -> AudioStreamPlayer:
+	if path.is_empty():
+		return null
+	if _cued_floor_music == null:
+		_cued_floor_music = AudioStreamPlayer.new()
+		_cued_floor_music.bus = MUSIC_BUS
+		add_child(_cued_floor_music)
+	if _cued_floor_music.stream != null and _cued_floor_music.stream.resource_path == path:
+		return _cued_floor_music
+	var track := load(path) as AudioStreamMP3
+	_cued_floor_music.process_mode = Node.PROCESS_MODE_DISABLED
+	_cued_floor_music.volume_linear = 0.0
+	_cued_floor_music.stream = track
+	if track != null:
+		track.loop = true
+		_cued_floor_music.play(randf() * 20.0)
+		_cued_floor_music.stream_paused = true
+	return _cued_floor_music
+
+
 ## While the title is up the track is fixed, whatever floor is loaded behind it.
 func _switch_music(level: int) -> void:
 	var target := TITLE_MUSIC if _title_music else _music_track_for(level)
 	if target == _music_target:
 		return
 	_music_target = target
-	var track := _floor_music if _floor_music != null and _floor_music.resource_path == target else null
-	if track == null and not target.is_empty():
-		track = load(target) as AudioStreamMP3
-	var tw := create_tween()
-	tw.tween_property(_music, "volume_db", -50.0, 0.6)
-	tw.tween_callback(func():
-		if track == null:
-			_music.stop()
-			return
-		track.loop = true
-		_music.stream = track
-		# The title track starts at the top. A floor track is joined partway in,
-		# because you are walking into a building that was already playing.
-		_music.play(0.0 if _title_music else randf() * 20.0))
-	if target != "":
-		tw.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
+	if _music_fade != null:
+		_music_fade.kill()
+	_music_fade = create_tween()
+	if _music.stream != null and _music.stream.resource_path == target and _music.has_stream_playback():
+		# The previous request was reversed before the audible track changed.
+		_music_fade.tween_property(_music, "volume_db", MUSIC_DB, 1.6)
+		return
+	_music_fade.tween_property(_music, "volume_db", MUSIC_FADE_DB, 0.6)
+	if target.is_empty():
+		if _cued_floor_music != null:
+			_cued_floor_music.stream = null
+		_music_fade.tween_callback(_music.stop)
+		return
+	var incoming := _music
+	if target == TITLE_MUSIC:
+		var track := load(target) as AudioStreamMP3
+		_music_fade.tween_callback(func():
+			_music.stream = track
+			if track != null:
+				track.loop = true
+				_music.play()
+				_music.stream_paused = _music_held)
+	else:
+		# Direct starts, lift changes and realm crossings request their score
+		# under cover. A title-screen start already has this playback waiting.
+		incoming = _cue_floor_music(target)
+		_music_fade.tween_callback(func():
+			_music.stream = null
+			_cued_floor_music = _music
+			_music = incoming
+			_music.process_mode = Node.PROCESS_MODE_INHERIT
+			_music.stream_paused = _music_held
+			_music.volume_db = MUSIC_FADE_DB)
+	_music_fade.tween_property(incoming, "volume_db", MUSIC_DB, 1.6)
 
 
 func _video_pipeline_requested() -> int:
@@ -3360,6 +3408,9 @@ func _build_title(force := false) -> void:
 	_title.quit_requested.connect(_request_quit)
 	add_child(_title)
 	_set_title_covered(true)
+	if not _title_floor_pending:
+		# Returning to an already-built floor skips the initial loading step.
+		_cue_floor_music(_music_track_for(active_level))
 	if descent:
 		_title.present_descent(true)
 
@@ -3468,7 +3519,7 @@ func _prepare_first_wander() -> void:
 
 func _finish_mode_start(selected_descent: bool) -> void:
 	_apply_hud_scaling()
-	_music.stream_paused = false
+	_set_music_held(false)
 	_set_world_audio(true)
 	_switch_music(active_level)
 	player.grab_look()
@@ -3488,7 +3539,7 @@ func _play_descent_intro() -> void:
 	_set_world_audio(false)
 	# Score and dialogue independently feed Master. Pause the score while the
 	# Hall bus and ambience are silent, leaving the intro's own audio untouched.
-	_music.stream_paused = true
+	_set_music_held(true)
 	player.velocity = Vector3.ZERO
 	player.set_process_unhandled_input(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -3513,7 +3564,7 @@ func _play_descent_outro() -> void:
 		return
 	_set_presence(Presence.SILENT)
 	_set_world_audio(false)
-	_music.stream_paused = true
+	_set_music_held(true)
 	player.velocity = Vector3.ZERO
 	player.set_process_unhandled_input(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE

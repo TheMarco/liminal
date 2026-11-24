@@ -100,18 +100,26 @@ func run() -> void:
 	if music_bus >= 0:
 		expect(AudioServer.get_bus_send(music_bus) == "Master",
 			"music is affected by the world-effects volume bus")
-	# Headless startup can reach this check before the soundtrack fade-in
-	# tween starts playback. A stopped stream has no paused playback state.
-	if not game._music.playing:
-		game._music.stream = load(game._music_track_for(game.active_level))
-		game._music.play()
-	expect(game._music.playing, "soundtrack could not start for the playback check")
+	var floor_track: String = game._music_track_for(game.active_level)
+	var score: AudioStreamPlayer = game._music
+	if score.stream == null or score.stream.resource_path != floor_track:
+		score = game._cued_floor_music
+		expect(score != null and score.stream_paused and is_zero_approx(score.volume_linear),
+			"floor score was not cued silently before the fade")
+	var playback: AudioStreamPlayback
+	if score != null and score.has_stream_playback():
+		playback = score.get_stream_playback()
+	expect(playback != null, "floor score has no prepared playback")
 	# Headless startup omits the GPU video host. Exercise the Classic
 	# compositor explicitly; the default Full pipeline has no legacy overlay.
 	game._post_process.set_video_pipeline(0, game._settings.values)
 	game.descent_tape_watch(true)
 	expect(game._post_process._overlay.visible,
 		"TV watch must retain the whole-scene post-processing overlay")
+	expect(await await_until(func(): return game._music == score and game._music.has_stream_playback()),
+		"floor score never took over during tape playback")
+	expect(game._music.has_stream_playback() and game._music.get_stream_playback() == playback
+		and game._music.stream.resource_path == floor_track, "floor score restarted at the handoff")
 	expect(game._music.stream_paused,
 		"VCR watch did not pause the independently routed music")
 	game.descent_tape_watch(false)
