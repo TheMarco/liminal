@@ -6349,41 +6349,48 @@ func _rect_hits_zones(rect: Rect2, zones: Array[Rect2]) -> bool:
 	return false
 
 
-## Collect the floor footprint of every visible mesh below head height. A
-## top-level prop pivot is removed as a unit when any of its solid-looking
-## geometry occupies an approach lane, so a bookcase cannot be left as loose
-## shelves and a table cannot be left as four orphaned legs.
-func _collect_low_mesh_rects(node: Node, parent_xf: Transform3D, out: Array[Rect2]) -> void:
+## A support point is the corner farthest along an axis. Transforming those
+## corners directly preserves exact contact at the floor and doorway edges.
+static func _bounds_reach_player(box: AABB, xf: Transform3D, local_up: Vector3) -> bool:
+	return (xf * box.get_support(local_up)).y > 0.22 \
+		and (xf * box.get_support(-local_up)).y < 2.45
+
+
+static func _bounds_floor_rect(box: AABB, xf: Transform3D, local_axes: Basis) -> Rect2:
+	var min_x := (xf * box.get_support(-local_axes.x)).x
+	var max_x := (xf * box.get_support(local_axes.x)).x
+	var min_z := (xf * box.get_support(-local_axes.z)).z
+	var max_z := (xf * box.get_support(local_axes.z)).z
+	return Rect2(min_x, min_z, max_x - min_x, max_z - min_z)
+
+
+## Collect a furnishing's footprints, or stop on the first mesh that occupies
+## a doorway. Clearance removes the entire furnishing when any part hits.
+func _collect_low_mesh_rects(node: Node, parent_xf: Transform3D, out: Array[Rect2],
+		doorways: Array[Rect2] = []) -> bool:
 	var xf := parent_xf
 	if node is Node3D:
 		xf = parent_xf * (node as Node3D).transform
 	if node is MeshInstance3D:
 		var mi := node as MeshInstance3D
 		if mi.mesh != null:
-			var a := mi.get_aabb()
-			var mn := Vector3(INF, INF, INF)
-			var mx := Vector3(-INF, -INF, -INF)
-			for ix in 2:
-				for iy in 2:
-					for iz in 2:
-						var p := xf * (a.position + Vector3(a.size.x * ix,
-							a.size.y * iy, a.size.z * iz))
-						mn = mn.min(p)
-						mx = mx.max(p)
+			var bounds := mi.get_aabb()
+			var axes := xf.basis.transposed()
 			# Floor finishes and ceiling fittings do not obstruct a body.
-			if mx.y > 0.22 and mn.y < 2.45:
-				out.append(Rect2(mn.x, mn.z, mx.x - mn.x, mx.z - mn.z))
-	for ch in node.get_children():
-		_collect_low_mesh_rects(ch, xf, out)
+			if _bounds_reach_player(bounds, xf, axes.y):
+				var rect := _bounds_floor_rect(bounds, xf, axes)
+				if doorways.is_empty():
+					out.append(rect)
+				elif _rect_hits_zones(rect, doorways):
+					return true
+	for i in node.get_child_count():
+		if _collect_low_mesh_rects(node.get_child(i), xf, out, doorways):
+			return true
+	return false
 
 
 func _node_hits_doorway(node: Node, zones: Array[Rect2]) -> bool:
-	var rects: Array[Rect2] = []
-	_collect_low_mesh_rects(node, Transform3D.IDENTITY, rects)
-	for rect in rects:
-		if _rect_hits_zones(rect, zones):
-			return true
-	return false
+	return not zones.is_empty() and _collect_low_mesh_rects(node, Transform3D.IDENTITY, [], zones)
 
 
 func _collision_floor_rect(cs: CollisionShape3D) -> Rect2:
@@ -6400,19 +6407,12 @@ func _collision_floor_rect(cs: CollisionShape3D) -> Rect2:
 		size = Vector3(cap.radius * 2.0, cap.height, cap.radius * 2.0)
 	else:
 		return Rect2()
-	var local := AABB(-size * 0.5, size)
-	var mn := Vector3(INF, INF, INF)
-	var mx := Vector3(-INF, -INF, -INF)
-	for ix in 2:
-		for iy in 2:
-			for iz in 2:
-				var p := cs.transform * (local.position + Vector3(local.size.x * ix,
-					local.size.y * iy, local.size.z * iz))
-				mn = mn.min(p)
-				mx = mx.max(p)
-	if mx.y <= 0.22 or mn.y >= 2.45:
+	var bounds := AABB(-size * 0.5, size)
+	var xf := cs.transform
+	var axes := xf.basis.transposed()
+	if not _bounds_reach_player(bounds, xf, axes.y):
 		return Rect2()
-	return Rect2(mn.x, mn.z, mx.x - mn.x, mx.z - mn.z)
+	return _bounds_floor_rect(bounds, xf, axes)
 
 
 func _furnishing_clearance_zones() -> Array[Rect2]:
@@ -6455,18 +6455,19 @@ func _clear_furnishings_from_doorways(n0: int, b0: int) -> void:
 			if group_id >= 0:
 				hit_groups[group_id] = true
 	# A hit on any visible or physical member removes the whole atomic group.
-	for i in range(n0, get_child_count()):
-		var ch := get_child(i)
-		var group_id: int = int(ch.get_meta("furnishing_group", -1))
-		if group_id >= 0 and hit_groups.has(group_id) and not remove_nodes.has(ch):
-			remove_nodes.append(ch)
-	for i in range(b0, body.get_child_count()):
-		var cs := body.get_child(i) as CollisionShape3D
-		if cs == null:
-			continue
-		var group_id: int = int(cs.get_meta("furnishing_group", -1))
-		if group_id >= 0 and hit_groups.has(group_id) and not remove_shapes.has(cs):
-			remove_shapes.append(cs)
+	if not hit_groups.is_empty():
+		for i in range(n0, get_child_count()):
+			var ch := get_child(i)
+			var group_id: int = int(ch.get_meta("furnishing_group", -1))
+			if hit_groups.has(group_id) and not remove_nodes.has(ch):
+				remove_nodes.append(ch)
+		for i in range(b0, body.get_child_count()):
+			var cs := body.get_child(i) as CollisionShape3D
+			if cs == null:
+				continue
+			var group_id: int = int(cs.get_meta("furnishing_group", -1))
+			if hit_groups.has(group_id) and not remove_shapes.has(cs):
+				remove_shapes.append(cs)
 	for ch in remove_nodes:
 		remove_child(ch)
 		ch.free()

@@ -24,13 +24,60 @@ func _room_has_door(ws: int, root: Vector2i, theme: int) -> bool:
 	return false
 
 
+## A prop exactly touching a lane or a height cutoff must give the same
+## result as its transformed corners, including under a mirrored parent.
+func _furnishing_contact_failures() -> int:
+	var chunk := Chunk.new(1, Vector2i.ZERO, 4, null, true)
+	var pivot := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(2.34, 0.81, 4.13)
+	mesh.mesh = box
+	pivot.add_child(mesh)
+	var collider := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = box.size
+	collider.shape = shape
+	var failures := 0
+	for angle: float in [0.0, 0.36]:
+		pivot.transform = Transform3D(Basis(Vector3.UP, angle).scaled(Vector3(-1, 1.13, 0.88)), Vector3(4, 0, -7))
+		mesh.transform = Transform3D(Basis(Vector3.RIGHT, angle * 0.87).scaled(Vector3(1.2, 0.9, -1)), Vector3(-1.8, 0, 2.5))
+		for placement in 3:
+			var xf := pivot.transform * mesh.transform
+			collider.transform = xf
+			var low := Vector3(INF, INF, INF)
+			var high := -low
+			for corner in 8:
+				var point := xf * mesh.get_aabb().get_endpoint(corner)
+				low = low.min(point)
+				high = high.max(point)
+			var footprint := Rect2(low.x, low.z, high.x - low.x, high.z - low.z)
+			var in_height := high.y > 0.22 and low.y < 2.45
+			if chunk._collision_floor_rect(collider) != (footprint if in_height else Rect2()):
+				failures += 1
+			var touching := Rect2(footprint.end.x, footprint.position.y, 1.0, footprint.size.y)
+			for zone: Rect2 in [touching, touching.grow(0.001), footprint]:
+				if chunk._node_hits_doorway(pivot, [zone]) != (in_height and footprint.intersects(zone)):
+					failures += 1
+			if placement == 0:
+				pivot.position.y += 0.22 - high.y
+			elif placement == 1:
+				pivot.position.y += 2.45 - low.y
+	pivot.free()
+	collider.free()
+	chunk.free()
+	return failures
+
+
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	var seed_count := clampi(int(args[0]) if args.size() > 0 else 6, 1, 24)
 	var radius := clampi(int(args[1]) if args.size() > 1 else 6, 2, 12)
 	var rooms := 0
 	var culled := 0
-	var failures := 0
+	var failures := _furnishing_contact_failures()
+	if failures > 0:
+		print("FAIL — %d furnishing bounds disagree at doorway contact" % failures)
 	var chalk_failures := 0
 	var terminal_failures := 0
 	var stationery_failures := 0
