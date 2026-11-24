@@ -1,11 +1,13 @@
 extends Node3D
-## Native geometry and matching collision, prepared in bounded main-thread slices.
+## A worker calculates mesh deformation. The game thread builds matching
+## collision and installs the prepared meshes in slices.
 ## Preparation owns a private signal, so freeing this node cancels its coroutines.
 signal _prepare_continue
 const Profile := preload("res://scripts/hallway_wave_profile.gd")
 const Native := preload("res://scripts/environment_breath_surface.gd")
 const Placement := preload("res://scripts/environment_breath_placement.gd")
 const Layout := preload("res://scripts/hallway_wave_placement.gd")
+const MeshJob := preload("res://scripts/hallway_wave_mesh_job.gd")
 var frame: Transform3D
 var width := 3.55
 var height := 3.0
@@ -22,7 +24,10 @@ var failed := false
 var max_prepare_step_ms := 0.0
 var _deadline := 0
 var _cancelled := false
-const PREPARE_BUDGET_USEC := 2000
+var _mesh_job: MeshJob
+# Tiny surfaces cost less to compute than waiting a frame for a worker.
+const INLINE_VERTEX_KEYS := 512
+const PREPARE_BUDGET_USEC := 1000
 const INSTALL_SURFACES_PER_FRAME := 8
 
 func begin_setup(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> void:
@@ -114,7 +119,11 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 				return false
 			# Primitive/imported mesh arrays can be shared by multiple instances.
 			# Rest attributes and UV baking must never mutate the source arrays.
+			var read_started := Time.get_ticks_usec()
 			var arrays := source.surface_get_arrays(s).duplicate(true)
+			if Time.get_ticks_usec() - read_started >= RuntimeDiagnostics.SLOW_USEC:
+				RuntimeDiagnostics.slow("hallway_wave_mesh_read", read_started,
+					{"cell": chunk.cell, "node": str(node.name), "surface": s, "mesh_class": source.get_class()})
 			var material := node.get_active_material(s)
 			overrides.append(node.get_surface_override_material(s))
 			if not (material is StandardMaterial3D or material is ShaderMaterial):
@@ -144,12 +153,23 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 				flags |= (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) | (Mesh.ARRAY_CUSTOM_RGB_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM1_SHIFT)
 				material = Native.wrap_native_shader(material)
 			materials.append(material)
-			var shapes: Array[Array] = []
-			var samples: Dictionary = await _samples(arrays, xf)
-			for k: int in shape_indices:
-				shapes.append(await _shape(arrays, xf, float(k)/(Profile.KEYS-1), samples))
-				await _budget()
-			motion.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, shapes, {}, flags)
+			var geometry := MeshJob.Geometry.new()
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			if vertices.size() * shape_indices.size() <= INLINE_VERTEX_KEYS:
+				geometry.calculate(arrays, xf, shape_indices.keys(), width, height)
+			else:
+				if _mesh_job == null:
+					_mesh_job = MeshJob.new()
+					get_tree().root.add_child(_mesh_job)
+				_mesh_job.start(geometry, arrays, xf, shape_indices.keys(), width, height)
+				while not _mesh_job.collect_if_ready():
+					await _prepare_continue
+			await _budget()
+			var upload_started := Time.get_ticks_usec()
+			motion.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, geometry.shapes, {}, flags)
+			if Time.get_ticks_usec() - upload_started >= RuntimeDiagnostics.SLOW_USEC:
+				RuntimeDiagnostics.slow("hallway_wave_mesh_upload", upload_started,
+					{"cell": chunk.cell, "node": str(node.name), "surface": s, "vertices": vertices.size(), "keys": shape_indices.size()})
 			if motion.get_surface_count() != s+1:
 				failure = "Could not preserve mesh surface: " + str(node.get_path())
 				native.free()
@@ -157,6 +177,7 @@ func _build(chunk: Chunk, axis: int, lane_width: float, lane_height: float) -> b
 		pieces.append({"node": node, "original": original, "motion": motion, "keys": shape_indices,
 			"materials": materials, "overrides": overrides, "override": node.material_override, "margin": node.extra_cull_margin})
 		await _budget()
+	_retire_mesh_job()
 	native.free()
 	for node: CollisionShape3D in chunk.find_children("*", "CollisionShape3D", true, false):
 		if node.disabled: continue
@@ -356,83 +377,6 @@ func _custom_attribute(vectors: PackedVector3Array) -> PackedFloat32Array:
 		if i % 256 == 255: await _budget()
 	return data
 
-func _samples(arrays: Array, xf: Transform3D) -> Dictionary:
-	var points := PackedVector3Array()
-	var fields := PackedVector3Array()
-	var derivatives: Array[Basis] = []
-	var along_min := INF
-	var along_max := -INF
-	const E := 0.005
-	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var cross_sections: Dictionary[Vector2, int] = {}
-	for i in vertices.size():
-		var p := xf * vertices[i]
-		along_min = minf(along_min, p.z)
-		along_max = maxf(along_max, p.z)
-		points.append(p)
-		# The displacement field is constant along the corridor. Grid rows
-		# sharing x/y also share both transverse derivatives.
-		var xy := Vector2(p.x, p.y)
-		var prior: int = cross_sections.get(xy, -1)
-		if prior >= 0:
-			fields.append(fields[prior])
-			derivatives.append(derivatives[prior])
-		else:
-			cross_sections[xy] = i
-			fields.append(Profile.field(p, width, height))
-			derivatives.append(Basis(
-				(Profile.field(p+Vector3.RIGHT*E,width,height)-Profile.field(p-Vector3.RIGHT*E,width,height))/(2*E),
-				(Profile.field(p+Vector3.UP*E,width,height)-Profile.field(p-Vector3.UP*E,width,height))/(2*E),
-				Vector3.ZERO))
-		if i % 64 == 63: await _budget()
-	return {"points": points, "fields": fields, "derivatives": derivatives, "along_min": along_min, "along_max": along_max}
-
-func _shape(arrays: Array, xf: Transform3D, at: float, samples: Dictionary) -> Array:
-	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-	var tangents: PackedFloat32Array = arrays[Mesh.ARRAY_TANGENT]
-	var result: Array = []
-	result.resize(Mesh.ARRAY_MAX)
-	result[Mesh.ARRAY_VERTEX] = vertices
-	result[Mesh.ARRAY_NORMAL] = normals
-	if not tangents.is_empty(): result[Mesh.ARRAY_TANGENT] = tangents
-	var center := lerpf(-6.0-Profile.BAND, 6.0+Profile.BAND, at)
-	# Most keys never reach a small prop. Reuse its exact rest arrays instead
-	# of transforming tens of thousands of leaves/pebbles for zero movement.
-	# Include the derivative stencil so boundary normals remain identical.
-	if at <= 0.0 or at >= 1.0 or samples.along_min > center+Profile.BAND+0.005 or samples.along_max < center-Profile.BAND-0.005:
-		return result
-	var positions := vertices.duplicate()
-	var directions := normals.duplicate()
-	var ts := tangents.duplicate()
-	var inverse := xf.affine_inverse()
-	# Most room vertices share the same longitudinal grid coordinates.
-	var pulses: Dictionary[float, Vector2] = {}
-	var points: PackedVector3Array = samples.points
-	var fields: PackedVector3Array = samples.fields
-	var derivatives: Array[Basis] = samples.derivatives
-	for i in vertices.size():
-		if i % 64 == 63: await _budget()
-		var p := points[i]
-		if not pulses.has(p.z):
-			pulses[p.z] = Vector2(Profile.pulse(p.z, at), (Profile.pulse(p.z+0.005, at)-Profile.pulse(p.z-0.005, at))/0.01)
-		var wave: Vector2 = pulses[p.z]
-		if wave == Vector2.ZERO: continue
-		var field := fields[i]
-		var derivative := derivatives[i]
-		positions[i] = inverse * (p + field * wave.x)
-		var j := inverse.basis * Basis(Vector3.RIGHT+derivative.x*wave.x, Vector3.UP+derivative.y*wave.x, Vector3.BACK+field*wave.y) * xf.basis
-		directions[i] = (j.inverse().transposed() * normals[i]).normalized()
-		if ts.size() >= (i+1)*4:
-			var t := (j * Vector3(tangents[i*4],tangents[i*4+1],tangents[i*4+2])).normalized()
-			ts[i*4] = t.x
-			ts[i*4+1] = t.y
-			ts[i*4+2] = t.z
-	result[Mesh.ARRAY_VERTEX] = positions
-	result[Mesh.ARRAY_NORMAL] = directions
-	if not ts.is_empty(): result[Mesh.ARRAY_TANGENT] = ts
-	return result
-
 func _install_piece(piece: Dictionary) -> void:
 	var node: MeshInstance3D = piece.node
 	node.mesh = piece.motion
@@ -510,8 +454,14 @@ func restore() -> void:
 	installed = false
 	_last_lo = -1
 
+func _retire_mesh_job() -> void:
+	if is_instance_valid(_mesh_job):
+		_mesh_job.retire()
+	_mesh_job = null
+
 func _exit_tree() -> void:
 	_cancelled = true
+	_retire_mesh_job()
 	restore()
 
 func originals_restored() -> bool:

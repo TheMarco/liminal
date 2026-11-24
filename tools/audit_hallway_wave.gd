@@ -186,12 +186,23 @@ func run() -> void:
 	await process_frame
 	# Teardown while suspended mid-preparation must not resume freed objects.
 	expect(director.start_event(chunk,layout,"wave"), "restart failed")
-	director._physics_process(1.0/60)
+	var pending_job_id := 0
+	for step in 120:
+		director._physics_process(1.0/60)
+		if is_instance_valid(director.active):
+			var job: Node = director.active._mesh_job
+			if is_instance_valid(job) and job._task >= 0:
+				pending_job_id = job.get_instance_id()
+				break
+		await process_frame
+	expect(pending_job_id != 0, "room did not submit a wave mesh for background preparation")
 	game.cm.chunks.erase(cell)
 	chunk.queue_free()
 	await process_frame
 	director._physics_process(1.0/60)
 	expect(director.active == null, "unload retained preparation")
+	expect(await await_until(func(): return not is_instance_id_valid(pending_job_id)),
+		"unloading the room retained its background mesh job")
 	await process_frame
 	await teardown_game(game)
 	finish("hallway wave: streamed Office, boundaries, walking, audio, cancellation and unload")
