@@ -324,6 +324,14 @@ func _warm_blackout_surfaces(rooms: Node3D, live_power_pass: bool) -> void:
 		sample.scale = Vector3.ONE
 		sample.visible = true
 		blackout_label_count += 1
+	# An arrival can have no signs. Draw a room number in the same blackout
+	# pass so switching a later cell's lettering to shaded is already prepared.
+	var room_number := Label3D.new()
+	room_number.text = "A-01"
+	room_number.font_size = 96
+	room_number.position = Vector3(-6, 3, 2) if seen.is_empty() else Vector3(-6, 4, 2)
+	_samples.add_child(room_number)
+	blackout_label_count += 1
 
 func _material_key(material: Material) -> Array:
 	var key: Array = []

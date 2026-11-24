@@ -113,6 +113,10 @@ func run() -> void:
 	chunks.set_process(false)
 	chunks.warm_up(Vector2i.ZERO)
 	var chunk := chunks.chunk_at(Vector2i.ZERO)
+	if theme == 8:
+		# Reproduce arriving in Prison before any numbered cells stream in.
+		for label: Label3D in rooms.find_children("*", "Label3D", true, false):
+			label.text = ""
 	var wall := MeshInstance3D.new()
 	wall.mesh = BoxMesh.new()
 	wall.mesh.size = Vector3(2, 2, 0.1)
@@ -199,6 +203,14 @@ func run() -> void:
 		failures.append("live breathing surface failed preparation")
 	await check_event("breathing", func(): surface.pose(PackedFloat32Array([0.5])))
 	surface.restore()
+	var cell_number: Label3D
+	if theme == 8:
+		cell_number = Label3D.new()
+		cell_number.text = "B-27"
+		cell_number.font_size = 96
+		chunk.add_child(cell_number)
+		cell_number.global_transform = camera.global_transform.translated_local(Vector3.FORWARD * 1.5)
+		await frames(8)
 	var power := Power.new()
 	await check_event("blackout", func():
 		chunks.set_blackout(true)
@@ -207,6 +219,7 @@ func run() -> void:
 	await check_event("power_restored", func():
 		chunks.set_blackout(false)
 		power.restore())
+	if cell_number != null: cell_number.free()
 	var reveal := MutationRevealEffect.new()
 	var ghost := DescentMutationCoordinator.new()._snapshot_visuals([chunk])
 	await check_event("mutation_reveal", func():
