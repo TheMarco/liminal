@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://models/cc0/office_chair/Office_Chair.fbx" id="chair"]
+[ext_resource type="Texture2D" path="res://models/cc0/office_chair/Office_Chair_Base_Color.png" id="albedo"]
+[ext_resource type="Texture2D" path="res://models/cc0/office_chair/Office_Chair_Metallic.png" id="metallic"]
+[ext_resource type="Texture2D" path="res://models/cc0/office_chair/Office_Chair_Normal.png" id="normal"]
+[ext_resource type="Texture2D" path="res://models/cc0/office_chair/Office_Chair_Roughness.png" id="roughness"]
+
+[sub_resource type="StandardMaterial3D" id="finish"]
+resource_name = "office_task_chair"
+albedo_texture = ExtResource("albedo")
+metallic_texture = ExtResource("metallic")
+roughness_texture = ExtResource("roughness")
+normal_enabled = true
+normal_texture = ExtResource("normal")
+texture_filter = 5
+
+[node name="Office_Chair" instance=ExtResource("chair")]
+
+[node name="Cube_1" parent="." index="0"]
+material_override = SubResource("finish")

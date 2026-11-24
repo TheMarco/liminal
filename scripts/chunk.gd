@@ -129,7 +129,7 @@ const CC0_PROP_NAMES := ["ArmChair_01", "Chandelier_03", "CoffeeCart_01",
 	"stationery_supplies", "CashRegister_01", "hand_truck",
 	"industrial_storage_cart", "metal_trash_can", "long_life_food",
 	"plunger", "drain_cleaner", "can_rusted"]
-const OFFICE_CHAIR_PATH := "res://models/cc0/office_chair/Office_Chair.fbx"
+const OFFICE_CHAIR_PATH := "res://models/cc0/office_chair/office_task_chair.tscn"
 const OFFICE_MODERN_CHAIR_PATH := \
 	"res://models/authored/office_chair/office_chair.glb"
 # World bounds (after the file's own 0.90176 root scale and -90° root yaw)
@@ -1223,7 +1223,7 @@ static func theme_prop_paths(p_theme: int) -> Array[String]:
 			paths.append("res://scenes/preloads/office_rooms.tscn")
 			paths.append_array([OFFICE_AIR_CONDITIONER_PATH, OFFICE_PHONE_PATH, OFFICE_PRINTER_PATH])
 			paths.append(ANNEX_SHELVING_PATH) # Office photographic obstruction.
-			paths.append_array([OFFICE_WATER_COOLER_PATH, OFFICE_CHAIR_PATH, OFFICE_MODERN_CHAIR_PATH, OFFICE_TERMINAL_PATH])
+			paths.append_array([OFFICE_WATER_COOLER_PATH, OFFICE_MODERN_CHAIR_PATH, OFFICE_TERMINAL_PATH])
 			paths.append_array([OFFICE_BOXES_PATH, OFFICE_SCHOOL_BIN_PATH, LIGHT_SWITCH_PATH, OUTLET_PATH])
 			paths.append("res://models/cc0/WetFloorSign_01/WetFloorSign_01_1k.gltf")
 			paths.append("res://models/cc0/clipboard/clipboard_1k.gltf")
@@ -9162,7 +9162,6 @@ func _task_chair(pos: Vector3, yaw: float) -> Node3D:
 	inst.set_meta("surface_wear_prop", "office_task_chair")
 	inst.position = pos + Vector3(0, 0.50676, 0)
 	inst.rotation.y = yaw
-	_set_model_material(inst, Mats.office_task_chair())
 	add_child(inst)
 	_collider_yaw_box(pos + Vector3(0, 0.52, 0), Vector3(0.62, 1.04, 0.62), yaw)
 	return inst

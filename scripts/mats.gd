@@ -850,22 +850,6 @@ static func annex_baseboard() -> StandardMaterial3D:
 		m.roughness = 0.88)
 
 
-## Textured black task chair from 3DModelsCC0/OpenGameArt. The source FBX
-## references an absent authoring-time TIFF, so bind the supplied PBR set
-## explicitly rather than allowing the importer to render it flat white.
-static func office_task_chair() -> StandardMaterial3D:
-	return _std("office_task_chair", func(m: StandardMaterial3D):
-		var root := "res://models/cc0/office_chair/Office_Chair_"
-		m.albedo_texture = load(root + "Base_Color.png")
-		m.normal_enabled = true
-		m.normal_texture = load(root + "Normal.png")
-		m.roughness_texture = load(root + "Roughness.png")
-		m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
-		m.metallic_texture = load(root + "Metallic.png")
-		m.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
-		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC)
-
-
 static func crt() -> Material:
 	return _shader("crt", "res://shaders/crt.gdshader")
 

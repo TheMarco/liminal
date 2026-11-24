@@ -10,5 +10,5 @@
   roughness textures
 
 The FBX references an authoring-time `Mat_Color_91.tif` that is not included
-in the archive. `Mats.office_task_chair()` explicitly binds the supplied PNG
-PBR maps to every imported mesh.
+in the archive. `office_task_chair.tscn` binds the supplied PNG maps to the
+chair mesh so the model and its material load together.

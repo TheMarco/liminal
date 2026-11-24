@@ -28,6 +28,7 @@ func run() -> void:
 			expect(FloorResourcePreloader.cached_scene(Chunk.OFFICE_TERMINAL_PATH) != null,
 				"school admin office would synchronously load its terminal")
 			_expect_cc0_ready("school", ["office_notepads"])
+			_expect_prepared_chair()
 	Chunk.prepare_floor_resources(2)
 	_expect_cc0_ready("annex", ["sofa_03", "drawer_cabinet", "ArmChair_01",
 		"Ottoman_01", "CoffeeTable_01", "coffee_table_round_01", "television_02"])
@@ -49,6 +50,26 @@ func run() -> void:
 	ShadowWalkerVisual.clear_runtime_caches()
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	finish("floor resource lifetime")
+
+
+func _expect_prepared_chair() -> void:
+	for suffix in ["Base_Color", "Normal", "Roughness", "Metallic"]:
+		var path := "res://models/cc0/office_chair/Office_Chair_%s.png" % suffix
+		expect(ResourceLoader.has_cached(path),
+			"the first school desk chair would load its %s map during play" % suffix)
+	var scene := FloorResourcePreloader.cached_scene(Chunk.OFFICE_CHAIR_PATH)
+	if scene == null:
+		fail("the school desk chair was not prepared")
+		return
+	var chair := scene.instantiate()
+	var meshes := chair.find_children("*", "MeshInstance3D", true, false)
+	expect(not meshes.is_empty(), "the prepared desk chair has no mesh")
+	for mesh: MeshInstance3D in meshes:
+		var mat := mesh.material_override as StandardMaterial3D
+		expect(mat != null and mat.albedo_texture != null and mat.normal_enabled
+			and mat.normal_texture != null and mat.roughness_texture != null
+			and mat.metallic_texture != null, "the prepared desk chair lost its fitted material")
+	chair.free()
 
 
 func _expect_cc0_ready(floor_name: String, models: Array[String]) -> void:
