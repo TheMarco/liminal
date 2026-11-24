@@ -72,6 +72,8 @@ func _run() -> void:
 	check(not visual._presentation.visible and not figure._wisps.visible,
 		"arrival starts fully visible")
 	check(is_zero_approx(figure._wisps.preprocess), "arrival fast-forwards GPU particles")
+	check(figure._wisps.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF,
+		"arrival smoke redraws nearby light shadows")
 	check(figure._wisps.process_material == ShadowFigure.prewarm_presence().process,
 		"arrival rebuilt immutable particle resources")
 	var start := figure.position

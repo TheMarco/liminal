@@ -483,6 +483,9 @@ func _build_presence() -> void:
 	# second of particles in one render frame at every spawn, causing a hitch.
 	_wisps.preprocess = 0.0
 	_wisps.local_coords = false
+	# These translucent motes can invalidate nearby lights' cached shadows
+	# every frame even though their material contributes no shadow silhouette.
+	_wisps.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_wisps.process_material = resources.process
 	_wisps.draw_pass_1 = resources.mesh
 	_wisps.position = Vector3(0, 0.96, 0)
