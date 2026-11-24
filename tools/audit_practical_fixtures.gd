@@ -127,6 +127,8 @@ func run() -> void:
 						expect(light.light_energy==before[light],"ballast alters a different fitting")
 						continue
 					expect(light.light_energy>0.0 and light.light_energy<before[light],"ballast dropout does not dim both faces")
+				if flickering == 1:
+					_check_ballast_during_blackout(chunk, node)
 			var state := {}
 			for light in lamps:
 				state[light] = [light.visible, light.light_energy, light.layers,
@@ -149,6 +151,30 @@ func run() -> void:
 	print("PRACTICAL_FIXTURES checked=%d flickering_rooms=%d dead_rooms=%d" % [checked,flickering,dead])
 	await preload("res://tools/lib/audit_cleanup.gd").release(self)
 	finish("visible practical fixtures")
+
+
+func _check_ballast_during_blackout(chunk: Chunk, ballast: BloomFixtureFlicker) -> void:
+	var previous := GameSettings.current
+	var settings := GameSettings.new("user://fixture-lighting-audit.cfg")
+	GameSettings.current = settings
+	chunk.set_blackout(true)
+	var dark_energies := PackedFloat32Array()
+	for light in ballast.lights:
+		dark_energies.append(light.light_energy)
+	var glow_at_cut := ballast.mats[0].emission_energy_multiplier
+	for reduced in [false, true]:
+		settings.values.reduced_flashing = reduced
+		ballast._process(1.0 / 60.0)
+		for i in ballast.lights.size():
+			expect(ballast.lights[i].light_energy == dark_energies[i], "ballast rewrites a light during blackout")
+		expect(ballast.mats[0].emission_energy_multiplier == glow_at_cut, "ballast changes a lens during blackout")
+	chunk.set_blackout(false)
+	ballast._process(1.0 / 60.0)
+	for i in ballast.lights.size():
+		expect(ballast.lights[i].light_energy == ballast.base_energies[i], "Reduce Flashing fails to restore full brightness")
+	expect(is_equal_approx(ballast.mats[0].emission_energy_multiplier, 2.7), "Reduce Flashing leaves a dim lens")
+	expect(is_equal_approx(ballast.buzz.volume_db, -26.0), "Reduce Flashing leaves the ballast buzzing loudly")
+	GameSettings.current = previous
 
 
 func _check_school_gym_grid() -> void:
