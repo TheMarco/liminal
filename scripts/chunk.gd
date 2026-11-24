@@ -2219,6 +2219,9 @@ func _descent_intro_tv(dir: int) -> void:
 	add_child(tv)
 
 
+const VHS_SITES_PER_SLICE := 8
+
+
 ## Rare optional playback altar. Route selection happens in DescentRoute and
 ## endless density in ChunkManager; this chunk only finds a physically honest
 ## wall site that does not overlap furniture or a doorway approach.
@@ -2227,9 +2230,13 @@ func _build_optional_vhs_set() -> void:
 			or descent_target or descent_arrival \
 			or not is_room_anchor:
 		return
-	var site := _pick_vhs_site()
-	if site.is_empty():
-		return
+	var sites := _optional_vhs_sites()
+	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 7391), sites.size())
+	queue_build_job(_try_optional_vhs_sites.bind(
+		sites, _doorway_clearance_rects(), start, 0, {}))
+
+
+func _place_optional_vhs(site: Dictionary) -> void:
 	var set := VHS_RITUAL_SCRIPT.new() as Node3D
 	set.name = "OptionalVhs"
 	set.world_seed = descent_base_seed
@@ -2246,8 +2253,9 @@ func _build_optional_vhs_set() -> void:
 
 ## Deterministic optional-set search: perimeter wall sites first, then a
 ## freestanding interior lattice, plus the Poolrooms' dry-island sampling.
-func _pick_vhs_site() -> Dictionary:
+func _optional_vhs_sites() -> Array[Dictionary]:
 	var sites: Array[Dictionary] = []
+	var floor_y := _floor_h()
 	# Dense authored rooms can occupy the old six sample points even while a
 	# perfectly sound wall site exists between them. Sample each metre so a
 	# route-selected recording cannot silently disappear.
@@ -2258,7 +2266,7 @@ func _pick_vhs_site() -> Dictionary:
 			continue
 		for along in alongs:
 			sites.append({
-				"at": _wall_pt(dir, float(along), 0.34, _floor_h()),
+				"at": _wall_pt(dir, float(along), 0.34, floor_y),
 				"yaw": _wall_facing(dir),
 			})
 	# Dense authored rooms sometimes occupy every perimeter site. A freestanding
@@ -2269,7 +2277,7 @@ func _pick_vhs_site() -> Dictionary:
 			var yaw_step := posmod(WorldGen.h(wseed, cell.x + int(x),
 				cell.y + int(z), 7393), 4)
 			sites.append({
-				"at": Vector3(x, _floor_h(), z),
+				"at": Vector3(x, floor_y, z),
 				"yaw": float(yaw_step) * PI * 0.5,
 			})
 	if theme == 9:
@@ -2279,15 +2287,22 @@ func _pick_vhs_site() -> Dictionary:
 		for i in 64:
 			sites.append({
 				"at": Vector3(
-					1.5 + 9.0 * _r(7411 + i * 2), _floor_h(),
+					1.5 + 9.0 * _r(7411 + i * 2), floor_y,
 					1.5 + 9.0 * _r(7412 + i * 2)),
 				"yaw": float(posmod(WorldGen.h(wseed, cell.x, cell.y,
 					7421 + i), 4)) * PI * 0.5,
 			})
-	var start := posmod(WorldGen.h(wseed, cell.x, cell.y, 7391),
-		sites.size())
-	var footprint_fallback := {}
-	for i in sites.size():
+	return sites
+
+
+## Dense rooms can exhaust every site. Keep the first furniture-safe fallback
+## across slices while looking for a site with a clear view of the screen.
+func _try_optional_vhs_sites(sites: Array[Dictionary], doorways: Array[Rect2],
+		start: int, offset: int, footprint_fallback: Dictionary) -> void:
+	var end := sites.size()
+	if _collect_build_jobs:
+		end = mini(offset + VHS_SITES_PER_SLICE, end)
+	for i in range(offset, end):
 		var site: Dictionary = sites[(start + i) % sites.size()]
 		var yaw := float(site["yaw"])
 		var at: Vector3 = site["at"]
@@ -2295,16 +2310,19 @@ func _pick_vhs_site() -> Dictionary:
 			if theme == 9 else _floor_box_clear(at, yaw, 1.95, 0.82, 1.2)
 		if not footprint_clear:
 			continue
-		if _optional_vhs_hits_doorway(at, yaw):
+		if _optional_vhs_hits_doorway(at, yaw, doorways):
 			continue
 		if _vhs_watch_path_clear(at, yaw):
-			return site
+			_place_optional_vhs(site)
+			return
 		if footprint_fallback.is_empty():
 			footprint_fallback = site
-	# The private watch layer prevents a neighbouring prop from entering the
-	# close-up. Retain a furniture-safe set when a dense authored room cannot
-	# also provide the ideal camera corridor.
-	return footprint_fallback
+	if end < sites.size():
+		queue_build_job(_try_optional_vhs_sites.bind(
+			sites, doorways, start, end, footprint_fallback))
+	elif not footprint_fallback.is_empty():
+		# The private watch layer still protects the close-up in a dense room.
+		_place_optional_vhs(footprint_fallback)
 
 
 ## The table footprint alone is not enough: playback puts a camera about half
@@ -2321,9 +2339,10 @@ func _vhs_watch_path_clear(at: Vector3, yaw: float) -> bool:
 	return _floor_box_clear(world_centre, yaw, 1.10, 1.10, 1.65)
 
 
-func _optional_vhs_hits_doorway(at: Vector3, yaw: float) -> bool:
+func _optional_vhs_hits_doorway(at: Vector3, yaw: float,
+		doorways: Array[Rect2] = _doorway_clearance_rects()) -> bool:
 	var candidate := plan_box(at, yaw, 1.95, 0.82, 1.2)
-	for zone in _doorway_clearance_rects():
+	for zone in doorways:
 		var centre := zone.position + zone.size * 0.5
 		var doorway := plan_box(Vector3(centre.x, at.y, centre.y), 0.0,
 			zone.size.x, zone.size.y, 1.2)
