@@ -669,7 +669,7 @@ func _photo_room_graph(route: DescentRoute) -> Dictionary:
 
 func _photo_room_distances(route: DescentRoute, graph: Dictionary,
 		openings: Array = []) -> Dictionary:
-	var neighbours := graph.duplicate()
+	var neighbours := graph if openings.is_empty() else graph.duplicate()
 	for record: Dictionary in openings:
 		var at: Vector2i = record["cell"]
 		var other: Vector2i = at + WorldGen.DIRV[edge_dir(record)]
@@ -691,6 +691,44 @@ func _photo_room_distances(route: DescentRoute, graph: Dictionary,
 				distances[next_room] = int(distances[room]) + 1
 				queue.append(next_room)
 	return distances
+
+
+## An obstruction must be approachable from a room on the candidate's walking
+## path. Only inspect seed-authored walls here so districts can share results.
+## The full planner checks the current scan, protected rooms and distance saved.
+func path_can_have_obstruction(route: DescentRoute, path: Array[Vector2i],
+		sites: Dictionary[Vector2i, bool]) -> bool:
+	for cell in path:
+		var room := route.base_room(cell)
+		if not sites.has(room):
+			sites[room] = _room_has_obstruction_wall(route, cell)
+		if sites[room]:
+			return true
+	return false
+
+
+func _room_has_obstruction_wall(route: DescentRoute, cell: Vector2i) -> bool:
+	if not _room_supports_obstruction(route, cell):
+		return false
+	for at in route.base_room_members(cell):
+		for dir in 4:
+			if not route.base_is_wall(at, dir):
+				continue
+			var other: Vector2i = at + WorldGen.DIRV[dir]
+			if _room_supports_obstruction(route, other) and is_equal_approx(
+					Chunk.cell_floor_h(world_seed, at, theme),
+					Chunk.cell_floor_h(world_seed, other, theme)):
+				return true
+	return false
+
+
+func _room_supports_obstruction(route: DescentRoute, at: Vector2i) -> bool:
+	if not _photo_shell_safe(at, theme == 7):
+		return false
+	for member in route.base_room_members(at):
+		if _has_permanent_fixture(member):
+			return false
+	return true
 
 
 func _plan_photo_doors(route: DescentRoute, intro_only := false, obstruction_only := false,
@@ -983,8 +1021,10 @@ func intro_photo_door() -> Dictionary:
 
 func _photo_cell_safe(route: DescentRoute, at: Vector2i,
 		protected: Dictionary, optional: Array[Vector2i], allow_corridor := false) -> bool:
-	if not _mutation_cell_safe(route, at, protected, optional):
-		return false
+	return _mutation_cell_safe(route, at, protected, optional) and _photo_shell_safe(at, allow_corridor)
+
+
+func _photo_shell_safe(at: Vector2i, allow_corridor: bool) -> bool:
 	# Corridor shells, split rooms and submerged pools can hide an edge behind
 	# another architectural barrier. Only reserve ordinary, dry room boundaries.
 	if not allow_corridor and (WorldGen.annex_corridor_axis(world_seed, at) if theme == 2 \
@@ -1045,14 +1085,17 @@ func _cell_allowed(route: DescentRoute, at: Vector2i,
 	# Protect the whole owning room whenever any member contains mandatory or
 	# stateful content, not merely the edge endpoint selected by the planner.
 	for member in route.base_room_members(at):
-		if protected.has(member) \
-				or WorldGen.portal(world_seed, member, theme) >= 0 \
-				or WorldGen.elevator_cell(world_seed, member, theme) \
-				or (posmod(member.x, 3) == 1 and posmod(member.y, 3) == 1):
+		if protected.has(member) or _has_permanent_fixture(member):
 			_cell_allowed_cache[at] = false
 			return false
 	_cell_allowed_cache[at] = true
 	return true
+
+
+func _has_permanent_fixture(at: Vector2i) -> bool:
+	return (posmod(at.x, 3) == 1 and posmod(at.y, 3) == 1) \
+		or WorldGen.portal(world_seed, at, theme) >= 0 \
+		or WorldGen.elevator_cell(world_seed, at, theme)
 
 
 func _mutation_cell_safe(route: DescentRoute, at: Vector2i,

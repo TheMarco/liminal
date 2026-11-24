@@ -142,6 +142,8 @@ static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 	var walls := {}
 	var rooms := {}
 	var room_members := {}
+	var preferred_sites: Dictionary[Vector2i, bool] = {}
+	var obstruction_sites: Dictionary[Vector2i, bool] = {}
 	var route: DescentRoute
 	while district < REALM_DISTRICTS:
 		route = DescentRoute.new()
@@ -152,7 +154,7 @@ static func build(ws: int, floor_theme: int, p_floor_idx := 0) -> DescentRoute:
 		route._base_room_cache = rooms
 		route._base_room_members_cache = room_members
 		route._obstruction_district = district
-		route._build()
+		route._build(preferred_sites, obstruction_sites)
 		# Search each district once in order. Keep the original obstruction
 		# fallback boundary, but never recurse through complete route builds.
 		if p_floor_idx != 0 and route.obstruction_hint.is_empty():
@@ -725,7 +727,8 @@ func walk_metres() -> float:
 	return float(maxi(0, path_from_origin().size() - 1)) * WorldGen.CELL_SIZE
 
 
-func _build() -> void:
+func _build(preferred_sites: Dictionary[Vector2i, bool],
+		obstruction_sites: Dictionary[Vector2i, bool]) -> void:
 	var depth := depth_of(floor_idx)
 	var shorten := float(EARLY_SHORTEN[floor_idx]) \
 		if floor_idx < EARLY_SHORTEN.size() else 1.0
@@ -749,13 +752,13 @@ func _build() -> void:
 		# is only ever reached by cells that already passed the cheap distance
 		# and style filters — the scan is radius-squared and the band is a thin
 		# annulus inside it.
-		candidates = _collect(min_dist, max_dist, true)
+		candidates = _collect(min_dist, max_dist, true, preferred_sites)
 		fallback_tier = 0
 		if candidates.is_empty():
-			candidates = _collect(4, radius, true)
+			candidates = _collect(4, radius, true, preferred_sites)
 			fallback_tier = 1
 		if candidates.is_empty():
-			candidates = _collect(4, radius, false)
+			candidates = _collect(4, radius, false, preferred_sites)
 			fallback_tier = 2
 		if not candidates.is_empty():
 			break
@@ -815,8 +818,11 @@ func _build() -> void:
 				return WorldGen.h(world_seed, a.x, a.y, TARGET_SALT) < WorldGen.h(world_seed, b.x, b.y, TARGET_SALT))
 			for candidate in candidates.slice(0, OBSTRUCTION_TARGET_ATTEMPTS):
 				target = candidate
+				var path := _candidate_path()
 				var discovery := DescentTopology.new(world_seed, theme)
-				discovery._plan_photo_doors(self, false, true, _candidate_path())
+				if not discovery.path_can_have_obstruction(self, path, obstruction_sites):
+					continue
+				discovery._plan_photo_doors(self, false, true, path)
 				var options := discovery.photo_doorways()
 				if not options.is_empty():
 					obstruction_hint = options[0].duplicate(true)
@@ -828,16 +834,21 @@ func _build() -> void:
 	graph_distance = int(_origin_distance[target])
 
 
-func _collect(low: int, high: int, styled: bool) -> Array[Vector2i]:
+func _collect(low: int, high: int, styled: bool,
+		preferred_sites: Dictionary[Vector2i, bool]) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for key in _origin_distance:
 		var c: Vector2i = key
 		var dist := int(_origin_distance[c])
-		if dist < low or dist > high:
+		if dist < low or dist > high or c == origin:
 			continue
-		if styled and not _style_allowed(c):
-			continue
-		if not _base_candidate(c, origin):
+		if styled:
+			# Districts on this floor overlap. Cache only seed-authored suitability.
+			if not preferred_sites.has(c):
+				preferred_sites[c] = _style_allowed(c) and _base_candidate(c, NO_CELL)
+			if not preferred_sites[c]:
+				continue
+		elif not _base_candidate(c, NO_CELL):
 			continue
 		out.append(c)
 	return out
