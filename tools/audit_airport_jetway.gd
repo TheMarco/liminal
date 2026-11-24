@@ -122,18 +122,25 @@ func run() -> void:
 	for x in range(-5, 6):
 		for z in range(-5, 6):
 			var cell := Vector2i(x, z)
-			# This gate keeps its jetway and aircraft after doorway clearance.
-			var streamed := cell == Vector2i(-4, -1)
+			var visible_gate := cell == Vector2i(-4, -1)
+			var blocked_gate := cell == Vector2i(2, 0)
+			var streamed := visible_gate or blocked_gate
 			var c := Chunk.new(ws, cell, 4, null, streamed)
+			var built_blocked_jetway := false
 			if streamed:
 				while not c.build_next_slice():
-					pass
+					if blocked_gate and c.find_child("AirportJetway", true, false) != null:
+						built_blocked_jetway = true
 			var report := c.airport_apron_setpiece_audit()
 			check(int(report.violations) == 0, "Generated apron overflows at %s" % cell)
 			var count := c.find_children("AirportJetway", "Node3D", true, false).size()
-			if streamed:
+			if visible_gate:
 				check(count == 1 and int(report.setpieces) == 2,
 					"Streamed airport gate lost its jetway or aircraft")
+			if blocked_gate:
+				check(c.style == WorldGen.AIR_GATE and c.doorway_props_removed > 0 and count == 0,
+					"Expected the window at the doorway to be removed")
+				check(not built_blocked_jetway, "Built a jetway that doorway clearance removes")
 			generated_jetways += count
 			generated += 1
 			c.free()

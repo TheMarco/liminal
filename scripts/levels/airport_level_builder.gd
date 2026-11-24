@@ -7,6 +7,7 @@ static var _walkway_glass_material: StandardMaterial3D
 # floor cross-aisle beyond them (over 1.1m clear even beside a boundary wall).
 const WALKWAY_RAMP_OVERHANG := 0.56
 const WALKWAY_END_AISLE := 1.24
+const GATE_GLASS_Z := 3.8
 const STANCHION_BASE_RADIUS := 0.16
 const STANCHION_SOCKET_Y := 0.91
 const STANCHION_SOCKET_Z := 0.049
@@ -513,12 +514,13 @@ func _stanchion_run(start: Vector3, step: Vector3, count: int) -> void:
 # --- airport: gate ------------------------------------------------------------
 
 
-func _air_gate() -> void:
+func _air_gate() -> Node3D:
 	var wdir = _air_pick_wall(310)
 	var yw = scene.yaw_for(wdir) if wdir >= 0 else float(int(ctx.random01(311) * 3.99)) * PI / 2.0
 	var o = Vector3(WorldGen.CELL_SIZE / 2.0, 0, WorldGen.CELL_SIZE / 2.0)
+	var window: Node3D
 	if wdir >= 0:
-		scene.build_job(_air_window_wall.bind(o, yw))
+		window = _air_window_frame(o, yw)
 	scene.build_job(func() -> void:
 		var cp := scene.world_point(o, Vector3(0, 0.008, -1.2), yw)
 		var carpet := scene.model_box(null, cp, Vector3(10.6, 0.016, 6.6), Mats.airport_carpet())
@@ -537,21 +539,30 @@ func _air_gate() -> void:
 			ctx.random01(320) * TAU, 321))
 	if ctx.random01(330) < 0.72:
 		scene.build_job(scene.security_camera.bind(scene.world_point(o, Vector3(4.7, 3.55, 3.8), yw), yw + PI))
+	return window
 
 
 ## Full-height glass curtain wall 2.2m inside the anchor wall; the strip
 ## behind it is the night: black apron, taxiway lights, a docked jetway.
 
 
-func _air_window_wall(o: Vector3, yw: float) -> void:
+func _air_window_frame(o: Vector3, yw: float) -> Node3D:
 	var W = Node3D.new()
 	W.position = o
 	W.rotation.y = yw
 	scene.add_node(W)
-	var gz = 3.8   # glass plane, local z
-	# mullions and transoms
+	var gz := GATE_GLASS_Z
 	for mx in [-5.95, -4.0, -2.0, 0.0, 2.0, 4.0, 5.95]:
 		scene.model_box(W, Vector3(mx, ctx.ceiling_height / 2.0, gz), Vector3(0.09, ctx.ceiling_height, 0.14), Mats.charcoal())
+	# The three colliders belong to the room and are cleared individually.
+	scene.collider_yaw_box(scene.world_point(o, Vector3(0, ctx.ceiling_height / 2.0, gz), yw), Vector3(WorldGen.CELL_SIZE, ctx.ceiling_height, 0.1), yw)
+	for sx in [-5.9, 5.9]:
+		scene.collider_yaw_box(scene.world_point(o, Vector3(sx, ctx.ceiling_height / 2.0, 4.85), yw), Vector3(0.12, ctx.ceiling_height, 2.1), yw)
+	return W
+
+
+func _air_window_details(W: Node3D) -> void:
+	var gz := GATE_GLASS_Z
 	scene.model_box(W, Vector3(0, 0.06, gz), Vector3(WorldGen.CELL_SIZE, 0.12, 0.14), Mats.charcoal())
 	scene.model_box(W, Vector3(0, ctx.ceiling_height - 0.07, gz), Vector3(WorldGen.CELL_SIZE, 0.14, 0.14), Mats.charcoal())
 	for ty in [1.35, 2.9]:
@@ -563,7 +574,6 @@ func _air_window_wall(o: Vector3, yw: float) -> void:
 		Vector3(WorldGen.CELL_SIZE - 0.1, ctx.ceiling_height - 0.2, 0.024), Mats.airport_glass())
 	barrier_glass.set_meta("airport_barrier_glass", true)
 	barrier_glass.set_meta("barrier_alpha", 0.62)
-	scene.collider_yaw_box(scene.world_point(o, Vector3(0, ctx.ceiling_height / 2.0, gz), yw), Vector3(WorldGen.CELL_SIZE, ctx.ceiling_height, 0.1), yw)
 	# Two rows of ceramic manifestation dots make the full-height pane legible
 	# head-on without turning the apron view into an opaque wall.
 	for row_y in [1.28, 1.58]:
@@ -576,7 +586,6 @@ func _air_window_wall(o: Vector3, yw: float) -> void:
 	# side caps close the strip ends
 	for sx in [-5.9, 5.9]:
 		scene.model_box(W, Vector3(sx, ctx.ceiling_height / 2.0, 4.85), Vector3(0.1, ctx.ceiling_height, 2.1), Mats.charcoal())
-		scene.collider_yaw_box(scene.world_point(o, Vector3(sx, ctx.ceiling_height / 2.0, 4.85), yw), Vector3(0.12, ctx.ceiling_height, 2.1), yw)
 	# The apron floor and backdrop each use a distinct first-use shader.
 	scene.build_job(func() -> void:
 		scene.model_box(W, Vector3(0, 0.012, 4.9), Vector3(WorldGen.CELL_SIZE, 0.022, 2.15), Mats.asphalt()))

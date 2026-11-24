@@ -5983,6 +5983,7 @@ func _build_props() -> void:
 		_shift_props(off, n0, b0)
 		_clear_furnishings_from_doorways(n0, b0)
 		return
+	var gate_window: Node3D
 	match style:
 		WorldGen.STYLE_PILLARS:
 			_level_builder._pillars(ceil_h, Mats.brass())
@@ -6069,7 +6070,7 @@ func _build_props() -> void:
 		WorldGen.ANNEX_LOBBY:
 			_level_builder._annex_lobby()
 		WorldGen.AIR_GATE:
-			_level_builder._air_gate()
+			gate_window = _level_builder._air_gate()
 			queue_build_job(_level_builder._air_common)
 		WorldGen.AIR_CONCOURSE:
 			_level_builder._air_concourse()
@@ -6234,15 +6235,25 @@ func _build_props() -> void:
 			var setpiece := RouteSetpieces.new(_build_context, _scene_writer)
 			if not setpiece.is_native(): setpiece.build_landmark()
 		return
-	queue_build_job(_finish_room_props.bind(off, n0, b0))
+	queue_build_job(_finish_room_props.bind(off, n0, b0, gate_window))
 
 
-func _finish_room_props(off: Vector3, n0: int, b0: int) -> void:
+func _finish_room_props(off: Vector3, n0: int, b0: int, gate_window: Node3D) -> void:
 	_shift_props(off, n0, b0)
 	if style == WorldGen.STYLE_SLOTS:
 		# Cabinet banks belong at the complete room's centre. Their wall sign
 		# belongs to the anchor cell's actual wall and must keep its coordinates.
 		_level_builder._slots_sign()
+	if gate_window != null:
+		# A single post in an approach lane removes the entire window assembly.
+		# Decide from its real posts before creating the glass, jetway and plane.
+		var zones := _furnishing_clearance_zones()
+		if zones.is_empty() or not _node_hits_doorway(gate_window, zones):
+			queue_build_job(_level_builder._air_window_details.bind(gate_window))
+			# Check the finished geometry against the current door layout. A
+			# photograph or blackout can change it between streaming slices.
+			queue_build_job(_clear_furnishings_from_doorways.bind(n0, b0))
+			return
 	_clear_furnishings_from_doorways(n0, b0)
 
 
@@ -6404,17 +6415,21 @@ func _collision_floor_rect(cs: CollisionShape3D) -> Rect2:
 	return Rect2(mn.x, mn.z, mx.x - mn.x, mx.z - mn.z)
 
 
-func _clear_furnishings_from_doorways(n0: int, b0: int) -> void:
+func _furnishing_clearance_zones() -> Array[Rect2]:
 	# Corridor styles build their continuous shell during the prop pass. Their
 	# real side bays already own explicit clearance and must not be mistaken for
 	# furniture. The neighbouring room still clears its side of the same door.
 	var is_corridor := WorldGen.annex_corridor_axis(wseed, cell) != 0 \
 		if theme == 2 else WorldGen.corridor(wseed, cell) != 0
 	if is_corridor and theme != 7:
-		return
+		return []
 	# Mall galleries furnish the existing shell with removable props. Reserve
 	# the photographic lane there too; other corridor architecture stays intact.
-	var zones := _doorway_clearance_rects(is_corridor)
+	return _doorway_clearance_rects(is_corridor)
+
+
+func _clear_furnishings_from_doorways(n0: int, b0: int) -> void:
+	var zones := _furnishing_clearance_zones()
 	if zones.is_empty():
 		return
 	var hit_groups := {}
