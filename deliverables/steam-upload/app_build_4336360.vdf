@@ -1,7 +1,7 @@
 "AppBuild"
 {
     "AppID" "4336360"
-    "Desc" "It Wants You To Stay 0.6.3 - Smoother exploration and blackout recovery - Windows, Linux and macOS"
+    "Desc" "It Wants You To Stay 0.6.4 - Performance test - Windows, Linux and macOS"
     "ContentRoot" "../../build"
     "BuildOutput" "../../build/steam-upload-output"
     "Depots"
