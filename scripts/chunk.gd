@@ -1457,6 +1457,7 @@ static func release_floor_resources() -> void:
 	preload("res://scripts/native_doorway_surface.gd").clear_runtime_cache()
 	PhotoAnomaly.clear_runtime_cache()
 	ProceduralDetails.clear_runtime_cache()
+	SurfaceWear.clear_runtime_cache()
 	preload("res://scripts/fixture_lighting.gd").clear_fluorescent_housings()
 	AirportGrandCeiling.clear_runtime_cache()
 	_attributed_scenes.clear()

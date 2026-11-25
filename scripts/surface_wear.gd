@@ -9,8 +9,10 @@ static var enabled := true # Also permits clean/reference captures in audits.
 const MAX_PATCHES := 20
 const MAX_PROP_MESHES := 24
 const MAX_STRENGTH := 0.36
+const MAX_CACHED_PATCH_SIZES := 128
 const PATCH_SHADER := preload("res://shaders/surface_wear.gdshader")
 const PROP_SHADER := preload("res://shaders/prop_wear.gdshader")
+static var _patch_quads: Dictionary[Vector2, QuadMesh] = {}
 
 enum Motif { SPILL, LEAK, MOLD, CRACK, SCUFF, REPAIR, ADHESIVE, SCORCH,
 	DUST, RUST, MINERAL, MISSING_TILE, JOINT, ROOT, FOOTPRINT, VENT,
@@ -56,6 +58,21 @@ var age := 0.6
 static func prepare_floor() -> void:
 	for mask_id in 8:
 		_patch_material(Motif.SPILL, mask_id, "")
+
+
+static func clear_runtime_cache() -> void:
+	_patch_quads.clear()
+
+
+static func _patch_quad(size_: Vector2) -> QuadMesh:
+	var quad: QuadMesh = _patch_quads.get(size_)
+	if quad == null:
+		quad = QuadMesh.new()
+		quad.size = size_
+		# Clipping to a support can produce one-off dimensions on long floors.
+		if _patch_quads.size() < MAX_CACHED_PATCH_SIZES:
+			_patch_quads[size_] = quad
+	return quad
 
 
 static func _patch_material(motif: int, mask_id: int,
@@ -384,11 +401,9 @@ func _patch(face: Face, at: Vector3, requested: Vector2, motif: int,
 	var offset := Vector2(clampf(delta.dot(face.u), -margin.x, margin.x),
 		clampf(delta.dot(face.v), -margin.y, margin.y))
 	var center := face.center + face.u * offset.x + face.v * offset.y
-	var quad := QuadMesh.new()
-	quad.size = size_
 	var mark := MeshInstance3D.new()
 	mark.name = "SurfaceWear_%02d" % patches
-	mark.mesh = quad
+	mark.mesh = _patch_quad(size_)
 	var damp := motif == Motif.SPILL and not cause.begins_with("drink_spill")
 	var mask_id := _hash(center, 28211) % 8 if damp else -1
 	var authored_mask := ""
