@@ -508,7 +508,7 @@ func _register_photo_doors() -> void:
 		var chunks: Array[Chunk] = []
 		var instances := PackedInt64Array()
 		for endpoint in [at, other]:
-			for member in WorldGen.owning_room_members(world_seed, endpoint, theme):
+			for member in route.base_room_members(endpoint):
 				var part := _chunk_manager.chunk_at(member)
 				if part == null:
 					complete = false
@@ -533,8 +533,9 @@ func _register_photo_doors() -> void:
 				if seal.photo_id != id:
 					continue
 				if opened:
-					seal.open()
-				else:
+					if not seal.opened:
+						seal.open()
+				elif seal.preview_ready != ready:
 					seal.set_preview_ready(ready)
 				var live_key := "%s:%s" % [id, endpoint]
 				# Opened doors remain album subjects after streaming/reloading.
