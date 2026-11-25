@@ -4,7 +4,10 @@ extends RefCounted
 ## and shader detail, so a torch still reveals the real ceiling and fixtures.
 ## Shader-powered surfaces opt in with the mains_power uniform. Organic/realm
 ## effects and screen-space water transmission deliberately do not opt in.
-var _prepared := {}
+var _prepared: Dictionary[Material, Material] = {}
+## One unbound copy per floor-owned source. A room takes it out of the pool
+## before using it. Room-specific flicker and prop materials stay local.
+static var _floor_prepared: Dictionary[Material, Material] = {}
 static var _shader_power := {}
 var _meshes := {}
 var _labels := {}
@@ -30,6 +33,7 @@ func emitter_box(source: Material) -> BoxMesh:
 	return box
 
 static func clear_cache() -> void:
+	_floor_prepared.clear()
 	_shader_power.clear()
 
 static func _has_power(shader: Shader) -> bool:
@@ -57,20 +61,24 @@ func prepare_mesh(mesh: MeshInstance3D, variants: Dictionary) -> void:
 			_prepare_material(mesh.get_active_material(i), variants)
 
 func _prepare_material(material: Material, variants: Dictionary) -> void:
-	if material == null or variants.has(material):
+	if material == null or variants.has(material) or _floor_prepared.has(material):
 		return
 	var off := off_material(material, variants)
 	if off != material:
-		_prepared[material] = off
+		if Mats.is_cached_material(material):
+			_floor_prepared[material] = off
+		else:
+			_prepared[material] = off
 
 func _copy_for_blackout(material: Material) -> Material:
-	var off: Material = _prepared.get(material)
+	var pool := _floor_prepared if _floor_prepared.has(material) else _prepared
+	var off: Material = pool.get(material)
 	if off == null:
 		return material.duplicate()
 	# Shader uniforms and standard-material properties can change in place
 	# without a Resource.changed signal. Refresh once per distinct source.
 	# Take the copy out of the pool before other rooms start displaying it.
-	_prepared.erase(material)
+	pool.erase(material)
 	off.copy_from_resource(material)
 	return off
 

@@ -9,6 +9,10 @@ static var _wall_art_textures := {}
 static var _wall_art_preloads_requested := false
 
 
+static func is_cached_material(material: Material) -> bool:
+	return _c.get(material.resource_name) == material
+
+
 ## Called at the opaque floor transition and at audit teardown. Streamed
 ## chunks share these for the floor's lifetime; live nodes retain their own
 ## references when the cache relinquishes an inactive floor.

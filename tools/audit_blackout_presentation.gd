@@ -295,11 +295,58 @@ func _room_diffusers() -> void:
 	first_lens.free()
 	second_lens.free()
 
+
+func _shared_material_preparation() -> void:
+	var power_a := SURFACE_POWER.new()
+	var power_b := SURFACE_POWER.new()
+	var source := Mats.air_panel()
+	var initial_color := source.albedo_color
+	var initial_pass := source.next_pass
+	var a := MeshInstance3D.new()
+	var b := MeshInstance3D.new()
+	a.mesh = BoxMesh.new()
+	b.mesh = a.mesh
+	a.material_override = source
+	b.material_override = source
+	power_a.prepare_mesh(a, {})
+	var reserved: Material = SURFACE_POWER._floor_prepared.get(source)
+	power_b.prepare_mesh(b, {})
+	expect(reserved != null and SURFACE_POWER._floor_prepared.get(source) == reserved,
+		"rooms prepared separate copies of the same floor material")
+	power_a.apply_visuals([a], {})
+	var first := a.material_override as StandardMaterial3D
+	source.albedo_color = Color.CORAL
+	var extra := StandardMaterial3D.new()
+	extra.emission_enabled = true
+	source.next_pass = extra
+	power_b.prepare_mesh(b, {})
+	power_b.apply_visuals([b], {})
+	var second := b.material_override as StandardMaterial3D
+	expect(first == reserved and second != first and first.albedo_color == initial_color
+		and second.albedo_color == Color.CORAL and is_zero_approx(first.emission_energy_multiplier)
+		and is_zero_approx(second.emission_energy_multiplier),
+		"a separately switched room reused a live blackout snapshot")
+	var second_pass := second.next_pass as StandardMaterial3D
+	expect(first.next_pass == initial_pass and second_pass != null and second_pass != extra
+		and is_zero_approx(second_pass.emission_energy_multiplier),
+		"a late emissive pass leaked into a dark room or its earlier snapshot")
+	power_a.restore()
+	expect(a.material_override == source and b.material_override == second,
+		"restoring one room disturbed its unpowered neighbour")
+	power_b.restore()
+	expect(b.material_override == source, "second room lost the original shared material")
+	source.albedo_color = initial_color
+	source.next_pass = initial_pass
+	a.free()
+	b.free()
+
+
 func run() -> void:
 	_environments()
 	_surface_cases()
 	_indexed_room()
 	_room_diffusers()
+	_shared_material_preparation()
 	for theme in WorldGen.THEMES:
 		for cell in [Vector2i.ZERO, Vector2i(3, 3), Vector2i(-4, 2)]:
 			_chunk(theme, cell)
