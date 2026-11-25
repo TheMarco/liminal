@@ -1,10 +1,10 @@
-[h1]0.6.4 performance beta — Smoother room loading and blackouts[/h1]
+[h1]Update 0.6.4 — Smoother room loading and blackouts[/h1]
 
 [list]
-[*]The Office prepares furniture and other room assets earlier. The Airport spreads gate construction across frames and draws ceiling fixtures and glass markings in fewer batches.
-[*]Room loading reuses materials and meshes for repeated surfaces. Optional tapes are placed over several frames, and photographic doorways skip updates when their state is already correct.
-[*]Blackouts prepare numbered signs ahead of time and save layout changes together. Moving hallways now prepare their deformation off the gameplay thread.
-[*]Floor music is cued before the screen fades in, casino slot machines skip unnecessary audio seeks, and setting a monster on fire reuses animation data prepared earlier.
+[*]The Office starts preparing furniture earlier as you approach new rooms. The Airport builds gates over several frames and draws ceiling fixtures and glass markings in fewer batches.
+[*]Rooms reuse materials and meshes for repeated surfaces. The game spreads out the work of placing optional tapes and skips redundant updates to doorways revealed by the camera.
+[*]Blackouts now prepare numbered signs ahead of time and save layout changes together. Shifting hallways calculate their new shape in the background.
+[*]Floor music is cued before the screen fades in. Casino slot machines skip unnecessary audio updates, and setting a monster on fire reuses animation data the game has already prepared.
 [/list]
 
-For the Windows playtest, use the same graphics preset and resolution you used on 0.6.3. The most useful comparisons are entering Office rooms, approaching an Airport gate, and the first blackout. If you feel a pause, note the floor and in-game time and send the logs from that run.
+If you still feel a pause, please include the floor, the time on the in-game clock, and the log from that session when you report it.

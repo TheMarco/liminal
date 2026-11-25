@@ -1,6 +1,6 @@
 # Upload It Wants You To Stay to Steam
 
-Version **0.6.4** is available on the password-protected `performance-test` branch as Steam build **26927780**. On November 25, 2026, SteamCMD on macOS accepted the tester code and installed the Windows depot. The executable matched the release SHA-256. The default branch serves **0.6.3**, build **26899671**. [Steam build](https://partner.steamgames.com/apps/builddetails/4336360/26927780) · [Beta notes](update-0.6.4.bbcode.txt) · [Packaged source](https://github.com/TheMarco/liminal/commit/8854a929d8035681d71513b3775c878ba6ded905)
+Version **0.6.4** went live on Steam’s default branch on November 25, 2026 at 11:26 a.m. Pacific. Build **26927780** replaced 0.6.3 (26899671). An anonymous Steam client returned the matching Windows, Linux and macOS depot manifests. The `performance-test` branch serves the same build, and the Windows executable installed from that branch matched the release SHA-256. [Steam build](https://partner.steamgames.com/apps/builddetails/4336360/26927780) · [Patch notes](update-0.6.4.bbcode.txt) · [Packaged source](https://github.com/TheMarco/liminal/commit/8854a929d8035681d71513b3775c878ba6ded905)
 
 All 171 audits passed, including an isolated repeat of the descent transition test. Steam’s preview matched all ten files across Windows, Linux and macOS. Apple notarized the universal Mac app, and Gatekeeper accepted its stapled ticket. Native Windows frame-time testing is the next playtest. Release receipts are in `build/steam-release-2026-11-25-0.6.4/`.
 
