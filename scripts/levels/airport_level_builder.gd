@@ -3,6 +3,7 @@ const FIXTURE_LIGHTING := preload("res://scripts/fixture_lighting.gd")
 static var _carousel_belt_material: ShaderMaterial
 static var _walkway_fitted_meshes: Dictionary = {}
 static var _walkway_glass_material: StandardMaterial3D
+static var _gate_markings_mesh: ArrayMesh
 # Authored ramps project 56cm past each nominal belt end. Leave a full 1.24m
 # floor cross-aisle beyond them (over 1.1m clear even beside a boundary wall).
 const WALKWAY_RAMP_OVERHANG := 0.56
@@ -16,6 +17,7 @@ static func clear_runtime_cache() -> void:
 	_carousel_belt_material = null
 	_walkway_fitted_meshes.clear()
 	_walkway_glass_material = null
+	_gate_markings_mesh = null
 
 
 func _air_zone_sign(salt: int) -> String:
@@ -574,13 +576,9 @@ func _air_window_details(W: Node3D) -> void:
 		Vector3(WorldGen.CELL_SIZE - 0.1, ctx.ceiling_height - 0.2, 0.024), Mats.airport_glass())
 	barrier_glass.set_meta("airport_barrier_glass", true)
 	barrier_glass.set_meta("barrier_alpha", 0.62)
-	# Two rows of ceramic manifestation dots make the full-height pane legible
-	# head-on without turning the apron view into an opaque wall.
-	for row_y in [1.28, 1.58]:
-		for i in 16:
-			var mx = -5.55 + 0.74 * float(i)
-			scene.model_rounded_box(W, Vector3(mx, row_y, gz - 0.018),
-				Vector3(0.12, 0.045, 0.012), Mats.airport_glass_marker(), 0.012)
+	var markings := gate_glass_markings()
+	markings.position.z = gz - 0.018
+	W.add_child(markings)
 	# dark soffit over the strip so no interior ceiling reads as "outside"
 	scene.model_box(W, Vector3(0, ctx.ceiling_height - 0.10, 4.85), Vector3(WorldGen.CELL_SIZE, 0.06, 2.15), Mats.charcoal())
 	# side caps close the strip ends
@@ -590,6 +588,27 @@ func _air_window_details(W: Node3D) -> void:
 	scene.build_job(func() -> void:
 		scene.model_box(W, Vector3(0, 0.012, 4.9), Vector3(WorldGen.CELL_SIZE, 0.022, 2.15), Mats.asphalt()))
 	scene.build_job(_air_apron_backdrop.bind(W, gz))
+
+
+## The 32 ceramic markings are fixed to one pane and share a material.
+## Each original marking was small enough to skip the fixture shadow pass.
+static func gate_glass_markings() -> MeshInstance3D:
+	if _gate_markings_mesh == null:
+		var marking := RoundedBox.mesh(Vector3(0.12, 0.045, 0.012), 0.012)
+		var surface := SurfaceTool.new()
+		surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for y in [1.28, 1.58]:
+			for i in 16:
+				var position := Vector3(-5.55 + 0.74 * i, y, 0)
+				surface.append_from(marking, 0, Transform3D(Basis.IDENTITY, position))
+		_gate_markings_mesh = surface.commit()
+	var strip := MeshInstance3D.new()
+	strip.mesh = _gate_markings_mesh
+	strip.material_override = Mats.airport_glass_marker()
+	strip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Weather the pane behind the markings. Its ceramic strip is decoration.
+	strip.set_meta(&"procedural_detail", "airport_glass_markings")
+	return strip
 
 
 func _air_apron_backdrop(W: Node3D, gz: float) -> void:

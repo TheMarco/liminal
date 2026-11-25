@@ -367,6 +367,9 @@ func _warm_airport_terminal() -> void:
 	]
 	for i in materials.size():
 		_add_effect_quad(terminal, quad, materials[i], Vector3(-3.0 + i * 0.62, 4.2, 2.0))
+	var markings := Chunk.AIRPORT_LEVEL_BUILDER.gate_glass_markings()
+	markings.position = Vector3(0, 2.0, 2.0)
+	terminal.add_child(markings)
 
 	# Exercise the imported vertex formats with the belt and glass overrides
 	# used on the moving walkway in the concourse.
